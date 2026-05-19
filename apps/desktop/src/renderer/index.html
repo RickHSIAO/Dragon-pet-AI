@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!--
+    CSP: tightened for security.
+    - default-src 'self'           — no external resources
+    - script-src 'self'            — only local scripts
+    - connect-src 'self' http://localhost:8000  — backend calls only
+    - style-src 'self' 'unsafe-inline' — local CSS only
+    No CDN, no external fonts, no tracking.
+  -->
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="
+      default-src 'self';
+      script-src 'self';
+      style-src 'self' 'unsafe-inline';
+      connect-src 'self' http://localhost:8000;
+      img-src 'self' data:;
+    "
+  />
+  <title>Dragon Pet AI</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- ── Header ─────────────────────────────────────────── -->
+  <header id="header">
+    <h1>Dragon Pet AI</h1>
+    <span class="version-tag">v0.1 skeleton</span>
+  </header>
+
+  <!-- ── Character status ───────────────────────────────── -->
+  <div id="character-status">
+    <div class="mood-indicator"></div>
+    <span>Mood:</span>
+    <span id="mood-label">neutral</span>
+    <span style="margin-left:auto; font-size:11px;">mock mode — no AI connected</span>
+  </div>
+
+  <!-- ── Chat area ──────────────────────────────────────── -->
+  <main id="chat-area">
+    <!-- Messages are injected here by renderer.js -->
+  </main>
+
+  <!-- ── Input bar ──────────────────────────────────────── -->
+  <footer id="input-bar">
+    <textarea
+      id="message-input"
+      placeholder="Type a message… (Enter to send, Shift+Enter for newline)"
+      rows="1"
+      autocomplete="off"
+      spellcheck="true"
+    ></textarea>
+    <button id="send-btn">Send</button>
+  </footer>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

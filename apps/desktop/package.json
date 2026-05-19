@@ -1,0 +1,16 @@
+{
+  "name": "dragon-pet-ai-desktop",
+  "version": "0.1.0",
+  "description": "Dragon Pet AI — desktop companion (Electron skeleton)",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev"
+  },
+  "keywords": ["desktop", "electron", "ai-pet"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^30.0.0"
+  }
+}

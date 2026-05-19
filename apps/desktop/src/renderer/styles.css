@@ -1,0 +1,222 @@
+/* dragon-pet-ai — renderer styles (TASK-003 skeleton) */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg:          #1a1a2e;
+  --surface:     #16213e;
+  --surface-alt: #0f3460;
+  --accent:      #e94560;
+  --accent-soft: #c73652;
+  --text:        #eaeaea;
+  --text-muted:  #8a8a9a;
+  --user-bubble: #0f3460;
+  --pet-bubble:  #1e1e3a;
+  --border:      #2a2a4a;
+  --radius:      10px;
+  --font:        -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+#header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+#header h1 {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+#header .version-tag {
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--surface-alt);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* ── Character status bar ───────────────────────────────── */
+#character-status {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+#character-status .mood-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+#mood-label {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* ── Chat area ──────────────────────────────────────────── */
+#chat-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scroll-behavior: smooth;
+}
+
+#chat-area::-webkit-scrollbar {
+  width: 4px;
+}
+
+#chat-area::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
+/* ── Message bubbles ────────────────────────────────────── */
+.message {
+  max-width: 80%;
+  padding: 10px 13px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  line-height: 1.55;
+  word-break: break-word;
+  animation: fadein 0.15s ease;
+}
+
+@keyframes fadein {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.message.user {
+  background: var(--user-bubble);
+  align-self: flex-end;
+  border-bottom-right-radius: 3px;
+}
+
+.message.pet {
+  background: var(--pet-bubble);
+  border: 1px solid var(--border);
+  align-self: flex-start;
+  border-bottom-left-radius: 3px;
+}
+
+.message .sender {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+  opacity: 0.6;
+}
+
+.message.user .sender { color: #7ab3ff; }
+.message.pet  .sender { color: var(--accent); }
+
+/* Error message */
+.message.error {
+  background: #3a1a1a;
+  border: 1px solid #6a2020;
+  align-self: flex-start;
+  color: #ff8a8a;
+}
+
+/* Status / system message */
+.message.status {
+  align-self: center;
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--text-muted);
+  font-size: 11px;
+  text-align: center;
+  max-width: 90%;
+}
+
+/* ── Input bar ──────────────────────────────────────────── */
+#input-bar {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 12px 16px;
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+
+#message-input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  padding: 9px 12px;
+  resize: none;
+  min-height: 40px;
+  max-height: 100px;
+  outline: none;
+  transition: border-color 0.15s;
+  line-height: 1.4;
+}
+
+#message-input:focus {
+  border-color: var(--accent-soft);
+}
+
+#message-input::placeholder {
+  color: var(--text-muted);
+}
+
+#send-btn {
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius);
+  color: white;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 16px;
+  height: 40px;
+  flex-shrink: 0;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+#send-btn:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+
+#send-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
