@@ -1,36 +1,47 @@
 """
-Database initialization placeholder.
-
-TASK-003: SQLModel engine setup — SQLite only, no tables yet.
-Tables and schema migrations will be added in TASK-005 (Phase 3).
+SQLite database setup for local runtime storage.
 
 Safety note:
-- This module does NOT execute shell commands.
-- It does NOT read arbitrary user files.
-- It only manages a local SQLite file at the configured DB_PATH.
+- This module does not execute shell commands.
+- It does not read arbitrary user files.
+- It only manages the configured local SQLite database.
 """
 
 import os
-from sqlmodel import create_engine, SQLModel
+from collections.abc import Generator
 
-# Database path — can be overridden via environment variable DB_PATH
+from sqlalchemy.pool import StaticPool
+from sqlmodel import Session, SQLModel, create_engine
+
+from app.db import models  # noqa: F401
+
 DB_PATH = os.getenv("DB_PATH", "sqlite:///./dragon_pet_ai.db")
 
-# connect_args is required for SQLite to support multi-threaded access in FastAPI
-engine = create_engine(
-    DB_PATH,
-    echo=False,
-    connect_args={"check_same_thread": False},
-)
 
-
-def init_db() -> None:
+def create_db_engine(db_path: str = DB_PATH):
     """
-    Initialize the database.
+    Create a SQLite engine.
 
-    TASK-003: Creates the SQLite file and runs SQLModel metadata setup.
-    No tables are defined yet — this is a placeholder for Phase 3.
+    In-memory SQLite uses StaticPool so tests keep the same database across
+    sessions and TestClient requests.
     """
-    # SQLModel.metadata.create_all(engine) will activate once models are added.
-    # For now, just validate the engine can connect.
-    SQLModel.metadata.create_all(engine)
+    kwargs = {
+        "echo": False,
+        "connect_args": {"check_same_thread": False},
+    }
+    if db_path == "sqlite:///:memory:":
+        kwargs["poolclass"] = StaticPool
+    return create_engine(db_path, **kwargs)
+
+
+engine = create_db_engine()
+
+
+def init_db(db_engine=None) -> None:
+    """Create local SQLite tables for conversation history, state, and memory."""
+    SQLModel.metadata.create_all(db_engine or engine)
+
+
+def get_session() -> Generator[Session, None, None]:
+    with Session(engine) as session:
+        yield session
