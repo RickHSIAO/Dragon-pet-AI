@@ -2615,7 +2615,7 @@ Completion Notes:
 
 ## TASK-052 - Provider Settings UI Implementation
 
-Status: IN_PROGRESS
+Status: DONE
 
 Goal:
 Implement a safe Provider Settings UI for non-secret settings and usage visibility.
@@ -2661,6 +2661,26 @@ Implementation Notes:
 - Backend pytest result: 421 passed.
 - Electron static checks passed: `node --check src/main.js` and `node --check src/renderer/renderer.js`.
 - Static safety scan found no external provider URLs, localStorage usage, console logging, or frontend key/test endpoint calls.
+
+Completion Notes:
+- TASK-052 was an implementation task.
+- Electron renderer now includes a Provider Settings UI section after Audit Logs and before the memory toggle.
+- UI can load `GET /provider/settings`.
+- UI can update non-secret settings via `PATCH /provider/settings`.
+- UI displays provider, model, real_provider_enabled, llm_chat_enabled, fallback_to_mock, key_status, last_test_status, resolved_provider, and safe aggregate usage_summary.
+- API key save, clear, and test connection controls remain disabled placeholders.
+- API key save / clear / test connection must not be truly enabled before TASK-053 - Secure Key Storage Implementation is complete.
+- Frontend does not call `/provider/settings/key`.
+- Frontend does not call `/provider/settings/test`.
+- Frontend does not call Anthropic, OpenAI, or any external provider endpoint.
+- No API key was exposed.
+- `/chat` remained usable and its response schema stayed reply / mood / source.
+- pytest result: 421 passed.
+- Electron static checks passed:
+  - `node --check src/main.js`
+  - `node --check src/renderer/renderer.js`
+- Static scan found no external provider URL, localStorage usage, console logging, or frontend key/test endpoint calls.
+- No live external API call was made.
 
 ---
 
