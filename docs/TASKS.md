@@ -2485,7 +2485,7 @@ TASK-050 - Usage Meter Implementation
 
 ## TASK-050 - Usage Meter Implementation
 
-Status: IN_PROGRESS
+Status: DONE
 
 Goal:
 Implement a minimal in-memory usage meter for safe session-level usage visibility. Track only safe aggregate metadata. Never store raw messages, prompts, memory context, provider response bodies, or API keys.
@@ -2526,6 +2526,19 @@ Acceptance Criteria:
 
 Next Task:
 TASK-051 - Backend Provider Settings API Implementation
+
+Completion Notes:
+- TASK-050 was an implementation task.
+- Added in-memory usage meter only; no SQLite usage table was added.
+- /chat response schema remained unchanged: reply / mood / source.
+- Usage meter tracks safe aggregate metadata only: request_count, source_counts, provider_counts, model_counts, estimated tokens, fallback_count, memory_used_count, and error_counts.
+- Privacy boundaries were preserved: usage meter does not record API keys, raw user messages, raw prompts, raw memory context, or raw provider responses.
+- pytest result: 405 passed.
+- No Electron UI changes were made.
+- No API key was read.
+- No external API call was made.
+- POST /provider/settings/key must not be enabled before TASK-053 - Secure Key Storage Implementation.
+- TASK-051 may implement non-secret endpoints and read-only status first.
 
 ---
 
