@@ -3221,7 +3221,7 @@ TASK-060 - Provider Test Connection UI Enablement
 
 ## TASK-060 - Provider Test Connection UI Enablement
 
-Status: Pending
+Status: DONE
 
 Goal:
 Enable the Test Connection button in the Electron renderer and wire it to the POST /provider/settings/test backend endpoint, with explicit cost acknowledgement dialog. Blocked until TASK-059R passes.
@@ -3239,16 +3239,32 @@ Scope:
 - Do not add retries
 
 Acceptance Criteria:
-- TASK-060 is recorded as DONE
-- Test Connection button enabled for real providers with configured key
-- Explicit cost acknowledgement dialog shown before every request
-- POST /provider/settings/test called with explicit_cost_ack: true
-- safe_message displayed in UI
-- key_status refreshed after test
-- No API key in renderer logs or localStorage
-- No live external API call from renderer
-- Electron static check passes (node --check)
-- No /chat response schema change
+- TASK-060 is recorded as DONE ✅
+- Test Connection button enabled for real providers with configured key ✅
+- Explicit cost acknowledgement dialog shown before every request ✅
+- POST /provider/settings/test called with explicit_cost_ack: true ✅
+- safe_message displayed in UI ✅
+- key_status refreshed after test ✅
+- No API key in renderer logs or localStorage ✅
+- No live external API call from renderer ✅
+- Electron static check passes (node --check) ✅
+- No /chat response schema change ✅
+
+Completion Notes:
+- TASK-060 was an Electron UI implementation task. No backend API was added or modified.
+- apps/desktop/src/renderer/index.html: updated comment block; changed Test Connection button text from "Test Connection (disabled)" to "Test Connection"; updated title attribute with enable conditions; added provider-test-msg div for test result messages; updated helper note text.
+- apps/desktop/src/renderer/renderer.js: added providerTestMsg DOM ref; added isTestingConnection state flag (prevents concurrent requests); added currentProviderSettings cache (set by renderProviderSettings on every load); updated updateKeyUIState() to enable Test Connection when provider !== mock AND key exists AND real_provider_enabled === true AND no in-flight request; updated button title text to explain disabled state; added setProviderTestMsg() helper; added runTestConnection() with explicit window.confirm() cost acknowledgement (all 4 required text items), POST to local backend only with body {provider, model, explicit_cost_ack: true} (no api_key/prompt/memory), safe response rendering (status/safe_message/error_category/source/usage_estimate only); added testProviderConnectionBtn event listener.
+- apps/desktop/src/renderer/styles.css: added .provider-test-msg and .provider-test-msg.error styles.
+- No api_key, prompt, memory_context, or conversation_history sent to test endpoint. ✅
+- No automatic test after Save Key. ✅
+- No external provider URL in renderer (api.anthropic.com, api.openai.com, etc.). ✅
+- localStorage/sessionStorage references in renderer are comments only, not code. ✅
+- Safety scan: no external URL, no localStorage/sessionStorage code, no console.log of key. ✅
+- node --check: main.js PASS, renderer.js PASS. ✅
+- pytest result: 465 passed (NTFS stale-cache regressions fixed in rsync copy during test run; no backend logic was modified). ✅
+- No live external API call was made. ✅
+- /chat response schema remains reply / mood / source. ✅
+- Runtime smoke check is deferred to TASK-061.
 
 Next Task:
 TASK-061 - Provider Test Connection Runtime Smoke Check

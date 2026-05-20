@@ -9,6 +9,10 @@
 > TASK-058 update: Provider Test Connection design is documented. Test Connection remains disabled in runtime, requires future per-click `explicit_cost_ack`, sends exactly one minimal request, uses no retries/tools/streaming/memory, and does not fallback to mock. No live provider call has occurred.
 >
 > TASK-059 update: Backend `POST /provider/settings/test` is implemented with mocked-provider runner support. It requires per-click `explicit_cost_ack`, builds exactly one minimal no-memory/no-tools/no-streaming request, records safe aggregate usage, and never falls back to mock. Runtime default runner does not call external providers; Electron Test Connection UI remains disabled. pytest: 465 passed.
+>
+> TASK-059R update: Opus safety review of TASK-059 backend: verdict PASS. No critical issues. explicit_cost_ack enforced at API boundary, response schema contains no secret-bearing fields, runtime default runner is UnavailableProviderTestRunner, no live external API calls in tests. TASK-060 unblocked.
+>
+> TASK-060 update: Test Connection button enabled in Electron renderer. Enable conditions: real provider selected, key_status configured, real_provider_enabled true. Explicit cost acknowledgement (window.confirm) required on every click — covers all 4 required disclosures. POST to local backend only with body {provider, model, explicit_cost_ack: true} — no api_key, no prompt, no memory. Safe response fields rendered: status, safe_message, error_category, source, usage_estimate. No automatic test after Save Key. No external provider URL in renderer. API key never logged, never in localStorage/sessionStorage. node --check: PASS. pytest: 465 passed. Runtime smoke deferred to TASK-061.
 
 AI 驅動的桌面螢幕寵物 — 有個性、有記憶的桌面同伴。
 

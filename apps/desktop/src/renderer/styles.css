@@ -650,6 +650,19 @@ body {
   margin-top: 6px;
 }
 
+/* TASK-060: test connection result message */
+.provider-test-msg {
+  color: #a0e8a0;
+  font-size: 11px;
+  line-height: 1.4;
+  margin-top: 4px;
+  min-height: 16px;
+}
+
+.provider-test-msg.error {
+  color: #ff8a8a;
+}
+
 .provider-settings-status {
   color: var(--text-muted);
   font-size: 11px;

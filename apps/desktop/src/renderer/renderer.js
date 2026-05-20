@@ -56,20 +56,28 @@ const providerLastTestStatus = document.getElementById("provider-last-test-statu
 const providerResolvedProvider = document.getElementById("provider-resolved-provider");
 const providerSettingsStatus = document.getElementById("provider-settings-status");
 const providerUsageSummary = document.getElementById("provider-usage-summary");
-// TASK-056: provider key save/clear controls
+// TASK-056 / TASK-060: provider key save/clear/test controls
 // Safety: key value is never logged, never stored in localStorage/sessionStorage,
 // never sent to external providers, cleared from DOM immediately after every save attempt.
+// Test Connection: only calls local backend POST /provider/settings/test.
+// No api_key, prompt, memory_context, or chat history is sent to test endpoint.
+// No automatic test after Save Key.
 const providerApiKeyInput       = document.getElementById("provider-api-key-placeholder");
 const saveProviderKeyBtn        = document.getElementById("save-provider-key-btn");
 const clearProviderKeyBtn       = document.getElementById("clear-provider-key-btn");
 const testProviderConnectionBtn = document.getElementById("test-provider-connection-btn");
 const providerKeyMsg            = document.getElementById("provider-key-msg");
+const providerTestMsg           = document.getElementById("provider-test-msg");
 
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 let currentMood = "neutral";
 let isSending   = false;
+// TASK-060: track in-flight test connection to prevent double-click
+let isTestingConnection = false;
+// TASK-060: cache last-loaded provider settings for Test Connection enable conditions
+let currentProviderSettings = {};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -426,7 +434,8 @@ function renderProviderSettings(settings) {
   providerLastTestStatus.textContent = settings.last_test_status || "not_tested";
   providerResolvedProvider.textContent = settings.resolved_provider || "mock";
   renderUsageSummary(settings.usage_summary);
-  // TASK-056: update key UI controls based on current settings
+  // TASK-056 / TASK-060: cache settings and update all key UI controls
+  currentProviderSettings = settings;
   updateKeyUIState(settings);
 }
 
@@ -496,12 +505,19 @@ function setProviderKeyMsg(text, isError = false) {
  * - API key input: enabled only for real providers (not mock).
  * - Save Key: enabled only when real provider AND input is non-empty.
  * - Clear Key: visible only when key_status indicates a key exists.
- * - Test Connection: always disabled (TASK-058 deferred).
+ * - Test Connection (TASK-060): enabled only when ALL conditions are met:
+ *     1. provider !== "mock"
+ *     2. key_status === "configured" (or not_tested / test_success / test_failed / invalid)
+ *     3. real_provider_enabled === true
+ *     4. no in-flight test request (isTestingConnection === false)
+ *   Helper text explains why it is disabled when conditions are not fully met.
  */
 function updateKeyUIState(settings) {
   const provider = settings.provider || "mock";
   const isRealProvider = provider !== "mock";
   const keyStatus = settings.key_status || "not_configured";
+  const realProviderEnabled = Boolean(settings.real_provider_enabled);
+
   // A key exists in any of these states
   const keyExists = [
     "configured", "not_tested", "invalid", "test_success", "test_failed",
@@ -520,8 +536,24 @@ function updateKeyUIState(settings) {
   clearProviderKeyBtn.style.display = keyExists ? "" : "none";
   clearProviderKeyBtn.disabled = false;
 
-  // Test Connection: always disabled
-  testProviderConnectionBtn.disabled = true;
+  // Test Connection (TASK-060): enable only when all conditions met
+  const canTest = isRealProvider && keyExists && realProviderEnabled && !isTestingConnection;
+  testProviderConnectionBtn.disabled = !canTest;
+
+  // Update button title to explain disabled state
+  if (!isRealProvider) {
+    testProviderConnectionBtn.title = "Configure a real provider and save a key before testing.";
+  } else if (!keyExists) {
+    testProviderConnectionBtn.title = "Save an API key before testing.";
+  } else if (!realProviderEnabled) {
+    testProviderConnectionBtn.title = "Enable real provider (real_provider_enabled) before testing.";
+  } else if (isTestingConnection) {
+    testProviderConnectionBtn.title = "Test in progress...";
+  } else {
+    testProviderConnectionBtn.title =
+      "Test Connection requires explicit cost acknowledgement. " +
+      "Sends exactly one minimal request to your provider via local backend.";
+  }
 }
 
 /**
@@ -653,6 +685,188 @@ async function clearProviderKey() {
 }
 
 // ---------------------------------------------------------------------------
+// Provider Test Connection (TASK-060)
+// Security rules:
+//   - Only calls local backend POST /provider/settings/test (never external provider).
+//   - Request body contains ONLY: provider, model, explicit_cost_ack: true.
+//   - No api_key, prompt, memory_context, conversation_history, tools in body.
+//   - Response renders ONLY safe fields: status, safe_message, error_category,
+//     source, usage_estimate. Never shows raw provider body, headers, diagnostics.
+//   - Explicit cost acknowledgement (window.confirm) required on every click.
+//   - No automatic test after Save Key.
+//   - isTestingConnection flag prevents concurrent requests.
+// ---------------------------------------------------------------------------
+
+/**
+ * Show a safe message in the test connection status area.
+ * Never include API key value or raw provider body in `text`.
+ */
+function setProviderTestMsg(text, isError = false) {
+  providerTestMsg.textContent = text;
+  providerTestMsg.className = isError ? "provider-test-msg error" : "provider-test-msg";
+}
+
+/**
+ * Run Test Connection: sends one minimal POST to local backend.
+ *
+ * Enable conditions (all must be true):
+ *   1. provider !== "mock"
+ *   2. key_status is a "key exists" value (configured / not_tested / invalid / test_success / test_failed)
+ *   3. real_provider_enabled === true
+ *   4. isTestingConnection === false (no in-flight request)
+ *
+ * Explicit cost acknowledgement is required via window.confirm() on every click.
+ * Cancelling the dialog sends no backend request.
+ *
+ * Request body sent: { provider, model, explicit_cost_ack: true }
+ * Fields NOT sent: api_key, prompt, memory_context, conversation_history, tools.
+ *
+ * Safe response fields rendered: status, safe_message, error_category, source, usage_estimate.
+ * Fields NOT rendered: raw provider body, API key, headers, diagnostics, prompt.
+ */
+async function runTestConnection() {
+  // Guard: re-check enable conditions (button may be clicked programmatically)
+  const provider = currentProviderSettings.provider || "mock";
+  const keyStatus = currentProviderSettings.key_status || "not_configured";
+  const realProviderEnabled = Boolean(currentProviderSettings.real_provider_enabled);
+  const model = currentProviderSettings.model || "";
+
+  const keyExists = [
+    "configured", "not_tested", "invalid", "test_success", "test_failed",
+  ].includes(keyStatus);
+
+  if (!provider || provider === "mock") {
+    setProviderTestMsg("Configure a real provider and save a key before testing.", true);
+    return;
+  }
+  if (!keyExists) {
+    setProviderTestMsg("Save an API key before running Test Connection.", true);
+    return;
+  }
+  if (!realProviderEnabled) {
+    setProviderTestMsg("Enable real provider (real_provider_enabled) before testing.", true);
+    return;
+  }
+  if (isTestingConnection) {
+    return; // Silently ignore — button should already be disabled
+  }
+
+  // Explicit cost acknowledgement — required on every click.
+  // window.confirm() is used as the MVP cost ack dialog.
+  const confirmed = window.confirm(
+    "Test Connection — Cost Acknowledgement\n\n" +
+    "This may contact your configured provider.\n" +
+    "This may incur provider charges.\n" +
+    "The test sends exactly one minimal request.\n" +
+    "No memory or chat history will be sent.\n\n" +
+    "Continue with Test Connection?"
+  );
+  if (!confirmed) {
+    setProviderTestMsg("Test Connection cancelled.");
+    return;
+  }
+
+  // Set in-flight state
+  isTestingConnection = true;
+  testProviderConnectionBtn.disabled = true;
+  testProviderConnectionBtn.textContent = "Testing…";
+  setProviderTestMsg("Sending test request to local backend...");
+
+  let res;
+  try {
+    // Safety: body contains ONLY safe fields — no api_key, no prompt, no memory.
+    res = await fetch(`${BACKEND_URL}/provider/settings/test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        provider,
+        model: model || null,
+        explicit_cost_ack: true,
+      }),
+    });
+  } catch (fetchErr) {
+    isTestingConnection = false;
+    testProviderConnectionBtn.textContent = "Test Connection";
+    updateKeyUIState(currentProviderSettings);
+    const isNetworkError = fetchErr instanceof TypeError && fetchErr.message.includes("fetch");
+    setProviderTestMsg(
+      isNetworkError
+        ? "Could not reach backend. Make sure the backend is running on localhost."
+        : "Test Connection request failed. Please try again.",
+      true
+    );
+    return;
+  }
+
+  // Reset in-flight state before handling response
+  isTestingConnection = false;
+  testProviderConnectionBtn.textContent = "Test Connection";
+
+  // Parse response safely — never render raw body
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+    data = null;
+  }
+
+  if (res.status === 400 && data && data.detail === "cost_ack_required") {
+    // Should not occur if UI sends explicit_cost_ack: true — safe fallback message
+    setProviderTestMsg(
+      "Test Connection requires explicit cost acknowledgement. Please try again.",
+      true
+    );
+  } else if (res.status === 503) {
+    setProviderTestMsg(
+      "Secure key storage is unavailable in this environment. " +
+      "Set your API key as an environment variable and restart the backend.",
+      true
+    );
+  } else if (res.status === 400) {
+    // Other 400 errors (unknown provider, etc.)
+    setProviderTestMsg(
+      "Test Connection request was not accepted. Check provider and model settings.",
+      true
+    );
+  } else if (!res.ok || !data) {
+    setProviderTestMsg(
+      "Test Connection failed. Please check your provider settings and try again.",
+      true
+    );
+  } else {
+    // Success or safe failure — render only safe fields from response
+    // Never render: raw provider body, api_key, headers, diagnostics, prompt
+    const status = data.status || "unknown";
+    const safeMessage = data.safe_message || "";
+    const errorCategory = data.error_category || "";
+    const source = data.source || "";
+    const usageEstimate = data.usage_estimate;
+
+    // Build a safe display string from safe fields only
+    let display = safeMessage || `Test result: ${status}`;
+    if (errorCategory && status !== "success") {
+      display += ` (${errorCategory})`;
+    }
+    if (source) {
+      display += ` [source: ${source}]`;
+    }
+    if (usageEstimate) {
+      const inputTok = usageEstimate.estimated_input_tokens;
+      const outputTok = usageEstimate.estimated_output_tokens;
+      if (inputTok != null || outputTok != null) {
+        display += ` — tokens in: ${inputTok ?? "?"}, out: ${outputTok ?? "?"}`;
+      }
+    }
+
+    const isError = status !== "success";
+    setProviderTestMsg(display, isError);
+  }
+
+  // Refresh settings to pick up updated last_test_status / key_status
+  await loadProviderSettings();
+}
+
+// ---------------------------------------------------------------------------
 // Backend call
 // ---------------------------------------------------------------------------
 async function sendMessage(text) {
@@ -738,6 +952,13 @@ saveProviderKeyBtn.addEventListener("click", () => {
 
 clearProviderKeyBtn.addEventListener("click", () => {
   clearProviderKey();
+});
+
+// TASK-060: Test Connection button.
+// Sends POST to local backend only. No external provider URL. No api_key in body.
+// Explicit cost acknowledgement required via window.confirm() inside runTestConnection().
+testProviderConnectionBtn.addEventListener("click", () => {
+  runTestConnection();
 });
 
 // Dynamically enable/disable Save Key as user types in the key input field.

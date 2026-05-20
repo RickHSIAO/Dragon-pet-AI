@@ -217,14 +217,17 @@ No active memories.</pre>
       </div>
     </div>
 
-    <!-- TASK-056: API key save/clear controls.
+    <!-- TASK-056 / TASK-060: API key save/clear/test controls.
          Security rules:
          - Input is type="password" — browser masks the value.
          - Value is cleared by renderer.js immediately after every save attempt.
          - Key value is never logged to console.
          - Key value is never stored in localStorage or sessionStorage.
          - Only calls local backend (http://127.0.0.1:8000).
-         - Test Connection remains disabled (TASK-058 deferred).
+         - Test Connection requires explicit cost acknowledgement per click.
+         - Test Connection only calls local backend POST /provider/settings/test.
+         - No api_key, prompt, memory_context, or chat history is sent to test endpoint.
+         - No automatic test after Save Key.
     -->
     <div class="provider-key-section">
       <label>
@@ -244,12 +247,14 @@ No active memories.</pre>
           id="test-provider-connection-btn"
           type="button"
           disabled
-          title="Test Connection is disabled until provider test flow is implemented."
-        >Test Connection (disabled)</button>
+          title="Requires a real provider, saved key, and real_provider_enabled. Sends exactly one minimal request to your provider via local backend."
+        >Test Connection</button>
       </div>
       <div id="provider-key-msg" class="provider-key-msg" role="status"></div>
+      <div id="provider-test-msg" class="provider-test-msg" role="status"></div>
       <p class="provider-key-note">
-        Test Connection is disabled. To use a real provider, set your API key above.
+        Test Connection sends one minimal request to your provider via the local backend.
+        Explicit cost acknowledgement is required on every click. No memory or chat history is sent.
         If key storage is unavailable, set <code>ANTHROPIC_API_KEY</code> as an environment variable and restart the backend.
       </p>
     </div>
