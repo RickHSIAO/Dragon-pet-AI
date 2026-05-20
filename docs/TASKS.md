@@ -2376,7 +2376,7 @@ TASK-048 - Backend Provider Settings API Design
 
 ## TASK-048 - Backend Provider Settings API Design
 
-Status: IN_PROGRESS
+Status: DONE
 
 Goal:
 Design backend APIs for future BYOK provider settings without implementing them. This document defines the API surface, request/response schemas, key handling rules, and security boundaries that will guide future implementation.
@@ -2396,19 +2396,34 @@ Scope:
 
 Acceptance Criteria:
 - TASK-047 is marked DONE ✅
-- TASK-048 is recorded as IN_PROGRESS ✅
-- docs/PROVIDER_SETTINGS_API_DESIGN.md exists
-- Backend API endpoints are documented (GET/PATCH /provider/settings, POST /provider/settings/key, DELETE /provider/settings/key, POST /provider/settings/test)
-- Request and response schemas are documented
-- API key write-only behavior is documented
-- API key clear behavior is documented
-- Test connection behavior is documented
-- Provider status behavior (safe status model) is documented
-- Usage meter integration points are documented
-- Security boundaries are documented
-- No backend/app code is modified
-- No apps/desktop code is modified
-- No external API call is made
+- TASK-048 is recorded as DONE ✅
+- docs/PROVIDER_SETTINGS_API_DESIGN.md exists ✅
+- Backend API endpoints are documented (GET/PATCH /provider/settings, POST /provider/settings/key, DELETE /provider/settings/key, POST /provider/settings/test) ✅
+- Request and response schemas are documented ✅
+- API key write-only behavior is documented ✅
+- API key clear behavior is documented (DELETE endpoint, idempotent) ✅
+- Test connection behavior is documented (explicit_cost_ack required, no retries, no auto-trigger) ✅
+- Provider status behavior (safe status model: not_configured / configured / invalid / not_tested / test_success / test_failed) is documented ✅
+- Usage meter integration points are documented ✅
+- Security boundaries are documented (11 rules) ✅
+- No backend/app code is modified ✅
+- No apps/desktop code is modified ✅
+- No external API call is made ✅
+
+Completion Notes:
+- This was a design-only task. No runtime code was written or modified.
+- docs/PROVIDER_SETTINGS_API_DESIGN.md created: 12 sections covering proposed endpoints, API key handling rules, safe status model, test connection safety, usage meter integration, error handling, security boundaries, non-goals, and future implementation sequence.
+- Endpoints designed: GET /provider/settings, PATCH /provider/settings, POST /provider/settings/key, DELETE /provider/settings/key, POST /provider/settings/test
+- API key write-only: accepted only at POST /provider/settings/key; never returned from any endpoint; never logged; never in SQLite until TASK-049 secure storage design is complete
+- Test connection: explicit_cost_ack: true is mandatory (backend-enforced); exactly one minimal request; no retry; no auto-trigger on load/save/start; does not write to chat history or MemoryInjectionAudit
+- Safe status model: not_configured / configured / invalid / not_tested / test_success / test_failed — no key fragments in any status value
+- Error handling: 11 safe error categories, no raw provider body forwarded
+- POST /provider/settings/key implementation must not begin until TASK-049 (Secure Key Storage Design) is complete
+- No backend/app was modified
+- No apps/desktop was modified
+- No tests were added
+- No APIs were added
+- No external API was called
 
 Next Task:
 TASK-049 - Secure Key Storage Design
