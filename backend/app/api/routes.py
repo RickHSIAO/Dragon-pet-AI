@@ -1,4 +1,4 @@
-"""
+﻿"""
 API routes for dragon-pet-ai backend.
 
 TASK-009 keeps the system mock-only while allowing mock chat to read internal
@@ -100,13 +100,13 @@ def chat(request: ChatRequest, session: Session = Depends(get_session)) -> ChatR
     mode = normalize_chat_mode(request.mode)
     state_context = get_chat_state_context(session)
 
-    # ── Two-layer memory context gate (TASK-023) ───────────────────────────
-    # Layer 1 — backend global gate: MEMORY_INJECTION_ENABLED env var (default False)
-    # Layer 2 — per-request toggle:  request.use_memory (default False)
+    # ?? Two-layer memory context gate (TASK-023) ???????????????????????????
+    # Layer 1 ??backend global gate: MEMORY_INJECTION_ENABLED env var (default False)
+    # Layer 2 ??per-request toggle:  request.use_memory (default False)
     #
     # Only when BOTH are True may /chat build approved memory context and
     # write a MemoryInjectionAudit row.  Either gate being False means no
-    # memory injection and no audit row — identical to pre-TASK-020 behaviour.
+    # memory injection and no audit row ??identical to pre-TASK-020 behaviour.
     #
     # Memory content is NEVER placed in the response returned to the caller.
     memory_enabled = is_memory_injection_enabled()
@@ -125,7 +125,7 @@ def chat(request: ChatRequest, session: Session = Depends(get_session)) -> ChatR
         entries = [record.content.strip() for record in selected_records]
         formatted_context = format_approved_memory_context(entries)
 
-        # exclusion_summary is not yet computed by the builder — tracked in
+        # exclusion_summary is not yet computed by the builder ??tracked in
         # TASKS.md TASK-020 implementation notes for follow-up.
         create_memory_injection_audit(
             session=session,
@@ -145,7 +145,7 @@ def chat(request: ChatRequest, session: Session = Depends(get_session)) -> ChatR
         memory_context=formatted_context,
     )
 
-    # ── Usage meter recording (TASK-050) ──────────────────────────────────
+    # ?? Usage meter recording (TASK-050) ??????????????????????????????????
     # Record only safe aggregate metadata. Raw message text, prompt text,
     # memory context text, provider response body, and API key are NEVER
     # stored. Only integer token-length estimates and safe identifiers.
@@ -424,11 +424,6 @@ def deactivate_memory_route(
         raise HTTPException(status_code=404, detail="memory not found")
     return MemoryResponse.model_validate(memory)
 
-        raise HTTPException(
-            status_code=503,
-            detail="secure key storage is unavailable",
-        ) from exc
-    return KeyStatusResponse(**result)
 
 
 @router.post(
