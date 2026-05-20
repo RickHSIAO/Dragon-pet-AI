@@ -3151,7 +3151,9 @@ TASK-059R - Provider Test Connection Safety Review
 
 ## TASK-059R - Provider Test Connection Safety Review
 
-Status: Pending
+Status: DONE
+
+Reviewer: Opus (automated safety review)
 
 Goal:
 Conduct a safety review of the TASK-059 Test Connection backend implementation before enabling the Electron UI. Verify that all security and safety invariants from TASK-058 design are correctly enforced.
@@ -3173,21 +3175,47 @@ Scope:
 - Do not call external APIs
 
 Acceptance Criteria:
-- TASK-059R is recorded as DONE
-- explicit_cost_ack enforcement is confirmed ✅ / issue found
-- exactly-one minimal request rule is confirmed ✅ / issue found
-- no-fallback policy is confirmed ✅ / issue found
-- safe response model is confirmed (no key / raw body / headers / prompt in response) ✅ / issue found
-- redaction rules are confirmed in logs ✅ / issue found
-- usage meter safe metadata only is confirmed ✅ / issue found
-- mocked tests confirmed to cover all critical paths ✅ / issue found
-- PASS / PASS WITH CHANGES / FAIL verdict recorded
-- No backend/app code is modified
-- No apps/desktop code is modified
-- No external API call is made
+- TASK-059R is recorded as DONE ✅
+- explicit_cost_ack enforcement is confirmed ✅
+- exactly-one minimal request rule is confirmed ✅
+- no-fallback policy is confirmed ✅
+- safe response model is confirmed (no key / raw body / headers / prompt in response) ✅
+- redaction rules are confirmed in logs ✅
+- usage meter safe metadata only is confirmed ✅
+- mocked tests confirmed to cover all critical paths ✅
+- PASS / PASS WITH CHANGES / FAIL verdict recorded ✅
+- No backend/app code is modified ✅
+- No apps/desktop code is modified ✅
+- No external API call is made ✅
+
+Review Verdict: PASS
+
+Findings:
+- No critical issues found.
+- No blocking required fixes.
+- explicit_cost_ack is enforced at API boundary — missing or false returns 400 cost_ack_required. ✅
+- safe error categories are limited — no raw provider body, headers, prompt, or diagnostics in response. ✅
+- response schema contains no secret-bearing fields. ✅
+- runtime default runner is UnavailableProviderTestRunner — no external provider calls in default configuration. ✅
+- automated tests have no live external API calls. ✅
+- Backend surface is safe to expose to UI. TASK-060 may proceed.
+
+Recommended Non-Blocking Hardening Tests (deferred — not blocking TASK-060):
+- provider_disabled branch with configured key: verify behavior when LLM_PROVIDER_ENABLED=false but key is configured.
+- invalid_model branch: verify safe error_category returned for unsupported model identifier.
+- unknown provider error collapses to provider_error: verify unrecognized runner exceptions map to safe category, not raw message.
+- suspicious extra field rejection: verify extra request fields (e.g., system_prompt) are rejected without being echoed back.
+- safe_message category sweep: verify all error_category values produce distinct, safe, non-technical safe_message strings.
+
+Completion Notes:
+- TASK-059R was a safety review task. No runtime code was written or modified.
+- No backend/app code was modified.
+- No apps/desktop code was modified.
+- No tests were added.
+- No external API call was made.
 
 Next Task:
-TASK-060 - Provider Test Connection UI Enablement (blocked until TASK-059R PASS)
+TASK-060 - Provider Test Connection UI Enablement
 
 ---
 
