@@ -44,6 +44,7 @@ from app.services.memory_service import (
 )
 from app.services.prompt_service import format_approved_memory_context, normalize_chat_mode
 from app.services.state_service import get_chat_state_context, update_state_after_chat_turn
+from app.services.usage_meter_service import UsageRecord, estimate_text_tokens, record_usage
 
 router = APIRouter()
 
@@ -127,6 +128,23 @@ def chat(request: ChatRequest, session: Session = Depends(get_session)) -> ChatR
         state_context,
         memory_context=formatted_context,
     )
+
+    # ── Usage meter recording (TASK-050) ──────────────────────────────────
+    # Record only safe aggregate metadata. Raw message text, prompt text,
+    # memory context text, provider response body, and API key are NEVER
+    # stored. Only integer token-length estimates and safe identifiers.
+    _source = response_data["source"]
+    record_usage(UsageRecord(
+        source=_source,
+        provider=None,   # provider name not exposed at this layer
+        model=None,      # model name not exposed at this layer
+        estimated_input_tokens=estimate_text_tokens(request.message),
+        estimated_output_tokens=estimate_text_tokens(response_data["reply"]),
+        fallback_used=(_source == "llm_real_error"),
+        memory_used=should_use_memory,
+        error_category=None,
+    ))
+
     store_chat_turn(
         session=session,
         user_message=request.message,

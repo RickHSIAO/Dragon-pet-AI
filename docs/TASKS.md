@@ -2483,6 +2483,52 @@ TASK-050 - Usage Meter Implementation
 
 ---
 
+## TASK-050 - Usage Meter Implementation
+
+Status: IN_PROGRESS
+
+Goal:
+Implement a minimal in-memory usage meter for safe session-level usage visibility. Track only safe aggregate metadata. Never store raw messages, prompts, memory context, provider response bodies, or API keys.
+
+Scope:
+- Add in-memory usage meter service (backend/app/services/usage_meter_service.py)
+- Track safe aggregate usage fields only
+- Integrate usage recording with /chat response generation
+- Expose safe usage summary helper for future Provider Settings API
+- Add tests for usage counters and privacy boundaries
+- Do not store usage in SQLite
+- Do not track raw messages/prompts/memory/provider bodies/API keys
+- Do not call external APIs
+- Do not modify Electron UI
+
+Acceptance Criteria:
+- TASK-049 is marked DONE ✅
+- TASK-050 is recorded as IN_PROGRESS ✅
+- In-memory usage meter service exists (usage_meter_service.py)
+- Usage meter tracks request_count
+- Usage meter tracks source_counts
+- Usage meter tracks provider_counts
+- Usage meter tracks model_counts
+- Usage meter tracks estimated input/output/total tokens
+- Usage meter tracks fallback_count
+- Usage meter tracks memory_used_count
+- Usage meter never stores API key
+- Usage meter never stores raw user message
+- Usage meter never stores raw prompt
+- Usage meter never stores raw memory context
+- Usage meter never stores raw provider response
+- /chat response schema remains reply/mood/source
+- Existing tests pass
+- New tests pass (test_usage_meter_service.py)
+- No SQLite usage table is added
+- No Electron UI changes are made
+- No live external API calls occur
+
+Next Task:
+TASK-051 - Backend Provider Settings API Implementation
+
+---
+
 ## SIDE_TRACK — Streamer Companion Mode
 
 Status: NOT SCHEDULED — design exploration only

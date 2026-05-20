@@ -7,7 +7,7 @@ AI 驅動的桌面螢幕寵物 — 有個性、有記憶的桌面同伴。
 ## 目前狀態
 
 **Phase 3 完成 — Memory-Aware Chat and Audit Inspection**
-**Phase 4 進行中 — LLM Adapter Integration（TASK-049 Secure Key Storage Design 進行中）**
+**Phase 4 進行中 — LLM Adapter Integration（TASK-050 Usage Meter Implementation 進行中）**
 
 Backend（FastAPI）和 Desktop（Electron）均可運行。Mock chat、Manual Memory、Memory-Aware Chat（two-layer gate）、Audit Inspection API 和 Audit Logs UI 全部完成並通過 runtime smoke check。pytest 最新結果：356 passed。Real provider adapter 已在 TASK-035 behind feature flags；Anthropic contract 已用 mocked HTTP 驗證（TASK-037）。`/chat` wiring 已放在 `LLM_CHAT_ENABLED` 後面，default false；mock runtime smoke passed（TASK-041）；live provider 仍預設停用。
 

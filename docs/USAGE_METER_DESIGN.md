@@ -2,9 +2,21 @@
 
 > dragon-pet-ai
 > Phase: 4 — LLM Adapter Integration
-> Status: DESIGN (TASK-046)
-> Last Updated: 2026-05-19
-> Owner: TASK-046
+> Status: DESIGN COMPLETE (TASK-046 DONE) — MVP implementation done (TASK-050)
+> Last Updated: 2026-05-20
+> Owner: TASK-046 (design) / TASK-050 (implementation)
+
+---
+
+## MVP Implementation Status (TASK-050)
+
+The MVP in-memory usage meter has been implemented:
+
+- `backend/app/services/usage_meter_service.py` — `UsageRecord`, `UsageSummary`, `UsageMeter` (thread-safe), `estimate_text_tokens()`, module-level `record_usage()` / `get_usage_summary()` / `reset_usage_meter()`
+- `/chat` route records safe aggregate usage after each response (source, estimated token counts, memory_used, fallback_used)
+- Storage: in-memory only — resets on backend restart. No SQLite usage table added.
+- Raw message text, prompt text, memory context, provider response body, and API key are never stored.
+- `backend/tests/test_usage_meter_service.py` — 49 tests covering counters, privacy boundaries, SQLite absence, and /chat integration. pytest: **405 passed**.
 
 ---
 
