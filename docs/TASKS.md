@@ -3094,7 +3094,7 @@ TASK-059 - Provider Test Connection Implementation
 
 ## TASK-059 - Provider Test Connection Implementation
 
-Status: IN_PROGRESS
+Status: DONE
 
 Goal:
 Implement the backend Test Connection flow as designed in TASK-058, using mocked-provider tests only. No live provider calls.
@@ -3115,38 +3115,151 @@ Scope:
 - Do not call external APIs from tests
 
 Acceptance Criteria:
-- TASK-059 is recorded as IN_PROGRESS
-- POST /provider/settings/test is implemented (no longer returns 501)
-- explicit_cost_ack: true is required; missing/false returns 400 cost_ack_required
-- exactly-one minimal request rule is enforced in backend
-- safe response model is returned (status / provider / model / source / safe_message / error_category / usage_estimate)
-- no mock fallback on test failure
-- usage meter records test connection usage
-- redaction rules are enforced in backend
-- mocked pytest tests cover: missing cost_ack, false cost_ack, mock provider rejection, missing key, storage unavailable, success, auth failure, timeout, opaque non-2xx body, no retries, no memory/history/tools/streaming, key leakage, usage meter, no memory audit, /chat compatibility, and no external HTTP
-- no live external API call in any test
-- pytest passes (no regressions)
-- No Electron UI changes are made
-- No /chat response schema change
+- TASK-059 is recorded as DONE ✅
+- POST /provider/settings/test is implemented (no longer returns 501) ✅
+- explicit_cost_ack: true is required; missing/false returns 400 cost_ack_required ✅
+- exactly-one minimal request rule is enforced in backend ✅
+- safe response model is returned (status / provider / model / source / safe_message / error_category / usage_estimate) ✅
+- no mock fallback on test failure ✅
+- usage meter records test connection usage ✅
+- redaction rules are enforced in backend ✅
+- mocked pytest tests cover: missing cost_ack, false cost_ack, mock provider rejection, missing key, storage unavailable, success, auth failure, timeout, opaque non-2xx body, no retries, no memory/history/tools/streaming, key leakage, usage meter, no memory audit, /chat compatibility, and no external HTTP ✅
+- no live external API call in any test ✅
+- pytest passes (no regressions) ✅
+- No Electron UI changes are made ✅
+- No /chat response schema change ✅
 
-Implementation Notes:
-- `POST /provider/settings/test` is implemented as a backend-only endpoint with mocked-provider runner support.
-- Runtime default provider test runner is safe unavailable behavior and does not call external providers.
-- Tests can inject a fake provider runner to verify success, auth failure, timeout, non-2xx opaque body, and no-retry behavior.
-- `explicit_cost_ack: true` is required; missing or false returns safe HTTP 400 `cost_ack_required`.
-- The endpoint builds exactly one minimal `LLMRequest` with fixed user message `Reply with OK.`, no memory context, no state context, no conversation history, no tools, no streaming, and `max_tokens=16` passed to the runner.
-- Fallback policy is no fallback. Real provider test failures return `status=failed`, `source=llm_real_error`, and a safe `error_category`.
-- Usage meter records safe aggregate provider/model/source/token estimates/error category only after a provider-runner attempt.
-- API key, raw provider body, raw prompt, request headers, diagnostics, and raw response content are never returned.
-- Electron UI is not modified in TASK-059; Test Connection remains disabled in the renderer until TASK-060.
-- No live external API call is made.
-- No real API key is used.
-- `/chat` response schema remains `reply / mood / source`.
+Completion Notes:
+- TASK-059 was a backend implementation task. No Electron UI was modified. Test Connection button remains disabled in the renderer.
+- backend/app/services/provider_test_connection_service.py created: implements the provider test runner abstraction and minimal LLMRequest construction.
+- backend/tests/test_provider_test_connection.py created: mocked tests only — uses injectable fake provider runner; no live external API call; no real API key used.
+- POST /provider/settings/test implemented (replaces 501 placeholder). Requires explicit_cost_ack: true; missing or false returns safe HTTP 400 cost_ack_required.
+- Exactly one minimal LLMRequest per test call: prompt "Reply with OK.", max_tokens=16, no memory context, no state context, no conversation history, no tools, no streaming, no retries.
+- Fallback policy: no silent mock fallback. Failures return status=failed, source=llm_real_error, safe error_category only.
+- Usage meter records safe aggregate metadata only (provider / model / source / token estimates / error_category). No API key, raw provider body, headers, prompt, or diagnostics in any log or response.
+- Runtime default does not call external providers. Tests use injectable fake runner.
+- No backend/app code was broken. No apps/desktop code was modified.
+- No external API call was made. No real API key was used.
+- /chat response schema remains reply / mood / source.
 - pytest result: 465 passed.
 - Production DB was not polluted.
 
 Next Task:
-TASK-060 - Provider Test Connection UI Enablement
+TASK-059R - Provider Test Connection Safety Review
+
+---
+
+## TASK-059R - Provider Test Connection Safety Review
+
+Status: Pending
+
+Goal:
+Conduct a safety review of the TASK-059 Test Connection backend implementation before enabling the Electron UI. Verify that all security and safety invariants from TASK-058 design are correctly enforced.
+
+Scope:
+- Review backend/app/services/provider_test_connection_service.py
+- Review POST /provider/settings/test route
+- Verify explicit_cost_ack enforcement
+- Verify exactly-one minimal request rule (no retries, no streaming, no tools, no memory, no history)
+- Verify no-fallback policy
+- Verify safe response model (no key / raw body / headers / prompt / diagnostics in response or logs)
+- Verify usage meter only records safe aggregate metadata
+- Verify redaction rules in backend logging
+- Verify mocked tests cover all critical failure paths
+- Report any findings; block TASK-060 if critical issues found
+- Do not modify backend/app
+- Do not modify apps/desktop
+- Do not add tests
+- Do not call external APIs
+
+Acceptance Criteria:
+- TASK-059R is recorded as DONE
+- explicit_cost_ack enforcement is confirmed ✅ / issue found
+- exactly-one minimal request rule is confirmed ✅ / issue found
+- no-fallback policy is confirmed ✅ / issue found
+- safe response model is confirmed (no key / raw body / headers / prompt in response) ✅ / issue found
+- redaction rules are confirmed in logs ✅ / issue found
+- usage meter safe metadata only is confirmed ✅ / issue found
+- mocked tests confirmed to cover all critical paths ✅ / issue found
+- PASS / PASS WITH CHANGES / FAIL verdict recorded
+- No backend/app code is modified
+- No apps/desktop code is modified
+- No external API call is made
+
+Next Task:
+TASK-060 - Provider Test Connection UI Enablement (blocked until TASK-059R PASS)
+
+---
+
+## TASK-060 - Provider Test Connection UI Enablement
+
+Status: Pending
+
+Goal:
+Enable the Test Connection button in the Electron renderer and wire it to the POST /provider/settings/test backend endpoint, with explicit cost acknowledgement dialog. Blocked until TASK-059R passes.
+
+Scope:
+- Enable Test Connection button in Electron renderer for real providers with key_status configured
+- Implement explicit cost acknowledgement confirmation dialog before sending request
+- Wire renderer to POST /provider/settings/test with explicit_cost_ack: true
+- Display safe_message from backend response
+- Handle backend error responses (400 cost_ack_required, 503 storage unavailable, 500, network error)
+- Key status indicator updated after test (test_success / test_failed)
+- No live external API call from renderer — only calls local backend
+- No API key exposed in UI or logs
+- Do not modify /chat response schema
+- Do not add retries
+
+Acceptance Criteria:
+- TASK-060 is recorded as DONE
+- Test Connection button enabled for real providers with configured key
+- Explicit cost acknowledgement dialog shown before every request
+- POST /provider/settings/test called with explicit_cost_ack: true
+- safe_message displayed in UI
+- key_status refreshed after test
+- No API key in renderer logs or localStorage
+- No live external API call from renderer
+- Electron static check passes (node --check)
+- No /chat response schema change
+
+Next Task:
+TASK-061 - Provider Test Connection Runtime Smoke Check
+
+---
+
+## TASK-061 - Provider Test Connection Runtime Smoke Check
+
+Status: Pending
+
+Goal:
+Perform a manual runtime smoke check of the full Test Connection flow end-to-end on the local dev machine. Blocked until TASK-060 is complete.
+
+Scope:
+- Start backend and Electron desktop
+- Verify Test Connection button disabled for mock provider
+- Verify Test Connection button disabled when key_status is not_configured
+- Verify Test Connection button enabled for real provider with configured key
+- Verify cost acknowledgement dialog appears on click
+- Verify cancelling dialog sends no backend request
+- Verify confirming dialog sends POST /provider/settings/test
+- Verify safe_message displayed in UI
+- Verify key status indicator updated after test
+- Verify no API key in renderer DevTools or console
+- Verify /chat remains functional throughout
+- Do not modify backend/app
+- Do not modify apps/desktop
+- Do not add tests
+- Do not call external APIs from automation
+
+Acceptance Criteria:
+- TASK-061 is recorded as DONE
+- All smoke check items verified ✅ or recorded as non-blocking
+- Runtime Smoke Verdict: PASS recorded
+- No API key leaked in renderer logs or DevTools
+- /chat unaffected
+
+Next Task:
+TASK-062 - (TBD — Phase 4 stabilization or Phase 5 planning)
 
 ---
 
