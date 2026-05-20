@@ -2,7 +2,7 @@
 
 > dragon-pet-ai
 > Phase: 4 — LLM Adapter Integration
-> Status: DESIGN COMPLETE (TASK-055 DONE); IMPLEMENTATION DONE (TASK-056); SMOKE PASS (TASK-057); TEST CONNECTION DESIGN IN_PROGRESS (TASK-058)
+> Status: DESIGN COMPLETE (TASK-055 DONE); IMPLEMENTATION DONE (TASK-056); SMOKE PASS (TASK-057); TEST CONNECTION DESIGN DONE (TASK-058); BACKEND TEST CONNECTION IN_PROGRESS (TASK-059)
 > Last Updated: 2026-05-20
 > Owner: TASK-055
 > Depends on: TASK-054 (key save/clear backend endpoints wired to key storage abstraction)
@@ -268,8 +268,9 @@ The following are explicitly out of scope for TASK-055:
 | TASK-056 | Provider Settings Key UI Enablement Implementation | Implementation | TASK-055 |
 | TASK-057 | Provider Settings Key UI Smoke Check | Smoke check | TASK-056 |
 | TASK-058 | Provider Test Connection Design | Design-only | TASK-057 |
-| TASK-059 | Provider Test Connection Implementation | Implementation | TASK-058 |
-| TASK-060 | Provider Test Connection Runtime Smoke Check | Manual smoke | TASK-059 |
+| TASK-059 | Provider Test Connection Backend Implementation | Implementation | TASK-058 |
+| TASK-060 | Provider Test Connection UI Enablement | Implementation | TASK-059 |
+| TASK-061 | Provider Test Connection Runtime Smoke Check | Manual smoke | TASK-060 |
 
 TASK-056 will modify the Electron renderer to:
 - Enable Save Key button for real providers.

@@ -187,7 +187,7 @@ def test_key_endpoint_clear_removes_key_without_exposing_value():
     assert "api_key" not in response.text
 
 
-def test_placeholder_test_endpoint_remains_safe_and_no_external_call(monkeypatch):
+def test_test_endpoint_rejects_api_key_field_and_no_external_call(monkeypatch):
     secret = "sk-test-placeholder-secret-should-not-appear"
 
     def raise_if_llm_provider_called():
@@ -204,7 +204,7 @@ def test_placeholder_test_endpoint_remains_safe_and_no_external_call(monkeypatch
             json={"provider": "anthropic", "api_key": secret},
         )
 
-    assert response.status_code == 501
-    assert response.json()["status"] == "not_implemented"
+    assert response.status_code == 400
+    assert response.json() == {"detail": "unsupported test field"}
     assert secret not in response.text
     assert "api_key" not in response.text

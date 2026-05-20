@@ -45,6 +45,24 @@ class KeyStatusResponse(BaseModel):
     message: str
 
 
+class ProviderTestConnectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str
+    model: str | None = None
+    explicit_cost_ack: bool = False
+
+
+class ProviderTestConnectionResponse(BaseModel):
+    status: str
+    provider: str
+    model: str | None = None
+    source: str
+    safe_message: str
+    error_category: str | None = None
+    usage_estimate: dict[str, int] | None = None
+
+
 class ProviderSettingsNotImplementedResponse(BaseModel):
     status: str
     message: str

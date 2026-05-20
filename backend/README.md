@@ -38,7 +38,7 @@ source .venv/bin/activate
 | PATCH | `/provider/settings` | Update non-secret provider settings only |
 | POST | `/provider/settings/key` | Save provider key through secure key storage abstraction; never returns key |
 | DELETE | `/provider/settings/key` | Clear provider key through secure key storage abstraction |
-| POST | `/provider/settings/test` | Disabled placeholder; no live provider call |
+| POST | `/provider/settings/test` | Backend Test Connection endpoint with mocked-provider runner; no live provider call |
 | GET | `/memory/audit` | Read-only audit inspection — safe metadata only, no raw content |
 
 ### POST /chat
@@ -111,11 +111,11 @@ Real provider config design (TASK-034), safety review (TASK-034R), and review fi
 
 TASK-040 adds `/chat` internal LLM adapter wiring behind `LLM_CHAT_ENABLED=false` by default. With the flag disabled, `/chat` keeps the existing mock flow and does not call the provider factory. With the flag enabled, `/chat` can use the LLM adapter path. TASK-043 adds mocked-only `/chat` real-provider contract tests for the flag matrix, source behavior, fallback behavior, leakage checks, memory independence, and no-retry behavior. Live provider calls are still not part of automated tests.
 
-TASK-051 adds the safe non-secret Provider Settings API subset. `GET /provider/settings` returns provider/model flags, safe key status, resolved provider status, and aggregate in-memory `usage_summary`. `PATCH /provider/settings` updates only non-secret settings and rejects API key fields with a fixed safe error. TASK-054 wires `POST /provider/settings/key` and `DELETE /provider/settings/key` to secure key storage abstraction; they never return key values. `POST /provider/settings/test` remains a `501 not_implemented` placeholder and does not call external providers.
+TASK-051 adds the safe non-secret Provider Settings API subset. `GET /provider/settings` returns provider/model flags, safe key status, resolved provider status, and aggregate in-memory `usage_summary`. `PATCH /provider/settings` updates only non-secret settings and rejects API key fields with a fixed safe error. TASK-054 wires `POST /provider/settings/key` and `DELETE /provider/settings/key` to secure key storage abstraction; they never return key values. TASK-059 wires `POST /provider/settings/test` as a backend-only mocked-provider Test Connection endpoint; it requires `explicit_cost_ack`, uses exactly one minimal request, has no mock fallback, and does not call external providers by default.
 
 TASK-052 adds an Electron Provider Settings UI for that safe subset. The UI calls only local backend settings endpoints, displays safe key status and usage counters, and keeps key save/clear/test connection controls disabled.
 
-TASK-053 adds a backend key storage abstraction in `app/services/key_storage_service.py`. TASK-054 wires `POST /provider/settings/key` and `DELETE /provider/settings/key` to that abstraction. The runtime default is a safe unavailable backend; tests use an in-memory fake backend for save/clear/idempotent-clear/replace behavior. No API key is stored in SQLite or a plain config file, no key is returned to frontend responses, and `POST /provider/settings/test` remains disabled. Latest backend validation: 449 passed.
+TASK-053 adds a backend key storage abstraction in `app/services/key_storage_service.py`. TASK-054 wires `POST /provider/settings/key` and `DELETE /provider/settings/key` to that abstraction. The runtime default is a safe unavailable backend; tests use an in-memory fake backend for save/clear/idempotent-clear/replace behavior. No API key is stored in SQLite or a plain config file, and no key is returned to frontend responses. TASK-059 backend validation: 465 passed.
 
 `MemoryInjectionAudit` records injection events when memory-aware chat runs with both `MEMORY_INJECTION_ENABLED=true` and `use_memory=true`. Each audit row stores: selected memory IDs (as a JSON array), selected count, total context chars, feature flag state, and timestamp. Raw memory content is never stored in audit rows.
 

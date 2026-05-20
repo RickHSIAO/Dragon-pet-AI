@@ -202,6 +202,20 @@ def get_api_key(provider: str) -> str | None:
         return None
 
 
+def require_api_key(provider: str) -> str:
+    """
+    Return a backend-only API key or raise a safe typed error.
+
+    This is for backend operations that must distinguish a missing key from
+    unavailable secure storage. The key must never be returned through schemas.
+    """
+    normalized_provider = normalize_provider(provider)
+    api_key = _backend.get_api_key(normalized_provider)
+    if not api_key:
+        raise ValueError("missing_key")
+    return api_key
+
+
 def clear_api_key(provider: str) -> None:
     _backend.clear_api_key(provider)
 

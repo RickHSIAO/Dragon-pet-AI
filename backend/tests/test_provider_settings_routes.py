@@ -394,7 +394,7 @@ def test_delete_provider_settings_key_unavailable_storage_fails_safely():
     assert response.json() == {"detail": "secure key storage is unavailable"}
 
 
-def test_post_provider_settings_test_is_safe_placeholder():
+def test_post_provider_settings_test_rejects_api_key_field():
     secret = "sk-test-secret-should-not-appear"
 
     with TestClient(app) as client:
@@ -403,8 +403,8 @@ def test_post_provider_settings_test_is_safe_placeholder():
             json={"provider": "anthropic", "api_key": secret},
         )
 
-    assert response.status_code == 501
-    assert response.json()["status"] == "not_implemented"
+    assert response.status_code == 400
+    assert response.json() == {"detail": "unsupported test field"}
     assert secret not in response.text
     assert "api_key" not in response.text
 

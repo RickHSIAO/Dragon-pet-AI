@@ -2,7 +2,7 @@
 
 > dragon-pet-ai
 > Phase: 4 — LLM Adapter Integration
-> Status: DESIGN COMPLETE (TASK-048 DONE); NON-SECRET API IMPLEMENTED (TASK-051 DONE); KEY STORAGE ABSTRACTION DONE (TASK-053); KEY SAVE/CLEAR ENDPOINTS DONE (TASK-054); KEY UI ENABLEMENT DESIGNED (TASK-055); TEST CONNECTION DESIGN IN_PROGRESS (TASK-058)
+> Status: DESIGN COMPLETE (TASK-048 DONE); NON-SECRET API IMPLEMENTED (TASK-051 DONE); KEY STORAGE ABSTRACTION DONE (TASK-053); KEY SAVE/CLEAR ENDPOINTS DONE (TASK-054); KEY UI ENABLEMENT DESIGNED (TASK-055); TEST CONNECTION DESIGN DONE (TASK-058); BACKEND TEST CONNECTION IN_PROGRESS (TASK-059)
 > Last Updated: 2026-05-20
 > Owner: TASK-048
 > Secure Key Storage Design: see `docs/SECURE_KEY_STORAGE_DESIGN.md` (TASK-049)
@@ -169,7 +169,7 @@ Key principles:
 
 **Purpose:** Execute a single minimal test request to the configured provider. This is the only endpoint that may trigger a live provider call outside of `/chat`. It requires explicit user action and an explicit cost acknowledgement.
 
-**TASK-058 runtime status:** Disabled placeholder returning `501 not_implemented`. It does not call external providers and must remain disabled until TASK-059 implementation. See `docs/PROVIDER_TEST_CONNECTION_DESIGN.md` for the safe Test Connection contract.
+**TASK-059 runtime status:** Backend endpoint implemented with mocked-provider runner support. Runtime default runner does not call external providers. Electron UI remains disabled until TASK-060.
 
 **Request fields:**
 
@@ -382,11 +382,12 @@ The following are explicitly out of scope for TASK-048 and Phase 4:
 | TASK-055 | Provider Settings Key UI Enablement Design | DONE | TASK-054 |
 | TASK-056 | Provider Settings Key UI Enablement Implementation | DONE | TASK-055 |
 | TASK-057 | Provider Settings Key UI Smoke Check | DONE | TASK-056 |
-| TASK-058 | Provider Test Connection Design | IN_PROGRESS | TASK-057 |
-| TASK-059 | Provider Test Connection Implementation | Pending | TASK-058 |
-| TASK-060 | Provider Test Connection Runtime Smoke Check | Pending | TASK-059 |
+| TASK-058 | Provider Test Connection Design | DONE | TASK-057 |
+| TASK-059 | Provider Test Connection Backend Implementation | IN_PROGRESS | TASK-058 |
+| TASK-060 | Provider Test Connection UI Enablement | Pending | TASK-059 |
+| TASK-061 | Provider Test Connection Runtime Smoke Check | Pending | TASK-060 |
 
-`POST /provider/settings/key` and `DELETE /provider/settings/key` are wired to the TASK-053 key storage abstraction. Runtime default is `UnavailableKeyStorageBackend` (safe 503). Live provider test behavior remains disabled (`501 not_implemented`) and must not begin until TASK-059 implementation.
+`POST /provider/settings/key` and `DELETE /provider/settings/key` are wired to the TASK-053 key storage abstraction. Runtime default is `UnavailableKeyStorageBackend` (safe 503). `POST /provider/settings/test` is backend-implemented with mocked-provider runner support and must not make live external provider calls in automated tests.
 
 `TASK-051` (Backend implementation) must not begin until `TASK-050` (Usage Meter Implementation) is ready, because the test connection endpoint must be able to record usage at the moment of the first live call.
 

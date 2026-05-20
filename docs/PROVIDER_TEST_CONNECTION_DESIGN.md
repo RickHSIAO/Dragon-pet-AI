@@ -2,7 +2,7 @@
 
 > dragon-pet-ai
 > Phase: 4 - LLM Adapter Integration
-> Status: DESIGN IN PROGRESS (TASK-058)
+> Status: DESIGN COMPLETE (TASK-058 DONE); BACKEND IMPLEMENTATION IN_PROGRESS (TASK-059)
 > Last Updated: 2026-05-20
 > Owner: TASK-058
 
@@ -24,8 +24,9 @@ and no live provider call is made in TASK-058.
 - Save Key and Clear Key UI exists.
 - Key storage abstraction exists.
 - `POST /provider/settings/key` and `DELETE /provider/settings/key` are wired to key storage.
-- Test Connection button remains disabled.
-- `POST /provider/settings/test` currently returns `501 not_implemented`.
+- Test Connection button remains disabled in the Electron renderer.
+- `POST /provider/settings/test` is implemented backend-side in TASK-059 with mocked-provider tests only.
+- Runtime default provider test runner does not call external providers.
 - Real provider remains disabled by default.
 - Manual live smoke remains deferred until explicit user cost confirmation.
 
@@ -317,6 +318,6 @@ For a future manual smoke task:
 | Task | Name | Type |
 |---|---|---|
 | TASK-058 | Provider Test Connection Design | Design-only |
-| TASK-059 | Provider Test Connection Implementation | Implementation |
-| TASK-060 | Provider Test Connection Runtime Smoke Check | Manual smoke |
-
+| TASK-059 | Provider Test Connection Backend Implementation | Implementation |
+| TASK-060 | Provider Test Connection UI Enablement | Implementation |
+| TASK-061 | Provider Test Connection Runtime Smoke Check | Manual smoke |

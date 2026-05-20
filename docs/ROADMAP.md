@@ -111,7 +111,7 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 
 **Goal:** Wire the approved memory context pipeline to a real LLM provider behind a feature flag, using an adapter pattern that keeps mock as the default.
 
-**Status:** IN PROGRESS — provider adapter exists behind flags; mock `/chat` LLM wiring smoke passed; real-provider `/chat` wiring contract tests passed with mocked HTTP only; in-memory usage meter, non-secret provider settings API, Provider Settings UI, secure key storage abstraction, key save/clear endpoints, key UI enablement design, key UI implementation, and key UI runtime smoke are complete; Provider Test Connection design is in progress (TASK-058); live provider remains disabled by default
+**Status:** IN PROGRESS — provider adapter exists behind flags; mock `/chat` LLM wiring smoke passed; real-provider `/chat` wiring contract tests passed with mocked HTTP only; in-memory usage meter, non-secret provider settings API, Provider Settings UI, secure key storage abstraction, key save/clear endpoints, key UI enablement design, key UI implementation, key UI runtime smoke, and Provider Test Connection design are complete; backend Test Connection implementation is in progress with mocked-provider tests only (TASK-059); live provider remains disabled by default
 
 **Recommended primary path: Option A — LLM Adapter Integration**
 
@@ -156,9 +156,10 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 | TASK-055 | Provider Settings Key UI Enablement Design | DONE |
 | TASK-056 | Provider Settings Key UI Enablement Implementation | DONE |
 | TASK-057 | Provider Settings Key UI Smoke Check | DONE |
-| TASK-058 | Provider Test Connection Design | IN_PROGRESS |
-| TASK-059 | Provider Test Connection Implementation | Pending |
-| TASK-060 | Provider Test Connection Runtime Smoke Check | Pending |
+| TASK-058 | Provider Test Connection Design | DONE |
+| TASK-059 | Provider Test Connection Backend Implementation | IN_PROGRESS |
+| TASK-060 | Provider Test Connection UI Enablement | Pending |
+| TASK-061 | Provider Test Connection Runtime Smoke Check | Pending |
 
 **Phase 4 Key Safety Constraints:**
 - `LLM_PROVIDER_ENABLED=false` is the default; real provider requires explicit opt-in via env var
@@ -170,7 +171,7 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 - Non-2xx provider response bodies are opaque — not parsed, not logged, not returned
 - No tool execution, no file access, no autonomous action, no automatic memory extraction
 - Live smoke is blocked until explicit user cost confirmation and TASK-044 go/no-go criteria are satisfied
-- BYOK is the recommended MVP path; provider settings UI design done (TASK-047); backend API design done (TASK-048); secure key storage design done (TASK-049); usage meter implementation done (TASK-050); non-secret settings API implementation done (TASK-051); Provider Settings UI implementation done (TASK-052); secure key storage abstraction done (TASK-053); provider key save/clear endpoints done (TASK-054); key UI enablement design done (TASK-055); Save Key / Clear Key UI implementation done (TASK-056); key UI runtime smoke passed (TASK-057); live test connection remains disabled until TASK-059 implementation
+- BYOK is the recommended MVP path; provider settings UI design done (TASK-047); backend API design done (TASK-048); secure key storage design done (TASK-049); usage meter implementation done (TASK-050); non-secret settings API implementation done (TASK-051); Provider Settings UI implementation done (TASK-052); secure key storage abstraction done (TASK-053); provider key save/clear endpoints done (TASK-054); key UI enablement design done (TASK-055); Save Key / Clear Key UI implementation done (TASK-056); key UI runtime smoke passed (TASK-057); Provider Test Connection design done (TASK-058); renderer Test Connection remains disabled until TASK-060 UI enablement
 
 See `docs/PHASE4_PLAN.md`, `docs/LLM_ADAPTER_DESIGN.md`, `docs/LLM_PROVIDER_CONTRACT.md`, `docs/CHAT_LLM_WIRING_DESIGN.md`, `docs/CHAT_LLM_REAL_PROVIDER_WIRING_DESIGN.md`, `docs/COST_AND_MONETIZATION.md`, `docs/BYOK_PRODUCT_AND_SETTINGS.md`, `docs/USAGE_METER_DESIGN.md`, `docs/PROVIDER_SETTINGS_UI_DESIGN.md`, `docs/PROVIDER_SETTINGS_API_DESIGN.md`, `docs/SECURE_KEY_STORAGE_DESIGN.md`, and `docs/PROVIDER_TEST_CONNECTION_DESIGN.md` for full planning and design documents.
 
