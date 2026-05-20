@@ -39,7 +39,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],   # Electron uses file:// — restrict further in Phase 2
-    allow_methods=["GET", "POST", "DELETE"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
     allow_headers=["Content-Type"],
 )
 

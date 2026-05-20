@@ -2542,6 +2542,56 @@ Completion Notes:
 
 ---
 
+## TASK-051 - Backend Provider Settings API Implementation
+
+Status: IN_PROGRESS
+
+Goal:
+Implement safe non-secret Provider Settings API endpoints and read-only provider status without key storage.
+
+Scope:
+- Add provider settings schemas
+- Add provider settings service for non-secret runtime settings
+- Add GET /provider/settings
+- Add PATCH /provider/settings for non-secret settings only
+- Add safe usage_summary from in-memory usage meter
+- Add safe provider resolved status
+- Add disabled placeholder behavior for key storage endpoints
+- Do not store API keys
+- Do not read API keys
+- Do not call external providers
+- Do not modify Electron UI
+
+Acceptance Criteria:
+- TASK-051 is recorded as IN_PROGRESS
+- GET /provider/settings exists
+- PATCH /provider/settings exists for non-secret settings
+- GET /provider/settings never returns API key
+- PATCH /provider/settings rejects API key fields
+- usage_summary is safe and aggregate only
+- provider status is safe and non-secret
+- POST /provider/settings/key returns safe not_implemented placeholder
+- DELETE /provider/settings/key returns safe not_implemented placeholder
+- POST /provider/settings/test returns safe not_implemented placeholder
+- No API key is read
+- No API key is stored
+- No external API call occurs
+- /chat response schema remains unchanged
+- Existing tests pass
+- New tests pass
+- No Electron UI changes are made
+
+Next Task:
+TASK-052 - Provider Settings UI Implementation
+
+Implementation Notes:
+- `POST /provider/settings/key` must not be enabled before TASK-053 - Secure Key Storage Implementation.
+- TASK-051 implements non-secret endpoints and read-only status first.
+- Placeholder endpoints must not inspect request body or process submitted key values.
+- pytest result: 421 passed.
+
+---
+
 ## SIDE_TRACK — Streamer Companion Mode
 
 Status: NOT SCHEDULED — design exploration only

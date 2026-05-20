@@ -11,7 +11,8 @@ Safety boundaries:
 - /chat only writes local conversation history and internal MVP state to SQLite.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from pydantic import ValidationError
 from sqlmodel import Session
 
 from app.core.config import is_memory_injection_enabled
@@ -25,6 +26,11 @@ from app.schemas.memory import (
 from app.schemas.memory_audit import (
     MemoryInjectionAuditListResponse,
     MemoryInjectionAuditResponse,
+)
+from app.schemas.provider_settings import (
+    ProviderSettingsNotImplementedResponse,
+    ProviderSettingsResponse,
+    ProviderSettingsUpdateRequest,
 )
 from app.services.chat_service import generate_chat_reply
 from app.services.conversation_service import get_or_create_default_conversation, store_chat_turn
@@ -43,6 +49,11 @@ from app.services.memory_service import (
     list_active_memories,
 )
 from app.services.prompt_service import format_approved_memory_context, normalize_chat_mode
+from app.services.provider_settings_service import (
+    ProviderSettingsUpdate,
+    get_provider_settings,
+    update_provider_settings,
+)
 from app.services.state_service import get_chat_state_context, update_state_after_chat_turn
 from app.services.usage_meter_service import UsageRecord, estimate_text_tokens, record_usage
 
@@ -159,6 +170,103 @@ def chat(request: ChatRequest, session: Session = Depends(get_session)) -> ChatR
         mode=mode,
     )
     return ChatResponse(**response_data)
+
+
+@router.get("/provider/settings", response_model=ProviderSettingsResponse)
+def get_provider_settings_route() -> ProviderSettingsResponse:
+    """
+    Return safe non-secret provider settings and aggregate usage metadata.
+
+    This endpoint never reads or returns an API key.
+    """
+    return ProviderSettingsResponse(**get_provider_settings())
+
+
+@router.patch("/provider/settings", response_model=ProviderSettingsResponse)
+async def update_provider_settings_route(
+    request: Request,
+) -> ProviderSettingsResponse:
+    """
+    Update non-secret provider settings only.
+
+    API key fields are not part of the schema and extra fields are rejected by
+    Pydantic before this handler runs.
+    """
+    try:
+        body = await request.json()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="invalid json body") from exc
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="request body must be an object")
+
+    allowed_fields = set(ProviderSettingsUpdateRequest.model_fields)
+    unsupported_fields = set(body) - allowed_fields
+    if unsupported_fields:
+        raise HTTPException(status_code=400, detail="unsupported setting field")
+
+    try:
+        update_request = ProviderSettingsUpdateRequest(**body)
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail="invalid provider settings") from exc
+    update = ProviderSettingsUpdate(**update_request.model_dump())
+    try:
+        settings = update_provider_settings(update)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return ProviderSettingsResponse(**settings)
+
+
+@router.post(
+    "/provider/settings/key",
+    response_model=ProviderSettingsNotImplementedResponse,
+    status_code=501,
+)
+def save_provider_key_placeholder(response: Response) -> ProviderSettingsNotImplementedResponse:
+    """
+    Safe placeholder until TASK-053 secure key storage is implemented.
+
+    The request body is intentionally not accepted or inspected.
+    """
+    response.status_code = 501
+    return ProviderSettingsNotImplementedResponse(
+        status="not_implemented",
+        message="API key storage is not implemented yet.",
+    )
+
+
+@router.delete(
+    "/provider/settings/key",
+    response_model=ProviderSettingsNotImplementedResponse,
+    status_code=501,
+)
+def clear_provider_key_placeholder(response: Response) -> ProviderSettingsNotImplementedResponse:
+    """Safe placeholder until TASK-053 secure key storage is implemented."""
+    response.status_code = 501
+    return ProviderSettingsNotImplementedResponse(
+        status="not_implemented",
+        message="API key storage is not implemented yet.",
+    )
+
+
+@router.post(
+    "/provider/settings/test",
+    response_model=ProviderSettingsNotImplementedResponse,
+    status_code=501,
+)
+def test_provider_connection_placeholder(
+    response: Response,
+) -> ProviderSettingsNotImplementedResponse:
+    """
+    Safe placeholder until live provider testing is explicitly implemented.
+
+    The request body is intentionally not accepted or inspected, and no external
+    provider call can occur.
+    """
+    response.status_code = 501
+    return ProviderSettingsNotImplementedResponse(
+        status="not_implemented",
+        message="Provider test connection is not implemented yet.",
+    )
 
 
 @router.post("/memory", response_model=MemoryResponse)

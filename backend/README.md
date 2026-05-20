@@ -34,6 +34,11 @@ source .venv/bin/activate
 | GET | `/memory` | List active local memory records |
 | GET | `/memory/context-preview` | Preview active memory records as context text |
 | DELETE | `/memory/{id}` | Deactivate a local memory record |
+| GET | `/provider/settings` | Read safe non-secret provider settings and aggregate usage summary |
+| PATCH | `/provider/settings` | Update non-secret provider settings only |
+| POST | `/provider/settings/key` | Disabled placeholder until secure key storage is implemented |
+| DELETE | `/provider/settings/key` | Disabled placeholder until secure key storage is implemented |
+| POST | `/provider/settings/test` | Disabled placeholder; no live provider call |
 | GET | `/memory/audit` | Read-only audit inspection — safe metadata only, no raw content |
 
 ### POST /chat
@@ -105,6 +110,8 @@ Mock provider compatibility tests cover supported chat modes, optional memory/st
 Real provider config design (TASK-034), safety review (TASK-034R), and review fixes (TASK-034F) are complete. TASK-035 adds real provider selection behind `LLM_PROVIDER_ENABLED=false` by default. Unknown providers and missing keys fall back safely without exposing secrets. API keys must never appear in logs, SQLite, audit rows, API responses, provider repr/str, or the Electron frontend. No automatic retries are permitted in Phase 4. Non-2xx provider response bodies are opaque. Fallback responses must not claim `llm_real`.
 
 TASK-040 adds `/chat` internal LLM adapter wiring behind `LLM_CHAT_ENABLED=false` by default. With the flag disabled, `/chat` keeps the existing mock flow and does not call the provider factory. With the flag enabled, `/chat` can use the LLM adapter path. TASK-043 adds mocked-only `/chat` real-provider contract tests for the flag matrix, source behavior, fallback behavior, leakage checks, memory independence, and no-retry behavior. Live provider calls are still not part of automated tests.
+
+TASK-051 adds the safe non-secret Provider Settings API subset. `GET /provider/settings` returns provider/model flags, safe key status, resolved provider status, and aggregate in-memory `usage_summary`. `PATCH /provider/settings` updates only non-secret settings and rejects API key fields with a fixed safe error. `POST /provider/settings/key`, `DELETE /provider/settings/key`, and `POST /provider/settings/test` are `501 not_implemented` placeholders until secure key storage and live test safety are implemented. These endpoints do not read, store, log, or return API keys and do not call external providers.
 
 `MemoryInjectionAudit` records injection events when memory-aware chat runs with both `MEMORY_INJECTION_ENABLED=true` and `use_memory=true`. Each audit row stores: selected memory IDs (as a JSON array), selected count, total context chars, feature flag state, and timestamp. Raw memory content is never stored in audit rows.
 

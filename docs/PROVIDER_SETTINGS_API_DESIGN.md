@@ -2,7 +2,7 @@
 
 > dragon-pet-ai
 > Phase: 4 — LLM Adapter Integration
-> Status: DESIGN COMPLETE (TASK-048 DONE)
+> Status: DESIGN COMPLETE (TASK-048 DONE); NON-SECRET API IMPLEMENTED (TASK-051 IN_PROGRESS)
 > Last Updated: 2026-05-20
 > Owner: TASK-048
 > Secure Key Storage Design: see `docs/SECURE_KEY_STORAGE_DESIGN.md` (TASK-049)
@@ -19,7 +19,8 @@ Key principles:
 - The API key is write-only. It must never appear in any response body, log line, or error message.
 - Test connection is manual-only. No endpoint triggers a live provider call automatically.
 - Provider status responses expose only safe, non-secret metadata.
-- This document is design-only. No runtime API is implemented in TASK-048.
+- TASK-048 was design-only. TASK-051 implements the safe non-secret subset only.
+- API key storage endpoints remain disabled placeholders until TASK-053.
 
 ---
 
@@ -28,10 +29,11 @@ Key principles:
 | Component | Status |
 |---|---|
 | Provider Settings UI design | DONE (TASK-047) — `docs/PROVIDER_SETTINGS_UI_DESIGN.md` |
-| Backend Provider Settings API | Not implemented — this document is the design |
+| Backend Provider Settings API | Non-secret GET/PATCH implemented in TASK-051 |
 | API key handling | Environment variable only during dev phase |
-| Secure key storage | Not designed yet — TASK-049 |
+| Secure key storage | Design complete (TASK-049); implementation deferred to TASK-053 |
 | Usage meter design | DONE (TASK-046) — `docs/USAGE_METER_DESIGN.md` |
+| Usage meter runtime | In-memory safe aggregate implementation complete (TASK-050) |
 | LLM provider factory | Exists in `backend/app` behind feature flags |
 | Real provider | Disabled by default (`LLM_PROVIDER_ENABLED=false`) |
 | Manual live smoke | Deferred until explicit user cost confirmation |
@@ -43,6 +45,8 @@ Key principles:
 ### 3.1 `GET /provider/settings`
 
 **Purpose:** Return the current safe provider settings state. Used by the settings UI on load to display current configuration.
+
+**TASK-051 runtime status:** Implemented for safe non-secret status and safe aggregate usage summary. It does not read `LLM_API_KEY`.
 
 **Response fields:**
 
@@ -71,6 +75,8 @@ Key principles:
 ### 3.2 `PATCH /provider/settings`
 
 **Purpose:** Update safe, non-secret provider settings. Does not accept or touch the API key.
+
+**TASK-051 runtime status:** Implemented for non-secret in-memory settings only. Unsupported fields such as `api_key`, `key`, `prompt`, and `memory_context` are rejected with a fixed safe error that does not echo submitted values.
 
 **Allowed request fields:**
 
@@ -102,6 +108,8 @@ Key principles:
 ### 3.3 `POST /provider/settings/key`
 
 **Purpose:** Save or update the API key for the configured provider. This is the only endpoint that accepts a key value.
+
+**TASK-051 runtime status:** Disabled placeholder returning `501 not_implemented`. It must not be enabled before TASK-053 Secure Key Storage Implementation.
 
 **Request fields:**
 
@@ -136,6 +144,8 @@ Key principles:
 
 **Purpose:** Clear the stored API key for the configured provider. After deletion, real provider calls cannot be made until a new key is provided.
 
+**TASK-051 runtime status:** Disabled placeholder returning `501 not_implemented`. It must not be enabled before TASK-053 Secure Key Storage Implementation.
+
 **Request:** No body required. Provider may be specified as a query parameter or path segment.
 
 **Response fields:**
@@ -157,6 +167,8 @@ Key principles:
 ### 3.5 `POST /provider/settings/test`
 
 **Purpose:** Execute a single minimal test request to the configured provider. This is the only endpoint that may trigger a live provider call outside of `/chat`. It requires explicit user action and an explicit cost acknowledgement.
+
+**TASK-051 runtime status:** Disabled placeholder returning `501 not_implemented`. It does not call external providers and must remain disabled until key storage and live-test safety are implemented.
 
 **Request fields:**
 
