@@ -2960,6 +2960,86 @@ TASK-057 - Provider Settings Key UI Runtime Smoke Check
 
 ---
 
+## TASK-057 - Provider Settings Key UI Runtime Smoke Check
+
+Status: DONE
+
+Goal:
+Verify the Provider Settings Key UI Save Key and Clear Key controls at runtime on the Windows local machine, confirming safe behavior, correct 503 handling, input clearing, and no external provider calls.
+
+Scope:
+- Run backend pytest suite and confirm all tests pass
+- Start uvicorn backend and confirm no startup errors
+- Start Electron desktop with npm start and confirm window opens
+- Confirm Provider Settings section is visible
+- Confirm API key input is enabled for real providers
+- Confirm Save Key calls local backend only (not external provider)
+- Confirm storage unavailable 503 shows safe message
+- Confirm key input is cleared after save attempt
+- Confirm Clear Key behavior (if applicable)
+- Confirm Test Connection remains disabled
+- Confirm /chat still works
+- Confirm API key is not displayed in UI
+- Confirm API key is not logged to console
+- Confirm API key is not stored in localStorage/sessionStorage
+- Confirm no external provider call occurs
+- Do not modify backend/app
+- Do not modify apps/desktop
+- Do not add tests
+- Do not add APIs
+- Do not call external APIs
+
+Acceptance Criteria:
+- TASK-056 is marked DONE ✅
+- TASK-057 is recorded as DONE ✅
+- pytest passes ✅
+- backend starts without errors ✅
+- Electron desktop opens ✅
+- Provider Settings section visible ✅
+- API key input enabled for real providers ✅
+- Save Key calls local backend only ✅
+- Storage unavailable 503 safe message shown ✅
+- Key input cleared after save attempt ✅
+- Test Connection remains disabled ✅
+- /chat still works ✅
+- API key not displayed in UI ✅
+- API key not logged to console ✅
+- API key not stored in localStorage/sessionStorage ✅
+- No external provider call occurs ✅
+- No backend/app code modified ✅
+- No apps/desktop code modified ✅
+
+Runtime Smoke Check Results (performed on Windows host):
+
+- pytest: 449 passed, 0 failed ✅
+- backend uvicorn: started successfully, no errors ✅
+- desktop npm start: launched successfully ✅
+- Electron window: opened and responsive ✅
+- Provider Settings section visible: yes ✅
+- anthropic provider key input enabled: yes ✅
+- Save Key calls local backend only: yes ✅
+- storage unavailable 503 safe message shown: yes ✅
+- key input cleared after save attempt: yes ✅
+- Clear Key: not applicable — key_status remained not_configured (storage unavailable by design) ✅
+- Test Connection still disabled: yes ✅
+- /chat still works: yes ✅
+- API key shown in UI: no ✅
+- API key logged to console: no ✅
+- API key stored in localStorage/sessionStorage: no ✅
+- external provider called: no ✅
+- mock provider key input disabled: not directly verified (non-blocking)
+
+Non-Blocking Follow-Up (not blocking TASK-057 pass):
+- Electron DevTools docked right squeezes the Provider Settings UI. Future UI polish task should address layout.
+- Electron font/layout is hard to read at current density. Deferred to a future UI polish/layout task.
+
+Runtime Smoke Verdict: PASS — all acceptance criteria met.
+
+Next Task:
+TASK-058 - Provider Test Connection Design
+
+---
+
 ## SIDE_TRACK — Streamer Companion Mode
 
 Status: NOT SCHEDULED — design exploration only
