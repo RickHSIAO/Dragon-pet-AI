@@ -85,6 +85,11 @@ def test_unknown_provider_is_rejected():
         save_api_key("unknown", "sk-test-secret")
 
 
+def test_mock_provider_key_storage_is_rejected():
+    with pytest.raises(ValueError, match="unsupported provider"):
+        save_api_key("mock", "sk-test-secret")
+
+
 def test_repr_and_str_do_not_expose_key():
     secret = "sk-repr-secret-should-not-appear"
     backend = InMemoryKeyStorageBackend()
@@ -144,8 +149,8 @@ def test_provider_settings_get_response_does_not_include_key():
     assert "api_key" not in response.text
 
 
-def test_placeholder_key_endpoint_remains_safe():
-    secret = "sk-placeholder-secret-should-not-appear"
+def test_key_endpoint_saves_key_without_exposing_value():
+    secret = "sk-endpoint-storage-secret-should-not-appear"
 
     with TestClient(app) as client:
         response = client.post(
@@ -153,8 +158,31 @@ def test_placeholder_key_endpoint_remains_safe():
             json={"provider": "anthropic", "api_key": secret},
         )
 
-    assert response.status_code == 501
-    assert response.json()["status"] == "not_implemented"
+    assert response.status_code == 200
+    assert response.json() == {
+        "provider": "anthropic",
+        "key_status": "configured",
+        "message": "API key saved.",
+    }
+    assert get_api_key("anthropic") == secret
+    assert secret not in response.text
+    assert "api_key" not in response.text
+
+
+def test_key_endpoint_clear_removes_key_without_exposing_value():
+    secret = "sk-clear-endpoint-secret-should-not-appear"
+    save_api_key("anthropic", secret)
+
+    with TestClient(app) as client:
+        response = client.delete("/provider/settings/key?provider=anthropic")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "provider": "anthropic",
+        "key_status": "not_configured",
+        "message": "API key cleared.",
+    }
+    assert get_api_key("anthropic") is None
     assert secret not in response.text
     assert "api_key" not in response.text
 

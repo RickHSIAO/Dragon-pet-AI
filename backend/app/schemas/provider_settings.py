@@ -1,8 +1,8 @@
 """
 Provider settings API schemas.
 
-TASK-051 exposes only non-secret provider settings and read-only status.
-API key fields are intentionally absent and extra request fields are rejected.
+Provider settings responses expose safe metadata only. Key save requests are
+write-only and key values are never included in response schemas.
 """
 
 from typing import Any
@@ -30,6 +30,19 @@ class ProviderSettingsUpdateRequest(BaseModel):
     real_provider_enabled: bool | None = None
     llm_chat_enabled: bool | None = None
     fallback_to_mock: bool | None = None
+
+
+class KeySaveRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str
+    api_key: str
+
+
+class KeyStatusResponse(BaseModel):
+    provider: str
+    key_status: str
+    message: str
 
 
 class ProviderSettingsNotImplementedResponse(BaseModel):

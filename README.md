@@ -1,6 +1,6 @@
 # Dragon Pet AI
 
-> TASK-053 update: secure key storage abstraction is implemented/in progress. Runtime default remains a safe unavailable backend, tests use an in-memory fake backend, and no key is written to SQLite or plain config files. Provider key endpoints and live test connection remain disabled until TASK-054; no external provider calls are made. Validation: `cd backend; python -m pytest` -> 436 passed.
+> TASK-054 update: provider key save/clear endpoints are wired to the secure key storage abstraction. Runtime default remains a safe unavailable backend, tests use an in-memory fake backend, no key is written to SQLite or plain config files, and live test connection remains disabled. No external provider calls are made. Validation: `cd backend; python -m pytest` -> 449 passed.
 
 AI 驅動的桌面螢幕寵物 — 有個性、有記憶的桌面同伴。
 

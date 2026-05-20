@@ -28,6 +28,8 @@ from app.schemas.memory_audit import (
     MemoryInjectionAuditResponse,
 )
 from app.schemas.provider_settings import (
+    KeySaveRequest,
+    KeyStatusResponse,
     ProviderSettingsNotImplementedResponse,
     ProviderSettingsResponse,
     ProviderSettingsUpdateRequest,
@@ -50,8 +52,11 @@ from app.services.memory_service import (
 )
 from app.services.prompt_service import format_approved_memory_context, normalize_chat_mode
 from app.services.provider_settings_service import (
+    ProviderKeyStorageError,
     ProviderSettingsUpdate,
+    clear_provider_api_key,
     get_provider_settings,
+    save_provider_api_key,
     update_provider_settings,
 )
 from app.services.state_service import get_chat_state_context, update_state_after_chat_turn
@@ -218,34 +223,65 @@ async def update_provider_settings_route(
 
 @router.post(
     "/provider/settings/key",
-    response_model=ProviderSettingsNotImplementedResponse,
-    status_code=501,
+    response_model=KeyStatusResponse,
 )
-def save_provider_key_placeholder(response: Response) -> ProviderSettingsNotImplementedResponse:
+async def save_provider_key_route(request: Request) -> KeyStatusResponse:
     """
-    Safe placeholder until TASK-053 secure key storage is implemented.
+    Save a provider API key through the key storage abstraction.
 
-    The request body is intentionally not accepted or inspected.
+    The key is write-only: never returned, logged, or stored in SQLite.
     """
-    response.status_code = 501
-    return ProviderSettingsNotImplementedResponse(
-        status="not_implemented",
-        message="API key storage is not implemented yet.",
-    )
+    try:
+        body = await request.json()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="invalid json body") from exc
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="request body must be an object")
+
+    allowed_fields = set(KeySaveRequest.model_fields)
+    unsupported_fields = set(body) - allowed_fields
+    if unsupported_fields:
+        raise HTTPException(status_code=400, detail="unsupported key field")
+
+    try:
+        key_request = KeySaveRequest(**body)
+        result = save_provider_api_key(
+            provider=key_request.provider,
+            api_key=key_request.api_key,
+        )
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail="invalid key settings") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ProviderKeyStorageError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="secure key storage is unavailable",
+        ) from exc
+
+    return KeyStatusResponse(**result)
 
 
 @router.delete(
     "/provider/settings/key",
-    response_model=ProviderSettingsNotImplementedResponse,
-    status_code=501,
+    response_model=KeyStatusResponse,
 )
-def clear_provider_key_placeholder(response: Response) -> ProviderSettingsNotImplementedResponse:
-    """Safe placeholder until TASK-053 secure key storage is implemented."""
-    response.status_code = 501
-    return ProviderSettingsNotImplementedResponse(
-        status="not_implemented",
-        message="API key storage is not implemented yet.",
-    )
+def clear_provider_key_route(provider: str = "anthropic") -> KeyStatusResponse:
+    """
+    Clear a provider API key through the key storage abstraction.
+
+    The operation is idempotent when storage is available.
+    """
+    try:
+        result = clear_provider_api_key(provider)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ProviderKeyStorageError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="secure key storage is unavailable",
+        ) from exc
+    return KeyStatusResponse(**result)
 
 
 @router.post(

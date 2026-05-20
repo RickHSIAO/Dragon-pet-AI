@@ -1,8 +1,8 @@
 """
 Secure API key storage abstraction.
 
-TASK-053 adds the backend-only storage layer needed before provider settings
-key endpoints can be enabled. The production backend is intentionally disabled
+TASK-053 adds the backend-only storage layer. TASK-054 wires provider settings
+key save/clear endpoints to it. The production backend is intentionally disabled
 unless an explicit secure backend is configured; tests use the in-memory fake.
 
 Safety rules:
@@ -19,7 +19,7 @@ from threading import Lock
 from typing import Protocol
 
 
-ALLOWED_PROVIDERS = {"mock", "anthropic", "openai"}
+ALLOWED_PROVIDERS = {"anthropic", "openai"}
 KEYRING_SERVICE_NAME = "dragon-pet-ai"
 
 
@@ -119,7 +119,7 @@ class UnavailableKeyStorageBackend:
 
     def clear_api_key(self, provider: str) -> None:
         normalize_provider(provider)
-        # Idempotent no-op while secure storage is unavailable.
+        raise KeyStorageUnavailableError("secure key storage is unavailable")
 
 
 class KeyringKeyStorageBackend:

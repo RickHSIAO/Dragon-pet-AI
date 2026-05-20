@@ -1,8 +1,8 @@
 """
-Safe non-secret provider settings service.
+Safe provider settings service.
 
-TASK-051 keeps settings in memory and intentionally does not read, store, or
-validate API keys. Key storage is blocked until TASK-053.
+Non-secret settings remain in memory. TASK-054 key save/clear helpers delegate
+to the key storage abstraction and never return, log, or persist keys in SQLite.
 """
 
 from __future__ import annotations
@@ -12,12 +12,21 @@ from dataclasses import asdict, dataclass
 from threading import Lock
 from typing import Any
 
-from app.services.key_storage_service import get_key_status
+from app.services.key_storage_service import (
+    KeyStorageUnavailableError,
+    clear_api_key,
+    get_key_status,
+    save_api_key,
+)
 from app.services.usage_meter_service import get_usage_summary
 
 
 SUPPORTED_PROVIDERS = {"mock", "anthropic", "openai"}
 REAL_PROVIDERS = {"anthropic", "openai"}
+
+
+class ProviderKeyStorageError(RuntimeError):
+    """Safe provider key storage failure without secret details."""
 
 
 @dataclass
@@ -87,7 +96,7 @@ class ProviderSettingsService:
 
     def _serialize(self, settings: ProviderSettings) -> dict[str, Any]:
         data = asdict(settings)
-        data["key_status"] = get_key_status(settings.provider)
+        data["key_status"] = get_provider_key_status(settings.provider)
         data["resolved_provider"] = _resolve_provider(settings)
         data["usage_summary"] = _safe_usage_summary()
         return data
@@ -102,9 +111,53 @@ def _resolve_provider(settings: ProviderSettings) -> str:
         return "mock"
     if settings.provider not in REAL_PROVIDERS:
         return "mock"
-    if get_key_status(settings.provider) != "configured":
+    if get_provider_key_status(settings.provider) != "configured":
         return "mock" if settings.fallback_to_mock else "safe_fallback"
     return settings.provider
+
+
+def _normalize_key_provider(provider: str) -> str:
+    normalized = (provider or "").strip().lower()
+    if normalized == "mock":
+        raise ValueError("mock provider cannot store an api key")
+    if normalized not in REAL_PROVIDERS:
+        raise ValueError("unsupported provider")
+    return normalized
+
+
+def save_provider_api_key(provider: str, api_key: str) -> dict[str, str]:
+    normalized_provider = _normalize_key_provider(provider)
+    try:
+        save_api_key(normalized_provider, api_key)
+    except KeyStorageUnavailableError as exc:
+        raise ProviderKeyStorageError("secure key storage is unavailable") from exc
+    return {
+        "provider": normalized_provider,
+        "key_status": "configured",
+        "message": "API key saved.",
+    }
+
+
+def clear_provider_api_key(provider: str) -> dict[str, str]:
+    normalized_provider = _normalize_key_provider(provider)
+    try:
+        clear_api_key(normalized_provider)
+    except KeyStorageUnavailableError as exc:
+        raise ProviderKeyStorageError("secure key storage is unavailable") from exc
+    return {
+        "provider": normalized_provider,
+        "key_status": "not_configured",
+        "message": "API key cleared.",
+    }
+
+
+def get_provider_key_status(provider: str) -> str:
+    normalized = (provider or "").strip().lower()
+    if normalized == "mock":
+        return "not_configured"
+    if normalized not in REAL_PROVIDERS:
+        raise ValueError("unsupported provider")
+    return get_key_status(normalized)
 
 
 def _safe_usage_summary() -> dict[str, Any]:

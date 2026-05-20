@@ -2686,7 +2686,7 @@ Completion Notes:
 
 ## TASK-053 - Secure Key Storage Implementation
 
-Status: IN_PROGRESS
+Status: DONE
 
 Goal:
 Implement a secure key storage abstraction for future BYOK API key save/clear support without exposing or using real keys.
@@ -2737,6 +2737,81 @@ Implementation Notes:
 - No external provider call is made.
 - Electron UI is not modified.
 - pytest result: 436 passed.
+
+Completion Notes:
+- TASK-053 was an implementation task.
+- Added `backend/app/services/key_storage_service.py`.
+- Added `KeyStorageBackend` protocol.
+- Runtime default is `UnavailableKeyStorageBackend`.
+- `InMemoryKeyStorageBackend` is for tests only.
+- `KeyringKeyStorageBackend` is optional and currently not enabled as a dependency.
+- Provider settings can read safe key_status values: configured / not_configured.
+- API key is never returned to frontend responses.
+- API key is never stored in SQLite.
+- API key is never stored in plain config files.
+- API key is never written to logs, stdout, stderr, memory, audit, usage records, or chat history.
+- No external API call was made.
+- No Electron UI changes were made.
+- pytest result: 436 passed.
+- Production DB was not polluted.
+
+---
+
+## TASK-054 - Provider Settings Key Endpoint Implementation
+
+Status: IN_PROGRESS
+
+Goal:
+Implement safe API key save and clear endpoints through the key storage abstraction without exposing keys or calling providers.
+
+Scope:
+- Enable POST /provider/settings/key through key storage service
+- Enable DELETE /provider/settings/key through key storage service
+- Keep POST /provider/settings/test disabled / placeholder
+- Use fake/in-memory backend in tests only
+- Runtime unavailable storage must fail safely
+- Never return API key
+- Never log API key
+- Never store API key in SQLite
+- Do not call external APIs
+- Do not modify Electron UI
+
+Acceptance Criteria:
+- TASK-054 is recorded as IN_PROGRESS
+- POST /provider/settings/key exists and uses key storage abstraction
+- DELETE /provider/settings/key exists and uses key storage abstraction
+- POST /provider/settings/test remains disabled or not implemented
+- Runtime unavailable storage returns safe error without exposing key
+- Test backend can save key
+- Test backend can clear key
+- Test backend clear is idempotent
+- Replacing key overwrites old key in fake backend tests
+- GET /provider/settings returns key_status only
+- No endpoint returns API key or partial key
+- API key does not appear in logs/stdout/stderr
+- API key is not stored in SQLite
+- No external API call occurs
+- /chat response schema remains unchanged
+- Existing tests pass
+- New tests pass
+- No Electron UI changes are made
+
+Next Task:
+TASK-055 - Provider Settings Key UI Enablement Design
+
+Implementation Notes:
+- `POST /provider/settings/key` now accepts write-only `provider` and `api_key` fields and saves through the key storage abstraction.
+- `DELETE /provider/settings/key` now clears a provider key through the key storage abstraction and is idempotent when storage is available.
+- Runtime default storage is still `UnavailableKeyStorageBackend`; save/clear return a safe unavailable error without exposing submitted key values.
+- Tests use `InMemoryKeyStorageBackend` only and verify save, clear, idempotent clear, and replace behavior.
+- `GET /provider/settings` returns only safe `key_status`; it never returns full or partial key values.
+- `POST /provider/settings/test` remains disabled as a safe `501 not_implemented` placeholder.
+- API keys are not written to SQLite, logs, stdout, stderr, memory, audit rows, usage records, chat history, or frontend responses.
+- No external provider call is made.
+- Electron UI is not modified.
+- `/chat` response schema remains `reply / mood / source`.
+- pytest result: 449 passed.
+- Production DB was not polluted.
 
 ---
 

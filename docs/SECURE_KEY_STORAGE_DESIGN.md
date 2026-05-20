@@ -2,7 +2,7 @@
 
 > dragon-pet-ai
 > Phase: 4 — LLM Adapter Integration
-> Status: DESIGN (TASK-049); ABSTRACTION IMPLEMENTED (TASK-053 IN_PROGRESS)
+> Status: DESIGN (TASK-049); ABSTRACTION IMPLEMENTED (TASK-053 DONE); KEY SAVE/CLEAR ENDPOINTS IN_PROGRESS (TASK-054)
 > Last Updated: 2026-05-20
 > Owner: TASK-049
 
@@ -15,7 +15,7 @@ BYOK requires storing or referencing user-owned LLM API keys safely. API keys ar
 Key principles:
 
 - The app must avoid exposing, logging, or storing keys unsafely at every layer: backend, frontend, database, logs, crash reports, and debug exports.
-- Persistent key storage is not enabled in the current dev phase. TASK-053 adds a storage abstraction and test fake backend only; key endpoints remain disabled until TASK-054.
+- Persistent key storage is not enabled in the current dev phase. TASK-053 adds a storage abstraction and test fake backend; TASK-054 wires save/clear endpoints to that abstraction while runtime storage remains unavailable by default.
 - This document defines design and recommendations only. No storage implementation is added in TASK-049.
 - The `POST /provider/settings/key` endpoint (designed in TASK-048) must not be implemented until the storage strategy defined here is accepted and TASK-053 (Secure Key Storage Implementation) is complete.
 
@@ -26,19 +26,19 @@ Key principles:
 | Component | Status |
 |---|---|
 | API key handling — dev phase | Environment variable only (`LLM_API_KEY`) |
-| Provider Settings API | Non-secret API implemented; key endpoints still disabled |
+| Provider Settings API | Non-secret API implemented; key save/clear endpoints wired to storage abstraction |
 | Provider Settings UI | Non-secret UI implemented; key controls still disabled |
 | Key storage abstraction | Implemented in TASK-053 with safe unavailable runtime backend and fake test backend |
 | Key stored in SQLite | No — explicitly forbidden until secure storage is designed and approved |
 | Key stored in any file | No — no persistent key storage exists |
 | Live provider call required | No — design task only |
-| User-facing key management UI | Placeholder controls only; key save/clear/test disabled |
+| User-facing key management UI | Placeholder controls only; key save/clear/test disabled until UI enablement work |
 
 ---
 
-## 2.1 TASK-053 Implementation Status
+## 2.1 TASK-053/TASK-054 Implementation Status
 
-TASK-053 implements the storage abstraction only:
+TASK-053 implements the storage abstraction:
 
 - `backend/app/services/key_storage_service.py` defines the backend interface.
 - Runtime default is a safe unavailable backend; it does not persist keys.
@@ -46,7 +46,9 @@ TASK-053 implements the storage abstraction only:
 - `KeyringKeyStorageBackend` is optional and only usable if the `keyring` package is installed.
 - No key is stored in SQLite.
 - No key is stored in a plain config file.
-- No key endpoint is enabled yet.
+- TASK-054 wires `POST /provider/settings/key` and `DELETE /provider/settings/key` to this abstraction.
+- Runtime default storage remains unavailable and returns safe errors for save/clear.
+- Tests use `InMemoryKeyStorageBackend` to verify save, clear, idempotent clear, and replace behavior.
 - No live provider test connection is enabled.
 
 ---
@@ -289,9 +291,9 @@ The recommended task order, taking into account the dependency constraints in TA
 | TASK-052 | Provider Settings UI Implementation | Implementation | Depends on TASK-051 |
 | TASK-053 | Secure Key Storage Implementation | Implementation | This design (TASK-049) must be accepted first |
 | TASK-054 | Provider Settings Key Endpoint Implementation | Implementation | Depends on TASK-053 |
-| TASK-055 | BYOK Runtime Smoke Check | Validation | Depends on TASK-054 |
+| TASK-055 | Provider Settings Key UI Enablement Design | Design | Depends on TASK-054 |
 
-**Current ordering note:** TASK-051 and TASK-052 implemented only safe non-secret surfaces. TASK-053 adds the key storage abstraction. TASK-054 should wire `POST /provider/settings/key` and `DELETE /provider/settings/key` to that abstraction without enabling live provider tests.
+**Current ordering note:** TASK-051 and TASK-052 implemented only safe non-secret surfaces. TASK-053 adds the key storage abstraction. TASK-054 wires `POST /provider/settings/key` and `DELETE /provider/settings/key` to that abstraction without enabling live provider tests.
 
 Proposed adjusted order for implementation phase:
 1. TASK-050 — Usage Meter Implementation (no key dependency; can start any time)
@@ -299,7 +301,7 @@ Proposed adjusted order for implementation phase:
 3. TASK-051 — Backend Provider Settings API Implementation (non-secret endpoints only)
 4. TASK-052 — Provider Settings UI Implementation (non-secret UI only)
 5. TASK-054 — Provider Settings Key Endpoint Implementation (depends on TASK-053)
-6. TASK-055 — BYOK Runtime Smoke Check (depends on all above)
+6. TASK-055 — Provider Settings Key UI Enablement Design (depends on TASK-054)
 
 ---
 
@@ -307,7 +309,7 @@ Proposed adjusted order for implementation phase:
 
 | Out of Scope | Reason |
 |---|---|
-| Key endpoint wiring | Deferred to TASK-054 |
+| Key endpoint wiring | In progress in TASK-054 |
 | Live provider test connection | Deferred until after key endpoints are safe |
 | Encrypted file implementation | Not recommended for MVP; deferred |
 | Provider API call | Design task — no live calls |
