@@ -2,7 +2,7 @@
 
 > dragon-pet-ai
 > Phase: 4 — LLM Adapter Integration
-> Status: DESIGN COMPLETE (TASK-048 DONE); NON-SECRET API IMPLEMENTED (TASK-051 DONE); KEY STORAGE ABSTRACTION DONE (TASK-053); KEY SAVE/CLEAR ENDPOINTS DONE (TASK-054); KEY UI ENABLEMENT DESIGNED (TASK-055)
+> Status: DESIGN COMPLETE (TASK-048 DONE); NON-SECRET API IMPLEMENTED (TASK-051 DONE); KEY STORAGE ABSTRACTION DONE (TASK-053); KEY SAVE/CLEAR ENDPOINTS DONE (TASK-054); KEY UI ENABLEMENT DESIGNED (TASK-055); TEST CONNECTION DESIGN IN_PROGRESS (TASK-058)
 > Last Updated: 2026-05-20
 > Owner: TASK-048
 > Secure Key Storage Design: see `docs/SECURE_KEY_STORAGE_DESIGN.md` (TASK-049)
@@ -169,7 +169,7 @@ Key principles:
 
 **Purpose:** Execute a single minimal test request to the configured provider. This is the only endpoint that may trigger a live provider call outside of `/chat`. It requires explicit user action and an explicit cost acknowledgement.
 
-**TASK-051/TASK-054 runtime status:** Disabled placeholder returning `501 not_implemented`. It does not call external providers and must remain disabled until live-test safety is implemented.
+**TASK-058 runtime status:** Disabled placeholder returning `501 not_implemented`. It does not call external providers and must remain disabled until TASK-059 implementation. See `docs/PROVIDER_TEST_CONNECTION_DESIGN.md` for the safe Test Connection contract.
 
 **Request fields:**
 
@@ -178,16 +178,16 @@ Key principles:
 | `provider` | str | Provider to test: `anthropic`, `openai` |
 | `model` | str \| null | Optional model override. Defaults to configured model. |
 | `explicit_cost_ack` | bool | Must be `true`. Backend rejects if `false` or absent. |
-| `test_message` | str \| null | Optional minimal test message. Defaults to a fixed safe phrase. |
+| `test_message` | not accepted | Prompt override is not accepted in MVP; backend uses a fixed minimal prompt. |
 
 **Response fields:**
 
 | Field | Type | Description |
 |---|---|---|
-| `status` | str | `success`, `failed`, or `fallback_used` |
+| `status` | str | `success` or `failed` |
 | `provider` | str | Provider that was tested |
 | `model` | str \| null | Model used for the test |
-| `source` | str | `llm_real`, `llm_real_error`, `mock` |
+| `source` | str | `llm_real` or `llm_real_error` |
 | `safe_message` | str | Safe informational text — no raw provider content |
 | `error_category` | str \| null | Safe error category if failed (see Section 8) |
 | `usage_estimate` | dict \| null | Optional safe usage estimate: `{ input_tokens, output_tokens, estimated_cost_usd }` |
@@ -206,6 +206,7 @@ Key principles:
 - No memory context is injected.
 - No tools are used.
 - No streaming response.
+- No mock fallback is used for Test Connection. A failed real provider test returns `status: failed` with a safe `error_category`.
 - Does not write to chat history.
 - Does not create a `MemoryInjectionAudit` row.
 - Does not trigger automatic re-test on failure.
@@ -271,6 +272,7 @@ The following rules govern all behavior related to `POST /provider/settings/test
 - Non-2xx provider responses are opaque: backend returns only a safe `error_category` and `safe_message`.
 - Test result does not mutate `/chat` behavior, memory state, or audit logs.
 - Usage meter may be incremented if a real provider call was made (see Section 7).
+- Recommended fallback policy: no mock fallback. Test Connection verifies the real provider only.
 
 ---
 
@@ -283,10 +285,10 @@ When `POST /provider/settings/test` triggers a real provider call, the usage met
 | `request_count` | +1 |
 | `provider` | Tested provider name |
 | `model` | Model used for test |
-| `source` | `llm_real`, `llm_real_error`, or `mock` |
+| `source` | `llm_real` or `llm_real_error` |
 | `estimated_input_tokens` | From provider-reported usage if available; local heuristic otherwise |
 | `estimated_output_tokens` | From provider-reported usage if available |
-| `fallback_used` | True if real provider failed and mock was used |
+| `fallback_used` | Always `False` for Test Connection MVP |
 | `error_category` | Safe error category if failed |
 
 **Must not record:**
@@ -314,7 +316,7 @@ All errors returned by provider settings endpoints must use safe, non-technical 
 | `rate_limit` | `Provider returned a rate limit response. Wait a moment and try again.` |
 | `provider_unavailable` | `Provider is not reachable right now. Check your provider's status page.` |
 | `invalid_response` | `Provider returned an unexpected response. Try again later.` |
-| `fallback_used` | `Real provider failed. Mock fallback was used.` |
+| `fallback_used` | Not used for Test Connection MVP; mock fallback is intentionally disabled. |
 | `key_save_failed` | `Could not save key. Please try again.` |
 | `key_clear_failed` | `Could not clear key. Please try again.` |
 
@@ -377,13 +379,14 @@ The following are explicitly out of scope for TASK-048 and Phase 4:
 | TASK-052 | Provider Settings UI Implementation | DONE | TASK-051 |
 | TASK-053 | Secure Key Storage Implementation | DONE | TASK-052 |
 | TASK-054 | Provider Settings Key Endpoint Implementation | DONE | TASK-053 |
-| TASK-055 | Provider Settings Key UI Enablement Design | IN_PROGRESS | TASK-054 |
-| TASK-056 | Provider Settings Key UI Enablement Implementation | Pending | TASK-055 |
-| TASK-057 | Provider Settings Key UI Smoke Check | Pending | TASK-056 |
-| TASK-058 | Test Connection Design | Pending | TASK-057 |
-| TASK-059 | Test Connection Implementation | Pending | TASK-058 |
+| TASK-055 | Provider Settings Key UI Enablement Design | DONE | TASK-054 |
+| TASK-056 | Provider Settings Key UI Enablement Implementation | DONE | TASK-055 |
+| TASK-057 | Provider Settings Key UI Smoke Check | DONE | TASK-056 |
+| TASK-058 | Provider Test Connection Design | IN_PROGRESS | TASK-057 |
+| TASK-059 | Provider Test Connection Implementation | Pending | TASK-058 |
+| TASK-060 | Provider Test Connection Runtime Smoke Check | Pending | TASK-059 |
 
-`POST /provider/settings/key` and `DELETE /provider/settings/key` are wired to the TASK-053 key storage abstraction. Runtime default is `UnavailableKeyStorageBackend` (safe 503). Live provider test behavior remains disabled (`501 not_implemented`) and must not begin until TASK-058 (design) and TASK-059 (implementation).
+`POST /provider/settings/key` and `DELETE /provider/settings/key` are wired to the TASK-053 key storage abstraction. Runtime default is `UnavailableKeyStorageBackend` (safe 503). Live provider test behavior remains disabled (`501 not_implemented`) and must not begin until TASK-059 implementation.
 
 `TASK-051` (Backend implementation) must not begin until `TASK-050` (Usage Meter Implementation) is ready, because the test connection endpoint must be able to record usage at the moment of the first live call.
 
@@ -394,6 +397,7 @@ The following are explicitly out of scope for TASK-048 and Phase 4:
 | Document | Relationship |
 |---|---|
 | `docs/PROVIDER_SETTINGS_UI_DESIGN.md` | Defines the frontend surface that this API supports. UI rules (no direct provider call, key write-only, confirmation dialogs) are enforced on the backend side here. |
+| `docs/PROVIDER_TEST_CONNECTION_DESIGN.md` | Defines the TASK-058 safe Test Connection flow, including cost acknowledgement, exactly-one request, no fallback, and logging/redaction rules. |
 | `docs/BYOK_PRODUCT_AND_SETTINGS.md` | Defines key ownership model, storage options, and BYOK product positioning. This API design implements the backend side of those rules. |
 | `docs/USAGE_METER_DESIGN.md` | Defines what to track. Section 7 of this document specifies how test connection integrates with usage meter. |
 | `docs/LLM_ADAPTER_DESIGN.md` | Defines the provider factory, feature flags, and redaction utility. The settings API must use the same factory and redaction rules. |

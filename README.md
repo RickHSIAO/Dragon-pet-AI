@@ -5,6 +5,8 @@
 > TASK-055 update: Key UI enablement design complete. Save Key and Clear Key controls are now designed with full interaction flows, unavailable storage UX (503 → safe message, env var recommendation), key status display (6 safe values, no key fragments), and security boundaries. Test Connection remains disabled.
 >
 > TASK-056 update: Save Key and Clear Key controls are now enabled in the Provider Settings UI. Key input is enabled for real providers only, disabled for mock. Save Key POSTs to local backend and clears the input field after every attempt. Clear Key shows a confirmation dialog and DELETEs via local backend. Storage unavailable (503) shows a safe message with env var instructions. API key is never logged, never stored in localStorage/sessionStorage, never sent to external providers. Test Connection remains disabled. pytest: 449 passed (also fixed pre-existing TASK-054 truncation in routes.py and main.py).
+>
+> TASK-058 update: Provider Test Connection design is documented. Test Connection remains disabled in runtime, requires future per-click `explicit_cost_ack`, sends exactly one minimal request, uses no retries/tools/streaming/memory, and does not fallback to mock. No live provider call has occurred.
 
 AI 驅動的桌面螢幕寵物 — 有個性、有記憶的桌面同伴。
 
@@ -119,6 +121,7 @@ npm start
 | `docs/PROVIDER_SETTINGS_API_DESIGN.md` | TASK-048 backend provider settings API design：5 endpoints、write-only key handling、safe status model、test connection safety rules、usage meter integration、security boundaries、error categories |
 | `docs/SECURE_KEY_STORAGE_DESIGN.md` | TASK-049 secure key storage design：4 storage options、MVP recommendation（env var）、future desktop recommendation（OS keychain）、key lifecycle、redaction rules、threat model、testing requirements |
 | `docs/PROVIDER_SETTINGS_KEY_UI_ENABLEMENT_DESIGN.md` | TASK-055 key UI enablement design：Save Key UI flow、Clear Key UI flow、unavailable storage UX、key status display（6 values）、Test Connection disabled state、security boundaries、error UX（7 messages）、future sequence（TASK-056 → 059） |
+| `docs/PROVIDER_TEST_CONNECTION_DESIGN.md` | TASK-058 Test Connection design：explicit cost acknowledgement、exactly-one minimal request、safe response model、no mock fallback、usage meter integration、UI behavior、logging/redaction rules |
 | `docs/PRD.md` | 產品需求文件（MVP 定義） |
 | `docs/ARCHITECTURE.md` | 系統架構設計 |
 | `docs/MEMORY_SYSTEM.md` | 記憶系統設計 |

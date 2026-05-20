@@ -2,7 +2,7 @@
 
 > dragon-pet-ai
 > Phase: 4 — LLM Adapter Integration
-> Status: DESIGN COMPLETE (TASK-055 DONE); IMPLEMENTATION IN PROGRESS (TASK-056)
+> Status: DESIGN COMPLETE (TASK-055 DONE); IMPLEMENTATION DONE (TASK-056); SMOKE PASS (TASK-057); TEST CONNECTION DESIGN IN_PROGRESS (TASK-058)
 > Last Updated: 2026-05-20
 > Owner: TASK-055
 > Depends on: TASK-054 (key save/clear backend endpoints wired to key storage abstraction)
@@ -24,7 +24,7 @@ Key principles carried forward from TASK-047:
 - The UI sends the key to the local backend only — never to an external provider.
 - After save, the input field is cleared. The key is never displayed again through the UI.
 - Clear Key requires a confirmation dialog. It is idempotent.
-- Test Connection remains disabled in this design task. It is deferred to a future task with explicit cost acknowledgement design.
+- Test Connection remains disabled in runtime. Its explicit cost acknowledgement flow is documented separately in TASK-058.
 
 This task is design-only. No runtime code is written and no Electron UI is modified.
 
@@ -175,13 +175,14 @@ Rules:
 
 ## 7. Test Connection (Remains Disabled)
 
-Test Connection (`POST /provider/settings/test`) remains disabled in this design task. The backend placeholder returns `501 not_implemented`.
+Test Connection (`POST /provider/settings/test`) remains disabled in runtime. The backend placeholder returns `501 not_implemented`. The future Test Connection flow is now designed separately in `docs/PROVIDER_TEST_CONNECTION_DESIGN.md`.
 
 The UI behavior for Test Connection must remain:
 
 - Button disabled with label: `Test Connection (not yet available)`.
 - No click handler or backend call is wired.
 - No live provider call occurs from this button.
+- Save Key and Clear Key must not trigger Test Connection automatically.
 - The pre-test cost warning from Section 2.5 of `PROVIDER_SETTINGS_UI_DESIGN.md` is not shown until the button is enabled.
 
 Test Connection enablement is deferred to TASK-058 (design) and TASK-059 (implementation). Enablement requires:
@@ -266,8 +267,9 @@ The following are explicitly out of scope for TASK-055:
 | TASK-055 | Provider Settings Key UI Enablement Design | Design-only | TASK-054 |
 | TASK-056 | Provider Settings Key UI Enablement Implementation | Implementation | TASK-055 |
 | TASK-057 | Provider Settings Key UI Smoke Check | Smoke check | TASK-056 |
-| TASK-058 | Test Connection Design | Design-only | TASK-057 |
-| TASK-059 | Test Connection Implementation | Implementation | TASK-058 |
+| TASK-058 | Provider Test Connection Design | Design-only | TASK-057 |
+| TASK-059 | Provider Test Connection Implementation | Implementation | TASK-058 |
+| TASK-060 | Provider Test Connection Runtime Smoke Check | Manual smoke | TASK-059 |
 
 TASK-056 will modify the Electron renderer to:
 - Enable Save Key button for real providers.
@@ -295,6 +297,8 @@ TASK-058 will design Test Connection enablement, including:
 ---
 
 ## 12. Relationship to Existing Documents
+
+Test Connection is now designed separately in `docs/PROVIDER_TEST_CONNECTION_DESIGN.md`; Save Key and Clear Key must not trigger that flow automatically.
 
 | Document | Relationship |
 |---|---|

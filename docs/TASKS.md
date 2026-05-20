@@ -3040,6 +3040,57 @@ TASK-058 - Provider Test Connection Design
 
 ---
 
+## TASK-058 - Provider Test Connection Design
+
+Status: IN_PROGRESS
+
+Goal:
+Design a safe manual Test Connection flow for BYOK providers without implementing it.
+
+Scope:
+- Define Test Connection purpose
+- Define explicit cost acknowledgement requirement
+- Define exactly-one minimal request rule
+- Define provider/model/key preconditions
+- Define memory-disabled test behavior
+- Define no tools / no streaming / no retries rule
+- Define safe success / failure response model
+- Define usage meter integration
+- Define UI behavior
+- Define logging/redaction rules
+- Do not implement runtime code
+- Do not call external APIs
+
+Acceptance Criteria:
+- TASK-058 is recorded as IN_PROGRESS
+- docs/PROVIDER_TEST_CONNECTION_DESIGN.md exists
+- explicit_cost_ack behavior is documented
+- exactly-one minimal request rule is documented
+- safe response model is documented
+- failure behavior is documented
+- usage meter integration is documented
+- UI behavior is documented
+- logging/redaction rules are documented
+- Test Connection remains disabled in runtime
+- No backend/app code is modified
+- No apps/desktop code is modified
+- No external API call is made
+
+Next Task:
+TASK-059 - Provider Test Connection Implementation
+
+Implementation Notes:
+- Test Connection remains disabled in runtime; `POST /provider/settings/test` still returns `501 not_implemented`.
+- `docs/PROVIDER_TEST_CONNECTION_DESIGN.md` defines the manual flow, preconditions, explicit cost acknowledgement, exactly-one minimal request rule, safe response model, failure categories, no-fallback policy, usage meter integration, UI behavior, logging/redaction rules, future tests, and runtime smoke checklist.
+- The recommended fallback policy is no mock fallback for Test Connection. A failed real provider test should return safe failure metadata, not `llm_mock`.
+- No backend/app code is modified.
+- No apps/desktop code is modified.
+- No tests are added.
+- No APIs are added.
+- No external API call is made.
+
+---
+
 ## SIDE_TRACK — Streamer Companion Mode
 
 Status: NOT SCHEDULED — design exploration only
