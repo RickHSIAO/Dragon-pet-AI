@@ -2430,6 +2430,44 @@ TASK-049 - Secure Key Storage Design
 
 ---
 
+## TASK-049 - Secure Key Storage Design
+
+Status: IN_PROGRESS
+
+Goal:
+Design secure local API key storage for future BYOK provider settings. Compare storage options, define the recommended MVP path, define the future desktop path, and document key lifecycle, redaction rules, and API dependency constraints. No runtime code is written.
+
+Scope:
+- Compare key storage options (env var, OS keychain, encrypted file, plain SQLite)
+- Define recommended MVP storage path
+- Define future desktop secure storage path
+- Define deletion / rotation behavior
+- Define logging and redaction requirements
+- Define API dependency constraints
+- Define implementation sequence
+- Do not implement runtime code
+- Do not read API keys
+- Do not call external APIs
+
+Acceptance Criteria:
+- TASK-048 is marked DONE ✅
+- TASK-049 is recorded as IN_PROGRESS ✅
+- docs/SECURE_KEY_STORAGE_DESIGN.md exists
+- Storage options are compared (4 options)
+- MVP recommendation is documented
+- Future desktop recommendation is documented
+- Deletion and rotation behavior are documented
+- API key redaction rules are documented
+- Provider Settings API dependency is documented
+- No backend/app code is modified
+- No apps/desktop code is modified
+- No external API call is made
+
+Next Task:
+TASK-050 - Usage Meter Implementation
+
+---
+
 ## SIDE_TRACK — Streamer Companion Mode
 
 Status: NOT SCHEDULED — design exploration only

@@ -1,6 +1,27 @@
 # BYOK Product and Settings Design
 
-Status: TASK-045 DONE. TASK-046 DONE. TASK-047 DONE. TASK-048 Backend Provider Settings API Design in progress. This document does not implement provider settings UI or settings API and does not read API keys.
+Status: TASK-045 DONE. TASK-046 DONE. TASK-047 DONE. TASK-048 DONE. TASK-049 Secure Key Storage Design in progress. This document does not implement provider settings UI, settings API, or key storage and does not read API keys.
+
+## Secure Key Storage Design (TASK-049)
+
+The secure key storage design is documented separately in `docs/SECURE_KEY_STORAGE_DESIGN.md`. That document covers:
+
+- Comparison of 4 storage options: environment variable, OS keychain, encrypted file, plain SQLite
+- MVP recommendation: environment variable only for dev phase; OS keychain for future production desktop
+- Explicitly forbidden: plain SQLite or plain config file for real API keys
+- Key lifecycle: add, replace, clear, test, rotate, uninstall behavior, debug export behavior
+- API integration rules: how each Provider Settings API endpoint interacts with the storage layer
+- Redaction rules across logs, exceptions, repr/str, stdout/stderr, exports
+- Threat model: accidental git commit, log exposure, frontend exposure, local DB leakage, debug export, malware
+- Testing requirements for TASK-053 implementation
+- Adjusted implementation sequence: TASK-053 must precede TASK-051
+
+Key constraints confirmed:
+
+- Dev phase remains environment variable only. No persistent user key storage until TASK-053 is complete.
+- Future production desktop should prefer OS keychain / Credential Manager (Python `keyring` library).
+- `POST /provider/settings/key` must not be implemented until TASK-053 (Secure Key Storage Implementation) is complete.
+- Plain SQLite storage is explicitly forbidden for real API keys.
 
 ## Backend Provider Settings API Design (TASK-048)
 

@@ -146,12 +146,13 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 | TASK-045 | BYOK Product and Settings Design | DONE |
 | TASK-046 | Usage Meter Design | DONE |
 | TASK-047 | Provider Settings UI Design | DONE |
-| TASK-048 | Backend Provider Settings API Design | IN_PROGRESS |
-| TASK-049 | Secure Key Storage Design | Pending |
+| TASK-048 | Backend Provider Settings API Design | DONE |
+| TASK-049 | Secure Key Storage Design | IN_PROGRESS |
 | TASK-050 | Usage Meter Implementation | Pending |
 | TASK-051 | Backend Provider Settings API Implementation | Pending |
 | TASK-052 | Provider Settings UI Implementation | Pending |
-| TASK-053 | BYOK Runtime Smoke Check | Pending |
+| TASK-053 | Secure Key Storage Implementation | Pending |
+| TASK-054 | BYOK Runtime Smoke Check | Pending |
 
 **Phase 4 Key Safety Constraints:**
 - `LLM_PROVIDER_ENABLED=false` is the default; real provider requires explicit opt-in via env var
@@ -163,9 +164,9 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 - Non-2xx provider response bodies are opaque — not parsed, not logged, not returned
 - No tool execution, no file access, no autonomous action, no automatic memory extraction
 - Live smoke is blocked until explicit user cost confirmation and TASK-044 go/no-go criteria are satisfied
-- BYOK is the recommended MVP path; provider settings UI design done (TASK-047); backend provider settings API design in progress (TASK-048); no settings API or UI implemented yet; API keys remain env-only during dev phase
+- BYOK is the recommended MVP path; provider settings UI design done (TASK-047); backend provider settings API design done (TASK-048); secure key storage design in progress (TASK-049); no settings API, UI, or key storage implemented yet; API keys remain env-only during dev phase
 
-See `docs/PHASE4_PLAN.md`, `docs/LLM_ADAPTER_DESIGN.md`, `docs/LLM_PROVIDER_CONTRACT.md`, `docs/CHAT_LLM_WIRING_DESIGN.md`, `docs/CHAT_LLM_REAL_PROVIDER_WIRING_DESIGN.md`, `docs/COST_AND_MONETIZATION.md`, `docs/BYOK_PRODUCT_AND_SETTINGS.md`, `docs/USAGE_METER_DESIGN.md`, `docs/PROVIDER_SETTINGS_UI_DESIGN.md`, and `docs/PROVIDER_SETTINGS_API_DESIGN.md` for full planning and design documents.
+See `docs/PHASE4_PLAN.md`, `docs/LLM_ADAPTER_DESIGN.md`, `docs/LLM_PROVIDER_CONTRACT.md`, `docs/CHAT_LLM_WIRING_DESIGN.md`, `docs/CHAT_LLM_REAL_PROVIDER_WIRING_DESIGN.md`, `docs/COST_AND_MONETIZATION.md`, `docs/BYOK_PRODUCT_AND_SETTINGS.md`, `docs/USAGE_METER_DESIGN.md`, `docs/PROVIDER_SETTINGS_UI_DESIGN.md`, `docs/PROVIDER_SETTINGS_API_DESIGN.md`, and `docs/SECURE_KEY_STORAGE_DESIGN.md` for full planning and design documents.
 
 ---
 

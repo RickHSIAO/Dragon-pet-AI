@@ -7,11 +7,11 @@ AI 驅動的桌面螢幕寵物 — 有個性、有記憶的桌面同伴。
 ## 目前狀態
 
 **Phase 3 完成 — Memory-Aware Chat and Audit Inspection**
-**Phase 4 進行中 — LLM Adapter Integration（TASK-048 Backend Provider Settings API Design 進行中）**
+**Phase 4 進行中 — LLM Adapter Integration（TASK-049 Secure Key Storage Design 進行中）**
 
 Backend（FastAPI）和 Desktop（Electron）均可運行。Mock chat、Manual Memory、Memory-Aware Chat（two-layer gate）、Audit Inspection API 和 Audit Logs UI 全部完成並通過 runtime smoke check。pytest 最新結果：356 passed。Real provider adapter 已在 TASK-035 behind feature flags；Anthropic contract 已用 mocked HTTP 驗證（TASK-037）。`/chat` wiring 已放在 `LLM_CHAT_ENABLED` 後面，default false；mock runtime smoke passed（TASK-041）；live provider 仍預設停用。
 
-BYOK 已設計完成（TASK-045）：推薦方向 BYOK desktop app / personal companion，使用者自帶 API key 並承擔 provider billing。Usage meter 設計完成（TASK-046）：14 個追蹤欄位、token 估算規則、privacy 邊界。Provider Settings UI 設計完成（TASK-047）：UI sections、9-step settings flow、security boundaries、error UX。Backend Provider Settings API 設計進行中（TASK-048）：5 個 endpoints、write-only key handling、safe status model、test connection safety。尚未實作 settings API 或 settings UI；API key 目前仍為 env-only（dev phase）；real provider 預設關閉。manual live smoke 暫緩，直到使用者明確接受成本風險。詳見 `docs/BYOK_PRODUCT_AND_SETTINGS.md`、`docs/USAGE_METER_DESIGN.md`、`docs/PROVIDER_SETTINGS_UI_DESIGN.md`、`docs/PROVIDER_SETTINGS_API_DESIGN.md`、`docs/COST_AND_MONETIZATION.md`。
+BYOK 已設計完成（TASK-045）：推薦方向 BYOK desktop app / personal companion，使用者自帶 API key 並承擔 provider billing。Usage meter 設計完成（TASK-046）：14 個追蹤欄位、token 估算規則、privacy 邊界。Provider Settings UI 設計完成（TASK-047）：UI sections、9-step settings flow、security boundaries、error UX。Backend Provider Settings API 設計完成（TASK-048）：5 個 endpoints、write-only key handling、safe status model、test connection safety。Secure Key Storage 設計進行中（TASK-049）：4 個 storage options 比較、MVP 推薦 env var only、future desktop 推薦 OS keychain、plain SQLite 明確禁止。尚未實作 settings API、settings UI、或 persistent key storage；API key 目前仍為 env-only（dev phase）；real provider 預設關閉。manual live smoke 暫緩，直到使用者明確接受成本風險。詳見 `docs/BYOK_PRODUCT_AND_SETTINGS.md`、`docs/USAGE_METER_DESIGN.md`、`docs/PROVIDER_SETTINGS_UI_DESIGN.md`、`docs/PROVIDER_SETTINGS_API_DESIGN.md`、`docs/COST_AND_MONETIZATION.md`。
 
 ---
 
@@ -111,6 +111,7 @@ npm start
 | `docs/USAGE_METER_DESIGN.md` | TASK-046 usage meter design：token/cost tracking、estimation rules、privacy boundaries、storage options、UI requirements |
 | `docs/PROVIDER_SETTINGS_UI_DESIGN.md` | TASK-047 provider settings UI design：UI sections、settings flow（9 steps）、security boundaries、error UX（7 types）、memory interaction、non-goals、implementation sequence |
 | `docs/PROVIDER_SETTINGS_API_DESIGN.md` | TASK-048 backend provider settings API design：5 endpoints、write-only key handling、safe status model、test connection safety rules、usage meter integration、security boundaries、error categories |
+| `docs/SECURE_KEY_STORAGE_DESIGN.md` | TASK-049 secure key storage design：4 storage options、MVP recommendation（env var）、future desktop recommendation（OS keychain）、key lifecycle、redaction rules、threat model、testing requirements |
 | `docs/PRD.md` | 產品需求文件（MVP 定義） |
 | `docs/ARCHITECTURE.md` | 系統架構設計 |
 | `docs/MEMORY_SYSTEM.md` | 記憶系統設計 |

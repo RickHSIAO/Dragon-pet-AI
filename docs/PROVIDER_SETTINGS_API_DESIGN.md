@@ -2,9 +2,10 @@
 
 > dragon-pet-ai
 > Phase: 4 — LLM Adapter Integration
-> Status: DESIGN (TASK-048)
+> Status: DESIGN COMPLETE (TASK-048 DONE)
 > Last Updated: 2026-05-20
 > Owner: TASK-048
+> Secure Key Storage Design: see `docs/SECURE_KEY_STORAGE_DESIGN.md` (TASK-049)
 
 ---
 
@@ -122,7 +123,9 @@ Key principles:
 - The `api_key` field is accepted in the request body.
 - The key value must never appear in any response field.
 - The key must never appear in any log line at any level (DEBUG, INFO, WARNING, ERROR).
-- The key must never be stored in plain SQLite. Storage method is determined by TASK-049 Secure Key Storage Design.
+- The key must never be stored in plain SQLite. Storage method is determined by TASK-049 Secure Key Storage Design — recommended path is OS keychain / Credential Manager. See `docs/SECURE_KEY_STORAGE_DESIGN.md` for the full comparison and recommendation.
+- Plain SQLite storage is explicitly forbidden for real API keys. Any column that would store the key unencrypted violates the security boundaries defined in TASK-048 and TASK-049.
+- No persistent key storage should be implemented until the storage strategy in `docs/SECURE_KEY_STORAGE_DESIGN.md` is accepted and TASK-053 (Secure Key Storage Implementation) is complete.
 - The key must never appear in any Python `repr()` or `str()` of any object that holds it.
 - If validation of the key format fails (e.g. wrong prefix), return `key_status: invalid` with a safe message. Do not echo back the key or any fragment.
 - Future implementation must not begin until TASK-049 is complete.
