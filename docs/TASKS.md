@@ -2684,6 +2684,62 @@ Completion Notes:
 
 ---
 
+## TASK-053 - Secure Key Storage Implementation
+
+Status: IN_PROGRESS
+
+Goal:
+Implement a secure key storage abstraction for future BYOK API key save/clear support without exposing or using real keys.
+
+Scope:
+- Add key storage service abstraction
+- Prefer OS keychain/keyring backend when available
+- Add safe unavailable fallback behavior
+- Add fake/in-memory test backend for tests only
+- Add tests for save/get/status/clear behavior
+- Ensure API keys are never returned
+- Ensure API keys are never logged
+- Do not store keys in SQLite
+- Do not call external APIs
+- Do not enable live test connection
+- Do not modify Electron UI
+
+Acceptance Criteria:
+- TASK-053 is recorded as IN_PROGRESS
+- secure key storage service exists
+- key storage does not use SQLite
+- key storage does not use plain config file
+- fake test backend exists for tests
+- save key works in fake backend tests
+- get key is backend-only and never exposed through response schemas
+- key_status can report configured / not_configured
+- clear key works and is idempotent
+- replace key overwrites old key in fake backend tests
+- API key is redacted from repr / str / logs
+- API key does not appear in stdout / stderr
+- API key does not appear in provider settings GET response
+- No external API call occurs
+- No Electron UI changes are made
+- Existing tests pass
+- New tests pass
+
+Next Task:
+TASK-054 - Provider Settings Key Endpoint Implementation
+
+Implementation Notes:
+- `backend/app/services/key_storage_service.py` implements the abstraction.
+- Default runtime backend is a safe unavailable backend; it does not persist keys.
+- `InMemoryKeyStorageBackend` is for tests only.
+- `KeyringKeyStorageBackend` is optional and raises safe unavailable behavior if the `keyring` package is not installed.
+- `GET /provider/settings` may report safe key_status but never returns key values.
+- `POST /provider/settings/key`, `DELETE /provider/settings/key`, and `POST /provider/settings/test` remain disabled placeholders until TASK-054.
+- No SQLite key table or plain config storage is added.
+- No external provider call is made.
+- Electron UI is not modified.
+- pytest result: 436 passed.
+
+---
+
 ## SIDE_TRACK — Streamer Companion Mode
 
 Status: NOT SCHEDULED — design exploration only

@@ -1,6 +1,6 @@
 # Dragon Pet AI
 
-> TASK-052 update: Provider Settings UI safe subset is implemented/in progress in Electron. The UI loads `GET /provider/settings`, saves only non-secret settings with `PATCH /provider/settings`, displays safe aggregate `usage_summary`, and keeps API key save/clear/test controls disabled until secure key storage is implemented. No frontend external provider calls, no API key exposure, and `/chat` still returns only `reply / mood / source`. This note supersedes older Phase 4 status text that says settings API/UI are not implemented.
+> TASK-053 update: secure key storage abstraction is implemented/in progress. Runtime default remains a safe unavailable backend, tests use an in-memory fake backend, and no key is written to SQLite or plain config files. Provider key endpoints and live test connection remain disabled until TASK-054; no external provider calls are made. Validation: `cd backend; python -m pytest` -> 436 passed.
 
 AI 驅動的桌面螢幕寵物 — 有個性、有記憶的桌面同伴。
 

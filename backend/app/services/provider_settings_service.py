@@ -12,6 +12,7 @@ from dataclasses import asdict, dataclass
 from threading import Lock
 from typing import Any
 
+from app.services.key_storage_service import get_key_status
 from app.services.usage_meter_service import get_usage_summary
 
 
@@ -86,6 +87,7 @@ class ProviderSettingsService:
 
     def _serialize(self, settings: ProviderSettings) -> dict[str, Any]:
         data = asdict(settings)
+        data["key_status"] = get_key_status(settings.provider)
         data["resolved_provider"] = _resolve_provider(settings)
         data["usage_summary"] = _safe_usage_summary()
         return data
@@ -100,7 +102,7 @@ def _resolve_provider(settings: ProviderSettings) -> str:
         return "mock"
     if settings.provider not in REAL_PROVIDERS:
         return "mock"
-    if settings.key_status != "configured":
+    if get_key_status(settings.provider) != "configured":
         return "mock" if settings.fallback_to_mock else "safe_fallback"
     return settings.provider
 

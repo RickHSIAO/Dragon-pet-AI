@@ -115,6 +115,8 @@ TASK-051 adds the safe non-secret Provider Settings API subset. `GET /provider/s
 
 TASK-052 adds an Electron Provider Settings UI for that safe subset. The UI calls only local backend settings endpoints, displays safe key status and usage counters, and keeps key save/clear/test connection controls disabled.
 
+TASK-053 adds a backend key storage abstraction in `app/services/key_storage_service.py`. The runtime default is a safe unavailable backend; tests use an in-memory fake backend. No API key is stored in SQLite or a plain config file, no key is returned to frontend responses, and key endpoints remain disabled until TASK-054. Latest backend validation: 436 passed.
+
 `MemoryInjectionAudit` records injection events when memory-aware chat runs with both `MEMORY_INJECTION_ENABLED=true` and `use_memory=true`. Each audit row stores: selected memory IDs (as a JSON array), selected count, total context chars, feature flag state, and timestamp. Raw memory content is never stored in audit rows.
 
 `GET /memory/audit` (TASK-026) is now implemented. It returns a read-only paginated list of memory injection audit records — safe metadata only (IDs, counts, chars, flag state). Supports `limit` (default 20, max 100) and `offset` (default 0) query params. Results are sorted newest first. Raw memory content, prompt text, and system instructions are never returned. The endpoint does not create rows or modify any data. UI for this endpoint is planned for TASK-027.

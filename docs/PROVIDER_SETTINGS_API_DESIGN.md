@@ -2,7 +2,7 @@
 
 > dragon-pet-ai
 > Phase: 4 — LLM Adapter Integration
-> Status: DESIGN COMPLETE (TASK-048 DONE); NON-SECRET API IMPLEMENTED (TASK-051 IN_PROGRESS)
+> Status: DESIGN COMPLETE (TASK-048 DONE); NON-SECRET API IMPLEMENTED (TASK-051 DONE); KEY STORAGE ABSTRACTION IN PROGRESS (TASK-053)
 > Last Updated: 2026-05-20
 > Owner: TASK-048
 > Secure Key Storage Design: see `docs/SECURE_KEY_STORAGE_DESIGN.md` (TASK-049)
@@ -20,7 +20,7 @@ Key principles:
 - Test connection is manual-only. No endpoint triggers a live provider call automatically.
 - Provider status responses expose only safe, non-secret metadata.
 - TASK-048 was design-only. TASK-051 implements the safe non-secret subset only.
-- API key storage endpoints remain disabled placeholders until TASK-053.
+- API key storage endpoints remain disabled placeholders until TASK-054.
 
 ---
 
@@ -31,7 +31,7 @@ Key principles:
 | Provider Settings UI design | DONE (TASK-047) — `docs/PROVIDER_SETTINGS_UI_DESIGN.md` |
 | Backend Provider Settings API | Non-secret GET/PATCH implemented in TASK-051 |
 | API key handling | Environment variable only during dev phase |
-| Secure key storage | Design complete (TASK-049); implementation deferred to TASK-053 |
+| Secure key storage | Abstraction implemented in TASK-053; key endpoints still disabled |
 | Usage meter design | DONE (TASK-046) — `docs/USAGE_METER_DESIGN.md` |
 | Usage meter runtime | In-memory safe aggregate implementation complete (TASK-050) |
 | LLM provider factory | Exists in `backend/app` behind feature flags |
@@ -109,7 +109,7 @@ Key principles:
 
 **Purpose:** Save or update the API key for the configured provider. This is the only endpoint that accepts a key value.
 
-**TASK-051 runtime status:** Disabled placeholder returning `501 not_implemented`. It must not be enabled before TASK-053 Secure Key Storage Implementation.
+**TASK-051/TASK-053 runtime status:** Disabled placeholder returning `501 not_implemented`. TASK-053 adds the storage abstraction only; this endpoint remains disabled until TASK-054 Provider Settings Key Endpoint Implementation.
 
 **Request fields:**
 
@@ -133,7 +133,7 @@ Key principles:
 - The key must never appear in any log line at any level (DEBUG, INFO, WARNING, ERROR).
 - The key must never be stored in plain SQLite. Storage method is determined by TASK-049 Secure Key Storage Design — recommended path is OS keychain / Credential Manager. See `docs/SECURE_KEY_STORAGE_DESIGN.md` for the full comparison and recommendation.
 - Plain SQLite storage is explicitly forbidden for real API keys. Any column that would store the key unencrypted violates the security boundaries defined in TASK-048 and TASK-049.
-- No persistent key storage should be implemented until the storage strategy in `docs/SECURE_KEY_STORAGE_DESIGN.md` is accepted and TASK-053 (Secure Key Storage Implementation) is complete.
+- Persistent key endpoints remain disabled until TASK-054. TASK-053 provides only the storage abstraction and tests.
 - The key must never appear in any Python `repr()` or `str()` of any object that holds it.
 - If validation of the key format fails (e.g. wrong prefix), return `key_status: invalid` with a safe message. Do not echo back the key or any fragment.
 - Future implementation must not begin until TASK-049 is complete.
@@ -144,7 +144,7 @@ Key principles:
 
 **Purpose:** Clear the stored API key for the configured provider. After deletion, real provider calls cannot be made until a new key is provided.
 
-**TASK-051 runtime status:** Disabled placeholder returning `501 not_implemented`. It must not be enabled before TASK-053 Secure Key Storage Implementation.
+**TASK-051/TASK-053 runtime status:** Disabled placeholder returning `501 not_implemented`. TASK-053 adds the storage abstraction only; this endpoint remains disabled until TASK-054 Provider Settings Key Endpoint Implementation.
 
 **Request:** No body required. Provider may be specified as a query parameter or path segment.
 
@@ -374,7 +374,9 @@ The following are explicitly out of scope for TASK-048 and Phase 4:
 | TASK-050 | Usage Meter Implementation | Implementation | TASK-049 |
 | TASK-051 | Backend Provider Settings API Implementation | Implementation | TASK-049, TASK-050 |
 | TASK-052 | Provider Settings UI Implementation | Implementation | TASK-051 |
-| TASK-053 | BYOK Runtime Smoke Check | Validation | TASK-052 |
+| TASK-053 | Secure Key Storage Implementation | Implementation | TASK-052 |
+| TASK-054 | Provider Settings Key Endpoint Implementation | Implementation | TASK-053 |
+| TASK-055 | BYOK Runtime Smoke Check | Validation | TASK-054 |
 
 `POST /provider/settings/key` implementation must not begin until TASK-049 (Secure Key Storage Design) is complete, because the storage backend for the key is not yet determined.
 
