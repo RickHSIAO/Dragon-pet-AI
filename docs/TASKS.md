@@ -2759,7 +2759,7 @@ Completion Notes:
 
 ## TASK-054 - Provider Settings Key Endpoint Implementation
 
-Status: IN_PROGRESS
+Status: DONE
 
 Goal:
 Implement safe API key save and clear endpoints through the key storage abstraction without exposing keys or calling providers.
@@ -2812,6 +2812,23 @@ Implementation Notes:
 - `/chat` response schema remains `reply / mood / source`.
 - pytest result: 449 passed.
 - Production DB was not polluted.
+
+Completion Notes:
+- TASK-054 was an implementation task.
+- `POST /provider/settings/key` is wired to the key storage abstraction.
+- `DELETE /provider/settings/key` is wired to the key storage abstraction.
+- `POST /provider/settings/test` remains disabled as `501 not_implemented`.
+- Runtime default `UnavailableKeyStorageBackend` fails safely with a `503` response for save/clear attempts.
+- Tests use `InMemoryKeyStorageBackend` to verify save, clear, idempotent clear, and replace behavior.
+- API key is never returned to frontend responses.
+- API key is never stored in SQLite.
+- API key is never written to logs, stdout, or stderr.
+- No external provider call was made.
+- No Electron UI changes were made.
+- `/chat` response schema remains `reply / mood / source`.
+- pytest result: 449 passed.
+- Production DB was not polluted.
+- Next task: TASK-055 - Provider Settings Key UI Enablement Design.
 
 ---
 
