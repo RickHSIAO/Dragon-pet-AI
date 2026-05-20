@@ -46,6 +46,121 @@
   </main>
 
   <!-- ── Input bar ──────────────────────────────────────── -->
+  <!-- Memory management placeholder -->
+  <section id="memory-section" aria-labelledby="memory-title">
+    <div class="section-header">
+      <div>
+        <h2 id="memory-title">Memory</h2>
+        <p>Manual records</p>
+      </div>
+      <button id="refresh-memory-btn" type="button">Refresh Memories</button>
+    </div>
+
+    <form id="memory-form" class="memory-form">
+      <label>
+        Type
+        <select id="memory-type">
+          <option value="user_preference" selected>user_preference</option>
+          <option value="project_context">project_context</option>
+          <option value="task_memory">task_memory</option>
+          <option value="character_note">character_note</option>
+          <option value="system_event">system_event</option>
+        </select>
+      </label>
+
+      <label>
+        Importance
+        <input id="memory-importance" type="number" min="0" max="100" value="50" />
+      </label>
+
+      <label>
+        Confidence
+        <select id="memory-confidence">
+          <option value="explicit" selected>explicit</option>
+          <option value="inferred">inferred</option>
+          <option value="temporary">temporary</option>
+          <option value="stale">stale</option>
+          <option value="user_corrected">user_corrected</option>
+        </select>
+      </label>
+
+      <label class="memory-content-field">
+        Content
+        <textarea
+          id="memory-content"
+          rows="2"
+          placeholder="Write an explicit memory..."
+          spellcheck="true"
+        ></textarea>
+      </label>
+
+      <button id="save-memory-btn" type="submit">Save Memory</button>
+    </form>
+
+    <div id="memory-status" role="status"></div>
+
+    <div id="memory-list" class="memory-list">
+      <!-- Active memories are injected here by renderer.js -->
+    </div>
+
+    <div class="context-preview">
+      <div class="section-header compact">
+        <div>
+          <h3>Context Preview</h3>
+          <p id="memory-preview-meta">count: 0 - source: manual_memory_preview</p>
+        </div>
+        <button id="refresh-preview-btn" type="button">Refresh Context Preview</button>
+      </div>
+      <pre id="memory-context-text">Memory Context Preview:
+
+No active memories.</pre>
+    </div>
+  </section>
+
+  <!-- ── Audit Logs section (TASK-027) ───────────────────────── -->
+  <!-- Shows safe metadata for memory injection events. Raw memory content,  -->
+  <!-- prompt text, and approved context text are never displayed here.       -->
+  <section id="audit-section" aria-labelledby="audit-title">
+    <div class="section-header">
+      <div>
+        <h2 id="audit-title">Audit Logs</h2>
+        <p>Memory injection event metadata — raw memory content is not displayed.</p>
+      </div>
+      <button id="refresh-audit-btn" type="button">Refresh Audit Logs</button>
+    </div>
+
+    <div class="audit-controls">
+      <label class="audit-control-label">
+        Limit
+        <input id="audit-limit" type="number" min="1" max="100" value="20" />
+      </label>
+      <label class="audit-control-label">
+        Offset
+        <input id="audit-offset" type="number" min="0" value="0" />
+      </label>
+    </div>
+
+    <div id="audit-status" role="status" class="audit-status"></div>
+
+    <div id="audit-list" class="audit-list">
+      <!-- Audit cards are injected here by renderer.js -->
+    </div>
+  </section>
+
+  <!-- ── Memory-aware chat toggle ──────────────────────────── -->
+  <!-- TASK-023: per-request opt-in. Backend MEMORY_INJECTION_ENABLED must   -->
+  <!-- also be true. Toggle only controls the use_memory field in /chat body. -->
+  <div id="memory-toggle-bar">
+    <label id="memory-toggle-label" for="use-memory-toggle">
+      <input type="checkbox" id="use-memory-toggle" />
+      Use approved memories
+    </label>
+    <span id="memory-toggle-hint">
+      Requires backend <code>MEMORY_INJECTION_ENABLED=true</code>.
+      Only active approved memories may be used.
+    </span>
+  </div>
+
   <footer id="input-bar">
     <textarea
       id="message-input"
