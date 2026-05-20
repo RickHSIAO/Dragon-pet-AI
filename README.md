@@ -1,6 +1,8 @@
 # Dragon Pet AI
 
 > TASK-054 update: provider key save/clear endpoints are wired to the secure key storage abstraction. Runtime default remains a safe unavailable backend, tests use an in-memory fake backend, no key is written to SQLite or plain config files, and live test connection remains disabled. No external provider calls are made. Validation: `cd backend; python -m pytest` -> 449 passed.
+>
+> TASK-055 update: Key UI enablement design complete. Save Key and Clear Key controls are now designed with full interaction flows, unavailable storage UX (503 → safe message, env var recommendation), key status display (6 safe values, no key fragments), and security boundaries. Test Connection remains disabled. Implementation deferred to TASK-056.
 
 AI 驅動的桌面螢幕寵物 — 有個性、有記憶的桌面同伴。
 
@@ -114,6 +116,7 @@ npm start
 | `docs/PROVIDER_SETTINGS_UI_DESIGN.md` | TASK-047 provider settings UI design：UI sections、settings flow（9 steps）、security boundaries、error UX（7 types）、memory interaction、non-goals、implementation sequence |
 | `docs/PROVIDER_SETTINGS_API_DESIGN.md` | TASK-048 backend provider settings API design：5 endpoints、write-only key handling、safe status model、test connection safety rules、usage meter integration、security boundaries、error categories |
 | `docs/SECURE_KEY_STORAGE_DESIGN.md` | TASK-049 secure key storage design：4 storage options、MVP recommendation（env var）、future desktop recommendation（OS keychain）、key lifecycle、redaction rules、threat model、testing requirements |
+| `docs/PROVIDER_SETTINGS_KEY_UI_ENABLEMENT_DESIGN.md` | TASK-055 key UI enablement design：Save Key UI flow、Clear Key UI flow、unavailable storage UX、key status display（6 values）、Test Connection disabled state、security boundaries、error UX（7 messages）、future sequence（TASK-056 → 059） |
 | `docs/PRD.md` | 產品需求文件（MVP 定義） |
 | `docs/ARCHITECTURE.md` | 系統架構設計 |
 | `docs/MEMORY_SYSTEM.md` | 記憶系統設計 |

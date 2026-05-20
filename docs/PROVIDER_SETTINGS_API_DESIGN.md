@@ -2,7 +2,7 @@
 
 > dragon-pet-ai
 > Phase: 4 — LLM Adapter Integration
-> Status: DESIGN COMPLETE (TASK-048 DONE); NON-SECRET API IMPLEMENTED (TASK-051 DONE); KEY STORAGE ABSTRACTION DONE (TASK-053); KEY SAVE/CLEAR ENDPOINTS IN_PROGRESS (TASK-054)
+> Status: DESIGN COMPLETE (TASK-048 DONE); NON-SECRET API IMPLEMENTED (TASK-051 DONE); KEY STORAGE ABSTRACTION DONE (TASK-053); KEY SAVE/CLEAR ENDPOINTS DONE (TASK-054); KEY UI ENABLEMENT DESIGNED (TASK-055)
 > Last Updated: 2026-05-20
 > Owner: TASK-048
 > Secure Key Storage Design: see `docs/SECURE_KEY_STORAGE_DESIGN.md` (TASK-049)
@@ -373,13 +373,17 @@ The following are explicitly out of scope for TASK-048 and Phase 4:
 |---|---|---|---|
 | TASK-049 | Secure Key Storage Design | Design-only | TASK-048 |
 | TASK-050 | Usage Meter Implementation | Implementation | TASK-049 |
-| TASK-051 | Backend Provider Settings API Implementation | Implementation | TASK-049, TASK-050 |
-| TASK-052 | Provider Settings UI Implementation | Implementation | TASK-051 |
-| TASK-053 | Secure Key Storage Implementation | Implementation | TASK-052 |
-| TASK-054 | Provider Settings Key Endpoint Implementation | Implementation | TASK-053 |
-| TASK-055 | Provider Settings Key UI Enablement Design | Design | TASK-054 |
+| TASK-051 | Backend Provider Settings API Implementation | DONE | TASK-049, TASK-050 |
+| TASK-052 | Provider Settings UI Implementation | DONE | TASK-051 |
+| TASK-053 | Secure Key Storage Implementation | DONE | TASK-052 |
+| TASK-054 | Provider Settings Key Endpoint Implementation | DONE | TASK-053 |
+| TASK-055 | Provider Settings Key UI Enablement Design | IN_PROGRESS | TASK-054 |
+| TASK-056 | Provider Settings Key UI Enablement Implementation | Pending | TASK-055 |
+| TASK-057 | Provider Settings Key UI Smoke Check | Pending | TASK-056 |
+| TASK-058 | Test Connection Design | Pending | TASK-057 |
+| TASK-059 | Test Connection Implementation | Pending | TASK-058 |
 
-`POST /provider/settings/key` and `DELETE /provider/settings/key` now depend on the TASK-053 storage abstraction. Live provider test behavior remains disabled and must not begin until a separate safety task.
+`POST /provider/settings/key` and `DELETE /provider/settings/key` are wired to the TASK-053 key storage abstraction. Runtime default is `UnavailableKeyStorageBackend` (safe 503). Live provider test behavior remains disabled (`501 not_implemented`) and must not begin until TASK-058 (design) and TASK-059 (implementation).
 
 `TASK-051` (Backend implementation) must not begin until `TASK-050` (Usage Meter Implementation) is ready, because the test connection endpoint must be able to record usage at the moment of the first live call.
 

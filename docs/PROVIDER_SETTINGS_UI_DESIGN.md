@@ -2,10 +2,11 @@
 
 > dragon-pet-ai
 > Phase: 4 — LLM Adapter Integration
-> Status: DESIGN COMPLETE (TASK-047 DONE); NON-SECRET UI IMPLEMENTED (TASK-052 IN_PROGRESS)
+> Status: DESIGN COMPLETE (TASK-047 DONE); NON-SECRET UI IMPLEMENTED (TASK-052 DONE); KEY UI ENABLEMENT DESIGNED (TASK-055)
 > Last Updated: 2026-05-20
 > Owner: TASK-047
 > Backend API Design: see `docs/PROVIDER_SETTINGS_API_DESIGN.md` (TASK-048)
+> Key UI Enablement Design: see `docs/PROVIDER_SETTINGS_KEY_UI_ENABLEMENT_DESIGN.md` (TASK-055)
 
 ---
 
@@ -24,6 +25,8 @@ Backend API design is documented separately in `docs/PROVIDER_SETTINGS_API_DESIG
 - Mock mode remains the default. Provider Settings UI should make switching to real mode feel deliberate, not casual.
 
 TASK-052 implements the safe non-secret UI subset: settings load/save and usage summary display. API key storage, key clearing, and live test connection remain disabled placeholders until secure key storage is implemented.
+
+TASK-055 designs the key UI enablement — how Save Key and Clear Key controls are safely wired now that the backend key endpoints exist (TASK-054). Test Connection remains disabled. See `docs/PROVIDER_SETTINGS_KEY_UI_ENABLEMENT_DESIGN.md` for the full interaction design, unavailable storage UX, error messages, and security boundaries.
 
 ---
 
@@ -265,12 +268,18 @@ The following are explicitly out of scope for the TASK-047 design and Phase 4 im
 | TASK-049 | Secure Key Storage Design | Design-only | TASK-048 |
 | TASK-050 | Usage Meter Implementation | Implementation | TASK-049 |
 | TASK-051 | Backend Provider Settings API Implementation | DONE | TASK-049, TASK-050 |
-| TASK-052 | Provider Settings UI Implementation | IN_PROGRESS | TASK-051 |
-| TASK-053 | Secure Key Storage Implementation | Pending | TASK-052 |
+| TASK-052 | Provider Settings UI Implementation | DONE | TASK-051 |
+| TASK-053 | Secure Key Storage Implementation | DONE | TASK-052 |
+| TASK-054 | Provider Settings Key Endpoint Implementation | DONE | TASK-053 |
+| TASK-055 | Provider Settings Key UI Enablement Design | IN_PROGRESS | TASK-054 |
+| TASK-056 | Provider Settings Key UI Enablement Implementation | Pending | TASK-055 |
+| TASK-057 | Provider Settings Key UI Smoke Check | Pending | TASK-056 |
 
 The safe non-secret Provider Settings UI described in this document is implemented in TASK-052. No runtime code changes are made in TASK-047.
 
 TASK-050 (Usage Meter Implementation) must be complete before TASK-051 (BYOK Settings Implementation) ships to users. A user who enables live provider calls should be able to see what they are spending immediately.
+
+Key UI enablement (Save Key, Clear Key) is designed in TASK-055 and implemented in TASK-056. Test Connection remains disabled until TASK-058 (design) and TASK-059 (implementation).
 
 ---
 

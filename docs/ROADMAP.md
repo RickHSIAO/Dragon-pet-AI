@@ -111,7 +111,7 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 
 **Goal:** Wire the approved memory context pipeline to a real LLM provider behind a feature flag, using an adapter pattern that keeps mock as the default.
 
-**Status:** IN PROGRESS — provider adapter exists behind flags; mock `/chat` LLM wiring smoke passed; real-provider `/chat` wiring contract tests passed with mocked HTTP only; in-memory usage meter, non-secret provider settings API, and Provider Settings UI are implemented; secure key storage abstraction is in progress; live provider remains disabled by default
+**Status:** IN PROGRESS — provider adapter exists behind flags; mock `/chat` LLM wiring smoke passed; real-provider `/chat` wiring contract tests passed with mocked HTTP only; in-memory usage meter, non-secret provider settings API, Provider Settings UI, secure key storage abstraction, and key save/clear endpoints are complete; key UI enablement is being designed (TASK-055); live provider remains disabled by default
 
 **Recommended primary path: Option A — LLM Adapter Integration**
 
@@ -152,8 +152,12 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 | TASK-051 | Backend Provider Settings API Implementation | DONE |
 | TASK-052 | Provider Settings UI Implementation | DONE |
 | TASK-053 | Secure Key Storage Implementation | DONE |
-| TASK-054 | Provider Settings Key Endpoint Implementation | IN_PROGRESS |
-| TASK-055 | Provider Settings Key UI Enablement Design | Pending |
+| TASK-054 | Provider Settings Key Endpoint Implementation | DONE |
+| TASK-055 | Provider Settings Key UI Enablement Design | IN_PROGRESS |
+| TASK-056 | Provider Settings Key UI Enablement Implementation | Pending |
+| TASK-057 | Provider Settings Key UI Smoke Check | Pending |
+| TASK-058 | Test Connection Design | Pending |
+| TASK-059 | Test Connection Implementation | Pending |
 
 **Phase 4 Key Safety Constraints:**
 - `LLM_PROVIDER_ENABLED=false` is the default; real provider requires explicit opt-in via env var
@@ -165,7 +169,7 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 - Non-2xx provider response bodies are opaque — not parsed, not logged, not returned
 - No tool execution, no file access, no autonomous action, no automatic memory extraction
 - Live smoke is blocked until explicit user cost confirmation and TASK-044 go/no-go criteria are satisfied
-- BYOK is the recommended MVP path; provider settings UI design done (TASK-047); backend API design done (TASK-048); secure key storage design done (TASK-049); usage meter implementation done (TASK-050); non-secret settings API implementation done (TASK-051); Provider Settings UI implementation done (TASK-052); secure key storage abstraction done (TASK-053); provider key save/clear endpoints are in progress (TASK-054); live test connection remains disabled until a later task
+- BYOK is the recommended MVP path; provider settings UI design done (TASK-047); backend API design done (TASK-048); secure key storage design done (TASK-049); usage meter implementation done (TASK-050); non-secret settings API implementation done (TASK-051); Provider Settings UI implementation done (TASK-052); secure key storage abstraction done (TASK-053); provider key save/clear endpoints done (TASK-054); key UI enablement design in progress (TASK-055); live test connection remains disabled until TASK-058 (design) and TASK-059 (implementation)
 
 See `docs/PHASE4_PLAN.md`, `docs/LLM_ADAPTER_DESIGN.md`, `docs/LLM_PROVIDER_CONTRACT.md`, `docs/CHAT_LLM_WIRING_DESIGN.md`, `docs/CHAT_LLM_REAL_PROVIDER_WIRING_DESIGN.md`, `docs/COST_AND_MONETIZATION.md`, `docs/BYOK_PRODUCT_AND_SETTINGS.md`, `docs/USAGE_METER_DESIGN.md`, `docs/PROVIDER_SETTINGS_UI_DESIGN.md`, `docs/PROVIDER_SETTINGS_API_DESIGN.md`, and `docs/SECURE_KEY_STORAGE_DESIGN.md` for full planning and design documents.
 

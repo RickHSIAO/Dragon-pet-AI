@@ -2832,6 +2832,73 @@ Completion Notes:
 
 ---
 
+## TASK-055 - Provider Settings Key UI Enablement Design
+
+Status: DONE
+
+Goal:
+Design how the Provider Settings UI will safely enable the Save Key and Clear Key controls now that the backend key save/clear endpoints are wired to the key storage abstraction (TASK-054). This task is design-only — no runtime code is written, no Electron UI is modified.
+
+Scope:
+- Design Save Key UI interaction (password masking, POST to local backend, field clearing after save, disabled states)
+- Design Clear Key UI interaction (confirmation dialog, DELETE to local backend, idempotent behavior)
+- Design unavailable storage UX (503 → safe message, keep Save disabled, env var dev mode recommendation)
+- Design key status display (6 safe values, no key fragments)
+- Design Test Connection disabled state (no live calls, future explicit_cost_ack)
+- Define security boundaries for key UI (no key in renderer logs, localStorage, screenshots, etc.)
+- Define error UX (7 safe messages)
+- Define future task sequence (TASK-056 implementation, TASK-057 smoke check, TASK-058 test connection design)
+- Do not modify backend/app
+- Do not modify apps/desktop
+- Do not add tests
+- Do not add APIs
+- Do not implement UI enablement
+- Do not enable Test Connection
+- Do not call external APIs
+- Do not read real API keys
+- Do not modify /chat
+- Only modify docs / README
+
+Acceptance Criteria:
+- TASK-054 is marked DONE ✅
+- TASK-055 is recorded as DONE ✅
+- docs/PROVIDER_SETTINGS_KEY_UI_ENABLEMENT_DESIGN.md exists ✅
+- Save Key UI design is documented (masking, POST flow, field clearing, disabled states) ✅
+- Clear Key UI design is documented (confirmation, DELETE flow, idempotency) ✅
+- Unavailable storage UX is documented (503 safe message, Save disabled, env var recommendation) ✅
+- Key status display is documented (6 values, no key fragments) ✅
+- Test Connection remains documented as disabled ✅
+- Security boundaries are documented (key not in renderer logs / localStorage / screenshots / memory / audit / usage / chat history) ✅
+- Error UX is documented (7 safe messages) ✅
+- Future task sequence is documented (TASK-056 → TASK-057 → TASK-058 → TASK-059) ✅
+- No backend/app code is modified ✅
+- No apps/desktop code is modified ✅
+- No tests are added ✅
+- No APIs are added ✅
+- No external API call is made ✅
+
+Completion Notes:
+- TASK-055 was a design-only task. No runtime code was written or modified.
+- docs/PROVIDER_SETTINGS_KEY_UI_ENABLEMENT_DESIGN.md created: 12 sections covering current state after TASK-054, Save Key UI interaction flow, Clear Key UI interaction flow, unavailable storage UX (503 → safe message + env var recommendation), key status display (6 canonical values), Test Connection disabled state, security boundaries (12 rules), error UX (7 safe messages), non-goals (14 items), future implementation sequence, and relationship to existing documents.
+- Save Key UI: password-masked input, POST to local backend only, field cleared after save (success or failure), disabled for mock provider, disabled when storage is unavailable after 503, cost warning shown on real provider selection.
+- Clear Key UI: visible only when key exists (any status other than not_configured), requires confirmation dialog before DELETE, idempotent (404 treated as success), never displays key value.
+- Unavailable storage UX: 503 response returns safe message with env var setup instructions, no auto-retry, button re-enabled for manual retry.
+- Key status display: not_configured / configured / not_tested / invalid / test_success / test_failed mapped to human-readable labels; no key value or fragment in any label.
+- Test Connection: remains disabled, button shows "not yet available", deferred to TASK-058 (design) and TASK-059 (implementation).
+- Security boundaries: 12 rules — no key in renderer state / IPC / logs / localStorage / screenshots / DevTools / memory audit / usage records / chat history / crash reports; local backend only; no external provider URLs in renderer.
+- Error UX: 7 safe messages for storage unavailable (503), invalid provider (400), empty key (400), backend unreachable, save failed (500), clear failed (500), key not found on delete (treated as success).
+- No backend/app code was modified.
+- No apps/desktop code was modified.
+- No tests were added.
+- No APIs were added.
+- No external API call was made.
+- pytest count remains 449 passed (unchanged — design-only task).
+
+Next Task:
+TASK-056 - Provider Settings Key UI Enablement Implementation
+
+---
+
 ## SIDE_TRACK — Streamer Companion Mode
 
 Status: NOT SCHEDULED — design exploration only
