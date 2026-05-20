@@ -7,11 +7,11 @@ AI 驅動的桌面螢幕寵物 — 有個性、有記憶的桌面同伴。
 ## 目前狀態
 
 **Phase 3 完成 — Memory-Aware Chat and Audit Inspection**
-**Phase 4 進行中 — LLM Adapter Integration（TASK-046 Usage Meter Design 進行中）**
+**Phase 4 進行中 — LLM Adapter Integration（TASK-047 Provider Settings UI Design 進行中）**
 
 Backend（FastAPI）和 Desktop（Electron）均可運行。Mock chat、Manual Memory、Memory-Aware Chat（two-layer gate）、Audit Inspection API 和 Audit Logs UI 全部完成並通過 runtime smoke check。pytest 最新結果：356 passed。Real provider adapter 已在 TASK-035 behind feature flags；Anthropic contract 已用 mocked HTTP 驗證（TASK-037）。`/chat` wiring 已放在 `LLM_CHAT_ENABLED` 後面，default false；mock runtime smoke passed（TASK-041）；live provider 仍預設停用。
 
-BYOK 已設計完成（TASK-045）：推薦方向 BYOK desktop app / personal companion，使用者自帶 API key 並承擔 provider billing。Usage meter 設計進行中（TASK-046）：cost 可視化設計、token 估算規則、privacy 邊界。Usage meter 必須在 BYOK settings 上線前完成。manual live smoke 暫緩，直到使用者明確接受成本風險。Real provider 仍預設關閉，尚未實作 user-facing settings UI。詳見 `docs/BYOK_PRODUCT_AND_SETTINGS.md`、`docs/USAGE_METER_DESIGN.md`、`docs/COST_AND_MONETIZATION.md`。
+BYOK 已設計完成（TASK-045）：推薦方向 BYOK desktop app / personal companion，使用者自帶 API key 並承擔 provider billing。Usage meter 設計完成（TASK-046）：14 個追蹤欄位、token 估算規則、privacy 邊界、UI requirements。Provider Settings UI 設計進行中（TASK-047）：UI sections、settings flow、security boundaries、error UX。尚未實作 user-facing settings UI；API key 目前仍為 env-only；real provider 預設關閉。manual live smoke 暫緩，直到使用者明確接受成本風險。詳見 `docs/BYOK_PRODUCT_AND_SETTINGS.md`、`docs/USAGE_METER_DESIGN.md`、`docs/PROVIDER_SETTINGS_UI_DESIGN.md`、`docs/COST_AND_MONETIZATION.md`。
 
 ---
 
@@ -109,6 +109,7 @@ npm start
 | `docs/COST_AND_MONETIZATION.md` | TASK-044 cost control and go/no-go design：BYOK-first direction、live smoke criteria、monetization options |
 | `docs/BYOK_PRODUCT_AND_SETTINGS.md` | TASK-045 BYOK product/settings design：key ownership、storage options、settings UX、安全邊界、usage visibility |
 | `docs/USAGE_METER_DESIGN.md` | TASK-046 usage meter design：token/cost tracking、estimation rules、privacy boundaries、storage options、UI requirements |
+| `docs/PROVIDER_SETTINGS_UI_DESIGN.md` | TASK-047 provider settings UI design：UI sections、settings flow（9 steps）、security boundaries、error UX（7 types）、memory interaction、non-goals、implementation sequence |
 | `docs/PRD.md` | 產品需求文件（MVP 定義） |
 | `docs/ARCHITECTURE.md` | 系統架構設計 |
 | `docs/MEMORY_SYSTEM.md` | 記憶系統設計 |

@@ -1,6 +1,26 @@
 # BYOK Product and Settings Design
 
-Status: TASK-045 DONE. TASK-046 Usage Meter Design in progress. This document does not implement provider settings UI and does not read API keys.
+Status: TASK-045 DONE. TASK-046 DONE. TASK-047 Provider Settings UI Design in progress. This document does not implement provider settings UI and does not read API keys.
+
+## Provider Settings UI Design (TASK-047)
+
+The concrete UI design for provider settings is documented separately in `docs/PROVIDER_SETTINGS_UI_DESIGN.md`. That document covers:
+
+- UI sections: provider selector, API key input, model selection, safety toggles, cost warning, usage meter placement, test connection
+- Step-by-step settings flow (9 steps)
+- Security boundaries for settings UI
+- Error UX (7 error types, safe text only)
+- Memory interaction notes
+- Non-goals
+- Future implementation sequence (TASK-048 through TASK-052)
+
+Key rules confirmed in the UI design:
+
+- Settings UI must never directly call a provider from the frontend — all operations are backend-mediated.
+- API key must never be returned to the frontend. UI shows only `Key configured` or `No key saved`.
+- Test Connection requires explicit user action and confirmation dialog — never automatic.
+- Usage meter summary must be visible in the Provider Settings panel (implemented in TASK-050).
+- Cost warning must appear whenever a real provider is selected — non-dismissable.
 
 ## Usage Meter Requirement (TASK-046)
 

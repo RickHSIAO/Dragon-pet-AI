@@ -2262,7 +2262,7 @@ TASK-046 - Usage Meter Design
 
 ## TASK-046 - Usage Meter Design
 
-Status: IN_PROGRESS
+Status: DONE
 
 Goal:
 Design usage and cost visibility before implementing BYOK provider settings or broader real provider usage.
@@ -2279,20 +2279,81 @@ Scope:
 - Do not call external APIs
 
 Acceptance Criteria:
-- TASK-046 is recorded as IN_PROGRESS ✅
-- docs/USAGE_METER_DESIGN.md exists
-- Usage tracking fields are documented
-- Estimated cost display rules are documented
-- Provider/model visibility rules are documented
-- Privacy and logging boundaries are documented
-- UI requirements are documented
-- Future implementation sequence is documented
+- TASK-046 is recorded as DONE ✅
+- docs/USAGE_METER_DESIGN.md exists ✅
+- Usage tracking fields are documented (14 fields, Section 2) ✅
+- Estimated cost display rules are documented (Section 5) ✅
+- Provider/model visibility rules are documented (Section 6) ✅
+- Privacy and logging boundaries are documented (Section 8) ✅
+- UI requirements are documented (Section 6) ✅
+- Future implementation sequence is documented (Section 11) ✅
+- No backend/app code is modified ✅
+- No apps/desktop code is modified ✅
+- No external API call is made ✅
+
+Completion Notes:
+- docs/USAGE_METER_DESIGN.md created: 12 sections covering tracking fields, token/cost estimation rules, UI requirements, warning UX, privacy boundaries, storage options, BYOK interaction, and implementation sequence
+- What to track: 14 fields including request_count, provider, model, source, estimated tokens, cost, timestamp, memory flags, fallback flag, error category
+- What not to track: API key, raw prompt, raw user message, raw memory context, raw provider response, system prompt
+- Token estimation: prefer provider-reported; local heuristic labeled as estimate; CJK noted; never present as exact billing
+- Cost estimation: pricing table required; MVP default tokens-only; approximate label required; provider dashboard is truth
+- Storage: MVP Phase 1 in-memory session counters; Phase 2 optional SQLite daily rollup; no raw content stored; user-deletable
+- Usage meter (TASK-050) must be ready before BYOK settings (TASK-051)
+
+Next Task:
+TASK-047 - Provider Settings UI Design
+
+---
+
+## TASK-047 - Provider Settings UI Design
+
+Status: IN_PROGRESS
+
+Goal:
+Design the provider settings user interface for the desktop app. Document how users will configure their API key, select a provider, set model preferences, and view usage summaries. No runtime code, no backend/app changes, no apps/desktop changes.
+
+Scope:
+- Create docs/PROVIDER_SETTINGS_UI_DESIGN.md
+- Document UI sections: provider selector, API key input, model selection, safety toggles, cost warning, usage meter placement, test connection
+- Document settings flow (step-by-step interaction)
+- Document security boundaries for settings UI
+- Document error UX (7 error types, safe text only)
+- Document memory interaction note
+- Document non-goals
+- Document future implementation sequence (TASK-048 through TASK-052)
+- Update docs/BYOK_PRODUCT_AND_SETTINGS.md: note that Provider Settings UI design now exists separately; UI must be backend-mediated; usage meter visible near provider settings
+- Update docs/USAGE_METER_DESIGN.md: note Provider Settings UI should include usage meter summary; provider dashboard is billing source of truth
+- Update docs/ROADMAP.md: TASK-047 IN_PROGRESS (was Pending), verify TASK-046 DONE
+- Update README.md: note Provider Settings UI is in design; no settings UI implemented yet; API keys remain env-only during dev phase
+- Do not modify backend/app
+- Do not modify apps/desktop
+- Do not add tests
+- Do not add APIs
+- Do not read or use API keys
+- Do not call external APIs
+- Do not implement settings UI
+
+Acceptance Criteria:
+- TASK-046 is marked DONE ✅
+- TASK-047 is recorded as IN_PROGRESS ✅
+- docs/PROVIDER_SETTINGS_UI_DESIGN.md exists
+- UI sections are documented
+- Settings flow is documented
+- Security boundaries are documented
+- Error UX is documented (7 error types)
+- Memory interaction note is included
+- Non-goals section exists
+- Future implementation sequence (TASK-048 through TASK-052) is documented
+- docs/BYOK_PRODUCT_AND_SETTINGS.md updated with Provider Settings UI design reference
+- docs/USAGE_METER_DESIGN.md updated with Provider Settings UI placement note
+- docs/ROADMAP.md updated: TASK-047 IN_PROGRESS, TASK-046 DONE
+- README.md updated with provider settings design status note
 - No backend/app code is modified
 - No apps/desktop code is modified
 - No external API call is made
 
 Next Task:
-TASK-047 - Provider Settings UI Design
+TASK-048 - Backend Provider Settings API Design
 
 ---
 

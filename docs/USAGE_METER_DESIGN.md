@@ -125,12 +125,19 @@ The following elements should appear in a future Usage Meter UI. Implementation 
 
 ### 6.3 Placement
 
-Recommended placement options (decided in TASK-047 Provider Settings UI Design):
-- A collapsible "Usage" section in the existing Memory/Audit UI panel
-- A dedicated status area near the chat input toggle bar
-- A `/health`-based backend summary exposed in the UI non-intrusively
+Placement decided in TASK-047 Provider Settings UI Design:
 
-The usage meter should not interrupt the chat flow. It should be visible but not prominent.
+- **Primary placement**: A compact usage summary section embedded in the Provider Settings panel (Section 2.6 of `docs/PROVIDER_SETTINGS_UI_DESIGN.md`). This is the canonical home for the usage meter in Phase 4.
+- **Secondary placement** (optional, lower priority): A collapsed or minimal status indicator near the chat input toggle bar for quick session visibility.
+
+The usage meter must not interrupt the chat flow. It should be visible but not prominent.
+
+Standing disclaimer visible wherever usage meter appears:
+```
+Usage estimates are approximate. Check your provider dashboard for exact billing.
+```
+
+Provider dashboard remains the authoritative billing source of truth. The in-app usage meter is a transparency tool only — it must never be presented as a substitute for the provider's own billing interface.
 
 ---
 
