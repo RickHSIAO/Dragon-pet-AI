@@ -2307,7 +2307,7 @@ TASK-047 - Provider Settings UI Design
 
 ## TASK-047 - Provider Settings UI Design
 
-Status: IN_PROGRESS
+Status: DONE
 
 Goal:
 Design the provider settings user interface for the desktop app. Document how users will configure their API key, select a provider, set model preferences, and view usage summaries. No runtime code, no backend/app changes, no apps/desktop changes.
@@ -2335,22 +2335,39 @@ Scope:
 
 Acceptance Criteria:
 - TASK-046 is marked DONE ✅
-- TASK-047 is recorded as IN_PROGRESS ✅
-- docs/PROVIDER_SETTINGS_UI_DESIGN.md exists
-- UI sections are documented
-- Settings flow is documented
-- Security boundaries are documented
-- Error UX is documented (7 error types)
-- Memory interaction note is included
-- Non-goals section exists
-- Future implementation sequence (TASK-048 through TASK-052) is documented
-- docs/BYOK_PRODUCT_AND_SETTINGS.md updated with Provider Settings UI design reference
-- docs/USAGE_METER_DESIGN.md updated with Provider Settings UI placement note
-- docs/ROADMAP.md updated: TASK-047 IN_PROGRESS, TASK-046 DONE
-- README.md updated with provider settings design status note
-- No backend/app code is modified
-- No apps/desktop code is modified
-- No external API call is made
+- TASK-047 is recorded as DONE ✅
+- docs/PROVIDER_SETTINGS_UI_DESIGN.md exists ✅
+- UI sections are documented (7 sections: provider selector, API key input, model selection, safety toggles, cost warning, usage meter summary, test connection) ✅
+- Settings flow is documented (9-step interaction flow) ✅
+- Security boundaries are documented (12 rules) ✅
+- Error UX is documented (7 error types, safe text only) ✅
+- Memory interaction note is included ✅
+- Non-goals section exists ✅
+- Future implementation sequence (TASK-048 through TASK-052) is documented ✅
+- docs/BYOK_PRODUCT_AND_SETTINGS.md updated with Provider Settings UI design reference ✅
+- docs/USAGE_METER_DESIGN.md updated with Provider Settings UI placement note ✅
+- docs/ROADMAP.md updated: TASK-047 IN_PROGRESS → DONE, TASK-046 DONE ✅
+- README.md updated with provider settings design status note ✅
+- No backend/app code is modified ✅
+- No apps/desktop code is modified ✅
+- No external API call is made ✅
+
+Completion Notes:
+- This was a design-only task. No runtime code was written or modified.
+- docs/PROVIDER_SETTINGS_UI_DESIGN.md created: 9 sections covering UI sections, 9-step settings flow, security boundaries, error UX, memory interaction, non-goals, implementation sequence, and relationship to existing documents.
+- UI design key decisions:
+  - Settings UI must never directly call provider from frontend — all operations backend-mediated
+  - API key write-once from UI perspective: never retrieved, never shown after save
+  - Test Connection requires explicit user action and confirmation dialog — never automatic, no retries
+  - Usage meter summary embedded in Provider Settings panel (primary placement per TASK-046 Section 6.3)
+  - Cost warning is non-dismissable when real provider is selected
+  - Safety toggles (LLM flags) are read-only status displays in Phase 4 — not interactive
+  - 7 error types handled with safe user-facing text only — no HTTP codes, no raw error bodies
+- No backend/app was modified
+- No apps/desktop was modified
+- No tests were added
+- No APIs were added
+- No external API was called
 
 Next Task:
 TASK-048 - Backend Provider Settings API Design
