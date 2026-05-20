@@ -2544,7 +2544,7 @@ Completion Notes:
 
 ## TASK-051 - Backend Provider Settings API Implementation
 
-Status: IN_PROGRESS
+Status: DONE
 
 Goal:
 Implement safe non-secret Provider Settings API endpoints and read-only provider status without key storage.
@@ -2589,6 +2589,27 @@ Implementation Notes:
 - TASK-051 implements non-secret endpoints and read-only status first.
 - Placeholder endpoints must not inspect request body or process submitted key values.
 - pytest result: 421 passed.
+
+Completion Notes:
+- TASK-051 was an implementation task.
+- Added `backend/app/schemas/provider_settings.py`.
+- Added `backend/app/services/provider_settings_service.py`.
+- Implemented `GET /provider/settings`.
+- Implemented `PATCH /provider/settings`.
+- Key endpoints remain disabled as safe `501 not_implemented` placeholders:
+  - `POST /provider/settings/key`
+  - `DELETE /provider/settings/key`
+  - `POST /provider/settings/test`
+- `POST /provider/settings/key` must not be truly enabled before TASK-053 - Secure Key Storage Implementation.
+- Provider settings service is in-memory only and handles non-secret settings only.
+- `usage_summary` is provided from the in-memory usage meter with safe aggregate fields only.
+- No API key was read.
+- No API key was stored.
+- No external API call was made.
+- No Electron UI changes were made.
+- `/chat` response schema remained unchanged: reply / mood / source.
+- pytest result: 421 passed.
+- Production DB was not polluted.
 
 ---
 
