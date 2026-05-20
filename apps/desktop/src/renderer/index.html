@@ -17,7 +17,7 @@
       default-src 'self';
       script-src 'self';
       style-src 'self' 'unsafe-inline';
-      connect-src 'self' http://localhost:8000;
+      connect-src 'self' http://localhost:8000 http://127.0.0.1:8000;
       img-src 'self' data:;
     "
   />
@@ -150,6 +150,108 @@ No active memories.</pre>
   <!-- ── Memory-aware chat toggle ──────────────────────────── -->
   <!-- TASK-023: per-request opt-in. Backend MEMORY_INJECTION_ENABLED must   -->
   <!-- also be true. Toggle only controls the use_memory field in /chat body. -->
+  <!-- Provider Settings section (TASK-052) -->
+  <section id="provider-settings-section" aria-labelledby="provider-settings-title">
+    <div class="section-header">
+      <div>
+        <h2 id="provider-settings-title">Provider Settings</h2>
+        <p>Non-secret settings only. API key storage and live tests are disabled.</p>
+      </div>
+      <button id="refresh-provider-settings-btn" type="button">Refresh Settings</button>
+    </div>
+
+    <form id="provider-settings-form" class="provider-settings-form">
+      <label>
+        Provider
+        <select id="provider-settings-provider">
+          <option value="mock" selected>mock</option>
+          <option value="anthropic">anthropic</option>
+        </select>
+      </label>
+
+      <label>
+        Model
+        <input
+          id="provider-settings-model"
+          type="text"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="Optional model name"
+        />
+      </label>
+
+      <label class="provider-settings-checkbox">
+        <input id="provider-real-enabled" type="checkbox" />
+        Real provider enabled
+      </label>
+
+      <label class="provider-settings-checkbox">
+        <input id="provider-llm-chat-enabled" type="checkbox" />
+        LLM chat enabled
+      </label>
+
+      <label class="provider-settings-checkbox">
+        <input id="provider-fallback-to-mock" type="checkbox" checked />
+        Fallback to mock
+      </label>
+
+      <button id="save-provider-settings-btn" type="submit">Save Non-secret Settings</button>
+    </form>
+
+    <div class="provider-warning">
+      Using a real provider may incur charges from your API provider.
+    </div>
+
+    <div class="provider-status-grid" aria-live="polite">
+      <div>
+        <span>Key status</span>
+        <strong id="provider-key-status">not_configured</strong>
+      </div>
+      <div>
+        <span>Last test</span>
+        <strong id="provider-last-test-status">not_tested</strong>
+      </div>
+      <div>
+        <span>Resolved provider</span>
+        <strong id="provider-resolved-provider">mock</strong>
+      </div>
+    </div>
+
+    <div class="provider-key-placeholder">
+      <label>
+        API key
+        <input
+          id="provider-api-key-placeholder"
+          type="password"
+          disabled
+          placeholder="API key storage is not implemented yet."
+        />
+      </label>
+      <div class="provider-placeholder-actions">
+        <button id="save-provider-key-btn" type="button" disabled>Save API Key</button>
+        <button id="clear-provider-key-btn" type="button" disabled>Clear API Key</button>
+        <button id="test-provider-connection-btn" type="button" disabled>Test Connection</button>
+      </div>
+      <p>
+        API key storage is not implemented yet. Live test connection is disabled until secure key storage is implemented.
+      </p>
+    </div>
+
+    <div id="provider-settings-status" role="status" class="provider-settings-status"></div>
+
+    <div class="usage-summary-block">
+      <div class="section-header compact">
+        <div>
+          <h3>Usage Summary</h3>
+          <p>Safe aggregate counters only.</p>
+        </div>
+      </div>
+      <dl id="provider-usage-summary" class="usage-summary-list">
+        <!-- Safe usage counters are injected here by renderer.js -->
+      </dl>
+    </div>
+  </section>
+
   <div id="memory-toggle-bar">
     <label id="memory-toggle-label" for="use-memory-toggle">
       <input type="checkbox" id="use-memory-toggle" />

@@ -2,7 +2,7 @@
 
 > dragon-pet-ai
 > Phase: 4 — LLM Adapter Integration
-> Status: DESIGN COMPLETE (TASK-047 DONE)
+> Status: DESIGN COMPLETE (TASK-047 DONE); NON-SECRET UI IMPLEMENTED (TASK-052 IN_PROGRESS)
 > Last Updated: 2026-05-20
 > Owner: TASK-047
 > Backend API Design: see `docs/PROVIDER_SETTINGS_API_DESIGN.md` (TASK-048)
@@ -23,7 +23,7 @@ Key principles:
 Backend API design is documented separately in `docs/PROVIDER_SETTINGS_API_DESIGN.md` (TASK-048). The UI calls backend endpoints only — it never stores the key in frontend state, never calls the provider directly, and never reconstructs or displays the key after submission.
 - Mock mode remains the default. Provider Settings UI should make switching to real mode feel deliberate, not casual.
 
-This document describes the intended UI design only. Implementation is deferred to TASK-051.
+TASK-052 implements the safe non-secret UI subset: settings load/save and usage summary display. API key storage, key clearing, and live test connection remain disabled placeholders until secure key storage is implemented.
 
 ---
 
@@ -264,10 +264,11 @@ The following are explicitly out of scope for the TASK-047 design and Phase 4 im
 | TASK-048 | Backend Provider Settings API Design | Design-only | TASK-047 |
 | TASK-049 | Secure Key Storage Design | Design-only | TASK-048 |
 | TASK-050 | Usage Meter Implementation | Implementation | TASK-049 |
-| TASK-051 | BYOK Settings Implementation | Implementation | TASK-050 (must not start before TASK-050 complete) |
-| TASK-052 | BYOK Runtime Smoke Check | Validation | TASK-051 |
+| TASK-051 | Backend Provider Settings API Implementation | DONE | TASK-049, TASK-050 |
+| TASK-052 | Provider Settings UI Implementation | IN_PROGRESS | TASK-051 |
+| TASK-053 | Secure Key Storage Implementation | Pending | TASK-052 |
 
-The Provider Settings UI described in this document is implemented in TASK-051. No runtime code changes are made in TASK-047.
+The safe non-secret Provider Settings UI described in this document is implemented in TASK-052. No runtime code changes are made in TASK-047.
 
 TASK-050 (Usage Meter Implementation) must be complete before TASK-051 (BYOK Settings Implementation) ships to users. A user who enables live provider calls should be able to see what they are spending immediately.
 

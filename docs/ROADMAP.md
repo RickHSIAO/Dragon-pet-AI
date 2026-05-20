@@ -111,7 +111,7 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 
 **Goal:** Wire the approved memory context pipeline to a real LLM provider behind a feature flag, using an adapter pattern that keeps mock as the default.
 
-**Status:** IN PROGRESS — provider adapter exists behind flags; mock `/chat` LLM wiring smoke passed; real-provider `/chat` wiring contract tests passed with mocked HTTP only; in-memory usage meter is implemented; non-secret provider settings API is in progress; live provider remains disabled by default
+**Status:** IN PROGRESS — provider adapter exists behind flags; mock `/chat` LLM wiring smoke passed; real-provider `/chat` wiring contract tests passed with mocked HTTP only; in-memory usage meter and non-secret provider settings API are implemented; Provider Settings UI implementation is in progress; live provider remains disabled by default
 
 **Recommended primary path: Option A — LLM Adapter Integration**
 
@@ -149,8 +149,8 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 | TASK-048 | Backend Provider Settings API Design | DONE |
 | TASK-049 | Secure Key Storage Design | DONE |
 | TASK-050 | Usage Meter Implementation | DONE |
-| TASK-051 | Backend Provider Settings API Implementation | IN_PROGRESS |
-| TASK-052 | Provider Settings UI Implementation | Pending |
+| TASK-051 | Backend Provider Settings API Implementation | DONE |
+| TASK-052 | Provider Settings UI Implementation | IN_PROGRESS |
 | TASK-053 | Secure Key Storage Implementation | Pending |
 | TASK-054 | BYOK Runtime Smoke Check | Pending |
 
@@ -164,7 +164,7 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 - Non-2xx provider response bodies are opaque — not parsed, not logged, not returned
 - No tool execution, no file access, no autonomous action, no automatic memory extraction
 - Live smoke is blocked until explicit user cost confirmation and TASK-044 go/no-go criteria are satisfied
-- BYOK is the recommended MVP path; provider settings UI design done (TASK-047); backend API design done (TASK-048); secure key storage design done (TASK-049); usage meter implementation done (TASK-050); non-secret settings API implementation is in progress (TASK-051); API key storage and live test connection remain disabled until TASK-053
+- BYOK is the recommended MVP path; provider settings UI design done (TASK-047); backend API design done (TASK-048); secure key storage design done (TASK-049); usage meter implementation done (TASK-050); non-secret settings API implementation done (TASK-051); Provider Settings UI implementation is in progress (TASK-052); API key storage and live test connection remain disabled until TASK-053
 
 See `docs/PHASE4_PLAN.md`, `docs/LLM_ADAPTER_DESIGN.md`, `docs/LLM_PROVIDER_CONTRACT.md`, `docs/CHAT_LLM_WIRING_DESIGN.md`, `docs/CHAT_LLM_REAL_PROVIDER_WIRING_DESIGN.md`, `docs/COST_AND_MONETIZATION.md`, `docs/BYOK_PRODUCT_AND_SETTINGS.md`, `docs/USAGE_METER_DESIGN.md`, `docs/PROVIDER_SETTINGS_UI_DESIGN.md`, `docs/PROVIDER_SETTINGS_API_DESIGN.md`, and `docs/SECURE_KEY_STORAGE_DESIGN.md` for full planning and design documents.
 

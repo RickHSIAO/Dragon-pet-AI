@@ -43,6 +43,19 @@ const auditLimitInput  = document.getElementById("audit-limit");
 const auditOffsetInput = document.getElementById("audit-offset");
 const auditStatusEl    = document.getElementById("audit-status");
 const auditList        = document.getElementById("audit-list");
+// TASK-052: provider settings UI, non-secret settings only
+const providerSettingsForm = document.getElementById("provider-settings-form");
+const providerSettingsProvider = document.getElementById("provider-settings-provider");
+const providerSettingsModel = document.getElementById("provider-settings-model");
+const providerRealEnabled = document.getElementById("provider-real-enabled");
+const providerLlmChatEnabled = document.getElementById("provider-llm-chat-enabled");
+const providerFallbackToMock = document.getElementById("provider-fallback-to-mock");
+const refreshProviderSettingsBtn = document.getElementById("refresh-provider-settings-btn");
+const providerKeyStatus = document.getElementById("provider-key-status");
+const providerLastTestStatus = document.getElementById("provider-last-test-status");
+const providerResolvedProvider = document.getElementById("provider-resolved-provider");
+const providerSettingsStatus = document.getElementById("provider-settings-status");
+const providerUsageSummary = document.getElementById("provider-usage-summary");
 
 // ---------------------------------------------------------------------------
 // State
@@ -350,6 +363,103 @@ async function loadAuditLogs() {
 }
 
 // ---------------------------------------------------------------------------
+// Provider Settings (TASK-052) - local backend only, non-secret settings only
+// ---------------------------------------------------------------------------
+function setProviderSettingsStatus(message, isError = false) {
+  providerSettingsStatus.textContent = message;
+  providerSettingsStatus.className = isError
+    ? "provider-settings-status error"
+    : "provider-settings-status";
+}
+
+function formatCountMap(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return "none";
+  }
+  const entries = Object.entries(value);
+  if (!entries.length) return "none";
+  return entries.map(([key, count]) => `${key}: ${count}`).join(", ");
+}
+
+function renderUsageSummary(usageSummary) {
+  providerUsageSummary.replaceChildren();
+
+  const safeSummary = usageSummary || {};
+  const rows = [
+    ["Requests", String(safeSummary.request_count || 0)],
+    ["Source counts", formatCountMap(safeSummary.source_counts)],
+    ["Provider counts", formatCountMap(safeSummary.provider_counts)],
+    ["Model counts", formatCountMap(safeSummary.model_counts)],
+    ["Input tokens", String(safeSummary.estimated_input_tokens || 0)],
+    ["Output tokens", String(safeSummary.estimated_output_tokens || 0)],
+    ["Total tokens", String(safeSummary.estimated_total_tokens || 0)],
+    ["Fallbacks", String(safeSummary.fallback_count || 0)],
+    ["Memory used", String(safeSummary.memory_used_count || 0)],
+    ["Error counts", formatCountMap(safeSummary.error_counts)],
+  ];
+
+  for (const [label, value] of rows) {
+    const dt = document.createElement("dt");
+    dt.textContent = label;
+    const dd = document.createElement("dd");
+    dd.textContent = value;
+    providerUsageSummary.appendChild(dt);
+    providerUsageSummary.appendChild(dd);
+  }
+}
+
+function renderProviderSettings(settings) {
+  providerSettingsProvider.value = settings.provider || "mock";
+  providerSettingsModel.value = settings.model || "";
+  providerRealEnabled.checked = Boolean(settings.real_provider_enabled);
+  providerLlmChatEnabled.checked = Boolean(settings.llm_chat_enabled);
+  providerFallbackToMock.checked = settings.fallback_to_mock !== false;
+  providerKeyStatus.textContent = settings.key_status || "not_configured";
+  providerLastTestStatus.textContent = settings.last_test_status || "not_tested";
+  providerResolvedProvider.textContent = settings.resolved_provider || "mock";
+  renderUsageSummary(settings.usage_summary);
+}
+
+async function loadProviderSettings() {
+  setProviderSettingsStatus("Loading provider settings...");
+
+  try {
+    const res = await fetch(`${BACKEND_URL}/provider/settings`);
+    const settings = await parseJsonResponse(res);
+    renderProviderSettings(settings);
+    setProviderSettingsStatus("Provider settings loaded.");
+  } catch (err) {
+    renderUsageSummary(null);
+    setProviderSettingsStatus(formatBackendError(err), true);
+  }
+}
+
+async function saveProviderSettings() {
+  setProviderSettingsStatus("Saving non-secret provider settings...");
+
+  try {
+    const body = {
+      provider: providerSettingsProvider.value,
+      model: providerSettingsModel.value.trim() || null,
+      real_provider_enabled: providerRealEnabled.checked,
+      llm_chat_enabled: providerLlmChatEnabled.checked,
+      fallback_to_mock: providerFallbackToMock.checked,
+    };
+
+    const res = await fetch(`${BACKEND_URL}/provider/settings`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const settings = await parseJsonResponse(res);
+    renderProviderSettings(settings);
+    setProviderSettingsStatus("Non-secret provider settings saved.");
+  } catch (err) {
+    setProviderSettingsStatus(formatBackendError(err), true);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Backend call
 // ---------------------------------------------------------------------------
 async function sendMessage(text) {
@@ -380,6 +490,7 @@ async function sendMessage(text) {
     const data = await res.json();
     appendMessage("pet", data.reply);
     setMood(data.mood);
+    await loadProviderSettings();
 
   } catch (err) {
     const isNetworkError = err instanceof TypeError && err.message.includes("fetch");
@@ -418,6 +529,15 @@ refreshAuditBtn.addEventListener("click", () => {
   loadAuditLogs();
 });
 
+refreshProviderSettingsBtn.addEventListener("click", () => {
+  loadProviderSettings();
+});
+
+providerSettingsForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  saveProviderSettings();
+});
+
 msgInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
@@ -448,6 +568,7 @@ msgInput.addEventListener("input", () => {
       await loadMemories();
       await loadMemoryContextPreview();
       await loadAuditLogs();
+      await loadProviderSettings();
     } else {
       throw new Error("Unexpected health response");
     }
@@ -458,6 +579,7 @@ msgInput.addEventListener("input", () => {
       `Backend not reachable at ${BACKEND_URL}.\nStart the backend first:\n  cd backend\n  uvicorn app.main:app --reload`
     );
     setMemoryStatus(`Cannot reach backend at ${BACKEND_URL}.`, true);
+    setProviderSettingsStatus(`Cannot reach backend at ${BACKEND_URL}.`, true);
   }
 
   msgInput.focus();

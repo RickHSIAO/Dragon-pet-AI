@@ -2613,6 +2613,57 @@ Completion Notes:
 
 ---
 
+## TASK-052 - Provider Settings UI Implementation
+
+Status: IN_PROGRESS
+
+Goal:
+Implement a safe Provider Settings UI for non-secret settings and usage visibility.
+
+Scope:
+- Add Provider Settings UI section in Electron renderer
+- Load GET /provider/settings
+- Update non-secret settings via PATCH /provider/settings
+- Display safe key_status only
+- Display safe usage_summary
+- Show API key save/test as disabled or not implemented
+- Do not store API keys
+- Do not call external providers
+- Keep /chat response schema unchanged
+
+Acceptance Criteria:
+- TASK-052 is recorded as IN_PROGRESS
+- Provider Settings UI section exists
+- UI can load provider settings from backend
+- UI can update non-secret settings
+- UI displays key_status without key value
+- UI displays usage_summary safe aggregate data
+- API key save UI is disabled or clearly marked not implemented
+- Test connection UI is disabled or clearly marked not implemented
+- Frontend does not call external providers
+- Frontend does not log API key
+- /chat still works
+- Existing backend tests pass
+- Electron static checks pass
+- No live external API calls occur
+
+Next Task:
+TASK-053 - Secure Key Storage Implementation
+
+Implementation Notes:
+- Provider Settings UI is implemented in the Electron renderer near Memory and Audit sections.
+- UI only calls local backend endpoints: `GET /provider/settings` and `PATCH /provider/settings`.
+- PATCH body includes only provider, model, real_provider_enabled, llm_chat_enabled, and fallback_to_mock.
+- API key save, clear, and test connection controls are disabled placeholders.
+- Frontend does not call Anthropic, OpenAI, or any external provider endpoint.
+- No API key is read, stored, logged, or sent by the frontend.
+- `/chat` response schema remains reply / mood / source.
+- Backend pytest result: 421 passed.
+- Electron static checks passed: `node --check src/main.js` and `node --check src/renderer/renderer.js`.
+- Static safety scan found no external provider URLs, localStorage usage, console logging, or frontend key/test endpoint calls.
+
+---
+
 ## SIDE_TRACK — Streamer Companion Mode
 
 Status: NOT SCHEDULED — design exploration only

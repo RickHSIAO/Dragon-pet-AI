@@ -113,6 +113,8 @@ TASK-040 adds `/chat` internal LLM adapter wiring behind `LLM_CHAT_ENABLED=false
 
 TASK-051 adds the safe non-secret Provider Settings API subset. `GET /provider/settings` returns provider/model flags, safe key status, resolved provider status, and aggregate in-memory `usage_summary`. `PATCH /provider/settings` updates only non-secret settings and rejects API key fields with a fixed safe error. `POST /provider/settings/key`, `DELETE /provider/settings/key`, and `POST /provider/settings/test` are `501 not_implemented` placeholders until secure key storage and live test safety are implemented. These endpoints do not read, store, log, or return API keys and do not call external providers.
 
+TASK-052 adds an Electron Provider Settings UI for that safe subset. The UI calls only local backend settings endpoints, displays safe key status and usage counters, and keeps key save/clear/test connection controls disabled.
+
 `MemoryInjectionAudit` records injection events when memory-aware chat runs with both `MEMORY_INJECTION_ENABLED=true` and `use_memory=true`. Each audit row stores: selected memory IDs (as a JSON array), selected count, total context chars, feature flag state, and timestamp. Raw memory content is never stored in audit rows.
 
 `GET /memory/audit` (TASK-026) is now implemented. It returns a read-only paginated list of memory injection audit records — safe metadata only (IDs, counts, chars, flag state). Supports `limit` (default 20, max 100) and `offset` (default 0) query params. Results are sorted newest first. Raw memory content, prompt text, and system instructions are never returned. The endpoint does not create rows or modify any data. UI for this endpoint is planned for TASK-027.
