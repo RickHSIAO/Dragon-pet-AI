@@ -3042,7 +3042,7 @@ TASK-058 - Provider Test Connection Design
 
 ## TASK-058 - Provider Test Connection Design
 
-Status: IN_PROGRESS
+Status: DONE
 
 Goal:
 Design a safe manual Test Connection flow for BYOK providers without implementing it.
@@ -3062,32 +3062,80 @@ Scope:
 - Do not call external APIs
 
 Acceptance Criteria:
-- TASK-058 is recorded as IN_PROGRESS
-- docs/PROVIDER_TEST_CONNECTION_DESIGN.md exists
-- explicit_cost_ack behavior is documented
-- exactly-one minimal request rule is documented
-- safe response model is documented
-- failure behavior is documented
-- usage meter integration is documented
-- UI behavior is documented
-- logging/redaction rules are documented
-- Test Connection remains disabled in runtime
-- No backend/app code is modified
-- No apps/desktop code is modified
-- No external API call is made
+- TASK-058 is recorded as DONE ✅
+- docs/PROVIDER_TEST_CONNECTION_DESIGN.md exists ✅
+- explicit_cost_ack behavior is documented ✅
+- exactly-one minimal request rule is documented ✅
+- safe response model is documented ✅
+- failure behavior is documented ✅
+- usage meter integration is documented ✅
+- UI behavior is documented ✅
+- logging/redaction rules are documented ✅
+- Test Connection remains disabled in runtime ✅
+- No backend/app code is modified ✅
+- No apps/desktop code is modified ✅
+- No external API call is made ✅
 
-Next Task:
-TASK-059 - Provider Test Connection Implementation
-
-Implementation Notes:
-- Test Connection remains disabled in runtime; `POST /provider/settings/test` still returns `501 not_implemented`.
-- `docs/PROVIDER_TEST_CONNECTION_DESIGN.md` defines the manual flow, preconditions, explicit cost acknowledgement, exactly-one minimal request rule, safe response model, failure categories, no-fallback policy, usage meter integration, UI behavior, logging/redaction rules, future tests, and runtime smoke checklist.
-- The recommended fallback policy is no mock fallback for Test Connection. A failed real provider test should return safe failure metadata, not `llm_mock`.
+Completion Notes:
+- TASK-058 was a design-only task. No runtime code was written or modified.
+- docs/PROVIDER_TEST_CONNECTION_DESIGN.md created: defines manual Test Connection flow, preconditions (key_status configured, real provider selected, explicit_cost_ack per-click), explicit cost acknowledgement (every click requires confirmation; backend must require explicit_cost_ack: true; missing/false returns safe 400 cost_ack_required), exactly-one minimal request rule (one request only, no retries, no streaming, no tools, no memory, no history, minimal prompt "Reply with OK.", low max_tokens, timeout enforced), no-fallback policy (Test Connection verifies real provider only; no silent mock fallback), safe response model (status / provider / model / source / safe_message / error_category / usage_estimate; no API key / raw provider body / headers / prompt / diagnostics returned), usage meter integration, UI behavior, and logging/redaction rules.
+- Test Connection runtime remains disabled. POST /provider/settings/test still returns 501 not_implemented.
 - No backend/app code is modified.
 - No apps/desktop code is modified.
 - No tests are added.
 - No APIs are added.
 - No external API call is made.
+
+Next Task:
+TASK-059 - Provider Test Connection Implementation
+(Note: TASK-059 must use mocked tests only — no live provider calls, no live smoke.)
+
+---
+
+## TASK-059 - Provider Test Connection Implementation
+
+Status: Pending
+
+Goal:
+Implement the Test Connection flow in backend and Electron renderer as designed in TASK-058, using mocked tests only. No live provider calls.
+
+Scope:
+- Implement POST /provider/settings/test endpoint (replace 501 placeholder)
+- Require explicit_cost_ack: true in request body; return safe 400 cost_ack_required if missing/false
+- Send exactly-one minimal request to real provider (minimal prompt, low max_tokens, timeout enforced)
+- No retries, no streaming, no tools, no memory, no history
+- Return safe response model: status / provider / model / source / safe_message / error_category / usage_estimate
+- Implement no-fallback policy: test must not silently fall back to mock
+- Wire usage meter to record test connection token usage
+- Implement redaction rules: no API key / raw provider body / headers / prompt in any log or response
+- Enable Test Connection button in Electron renderer
+- Wire explicit cost acknowledgement confirmation dialog in renderer
+- Wire renderer to POST /provider/settings/test and display safe_message
+- Write mocked tests only — no live provider calls in pytest
+- Do not modify /chat response schema
+- Do not add retries or streaming
+- Do not call external APIs from tests
+
+Acceptance Criteria:
+- TASK-059 is recorded as DONE
+- POST /provider/settings/test is implemented (no longer returns 501)
+- explicit_cost_ack: true is required; missing/false returns 400 cost_ack_required
+- exactly-one minimal request rule is enforced in backend
+- safe response model is returned (status / provider / model / source / safe_message / error_category / usage_estimate)
+- no mock fallback on test failure
+- usage meter records test connection usage
+- redaction rules are enforced in backend
+- Test Connection button enabled in Electron renderer for real providers with configured key
+- renderer shows explicit cost acknowledgement dialog before sending request
+- renderer displays safe_message from backend response
+- mocked pytest tests cover: missing cost_ack, test success, test failure (provider error), test failure (timeout), storage unavailable
+- no live external API call in any test
+- pytest passes (no regressions)
+- Electron static check passes (node --check)
+- No /chat response schema change
+
+Next Task:
+TASK-060 - Provider Test Connection Runtime Smoke Check
 
 ---
 
