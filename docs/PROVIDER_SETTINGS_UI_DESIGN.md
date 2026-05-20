@@ -2,9 +2,10 @@
 
 > dragon-pet-ai
 > Phase: 4 — LLM Adapter Integration
-> Status: DESIGN (TASK-047)
+> Status: DESIGN COMPLETE (TASK-047 DONE)
 > Last Updated: 2026-05-20
 > Owner: TASK-047
+> Backend API Design: see `docs/PROVIDER_SETTINGS_API_DESIGN.md` (TASK-048)
 
 ---
 
@@ -18,6 +19,8 @@ Key principles:
 - API key must never be sent to the frontend in any response. The UI may only show whether a key exists, not the key value.
 - No live provider test should happen automatically. All provider tests require explicit user action.
 - Cost warnings must appear before and during real provider configuration.
+
+Backend API design is documented separately in `docs/PROVIDER_SETTINGS_API_DESIGN.md` (TASK-048). The UI calls backend endpoints only — it never stores the key in frontend state, never calls the provider directly, and never reconstructs or displays the key after submission.
 - Mock mode remains the default. Provider Settings UI should make switching to real mode feel deliberate, not casual.
 
 This document describes the intended UI design only. Implementation is deferred to TASK-051.

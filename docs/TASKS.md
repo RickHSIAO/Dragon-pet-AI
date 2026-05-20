@@ -2374,6 +2374,47 @@ TASK-048 - Backend Provider Settings API Design
 
 ---
 
+## TASK-048 - Backend Provider Settings API Design
+
+Status: IN_PROGRESS
+
+Goal:
+Design backend APIs for future BYOK provider settings without implementing them. This document defines the API surface, request/response schemas, key handling rules, and security boundaries that will guide future implementation.
+
+Scope:
+- Define backend provider settings API surface
+- Define safe request/response schemas
+- Define API key write-only behavior
+- Define key clear behavior
+- Define provider status behavior
+- Define manual test connection behavior
+- Define usage meter integration points
+- Define security boundaries
+- Do not implement runtime code
+- Do not read API keys
+- Do not call external APIs
+
+Acceptance Criteria:
+- TASK-047 is marked DONE ✅
+- TASK-048 is recorded as IN_PROGRESS ✅
+- docs/PROVIDER_SETTINGS_API_DESIGN.md exists
+- Backend API endpoints are documented (GET/PATCH /provider/settings, POST /provider/settings/key, DELETE /provider/settings/key, POST /provider/settings/test)
+- Request and response schemas are documented
+- API key write-only behavior is documented
+- API key clear behavior is documented
+- Test connection behavior is documented
+- Provider status behavior (safe status model) is documented
+- Usage meter integration points are documented
+- Security boundaries are documented
+- No backend/app code is modified
+- No apps/desktop code is modified
+- No external API call is made
+
+Next Task:
+TASK-049 - Secure Key Storage Design
+
+---
+
 ## SIDE_TRACK — Streamer Companion Mode
 
 Status: NOT SCHEDULED — design exploration only

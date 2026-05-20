@@ -1,6 +1,27 @@
 # BYOK Product and Settings Design
 
-Status: TASK-045 DONE. TASK-046 DONE. TASK-047 Provider Settings UI Design in progress. This document does not implement provider settings UI and does not read API keys.
+Status: TASK-045 DONE. TASK-046 DONE. TASK-047 DONE. TASK-048 Backend Provider Settings API Design in progress. This document does not implement provider settings UI or settings API and does not read API keys.
+
+## Backend Provider Settings API Design (TASK-048)
+
+The backend API design for provider settings is documented separately in `docs/PROVIDER_SETTINGS_API_DESIGN.md`. That document covers:
+
+- Proposed endpoints: `GET /provider/settings`, `PATCH /provider/settings`, `POST /provider/settings/key`, `DELETE /provider/settings/key`, `POST /provider/settings/test`
+- Request and response schemas (all key-free)
+- API key write-only behavior and storage rules
+- Safe status model (`not_configured`, `configured`, `invalid`, `not_tested`, `test_success`, `test_failed`)
+- Test connection safety rules (`explicit_cost_ack` enforcement, no retries, no automatic calls)
+- Usage meter integration points
+- Security boundaries (11 rules)
+- Error handling (11 safe error categories)
+- Future implementation sequence (TASK-049 through TASK-053)
+
+Key rules confirmed in the API design:
+
+- Backend API must be designed (TASK-048) before implementing settings UI or settings API.
+- Secure key storage must be designed (TASK-049) before any endpoint that stores a real key is implemented.
+- API key is write-only: accepted at `POST /provider/settings/key`, never returned from any endpoint.
+- All endpoints are backend-mediated — frontend never calls provider directly.
 
 ## Provider Settings UI Design (TASK-047)
 
