@@ -1,7 +1,7 @@
 # Development Roadmap
 
 > dragon-pet-ai
-> Status: DRAFT
+> Status: LIVING DOCUMENT
 > Last Updated: 2026-05-19
 > Owner: TASK-001
 
@@ -9,11 +9,11 @@
 
 ## Overview
 
-The project is developed in discrete phases. Each phase has a clearly defined scope and must not implement features belonging to later phases. This prevents scope creep and keeps each task reviewable and verifiable.
+The project is developed in discrete phases. Each phase has a clearly defined scope and must not implement features belonging to later phases.
 
 ```
 Phase 0 → Phase 1 → Phase 2 → Phase 3 → Phase 4 → Phase 5
-Docs      Skeleton  Chat+Char  Memory    Voice     Assistant
+Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 ```
 
 ---
@@ -22,26 +22,13 @@ Docs      Skeleton  Chat+Char  Memory    Voice     Assistant
 
 **Goal:** Establish the project structure, specifications, and documentation before writing any runtime code.
 
-**Status:** IN_PROGRESS
+**Status:** COMPLETE
 
 | Task | Name | Status |
 |---|---|---|
 | TASK-000 | Project Skeleton | DONE |
-| TASK-001 | MVP PRD and Initial Architecture | IN_PROGRESS |
-
-**Deliverables:**
-- Folder structure
-- README.md, .env.example
-- docs/PRD.md — product requirements
-- docs/ARCHITECTURE.md — system design
-- docs/ROADMAP.md — this file
-- docs/TASKS.md — task tracking
-- docs/MEMORY_SYSTEM.md — memory design (pending)
-- docs/CHARACTER_SPEC.md — character design (pending)
-
-**Exit Criteria:**
-- All docs files have meaningful content
-- No runtime code exists yet
+| TASK-001 | MVP PRD and Initial Architecture | DONE |
+| TASK-002 | Character Spec and Memory System Spec | DONE |
 
 ---
 
@@ -49,126 +36,135 @@ Docs      Skeleton  Chat+Char  Memory    Voice     Assistant
 
 **Goal:** Establish the running skeleton of both the backend and desktop app. No real AI, no real features — just the infrastructure working end-to-end.
 
-**Status:** NOT STARTED
+**Status:** COMPLETE
 
 | Task | Name | Status |
 |---|---|---|
-| TASK-002 | FastAPI backend skeleton + /health | Pending |
-| TASK-003 | Electron desktop shell + IPC setup | Pending |
-| TASK-004 | /chat mock endpoint (returns hardcoded response) | Pending |
+| TASK-003 | FastAPI backend skeleton + /health + /chat mock | DONE |
+| TASK-004 | Electron desktop shell + chat UI | DONE |
 
-**Deliverables:**
-- `backend/` — FastAPI app that starts and responds to `/health`
-- `apps/desktop/` — Electron window that opens and displays a placeholder character image
-- `/chat` endpoint that returns a hardcoded mock response (no LLM yet)
-- Local HTTP communication confirmed between Desktop and Backend
-
-**Out of Scope:**
-- Real LLM calls
-- Database
-- Character state
-- Memory
-
-**Exit Criteria:**
-- `uvicorn` starts the backend without errors
-- `npm start` opens the Electron window
-- Desktop can POST to `/chat` and display the mock response
+**Exit Criteria — Met:**
+- `uvicorn` starts the backend without errors ✅
+- `npm start` opens the Electron window ✅
+- Desktop can POST to `/chat` and display the mock response ✅
 
 ---
 
 ## Phase 2 — Chat and Character
 
-**Goal:** Wire up real LLM calls, define the character, and make the chat experience feel alive.
+**Goal:** Wire up character state, conversation history, and SQLite persistence.
 
-**Status:** NOT STARTED
+**Status:** COMPLETE
 
 | Task | Name | Status |
 |---|---|---|
-| TASK-005 | LLM adapter (abstract interface + first real provider) | Pending |
-| TASK-006 | Character prompt definition | Pending |
-| TASK-007 | Message history (in-memory, no DB yet) | Pending |
-| TASK-008 | Chat UI (scrollable history, input, send) | Pending |
-
-**Deliverables:**
-- LLM adapter with pluggable provider (OpenAI or Anthropic)
-- Character system prompt loaded from config
-- Chat UI functional: user types, pet responds in character
-- Last N messages included in prompt for context
-
-**Out of Scope:**
-- Database persistence
-- Long-term memory
-- Voice
-- Character state
-
-**Exit Criteria:**
-- User can have a multi-turn conversation with consistent character personality
-- LLM provider can be swapped via config change
+| TASK-005 to TASK-014 | Chat modes, character state, relationship state, SQLite persistence, memory table skeleton | DONE |
 
 ---
 
 ## Phase 3 — Memory and State
 
-**Goal:** Add persistence, long-term memory, character state, and relationship state.
+**Goal:** Add long-term memory, memory-aware chat, and audit inspection.
 
-**Status:** NOT STARTED
+**Status:** COMPLETE
 
 | Task | Name | Status |
 |---|---|---|
-| TASK-009 | SQLite schema + ORM setup | Pending |
-| TASK-010 | Conversation persistence | Pending |
-| TASK-011 | Long-term memory CRUD + prompt injection | Pending |
-| TASK-012 | Character state (mood, energy) | Pending |
-| TASK-013 | Relationship state (affinity level) | Pending |
-| TASK-014 | Daily summary placeholder endpoint | Pending |
+| TASK-015 | Manual memory injection design | DONE |
+| TASK-016 | Memory injection safety review | DONE |
+| TASK-017 | Apply memory injection safety review changes | DONE |
+| TASK-018 | Approved Memory Context Builder | DONE |
+| TASK-019 | Memory Injection Audit Log Skeleton | DONE |
+| TASK-020 | Feature Flagged Memory-Aware Chat Wiring | DONE |
+| TASK-021 | Feature Flagged Memory-Aware Chat Runtime Smoke Check | DONE |
+| TASK-022 | Memory-Aware Chat UI Toggle Design | DONE |
+| TASK-023 | Memory-Aware Chat UI Toggle Implementation | DONE |
+| TASK-024 | Memory-Aware Chat Runtime Smoke Check | DONE |
+| TASK-025 | Memory Injection Audit Inspection Design | DONE |
+| TASK-026 | Memory Injection Audit Inspection API | DONE |
+| TASK-027 | Memory Injection Audit UI | DONE |
+| TASK-028 | Audit Inspection Runtime Smoke Check | DONE |
+| TASK-029 | Phase 3 Stabilization and Demo Summary | DONE |
 
-**Deliverables:**
-- All messages persisted to SQLite
-- Long-term memory entries stored, viewable, and injected into prompts
-- Character state and relationship state persisted and updated each turn
-- `/summary` endpoint returning a placeholder or basic summary
+**Phase 3 Deliverables Completed:**
+- All messages persisted to SQLite ✅
+- Manual memory CRUD API ✅
+- Memory management UI ✅
+- Approved memory context builder with safety filters ✅
+- Memory-aware chat with two-layer safety gate ✅
+- MemoryInjectionAudit model + audit row creation ✅
+- Audit inspection API (read-only, paginated, safe metadata only) ✅
+- Audit Logs UI ✅
+- pytest: 226 passed, 0 failed ✅
+- All runtime smoke checks passed ✅
 
-**Out of Scope:**
-- Voice
-- Task list
+**Not implemented in Phase 3 (remains deferred):**
+- Real AI / LLM provider
+- Voice (TTS / STT)
 - Live2D
-
-**Exit Criteria:**
-- Conversations survive app restart
-- Pet recalls long-term memories across sessions
-- Character state influences response tone
+- Semantic retrieval / vector database
+- Automatic memory extraction
 
 ---
 
-## Phase 4 — Voice and Presence
+## Phase 4 — LLM Adapter Integration
 
-**Goal:** Add voice output (TTS) and placeholder mouth/emotion animation.
+**Goal:** Wire the approved memory context pipeline to a real LLM provider behind a feature flag, using an adapter pattern that keeps mock as the default.
 
-**Status:** NOT STARTED
+**Status:** IN PROGRESS — provider adapter exists behind flags; mock `/chat` LLM wiring smoke passed; real-provider `/chat` wiring contract tests passed with mocked HTTP only; BYOK product/settings design is in progress; live provider remains disabled by default
+
+**Recommended primary path: Option A — LLM Adapter Integration**
+
+| Option | Description | Notes |
+|---|---|---|
+| **A — LLM adapter integration** ⬅ selected | Wire approved memory context to a real LLM behind explicit flags | TASK-031 → TASK-051 |
+| B — TTS voice output | Add basic text-to-speech output | Deferred — more valuable after real LLM is wired |
+| C — UI polish and packaging | Improve layouts, scrolling, package as installable app | Deferred — better after LLM adapter done |
+| D — Daily summary / memory review | Generate end-of-day summaries and memory review UI | Deferred — requires LLM adapter first |
+
+**Task Sequence:**
 
 | Task | Name | Status |
 |---|---|---|
-| TASK-015 | TTS integration (basic voice output) | Pending |
-| TASK-016 | Basic mouth animation placeholder | Pending |
-| TASK-017 | Simple emotion expression (image swap or overlay) | Pending |
+| TASK-030 | Phase 4 Planning | DONE |
+| TASK-031 | LLM Adapter Design | DONE |
+| TASK-032 | LLM Provider Interface Skeleton | DONE |
+| TASK-033 | Mock Provider Compatibility Tests | DONE |
+| TASK-034 | Real Provider Config Design | DONE |
+| TASK-034R | Real Provider Config Safety Review (Opus) | DONE — PASS WITH CHANGES |
+| TASK-034F | Apply Real Provider Config Review Fixes | DONE |
+| TASK-035 | Real Provider Integration Behind Feature Flag | DONE |
+| TASK-036 | Real Provider Vendor Contract Design | DONE |
+| TASK-037 | Real Provider Contract Tests | DONE |
+| TASK-038 | Manual Live LLM Provider Smoke Check | IN_PROGRESS |
+| TASK-039 | Chat Service LLM Wiring Design | DONE |
+| TASK-040 | Chat Service LLM Wiring Behind Feature Flag | DONE |
+| TASK-041 | Chat LLM Wiring Mock Runtime Smoke Check | DONE |
+| TASK-042 | Chat LLM Real Provider Wiring Design | DONE |
+| TASK-043 | Chat Real Provider Wiring Contract Tests | DONE |
+| TASK-044 | Cost Control and Live Smoke Go/No-Go Design | DONE |
+| TASK-045 | BYOK Product and Settings Design | DONE |
+| TASK-046 | Usage Meter Design | IN_PROGRESS |
+| TASK-047 | Provider Settings UI Design | Pending |
+| TASK-048 | Backend Provider Settings API Design | Pending |
+| TASK-049 | Secure Key Storage Design | Pending |
+| TASK-050 | Usage Meter Implementation | Pending |
+| TASK-051 | BYOK Settings Implementation | Pending — must not start until TASK-050 complete |
+| TASK-052 | BYOK Runtime Smoke Check | Pending |
 
-**Deliverables:**
-- Pet speaks responses aloud via TTS
-- Character image changes based on emotion state (happy, tired, etc.)
-- Mouth animation placeholder (static swap, not Live2D)
+**Phase 4 Key Safety Constraints:**
+- `LLM_PROVIDER_ENABLED=false` is the default; real provider requires explicit opt-in via env var
+- `LLM_CHAT_ENABLED=false` must gate `/chat` LLM adapter use separately from provider selection
+- API key loaded from environment variable only — never hardcoded, never logged, never sent to frontend, never in repr/str
+- `/chat` response schema remains `reply / mood / source` — unchanged
+- Memory-aware chat two-layer gate is unchanged
+- No automatic retries in Phase 4 (at most one real provider call per `/chat` turn)
+- Non-2xx provider response bodies are opaque — not parsed, not logged, not returned
+- No tool execution, no file access, no autonomous action, no automatic memory extraction
+- Live smoke is blocked until explicit user cost confirmation and TASK-044 go/no-go criteria are satisfied
+- BYOK is the recommended MVP path; no user-facing provider settings UI is implemented yet
 
-**Out of Scope:**
-- STT (voice input)
-- Live2D
-- Task list
-
-**Notes:**
-- STT may be added as TASK-018 in this phase if TTS is stable
-- Live2D remains explicitly out of scope until a future phase
-
-**Exit Criteria:**
-- Pet speaks at least one response via TTS
-- Emotion image changes visible to user
+See `docs/PHASE4_PLAN.md`, `docs/LLM_ADAPTER_DESIGN.md`, `docs/LLM_PROVIDER_CONTRACT.md`, `docs/CHAT_LLM_WIRING_DESIGN.md`, `docs/CHAT_LLM_REAL_PROVIDER_WIRING_DESIGN.md`, `docs/COST_AND_MONETIZATION.md`, and `docs/BYOK_PRODUCT_AND_SETTINGS.md` for full planning and design documents.
 
 ---
 
@@ -180,28 +176,44 @@ Docs      Skeleton  Chat+Char  Memory    Voice     Assistant
 
 | Task | Name | Status |
 |---|---|---|
-| TASK-019 | Basic task list (CRUD via chat) | Pending |
-| TASK-020 | Project planning support (conversational) | Pending |
-| TASK-021 | Read-only project file context (with safety layer) | Pending |
-| TASK-022 | Scheduled reminders | Pending |
-| TASK-023 | Tool execution framework (safety-gated) | Pending |
+| (TBD) | Basic task list (CRUD via chat) | Pending |
+| (TBD) | Project planning support (conversational) | Pending |
+| (TBD) | Read-only project file context (with safety layer) | Pending |
+| (TBD) | Scheduled reminders | Pending |
+| (TBD) | Tool execution framework (safety-gated) | Pending |
 
-**Deliverables:**
-- User can manage tasks through conversation
-- Pet can reference project file context (read-only, user-approved paths)
-- Scheduled reminders fire at configured times
-- Tool execution framework with explicit user approval gate
-
-**Safety Requirements for TASK-021 and TASK-023:**
+**Safety Requirements for Phase 5:**
 - No shell command execution without a dedicated safety review
 - File access restricted to user-approved directories only
 - All tool actions logged and reversible where possible
 - User must explicitly enable tool execution capability
 
-**Exit Criteria:**
-- User can add, list, and complete tasks through chat
-- At least one file context read confirmed working safely
-- Tool execution blocked by default until explicitly enabled
+---
+
+## Future Product Track — Streamer Companion Mode
+
+> Status: SIDE TRACK — design exploration only; not scheduled for implementation
+> See: `docs/STREAMER_COMPANION_MODE.md`
+
+A potential future direction that adapts the dragon-pet AI for live streaming contexts (Twitch, YouTube Live). The pet would run as an OBS overlay, react to stream events (follows, subs, raids), and respond to chat commands — giving streamers an on-screen AI companion with personality.
+
+**This track is explicitly deferred** until the following are complete:
+- Phase 4 LLM adapter stable and safety-reviewed (TASK-037)
+- TTS voice output (Phase 5)
+- A dedicated Streamer Mode safety design (STREAM-001 — not yet created)
+
+| Future Task ID | Name | Status |
+|---|---|---|
+| STREAM-001 | Streamer Companion Mode Safety Design | Not scheduled |
+| STREAM-002 | OBS Browser Source Overlay Architecture | Not scheduled |
+| STREAM-003 | Twitch EventSub Integration Design | Not scheduled |
+| STREAM-004 | Chat Sampling and Filtering Design | Not scheduled |
+| STREAM-005 | Public Content Safety Layer Design | Not scheduled |
+| STREAM-006 | Per-Session Token Budget Design | Not scheduled |
+| STREAM-007 | Streamer Mode MVP Implementation | Not scheduled |
+| STREAM-008 | Streamer Mode Smoke Check | Not scheduled |
+
+Key differences from personal mode: public broadcast context, chat firehose input, per-session hard token budget, TTS required, higher content safety bar. See `docs/STREAMER_COMPANION_MODE.md` for full design exploration.
 
 ---
 

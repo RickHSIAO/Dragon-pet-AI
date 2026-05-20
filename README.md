@@ -6,11 +6,12 @@ AI 驅動的桌面螢幕寵物 — 有個性、有記憶的桌面同伴。
 
 ## 目前狀態
 
-**TASK-003 - Basic Runtime Skeleton（進行中）**
+**Phase 3 完成 — Memory-Aware Chat and Audit Inspection**
+**Phase 4 進行中 — LLM Adapter Integration（TASK-046 Usage Meter Design 進行中）**
 
-Phase 1 第一步：最小可跑骨架。
-Backend（FastAPI）和 Desktop（Electron）已建立，`/health` 和 `/chat` mock 端點可用。
-尚未串接真實 AI API。
+Backend（FastAPI）和 Desktop（Electron）均可運行。Mock chat、Manual Memory、Memory-Aware Chat（two-layer gate）、Audit Inspection API 和 Audit Logs UI 全部完成並通過 runtime smoke check。pytest 最新結果：356 passed。Real provider adapter 已在 TASK-035 behind feature flags；Anthropic contract 已用 mocked HTTP 驗證（TASK-037）。`/chat` wiring 已放在 `LLM_CHAT_ENABLED` 後面，default false；mock runtime smoke passed（TASK-041）；live provider 仍預設停用。
+
+BYOK 已設計完成（TASK-045）：推薦方向 BYOK desktop app / personal companion，使用者自帶 API key 並承擔 provider billing。Usage meter 設計進行中（TASK-046）：cost 可視化設計、token 估算規則、privacy 邊界。Usage meter 必須在 BYOK settings 上線前完成。manual live smoke 暫緩，直到使用者明確接受成本風險。Real provider 仍預設關閉，尚未實作 user-facing settings UI。詳見 `docs/BYOK_PRODUCT_AND_SETTINGS.md`、`docs/USAGE_METER_DESIGN.md`、`docs/COST_AND_MONETIZATION.md`。
 
 ---
 
@@ -71,7 +72,12 @@ npm start
 | `POST /chat` — mock 角色回應 | ✅ 可用（無 AI） |
 | Desktop 視窗 | ✅ 可用 |
 | Desktop ↔ Backend 通訊 | ✅ 可用 |
-| SQLite 資料庫初始化 | ✅ 佔位（無資料表） |
+| SQLite 資料庫初始化 | ✅ 可用 |
+| Manual Memory API (`POST/GET/DELETE /memory`) | ✅ 可用 |
+| Memory Context Preview (`GET /memory/context-preview`) | ✅ 可用 |
+| Memory-aware chat toggle (`use_memory`, two-layer gate) | ✅ 可用 |
+| `GET /memory/audit` — read-only audit inspection API | ✅ 可用（TASK-026） |
+| Desktop Audit Logs UI | ✅ 可用（TASK-027） |
 
 ---
 
@@ -94,13 +100,25 @@ npm start
 | 文件 | 說明 |
 |---|---|
 | `docs/TASKS.md` | 目前任務狀態與進度追蹤 |
+| `docs/PHASE3_DEMO_SUMMARY.md` | Phase 3 demo summary、safety model、demo flow |
+| `docs/PHASE4_PLAN.md` | Phase 4 規劃：候選方向、建議路徑、安全約束、任務序列 |
+| `docs/LLM_ADAPTER_DESIGN.md` | LLM Adapter 架構設計：provider interface、feature flags、API key 安全規則、error handling（含 TASK-034R Opus 審查結果與 TASK-034F 修補） |
+| `docs/LLM_PROVIDER_CONTRACT.md` | TASK-036 vendor contract：Anthropic request / response / error mapping、mocked fixtures、manual smoke checklist |
+| `docs/CHAT_LLM_WIRING_DESIGN.md` | TASK-039 chat wiring design：`LLM_CHAT_ENABLED`、/chat adapter flow、fallback、memory interaction、logging/test plan |
+| `docs/CHAT_LLM_REAL_PROVIDER_WIRING_DESIGN.md` | TASK-042 real-provider /chat wiring design：flag matrix、source behavior、fallback、memory independence、manual live smoke prerequisites |
+| `docs/COST_AND_MONETIZATION.md` | TASK-044 cost control and go/no-go design：BYOK-first direction、live smoke criteria、monetization options |
+| `docs/BYOK_PRODUCT_AND_SETTINGS.md` | TASK-045 BYOK product/settings design：key ownership、storage options、settings UX、安全邊界、usage visibility |
+| `docs/USAGE_METER_DESIGN.md` | TASK-046 usage meter design：token/cost tracking、estimation rules、privacy boundaries、storage options、UI requirements |
 | `docs/PRD.md` | 產品需求文件（MVP 定義） |
 | `docs/ARCHITECTURE.md` | 系統架構設計 |
 | `docs/MEMORY_SYSTEM.md` | 記憶系統設計 |
 | `docs/CHARACTER_SPEC.md` | 角色設定與人格規格 |
 | `docs/ROADMAP.md` | 開發路線圖 |
+| `docs/STREAMER_COMPANION_MODE.md` | Future side track（未排入 roadmap）：直播 companion 模式設計探索 |
 
 建議閱讀順序：`TASKS.md` → `PRD.md` → `ARCHITECTURE.md` → 其他文件
+
+> **Future Side Track（未排入 roadmap）：** Streamer Companion Mode — 未來可能的直播應用方向，讓 dragon-pet 成為 OBS overlay 角色、回應 Twitch/YouTube 事件與 chat 指令。此方向需要 Phase 4 LLM adapter 穩定、TTS 完成、以及專屬安全設計，目前不在實作計畫內。詳見 `docs/STREAMER_COMPANION_MODE.md`。
 
 ---
 
@@ -154,6 +172,42 @@ dragon-pet-ai/
 cd backend
 python -m pytest
 ```
+
+---
+
+## Memory Skeleton
+
+- Backend has a local SQLite `Memory` table skeleton for future long-term memory.
+- Manual memory API exists:
+  - `POST /memory` creates explicit memory.
+  - `GET /memory` lists active memory records.
+  - `GET /memory/context-preview` previews active memories as context text.
+  - `DELETE /memory/{id}` deactivates memory.
+- Desktop has a Memory Management placeholder for creating, listing, deactivating, and previewing local memories.
+- Memory is local SQLite only and is not used by `/chat` yet.
+- Manual memory injection is designed but not implemented.
+- Memory injection design was safety-reviewed; implementation remains disabled until future work.
+- Future runtime wiring will require `MEMORY_INJECTION_ENABLED`, default `False`.
+- Approved memory context builder exists but is not connected to `/chat` yet.
+- Approved context building applies type allowlist, confidence filtering, sensitive-content filtering, and 5-memory / 1500-character caps.
+- Prompt formatting uses delimiters and a reference-only safety instruction.
+- `MemoryInjectionAudit` table records injection events when memory-aware chat runs: selected memory IDs, count, total context chars, and feature flag state.
+- Audit rows store selected IDs and aggregate metadata only — raw memory content is never stored in audit rows.
+- An audit inspection design exists (TASK-025): a future `GET /memory/audit` endpoint and UI section will surface safe audit metadata. Not yet implemented.
+- Future audit inspection will show: id, created_at, selected_memory_ids, selected_count, total_context_chars, feature_flag_enabled. It will never expose raw memory content or prompt text.
+- Manual memory is intended to remain inspectable and controllable before any future chat use.
+- Context preview does not use semantic retrieval and does not update `last_used_at`.
+- No vector database is connected.
+- No automatic memory extraction is implemented.
+- A **memory-aware chat UI toggle** is implemented (TASK-023) using a two-layer safety model:
+  - Backend global gate: `MEMORY_INJECTION_ENABLED` (set before startup, defaults to `false`)
+  - Per-request opt-in: `use_memory` field in the POST `/chat` body (defaults to `false`)
+  - Only when both are `true` may `/chat` use approved memory context.
+  - The desktop UI shows a "Use approved memories" checkbox near the chat input.
+  - `/chat` response schema remains `reply / mood / source` regardless of flag or toggle state.
+  - Memory content is never returned in the `/chat` response.
+  - No `PATCH /config` endpoint. The backend flag is startup-time only.
+  - No Electron IPC required. The frontend sends `use_memory` in the POST body directly.
 
 ---
 
