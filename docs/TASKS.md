@@ -2432,7 +2432,7 @@ TASK-049 - Secure Key Storage Design
 
 ## TASK-049 - Secure Key Storage Design
 
-Status: IN_PROGRESS
+Status: DONE
 
 Goal:
 Design secure local API key storage for future BYOK provider settings. Compare storage options, define the recommended MVP path, define the future desktop path, and document key lifecycle, redaction rules, and API dependency constraints. No runtime code is written.
@@ -2451,17 +2451,32 @@ Scope:
 
 Acceptance Criteria:
 - TASK-048 is marked DONE ✅
-- TASK-049 is recorded as IN_PROGRESS ✅
-- docs/SECURE_KEY_STORAGE_DESIGN.md exists
-- Storage options are compared (4 options)
-- MVP recommendation is documented
-- Future desktop recommendation is documented
-- Deletion and rotation behavior are documented
-- API key redaction rules are documented
-- Provider Settings API dependency is documented
-- No backend/app code is modified
-- No apps/desktop code is modified
-- No external API call is made
+- TASK-049 is recorded as DONE ✅
+- docs/SECURE_KEY_STORAGE_DESIGN.md exists ✅
+- Storage options are compared (4 options: env var, OS keychain, encrypted file, plain SQLite) ✅
+- MVP recommendation is documented (Environment Variable Only for dev phase) ✅
+- Future desktop recommendation is documented (OS Keychain / Credential Manager) ✅
+- Deletion and rotation behavior are documented (key lifecycle: add, replace, clear, test, rotate, uninstall, debug export) ✅
+- API key redaction rules are documented (logs, exceptions, repr/str, stdout/stderr, exports, DB, audit logs) ✅
+- Provider Settings API dependency is documented (POST /provider/settings/key blocked until TASK-053) ✅
+- No backend/app code is modified ✅
+- No apps/desktop code is modified ✅
+- No external API call is made ✅
+
+Completion Notes:
+- This was a design-only task. No runtime code was written or modified.
+- docs/SECURE_KEY_STORAGE_DESIGN.md created: 14 sections covering storage options, recommendation, MVP strategy, key lifecycle, API integration rules, key status model, redaction rules, testing requirements, threat model, and future implementation sequence.
+- Dev phase storage recommendation: Environment Variable Only (Option A). No persistent key storage. Key set via shell env before backend start.
+- Future production desktop recommendation: OS Keychain / Credential Manager (Option B). Windows Credential Manager, macOS Keychain, Linux libsecret. Implemented via Python keyring library.
+- Explicitly forbidden: Plain SQLite / plain config file for real API keys — unacceptable leakage risk via backups, screenshots, debug exports.
+- Key lifecycle defined: Add → Replace (overwrites old secret) → Clear (idempotent) → Test (explicit_cost_ack required) → Rotate (same as Replace in Phase 4) → App Uninstall (OS keychain entries not auto-removed; user must be informed) → Debug Export (must exclude key-adjacent fields).
+- Threat model documented: accidental git commit, log exposure, frontend renderer exposure, local DB leakage, debug export leakage, malicious local user, malware, OS account compromise. Local malware and OS account compromise are accepted residual risks at the app layer.
+- Adjusted implementation sequence: TASK-053 (Secure Key Storage Implementation) must precede TASK-051 (Backend Provider Settings API Implementation).
+- No backend/app was modified
+- No apps/desktop was modified
+- No tests were added
+- No APIs were added
+- No external API was called
 
 Next Task:
 TASK-050 - Usage Meter Implementation
