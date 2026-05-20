@@ -504,7 +504,7 @@ body {
 }
 
 .provider-settings-form label,
-.provider-key-placeholder label {
+.provider-key-section label {
   color: var(--text-muted);
   display: flex;
   flex-direction: column;
@@ -514,7 +514,7 @@ body {
 
 .provider-settings-form input,
 .provider-settings-form select,
-.provider-key-placeholder input {
+.provider-key-section input {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -566,7 +566,7 @@ body {
 }
 
 #provider-settings-section button:disabled,
-.provider-key-placeholder input:disabled {
+.provider-key-section input:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }
@@ -615,26 +615,39 @@ body {
   word-break: break-word;
 }
 
-.provider-key-placeholder {
+/* TASK-056: key save/clear section (replaces .provider-key-placeholder) */
+.provider-key-section {
   background: var(--bg);
-  border: 1px dashed var(--border);
+  border: 1px solid var(--border);
   border-radius: 8px;
   margin-top: 8px;
   padding: 9px;
 }
 
-.provider-placeholder-actions {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+.provider-key-actions {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 8px;
 }
 
-.provider-key-placeholder p {
-  color: var(--text-muted);
+.provider-key-msg {
+  color: #a0e8a0;
   font-size: 11px;
   line-height: 1.4;
-  margin-top: 8px;
+  margin-top: 6px;
+  min-height: 16px;
+}
+
+.provider-key-msg.error {
+  color: #ff8a8a;
+}
+
+.provider-key-note {
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.4;
+  margin-top: 6px;
 }
 
 .provider-settings-status {

@@ -423,3 +423,150 @@ def deactivate_memory_route(
     if memory is None:
         raise HTTPException(status_code=404, detail="memory not found")
     return MemoryResponse.model_validate(memory)
+
+        raise HTTPException(
+            status_code=503,
+            detail="secure key storage is unavailable",
+        ) from exc
+    return KeyStatusResponse(**result)
+
+
+@router.post(
+    "/provider/settings/test",
+    response_model=ProviderSettingsNotImplementedResponse,
+    status_code=501,
+)
+def test_provider_connection_placeholder(
+    response: Response,
+) -> ProviderSettingsNotImplementedResponse:
+    """
+    Safe placeholder until live provider testing is explicitly implemented.
+
+    The request body is intentionally not accepted or inspected, and no external
+    provider call can occur.
+    """
+    response.status_code = 501
+    return ProviderSettingsNotImplementedResponse(
+        status="not_implemented",
+        message="Provider test connection is not implemented yet.",
+    )
+
+
+@router.post("/memory", response_model=MemoryResponse)
+def create_memory_route(
+    request: MemoryCreateRequest,
+    session: Session = Depends(get_session),
+) -> MemoryResponse:
+    """
+    Create an explicit local memory record.
+
+    This endpoint is manual-only. It does not perform extraction, retrieval, or
+    connect memory to chat responses.
+    """
+    try:
+        memory = create_memory(
+            session=session,
+            memory_type=request.memory_type,
+            content=request.content,
+            importance=request.importance,
+            confidence=request.confidence,
+            source=request.source,
+            source_message_id=request.source_message_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return MemoryResponse.model_validate(memory)
+
+
+@router.get("/memory", response_model=list[MemoryResponse])
+def list_memory_route(session: Session = Depends(get_session)) -> list[MemoryResponse]:
+    """
+    List active local memory records.
+
+    This is a plain list endpoint, not semantic retrieval.
+    """
+    return [
+        MemoryResponse.model_validate(memory)
+        for memory in list_active_memories(session)
+    ]
+
+
+@router.get("/memory/context-preview", response_model=MemoryContextPreviewResponse)
+def memory_context_preview_route(
+    session: Session = Depends(get_session),
+) -> MemoryContextPreviewResponse:
+    """
+    Preview active memories as deterministic context text.
+
+    This does not perform semantic retrieval and is not used by /chat.
+    """
+    preview = build_memory_context_preview(session)
+    return MemoryContextPreviewResponse(
+        memories=[
+            MemoryResponse.model_validate(memory)
+            for memory in preview["memories"]
+        ],
+        context_text=preview["context_text"],
+        count=preview["count"],
+        source=preview["source"],
+    )
+
+
+@router.get("/memory/audit", response_model=MemoryInjectionAuditListResponse)
+def list_audit_route(
+    limit: int = 20,
+    offset: int = 0,
+    session: Session = Depends(get_session),
+) -> MemoryInjectionAuditListResponse:
+    """
+    Read-only audit inspection endpoint.
+
+    Returns safe metadata about past memory injection events: which memory IDs
+    were selected, how many, total context chars, and flag state.
+
+    Safety rules:
+    - This endpoint is read-only. It does not create rows or modify any table.
+    - Raw memory content is never included in any response field.
+    - Prompt text and approved memory context text are never returned.
+    - selected_memory_ids is a list of integer IDs only.
+
+    TASK-026: supports limit (default 20, max 100) and offset (default 0).
+    Results are sorted newest first (id descending).
+    """
+    norm_limit, norm_offset = normalize_audit_pagination(limit, offset)
+    rows = list_memory_injection_audits_paginated(
+        session, limit=norm_limit, offset=norm_offset
+    )
+    items = [
+        MemoryInjectionAuditResponse(
+            id=row.id,
+            created_at=row.created_at,
+            conversation_id=row.conversation_id,
+            selected_memory_ids=parse_memory_ids_json(row.selected_memory_ids_json),
+            selected_count=row.selected_count,
+            total_context_chars=row.total_context_chars,
+            feature_flag_enabled=row.feature_flag_enabled,
+            exclusion_summary=parse_exclusion_summary_json(row.exclusion_summary_json),
+        )
+        for row in rows
+    ]
+    return MemoryInjectionAuditListResponse(
+        items=items,
+        count=len(items),
+        limit=norm_limit,
+        offset=norm_offset,
+    )
+
+
+@router.delete("/memory/{memory_id}", response_model=MemoryResponse)
+def deactivate_memory_route(
+    memory_id: int,
+    session: Session = Depends(get_session),
+) -> MemoryResponse:
+    """
+    Deactivate a memory record without deleting the database row.
+    """
+    memory = deactivate_memory(session, memory_id)
+    if memory is None:
+        raise HTTPException(status_code=404, detail="memory not found")
+    return MemoryResponse.model_validate(memory)

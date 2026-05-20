@@ -56,6 +56,14 @@ const providerLastTestStatus = document.getElementById("provider-last-test-statu
 const providerResolvedProvider = document.getElementById("provider-resolved-provider");
 const providerSettingsStatus = document.getElementById("provider-settings-status");
 const providerUsageSummary = document.getElementById("provider-usage-summary");
+// TASK-056: provider key save/clear controls
+// Safety: key value is never logged, never stored in localStorage/sessionStorage,
+// never sent to external providers, cleared from DOM immediately after every save attempt.
+const providerApiKeyInput       = document.getElementById("provider-api-key-placeholder");
+const saveProviderKeyBtn        = document.getElementById("save-provider-key-btn");
+const clearProviderKeyBtn       = document.getElementById("clear-provider-key-btn");
+const testProviderConnectionBtn = document.getElementById("test-provider-connection-btn");
+const providerKeyMsg            = document.getElementById("provider-key-msg");
 
 // ---------------------------------------------------------------------------
 // State
@@ -418,6 +426,8 @@ function renderProviderSettings(settings) {
   providerLastTestStatus.textContent = settings.last_test_status || "not_tested";
   providerResolvedProvider.textContent = settings.resolved_provider || "mock";
   renderUsageSummary(settings.usage_summary);
+  // TASK-056: update key UI controls based on current settings
+  updateKeyUIState(settings);
 }
 
 async function loadProviderSettings() {
@@ -456,6 +466,189 @@ async function saveProviderSettings() {
     setProviderSettingsStatus("Non-secret provider settings saved.");
   } catch (err) {
     setProviderSettingsStatus(formatBackendError(err), true);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Provider Key Save / Clear (TASK-056)
+// Security rules:
+//   - Key value is NEVER written to any console.* call.
+//   - Key value is NEVER stored in localStorage or sessionStorage.
+//   - Key value is NEVER sent to any external URL (only http://127.0.0.1:8000).
+//   - Input field is cleared immediately after every save attempt.
+//   - Test Connection remains disabled (TASK-058 deferred).
+// ---------------------------------------------------------------------------
+
+/**
+ * Show a safe message near the key controls.
+ * Never include API key value in `text`.
+ */
+function setProviderKeyMsg(text, isError = false) {
+  providerKeyMsg.textContent = text;
+  providerKeyMsg.className = isError ? "provider-key-msg error" : "provider-key-msg";
+}
+
+/**
+ * Update key UI control states based on current provider settings.
+ * Called by renderProviderSettings() after every settings load.
+ *
+ * Rules:
+ * - API key input: enabled only for real providers (not mock).
+ * - Save Key: enabled only when real provider AND input is non-empty.
+ * - Clear Key: visible only when key_status indicates a key exists.
+ * - Test Connection: always disabled (TASK-058 deferred).
+ */
+function updateKeyUIState(settings) {
+  const provider = settings.provider || "mock";
+  const isRealProvider = provider !== "mock";
+  const keyStatus = settings.key_status || "not_configured";
+  // A key exists in any of these states
+  const keyExists = [
+    "configured", "not_tested", "invalid", "test_success", "test_failed",
+  ].includes(keyStatus);
+
+  // API key input: enabled for real providers, disabled for mock
+  providerApiKeyInput.disabled = !isRealProvider;
+  providerApiKeyInput.placeholder = isRealProvider
+    ? "Enter provider API key"
+    : "Not required for mock provider";
+
+  // Save Key: enabled when real provider and input has text
+  saveProviderKeyBtn.disabled = !isRealProvider || !providerApiKeyInput.value.trim();
+
+  // Clear Key: visible only when a key exists
+  clearProviderKeyBtn.style.display = keyExists ? "" : "none";
+  clearProviderKeyBtn.disabled = false;
+
+  // Test Connection: always disabled
+  testProviderConnectionBtn.disabled = true;
+}
+
+/**
+ * Save API key to local backend via POST /provider/settings/key.
+ *
+ * Safety invariants:
+ * - The key value is NEVER passed to console.log / console.warn / console.error.
+ * - The request body is NEVER logged.
+ * - The input field is cleared immediately after fetch() completes.
+ * - Only calls local backend (BACKEND_URL = http://127.0.0.1:8000 or localhost:8000).
+ */
+async function saveProviderKey() {
+  const provider = providerSettingsProvider.value;
+  const keyValue = providerApiKeyInput.value;
+
+  if (!keyValue.trim()) {
+    setProviderKeyMsg("API key cannot be empty.", true);
+    return;
+  }
+
+  if (!provider || provider === "mock") {
+    setProviderKeyMsg("Select a real provider before saving a key.", true);
+    providerApiKeyInput.value = "";
+    return;
+  }
+
+  saveProviderKeyBtn.disabled = true;
+  saveProviderKeyBtn.textContent = "Saving…";
+  setProviderKeyMsg("Saving key...");
+
+  let res;
+  try {
+    // Safety: body is never logged. Key value is never written to console.
+    res = await fetch(`${BACKEND_URL}/provider/settings/key`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider, api_key: keyValue }),
+    });
+  } catch (fetchErr) {
+    // Network error — clear input before surfacing message
+    providerApiKeyInput.value = "";
+    saveProviderKeyBtn.textContent = "Save API Key";
+    const isNetworkError = fetchErr instanceof TypeError && fetchErr.message.includes("fetch");
+    setProviderKeyMsg(
+      isNetworkError
+        ? `Could not reach backend. Make sure the backend is running on localhost.`
+        : "Could not save key. Please try again.",
+      true
+    );
+    updateKeyUIState({ provider, key_status: providerKeyStatus.textContent });
+    return;
+  }
+
+  // Clear input immediately after fetch completes — key must not remain in DOM
+  providerApiKeyInput.value = "";
+  saveProviderKeyBtn.textContent = "Save API Key";
+
+  if (res.status === 503) {
+    setProviderKeyMsg(
+      "Secure key storage is unavailable in this environment. " +
+      "Use an environment variable to set your API key for now.",
+      true
+    );
+    updateKeyUIState({ provider, key_status: providerKeyStatus.textContent });
+  } else if (res.status === 400) {
+    setProviderKeyMsg(
+      "API key not accepted. Check that your key is correct and still active on your provider account.",
+      true
+    );
+    updateKeyUIState({ provider, key_status: providerKeyStatus.textContent });
+  } else if (!res.ok) {
+    setProviderKeyMsg("Could not save key. Please try again.", true);
+    updateKeyUIState({ provider, key_status: providerKeyStatus.textContent });
+  } else {
+    setProviderKeyMsg("Key saved successfully.");
+    await loadProviderSettings();
+  }
+}
+
+/**
+ * Clear stored API key via DELETE /provider/settings/key.
+ * Requires a confirmation dialog before calling the backend.
+ * Idempotent: 404 response is treated as success.
+ */
+async function clearProviderKey() {
+  const provider = providerSettingsProvider.value;
+
+  const confirmed = window.confirm(
+    "This will permanently delete your stored API key. " +
+    "The provider will revert to mock mode. Continue?"
+  );
+  if (!confirmed) return;
+
+  clearProviderKeyBtn.disabled = true;
+  setProviderKeyMsg("Clearing key...");
+
+  let res;
+  try {
+    res = await fetch(
+      `${BACKEND_URL}/provider/settings/key?provider=${encodeURIComponent(provider)}`,
+      { method: "DELETE" }
+    );
+  } catch (fetchErr) {
+    clearProviderKeyBtn.disabled = false;
+    const isNetworkError = fetchErr instanceof TypeError && fetchErr.message.includes("fetch");
+    setProviderKeyMsg(
+      isNetworkError
+        ? "Could not reach backend. Make sure the backend is running on localhost."
+        : "Could not clear key. Please try again.",
+      true
+    );
+    return;
+  }
+
+  clearProviderKeyBtn.disabled = false;
+
+  if (res.status === 503) {
+    setProviderKeyMsg(
+      "Could not clear key. Secure key storage is unavailable in this environment.",
+      true
+    );
+  } else if (res.ok || res.status === 404) {
+    // 404 treated as idempotent success — key already not configured
+    setProviderKeyMsg("Key cleared. Provider will fall back to mock mode.");
+    await loadProviderSettings();
+  } else {
+    setProviderKeyMsg("Could not clear key. Please try again.", true);
   }
 }
 
@@ -536,6 +729,36 @@ refreshProviderSettingsBtn.addEventListener("click", () => {
 providerSettingsForm.addEventListener("submit", (e) => {
   e.preventDefault();
   saveProviderSettings();
+});
+
+// TASK-056: key save / clear event listeners
+saveProviderKeyBtn.addEventListener("click", () => {
+  saveProviderKey();
+});
+
+clearProviderKeyBtn.addEventListener("click", () => {
+  clearProviderKey();
+});
+
+// Dynamically enable/disable Save Key as user types in the key input field.
+// Safety: this handler never logs providerApiKeyInput.value.
+providerApiKeyInput.addEventListener("input", () => {
+  const isRealProvider = providerSettingsProvider.value !== "mock";
+  saveProviderKeyBtn.disabled = !isRealProvider || !providerApiKeyInput.value.trim();
+});
+
+// When provider dropdown changes, update key UI state.
+providerSettingsProvider.addEventListener("change", () => {
+  const isRealProvider = providerSettingsProvider.value !== "mock";
+  providerApiKeyInput.disabled = !isRealProvider;
+  providerApiKeyInput.placeholder = isRealProvider
+    ? "Enter provider API key"
+    : "Not required for mock provider";
+  saveProviderKeyBtn.disabled = !isRealProvider || !providerApiKeyInput.value.trim();
+  if (!isRealProvider) {
+    providerApiKeyInput.value = "";
+    setProviderKeyMsg("");
+  }
 });
 
 msgInput.addEventListener("keydown", (e) => {

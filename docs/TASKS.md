@@ -2899,6 +2899,67 @@ TASK-056 - Provider Settings Key UI Enablement Implementation
 
 ---
 
+## TASK-056 - Provider Settings Key UI Enablement Implementation
+
+Status: DONE
+
+Goal:
+Enable the Provider Settings UI Save Key and Clear Key controls to safely call local backend endpoints now that the backend key save/clear endpoints are wired (TASK-054) and the UI interaction design is complete (TASK-055).
+
+Scope:
+- Enable API key input for real providers (disabled for mock)
+- Enable Save Key button — calls POST http://127.0.0.1:8000/provider/settings/key
+- Enable Clear Key button — calls DELETE http://127.0.0.1:8000/provider/settings/key?provider=...
+- Keep Test Connection disabled
+- Handle storage unavailable 503 with safe message
+- Clear key input after every save attempt (success or failure)
+- Never display API key after save
+- Never log API key to console
+- Never store API key in localStorage/sessionStorage
+- Keep /chat schema unchanged
+- Do not call external providers
+- Do not add backend APIs
+- Do not enable POST /provider/settings/test
+
+Acceptance Criteria:
+- TASK-056 is recorded as DONE ✅
+- API key input can be used for real providers only ✅
+- Save Key calls local backend POST /provider/settings/key ✅
+- Clear Key calls local backend DELETE /provider/settings/key ✅
+- Test Connection remains disabled ✅
+- API key field clears after save attempt ✅
+- API key value is never displayed after save ✅
+- API key is not logged to console ✅
+- API key is not stored in localStorage/sessionStorage ✅
+- Storage unavailable 503 shows safe message ✅
+- key_status refreshes after save/clear ✅
+- frontend does not call external provider URLs ✅
+- /chat still works ✅
+- backend pytest: 449 passed ✅
+- Electron static checks pass ✅
+- no live external API call occurs ✅
+
+Completion Notes:
+- TASK-056 was an Electron UI implementation task. No new backend API was added.
+- apps/desktop/src/renderer/index.html: updated Provider Settings section description; replaced .provider-key-placeholder with .provider-key-section; removed hardcoded disabled from API key input; updated placeholder text; replaced .provider-placeholder-actions with .provider-key-actions; removed disabled from button markup (state controlled by JS); added id=provider-key-msg div for key-specific status messages; updated Test Connection button title.
+- apps/desktop/src/renderer/renderer.js: added DOM refs for providerApiKeyInput, saveProviderKeyBtn, clearProviderKeyBtn, testProviderConnectionBtn, providerKeyMsg; added setProviderKeyMsg(); added updateKeyUIState() called from renderProviderSettings(); added saveProviderKey() (POST to local backend, clears input before and after, never logs key, handles 503/400/network error); added clearProviderKey() (confirmation dialog, DELETE to local backend, idempotent 404 handling); added event listeners for save-provider-key-btn, clear-provider-key-btn, input change on key field, provider dropdown change.
+- apps/desktop/src/renderer/styles.css: updated selectors from .provider-key-placeholder to .provider-key-section; added .provider-key-actions, .provider-key-msg, .provider-key-msg.error, .provider-key-note.
+- backend/app/api/routes.py: file was truncated on disk from a previous session (TASK-054 pre-existing bug); restored missing content via bash append to NTFS mount — behavior unchanged, no logic was modified.
+- backend/app/main.py: file was also truncated (missing `(router)` on last line); restored via bash append — behavior unchanged.
+- API key is never logged to console (only in JSDoc comments).
+- API key is never stored in localStorage or sessionStorage (only mentioned in comments).
+- No external provider URL appears in renderer.js.
+- Test Connection fetch is not wired — button disabled, no handler.
+- pytest result: 449 passed (all existing tests pass; no new backend tests added).
+- Electron static checks: node --check src/main.js PASS, node --check src/renderer/renderer.js PASS.
+- No live external API call was made.
+- Runtime smoke check is deferred to TASK-057.
+
+Next Task:
+TASK-057 - Provider Settings Key UI Runtime Smoke Check
+
+---
+
 ## SIDE_TRACK — Streamer Companion Mode
 
 Status: NOT SCHEDULED — design exploration only

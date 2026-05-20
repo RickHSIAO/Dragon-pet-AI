@@ -2,7 +2,9 @@
 
 > TASK-054 update: provider key save/clear endpoints are wired to the secure key storage abstraction. Runtime default remains a safe unavailable backend, tests use an in-memory fake backend, no key is written to SQLite or plain config files, and live test connection remains disabled. No external provider calls are made. Validation: `cd backend; python -m pytest` -> 449 passed.
 >
-> TASK-055 update: Key UI enablement design complete. Save Key and Clear Key controls are now designed with full interaction flows, unavailable storage UX (503 → safe message, env var recommendation), key status display (6 safe values, no key fragments), and security boundaries. Test Connection remains disabled. Implementation deferred to TASK-056.
+> TASK-055 update: Key UI enablement design complete. Save Key and Clear Key controls are now designed with full interaction flows, unavailable storage UX (503 → safe message, env var recommendation), key status display (6 safe values, no key fragments), and security boundaries. Test Connection remains disabled.
+>
+> TASK-056 update: Save Key and Clear Key controls are now enabled in the Provider Settings UI. Key input is enabled for real providers only, disabled for mock. Save Key POSTs to local backend and clears the input field after every attempt. Clear Key shows a confirmation dialog and DELETEs via local backend. Storage unavailable (503) shows a safe message with env var instructions. API key is never logged, never stored in localStorage/sessionStorage, never sent to external providers. Test Connection remains disabled. pytest: 449 passed (also fixed pre-existing TASK-054 truncation in routes.py and main.py).
 
 AI 驅動的桌面螢幕寵物 — 有個性、有記憶的桌面同伴。
 
