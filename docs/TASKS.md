@@ -3451,6 +3451,71 @@ TASK-064 - Provider Settings UI Runtime Smoke Re-check
 
 ---
 
+## TASK-064 - Provider Settings UI Runtime Smoke Re-check
+
+Status: DONE
+
+Goal:
+Re-check the Electron Provider Settings UI at runtime after TASK-063 readability and layout polish, without changing backend/app, renderer code, tests, APIs, or provider behavior.
+
+Scope:
+- Start local backend
+- Start Electron desktop
+- Re-check Provider Settings readability and scroll behavior
+- Re-check narrow layout / DevTools docked-right usability
+- Confirm Save Key / Clear Key / Test Connection behavior remains unchanged
+- Confirm Test Connection remains local-backend-only
+- Confirm no external provider is called
+- Confirm no real API key is used
+- Confirm /chat still works
+- Do not modify backend/app
+- Do not modify apps/desktop
+- Do not add tests
+- Do not add APIs
+- Do not call a live external provider
+
+Smoke Check Results:
+
+| Item | Result |
+|---|---|
+| backend start | pass |
+| desktop start | pass |
+| Electron UI readable after TASK-063 | yes |
+| Page can scroll vertically | yes |
+| Provider Settings section fully visible | yes |
+| Provider Settings fields readable | yes |
+| Usage summary readable | yes |
+| Buttons wrap / remain usable in narrow layout | yes |
+| DevTools docked right no longer blocks basic operation | partially |
+| Save Key behavior unchanged | yes |
+| Clear Key behavior unchanged | yes |
+| Test Connection behavior unchanged | yes |
+| Test Connection remains local-backend-only | yes |
+| No external provider called | yes |
+| API key not shown/logged/stored | yes |
+| /chat still works | yes |
+
+Validation Notes:
+- Known TASK-063 static checks remain valid: `node --check src/main.js` PASS; `node --check src/renderer/renderer.js` PASS.
+- Backend runtime smoke used local backend only: `GET /health` returned `status=ok`; `POST /chat` returned a mock response with `source=mock`.
+- Desktop runtime start passed after clearing the local shell environment variable `ELECTRON_RUN_AS_NODE=1`; the first attempt failed because that environment variable made Electron run in Node mode.
+- DevTools docked-right result is recorded as partially because the narrow-layout behavior is improved and basic controls remain usable, but a full manual docked DevTools click-through with saved key storage was not performed.
+- No real API key was entered.
+- No Save Key, Clear Key, or Test Connection endpoint behavior was changed.
+- No Test Connection request was sent to a live provider.
+- No external provider API was called.
+- No backend/app code was modified.
+- No apps/desktop code was modified.
+- No tests were added.
+- pytest was not run because this task did not modify backend/app or backend tests.
+
+Runtime Smoke Verdict: PASS WITH NON-BLOCKING UI NOTES
+
+Next Task:
+TASK-065 - Phase 4 Wrap-up or Next Planning
+
+---
+
 ## SIDE_TRACK — Streamer Companion Mode
 
 Status: NOT SCHEDULED — design exploration only
