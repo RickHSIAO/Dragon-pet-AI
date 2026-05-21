@@ -3396,7 +3396,58 @@ Implementation Summary:
 - No backend/app logic modified, no apps/desktop code modified, no external API calls
 
 Next Task:
-TASK-063 - (TBD — Phase 4 wrap-up or Phase 5 planning)
+TASK-063 - Electron Provider Settings UI Polish and Layout Fix
+
+---
+
+## TASK-063 - Electron Provider Settings UI Polish and Layout Fix
+
+Status: DONE
+
+Goal:
+Improve Electron renderer readability, scroll behavior, and Provider Settings layout without changing backend or provider behavior.
+
+Scope:
+- Improve base font size and line height
+- Improve scroll behavior
+- Improve Provider Settings section readability
+- Improve form spacing and button layout
+- Improve mobile/narrow-width behavior when DevTools is docked
+- Preserve all existing Provider Settings behavior
+- Preserve Save Key / Clear Key / Test Connection safety behavior
+- Do not modify backend/app
+- Do not call external APIs
+
+Acceptance Criteria:
+- TASK-063 is recorded and completed as DONE
+- Electron renderer font readability is improved
+- Provider Settings section is easier to read
+- Page can scroll vertically when content exceeds window height
+- Narrow window / docked DevTools layout remains usable
+- Test Connection button behavior is unchanged
+- Save Key / Clear Key behavior is unchanged
+- No backend/app code is modified
+- No external API call occurs
+- Electron static checks pass
+
+Implementation Summary:
+- apps/desktop/src/renderer/styles.css: increased base font size and line height, section padding, form spacing, button/input sizing, helper text sizing, and Provider Settings status/usage layout readability.
+- apps/desktop/src/renderer/styles.css: removed global fixed-height/hidden-overflow behavior, allowed body/html vertical scrolling, converted Provider/Memory/Audit sections away from nested fixed section scrolling, and added page bottom padding.
+- apps/desktop/src/renderer/styles.css: improved Provider Settings form grid, key actions wrapping, status cards, usage summary block, long-text wrapping, and narrow-width media queries for DevTools docked right.
+- apps/desktop/src/renderer/index.html: updated stale Test Connection helper copy and replaced small inline status text with a CSS class.
+- Save Key / Clear Key / Test Connection endpoint calls, enable conditions, explicit_cost_ack confirm logic, safe response rendering, usage data, /chat payload, and backend behavior were not changed.
+- No backend/app code was modified.
+- No backend tests were modified.
+- No external API call was made.
+
+Validation:
+- Safety scan: renderer contains no api.anthropic.com, api.openai.com, platform.claude.com, direct provider frontend call, API key console logging, or API key localStorage/sessionStorage storage.
+- `node --check src/main.js`: PASS.
+- `node --check src/renderer/renderer.js`: PASS.
+- pytest not run because backend/app and backend tests were not modified.
+
+Next Task:
+TASK-064 - Provider Settings UI Runtime Smoke Re-check
 
 ---
 

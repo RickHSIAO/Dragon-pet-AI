@@ -2,7 +2,7 @@
 
 > dragon-pet-ai
 > Status: LIVING DOCUMENT
-> Last Updated: 2026-05-19
+> Last Updated: 2026-05-21
 > Owner: TASK-001
 
 ---
@@ -111,7 +111,7 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 
 **Goal:** Wire the approved memory context pipeline to a real LLM provider behind a feature flag, using an adapter pattern that keeps mock as the default.
 
-**Status:** IN PROGRESS — provider adapter exists behind flags; mock `/chat` LLM wiring smoke passed; real-provider `/chat` wiring contract tests passed with mocked HTTP only; in-memory usage meter, non-secret provider settings API, Provider Settings UI, secure key storage abstraction, key save/clear endpoints, key UI enablement, Provider Test Connection design, backend Test Connection implementation (TASK-059), Opus safety review PASS (TASK-059R), and Test Connection UI enablement (TASK-060) are all complete; explicit cost acknowledgement required per click; no automatic test after Save Key; no live external API call; runtime smoke deferred to TASK-061; live provider remains disabled by default
+**Status:** IN PROGRESS — provider adapter exists behind flags; mock `/chat` LLM wiring smoke passed; real-provider `/chat` wiring contract tests passed with mocked HTTP only; in-memory usage meter, non-secret provider settings API, Provider Settings UI, secure key storage abstraction, key save/clear endpoints, key UI enablement, Provider Test Connection design, backend Test Connection implementation (TASK-059), Opus safety review PASS (TASK-059R), Test Connection UI enablement (TASK-060), hardening tests (TASK-062), and Provider Settings UI layout polish (TASK-063) are complete; explicit cost acknowledgement required per click; no automatic test after Save Key; no live external API call; live provider remains disabled by default
 
 **Recommended primary path: Option A — LLM Adapter Integration**
 
@@ -162,6 +162,7 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 | TASK-060 | Provider Test Connection UI Enablement | DONE |
 | TASK-061 | Provider Test Connection Runtime Smoke Check | DONE — PASS WITH EXPECTED LIMITATION |
 | TASK-062 | Provider Test Connection Hardening Tests | DONE |
+| TASK-063 | Electron Provider Settings UI Polish and Layout Fix | DONE |
 
 **Phase 4 Key Safety Constraints:**
 - `LLM_PROVIDER_ENABLED=false` is the default; real provider requires explicit opt-in via env var
@@ -173,7 +174,7 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 - Non-2xx provider response bodies are opaque — not parsed, not logged, not returned
 - No tool execution, no file access, no autonomous action, no automatic memory extraction
 - Live smoke is blocked until explicit user cost confirmation and TASK-044 go/no-go criteria are satisfied
-- BYOK is the recommended MVP path; provider settings UI design done (TASK-047); backend API design done (TASK-048); secure key storage design done (TASK-049); usage meter implementation done (TASK-050); non-secret settings API implementation done (TASK-051); Provider Settings UI implementation done (TASK-052); secure key storage abstraction done (TASK-053); provider key save/clear endpoints done (TASK-054); key UI enablement design done (TASK-055); Save Key / Clear Key UI done (TASK-056); key UI smoke passed (TASK-057); Test Connection design done (TASK-058); Test Connection backend done (TASK-059); safety review PASS (TASK-059R); Test Connection UI enabled in renderer (TASK-060); runtime smoke PASS WITH EXPECTED LIMITATION (TASK-061); hardening tests DONE — 470 passed (TASK-062)
+- BYOK is the recommended MVP path; provider settings UI design done (TASK-047); backend API design done (TASK-048); secure key storage design done (TASK-049); usage meter implementation done (TASK-050); non-secret settings API implementation done (TASK-051); Provider Settings UI implementation done (TASK-052); secure key storage abstraction done (TASK-053); provider key save/clear endpoints done (TASK-054); key UI enablement design done (TASK-055); Save Key / Clear Key UI done (TASK-056); key UI smoke passed (TASK-057); Test Connection design done (TASK-058); Test Connection backend done (TASK-059); safety review PASS (TASK-059R); Test Connection UI enabled in renderer (TASK-060); runtime smoke PASS WITH EXPECTED LIMITATION (TASK-061); hardening tests DONE — 470 passed (TASK-062); Provider Settings UI readability/layout polish DONE with no backend/provider behavior change (TASK-063)
 
 See `docs/PHASE4_PLAN.md`, `docs/LLM_ADAPTER_DESIGN.md`, `docs/LLM_PROVIDER_CONTRACT.md`, `docs/CHAT_LLM_WIRING_DESIGN.md`, `docs/CHAT_LLM_REAL_PROVIDER_WIRING_DESIGN.md`, `docs/COST_AND_MONETIZATION.md`, `docs/BYOK_PRODUCT_AND_SETTINGS.md`, `docs/USAGE_METER_DESIGN.md`, `docs/PROVIDER_SETTINGS_UI_DESIGN.md`, `docs/PROVIDER_SETTINGS_API_DESIGN.md`, `docs/SECURE_KEY_STORAGE_DESIGN.md`, and `docs/PROVIDER_TEST_CONNECTION_DESIGN.md` for full planning and design documents.
 

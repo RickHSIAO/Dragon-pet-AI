@@ -37,7 +37,7 @@
     <div class="mood-indicator"></div>
     <span>Mood:</span>
     <span id="mood-label">neutral</span>
-    <span style="margin-left:auto; font-size:11px;">mock mode — no AI connected</span>
+    <span class="status-note">mock mode - no AI connected</span>
   </div>
 
   <!-- ── Chat area ──────────────────────────────────────── -->
@@ -155,7 +155,7 @@ No active memories.</pre>
     <div class="section-header">
       <div>
         <h2 id="provider-settings-title">Provider Settings</h2>
-        <p>Configure provider, model, and API key. Test Connection is disabled.</p>
+        <p>Configure provider, model, and API key. Test Connection is available only after the safe preconditions are met.</p>
       </div>
       <button id="refresh-provider-settings-btn" type="button">Refresh Settings</button>
     </div>
@@ -288,7 +288,7 @@ No active memories.</pre>
   <footer id="input-bar">
     <textarea
       id="message-input"
-      placeholder="Type a message… (Enter to send, Shift+Enter for newline)"
+      placeholder="Type a message... (Enter to send, Shift+Enter for newline)"
       rows="1"
       autocomplete="off"
       spellcheck="true"
