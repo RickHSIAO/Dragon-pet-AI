@@ -9,6 +9,38 @@
 
 ---
 
+## Screenshots
+
+![Main Chat UI](docs/screenshots/01_main_chat_ui.png)
+
+*Local-first Electron desktop companion UI with mock LLM source — no external provider call.*
+
+---
+
+![Memory Audit Logs](docs/screenshots/03_audit_logs.png)
+
+*Safe metadata-only audit trail — raw memory content and prompt text are never stored in audit rows.*
+
+---
+
+![Provider Settings](docs/screenshots/04_provider_settings_overview.png)
+
+*BYOK provider configuration with write-only key handling, key status display, and safety-gated controls.*
+
+---
+
+![Usage Summary](docs/screenshots/05_usage_summary.png)
+
+*Safe aggregate usage counters only — no raw prompt text, no API key, no provider response body.*
+
+---
+
+![Pytest 470 Passed](docs/screenshots/08_pytest_470_passed.png)
+
+*Mocked backend test suite: 470 passing tests, zero failures, no external HTTP, no real API key.*
+
+---
+
 ## Current Status
 
 | Item | State |

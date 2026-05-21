@@ -168,6 +168,8 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 | TASK-066D | Portfolio Demo Script and Screenshots | DONE |
 | TASK-067D | Portfolio README Polish | DONE |
 | TASK-068D | Portfolio Screenshot Checklist Capture | DONE |
+| TASK-069D | Portfolio Screenshot Capture Session | DONE |
+| TASK-070D | Embed Portfolio Screenshots in README | DONE |
 
 **Phase 4 Key Safety Constraints:**
 - `LLM_PROVIDER_ENABLED=false` is the default; real provider requires explicit opt-in via env var

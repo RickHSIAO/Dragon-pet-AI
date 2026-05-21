@@ -3749,6 +3749,49 @@ TASK-070D - Embed Portfolio Screenshots in README
 
 ---
 
+## TASK-070D - Embed Portfolio Screenshots in README
+
+Status: DONE
+
+Goal:
+Embed the most impactful portfolio screenshots from docs/screenshots/ into README.md so GitHub visitors and interviewers can immediately see the running UI, audit design, provider settings, usage meter, and test coverage.
+
+Scope:
+- Add a Screenshots section to README.md with 5 embedded images
+- Add a one-sentence caption under each image
+- Update docs/TASKS.md and docs/ROADMAP.md
+- Do not modify backend/app
+- Do not modify apps/desktop
+- Do not add tests or APIs
+- Do not call external APIs
+- Do not use real API key
+
+Acceptance Criteria:
+- TASK-070D is recorded as DONE ✅
+- README.md contains a Screenshots section ✅
+- 5 screenshots embedded with captions ✅
+- No backend/app code modified ✅
+- No apps/desktop code modified ✅
+- No external API call made ✅
+
+Screenshots Embedded:
+- docs/screenshots/01_main_chat_ui.png — Main Chat UI ✅
+- docs/screenshots/03_audit_logs.png — Memory Audit Logs ✅
+- docs/screenshots/04_provider_settings_overview.png — Provider Settings ✅
+- docs/screenshots/05_usage_summary.png — Usage Summary ✅
+- docs/screenshots/08_pytest_470_passed.png — Test Coverage ✅
+
+Implementation Notes:
+- Screenshots section added to README.md after the project one-liner and before the Current Status table
+- Each screenshot has a short English caption explaining its safety / design significance
+- No runtime code was modified
+- No external API call was made
+
+Next Task:
+TASK-071D - (TBD — Phase 4 portfolio wrap-up or next development task)
+
+---
+
 ## SIDE_TRACK — Streamer Companion Mode
 
 Status: NOT SCHEDULED — design exploration only
