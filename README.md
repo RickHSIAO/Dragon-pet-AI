@@ -1,6 +1,6 @@
 # Dragon Pet AI
 
-> **Dragon Pet AI** is a local-first Electron + FastAPI desktop companion prototype with manual memory, memory audit logs, BYOK provider settings, usage metering, a safety-reviewed Test Connection endpoint, Anthropic/Ollama provider adapters behind flags, and mocked LLM integration - built with safety-first incremental development and a 504-test mocked backend suite.
+> **Dragon Pet AI** is a local-first Electron + FastAPI desktop companion prototype with manual memory, memory audit logs, BYOK provider settings, usage metering, a safety-reviewed Test Connection endpoint, Anthropic/Ollama provider adapters behind flags, local Ollama `/chat` runtime smoke passed with `source=llm_local` and 克莉絲蒂娜 persona active - built with safety-first incremental development and a 501-test mocked backend suite.
 
 **Not production-ready.** No live external provider call has been made. No real API key has been used. This is a portfolio / prototype project.
 
@@ -47,8 +47,9 @@
 |---|---|
 | Architecture | Electron desktop + FastAPI backend, end-to-end working |
 | Phase 3 | ✅ Complete — Memory, Audit Logs, Memory-Aware Chat |
-| Phase 4 | IN_PROGRESS - Provider Settings / BYOK stabilized; Local Ollama provider contract-tested |
-| pytest | 504 passed, 0 failed |
+| Phase 4 | IN_PROGRESS - Provider Settings / BYOK stabilized; Local Ollama runtime smoke PASSED (`source=llm_local`, 克莉絲蒂娜 persona active) |
+| pytest | 501 passed, 0 failed |
+| Local Ollama /chat smoke | ✅ PASS — `qwen3:8b`, `source=llm_local`, persona confirmed |
 | Live external provider call | ❌ None — intentionally gated |
 | Real API key used | ❌ None — all tests use mocked runners |
 | Production-ready | ❌ Not yet — prototype / portfolio stage |
@@ -80,7 +81,7 @@
 | Test Connection UI | Cost confirm dialog; safe field rendering; no auto-run |
 | LLM adapter layer | Anthropic adapter behind `LLM_PROVIDER_ENABLED=false` |
 | Hardening tests | 5 Opus-recommended tests covering edge cases and safety boundaries |
-| Local Ollama provider | Implemented behind flags; no API key; localhost-only base URL; contract-tested with mocked HTTP |
+| Local Ollama provider | Implemented behind flags; no API key; localhost-only; runtime smoke PASSED — `source=llm_local`, 克莉絲蒂娜 persona active in qwen3:8b |
 | 504 mocked tests | Full backend suite; no external HTTP; no real key |
 
 ---
@@ -188,7 +189,7 @@ npm start
 | [docs/PORTFOLIO_DEMO_SCRIPT.md](docs/PORTFOLIO_DEMO_SCRIPT.md) | Full demo script: one-liner, 30-sec pitch, 2-min walk-through, interview talking points, screenshot checklist |
 | [docs/PORTFOLIO_SCREENSHOT_CHECKLIST.md](docs/PORTFOLIO_SCREENSHOT_CHECKLIST.md) | Screenshot capture plan: 9 required screenshots, naming convention, setup commands, what not to show |
 | [docs/OLLAMA_PROVIDER_DESIGN.md](docs/OLLAMA_PROVIDER_DESIGN.md) | Local Ollama provider design and TASK-074 contract test notes: API contract, qwen3:8b recommendation, provider settings integration, feature flags, security boundaries |
-| [docs/OLLAMA_RUNTIME_SMOKE_CHECKLIST.md](docs/OLLAMA_RUNTIME_SMOKE_CHECKLIST.md) | TASK-075 runtime smoke checklist for local Ollama `/chat` validation; not yet executed |
+| [docs/OLLAMA_RUNTIME_SMOKE_CHECKLIST.md](docs/OLLAMA_RUNTIME_SMOKE_CHECKLIST.md) | TASK-075 runtime smoke checklist — **PASS** (2026-05-21): `source=llm_local`, 克莉絲蒂娜 persona confirmed, no external API |
 | [docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md](docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md) | Phase 4 stabilization summary: completed capabilities, safety boundaries, test results, live smoke go/no-go |
 | [docs/PROVIDER_TEST_CONNECTION_DESIGN.md](docs/PROVIDER_TEST_CONNECTION_DESIGN.md) | Test Connection design and hardening test results |
 | [docs/SECURE_KEY_STORAGE_DESIGN.md](docs/SECURE_KEY_STORAGE_DESIGN.md) | Key storage threat model, storage options, redaction rules |

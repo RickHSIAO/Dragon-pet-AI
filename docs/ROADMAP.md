@@ -211,7 +211,7 @@ See `docs/PHASE4_PLAN.md`, `docs/LLM_ADAPTER_DESIGN.md`, `docs/LLM_PROVIDER_CONT
 | TASK-072 | Local Ollama Provider Design | DONE |
 | TASK-073 | Ollama Provider Implementation Behind Feature Flag | DONE |
 | TASK-074 | Ollama Provider Contract Tests and Runtime Smoke Prep | DONE |
-| TASK-075 | Ollama Runtime Smoke Check | Pending |
+| TASK-075 | Ollama Runtime Smoke Check | DONE |
 | TASK-076 | Provider Settings UI — Ollama Option | Pending |
 | TASK-077 | README Update for Local LLM Mode | Pending |
 

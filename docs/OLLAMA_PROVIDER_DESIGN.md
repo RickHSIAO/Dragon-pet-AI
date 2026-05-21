@@ -392,9 +392,20 @@ class OllamaLocalProvider:
 | TASK-072 | Local Ollama Provider Design | Design — **DONE** |
 | TASK-073 | Ollama Provider Implementation Behind Feature Flag | **DONE** |
 | TASK-074 | Ollama Provider Contract Tests and Runtime Smoke Prep | **DONE** |
-| TASK-075 | Ollama Runtime Smoke Check | Manual smoke |
+| TASK-075 | Ollama Runtime Smoke Check | **DONE — PASS** |
 | TASK-076 | Provider Settings UI — Ollama Option | Implementation |
 | TASK-077 | README Update for Local LLM Mode | Docs |
+
+### TASK-075 runtime smoke result (2026-05-21)
+
+**Verdict: PASS**
+
+- `/chat` with `LLM_PROVIDER_NAME=ollama`, `qwen3:8b`, no API key → HTTP 200
+- `source=llm_local` ✅ (fixed in TASK-075F)
+- 克莉絲蒂娜 persona injected via system message ✅ (fixed in TASK-075G)
+- Actual reply included `汝`, `下賤的人類`, tsundere tone — persona confirmed
+- No external provider call, no API key used
+- Non-blocking: phrase 「令人作嘔」 slightly too harsh; tone-tuning deferred
 
 ### TASK-074 completion notes
 
