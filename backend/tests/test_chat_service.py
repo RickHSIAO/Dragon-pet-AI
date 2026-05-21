@@ -264,3 +264,140 @@ def test_generate_chat_reply_enabled_provider_error_safe_text_when_fallback_disa
 
     assert response["source"] == "llm_real_error"
     assert "raw provider text" not in response["reply"]
+
+
+# ---------------------------------------------------------------------------
+# TASK-075F — Ollama source mapping tests
+# ---------------------------------------------------------------------------
+
+def test_ollama_provider_success_returns_llm_local(monkeypatch):
+    """provider_name='ollama' + successful LLM response → source='llm_local'."""
+
+    class FakeOllamaProvider:
+        provider_name = "ollama"
+
+        def generate(self, request):  # noqa: ARG002
+            return LLMResponse(
+                text="local ollama reply",
+                provider="ollama",
+                model="qwen3:8b",
+                usage={"output_tokens_actual": 5},
+                error=None,
+            )
+
+    monkeypatch.setenv("LLM_CHAT_ENABLED", "true")
+    monkeypatch.setattr(
+        "app.services.chat_service.get_llm_provider",
+        lambda: FakeOllamaProvider(),
+    )
+
+    response = generate_chat_reply("hello", mode="casual")
+
+    assert response["source"] == "llm_local"
+    assert response["reply"] == "local ollama reply"
+    assert set(response.keys()) == {"reply", "mood", "source"}
+
+
+def test_ollama_provider_error_returns_llm_local_error_when_fallback_disabled(monkeypatch):
+    """provider_name='ollama' + LLM error + fallback disabled → source='llm_local_error'."""
+
+    class ErrorOllamaProvider:
+        provider_name = "ollama"
+
+        def generate(self, request):  # noqa: ARG002
+            return LLMResponse(
+                text="I cannot reach the real language model right now, "
+                     "so I will continue in safe mock mode.",
+                provider="ollama",
+                error="ollama_unavailable",
+            )
+
+    monkeypatch.setenv("LLM_CHAT_ENABLED", "true")
+    monkeypatch.setenv("LLM_FALLBACK_TO_MOCK", "false")
+    monkeypatch.setattr(
+        "app.services.chat_service.get_llm_provider",
+        lambda: ErrorOllamaProvider(),
+    )
+
+    response = generate_chat_reply("hello", mode="casual")
+
+    assert response["source"] == "llm_local_error"
+    assert set(response.keys()) == {"reply", "mood", "source"}
+
+
+def test_ollama_provider_error_falls_back_to_mock_when_fallback_enabled(monkeypatch):
+    """provider_name='ollama' + LLM error + fallback enabled → source='mock'."""
+
+    class ErrorOllamaProvider:
+        provider_name = "ollama"
+
+        def generate(self, request):  # noqa: ARG002
+            return LLMResponse(
+                text="I cannot reach the real language model right now, "
+                     "so I will continue in safe mock mode.",
+                provider="ollama",
+                error="provider_timeout",
+            )
+
+    monkeypatch.setenv("LLM_CHAT_ENABLED", "true")
+    monkeypatch.setenv("LLM_FALLBACK_TO_MOCK", "true")
+    monkeypatch.setattr(
+        "app.services.chat_service.get_llm_provider",
+        lambda: ErrorOllamaProvider(),
+    )
+
+    response = generate_chat_reply("hello", mode="casual")
+
+    assert response["source"] == "mock"
+    assert set(response.keys()) == {"reply", "mood", "source"}
+
+
+def test_anthropic_provider_source_unchanged_by_ollama_fix(monkeypatch):
+    """Existing cloud real provider behavior: source='llm_real' — unchanged."""
+
+    class FakeAnthropicProvider:
+        provider_name = "anthropic"
+
+        def generate(self, request):  # noqa: ARG002
+            return LLMResponse(
+                text="cloud reply",
+                provider="anthropic",
+                model="claude-test",
+                error=None,
+            )
+
+    monkeypatch.setenv("LLM_CHAT_ENABLED", "true")
+    monkeypatch.setattr(
+        "app.services.chat_service.get_llm_provider",
+        lambda: FakeAnthropicProvider(),
+    )
+
+    response = generate_chat_reply("hello", mode="casual")
+
+    assert response["source"] == "llm_real"
+    assert set(response.keys()) == {"reply", "mood", "source"}
+
+
+def test_chat_schema_has_only_reply_mood_source_with_ollama(monkeypatch):
+    """/chat response schema must be exactly reply/mood/source — no extra fields."""
+
+    class FakeOllamaProvider:
+        provider_name = "ollama"
+
+        def generate(self, request):  # noqa: ARG002
+            return LLMResponse(
+                text="schema check reply",
+                provider="ollama",
+                error=None,
+            )
+
+    monkeypatch.setenv("LLM_CHAT_ENABLED", "true")
+    monkeypatch.setattr(
+        "app.services.chat_service.get_llm_provider",
+        lambda: FakeOllamaProvider(),
+    )
+
+    response = generate_chat_reply("test", mode="casual")
+
+    assert set(response.keys()) == {"reply", "mood", "source"}
+    assert response["source"] == "llm_local"

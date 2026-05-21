@@ -303,7 +303,7 @@ When `LLM_PROVIDER_ENABLED=true`, `LLM_CHAT_ENABLED=true`, and `LLM_PROVIDER_NAM
 }
 ```
 
-**`source` value:** `llm_local` — indicates a locally-run model without disclosing which one. (Alternative: `llm_ollama` if provider-specific source values are preferred; this is a decision for TASK-073.)
+**`source` value:** `llm_local` on success; `llm_local_error` on failure. Implemented in TASK-075F via `_LOCAL_PROVIDER_NAMES = frozenset({"ollama"})` in `chat_service.py`. This decision is now final — `llm_local` is the stable source value for all local providers.
 
 **What does NOT change:**
 - `/chat` request and response schema — unchanged (`message`, `use_memory` in; `reply`, `mood`, `source` out)

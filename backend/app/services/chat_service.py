@@ -94,10 +94,15 @@ def _state_context_for_llm(
     }
 
 
+_LOCAL_PROVIDER_NAMES = frozenset({"ollama"})
+
+
 def _source_for_llm_response(provider: Any, response: LLMResponse) -> str:
     provider_name = getattr(provider, "provider_name", response.provider)
     if isinstance(provider, MockLLMProvider) or provider_name == "mock":
         return "llm_mock"
+    if provider_name in _LOCAL_PROVIDER_NAMES:
+        return "llm_local"
     return "llm_real"
 
 
@@ -111,7 +116,12 @@ def _safe_llm_fallback_response(
         return generate_mock_chat_reply(message, mode, state_context)
 
     provider_name = getattr(provider, "provider_name", "")
-    source = "llm_mock" if provider_name == "mock" else "llm_real_error"
+    if provider_name == "mock":
+        source = "llm_mock"
+    elif provider_name in _LOCAL_PROVIDER_NAMES:
+        source = "llm_local_error"
+    else:
+        source = "llm_real_error"
     return {
         "reply": CANONICAL_SAFE_FALLBACK_TEXT,
         "mood": select_mock_mood(message),

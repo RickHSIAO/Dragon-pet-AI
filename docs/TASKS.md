@@ -4010,6 +4010,45 @@ TASK-075 - Ollama Runtime Smoke Check
 
 ---
 
+## TASK-075F - Ollama Chat Source Mapping Fix
+
+Status: DONE
+
+Goal:
+Fix /chat source field for Ollama local provider. Runtime smoke (TASK-075) revealed source="llm_real" was returned for successful Ollama responses. Correct values are source="llm_local" on success and source="llm_local_error" on failure.
+
+Root Cause:
+_source_for_llm_response() in chat_service.py only branched on MockLLMProvider vs. everything else, defaulting all non-mock providers to "llm_real". OllamaLocalProvider had no special case.
+
+Scope:
+- Fix _source_for_llm_response() in backend/app/services/chat_service.py
+- Fix _safe_llm_fallback_response() in same file
+- Add 5 new tests to backend/tests/test_chat_service.py
+- No Electron UI changes
+- No /chat schema changes
+- No external API calls
+- No API key required
+
+Acceptance Criteria:
+- TASK-075F is recorded as DONE ✅
+- provider_name="ollama" success → source="llm_local" ✅
+- provider_name="ollama" error + fallback disabled → source="llm_local_error" ✅
+- provider_name="ollama" error + fallback enabled → source="mock" ✅
+- provider_name="anthropic" unchanged → source="llm_real" ✅
+- /chat schema still exactly reply/mood/source ✅
+- Electron UI unchanged ✅
+- No external API call in tests ✅
+- pytest: 494 passed ✅
+
+Implementation Summary:
+- backend/app/services/chat_service.py: added _LOCAL_PROVIDER_NAMES = frozenset({"ollama"}); updated _source_for_llm_response() to return "llm_local" for local providers; updated _safe_llm_fallback_response() to return "llm_local_error" for local providers; Anthropic/mock behavior unchanged
+- backend/tests/test_chat_service.py: added 5 tests — ollama success→llm_local, ollama error+fallback disabled→llm_local_error, ollama error+fallback enabled→mock, anthropic unchanged→llm_real, schema check reply/mood/source only
+
+Next Task:
+TASK-075 - Ollama Runtime Smoke Check (re-run)
+
+---
+
 ## SIDE_TRACK — Streamer Companion Mode
 
 Status: NOT SCHEDULED — design exploration only
