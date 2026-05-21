@@ -3788,7 +3788,68 @@ Implementation Notes:
 - No external API call was made
 
 Next Task:
-TASK-071D - (TBD — Phase 4 portfolio wrap-up or next development task)
+TASK-071D - Portfolio Demo Final Review
+
+---
+
+## TASK-071D - Portfolio Demo Final Review
+
+Status: DONE
+
+Goal:
+Final review pass over all portfolio assets: README screenshot paths, pytest numbers, false-claim check, doc consistency, and screenshot file integrity. Fix any doc-only issues found. No runtime code changes.
+
+Scope:
+- Verify README screenshot paths match files in docs/screenshots/
+- Verify no stale pytest numbers in main content
+- Verify no false claims (production-ready, live provider, OS keychain implemented)
+- Verify docs/screenshots/ contains all 9 required screenshots as valid PNG
+- Verify PORTFOLIO_DEMO_SCRIPT.md and PHASE4_PROVIDER_SETTINGS_SUMMARY.md are consistent with README
+- Verify TASKS.md records TASK-070D DONE
+- Fix any doc-only issues found
+- Do not modify backend/app
+- Do not modify apps/desktop
+- Do not add tests or APIs
+- Do not call external APIs
+
+Acceptance Criteria:
+- TASK-071D is recorded as DONE ✅
+- All 9 screenshot files are valid PNGs with correct filenames ✅ (fixed double .png.png extension)
+- README screenshot paths resolve correctly ✅
+- No stale pytest numbers in main content ✅ (all say 470)
+- No false claims ✅
+- Docs consistent with each other ✅
+- No runtime code modified ✅
+
+Issue Found and Fixed:
+- 8 of 9 screenshot files had double .png.png extension (e.g., 01_main_chat_ui.png.png)
+- Only 09_docs_overview.png was correct
+- Fixed by renaming all 8 affected files via bash: *.png.png → *.png
+- README paths were already correct (.png); now match the actual files
+- All 9 files verified as valid PNG image data (file command confirmed)
+
+No Issues Found:
+- pytest count consistently 470 throughout main README content ✅
+- Historical counts (449, 465) appear only in collapsible Development Journal ✅
+- No false production-ready claim ✅
+- OS keychain correctly described as "designed, not yet wired" ✅
+- No live provider claim anywhere ✅
+- PORTFOLIO_DEMO_SCRIPT.md: pytest 470, OS keychain deferred, no live call — consistent ✅
+- PHASE4_PROVIDER_SETTINGS_SUMMARY.md: pytest 470, OS keychain not built, no live call — consistent ✅
+- TASKS.md: TASK-070D recorded as DONE ✅
+
+git status: manual confirmation required (no git access from this session)
+
+No Runtime Code Modified:
+- No backend/app code modified ✅
+- No apps/desktop code modified ✅
+- No tests added ✅
+- No APIs added ✅
+- No external API called ✅
+- No real API key used ✅
+
+Next Task:
+TASK-072D - (TBD — OS Keychain implementation or Phase 5 planning)
 
 ---
 
