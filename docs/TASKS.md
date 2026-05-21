@@ -4049,6 +4049,53 @@ TASK-075 - Ollama Runtime Smoke Check (re-run)
 
 ---
 
+## TASK-075G - Ollama Persona Prompt Injection Fix
+
+Status: DONE
+
+Goal:
+Fix the character persona not being sent to the local LLM. Runtime smoke (TASK-075) showed Ollama responses were in generic assistant tone because _CHARACTER_PROMPTS contained only English placeholder text with no 克莉絲蒂娜 character definition.
+
+Root Cause:
+_CHARACTER_PROMPTS in prompt_service.py were written as "structural only" placeholders, explicitly not intended to be sent to an LLM. The prompts had no character name, no pronouns, no language specification, and no personality traits.
+
+Scope:
+- Rewrite _CHARACTER_PROMPTS in backend/app/services/prompt_service.py
+- All 5 modes now share a _PERSONA_BASE defining 克莉絲蒂娜 identity
+- Each mode appends mode-specific behavior instructions
+- Update existing test that relied on "project mode" string
+- Add 7 new tests in backend/tests/test_prompt_service.py
+- No Electron UI changes, no /chat schema changes, no external API calls
+
+Persona defined:
+- 名字：克莉絲蒂娜（Christina）
+- 身份：傲嬌的遠古龍
+- 自稱：吾 / 稱用戶：汝
+- 語言：繁體中文
+- 個性：表面冷淡自傲，實際關心用戶，嘴硬不承認
+
+Acceptance Criteria:
+- TASK-075G is recorded as DONE ✅
+- All 5 mode prompts include 克莉絲蒂娜 ✅
+- All 5 mode prompts include 吾 and 汝 ✅
+- All 5 mode prompts instruct 繁體中文 ✅
+- Casual mode prompt includes 傲嬌 ✅
+- Debug mode prompt is accuracy-focused ✅
+- End-to-end test confirms system message sent to Ollama contains persona keywords ✅
+- Exactly one HTTP call per generate() — no retries ✅
+- Electron UI unchanged ✅
+- No external API call ✅
+- pytest: 501 passed ✅
+
+Implementation Summary:
+- backend/app/services/prompt_service.py: replaced _CHARACTER_PROMPTS with persona-rich prompts; added _PERSONA_BASE (克莉絲蒂娜 identity + 吾/汝 pronouns + 繁體中文 + 傲嬌 personality + prohibitions); each mode appends mode-specific behavior instructions; build_character_prompt() docstring updated to reflect LLM usage
+- backend/tests/test_prompt_service.py: updated "project mode" assertion to "project"; added 7 tests — all modes include 克莉絲蒂娜/吾/汝/繁體中文, casual includes 傲嬌, debug is accuracy-focused, end-to-end payload capture test
+
+Next Task:
+TASK-075 - Ollama Runtime Smoke Check (re-run)
+
+---
+
 ## SIDE_TRACK — Streamer Companion Mode
 
 Status: NOT SCHEDULED — design exploration only
