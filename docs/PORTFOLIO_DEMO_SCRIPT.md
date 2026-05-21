@@ -395,6 +395,7 @@ Invoke-RestMethod -Uri http://localhost:8000/provider/settings/key/status
 
 | Document | Topic |
 |---|---|
+| `docs/PORTFOLIO_SCREENSHOT_CHECKLIST.md` | Screenshot capture plan: 9 required screenshots, naming convention, what not to show, setup commands |
 | `docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md` | Full Phase 4 Provider Settings summary (TASK-045–TASK-064) |
 | `docs/PROVIDER_TEST_CONNECTION_DESIGN.md` | Test Connection design and hardening test results |
 | `docs/SECURE_KEY_STORAGE_DESIGN.md` | Key storage options, threat model, redaction rules |

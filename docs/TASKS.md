@@ -3649,6 +3649,54 @@ TASK-068D - Portfolio Screenshot Checklist Capture
 
 ---
 
+## TASK-068D - Portfolio Screenshot Checklist Capture
+
+Status: DONE
+
+Goal:
+Plan and document the portfolio screenshot checklist so that demo screenshots can be captured consistently and safely. Docs-only task — no runtime code changes.
+
+Scope:
+- Create docs/PORTFOLIO_SCREENSHOT_CHECKLIST.md
+- Document naming convention, required screenshots (9 items), optional screenshots, setup commands, what must not appear, recommended capture order, and portfolio usage guidance
+- Update docs/PORTFOLIO_DEMO_SCRIPT.md with checklist link
+- Update README.md with checklist link
+- Update docs/ROADMAP.md with TASK-068D
+- Do not modify backend/app
+- Do not modify apps/desktop
+- Do not add tests or APIs
+- Do not call external APIs
+- Do not use real API key
+
+Acceptance Criteria:
+- TASK-068D is recorded as DONE ✅
+- docs/PORTFOLIO_SCREENSHOT_CHECKLIST.md exists ✅
+- 9 required screenshots defined with filenames and instructions ✅
+- Naming convention documented ✅
+- What must not appear is documented ✅
+- Setup commands documented ✅
+- Portfolio usage documented ✅
+- docs/PORTFOLIO_DEMO_SCRIPT.md updated with checklist link ✅
+- README.md updated with checklist link ✅
+- docs/ROADMAP.md updated ✅
+- No backend/app code modified ✅
+- No apps/desktop code modified ✅
+- No external API call made ✅
+
+Implementation Summary:
+- docs/PORTFOLIO_SCREENSHOT_CHECKLIST.md: created — covers purpose, naming convention (NN_descriptive_name.png → docs/screenshots/), 9 required screenshots with per-screenshot instructions and setup commands, 6 optional screenshots, what must not appear (8 prohibited items), recommended capture order (16 steps, ~10–15 min session), README/portfolio/interview/video usage guidance, future capture notes (4 items blocked on OS keychain or live call), and reference docs
+- docs/PORTFOLIO_DEMO_SCRIPT.md: added PORTFOLIO_SCREENSHOT_CHECKLIST.md to Reference table
+- README.md: added PORTFOLIO_SCREENSHOT_CHECKLIST.md to Demo & Portfolio Links section
+- docs/ROADMAP.md: TASK-068D DONE added
+- No backend/app code was modified
+- No apps/desktop code was modified
+- No external API call was made
+
+Next Task:
+TASK-069D - Capture Portfolio Screenshots (manual capture session)
+
+---
+
 ## SIDE_TRACK — Streamer Companion Mode
 
 Status: NOT SCHEDULED — design exploration only

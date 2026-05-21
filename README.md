@@ -153,6 +153,7 @@ npm start
 | Document | Purpose |
 |---|---|
 | [docs/PORTFOLIO_DEMO_SCRIPT.md](docs/PORTFOLIO_DEMO_SCRIPT.md) | Full demo script: one-liner, 30-sec pitch, 2-min walk-through, interview talking points, screenshot checklist |
+| [docs/PORTFOLIO_SCREENSHOT_CHECKLIST.md](docs/PORTFOLIO_SCREENSHOT_CHECKLIST.md) | Screenshot capture plan: 9 required screenshots, naming convention, setup commands, what not to show |
 | [docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md](docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md) | Phase 4 stabilization summary: completed capabilities, safety boundaries, test results, live smoke go/no-go |
 | [docs/PROVIDER_TEST_CONNECTION_DESIGN.md](docs/PROVIDER_TEST_CONNECTION_DESIGN.md) | Test Connection design and hardening test results |
 | [docs/SECURE_KEY_STORAGE_DESIGN.md](docs/SECURE_KEY_STORAGE_DESIGN.md) | Key storage threat model, storage options, redaction rules |

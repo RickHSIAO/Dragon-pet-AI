@@ -167,6 +167,7 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 | TASK-065 | Phase 4 Provider Settings Stabilization Summary | DONE |
 | TASK-066D | Portfolio Demo Script and Screenshots | DONE |
 | TASK-067D | Portfolio README Polish | DONE |
+| TASK-068D | Portfolio Screenshot Checklist Capture | DONE |
 
 **Phase 4 Key Safety Constraints:**
 - `LLM_PROVIDER_ENABLED=false` is the default; real provider requires explicit opt-in via env var
