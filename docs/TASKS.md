@@ -3512,7 +3512,44 @@ Validation Notes:
 Runtime Smoke Verdict: PASS WITH NON-BLOCKING UI NOTES
 
 Next Task:
-TASK-065 - Phase 4 Wrap-up or Next Planning
+TASK-065 - Phase 4 Provider Settings Stabilization Summary
+
+---
+
+## TASK-065 - Phase 4 Provider Settings Stabilization Summary
+
+Status: DONE
+
+Goal:
+Consolidate TASK-045 through TASK-064 achievements into a single stable reference document covering the Provider Settings / BYOK / Test Connection sub-track of Phase 4. Docs-only task — no backend/app changes, no apps/desktop changes, no external API calls.
+
+Scope:
+- Create docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md
+- Update docs/TASKS.md (this file)
+- Update docs/ROADMAP.md
+- Update README.md
+- Record: no live external provider call has occurred; no real API key has been used; Test Connection remains local-backend-only in all verified flows; manual live provider smoke requires explicit user cost confirmation
+
+Acceptance Criteria:
+- TASK-065 is recorded as DONE ✅
+- docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md exists and covers all required sections ✅
+- TASKS.md records TASK-065 DONE ✅
+- ROADMAP.md records TASK-064 DONE and TASK-065 DONE ✅
+- README.md updated with TASK-065 summary line ✅
+- No backend/app code modified ✅
+- No apps/desktop code modified ✅
+- No external API call made ✅
+
+Implementation Summary:
+- docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md: created — covers completed capabilities (BYOK, usage meter, backend API, key storage, Provider Settings UI, Test Connection), current safety boundaries (16-row table), what is implemented, what is intentionally not implemented (14 items), current runtime limitations (5 items), known non-blocking UI notes (3 items), test results summary (10 checks + 5 hardening tests), live provider smoke go/no-go conditions (8 conditions, all unmet), recommended next tasks (5 items), and reference documents (8 docs)
+- docs/ROADMAP.md: TASK-064 DONE added; TASK-065 DONE added; Phase 4 status line updated
+- README.md: TASK-065 update block added; Phase 4 status line updated
+- No backend/app code was modified
+- No apps/desktop code was modified
+- No external API call was made
+
+Next Task:
+TASK-066 - OS Keychain Backend Implementation (recommended) or TASK-038 resolution
 
 ---
 
