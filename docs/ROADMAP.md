@@ -160,7 +160,8 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 | TASK-059 | Provider Test Connection Backend Implementation | DONE |
 | TASK-059R | Provider Test Connection Safety Review (Opus) | DONE — PASS |
 | TASK-060 | Provider Test Connection UI Enablement | DONE |
-| TASK-061 | Provider Test Connection Runtime Smoke Check | Pending |
+| TASK-061 | Provider Test Connection Runtime Smoke Check | DONE — PASS WITH EXPECTED LIMITATION |
+| TASK-062 | Provider Test Connection Hardening Tests | DONE |
 
 **Phase 4 Key Safety Constraints:**
 - `LLM_PROVIDER_ENABLED=false` is the default; real provider requires explicit opt-in via env var
@@ -172,7 +173,7 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 - Non-2xx provider response bodies are opaque — not parsed, not logged, not returned
 - No tool execution, no file access, no autonomous action, no automatic memory extraction
 - Live smoke is blocked until explicit user cost confirmation and TASK-044 go/no-go criteria are satisfied
-- BYOK is the recommended MVP path; provider settings UI design done (TASK-047); backend API design done (TASK-048); secure key storage design done (TASK-049); usage meter implementation done (TASK-050); non-secret settings API implementation done (TASK-051); Provider Settings UI implementation done (TASK-052); secure key storage abstraction done (TASK-053); provider key save/clear endpoints done (TASK-054); key UI enablement design done (TASK-055); Save Key / Clear Key UI done (TASK-056); key UI smoke passed (TASK-057); Test Connection design done (TASK-058); Test Connection backend done (TASK-059); safety review PASS (TASK-059R); Test Connection UI enabled in renderer (TASK-060); runtime smoke deferred to TASK-061
+- BYOK is the recommended MVP path; provider settings UI design done (TASK-047); backend API design done (TASK-048); secure key storage design done (TASK-049); usage meter implementation done (TASK-050); non-secret settings API implementation done (TASK-051); Provider Settings UI implementation done (TASK-052); secure key storage abstraction done (TASK-053); provider key save/clear endpoints done (TASK-054); key UI enablement design done (TASK-055); Save Key / Clear Key UI done (TASK-056); key UI smoke passed (TASK-057); Test Connection design done (TASK-058); Test Connection backend done (TASK-059); safety review PASS (TASK-059R); Test Connection UI enabled in renderer (TASK-060); runtime smoke PASS WITH EXPECTED LIMITATION (TASK-061); hardening tests DONE — 470 passed (TASK-062)
 
 See `docs/PHASE4_PLAN.md`, `docs/LLM_ADAPTER_DESIGN.md`, `docs/LLM_PROVIDER_CONTRACT.md`, `docs/CHAT_LLM_WIRING_DESIGN.md`, `docs/CHAT_LLM_REAL_PROVIDER_WIRING_DESIGN.md`, `docs/COST_AND_MONETIZATION.md`, `docs/BYOK_PRODUCT_AND_SETTINGS.md`, `docs/USAGE_METER_DESIGN.md`, `docs/PROVIDER_SETTINGS_UI_DESIGN.md`, `docs/PROVIDER_SETTINGS_API_DESIGN.md`, `docs/SECURE_KEY_STORAGE_DESIGN.md`, and `docs/PROVIDER_TEST_CONNECTION_DESIGN.md` for full planning and design documents.
 

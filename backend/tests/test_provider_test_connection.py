@@ -367,3 +367,170 @@ def test_chat_old_format_still_returns_200_and_schema_unchanged():
 
     assert response.status_code == 200
     assert set(response.json().keys()) == {"reply", "mood", "source"}
+
+
+# ── TASK-062: Opus review hardening tests ─────────────────────────────────
+
+
+def test_provider_disabled_with_configured_key_returns_safe_failure():
+    """Test A — provider_disabled branch with configured key.
+
+    Runner must NOT be called when real_provider_enabled=False,
+    even when a key is present in key storage.
+    """
+    runner = FakeProviderTestRunner()
+    set_key_storage_backend_for_tests(InMemoryKeyStorageBackend())
+    save_api_key("anthropic", SECRET)
+    update_provider_settings(ProviderSettingsUpdate(
+        provider="anthropic",
+        model="claude-test",
+        real_provider_enabled=False,
+    ))
+    set_provider_test_runner_for_tests(runner)
+
+    with TestClient(app) as client:
+        response = post_test_connection(client)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "failed"
+    assert data["error_category"] == "provider_disabled"
+    assert data["source"] == "llm_real_error"
+    assert runner.calls == [], "runner must not be called when provider is disabled"
+    assert SECRET not in response.text
+    assert "api_key" not in response.text
+
+
+def test_invalid_model_returns_400_without_provider_call():
+    """Test B — invalid_model branch.
+
+    When neither the request nor settings carry a non-empty model,
+    the endpoint must return 400 invalid_model before the runner is called.
+    """
+    runner = FakeProviderTestRunner()
+    set_key_storage_backend_for_tests(InMemoryKeyStorageBackend())
+    save_api_key("anthropic", SECRET)
+    update_provider_settings(ProviderSettingsUpdate(
+        provider="anthropic",
+        real_provider_enabled=True,
+        # model intentionally omitted — settings.model stays None/empty
+    ))
+    set_provider_test_runner_for_tests(runner)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/provider/settings/test",
+            json={"provider": "anthropic", "explicit_cost_ack": True},
+            # no model field in request body
+        )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "invalid_model"}
+    assert runner.calls == [], "runner must not be called when model is invalid"
+    assert SECRET not in response.text
+
+
+def test_unknown_runner_error_collapses_to_provider_error():
+    """Test C — unknown provider error collapses to provider_error.
+
+    Unrecognized error strings must map to the safe 'provider_error'
+    category and must not leak the raw unknown string in the response.
+    """
+    UNKNOWN_ERROR = "weird_internal_error_xyz_should_not_leak"
+    runner = FakeProviderTestRunner(
+        response=LLMResponse(
+            text="",
+            provider="anthropic",
+            model="claude-test",
+            usage=None,
+            error=UNKNOWN_ERROR,
+        )
+    )
+    configure_real_provider_with_key(runner)
+
+    with TestClient(app) as client:
+        response = post_test_connection(client)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "failed"
+    assert data["error_category"] == "provider_error", (
+        "unknown error string must collapse to 'provider_error'"
+    )
+    assert data["source"] == "llm_real_error"
+    assert UNKNOWN_ERROR not in response.text, (
+        "raw unknown error string must not appear in response"
+    )
+    assert SECRET not in response.text
+
+
+def test_extra_field_rejected_without_echoing_value():
+    """Test D — suspicious extra field rejected without echoing the value.
+
+    Extra request fields (e.g., system_prompt) must be rejected by the
+    schema (ConfigDict extra='forbid'). The field value must not appear
+    in the response, and the runner must not be called.
+    """
+    runner = FakeProviderTestRunner()
+    configure_real_provider_with_key(runner)
+    LEAK_SENTINEL = "EXTRA_FIELD_LEAK_SENTINEL_XYZ"
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/provider/settings/test",
+            json={
+                "provider": "anthropic",
+                "model": "claude-test",
+                "explicit_cost_ack": True,
+                "system_prompt": LEAK_SENTINEL,
+            },
+        )
+
+    # Must be rejected — not processed successfully
+    assert response.status_code != 200, (
+        "extra field must cause request rejection (not 200)"
+    )
+    # Runner must not be called
+    assert runner.calls == [], "runner must not be called when extra field is present"
+    # The sentinel value must not appear in the response
+    assert LEAK_SENTINEL not in response.text, (
+        "extra field value must not be echoed back in response"
+    )
+    assert SECRET not in response.text
+
+
+def test_safe_message_category_sweep():
+    """Test E — safe_message category sweep.
+
+    Every error category defined in SAFE_ERROR_MESSAGES must have:
+    - A non-empty safe message string
+    - No API key sentinel value
+    - No raw body sentinel value
+    - No prompt text sentinel value
+    - A reasonable length (more than 5 chars, fewer than 200 chars)
+    """
+    from app.services.provider_test_connection_service import (
+        SAFE_ERROR_MESSAGES,
+        TEST_USER_MESSAGE,
+    )
+
+    API_KEY_SENTINEL  = "sk-sentinel-key-value-must-not-appear"
+    RAW_BODY_SENTINEL = "RAW_PROVIDER_BODY_MUST_NOT_APPEAR"
+    PROMPT_SENTINEL   = TEST_USER_MESSAGE  # "Reply with OK."
+
+    for category, safe_msg in SAFE_ERROR_MESSAGES.items():
+        assert safe_msg, (
+            f"safe_message for '{category}' must not be empty"
+        )
+        assert API_KEY_SENTINEL not in safe_msg, (
+            f"safe_message for '{category}' must not contain API key sentinel"
+        )
+        assert RAW_BODY_SENTINEL not in safe_msg, (
+            f"safe_message for '{category}' must not contain raw body sentinel"
+        )
+        assert PROMPT_SENTINEL not in safe_msg, (
+            f"safe_message for '{category}' must not contain prompt text"
+        )
+        assert 5 < len(safe_msg) < 200, (
+            f"safe_message for '{category}' has unexpected length: {len(safe_msg)}"
+        )

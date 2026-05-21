@@ -3357,7 +3357,7 @@ TASK-062 - Provider Test Connection Hardening Tests
 
 ## TASK-062 - Provider Test Connection Hardening Tests
 
-Status: Pending
+Status: DONE
 
 Goal:
 Implement the non-blocking hardening tests recommended by Opus safety review (TASK-059R) for the POST /provider/settings/test endpoint. Covers edge cases not included in the initial TASK-059 mocked test suite.
@@ -3383,7 +3383,17 @@ Acceptance Criteria:
 - No real API key used ✅
 - No backend logic modified ✅
 - No apps/desktop code modified ✅
-- pytest passes (no regressions)
+- pytest passes (no regressions) ✅
+
+Implementation Summary:
+- Added 5 hardening tests to backend/tests/test_provider_test_connection.py (lines 372-536)
+- Test A: provider_disabled branch — verifies runner not called when real_provider_enabled=False, even with configured key
+- Test B: invalid_model branch — verifies 400 invalid_model returned before runner call when no model in request or settings
+- Test C: unknown error collapse — verifies unrecognized runner error strings map to safe 'provider_error', raw string does not leak
+- Test D: extra field rejection — verifies ConfigDict extra='forbid' rejects system_prompt injection, sentinel value not echoed, runner not called
+- Test E: safe_message category sweep — verifies all 11 error categories have non-empty safe messages free of API key / raw body / prompt sentinels
+- pytest: 470 passed (465 pre-existing + 5 new), 0 failed, 0 regressions
+- No backend/app logic modified, no apps/desktop code modified, no external API calls
 
 Next Task:
 TASK-063 - (TBD — Phase 4 wrap-up or Phase 5 planning)

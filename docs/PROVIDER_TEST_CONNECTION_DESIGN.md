@@ -321,3 +321,18 @@ For a future manual smoke task:
 | TASK-059 | Provider Test Connection Backend Implementation | Implementation |
 | TASK-060 | Provider Test Connection UI Enablement | Implementation |
 | TASK-061 | Provider Test Connection Runtime Smoke Check | Manual smoke |
+| TASK-062 | Provider Test Connection Hardening Tests | Mocked tests |
+
+## TASK-062 Hardening Test Results
+
+All 5 hardening tests recommended by TASK-059R Opus review were implemented and pass.
+
+| Test | Description | Verdict |
+|---|---|---|
+| A | `provider_disabled` branch with configured key — runner not called, safe failure | PASS |
+| B | `invalid_model` branch — 400 returned before runner call when no model in request or settings | PASS |
+| C | Unknown runner error collapses to `provider_error` — raw unknown string does not leak | PASS |
+| D | Extra field (`system_prompt`) rejected by `ConfigDict(extra="forbid")` — value not echoed, runner not called | PASS |
+| E | `safe_message` category sweep — all 11 categories non-empty, no API key / raw body / prompt sentinel | PASS |
+
+pytest: 470 passed, 0 failed. No backend logic modified. No apps/desktop code modified. No external API calls.

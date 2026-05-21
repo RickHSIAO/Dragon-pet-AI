@@ -13,6 +13,10 @@
 > TASK-059R update: Opus safety review of TASK-059 backend: verdict PASS. No critical issues. explicit_cost_ack enforced at API boundary, response schema contains no secret-bearing fields, runtime default runner is UnavailableProviderTestRunner, no live external API calls in tests. TASK-060 unblocked.
 >
 > TASK-060 update: Test Connection button enabled in Electron renderer. Enable conditions: real provider selected, key_status configured, real_provider_enabled true. Explicit cost acknowledgement (window.confirm) required on every click — covers all 4 required disclosures. POST to local backend only with body {provider, model, explicit_cost_ack: true} — no api_key, no prompt, no memory. Safe response fields rendered: status, safe_message, error_category, source, usage_estimate. No automatic test after Save Key. No external provider URL in renderer. API key never logged, never in localStorage/sessionStorage. node --check: PASS. pytest: 465 passed. Runtime smoke deferred to TASK-061.
+>
+> TASK-061 update: Runtime smoke check PASS WITH EXPECTED LIMITATION. Test Connection button correctly remained disabled (key_status: not_configured, no key stored — expected safe behavior). No live external provider call was made.
+>
+> TASK-062 update: Provider Test Connection hardening tests complete. Added 5 Opus-recommended hardening tests: provider_disabled branch with configured key (runner not called), invalid_model 400 before runner call, unknown error collapse to provider_error (raw string does not leak), extra field rejection without echoing value (ConfigDict extra=forbid), safe_message category sweep across all 11 error categories. pytest: 470 passed, 0 failed. No backend logic modified. No Electron UI modified.
 
 AI 驅動的桌面螢幕寵物 — 有個性、有記憶的桌面同伴。
 
@@ -21,7 +25,7 @@ AI 驅動的桌面螢幕寵物 — 有個性、有記憶的桌面同伴。
 ## 目前狀態
 
 **Phase 3 完成 — Memory-Aware Chat and Audit Inspection**
-**Phase 4 進行中 — LLM Adapter Integration（TASK-050 Usage Meter Implementation 進行中）**
+**Phase 4 進行中 — LLM Adapter Integration（TASK-062 Provider Test Connection Hardening Tests 完成；pytest: 470 passed）**
 
 Backend（FastAPI）和 Desktop（Electron）均可運行。Mock chat、Manual Memory、Memory-Aware Chat（two-layer gate）、Audit Inspection API 和 Audit Logs UI 全部完成並通過 runtime smoke check。pytest 最新結果：356 passed。Real provider adapter 已在 TASK-035 behind feature flags；Anthropic contract 已用 mocked HTTP 驗證（TASK-037）。`/chat` wiring 已放在 `LLM_CHAT_ENABLED` 後面，default false；mock runtime smoke passed（TASK-041）；live provider 仍預設停用。
 
