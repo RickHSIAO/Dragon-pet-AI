@@ -64,6 +64,8 @@ def make_ollama_response(
     model: str = "qwen3:8b",
     eval_count: int | None = 3,
     prompt_eval_count: int | None = 42,
+    total_duration: int | None = None,
+    eval_duration: int | None = None,
 ) -> dict[str, Any]:
     """Build a minimal valid Ollama API response body."""
     resp: dict[str, Any] = {
@@ -75,6 +77,10 @@ def make_ollama_response(
         resp["eval_count"] = eval_count
     if prompt_eval_count is not None:
         resp["prompt_eval_count"] = prompt_eval_count
+    if total_duration is not None:
+        resp["total_duration"] = total_duration
+    if eval_duration is not None:
+        resp["eval_duration"] = eval_duration
     return resp
 
 
@@ -84,7 +90,11 @@ class FakeHTTPClient:
     def __init__(self, response: ProviderHTTPResponse) -> None:
         self._response = response
         self.last_payload: dict[str, Any] | None = None
+        self.last_headers: dict[str, str] | None = None
+        self.last_method: str | None = None
         self.last_url: str | None = None
+        self.last_timeout_seconds: int | None = None
+        self.call_count = 0
 
     def request_json(
         self,
@@ -94,8 +104,12 @@ class FakeHTTPClient:
         payload: dict[str, Any],
         timeout_seconds: int,
     ) -> ProviderHTTPResponse:
+        self.call_count += 1
+        self.last_method = method
         self.last_url = url
+        self.last_headers = headers
         self.last_payload = payload
+        self.last_timeout_seconds = timeout_seconds
         return self._response
 
 
@@ -104,6 +118,7 @@ class RaisingHTTPClient:
 
     def __init__(self, exc: Exception) -> None:
         self._exc = exc
+        self.call_count = 0
 
     def request_json(
         self,
@@ -113,7 +128,18 @@ class RaisingHTTPClient:
         payload: dict[str, Any],
         timeout_seconds: int,
     ) -> ProviderHTTPResponse:
+        self.call_count += 1
         raise self._exc
+
+
+class MalformedJSONResponse(ProviderHTTPResponse):
+    """ProviderHTTPResponse whose json() method raises to simulate bad JSON."""
+
+    def __init__(self) -> None:
+        super().__init__(status_code=200, json_data=None)
+
+    def json(self) -> Any:
+        raise ValueError("not json")
 
 
 def make_provider(
@@ -426,3 +452,276 @@ def test_request_payload_structure() -> None:
     assert messages[0]["content"] == SYSTEM_PROMPT
     assert messages[1]["role"] == "user"
     assert messages[1]["content"] == USER_MESSAGE
+
+
+# ---------------------------------------------------------------------------
+# TASK-074 contract hardening tests
+# ---------------------------------------------------------------------------
+
+def test_contract_full_request_schema_excludes_secrets_tools_and_context() -> None:
+    body = make_ollama_response(content="schema ok")
+    client = FakeHTTPClient(ProviderHTTPResponse(status_code=200, json_data=body))
+    provider = make_provider(http_client=client)
+    request = LLMRequest(
+        system_prompt=SYSTEM_PROMPT,
+        user_message=USER_MESSAGE,
+        memory_context="MEMORY_CONTEXT_SHOULD_NOT_BE_RAW_FIELD",
+        conversation_history=[{"role": "user", "content": "history"}],
+    )
+
+    provider.generate(request)
+
+    payload = client.last_payload
+    headers = client.last_headers
+    assert payload is not None
+    assert headers is not None
+    assert client.last_method == "POST"
+    assert client.last_url == "http://localhost:11434/api/chat"
+    assert headers == {"Content-Type": "application/json; charset=utf-8"}
+
+    assert payload["model"] == "qwen3:8b"
+    assert payload["stream"] is False
+    assert payload["think"] is False
+    assert payload["keep_alive"] == "10m"
+    assert payload["options"]["temperature"] == pytest.approx(0.7)
+    assert payload["options"]["num_predict"] == 256
+    assert payload["messages"] == [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": USER_MESSAGE},
+    ]
+
+    forbidden_keys = {
+        "api_key",
+        "key",
+        "tools",
+        "memory_context",
+        "conversation_history",
+    }
+    assert forbidden_keys.isdisjoint(payload)
+    assert "api_key" not in headers
+    assert "authorization" not in {key.lower() for key in headers}
+    assert payload["stream"] is not True
+
+
+def test_contract_system_user_message_order_ignores_raw_memory_and_tools() -> None:
+    body = make_ollama_response(content="order ok")
+    client = FakeHTTPClient(ProviderHTTPResponse(status_code=200, json_data=body))
+    provider = make_provider(http_client=client)
+    request = LLMRequest(
+        system_prompt="SYSTEM_PROMPT_SENTINEL",
+        user_message="USER_MESSAGE_SENTINEL",
+        memory_context="RAW_MEMORY_CONTEXT_SENTINEL",
+        conversation_history=[{"role": "assistant", "content": "history"}],
+    )
+
+    provider.generate(request)
+
+    assert client.last_payload is not None
+    messages = client.last_payload["messages"]
+    assert [message["role"] for message in messages] == ["system", "user"]
+    assert messages[0]["content"] == "SYSTEM_PROMPT_SENTINEL"
+    assert messages[1]["content"] == "USER_MESSAGE_SENTINEL"
+    assert "memory_context" not in client.last_payload
+    assert "tools" not in client.last_payload
+
+
+def test_contract_localhost_only_base_url_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.core.config import get_ollama_base_url
+
+    monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
+    assert get_ollama_base_url() == "http://localhost:11434"
+
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    assert get_ollama_base_url() == "http://localhost:11434"
+
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+    assert get_ollama_base_url() == "http://127.0.0.1:11434"
+
+    monkeypatch.setenv("OLLAMA_BASE_URL", "https://api.example.com")
+    assert get_ollama_base_url() == "http://localhost:11434"
+
+
+def test_contract_factory_never_passes_external_ollama_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER_NAME", "ollama")
+    monkeypatch.setenv("LLM_PROVIDER_ENABLED", "true")
+    monkeypatch.setenv("LLM_MODEL", "qwen3:8b")
+    monkeypatch.setenv("OLLAMA_BASE_URL", "https://api.example.com")
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+
+    from app.llm.factory import get_llm_provider
+
+    provider = get_llm_provider()
+
+    assert isinstance(provider, OllamaLocalProvider)
+    assert "api.example.com" not in repr(provider)
+    assert "http://localhost:11434" in repr(provider)
+
+
+def test_contract_ollama_no_api_key_required_even_when_key_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LLM_PROVIDER_NAME", "ollama")
+    monkeypatch.setenv("LLM_PROVIDER_ENABLED", "true")
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+
+    from app.llm.factory import get_llm_provider, get_resolved_llm_provider_info
+
+    info = get_resolved_llm_provider_info()
+    provider = get_llm_provider()
+
+    assert info["provider"] == "ollama"
+    assert info["reason"] == "real_provider_enabled"
+    assert isinstance(provider, OllamaLocalProvider)
+
+
+def test_contract_api_key_env_is_not_sent_in_request_body_or_headers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LLM_API_KEY", "SECRET_SENTINEL_API_KEY")
+    body = make_ollama_response(content="no key ok")
+    client = FakeHTTPClient(ProviderHTTPResponse(status_code=200, json_data=body))
+    provider = make_provider(http_client=client)
+
+    result = provider.generate(SAMPLE_REQUEST)
+
+    assert result.error is None
+    assert client.last_payload is not None
+    assert client.last_headers is not None
+    assert "SECRET_SENTINEL_API_KEY" not in repr(client.last_payload)
+    assert "SECRET_SENTINEL_API_KEY" not in repr(client.last_headers)
+    assert "api_key" not in client.last_payload
+    assert "key" not in client.last_payload
+    assert "authorization" not in {key.lower() for key in client.last_headers}
+
+
+def test_contract_usage_maps_token_counts_and_durations_without_raw_body() -> None:
+    body = make_ollama_response(
+        content="usage ok",
+        eval_count=11,
+        prompt_eval_count=22,
+        total_duration=333,
+        eval_duration=444,
+    )
+    body["prompt_eval_duration"] = "PROMPT_SENTINEL"
+    body["raw"] = "RAW_PROVIDER_BODY_SHOULD_NOT_LEAK"
+    client = FakeHTTPClient(ProviderHTTPResponse(status_code=200, json_data=body))
+    provider = make_provider(http_client=client)
+
+    result = provider.generate(SAMPLE_REQUEST)
+
+    assert result.error is None
+    assert result.usage == {
+        "input_tokens_actual": 22,
+        "output_tokens_actual": 11,
+        "total_duration": 333,
+        "eval_duration": 444,
+    }
+    assert "PROMPT_SENTINEL" not in repr(result.usage)
+    assert "RAW_PROVIDER_BODY_SHOULD_NOT_LEAK" not in repr(result.usage)
+
+
+@pytest.mark.parametrize(
+    ("response", "expected_error"),
+    [
+        (MalformedJSONResponse(), "invalid_response"),
+        (
+            ProviderHTTPResponse(
+                status_code=200,
+                json_data={"model": "qwen3:8b", "message": {}, "done": True},
+            ),
+            "invalid_response",
+        ),
+        (
+            ProviderHTTPResponse(
+                status_code=200,
+                json_data=make_ollama_response(content="   "),
+            ),
+            "invalid_response",
+        ),
+        (
+            ProviderHTTPResponse(
+                status_code=502,
+                json_data={"error": "RAW_PROVIDER_BODY_SHOULD_NOT_LEAK"},
+            ),
+            "provider_error",
+        ),
+    ],
+)
+def test_contract_additional_safe_error_categories(
+    response: ProviderHTTPResponse,
+    expected_error: str,
+) -> None:
+    client = FakeHTTPClient(response)
+    provider = make_provider(http_client=client)
+
+    result = provider.generate(SAMPLE_REQUEST)
+
+    assert result.error == expected_error
+    assert result.text == CANONICAL_SAFE_FALLBACK_TEXT
+
+
+def test_contract_unknown_exception_returns_safe_error_category() -> None:
+    client = RaisingHTTPClient(RuntimeError("RAW_PROVIDER_BODY_SHOULD_NOT_LEAK"))
+    provider = make_provider(http_client=client)
+
+    result = provider.generate(SAMPLE_REQUEST)
+
+    assert result.error == "ollama_unavailable"
+    assert result.text == CANONICAL_SAFE_FALLBACK_TEXT
+    assert "RAW_PROVIDER_BODY_SHOULD_NOT_LEAK" not in result.text
+    assert "RAW_PROVIDER_BODY_SHOULD_NOT_LEAK" not in (result.error or "")
+
+
+def test_contract_raw_provider_body_is_opaque_in_error_response() -> None:
+    sentinels = [
+        "RAW_PROVIDER_BODY_SHOULD_NOT_LEAK",
+        "SECRET_SENTINEL",
+        "PROMPT_SENTINEL",
+    ]
+    client = FakeHTTPClient(
+        ProviderHTTPResponse(
+            status_code=500,
+            json_data={
+                "error": sentinels[0],
+                "secret": sentinels[1],
+                "prompt": sentinels[2],
+            },
+        )
+    )
+    provider = make_provider(http_client=client)
+
+    result = provider.generate(SAMPLE_REQUEST)
+    rendered = f"{result!r} {result!s}"
+
+    assert result.error == "provider_error"
+    assert result.text == CANONICAL_SAFE_FALLBACK_TEXT
+    for sentinel in sentinels:
+        assert sentinel not in result.text
+        assert sentinel not in (result.error or "")
+        assert sentinel not in rendered
+
+
+def test_contract_no_retries_on_success_and_failure() -> None:
+    success_client = FakeHTTPClient(
+        ProviderHTTPResponse(status_code=200, json_data=make_ollama_response())
+    )
+    success_provider = make_provider(http_client=success_client)
+
+    success_provider.generate(SAMPLE_REQUEST)
+
+    assert success_client.call_count == 1
+
+    failure_client = RaisingHTTPClient(httpx.TimeoutException("timed out"))
+    failure_provider = make_provider(http_client=failure_client)
+
+    failure_provider.generate(SAMPLE_REQUEST)
+
+    assert failure_client.call_count == 1
+
+
+def test_contract_chat_response_schema_remains_reply_mood_source_only() -> None:
+    from app.schemas.chat import ChatResponse
+
+    response = ChatResponse(reply="ok", mood="neutral", source="mock")
+
+    assert set(response.model_dump().keys()) == {"reply", "mood", "source"}

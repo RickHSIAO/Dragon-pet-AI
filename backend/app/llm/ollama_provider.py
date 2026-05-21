@@ -167,16 +167,22 @@ class OllamaLocalProvider:
         if not isinstance(content, str) or not content.strip():
             return self._safe_response("invalid_response")
 
-        # Token counts — Ollama returns these as integers when available.
+        # Token counts and durations. Ollama returns these as integers when
+        # available; keep them as safe aggregate metadata only.
         output_tokens = data.get("eval_count")
         input_tokens = data.get("prompt_eval_count")
+        total_duration = data.get("total_duration")
+        eval_duration = data.get("eval_duration")
 
         usage: dict[str, Any] | None = None
-        if isinstance(output_tokens, int) or isinstance(input_tokens, int):
-            usage = {
-                "input_tokens_actual": input_tokens if isinstance(input_tokens, int) else None,
-                "output_tokens_actual": output_tokens if isinstance(output_tokens, int) else None,
-            }
+        usage_fields = {
+            "input_tokens_actual": input_tokens if isinstance(input_tokens, int) else None,
+            "output_tokens_actual": output_tokens if isinstance(output_tokens, int) else None,
+            "total_duration": total_duration if isinstance(total_duration, int) else None,
+            "eval_duration": eval_duration if isinstance(eval_duration, int) else None,
+        }
+        if any(value is not None for value in usage_fields.values()):
+            usage = usage_fields
 
         confirmed_model: str | None = None
         raw_model = data.get("model")

@@ -2,7 +2,7 @@
 
 > dragon-pet-ai
 > Task: TASK-072
-> Status: DESIGN COMPLETE — implementation IN_PROGRESS (TASK-073)
+> Status: IMPLEMENTED AND CONTRACT TESTED - TASK-073 and TASK-074 DONE; runtime smoke pending (TASK-075)
 > Last Updated: 2026-05-21
 
 ---
@@ -390,11 +390,26 @@ class OllamaLocalProvider:
 | Task | Name | Type |
 |---|---|---|
 | TASK-072 | Local Ollama Provider Design | Design — **DONE** |
-| TASK-073 | Ollama Provider Implementation Behind Feature Flag | **IN_PROGRESS** |
-| TASK-074 | Ollama Provider Mocked / Local Contract Tests | Tests |
+| TASK-073 | Ollama Provider Implementation Behind Feature Flag | **DONE** |
+| TASK-074 | Ollama Provider Contract Tests and Runtime Smoke Prep | **DONE** |
 | TASK-075 | Ollama Runtime Smoke Check | Manual smoke |
 | TASK-076 | Provider Settings UI — Ollama Option | Implementation |
 | TASK-077 | README Update for Local LLM Mode | Docs |
+
+### TASK-074 completion notes
+
+- Mocked Ollama provider contract coverage strengthened to 34 tests.
+- Request schema coverage includes `model`, `stream=false`, `think=false`, `keep_alive`, `options.temperature`, `options.num_predict`, and ordered system/user `messages`.
+- Negative payload coverage confirms no API key, no tools, no streaming, no top-level raw memory context, and no conversation history in the Ollama request body.
+- Localhost-only behavior is covered: default localhost, `localhost:11434`, `127.0.0.1:11434`, and external URL fallback to safe default.
+- No-key behavior is covered: `provider=ollama` resolves without `LLM_API_KEY`, and API key env values are not sent in request body or headers.
+- Usage mapping now covers `prompt_eval_count`, `eval_count`, `total_duration`, and `eval_duration` as safe aggregate metadata.
+- Safe error mapping and raw body opacity are covered with sentinel values.
+- No-retry behavior is covered by fake HTTP client call counts.
+- `docs/OLLAMA_RUNTIME_SMOKE_CHECKLIST.md` added for TASK-075.
+- Full backend pytest: 504 passed.
+- No live Ollama smoke was executed in TASK-074.
+- No external provider call was made and no API key was used.
 
 ### TASK-073 scope (preview)
 

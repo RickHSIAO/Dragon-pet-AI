@@ -109,6 +109,8 @@ Mock provider compatibility tests cover supported chat modes, optional memory/st
 
 Real provider config design (TASK-034), safety review (TASK-034R), and review fixes (TASK-034F) are complete. TASK-035 adds real provider selection behind `LLM_PROVIDER_ENABLED=false` by default. Unknown providers and missing keys fall back safely without exposing secrets. API keys must never appear in logs, SQLite, audit rows, API responses, provider repr/str, or the Electron frontend. No automatic retries are permitted in Phase 4. Non-2xx provider response bodies are opaque. Fallback responses must not claim `llm_real`.
 
+TASK-073/TASK-074 add and harden `OllamaLocalProvider` behind the same provider feature flags. `LLM_PROVIDER_NAME=ollama` resolves without `LLM_API_KEY`, uses a localhost-only `OLLAMA_BASE_URL` defaulting to `http://localhost:11434`, sends `stream=false` and `think=false`, does not send tools/history/API keys, maps safe aggregate token/duration metadata, and uses mocked HTTP contract tests only. Runtime Ollama smoke is deferred to TASK-075 and documented in `docs/OLLAMA_RUNTIME_SMOKE_CHECKLIST.md`. No live Ollama smoke or external provider call was made in TASK-074.
+
 TASK-040 adds `/chat` internal LLM adapter wiring behind `LLM_CHAT_ENABLED=false` by default. With the flag disabled, `/chat` keeps the existing mock flow and does not call the provider factory. With the flag enabled, `/chat` can use the LLM adapter path. TASK-043 adds mocked-only `/chat` real-provider contract tests for the flag matrix, source behavior, fallback behavior, leakage checks, memory independence, and no-retry behavior. Live provider calls are still not part of automated tests.
 
 TASK-051 adds the safe non-secret Provider Settings API subset. `GET /provider/settings` returns provider/model flags, safe key status, resolved provider status, and aggregate in-memory `usage_summary`. `PATCH /provider/settings` updates only non-secret settings and rejects API key fields with a fixed safe error. TASK-054 wires `POST /provider/settings/key` and `DELETE /provider/settings/key` to secure key storage abstraction; they never return key values. TASK-059 wires `POST /provider/settings/test` as a backend-only mocked-provider Test Connection endpoint; it requires `explicit_cost_ack`, uses exactly one minimal request, has no mock fallback, and does not call external providers by default.
@@ -127,6 +129,8 @@ TASK-053 adds a backend key storage abstraction in `app/services/key_storage_ser
 cd backend
 python -m pytest
 ```
+
+Latest known full backend result after TASK-074: `504 passed`.
 
 ## Current Limitations (TASK-003)
 

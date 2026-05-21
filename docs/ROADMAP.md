@@ -172,6 +172,8 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 | TASK-070D | Embed Portfolio Screenshots in README | DONE |
 | TASK-071D | Portfolio Demo Final Review | DONE |
 | TASK-072 | Local Ollama Provider Design | DONE |
+| TASK-073 | Ollama Provider Implementation Behind Feature Flag | DONE |
+| TASK-074 | Ollama Provider Contract Tests and Runtime Smoke Prep | DONE |
 
 **Phase 4 Key Safety Constraints:**
 - `LLM_PROVIDER_ENABLED=false` is the default; real provider requires explicit opt-in via env var
@@ -193,7 +195,7 @@ See `docs/PHASE4_PLAN.md`, `docs/LLM_ADAPTER_DESIGN.md`, `docs/LLM_PROVIDER_CONT
 
 **Goal:** Add a local LLM provider option via Ollama. No API key, no external network, no per-token cost. Runs on user's hardware.
 
-**Status:** DESIGN COMPLETE (TASK-072) — implementation pending
+**Status:** CONTRACT TESTED (TASK-074) - OllamaLocalProvider is implemented behind flags, mocked contract tests pass, runtime smoke checklist is ready; no live Ollama smoke has been executed yet
 
 **Local model candidates:**
 
@@ -207,8 +209,8 @@ See `docs/PHASE4_PLAN.md`, `docs/LLM_ADAPTER_DESIGN.md`, `docs/LLM_PROVIDER_CONT
 | Task | Name | Status |
 |---|---|---|
 | TASK-072 | Local Ollama Provider Design | DONE |
-| TASK-073 | Ollama Provider Implementation Behind Feature Flag | IN_PROGRESS |
-| TASK-074 | Ollama Provider Mocked / Local Contract Tests | Pending |
+| TASK-073 | Ollama Provider Implementation Behind Feature Flag | DONE |
+| TASK-074 | Ollama Provider Contract Tests and Runtime Smoke Prep | DONE |
 | TASK-075 | Ollama Runtime Smoke Check | Pending |
 | TASK-076 | Provider Settings UI — Ollama Option | Pending |
 | TASK-077 | README Update for Local LLM Mode | Pending |
@@ -221,6 +223,7 @@ See `docs/PHASE4_PLAN.md`, `docs/LLM_ADAPTER_DESIGN.md`, `docs/LLM_PROVIDER_CONT
 - `think=false`, `stream=false` — concise, deterministic responses
 - Renderer never calls Ollama directly — backend-only architecture boundary preserved
 - New key status value: `not_required` for providers that need no key
+- TASK-074 strengthened mocked contract coverage to 34 Ollama tests and added `docs/OLLAMA_RUNTIME_SMOKE_CHECKLIST.md`; pytest: 504 passed; no external provider call and no API key used
 
 See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 

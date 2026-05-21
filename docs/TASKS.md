@@ -3949,6 +3949,67 @@ TASK-074 - Ollama Provider Contract Tests and Runtime Smoke Prep
 
 ---
 
+## TASK-074 - Ollama Provider Contract Tests and Runtime Smoke Prep
+
+Status: DONE
+
+Goal:
+Strengthen Ollama provider contract tests and prepare a safe runtime smoke checklist without running live Ollama smoke.
+
+Scope:
+- Add or strengthen mocked Ollama provider contract tests
+- Verify localhost-only base URL behavior
+- Verify request body schema
+- Verify no API key / no tools / no streaming
+- Verify safe error mapping
+- Verify no raw body leakage
+- Verify no retries
+- Prepare runtime smoke checklist for TASK-075
+- Do not modify Electron UI
+- Do not run live Ollama smoke in this task
+
+Acceptance Criteria:
+- TASK-074 is recorded as DONE
+- Ollama contract tests cover request schema
+- localhost-only behavior is covered
+- no-key behavior is covered
+- safe error mapping is covered
+- raw body opacity is covered
+- no-retry behavior is covered
+- runtime smoke checklist is documented
+- pytest passes
+- Electron UI is unchanged
+- no external API call occurs
+- no API key is used
+
+Implementation Summary:
+- backend/app/llm/ollama_provider.py: usage mapping now includes safe aggregate Ollama duration metadata (`total_duration`, `eval_duration`) in addition to token counts.
+- backend/tests/test_llm_ollama_provider.py: strengthened mocked contract coverage from 19 to 34 tests.
+- Added full request schema coverage: `model`, `stream=false`, `think=false`, `keep_alive`, `options.temperature`, `options.num_predict`, and ordered `messages`.
+- Added negative payload coverage: no `api_key`, `key`, `tools`, `memory_context`, `conversation_history`, or `stream=true`.
+- Added system/user message order coverage and confirmed raw memory/history fields are not passed as top-level Ollama payload fields.
+- Added localhost-only config/factory coverage: default localhost, `localhost:11434` allowed, `127.0.0.1:11434` allowed, non-local URL falls back to safe default and is not passed to provider.
+- Added no-key coverage: `LLM_API_KEY` unset still resolves `provider=ollama`; if `LLM_API_KEY` is set, it is not sent in request body or headers.
+- Added response usage mapping coverage for `prompt_eval_count`, `eval_count`, `total_duration`, and `eval_duration`, with raw provider fields kept out of usage.
+- Added additional safe error coverage for malformed JSON, missing `message.content`, empty text, non-2xx generic errors, and unknown exceptions.
+- Added raw body opacity coverage with `RAW_PROVIDER_BODY_SHOULD_NOT_LEAK`, `SECRET_SENTINEL`, and `PROMPT_SENTINEL`.
+- Added no-retry coverage: fake HTTP client call count is exactly 1 on success and failure.
+- Added `/chat` response schema guard for `reply / mood / source`.
+- docs/OLLAMA_RUNTIME_SMOKE_CHECKLIST.md created for TASK-075.
+- No apps/desktop files modified; Electron UI unchanged.
+- No live Ollama runtime smoke executed in this task.
+- No external provider call made.
+- No API key used.
+
+Validation:
+- Targeted Ollama tests: `python -m pytest tests/test_llm_ollama_provider.py` -> 34 passed.
+- Full backend pytest: `python -m pytest` -> 504 passed.
+
+Next Task:
+TASK-075 - Ollama Runtime Smoke Check
+
+---
+
 ## SIDE_TRACK — Streamer Companion Mode
 
 Status: NOT SCHEDULED — design exploration only

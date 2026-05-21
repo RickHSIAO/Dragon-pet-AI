@@ -1,6 +1,6 @@
 # Dragon Pet AI
 
-> **Dragon Pet AI** is a local-first Electron + FastAPI desktop companion prototype with manual memory, memory audit logs, BYOK provider settings, usage metering, a safety-reviewed Test Connection endpoint, and mocked LLM integration — built with safety-first incremental development and a 470-test mocked backend suite.
+> **Dragon Pet AI** is a local-first Electron + FastAPI desktop companion prototype with manual memory, memory audit logs, BYOK provider settings, usage metering, a safety-reviewed Test Connection endpoint, Anthropic/Ollama provider adapters behind flags, and mocked LLM integration - built with safety-first incremental development and a 504-test mocked backend suite.
 
 **Not production-ready.** No live external provider call has been made. No real API key has been used. This is a portfolio / prototype project.
 
@@ -37,7 +37,7 @@
 
 ![Pytest 470 Passed](docs/screenshots/08_pytest_470_passed.png)
 
-*Mocked backend test suite: 470 passing tests, zero failures, no external HTTP, no real API key.*
+*Mocked backend test suite screenshot from portfolio capture; latest known backend suite: 504 passing tests, zero failures, no external HTTP, no real API key.*
 
 ---
 
@@ -47,8 +47,8 @@
 |---|---|
 | Architecture | Electron desktop + FastAPI backend, end-to-end working |
 | Phase 3 | ✅ Complete — Memory, Audit Logs, Memory-Aware Chat |
-| Phase 4 | 🔄 In Progress — Provider Settings / BYOK stabilized; Local Ollama provider design underway |
-| pytest | ✅ 470 passed, 0 failed |
+| Phase 4 | IN_PROGRESS - Provider Settings / BYOK stabilized; Local Ollama provider contract-tested |
+| pytest | 504 passed, 0 failed |
 | Live external provider call | ❌ None — intentionally gated |
 | Real API key used | ❌ None — all tests use mocked runners |
 | Production-ready | ❌ Not yet — prototype / portfolio stage |
@@ -80,7 +80,8 @@
 | Test Connection UI | Cost confirm dialog; safe field rendering; no auto-run |
 | LLM adapter layer | Anthropic adapter behind `LLM_PROVIDER_ENABLED=false` |
 | Hardening tests | 5 Opus-recommended tests covering edge cases and safety boundaries |
-| 470 mocked tests | Full backend suite; no external HTTP; no real key |
+| Local Ollama provider | Implemented behind flags; no API key; localhost-only base URL; contract-tested with mocked HTTP |
+| 504 mocked tests | Full backend suite; no external HTTP; no real key |
 
 ---
 
@@ -144,7 +145,7 @@ python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 python -m pytest
-# Expected: 470 passed
+# Expected: 504 passed
 ```
 
 ### Start the backend
@@ -186,7 +187,8 @@ npm start
 |---|---|
 | [docs/PORTFOLIO_DEMO_SCRIPT.md](docs/PORTFOLIO_DEMO_SCRIPT.md) | Full demo script: one-liner, 30-sec pitch, 2-min walk-through, interview talking points, screenshot checklist |
 | [docs/PORTFOLIO_SCREENSHOT_CHECKLIST.md](docs/PORTFOLIO_SCREENSHOT_CHECKLIST.md) | Screenshot capture plan: 9 required screenshots, naming convention, setup commands, what not to show |
-| [docs/OLLAMA_PROVIDER_DESIGN.md](docs/OLLAMA_PROVIDER_DESIGN.md) | Local Ollama provider design: API contract, qwen3:8b recommendation, provider settings integration, feature flags, security boundaries (design only — not yet implemented) |
+| [docs/OLLAMA_PROVIDER_DESIGN.md](docs/OLLAMA_PROVIDER_DESIGN.md) | Local Ollama provider design and TASK-074 contract test notes: API contract, qwen3:8b recommendation, provider settings integration, feature flags, security boundaries |
+| [docs/OLLAMA_RUNTIME_SMOKE_CHECKLIST.md](docs/OLLAMA_RUNTIME_SMOKE_CHECKLIST.md) | TASK-075 runtime smoke checklist for local Ollama `/chat` validation; not yet executed |
 | [docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md](docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md) | Phase 4 stabilization summary: completed capabilities, safety boundaries, test results, live smoke go/no-go |
 | [docs/PROVIDER_TEST_CONNECTION_DESIGN.md](docs/PROVIDER_TEST_CONNECTION_DESIGN.md) | Test Connection design and hardening test results |
 | [docs/SECURE_KEY_STORAGE_DESIGN.md](docs/SECURE_KEY_STORAGE_DESIGN.md) | Key storage threat model, storage options, redaction rules |
@@ -234,7 +236,7 @@ dragon-pet-ai/
       schemas/                # Pydantic request/response models
       services/               # Business logic (one file per service)
       providers/              # LLM adapter layer
-    tests/                    # pytest suite (470 tests)
+    tests/                    # pytest suite (504 tests)
     requirements.txt
   docs/                       # All design documents
   .env.example
@@ -269,7 +271,8 @@ dragon-pet-ai/
 | `docs/PROVIDER_SETTINGS_KEY_UI_ENABLEMENT_DESIGN.md` | Save Key / Clear Key UI flow, unavailable storage UX, key status display |
 | `docs/PROVIDER_TEST_CONNECTION_DESIGN.md` | Test Connection design and hardening test results (Opus review PASS) |
 | `docs/PORTFOLIO_DEMO_SCRIPT.md` | Portfolio demo script: 30-sec pitch, 2-min walk-through, interview talking points |
-| `docs/OLLAMA_PROVIDER_DESIGN.md` | Local Ollama provider design: API contract, qwen3:8b, no-key integration, security boundaries |
+| `docs/OLLAMA_PROVIDER_DESIGN.md` | Local Ollama provider design and contract test notes: API contract, qwen3:8b, no-key integration, security boundaries |
+| `docs/OLLAMA_RUNTIME_SMOKE_CHECKLIST.md` | TASK-075 local Ollama runtime smoke checklist |
 | `docs/STREAMER_COMPANION_MODE.md` | Future side track: OBS overlay / Twitch companion (not scheduled) |
 
 ---
