@@ -93,3 +93,61 @@ def test_usage_summary_is_safe_aggregate_only():
     assert usage_summary["error_counts"] == {"timeout": 1}
     assert raw_message not in observed
     assert "api_key" not in observed
+
+
+# ---------------------------------------------------------------------------
+# TASK-076 — Ollama / local provider tests
+# ---------------------------------------------------------------------------
+
+def test_ollama_key_status_is_not_required():
+    """get_provider_key_status('ollama') must return 'not_required' — no API key needed."""
+    from app.services.provider_settings_service import get_provider_key_status
+    assert get_provider_key_status("ollama") == "not_required"
+
+
+def test_update_accepts_ollama_provider():
+    """PATCH /provider/settings must accept 'ollama' as a valid provider."""
+    settings = update_provider_settings(ProviderSettingsUpdate(
+        provider="ollama",
+        real_provider_enabled=True,
+        llm_chat_enabled=True,
+        fallback_to_mock=True,
+    ))
+    assert settings["provider"] == "ollama"
+
+
+def test_resolve_provider_returns_ollama_when_real_enabled():
+    """resolved_provider must be 'ollama' when real_provider_enabled=True and provider=ollama."""
+    settings = update_provider_settings(ProviderSettingsUpdate(
+        provider="ollama",
+        real_provider_enabled=True,
+        llm_chat_enabled=True,
+        fallback_to_mock=True,
+    ))
+    assert settings["resolved_provider"] == "ollama"
+
+
+def test_ollama_key_status_returned_in_get_settings():
+    """GET /provider/settings returns key_status='not_required' when provider=ollama."""
+    update_provider_settings(ProviderSettingsUpdate(
+        provider="ollama",
+        real_provider_enabled=False,
+        llm_chat_enabled=False,
+        fallback_to_mock=True,
+    ))
+    settings = get_provider_settings()
+    assert settings["key_status"] == "not_required"
+
+
+def test_save_key_rejected_for_ollama():
+    """Saving an API key for the ollama provider must raise ValueError (no key needed)."""
+    from app.services.provider_settings_service import save_provider_api_key
+    with pytest.raises(ValueError, match="local provider"):
+        save_provider_api_key("ollama", "some-key")
+
+
+def test_clear_key_rejected_for_ollama():
+    """Clearing an API key for the ollama provider must raise ValueError."""
+    from app.services.provider_settings_service import clear_provider_api_key
+    with pytest.raises(ValueError, match="local provider"):
+        clear_provider_api_key("ollama")

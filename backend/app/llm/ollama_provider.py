@@ -27,9 +27,11 @@ from app.llm.types import LLMRequest, LLMResponse
 
 
 OLLAMA_CHAT_PATH = "/api/chat"
+OLLAMA_TAGS_PATH = "/api/tags"
 DEFAULT_OLLAMA_MODEL = "qwen3:8b"
 DEFAULT_OLLAMA_TEMPERATURE = 0.7
 DEFAULT_OLLAMA_NUM_PREDICT = 256
+DEFAULT_LOCAL_TEST_TIMEOUT_SECONDS = 10
 
 
 class OllamaLocalProvider:
@@ -50,12 +52,14 @@ class OllamaLocalProvider:
         base_url: str = "http://localhost:11434",
         keep_alive: str = "10m",
         timeout_seconds: int = 30,
+        test_timeout_seconds: int = DEFAULT_LOCAL_TEST_TIMEOUT_SECONDS,
         http_client: HTTPJSONClient | None = None,
     ) -> None:
         self._model = model.strip() or DEFAULT_OLLAMA_MODEL
         self._base_url = base_url.rstrip("/")
         self._keep_alive = keep_alive
         self._timeout_seconds = timeout_seconds
+        self._test_timeout_seconds = test_timeout_seconds
         self._http_client: HTTPJSONClient = http_client or HTTPXJSONClient()
 
     @property
@@ -92,6 +96,91 @@ class OllamaLocalProvider:
             return response.status_code < 500
         except Exception:
             return False
+
+    def test_connection(self, model: str | None = None) -> LLMResponse:
+        """
+        Fast Test Connection check for the local Ollama runtime.
+
+        This performs a single ``GET /api/tags`` request — it does NOT load the
+        model and does NOT call ``/api/chat``.  The Test Connection contract is
+        intentionally narrow: confirm the local runtime is reachable and the
+        requested model is present in the local model list.  Generation latency
+        and persona behaviour are validated by ``/chat`` smoke tests, not here.
+
+        On success returns ``LLMResponse(text="ok", error=None)``.
+
+        On failure returns ``LLMResponse(text="", error=<safe_category>)`` where
+        the category is one of:
+
+        - ``ollama_unavailable`` — server is not reachable
+        - ``provider_timeout``  — server did not respond in time
+        - ``model_not_found``   — server alive, but model is not pulled
+        - ``invalid_response``  — server responded with an unexpected body
+        - ``provider_error``    — any other failure (collapsed to safe category)
+
+        Exactly one HTTP request is made — no retries.  Raw provider bodies are
+        never forwarded to the caller.
+        """
+        target_model = (model or self._model).strip() or self._model
+        endpoint = self._base_url + OLLAMA_TAGS_PATH
+
+        try:
+            http_response = self._http_client.request_json(
+                "GET",
+                endpoint,
+                headers={},
+                payload={},
+                timeout_seconds=self._test_timeout_seconds,
+            )
+        except httpx.TimeoutException:
+            return self._safe_response("provider_timeout")
+        except (httpx.ConnectError, ConnectionRefusedError, OSError):
+            return self._safe_response("ollama_unavailable")
+        except Exception:
+            return self._safe_response("ollama_unavailable")
+
+        if http_response.status_code < 200 or http_response.status_code >= 300:
+            return self._safe_response("provider_error")
+
+        try:
+            data = http_response.json()
+        except Exception:
+            return self._safe_response("invalid_response")
+
+        if not isinstance(data, dict):
+            return self._safe_response("invalid_response")
+
+        models_field = data.get("models")
+        if not isinstance(models_field, list):
+            return self._safe_response("invalid_response")
+
+        installed_names: list[str] = []
+        for entry in models_field:
+            if not isinstance(entry, dict):
+                continue
+            # Ollama returns either ``name`` (older) or ``model`` (newer) — accept both.
+            name = entry.get("name")
+            if not isinstance(name, str):
+                name = entry.get("model")
+            if isinstance(name, str) and name.strip():
+                installed_names.append(name.strip())
+
+        if not _model_in_installed(target_model, installed_names):
+            return LLMResponse(
+                text="",
+                provider="ollama",
+                model=target_model,
+                usage=None,
+                error="model_not_found",
+            )
+
+        return LLMResponse(
+            text="ok",
+            provider="ollama",
+            model=target_model,
+            usage=None,
+            error=None,
+        )
 
     def generate(self, request: LLMRequest) -> LLMResponse:
         """
@@ -205,3 +294,27 @@ class OllamaLocalProvider:
             usage=None,
             error=error,
         )
+
+
+def _model_in_installed(target: str, installed: list[str]) -> bool:
+    """Return True if ``target`` matches any installed Ollama model name.
+
+    Ollama tag names may include a ``:<tag>`` suffix.  A request for ``qwen3``
+    matches ``qwen3:latest`` and ``qwen3:8b``; a request for ``qwen3:8b``
+    requires an exact match against the tagged entry.  Comparison is
+    case-insensitive and ignores leading/trailing whitespace.
+    """
+    if not target:
+        return False
+    target_norm = target.strip().lower()
+    if not target_norm:
+        return False
+    if ":" in target_norm:
+        # Fully-qualified tag — exact match required.
+        return any(name.lower() == target_norm for name in installed)
+    # Unqualified name — match by base before ``:``.
+    for name in installed:
+        base = name.split(":", 1)[0].lower()
+        if base == target_norm:
+            return True
+    return False

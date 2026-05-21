@@ -4211,3 +4211,200 @@ Completion Notes:
 - No apps/desktop code was modified
 - No external API call was made
 - No runtime code was modified
+
+## TASK-076 - Provider Settings UI — Ollama Option
+
+Status: DONE
+
+Goal:
+Add Ollama as a selectable provider in the Electron Provider Settings UI. When ollama is selected, the API key input, Save Key, and Clear Key controls are hidden/disabled. Test Connection is enabled based on real_provider_enabled only (no key required). A local resource warning replaces the monetary cost acknowledgement dialog.
+
+Scope:
+- apps/desktop/src/renderer/index.html: add ollama option to provider dropdown
+- apps/desktop/src/renderer/renderer.js: update updateKeyUIState(), runTestConnection(), provider change handler, key input handler
+- No backend/app changes — backend Ollama support was fully implemented in TASK-073
+- No new API endpoints
+- No external API calls
+- No real API key used
+
+Key UI Behavior Changes (ollama selected):
+- Provider dropdown shows third option: "ollama — local, no key"
+- API key input: disabled, placeholder shows "Not required — Ollama runs locally, no API key needed"
+- Save Key button: hidden (display:none)
+- Clear Key button: hidden (display:none)
+- Test Connection: enabled when real_provider_enabled=true (no key check)
+- Test Connection dialog: "Local Resource Warning" instead of "Cost Acknowledgement"
+  - Message: "This will send a test request to your local Ollama server. This will use your GPU/CPU for inference. No data leaves your device."
+- Provider change handler: delegates to updateKeyUIState() with not_required key_status for ollama
+
+Safety Constraints (all preserved):
+- Renderer never calls Ollama directly — localhost:11434 not referenced in renderer
+- No api_key field in Test Connection request body — unchanged
+- explicit_cost_ack: true still sent to backend for all providers including ollama
+- No API key console logging
+- No API key localStorage/sessionStorage
+- No external provider URL in renderer
+- Save Key endpoint not called for ollama
+
+Acceptance Criteria:
+- TASK-076 is recorded as DONE ✅
+- Provider dropdown includes ollama option ✅
+- When provider=ollama: API key input disabled with local-provider placeholder ✅
+- When provider=ollama: Save Key and Clear Key hidden ✅
+- When provider=ollama: Test Connection enabled when real_provider_enabled=true ✅
+- When provider=ollama: Test Connection dialog shows local resource warning ✅
+- Cloud provider path (anthropic) behavior unchanged ✅
+- Mock provider path behavior unchanged ✅
+- node --check renderer.js: PASS ✅
+- Safety scan: no direct Ollama call, no external URL, no key logging ✅
+- No backend/app code modified ✅
+- No external API call made ✅
+- No real API key used ✅
+
+Implementation Summary:
+- apps/desktop/src/renderer/index.html: added <option value="ollama">ollama — local, no key</option>
+- apps/desktop/src/renderer/renderer.js: updateKeyUIState() — added isLocalProvider flag; disabled/hidden key controls for ollama; Test Connection canTest logic branches on isLocalProvider; button title text branches on provider type
+- apps/desktop/src/renderer/renderer.js: runTestConnection() — added isLocalProvider guard; cloud-only key check before testing; separate window.confirm() dialogs for local vs cloud; request body unchanged (explicit_cost_ack: true always sent)
+- apps/desktop/src/renderer/renderer.js: providerApiKeyInput input handler — isLocalProvider check prevents Save Key enable for ollama
+- apps/desktop/src/renderer/renderer.js: providerSettingsProvider change handler — rewrote to delegate to updateKeyUIState() with not_required key_status for ollama; clears input and key message on every provider change
+- node --check: SYNTAX OK
+- Safety scan: no direct Ollama URL in renderer, no external provider URL, no console key logging, no api_key in test request body
+
+Next Task:
+TASK-077 - README Update for Local LLM Mode
+
+---
+
+## TASK-077 - README Update for Local LLM Mode
+
+Status: DONE
+
+Goal:
+Update project documentation so users can start and validate Local LLM mode with Ollama through the backend and Electron Provider Settings UI.
+
+Scope:
+- Update root README with Local LLM Mode concept, prerequisites, startup commands, Provider Settings UI behavior, `/chat` smoke test, troubleshooting, and safety rules.
+- Update backend README with backend-specific Ollama startup and smoke instructions.
+- Update docs/OLLAMA_PROVIDER_DESIGN.md with TASK-077 completion notes.
+- Update docs/ROADMAP.md to mark TASK-077 DONE.
+- Do not modify `/chat` schema.
+- Do not modify Electron renderer provider call logic.
+- Do not add direct renderer calls to `localhost:11434`.
+- Do not call external APIs.
+- Do not add live network-dependent tests.
+
+Acceptance Criteria:
+- README explains Ollama local mode and no API key requirement.
+- README explains renderer only calls backend; backend handles provider calls.
+- README documents Ollama install/pull/list prerequisites.
+- README documents `ollama serve`, backend start, and existing Electron app start.
+- README documents Provider Settings UI behavior for `ollama — local, no key`.
+- README includes PowerShell `/chat` smoke command with UTF-8 handling.
+- README troubleshooting covers missing `ollama`, missing `qwen3:8b`, Test Connection failure, `/chat` fallback to mock, missing persona tone, and stale backend settings.
+- README safety rules preserve backend-only provider calls and stable `/chat` schema.
+- Full pytest passes.
+- Electron node checks pass.
+
+Implementation Summary:
+- README.md: added `Local LLM Mode (Ollama)` guide with concept, prerequisites, startup, Provider Settings UI, `/chat` smoke test, troubleshooting, and safety rules; updated latest pytest references to 531.
+- backend/README.md: added backend-focused Local LLM Mode instructions and UTF-8 `/chat` smoke command.
+- docs/OLLAMA_PROVIDER_DESIGN.md: marked TASK-077 complete and recorded docs/safety notes.
+- docs/ROADMAP.md: marked TASK-077 DONE and noted README local LLM documentation completion.
+- docs/TASKS.md: recorded TASK-077 as DONE.
+- apps/desktop/src/renderer/renderer.js: removed a duplicated, truncated trailing event/startup block so the required syntax check passes; provider call logic unchanged.
+- No `/chat` schema change.
+- No Electron renderer provider call logic change.
+- No direct Ollama URL added to renderer.
+- No external API call made.
+- No API key used.
+
+Validation:
+- Markdown/docs sanity: `git diff --check` PASS.
+- Renderer safety scan: no direct Ollama URL (`localhost:11434`, `127.0.0.1:11434`, or bare `11434`) in `apps/desktop/src/renderer`.
+- Full backend pytest: `python -m pytest` -> 531 passed.
+- `node --check apps/desktop/src/main.js`: PASS.
+- `node --check apps/desktop/src/renderer/renderer.js`: PASS.
+
+Next Task:
+TASK-078 - Local LLM Mode Follow-up Planning
+
+---
+
+## TASK-080 - Electron End-to-End Local Chat Smoke
+
+Status: DONE
+
+Goal:
+Verify the Electron desktop UI can configure the Ollama local provider, run Test Connection, send chat through the backend `/chat` endpoint, render the Christina reply, and handle mood/source safely.
+
+Scope:
+- Launch backend and Electron locally for smoke validation.
+- Configure Provider Settings UI to `provider=ollama`, `model=qwen3:8b`, `real_provider_enabled=true`, `llm_chat_enabled=true`, and `fallback_to_mock=false`.
+- Verify Test Connection uses the Local Resource Warning and succeeds with `source=llm_local`.
+- Verify chat send calls backend `/chat`.
+- Verify assistant reply renders in the UI and mood label updates.
+- Verify `source=llm_local` through the fetch log and provider usage summary.
+- Add renderer chat smoke coverage with no external test dependency.
+- Preserve `/chat` schema.
+- Preserve renderer backend-only provider architecture.
+- Do not add any direct Ollama URL to renderer code.
+
+Implementation Summary:
+- apps/desktop/package.json: added `test:renderer`.
+- apps/desktop/scripts/renderer-chat-smoke.js: added a Node VM renderer smoke test covering send button, Enter handling, `/chat` fetch, reply rendering, `source=llm_local`, mood handling, backend error UI, and renderer safety scan.
+- Existing Electron chat wiring was sufficient; no `/chat` schema change was needed.
+- Electron E2E local smoke confirmed Provider Settings state: `ollama`, `qwen3:8b`, `not_required`, `real_provider_enabled=true`, `llm_chat_enabled=true`, `fallback_to_mock=false`.
+- Test Connection returned: `Local Ollama connection successful. [source: llm_local]`.
+- Chat UI POSTed backend `/chat`, rendered a Christina-style reply, and processed `mood=focused`.
+- Renderer safety boundary preserved: no direct `localhost:11434`, `127.0.0.1:11434`, or bare `11434` in `apps/desktop/src/renderer`.
+
+Validation:
+- Electron E2E local chat smoke: PASS.
+- `npm.cmd run test:renderer`: PASS.
+- `python -m pytest`: 555 passed.
+- `node --check apps/desktop/src/main.js`: PASS.
+- `node --check apps/desktop/src/renderer/renderer.js`: PASS.
+- `node --check apps/desktop/scripts/renderer-chat-smoke.js`: PASS.
+- Renderer safety scan for `11434` in `apps/desktop/src/renderer`: PASS.
+- `git diff --check`: PASS with existing LF/CRLF warnings only.
+
+Next Task:
+TASK-081 - Local Ollama UX Stabilization / Runtime Follow-up
+
+---
+
+## TASK-081 - Local Ollama UX Stabilization / Runtime Follow-up
+
+Status: DONE
+
+Goal:
+Stabilize the Local Ollama runtime UX so users can understand chat source, loading/cold-start state, provider consistency, and safe error states without changing `/chat` schema or renderer provider boundaries.
+
+Scope:
+- Show chat response source in the Electron runtime status area.
+- Show Provider Settings provider/resolved/model/key/flag state more clearly.
+- Add local Ollama loading/cold-start copy while `/chat` is in flight.
+- Improve safe renderer error messages for backend offline, provider timeout, local provider failure, and fallback-to-mock states.
+- Keep renderer backend-only; do not add direct Ollama URLs.
+- Preserve `/chat` response schema: `reply / mood / source`.
+
+Implementation Summary:
+- apps/desktop/src/renderer/index.html: added chat runtime source/provider status fields and expanded Provider Settings status rows for provider, model, real provider enabled, LLM chat enabled, and fallback-to-mock.
+- apps/desktop/src/renderer/styles.css: added runtime status pill styling and widened Provider Settings status grid.
+- apps/desktop/src/renderer/renderer.js: added source-aware chat runtime status, local Ollama cold-start loading copy, safer backend-offline detection, safe provider timeout/model/error messages, and explicit fallback/mock source explanations.
+- apps/desktop/scripts/renderer-chat-smoke.js: strengthened renderer smoke coverage for reply render, mood update, visible `source=llm_local`, loading/cold-start state, backend offline, provider timeout, `llm_local_error`, mock fallback, Test Connection success, Provider Settings consistency, Enter send, and renderer safety scan.
+- apps/desktop/package.json: existing `test:renderer` script continues to run the strengthened smoke.
+
+Validation:
+- `python -m pytest`: 555 passed.
+- `node --check apps/desktop/src/main.js`: PASS.
+- `node --check apps/desktop/src/renderer/renderer.js`: PASS.
+- `node --check apps/desktop/scripts/renderer-chat-smoke.js`: PASS.
+- `npm.cmd run test:renderer`: PASS.
+- Renderer safety scan for `localhost:11434`, `127.0.0.1:11434`, and bare `11434` in `apps/desktop/src/renderer`: PASS.
+- `git diff --check`: PASS with LF/CRLF warnings only.
+
+Next Task:
+TASK-082 - Local Ollama Release Readiness Review
+
+---

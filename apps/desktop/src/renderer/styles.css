@@ -106,6 +106,30 @@ textarea {
   overflow-wrap: anywhere;
 }
 
+.status-note.error {
+  color: #ff8a8a;
+}
+
+.chat-runtime-pill {
+  background: var(--pet-bubble);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 13px;
+  padding: 3px 7px;
+  overflow-wrap: anywhere;
+}
+
+.chat-runtime-pill.pending {
+  border-color: #5f4d29;
+  color: #ffd58a;
+}
+
+.chat-runtime-pill.error {
+  border-color: #6a2020;
+  color: #ff8a8a;
+}
+
 /* ── Chat area ──────────────────────────────────────────── */
 #chat-area {
   flex: 1 1 260px;
@@ -625,7 +649,7 @@ textarea {
 
 .provider-status-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(150px, 1fr));
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
   gap: 10px;
   margin: 12px 0;
 }

@@ -1,6 +1,6 @@
 # Dragon Pet AI
 
-> **Dragon Pet AI** is a local-first Electron + FastAPI desktop companion prototype with manual memory, memory audit logs, BYOK provider settings, usage metering, a safety-reviewed Test Connection endpoint, Anthropic/Ollama provider adapters behind flags, local Ollama `/chat` runtime smoke passed with `source=llm_local` and 克莉絲蒂娜 persona active - built with safety-first incremental development and a 501-test mocked backend suite.
+> **Dragon Pet AI** is a local-first Electron + FastAPI desktop companion prototype with manual memory, memory audit logs, BYOK provider settings, usage metering, a safety-reviewed Test Connection endpoint, Anthropic/Ollama provider adapters behind flags, local Ollama `/chat` runtime smoke passed with `source=llm_local` and 克莉絲蒂娜 persona active, Ollama option in Provider Settings UI (no API key, local GPU/CPU) - built with safety-first incremental development and a 531-test mocked backend suite.
 
 **Not production-ready.** No live external provider call has been made. No real API key has been used. This is a portfolio / prototype project.
 
@@ -37,7 +37,7 @@
 
 ![Pytest 470 Passed](docs/screenshots/08_pytest_470_passed.png)
 
-*Mocked backend test suite screenshot from portfolio capture; latest known backend suite: 504 passing tests, zero failures, no external HTTP, no real API key.*
+*Mocked backend test suite screenshot from portfolio capture; latest known backend suite: 531 passing tests, zero failures, no external HTTP, no real API key.*
 
 ---
 
@@ -47,8 +47,8 @@
 |---|---|
 | Architecture | Electron desktop + FastAPI backend, end-to-end working |
 | Phase 3 | ✅ Complete — Memory, Audit Logs, Memory-Aware Chat |
-| Phase 4 | IN_PROGRESS - Provider Settings / BYOK stabilized; Local Ollama runtime smoke PASSED (`source=llm_local`, 克莉絲蒂娜 persona active) |
-| pytest | 501 passed, 0 failed |
+| Phase 4 | IN_PROGRESS - Provider Settings / BYOK stabilized; Local Ollama runtime smoke PASSED; Ollama Provider Settings UI complete (TASK-076) |
+| pytest | 531 passed, 0 failed |
 | Local Ollama /chat smoke | ✅ PASS — `qwen3:8b`, `source=llm_local`, persona confirmed |
 | Live external provider call | ❌ None — intentionally gated |
 | Real API key used | ❌ None — all tests use mocked runners |
@@ -82,7 +82,8 @@
 | LLM adapter layer | Anthropic adapter behind `LLM_PROVIDER_ENABLED=false` |
 | Hardening tests | 5 Opus-recommended tests covering edge cases and safety boundaries |
 | Local Ollama provider | Implemented behind flags; no API key; localhost-only; runtime smoke PASSED — `source=llm_local`, 克莉絲蒂娜 persona active in qwen3:8b |
-| 504 mocked tests | Full backend suite; no external HTTP; no real key |
+| Ollama Provider Settings UI | Provider selector includes `ollama`; API key input hidden/disabled for local provider; Test Connection uses Local Resource Warning; renderer never calls Ollama directly |
+| 531 mocked tests | Full backend suite; no external HTTP; no real key |
 
 ---
 
@@ -146,7 +147,7 @@ python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 python -m pytest
-# Expected: 504 passed
+# Expected: 531 passed
 ```
 
 ### Start the backend
@@ -179,6 +180,97 @@ cd apps\desktop
 npm install
 npm start
 ```
+
+---
+
+## Local LLM Mode (Ollama)
+
+Local LLM mode uses Ollama on your own machine. It does not require an API key and does not send renderer data directly to Ollama. The Electron renderer only calls the FastAPI backend at `localhost:8000`; the backend owns provider selection, safety checks, usage metadata, and the Ollama request to `localhost:11434`.
+
+### Preconditions
+
+Install Ollama, pull the recommended local model, and confirm it is available:
+
+```powershell
+ollama pull qwen3:8b
+ollama list
+```
+
+### Start Local LLM Mode
+
+Start Ollama:
+
+```powershell
+ollama serve
+```
+
+Start the backend:
+
+```powershell
+cd backend
+$env:LLM_PROVIDER_ENABLED="true"
+$env:LLM_CHAT_ENABLED="true"
+$env:LLM_PROVIDER_NAME="ollama"
+$env:LLM_MODEL="qwen3:8b"
+$env:OLLAMA_BASE_URL="http://localhost:11434"
+uvicorn app.main:app --reload
+```
+
+Start Electron using the existing desktop command:
+
+```powershell
+cd apps\desktop
+npm start
+```
+
+### Provider Settings UI
+
+Open Provider Settings and select `ollama — local, no key`.
+
+Expected UI state:
+- API key input is disabled because Ollama does not use an API key.
+- Key status shows `not_required`.
+- Save Key and Clear Key are unavailable for Ollama.
+- Test Connection is available when real provider is enabled.
+- Test Connection shows a Local Resource Warning because it uses local GPU/CPU, not an API cost warning.
+
+### /chat Smoke Test
+
+With backend running in Ollama mode:
+
+```powershell
+cd F:\RickHSIAO\Python\dragon-pet-ai\backend
+
+$env:PYTHONIOENCODING="utf-8"
+
+python -c "import json, urllib.request; data=json.dumps({'message':'克莉絲蒂娜，稱讚我一下，我今天有努力做專案。'}, ensure_ascii=False).encode('utf-8'); req=urllib.request.Request('http://127.0.0.1:8000/chat', data=data, headers={'Content-Type':'application/json; charset=utf-8'}); raw=urllib.request.urlopen(req).read().decode('utf-8'); print(raw)"
+```
+
+Expected result:
+- HTTP 200
+- Response schema remains `reply / mood / source`
+- `source` is `llm_local`
+- `reply` is generated locally by `qwen3:8b`
+- The reply should carry Christina's voice, such as `吾`, `汝`, `哼`, or a tsundere / arrogant tone.
+
+### Troubleshooting
+
+| Symptom | Check |
+|---|---|
+| `ollama` not found | Install Ollama and reopen the terminal so `ollama` is on PATH. |
+| `qwen3:8b` not found | Run `ollama pull qwen3:8b`, then confirm with `ollama list`. |
+| Test Connection fails | Confirm `ollama serve` is running and `OLLAMA_BASE_URL` is `http://localhost:11434`. |
+| `/chat` returns `source=mock` | Confirm backend was started with `LLM_PROVIDER_ENABLED=true`, `LLM_CHAT_ENABLED=true`, and `LLM_PROVIDER_NAME=ollama`; restart backend after changing env vars. |
+| Reply lacks Christina tone | Confirm latest backend code is running and restart backend so prompt changes are loaded. |
+| Backend seems to ignore new settings | Stop and restart backend; env vars and provider settings are read by the backend process. |
+
+### Local LLM Safety Rules
+
+- Do not add direct `localhost:11434` calls to the Electron renderer.
+- Do not treat Ollama as a provider that needs an API key.
+- Do not change the `/chat` response schema.
+- Do not call Anthropic/OpenAI or any external provider for Ollama mode.
+- Do not add live network-dependent tests; automated tests must keep using mocked transports.
 
 ---
 
@@ -237,7 +329,7 @@ dragon-pet-ai/
       schemas/                # Pydantic request/response models
       services/               # Business logic (one file per service)
       providers/              # LLM adapter layer
-    tests/                    # pytest suite (504 tests)
+    tests/                    # pytest suite (531 tests)
     requirements.txt
   docs/                       # All design documents
   .env.example

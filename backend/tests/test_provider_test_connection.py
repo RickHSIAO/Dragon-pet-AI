@@ -534,3 +534,368 @@ def test_safe_message_category_sweep():
         assert 5 < len(safe_msg) < 200, (
             f"safe_message for '{category}' has unexpected length: {len(safe_msg)}"
         )
+
+
+
+# ---------------------------------------------------------------------------
+# TASK-076 / TASK-078: Ollama local provider test connection tests
+# ---------------------------------------------------------------------------
+#
+# TASK-078: Test Connection no longer calls ``OllamaLocalProvider.generate()``.
+# Instead it calls ``OllamaLocalProvider.test_connection(model)`` which does a
+# single ``GET /api/tags`` to verify server-alive + model-installed.  This
+# avoids the cold-start generation timeout that caused TASK-077R flakiness.
+
+class _FakeOllamaSuccess:
+    """OllamaLocalProvider stub that returns a valid Test Connection result."""
+    def __init__(self, **kwargs):
+        self._model = kwargs.get("model", "qwen3:8b")
+
+    def test_connection(self, model=None):
+        return LLMResponse(
+            text="ok",
+            provider="ollama",
+            model=(model or self._model),
+            usage=None,
+            error=None,
+        )
+
+
+class _FakeOllamaUnavailable:
+    """Simulates Ollama server not running."""
+    def __init__(self, **kwargs):
+        pass
+
+    def test_connection(self, model=None):
+        return LLMResponse(
+            text="",
+            provider="ollama",
+            model=(model or "qwen3:8b"),
+            usage=None,
+            error="ollama_unavailable",
+        )
+
+
+class _FakeOllamaModelNotFound:
+    """Simulates server alive but model not installed."""
+    def __init__(self, **kwargs):
+        pass
+
+    def test_connection(self, model=None):
+        return LLMResponse(
+            text="",
+            provider="ollama",
+            model=(model or "qwen3:8b"),
+            usage=None,
+            error="model_not_found",
+        )
+
+
+class _FakeOllamaTimeout:
+    """Simulates /api/tags timing out."""
+    def __init__(self, **kwargs):
+        pass
+
+    def test_connection(self, model=None):
+        return LLMResponse(
+            text="",
+            provider="ollama",
+            model=(model or "qwen3:8b"),
+            usage=None,
+            error="provider_timeout",
+        )
+
+
+def _enable_ollama_provider():
+    update_provider_settings(ProviderSettingsUpdate(
+        provider="ollama",
+        real_provider_enabled=True,
+        llm_chat_enabled=True,
+        fallback_to_mock=True,
+    ))
+
+
+def test_ollama_success_does_not_require_api_key(monkeypatch):
+    """Ollama test connection must succeed without an API key."""
+    _enable_ollama_provider()
+    monkeypatch.setattr(
+        "app.services.provider_test_connection_service.OllamaLocalProvider",
+        _FakeOllamaSuccess,
+    )
+    with TestClient(app) as client:
+        result = client.post(
+            "/provider/settings/test",
+            json={"provider": "ollama", "explicit_cost_ack": True},
+        )
+    assert result.status_code == 200
+    data = result.json()
+    assert data["status"] == "success"
+    assert data["source"] == "llm_local"
+
+
+def test_ollama_success_source_is_llm_local(monkeypatch):
+    """Successful Ollama test must return source=llm_local, not llm_real."""
+    _enable_ollama_provider()
+    monkeypatch.setattr(
+        "app.services.provider_test_connection_service.OllamaLocalProvider",
+        _FakeOllamaSuccess,
+    )
+    with TestClient(app) as client:
+        result = client.post(
+            "/provider/settings/test",
+            json={"provider": "ollama", "explicit_cost_ack": True},
+        )
+    data = result.json()
+    assert data["source"] == "llm_local"
+    assert data["status"] == "success"
+
+
+def test_ollama_provider_disabled_returns_safe_failure(monkeypatch):
+    """When real_provider_enabled=False, Ollama test must return provider_disabled."""
+    update_provider_settings(ProviderSettingsUpdate(
+        provider="ollama",
+        real_provider_enabled=False,
+        llm_chat_enabled=True,
+        fallback_to_mock=True,
+    ))
+    monkeypatch.setattr(
+        "app.services.provider_test_connection_service.OllamaLocalProvider",
+        _FakeOllamaSuccess,
+    )
+    with TestClient(app) as client:
+        result = client.post(
+            "/provider/settings/test",
+            json={"provider": "ollama", "explicit_cost_ack": True},
+        )
+    assert result.status_code == 200
+    data = result.json()
+    assert data["status"] == "failed"
+    assert data["error_category"] == "provider_disabled"
+    assert data["source"] == "llm_local_error"
+
+
+def test_ollama_unavailable_returns_safe_failure(monkeypatch):
+    """Ollama server down must return failed status, not 500."""
+    _enable_ollama_provider()
+    monkeypatch.setattr(
+        "app.services.provider_test_connection_service.OllamaLocalProvider",
+        _FakeOllamaUnavailable,
+    )
+    with TestClient(app) as client:
+        result = client.post(
+            "/provider/settings/test",
+            json={"provider": "ollama", "explicit_cost_ack": True},
+        )
+    assert result.status_code == 200
+    data = result.json()
+    assert data["status"] == "failed"
+    assert data["error_category"] == "ollama_unavailable"
+    assert data["source"] == "llm_local_error"
+
+
+def test_ollama_unavailable_safe_message_points_to_ollama_serve(monkeypatch):
+    """TASK-078: ollama_unavailable safe_message must point at 'ollama serve'."""
+    _enable_ollama_provider()
+    monkeypatch.setattr(
+        "app.services.provider_test_connection_service.OllamaLocalProvider",
+        _FakeOllamaUnavailable,
+    )
+    with TestClient(app) as client:
+        result = client.post(
+            "/provider/settings/test",
+            json={"provider": "ollama", "explicit_cost_ack": True},
+        )
+    data = result.json()
+    assert "ollama serve" in data["safe_message"].lower()
+
+
+def test_ollama_model_not_found_maps_safely(monkeypatch):
+    """Model not installed must map to safe error_category, not 500."""
+    _enable_ollama_provider()
+    monkeypatch.setattr(
+        "app.services.provider_test_connection_service.OllamaLocalProvider",
+        _FakeOllamaModelNotFound,
+    )
+    with TestClient(app) as client:
+        result = client.post(
+            "/provider/settings/test",
+            json={"provider": "ollama", "explicit_cost_ack": True},
+        )
+    assert result.status_code == 200
+    data = result.json()
+    assert data["status"] == "failed"
+    assert data["error_category"] == "model_not_found"
+    assert data["source"] == "llm_local_error"
+    assert "ollama pull" in data["safe_message"].lower()
+
+
+def test_ollama_timeout_returns_local_timeout_safe_message(monkeypatch):
+    """TASK-078: /api/tags timeout must use the local-runtime safe_message."""
+    _enable_ollama_provider()
+    monkeypatch.setattr(
+        "app.services.provider_test_connection_service.OllamaLocalProvider",
+        _FakeOllamaTimeout,
+    )
+    with TestClient(app) as client:
+        result = client.post(
+            "/provider/settings/test",
+            json={"provider": "ollama", "explicit_cost_ack": True},
+        )
+    assert result.status_code == 200
+    data = result.json()
+    assert data["status"] == "failed"
+    assert data["error_category"] == "provider_timeout"
+    assert data["source"] == "llm_local_error"
+    # Local timeout message must point to Ollama, not a paid provider.
+    assert "ollama" in data["safe_message"].lower()
+    # Must not blame the user for a missing API key on a timeout.
+    assert "api key" not in data["safe_message"].lower()
+
+
+def test_ollama_model_falls_back_to_default_when_unset(monkeypatch):
+    """With no model configured, Ollama test must use qwen3:8b."""
+    update_provider_settings(ProviderSettingsUpdate(
+        provider="ollama",
+        model=None,
+        real_provider_enabled=True,
+        llm_chat_enabled=True,
+        fallback_to_mock=True,
+    ))
+    captured = {}
+
+    class _CapturingOllama:
+        def __init__(self, **kwargs):
+            captured["constructor_model"] = kwargs.get("model")
+
+        def test_connection(self, model=None):
+            captured["test_connection_model"] = model
+            return LLMResponse(
+                text="ok",
+                provider="ollama",
+                model=(model or captured["constructor_model"]),
+                usage=None,
+                error=None,
+            )
+
+    monkeypatch.setattr(
+        "app.services.provider_test_connection_service.OllamaLocalProvider",
+        _CapturingOllama,
+    )
+    with TestClient(app) as client:
+        client.post(
+            "/provider/settings/test",
+            json={"provider": "ollama", "explicit_cost_ack": True},
+        )
+    assert captured["constructor_model"] == "qwen3:8b"
+    assert captured["test_connection_model"] == "qwen3:8b"
+
+
+def test_ollama_cost_ack_still_required():
+    """explicit_cost_ack must still be required for local providers."""
+    _enable_ollama_provider()
+    with TestClient(app) as client:
+        result = client.post(
+            "/provider/settings/test",
+            json={"provider": "ollama", "explicit_cost_ack": False},
+        )
+    assert result.status_code == 400
+    assert result.json()["detail"] == "cost_ack_required"
+
+
+def test_ollama_test_does_not_call_generate(monkeypatch):
+    """TASK-078: Test Connection must NOT invoke generate() — only test_connection()."""
+    _enable_ollama_provider()
+    call_log = []
+
+    class _ChatCheckingOllama:
+        def __init__(self, **kwargs):
+            pass
+
+        def test_connection(self, model=None):
+            call_log.append(("test_connection", model))
+            return LLMResponse(
+                text="ok",
+                provider="ollama",
+                model=(model or "qwen3:8b"),
+                usage=None,
+                error=None,
+            )
+
+        def generate(self, request):
+            call_log.append(("generate", request))
+            raise AssertionError(
+                "generate() must NOT be called by Test Connection — "
+                "TASK-078 uses /api/tags only."
+            )
+
+    monkeypatch.setattr(
+        "app.services.provider_test_connection_service.OllamaLocalProvider",
+        _ChatCheckingOllama,
+    )
+    with TestClient(app) as client:
+        result = client.post(
+            "/provider/settings/test",
+            json={"provider": "ollama", "explicit_cost_ack": True},
+        )
+    assert result.status_code == 200
+    assert result.json()["status"] == "success"
+    assert call_log == [("test_connection", "qwen3:8b")]
+
+
+def test_ollama_no_retries_exactly_one_test_connection_call(monkeypatch):
+    """Ollama test must call test_connection() exactly once on exception, no retries."""
+    _enable_ollama_provider()
+    call_count = [0]
+
+    class _CrashingOllama:
+        def __init__(self, **kwargs):
+            pass
+
+        def test_connection(self, model=None):
+            call_count[0] += 1
+            raise RuntimeError("simulated crash")
+
+    monkeypatch.setattr(
+        "app.services.provider_test_connection_service.OllamaLocalProvider",
+        _CrashingOllama,
+    )
+    with TestClient(app) as client:
+        result = client.post(
+            "/provider/settings/test",
+            json={"provider": "ollama", "explicit_cost_ack": True},
+        )
+    assert result.status_code == 200
+    assert call_count[0] == 1, "Expected exactly one test_connection() call — no retries"
+    assert result.json()["status"] == "failed"
+
+
+def test_ollama_uses_local_test_timeout_config(monkeypatch):
+    """TASK-078: provider must be constructed with the local-test timeout config."""
+    _enable_ollama_provider()
+    monkeypatch.setenv("LLM_LOCAL_TEST_TIMEOUT_SECONDS", "7")
+    captured = {}
+
+    class _TimeoutCapturingOllama:
+        def __init__(self, **kwargs):
+            captured["test_timeout_seconds"] = kwargs.get("test_timeout_seconds")
+            captured["timeout_seconds"] = kwargs.get("timeout_seconds")
+
+        def test_connection(self, model=None):
+            return LLMResponse(
+                text="ok",
+                provider="ollama",
+                model="qwen3:8b",
+                usage=None,
+                error=None,
+            )
+
+    monkeypatch.setattr(
+        "app.services.provider_test_connection_service.OllamaLocalProvider",
+        _TimeoutCapturingOllama,
+    )
+    with TestClient(app) as client:
+        client.post(
+            "/provider/settings/test",
+            json={"provider": "ollama", "explicit_cost_ack": True},
+        )
+    assert captured["test_timeout_seconds"] == 7

@@ -24,6 +24,9 @@ const chatArea    = document.getElementById("chat-area");
 const msgInput    = document.getElementById("message-input");
 const sendBtn     = document.getElementById("send-btn");
 const moodLabel   = document.getElementById("mood-label");
+const chatSourceStatus = document.getElementById("chat-source-status");
+const chatProviderStatus = document.getElementById("chat-provider-status");
+const chatRuntimeStatus = document.getElementById("chat-runtime-status");
 const memoryForm  = document.getElementById("memory-form");
 const memoryType  = document.getElementById("memory-type");
 const memoryContent = document.getElementById("memory-content");
@@ -54,8 +57,14 @@ const refreshProviderSettingsBtn = document.getElementById("refresh-provider-set
 const providerKeyStatus = document.getElementById("provider-key-status");
 const providerLastTestStatus = document.getElementById("provider-last-test-status");
 const providerResolvedProvider = document.getElementById("provider-resolved-provider");
+const providerCurrentProvider = document.getElementById("provider-current-provider");
+const providerCurrentModel = document.getElementById("provider-current-model");
+const providerRealEnabledStatus = document.getElementById("provider-real-enabled-status");
+const providerLlmChatEnabledStatus = document.getElementById("provider-llm-chat-enabled-status");
+const providerFallbackStatus = document.getElementById("provider-fallback-status");
 const providerSettingsStatus = document.getElementById("provider-settings-status");
 const providerUsageSummary = document.getElementById("provider-usage-summary");
+const providerWarning = document.getElementById("provider-warning");
 // TASK-056 / TASK-060: provider key save/clear/test controls
 // Safety: key value is never logged, never stored in localStorage/sessionStorage,
 // never sent to external providers, cleared from DOM immediately after every save attempt.
@@ -78,6 +87,8 @@ let isSending   = false;
 let isTestingConnection = false;
 // TASK-060: cache last-loaded provider settings for Test Connection enable conditions
 let currentProviderSettings = {};
+let lastChatSource = "not_checked";
+let lastChatStatusMessage = "No chat response yet.";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -113,7 +124,109 @@ function setSending(state) {
   isSending = state;
   sendBtn.disabled = state;
   msgInput.disabled = state;
-  sendBtn.textContent = state ? "..." : "Send";
+  sendBtn.textContent = state ? "Sending..." : "Send";
+}
+
+function isFetchNetworkError(err) {
+  const name = err && err.name ? String(err.name) : "";
+  const message = err && err.message ? String(err.message) : "";
+  return name === "TypeError" && message.toLowerCase().includes("fetch");
+}
+
+function providerSummary(settings = currentProviderSettings) {
+  const provider = settings.provider || "mock";
+  const resolved = settings.resolved_provider || "mock";
+  const model = settings.model || "default";
+  return `provider: ${provider} | resolved: ${resolved} | model: ${model}`;
+}
+
+function isOllamaChatPath(settings = currentProviderSettings) {
+  return (
+    (settings.provider === "ollama" || settings.resolved_provider === "ollama") &&
+    Boolean(settings.real_provider_enabled) &&
+    Boolean(settings.llm_chat_enabled)
+  );
+}
+
+function sourceStatusMessage(source, settings = currentProviderSettings) {
+  if (source === "llm_local") {
+    return "source=llm_local - local Ollama reply received through the backend.";
+  }
+  if (source === "llm_local_error") {
+    return "source=llm_local_error - local provider failed safely. Check Ollama server, model name, or timeout.";
+  }
+  if (source === "mock") {
+    if (settings.resolved_provider === "ollama" && !settings.llm_chat_enabled) {
+      return "source=mock - LLM chat is disabled, so /chat is using mock.";
+    }
+    if (settings.resolved_provider === "ollama" && settings.fallback_to_mock !== false) {
+      return "source=mock - Ollama is configured, but fallback_to_mock is enabled or a provider failure fell back to mock.";
+    }
+    if (settings.provider === "ollama" || settings.resolved_provider === "ollama") {
+      return "source=mock - Ollama is selected but /chat resolved to mock. Refresh settings and check backend state.";
+    }
+    return "source=mock - mock provider response.";
+  }
+  if (source === "llm_real") {
+    return "source=llm_real - cloud provider response through the backend.";
+  }
+  if (source === "llm_real_error") {
+    return "source=llm_real_error - cloud provider failed safely.";
+  }
+  if (source === "pending") {
+    return isOllamaChatPath(settings)
+      ? "Waiting for local Ollama. The first response can take longer while the model wakes up."
+      : "Waiting for backend chat response.";
+  }
+  if (source === "backend_offline") {
+    return "source=backend_offline - backend is not reachable.";
+  }
+  return "Chat source will appear after the next response.";
+}
+
+function setChatRuntimeStatus(source, message = "", state = "normal") {
+  lastChatSource = source || lastChatSource || "not_checked";
+  lastChatStatusMessage = message || sourceStatusMessage(lastChatSource);
+
+  chatSourceStatus.textContent = `source: ${lastChatSource}`;
+  chatSourceStatus.className =
+    state === "error"
+      ? "chat-runtime-pill error"
+      : state === "pending"
+        ? "chat-runtime-pill pending"
+        : "chat-runtime-pill";
+  chatProviderStatus.textContent = providerSummary();
+  chatRuntimeStatus.textContent = lastChatStatusMessage;
+  chatRuntimeStatus.className = state === "error" ? "status-note error" : "status-note";
+}
+
+function syncChatRuntimeProviderStatus() {
+  chatProviderStatus.textContent = providerSummary();
+  if (lastChatSource === "not_checked") {
+    setChatRuntimeStatus("not_checked", sourceStatusMessage("not_checked"));
+  } else {
+    chatRuntimeStatus.textContent = lastChatStatusMessage;
+  }
+}
+
+function safeChatErrorMessage(status, detail) {
+  const category = typeof detail === "string" ? detail : "";
+  if (category === "ollama_unavailable") {
+    return "Local Ollama is unavailable. Start Ollama, then retry.";
+  }
+  if (category === "model_not_found") {
+    return "Local model was not found. Pull the configured model, then retry.";
+  }
+  if (category === "provider_timeout") {
+    return "Provider timed out. Local models can take longer on cold start; retry after the model is loaded.";
+  }
+  if (category === "invalid_response") {
+    return "Provider returned an invalid response. Check provider logs and try again.";
+  }
+  if (category === "provider_error") {
+    return "Provider call failed safely. Check provider settings and try again.";
+  }
+  return `Backend returned HTTP ${status}.`;
 }
 
 function setMemoryStatus(text, isError = false) {
@@ -122,7 +235,7 @@ function setMemoryStatus(text, isError = false) {
 }
 
 function formatBackendError(err) {
-  const isNetworkError = err instanceof TypeError && err.message.includes("fetch");
+  const isNetworkError = isFetchNetworkError(err);
   if (isNetworkError) {
     return `Cannot reach backend at ${BACKEND_URL}. Start the backend first.`;
   }
@@ -430,12 +543,21 @@ function renderProviderSettings(settings) {
   providerRealEnabled.checked = Boolean(settings.real_provider_enabled);
   providerLlmChatEnabled.checked = Boolean(settings.llm_chat_enabled);
   providerFallbackToMock.checked = settings.fallback_to_mock !== false;
+  providerCurrentProvider.textContent = settings.provider || "mock";
+  providerCurrentModel.textContent = settings.model || "default";
   providerKeyStatus.textContent = settings.key_status || "not_configured";
   providerLastTestStatus.textContent = settings.last_test_status || "not_tested";
   providerResolvedProvider.textContent = settings.resolved_provider || "mock";
+  providerRealEnabledStatus.textContent = String(Boolean(settings.real_provider_enabled));
+  providerLlmChatEnabledStatus.textContent = String(Boolean(settings.llm_chat_enabled));
+  providerFallbackStatus.textContent = String(settings.fallback_to_mock !== false);
+  providerWarning.textContent = settings.provider === "ollama"
+    ? "Ollama runs locally and uses your CPU/GPU. No API key is required; the renderer still calls only the backend."
+    : "Using a real provider may incur charges from your API provider.";
   renderUsageSummary(settings.usage_summary);
   // TASK-056 / TASK-060: cache settings and update all key UI controls
   currentProviderSettings = settings;
+  syncChatRuntimeProviderStatus();
   updateKeyUIState(settings);
 }
 
@@ -502,47 +624,72 @@ function setProviderKeyMsg(text, isError = false) {
  * Called by renderProviderSettings() after every settings load.
  *
  * Rules:
- * - API key input: enabled only for real providers (not mock).
- * - Save Key: enabled only when real provider AND input is non-empty.
- * - Clear Key: visible only when key_status indicates a key exists.
- * - Test Connection (TASK-060): enabled only when ALL conditions are met:
- *     1. provider !== "mock"
- *     2. key_status === "configured" (or not_tested / test_success / test_failed / invalid)
- *     3. real_provider_enabled === true
- *     4. no in-flight test request (isTestingConnection === false)
- *   Helper text explains why it is disabled when conditions are not fully met.
+ * - API key input: enabled only for key-based providers (not mock, not ollama).
+ * - Save Key / Clear Key: hidden for mock and local (ollama) providers.
+ * - Test Connection (TASK-060 / TASK-076):
+ *     - Cloud providers (anthropic): requires key + real_provider_enabled + no in-flight.
+ *     - Local providers (ollama):    requires real_provider_enabled + no in-flight (no key check).
+ *     - mock:                        always disabled.
  */
 function updateKeyUIState(settings) {
   const provider = settings.provider || "mock";
   const isRealProvider = provider !== "mock";
+  // TASK-076: local providers (ollama) do not require an API key
+  const isLocalProvider = provider === "ollama";
   const keyStatus = settings.key_status || "not_configured";
   const realProviderEnabled = Boolean(settings.real_provider_enabled);
 
-  // A key exists in any of these states
+  // A key exists in any of these states (relevant for cloud providers only)
   const keyExists = [
     "configured", "not_tested", "invalid", "test_success", "test_failed",
   ].includes(keyStatus);
 
-  // API key input: enabled for real providers, disabled for mock
-  providerApiKeyInput.disabled = !isRealProvider;
-  providerApiKeyInput.placeholder = isRealProvider
-    ? "Enter provider API key"
-    : "Not required for mock provider";
+  // API key input: enabled only for key-based real providers
+  providerApiKeyInput.disabled = !isRealProvider || isLocalProvider;
+  if (!isRealProvider) {
+    providerApiKeyInput.placeholder = "Not required for mock provider";
+  } else if (isLocalProvider) {
+    providerApiKeyInput.placeholder = "Not required — Ollama runs locally, no API key needed";
+  } else {
+    providerApiKeyInput.placeholder = "Enter provider API key";
+  }
 
-  // Save Key: enabled when real provider and input has text
-  saveProviderKeyBtn.disabled = !isRealProvider || !providerApiKeyInput.value.trim();
+  // Save Key / Clear Key: hidden for mock and local providers
+  if (!isRealProvider || isLocalProvider) {
+    saveProviderKeyBtn.disabled = true;
+    saveProviderKeyBtn.style.display = isLocalProvider ? "none" : "";
+    clearProviderKeyBtn.style.display = "none";
+  } else {
+    // Cloud provider path (anthropic)
+    saveProviderKeyBtn.style.display = "";
+    saveProviderKeyBtn.disabled = !providerApiKeyInput.value.trim();
+    clearProviderKeyBtn.style.display = keyExists ? "" : "none";
+    clearProviderKeyBtn.disabled = false;
+  }
 
-  // Clear Key: visible only when a key exists
-  clearProviderKeyBtn.style.display = keyExists ? "" : "none";
-  clearProviderKeyBtn.disabled = false;
-
-  // Test Connection (TASK-060): enable only when all conditions met
-  const canTest = isRealProvider && keyExists && realProviderEnabled && !isTestingConnection;
+  // Test Connection: conditions differ by provider type
+  // - Local (ollama): only needs real_provider_enabled; no key required
+  // - Cloud (anthropic): needs key + real_provider_enabled
+  let canTest;
+  if (!isRealProvider) {
+    canTest = false;
+  } else if (isLocalProvider) {
+    canTest = realProviderEnabled && !isTestingConnection;
+  } else {
+    canTest = keyExists && realProviderEnabled && !isTestingConnection;
+  }
   testProviderConnectionBtn.disabled = !canTest;
 
   // Update button title to explain disabled state
   if (!isRealProvider) {
-    testProviderConnectionBtn.title = "Configure a real provider and save a key before testing.";
+    testProviderConnectionBtn.title = "Configure a real provider before testing.";
+  } else if (isLocalProvider && !realProviderEnabled) {
+    testProviderConnectionBtn.title = "Enable real provider (real_provider_enabled) before testing.";
+  } else if (isLocalProvider && isTestingConnection) {
+    testProviderConnectionBtn.title = "Test in progress...";
+  } else if (isLocalProvider) {
+    testProviderConnectionBtn.title =
+      "Sends one minimal request to your local Ollama server. No data leaves your device.";
   } else if (!keyExists) {
     testProviderConnectionBtn.title = "Save an API key before testing.";
   } else if (!realProviderEnabled) {
@@ -596,7 +743,7 @@ async function saveProviderKey() {
     // Network error — clear input before surfacing message
     providerApiKeyInput.value = "";
     saveProviderKeyBtn.textContent = "Save API Key";
-    const isNetworkError = fetchErr instanceof TypeError && fetchErr.message.includes("fetch");
+    const isNetworkError = isFetchNetworkError(fetchErr);
     setProviderKeyMsg(
       isNetworkError
         ? `Could not reach backend. Make sure the backend is running on localhost.`
@@ -658,7 +805,7 @@ async function clearProviderKey() {
     );
   } catch (fetchErr) {
     clearProviderKeyBtn.disabled = false;
-    const isNetworkError = fetchErr instanceof TypeError && fetchErr.message.includes("fetch");
+    const isNetworkError = isFetchNetworkError(fetchErr);
     setProviderKeyMsg(
       isNetworkError
         ? "Could not reach backend. Make sure the backend is running on localhost."
@@ -709,13 +856,19 @@ function setProviderTestMsg(text, isError = false) {
 /**
  * Run Test Connection: sends one minimal POST to local backend.
  *
- * Enable conditions (all must be true):
- *   1. provider !== "mock"
- *   2. key_status is a "key exists" value (configured / not_tested / invalid / test_success / test_failed)
- *   3. real_provider_enabled === true
- *   4. isTestingConnection === false (no in-flight request)
+ * Enable conditions vary by provider type:
+ *   Cloud (anthropic):
+ *     1. provider !== "mock"
+ *     2. key_status is a "key exists" value
+ *     3. real_provider_enabled === true
+ *     4. isTestingConnection === false
+ *   Local (ollama) — TASK-076:
+ *     1. provider === "ollama"
+ *     2. real_provider_enabled === true
+ *     3. isTestingConnection === false  (no key required)
  *
- * Explicit cost acknowledgement is required via window.confirm() on every click.
+ * Explicit acknowledgement is required via window.confirm() on every click.
+ * For Ollama, the dialog shows a local resource warning (no monetary cost).
  * Cancelling the dialog sends no backend request.
  *
  * Request body sent: { provider, model, explicit_cost_ack: true }
@@ -730,16 +883,19 @@ async function runTestConnection() {
   const keyStatus = currentProviderSettings.key_status || "not_configured";
   const realProviderEnabled = Boolean(currentProviderSettings.real_provider_enabled);
   const model = currentProviderSettings.model || "";
+  // TASK-076: local providers bypass key check
+  const isLocalProvider = provider === "ollama";
 
   const keyExists = [
     "configured", "not_tested", "invalid", "test_success", "test_failed",
   ].includes(keyStatus);
 
   if (!provider || provider === "mock") {
-    setProviderTestMsg("Configure a real provider and save a key before testing.", true);
+    setProviderTestMsg("Configure a real provider before testing.", true);
     return;
   }
-  if (!keyExists) {
+  // Cloud providers require a saved key; local providers do not
+  if (!isLocalProvider && !keyExists) {
     setProviderTestMsg("Save an API key before running Test Connection.", true);
     return;
   }
@@ -751,16 +907,29 @@ async function runTestConnection() {
     return; // Silently ignore — button should already be disabled
   }
 
-  // Explicit cost acknowledgement — required on every click.
-  // window.confirm() is used as the MVP cost ack dialog.
-  const confirmed = window.confirm(
-    "Test Connection — Cost Acknowledgement\n\n" +
-    "This may contact your configured provider.\n" +
-    "This may incur provider charges.\n" +
-    "The test sends exactly one minimal request.\n" +
-    "No memory or chat history will be sent.\n\n" +
-    "Continue with Test Connection?"
-  );
+  // Acknowledgement dialog — content differs for local vs cloud providers
+  let confirmed;
+  if (isLocalProvider) {
+    // TASK-076: local resource warning — no monetary cost
+    confirmed = window.confirm(
+      "Test Connection — Local Resource Warning\n\n" +
+      "This will send a test request to your local Ollama server.\n" +
+      "This will use your GPU/CPU for inference.\n" +
+      "No data leaves your device.\n" +
+      "The test sends exactly one minimal request.\n\n" +
+      "Continue with Test Connection?"
+    );
+  } else {
+    // Cloud provider — explicit cost acknowledgement
+    confirmed = window.confirm(
+      "Test Connection — Cost Acknowledgement\n\n" +
+      "This may contact your configured provider.\n" +
+      "This may incur provider charges.\n" +
+      "The test sends exactly one minimal request.\n" +
+      "No memory or chat history will be sent.\n\n" +
+      "Continue with Test Connection?"
+    );
+  }
   if (!confirmed) {
     setProviderTestMsg("Test Connection cancelled.");
     return;
@@ -788,7 +957,7 @@ async function runTestConnection() {
     isTestingConnection = false;
     testProviderConnectionBtn.textContent = "Test Connection";
     updateKeyUIState(currentProviderSettings);
-    const isNetworkError = fetchErr instanceof TypeError && fetchErr.message.includes("fetch");
+    const isNetworkError = isFetchNetworkError(fetchErr);
     setProviderTestMsg(
       isNetworkError
         ? "Could not reach backend. Make sure the backend is running on localhost."
@@ -875,6 +1044,13 @@ async function sendMessage(text) {
 
   // Show user message immediately
   appendMessage("user", text);
+  const loadingMessage = appendMessage(
+    "status",
+    isOllamaChatPath()
+      ? "Local model is waking up. First Ollama responses can take longer..."
+      : "Waiting for backend reply..."
+  );
+  setChatRuntimeStatus("pending", sourceStatusMessage("pending"), "pending");
   msgInput.value = "";
   msgInput.style.height = "auto";
 
@@ -890,21 +1066,36 @@ async function sendMessage(text) {
       body: JSON.stringify({ message: text, use_memory: useMemory }),
     });
 
+    const data = await res.json().catch(() => null);
     if (!res.ok) {
-      throw new Error(`Backend returned HTTP ${res.status}`);
+      const detail = data && data.detail ? data.detail : "";
+      throw new Error(safeChatErrorMessage(res.status, detail));
     }
 
-    const data = await res.json();
+    loadingMessage.remove();
     appendMessage("pet", data.reply);
     setMood(data.mood);
+    const source = data.source || "unknown";
+    const isSourceError = source === "llm_local_error" || source === "llm_real_error";
+    setChatRuntimeStatus(
+      source,
+      sourceStatusMessage(source),
+      isSourceError ? "error" : "normal"
+    );
     await loadProviderSettings();
 
   } catch (err) {
-    const isNetworkError = err instanceof TypeError && err.message.includes("fetch");
+    const isNetworkError = isFetchNetworkError(err);
     const errText = isNetworkError
       ? `Cannot reach backend at ${BACKEND_URL}.\nMake sure the backend is running:\n  cd backend && uvicorn app.main:app --reload`
       : `Something went wrong: ${err.message}`;
 
+    loadingMessage.remove();
+    setChatRuntimeStatus(
+      isNetworkError ? "backend_offline" : "error",
+      isNetworkError ? sourceStatusMessage("backend_offline") : err.message,
+      "error"
+    );
     appendMessage("error", errText);
   } finally {
     setSending(false);
@@ -963,23 +1154,36 @@ testProviderConnectionBtn.addEventListener("click", () => {
 
 // Dynamically enable/disable Save Key as user types in the key input field.
 // Safety: this handler never logs providerApiKeyInput.value.
+// TASK-076: local providers (ollama) never enable Save Key.
 providerApiKeyInput.addEventListener("input", () => {
-  const isRealProvider = providerSettingsProvider.value !== "mock";
-  saveProviderKeyBtn.disabled = !isRealProvider || !providerApiKeyInput.value.trim();
+  const selectedProvider = providerSettingsProvider.value;
+  const isRealProvider = selectedProvider !== "mock";
+  const isLocalProvider = selectedProvider === "ollama";
+  saveProviderKeyBtn.disabled =
+    !isRealProvider || isLocalProvider || !providerApiKeyInput.value.trim();
 });
 
 // When provider dropdown changes, update key UI state.
+// TASK-076: handle ollama (local provider — no key required).
 providerSettingsProvider.addEventListener("change", () => {
-  const isRealProvider = providerSettingsProvider.value !== "mock";
-  providerApiKeyInput.disabled = !isRealProvider;
-  providerApiKeyInput.placeholder = isRealProvider
-    ? "Enter provider API key"
-    : "Not required for mock provider";
-  saveProviderKeyBtn.disabled = !isRealProvider || !providerApiKeyInput.value.trim();
-  if (!isRealProvider) {
-    providerApiKeyInput.value = "";
-    setProviderKeyMsg("");
-  }
+  const selectedProvider = providerSettingsProvider.value;
+  const isRealProvider = selectedProvider !== "mock";
+  const isLocalProvider = selectedProvider === "ollama";
+
+  // Clear key input and status message on any provider switch
+  providerApiKeyInput.value = "";
+  setProviderKeyMsg("");
+
+  // Delegate full state update to updateKeyUIState using current cached settings
+  // merged with the newly selected provider so enable conditions are correct.
+  updateKeyUIState({
+    ...currentProviderSettings,
+    provider: selectedProvider,
+    // Local provider always reports not_required; cloud providers keep their cached key_status
+    key_status: isLocalProvider
+      ? "not_required"
+      : (currentProviderSettings.key_status || "not_configured"),
+  });
 });
 
 msgInput.addEventListener("keydown", (e) => {
@@ -1022,6 +1226,7 @@ msgInput.addEventListener("input", () => {
       "error",
       `Backend not reachable at ${BACKEND_URL}.\nStart the backend first:\n  cd backend\n  uvicorn app.main:app --reload`
     );
+    setChatRuntimeStatus("backend_offline", sourceStatusMessage("backend_offline"), "error");
     setMemoryStatus(`Cannot reach backend at ${BACKEND_URL}.`, true);
     setProviderSettingsStatus(`Cannot reach backend at ${BACKEND_URL}.`, true);
   }

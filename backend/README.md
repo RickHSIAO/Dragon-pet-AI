@@ -23,6 +23,74 @@ On macOS / Linux, activate with:
 source .venv/bin/activate
 ```
 
+## Local LLM Mode (Ollama)
+
+Ollama runs on the user's local machine and does not require an API key. The Electron renderer does not send data directly to Ollama; it calls the FastAPI backend, and the backend owns provider selection, safety checks, usage metadata, and the localhost Ollama request.
+
+### Preconditions
+
+Install Ollama, pull the recommended local model, and confirm the model exists:
+
+```powershell
+ollama pull qwen3:8b
+ollama list
+```
+
+### Start Ollama Mode
+
+Start Ollama:
+
+```powershell
+ollama serve
+```
+
+Start the backend with Ollama selected:
+
+```powershell
+cd backend
+$env:LLM_PROVIDER_ENABLED="true"
+$env:LLM_CHAT_ENABLED="true"
+$env:LLM_PROVIDER_NAME="ollama"
+$env:LLM_MODEL="qwen3:8b"
+$env:OLLAMA_BASE_URL="http://localhost:11434"
+uvicorn app.main:app --reload
+```
+
+### /chat Smoke Test
+
+With the backend running in Ollama mode:
+
+```powershell
+cd F:\RickHSIAO\Python\dragon-pet-ai\backend
+
+$env:PYTHONIOENCODING="utf-8"
+
+python -c "import json, urllib.request; data=json.dumps({'message':'克莉絲蒂娜，稱讚我一下，我今天有努力做專案。'}, ensure_ascii=False).encode('utf-8'); req=urllib.request.Request('http://127.0.0.1:8000/chat', data=data, headers={'Content-Type':'application/json; charset=utf-8'}); raw=urllib.request.urlopen(req).read().decode('utf-8'); print(raw)"
+```
+
+Expected result:
+- HTTP 200.
+- Response schema remains `reply / mood / source`.
+- `source` is `llm_local`.
+- No API key is required or sent.
+- The reply is generated locally by `qwen3:8b` and should keep Christina-style wording such as `吾`, `汝`, `哼`, or a tsundere / arrogant tone.
+
+### Troubleshooting
+
+- `ollama` not found: install Ollama and reopen the terminal so it is on PATH.
+- `qwen3:8b` not found: run `ollama pull qwen3:8b`, then confirm with `ollama list`.
+- Test Connection fails: confirm `ollama serve` is running and `OLLAMA_BASE_URL` is `http://localhost:11434`.
+- `/chat` returns `source=mock`: restart backend after setting `LLM_PROVIDER_ENABLED=true`, `LLM_CHAT_ENABLED=true`, and `LLM_PROVIDER_NAME=ollama`.
+- Reply lacks Christina tone: restart backend so the latest prompt code is loaded.
+- Backend uses old settings: stop and restart the backend process after changing env vars or provider settings.
+
+Safety constraints:
+- Do not add direct Ollama calls to the Electron renderer.
+- Do not treat Ollama as an API-key provider.
+- Do not change the `/chat` response schema.
+- Do not call external providers for Ollama mode.
+- Do not add live network-dependent automated tests.
+
 ## Endpoints (TASK-003 — skeleton only)
 
 | Method | Path | Description |
@@ -109,7 +177,9 @@ Mock provider compatibility tests cover supported chat modes, optional memory/st
 
 Real provider config design (TASK-034), safety review (TASK-034R), and review fixes (TASK-034F) are complete. TASK-035 adds real provider selection behind `LLM_PROVIDER_ENABLED=false` by default. Unknown providers and missing keys fall back safely without exposing secrets. API keys must never appear in logs, SQLite, audit rows, API responses, provider repr/str, or the Electron frontend. No automatic retries are permitted in Phase 4. Non-2xx provider response bodies are opaque. Fallback responses must not claim `llm_real`.
 
-TASK-073/TASK-074 add and harden `OllamaLocalProvider` behind the same provider feature flags. `LLM_PROVIDER_NAME=ollama` resolves without `LLM_API_KEY`, uses a localhost-only `OLLAMA_BASE_URL` defaulting to `http://localhost:11434`, sends `stream=false` and `think=false`, does not send tools/history/API keys, maps safe aggregate token/duration metadata, and uses mocked HTTP contract tests only. Runtime Ollama smoke is deferred to TASK-075 and documented in `docs/OLLAMA_RUNTIME_SMOKE_CHECKLIST.md`. No live Ollama smoke or external provider call was made in TASK-074.
+TASK-073/TASK-074 add and harden `OllamaLocalProvider` behind the same provider feature flags. `LLM_PROVIDER_NAME=ollama` resolves without `LLM_API_KEY`, uses a localhost-only `OLLAMA_BASE_URL` defaulting to `http://localhost:11434`, sends `stream=false` and `think=false`, does not send tools/history/API keys, maps safe aggregate token/duration metadata, and uses mocked HTTP contract tests only. TASK-075 runtime smoke passed: `source=llm_local`, 克莉絲蒂娜 persona active.
+
+TASK-076 adds Ollama as a selectable option in Provider Settings. `provider_settings_service.py` introduces `LOCAL_PROVIDERS = {"ollama"}`: local providers return `key_status="not_required"`, are accepted by `PATCH /provider/settings`, resolve to `"ollama"` (not mock) when `real_provider_enabled=True`, and reject API key save/clear operations. `provider_test_connection_service.py` accepts `ollama` in the `_normalize_provider` path, uses `_resolve_model_for_local()` (falls back to `"qwen3:8b"` instead of raising `invalid_model`), and runs `OllamaLocalProvider.generate()` directly — no API key, no external call, `source="llm_local"`. 15 new backend tests added (6 provider settings, 9 test connection Ollama path).
 
 TASK-040 adds `/chat` internal LLM adapter wiring behind `LLM_CHAT_ENABLED=false` by default. With the flag disabled, `/chat` keeps the existing mock flow and does not call the provider factory. With the flag enabled, `/chat` can use the LLM adapter path. TASK-043 adds mocked-only `/chat` real-provider contract tests for the flag matrix, source behavior, fallback behavior, leakage checks, memory independence, and no-retry behavior. Live provider calls are still not part of automated tests.
 
@@ -130,7 +200,7 @@ cd backend
 python -m pytest
 ```
 
-Latest known full backend result after TASK-074: `504 passed`.
+Latest known full backend result after TASK-077: `531 passed`.
 
 ## Current Limitations (TASK-003)
 

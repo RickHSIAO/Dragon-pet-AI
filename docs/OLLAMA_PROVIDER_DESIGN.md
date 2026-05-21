@@ -2,7 +2,7 @@
 
 > dragon-pet-ai
 > Task: TASK-072
-> Status: IMPLEMENTED AND CONTRACT TESTED - TASK-073 and TASK-074 DONE; runtime smoke pending (TASK-075)
+> Status: IMPLEMENTED — TASK-073 DONE; TASK-074 DONE; TASK-075 DONE (runtime smoke PASS); TASK-076 DONE (Provider Settings UI Ollama option); TASK-077 DONE (README Local LLM mode docs)
 > Last Updated: 2026-05-21
 
 ---
@@ -393,8 +393,8 @@ class OllamaLocalProvider:
 | TASK-073 | Ollama Provider Implementation Behind Feature Flag | **DONE** |
 | TASK-074 | Ollama Provider Contract Tests and Runtime Smoke Prep | **DONE** |
 | TASK-075 | Ollama Runtime Smoke Check | **DONE — PASS** |
-| TASK-076 | Provider Settings UI — Ollama Option | Implementation |
-| TASK-077 | README Update for Local LLM Mode | Docs |
+| TASK-076 | Provider Settings UI — Ollama Option | **DONE** |
+| TASK-077 | README Update for Local LLM Mode | **DONE** |
 
 ### TASK-075 runtime smoke result (2026-05-21)
 
@@ -465,3 +465,77 @@ class OllamaLocalProvider:
 | `docs/CHAT_LLM_REAL_PROVIDER_WIRING_DESIGN.md` | Real-provider /chat wiring — Ollama follows the same pattern |
 | `docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md` | Full Phase 4 Provider Settings summary |
 | `docs/COST_AND_MONETIZATION.md` | Live smoke go/no-go — Ollama bypasses the cost gate |
+
+---
+
+## TASK-076 — Provider Settings UI: Ollama Option
+
+**Status:** DONE
+**Implemented:** 2026-05-21
+
+### What changed
+
+**Electron UI (`apps/desktop/src/renderer/index.html`)**
+- Added `<option value="ollama">ollama — local, no key</option>` to the provider selector.
+
+**Electron UI (`apps/desktop/src/renderer/renderer.js`)**
+- `updateKeyUIState()` rewritten to detect `isLocalProvider = provider === "ollama"`.
+- When `provider=ollama`:
+  - API key input disabled; placeholder reads "Not required — Ollama runs locally, no API key needed".
+  - Save API Key button hidden.
+  - Clear API Key button hidden.
+  - Test Connection enabled when `real_provider_enabled=true` (no key required).
+  - Test Connection confirm dialog shows a Local Resource Warning (GPU/CPU usage, no data leaves device) instead of cost acknowledgement.
+- Provider change handler updates `key_status` to `not_required` immediately on selection.
+- Key input handler blocks Save Key for local providers.
+
+**Backend (`backend/app/services/provider_settings_service.py`)**
+- Added `LOCAL_PROVIDERS = {"ollama"}` — separate from `REAL_PROVIDERS`.
+- `SUPPORTED_PROVIDERS` now includes `"ollama"`.
+- `get_provider_key_status("ollama")` returns `"not_required"`.
+- `_resolve_provider()` returns `"ollama"` (not mock) when `real_provider_enabled=True` and provider is in `LOCAL_PROVIDERS`.
+- `_normalize_key_provider("ollama")` raises `ValueError("local provider does not require an api key")`.
+
+**Backend (`backend/app/services/provider_test_connection_service.py`)**
+- `_normalize_provider()` now accepts local providers (`LOCAL_PROVIDERS`) in addition to cloud providers.
+- When `real_provider_enabled=False` and provider is local: uses `_resolve_model_for_local()` to avoid `invalid_model` error.
+- Local provider path bypasses API key check, instantiates `OllamaLocalProvider` directly.
+- Returns `source="llm_local"` on success, `source="llm_local_error"` on failure.
+- `_resolve_model_for_local()` falls back to `"qwen3:8b"` (no `invalid_model` error for local providers).
+- `SAFE_ERROR_MESSAGES` extended with `"ollama_unavailable"` and `"model_not_found"`.
+
+**Tests added (15 new)**
+- `test_provider_settings_service.py`: 6 tests covering `get_provider_key_status("ollama")`, PATCH accepts ollama, `resolved_provider=ollama`, key operations raise ValueError.
+- `test_provider_test_connection.py`: 9 tests covering success/failure paths, no-key path, source verification, model fallback, cost_ack requirement, no memory/history in request, no retries.
+
+### Safety invariants confirmed
+
+- Renderer does not contain `localhost:11434`, `127.0.0.1:11434`, `api.anthropic.com`, `api.openai.com`, or `platform.claude.com`.
+- Renderer never logs the API key.
+- Renderer never stores the API key in localStorage or sessionStorage.
+- Test Connection for Ollama calls only local backend `/provider/settings/test`.
+- No external network call occurs.
+- No API key is used for Ollama.
+- `/chat` schema unchanged (`reply / mood / source`).
+- Memory gate unchanged.
+- `explicit_cost_ack: true` still required for all Test Connection calls including Ollama.
+
+### pytest result
+
+510 passed, 0 failed (495 pre-TASK-076 baseline + 15 new TASK-076 tests).
+
+## TASK-077 — README Update for Local LLM Mode
+
+Status: DONE
+
+Documentation updates:
+- Root README now includes a Local LLM Mode (Ollama) guide covering concept, prerequisites, startup commands, Provider Settings UI behavior, `/chat` smoke test, troubleshooting, and safety rules.
+- Backend README now includes backend-specific Ollama startup and `/chat` smoke instructions.
+- ROADMAP and TASKS record TASK-077 as DONE.
+- A duplicated, truncated trailing block in `apps/desktop/src/renderer/renderer.js` was removed so the required syntax check passes; no provider call logic, `/chat` schema, or tests were changed for TASK-077.
+- Latest validation: full backend pytest 531 passed; Electron `node --check` passed for main and renderer scripts.
+
+Safety notes:
+- Renderer still must not call `localhost:11434` directly.
+- Ollama remains a local provider with `key_status=not_required`.
+- Automated tests remain mocked; no live external provider call is required for docs validation.

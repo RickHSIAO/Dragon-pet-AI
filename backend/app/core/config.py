@@ -145,3 +145,22 @@ def get_ollama_timeout_seconds() -> int:
         min_value=1,
         max_value=120,
     )
+
+
+def get_local_test_timeout_seconds() -> int:
+    """Return the local provider Test Connection HTTP timeout in seconds.
+
+    Default: 10. Clamped to [1, 60]. This timeout is intentionally separate
+    from ``OLLAMA_TIMEOUT_SECONDS`` because Test Connection uses ``/api/tags``,
+    which does not load any model and returns quickly.  Generation cold-start
+    latency does not apply to this path, so a short timeout is appropriate.
+
+    Override with ``LLM_LOCAL_TEST_TIMEOUT_SECONDS`` if the local runtime needs
+    longer (for example a slow disk or container restart).
+    """
+    return read_int_env(
+        "LLM_LOCAL_TEST_TIMEOUT_SECONDS",
+        default=10,
+        min_value=1,
+        max_value=60,
+    )

@@ -2,12 +2,13 @@ from dataclasses import asdict, dataclass, is_dataclass
 from typing import Any
 
 from app.core.config import get_llm_chat_enabled, get_llm_fallback_to_mock
-from app.llm.factory import get_llm_provider
+from app.llm.factory import get_llm_provider, get_llm_provider_from_runtime_settings
 from app.llm.mock_provider import MockLLMProvider
 from app.llm.real_provider import CANONICAL_SAFE_FALLBACK_TEXT
 from app.llm.types import LLMRequest, LLMResponse
 from app.services.character_service import format_mock_reply, select_mock_mood
 from app.services.prompt_service import build_character_prompt, normalize_chat_mode
+from app.services.provider_settings_service import get_runtime_provider_settings
 
 
 @dataclass(frozen=True)
@@ -106,14 +107,74 @@ def _source_for_llm_response(provider: Any, response: LLMResponse) -> str:
     return "llm_real"
 
 
+def _provider_name(provider: Any, response: LLMResponse | None = None) -> str:
+    if response is not None and response.provider:
+        return response.provider
+    return str(getattr(provider, "provider_name", "") or "")
+
+
+def _provider_model(provider: Any, response: LLMResponse | None = None) -> str | None:
+    if response is not None and response.model:
+        return response.model
+    model = getattr(provider, "model", None)
+    if isinstance(model, str) and model.strip():
+        return model.strip()
+    private_model = getattr(provider, "_model", None)
+    if isinstance(private_model, str) and private_model.strip():
+        return private_model.strip()
+    return None
+
+
+def _with_usage_metadata(
+    response: dict[str, str],
+    *,
+    include_usage_metadata: bool,
+    provider: str | None = None,
+    model: str | None = None,
+    fallback_used: bool = False,
+    error_category: str | None = None,
+) -> dict[str, Any]:
+    if not include_usage_metadata:
+        return response
+    enriched: dict[str, Any] = dict(response)
+    enriched["_usage"] = {
+        "provider": provider,
+        "model": model,
+        "fallback_used": fallback_used,
+        "error_category": error_category,
+    }
+    return enriched
+
+
 def _safe_llm_fallback_response(
     message: str,
     mode: str,
     state_context: ChatStateContext | dict[str, Any] | None,
     provider: Any,
-) -> dict[str, str]:
-    if get_llm_fallback_to_mock():
-        return generate_mock_chat_reply(message, mode, state_context)
+    *,
+    llm_response: LLMResponse | None = None,
+    fallback_to_mock: bool | None = None,
+    error_category: str | None = None,
+    include_usage_metadata: bool = False,
+) -> dict[str, Any]:
+    should_fallback_to_mock = (
+        get_llm_fallback_to_mock()
+        if fallback_to_mock is None
+        else fallback_to_mock
+    )
+    provider_name = _provider_name(provider, llm_response) or None
+    provider_model = _provider_model(provider, llm_response)
+
+    if should_fallback_to_mock:
+        response = generate_mock_chat_reply(message, mode, state_context)
+        return _with_usage_metadata(
+            response,
+            include_usage_metadata=include_usage_metadata,
+            provider=provider_name,
+            model=provider_model,
+            fallback_used=True,
+            error_category=error_category,
+        )
 
     provider_name = getattr(provider, "provider_name", "")
     if provider_name == "mock":
@@ -122,11 +183,19 @@ def _safe_llm_fallback_response(
         source = "llm_local_error"
     else:
         source = "llm_real_error"
-    return {
+    response = {
         "reply": CANONICAL_SAFE_FALLBACK_TEXT,
         "mood": select_mock_mood(message),
         "source": source,
     }
+    return _with_usage_metadata(
+        response,
+        include_usage_metadata=include_usage_metadata,
+        provider=provider_name or None,
+        model=provider_model,
+        fallback_used=False,
+        error_category=error_category,
+    )
 
 
 def generate_chat_reply(
@@ -134,7 +203,9 @@ def generate_chat_reply(
     mode: str | None = None,
     state_context: ChatStateContext | dict[str, Any] | None = None,
     memory_context: str | None = None,
-) -> dict[str, str]:
+    *,
+    include_usage_metadata: bool = False,
+) -> dict[str, Any]:
     """
     Generate a chat reply through the existing mock flow by default.
 
@@ -144,10 +215,43 @@ def generate_chat_reply(
     to the stable reply/mood/source response shape.
     """
     chat_mode = normalize_chat_mode(mode)
-    if not get_llm_chat_enabled():
-        return generate_mock_chat_reply(message, chat_mode, state_context)
+    runtime_settings = get_runtime_provider_settings()
+    use_runtime_settings = bool(runtime_settings.get("runtime_overridden"))
+    fallback_to_mock: bool | None = None
 
-    provider = get_llm_provider()
+    if use_runtime_settings:
+        if not runtime_settings.get("llm_chat_enabled"):
+            response = generate_mock_chat_reply(message, chat_mode, state_context)
+            return _with_usage_metadata(
+                response,
+                include_usage_metadata=include_usage_metadata,
+                provider="mock",
+                model=None,
+            )
+
+        resolved_provider = str(runtime_settings.get("resolved_provider") or "mock")
+        if resolved_provider == "mock":
+            response = generate_mock_chat_reply(message, chat_mode, state_context)
+            return _with_usage_metadata(
+                response,
+                include_usage_metadata=include_usage_metadata,
+                provider="mock",
+                model=None,
+            )
+
+        provider = get_llm_provider_from_runtime_settings(runtime_settings)
+        fallback_to_mock = bool(runtime_settings.get("fallback_to_mock"))
+    else:
+        if not get_llm_chat_enabled():
+            response = generate_mock_chat_reply(message, chat_mode, state_context)
+            return _with_usage_metadata(
+                response,
+                include_usage_metadata=include_usage_metadata,
+                provider="mock",
+                model=None,
+            )
+
+        provider = get_llm_provider()
     llm_request = LLMRequest(
         system_prompt=build_character_prompt(chat_mode),
         user_message=message,
@@ -160,13 +264,38 @@ def generate_chat_reply(
     try:
         llm_response = provider.generate(llm_request)
     except Exception:
-        return _safe_llm_fallback_response(message, chat_mode, state_context, provider)
+        return _safe_llm_fallback_response(
+            message,
+            chat_mode,
+            state_context,
+            provider,
+            fallback_to_mock=fallback_to_mock,
+            error_category="provider_error",
+            include_usage_metadata=include_usage_metadata,
+        )
 
     if llm_response.error or not llm_response.text.strip():
-        return _safe_llm_fallback_response(message, chat_mode, state_context, provider)
+        return _safe_llm_fallback_response(
+            message,
+            chat_mode,
+            state_context,
+            provider,
+            llm_response=llm_response,
+            fallback_to_mock=fallback_to_mock,
+            error_category=llm_response.error or "invalid_response",
+            include_usage_metadata=include_usage_metadata,
+        )
 
-    return {
+    response = {
         "reply": llm_response.text,
         "mood": select_mock_mood(message),
         "source": _source_for_llm_response(provider, llm_response),
     }
+    return _with_usage_metadata(
+        response,
+        include_usage_metadata=include_usage_metadata,
+        provider=_provider_name(provider, llm_response) or None,
+        model=_provider_model(provider, llm_response),
+        fallback_used=False,
+        error_category=None,
+    )

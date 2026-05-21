@@ -4,6 +4,10 @@ Safe Provider Settings Test Connection service.
 TASK-059 implements the backend flow with an injectable provider runner so
 automated tests remain mocked-only. The runtime default runner does not call
 external providers.
+
+TASK-076: Added local provider (Ollama) test connection path. Local providers
+bypass the API key check and call OllamaLocalProvider directly. No external
+network call; no API key involved.
 """
 
 from __future__ import annotations
@@ -13,13 +17,21 @@ from typing import Protocol
 
 import httpx
 
-from app.core.config import get_llm_timeout_seconds
+from app.core.config import (
+    get_llm_timeout_seconds,
+    get_local_test_timeout_seconds,
+    get_ollama_base_url,
+    get_ollama_keep_alive,
+    get_ollama_timeout_seconds,
+)
+from app.llm.ollama_provider import OllamaLocalProvider
 from app.llm.types import LLMRequest, LLMResponse
 from app.services.key_storage_service import (
     KeyStorageUnavailableError,
     require_api_key,
 )
 from app.services.provider_settings_service import (
+    LOCAL_PROVIDERS,
     REAL_PROVIDERS,
     get_provider_settings,
 )
@@ -46,13 +58,41 @@ SAFE_ERROR_MESSAGES = {
     "provider_unavailable": "Provider is not reachable right now.",
     "invalid_response": "Provider returned an unexpected response.",
     "provider_error": "Provider test failed.",
+    # TASK-076: Ollama-specific safe messages
+    # TASK-078: clarified messages — Test Connection now verifies server+model
+    # via /api/tags only, so timeout/offline failures point to ``ollama serve``
+    # rather than blaming the model load.
+    "ollama_unavailable": (
+        "Local Ollama server is not reachable. "
+        "Make sure 'ollama serve' is running on localhost."
+    ),
+    "model_not_found": (
+        "Local model is not installed. "
+        "Run 'ollama pull <model>' to download it first."
+    ),
 }
+
+# TASK-078: timeout message overrides per provider class.  Cloud providers and
+# local providers fail differently and the user-facing hint should reflect that.
+_LOCAL_TIMEOUT_MESSAGE = (
+    "Local Ollama server did not respond in time. "
+    "Make sure 'ollama serve' is running and try again."
+)
 
 SAFE_PROVIDER_ERRORS = {
     "provider_auth_error",
     "rate_limit",
     "provider_timeout",
     "provider_unavailable",
+    "invalid_response",
+    "provider_error",
+}
+
+# TASK-076: error categories returned by OllamaLocalProvider
+SAFE_LOCAL_PROVIDER_ERRORS = {
+    "ollama_unavailable",
+    "model_not_found",
+    "provider_timeout",
     "invalid_response",
     "provider_error",
 }
@@ -141,15 +181,33 @@ def run_provider_test_connection(
         raise ProviderTestConnectionRequestError("cost_ack_required")
 
     normalized_provider = _normalize_provider(provider)
-    selected_model = _resolve_model(model)
     settings = get_provider_settings()
+    is_local_provider = normalized_provider in LOCAL_PROVIDERS
     if settings.get("real_provider_enabled") is not True:
+        # TASK-076: local providers use their own model resolver to avoid invalid_model
+        if is_local_provider:
+            selected_model = _resolve_model_for_local(model)
+        else:
+            selected_model = _resolve_model(model, normalized_provider)
         return _failed_response(
             provider=normalized_provider,
             model=selected_model,
+            source=_source_for_provider(normalized_provider, is_error=True),
             error_category="provider_disabled",
             usage_estimate=None,
+            is_local=is_local_provider,
         )
+
+    # TASK-076: local providers (ollama) — skip key check, call directly
+    if is_local_provider:
+        selected_model = _resolve_model_for_local(model)
+        return _run_local_provider_test(
+            provider=normalized_provider,
+            model=selected_model,
+        )
+
+    # Cloud provider path — requires API key
+    selected_model = _resolve_model(model, normalized_provider)
 
     try:
         api_key = require_api_key(normalized_provider)
@@ -157,6 +215,7 @@ def run_provider_test_connection(
         return _failed_response(
             provider=normalized_provider,
             model=selected_model,
+            source=_source_for_provider(normalized_provider, is_error=True),
             error_category="storage_unavailable",
             usage_estimate=None,
         )
@@ -165,6 +224,7 @@ def run_provider_test_connection(
             return _failed_response(
                 provider=normalized_provider,
                 model=selected_model,
+                source=_source_for_provider(normalized_provider, is_error=True),
                 error_category="missing_key",
                 usage_estimate=None,
             )
@@ -234,14 +294,147 @@ def run_provider_test_connection(
     }
 
 
+# ---------------------------------------------------------------------------
+# TASK-076: Local provider (Ollama) test connection
+# ---------------------------------------------------------------------------
+
+def _run_local_provider_test(
+    *,
+    provider: str,
+    model: str,
+) -> dict[str, object]:
+    """
+    Run a minimal test against the local Ollama provider.
+
+    TASK-078: Test Connection uses a two-layer fast check that does NOT load
+    the model:
+
+    1. ``GET /api/tags`` confirms the Ollama server is alive on localhost.
+    2. The returned ``models`` list confirms the requested model is installed.
+
+    A successful Test Connection means "the local runtime is reachable and the
+    selected model is available."  Generation behaviour and persona are
+    validated separately by ``/chat`` smoke tests, not here.
+
+    Safety invariants:
+    - No API key involved.
+    - No external network call — Ollama is localhost only.
+    - Exactly one HTTP call — no retries.
+    - Raw Ollama response body is never forwarded to the caller.
+    - The model is NOT loaded into memory by this call; there is no cold-start
+      generation latency, so the short local-test timeout is appropriate.
+    """
+    local_provider = OllamaLocalProvider(
+        model=model,
+        base_url=get_ollama_base_url(),
+        keep_alive=get_ollama_keep_alive(),
+        timeout_seconds=get_ollama_timeout_seconds(),
+        test_timeout_seconds=get_local_test_timeout_seconds(),
+    )
+
+    try:
+        llm_response = local_provider.test_connection(model=model)
+    except Exception:
+        return _local_record_and_fail(
+            provider=provider,
+            model=model,
+            error_category="provider_error",
+        )
+
+    if llm_response.error:
+        return _local_record_and_fail(
+            provider=provider,
+            model=llm_response.model or model,
+            error_category=_safe_local_error_category(llm_response.error),
+        )
+
+    if not llm_response.text.strip():
+        return _local_record_and_fail(
+            provider=provider,
+            model=llm_response.model or model,
+            error_category="invalid_response",
+        )
+
+    usage_estimate = _usage_estimate(llm_response, is_success=True)
+    _record_usage(
+        provider=provider,
+        model=llm_response.model or model,
+        source="llm_local",
+        usage_estimate=usage_estimate,
+        error_category=None,
+    )
+    return {
+        "status": "success",
+        "provider": provider,
+        "model": llm_response.model or model,
+        "source": "llm_local",
+        "safe_message": "Local Ollama connection successful.",
+        "error_category": None,
+        "usage_estimate": usage_estimate,
+    }
+
+
+def _local_record_and_fail(
+    *,
+    provider: str,
+    model: str,
+    error_category: str,
+) -> dict[str, object]:
+    usage_estimate = _usage_estimate(None, is_success=False)
+    _record_usage(
+        provider=provider,
+        model=model,
+        source="llm_local_error",
+        usage_estimate=usage_estimate,
+        error_category=error_category,
+    )
+    return _failed_response(
+        provider=provider,
+        model=model,
+        source="llm_local_error",
+        error_category=error_category,
+        usage_estimate=usage_estimate,
+        is_local=True,
+    )
+
+
+def _safe_local_error_category(error: str) -> str:
+    return error if error in SAFE_LOCAL_PROVIDER_ERRORS else "provider_error"
+
+
+def _resolve_model_for_local(model: str | None) -> str:
+    """Resolve model for local providers; fall back to Ollama default."""
+    if model is not None and model.strip():
+        return model.strip()
+    settings_model = get_provider_settings().get("model")
+    if isinstance(settings_model, str) and settings_model.strip():
+        return settings_model.strip()
+    # Ollama default — avoids invalid_model error for local providers
+    return "qwen3:8b"
+
+
+def _source_for_provider(provider: str, *, is_error: bool) -> str:
+    """Return the safe source string for usage records and responses."""
+    if provider in LOCAL_PROVIDERS:
+        return "llm_local_error" if is_error else "llm_local"
+    return "llm_real_error" if is_error else "llm_real"
+
+
+# ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
+
 def _normalize_provider(provider: str) -> str:
     normalized = (provider or "").strip().lower()
-    if normalized == "mock" or normalized not in REAL_PROVIDERS:
+    if normalized == "mock":
+        raise ProviderTestConnectionRequestError("invalid_provider")
+    # TASK-076: allow local providers (ollama) in addition to cloud providers
+    if normalized not in REAL_PROVIDERS and normalized not in LOCAL_PROVIDERS:
         raise ProviderTestConnectionRequestError("invalid_provider")
     return normalized
 
 
-def _resolve_model(model: str | None) -> str:
+def _resolve_model(model: str | None, provider: str) -> str:  # noqa: ARG001
     if model is not None and model.strip():
         return model.strip()
     settings_model = get_provider_settings().get("model")
@@ -267,6 +460,7 @@ def _record_and_fail(
     return _failed_response(
         provider=provider,
         model=model,
+        source="llm_real_error",
         error_category=error_category,
         usage_estimate=usage_estimate,
     )
@@ -276,15 +470,23 @@ def _failed_response(
     *,
     provider: str,
     model: str,
+    source: str,
     error_category: str,
     usage_estimate: dict[str, int] | None,
+    is_local: bool = False,
 ) -> dict[str, object]:
+    # TASK-078: provider_timeout has a distinct local-runtime message so users
+    # are pointed at ``ollama serve`` rather than at a paid provider outage.
+    if is_local and error_category == "provider_timeout":
+        safe_message = _LOCAL_TIMEOUT_MESSAGE
+    else:
+        safe_message = SAFE_ERROR_MESSAGES.get(error_category, "Provider test failed.")
     return {
         "status": "failed",
         "provider": provider,
         "model": model,
-        "source": "llm_real_error",
-        "safe_message": SAFE_ERROR_MESSAGES.get(error_category, "Provider test failed."),
+        "source": source,
+        "safe_message": safe_message,
         "error_category": error_category,
         "usage_estimate": usage_estimate,
     }
@@ -340,4 +542,3 @@ def _record_usage(
         memory_used=False,
         error_category=error_category,
     ))
-

@@ -37,7 +37,9 @@
     <div class="mood-indicator"></div>
     <span>Mood:</span>
     <span id="mood-label">neutral</span>
-    <span class="status-note">mock mode - no AI connected</span>
+    <span id="chat-source-status" class="chat-runtime-pill">source: not_checked</span>
+    <span id="chat-provider-status" class="chat-runtime-pill">provider: mock</span>
+    <span id="chat-runtime-status" class="status-note">mock mode - no AI connected</span>
   </div>
 
   <!-- ── Chat area ──────────────────────────────────────── -->
@@ -166,6 +168,7 @@ No active memories.</pre>
         <select id="provider-settings-provider">
           <option value="mock" selected>mock</option>
           <option value="anthropic">anthropic</option>
+          <option value="ollama">ollama — local, no key</option>
         </select>
       </label>
 
@@ -198,11 +201,19 @@ No active memories.</pre>
       <button id="save-provider-settings-btn" type="submit">Save Non-secret Settings</button>
     </form>
 
-    <div class="provider-warning">
+    <div id="provider-warning" class="provider-warning">
       Using a real provider may incur charges from your API provider.
     </div>
 
     <div class="provider-status-grid" aria-live="polite">
+      <div>
+        <span>Provider</span>
+        <strong id="provider-current-provider">mock</strong>
+      </div>
+      <div>
+        <span>Model</span>
+        <strong id="provider-current-model">default</strong>
+      </div>
       <div>
         <span>Key status</span>
         <strong id="provider-key-status">not_configured</strong>
@@ -214,6 +225,18 @@ No active memories.</pre>
       <div>
         <span>Resolved provider</span>
         <strong id="provider-resolved-provider">mock</strong>
+      </div>
+      <div>
+        <span>Real provider enabled</span>
+        <strong id="provider-real-enabled-status">false</strong>
+      </div>
+      <div>
+        <span>LLM chat enabled</span>
+        <strong id="provider-llm-chat-enabled-status">false</strong>
+      </div>
+      <div>
+        <span>Fallback to mock</span>
+        <strong id="provider-fallback-status">true</strong>
       </div>
     </div>
 

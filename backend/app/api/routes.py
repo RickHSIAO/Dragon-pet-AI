@@ -1,4 +1,4 @@
-﻿"""
+"""
 API routes for dragon-pet-ai backend.
 
 TASK-009 keeps the system mock-only while allowing mock chat to read internal
@@ -148,7 +148,9 @@ def chat(request: ChatRequest, session: Session = Depends(get_session)) -> ChatR
         request.mode,
         state_context,
         memory_context=formatted_context,
+        include_usage_metadata=True,
     )
+    usage_metadata = response_data.pop("_usage", {})
 
     # ?? Usage meter recording (TASK-050) ??????????????????????????????????
     # Record only safe aggregate metadata. Raw message text, prompt text,
@@ -157,13 +159,13 @@ def chat(request: ChatRequest, session: Session = Depends(get_session)) -> ChatR
     _source = response_data["source"]
     record_usage(UsageRecord(
         source=_source,
-        provider=None,   # provider name not exposed at this layer
-        model=None,      # model name not exposed at this layer
+        provider=usage_metadata.get("provider"),
+        model=usage_metadata.get("model"),
         estimated_input_tokens=estimate_text_tokens(request.message),
         estimated_output_tokens=estimate_text_tokens(response_data["reply"]),
-        fallback_used=(_source == "llm_real_error"),
+        fallback_used=bool(usage_metadata.get("fallback_used")),
         memory_used=should_use_memory,
-        error_category=None,
+        error_category=usage_metadata.get("error_category"),
     ))
 
     store_chat_turn(

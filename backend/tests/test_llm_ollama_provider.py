@@ -725,3 +725,178 @@ def test_contract_chat_response_schema_remains_reply_mood_source_only() -> None:
     response = ChatResponse(reply="ok", mood="neutral", source="mock")
 
     assert set(response.model_dump().keys()) == {"reply", "mood", "source"}
+
+
+# ---------------------------------------------------------------------------
+# TASK-078 — test_connection() fast check via /api/tags
+# ---------------------------------------------------------------------------
+
+def _tags_body(*model_names: str) -> dict[str, Any]:
+    return {
+        "models": [
+            {"name": name, "model": name, "size": 0, "modified_at": "2026-05-21"}
+            for name in model_names
+        ]
+    }
+
+
+def test_test_connection_success_when_server_alive_and_model_installed() -> None:
+    body = _tags_body("qwen3:8b", "llama3:latest")
+    client = FakeHTTPClient(ProviderHTTPResponse(status_code=200, json_data=body))
+    provider = make_provider(http_client=client)
+
+    result = provider.test_connection(model="qwen3:8b")
+
+    assert result.error is None
+    assert result.text == "ok"
+    assert result.provider == "ollama"
+    assert result.model == "qwen3:8b"
+    # /api/tags must be the endpoint hit; /api/chat must NOT be called.
+    assert client.last_method == "GET"
+    assert client.last_url == "http://localhost:11434/api/tags"
+    assert client.call_count == 1
+
+
+def test_test_connection_uses_short_local_test_timeout() -> None:
+    body = _tags_body("qwen3:8b")
+    client = FakeHTTPClient(ProviderHTTPResponse(status_code=200, json_data=body))
+    provider = OllamaLocalProvider(
+        model="qwen3:8b",
+        base_url="http://localhost:11434",
+        keep_alive="10m",
+        timeout_seconds=30,
+        test_timeout_seconds=10,
+        http_client=client,
+    )
+
+    provider.test_connection(model="qwen3:8b")
+
+    # Must use the short local-test timeout (10s), NOT the 30s chat timeout.
+    assert client.last_timeout_seconds == 10
+
+
+def test_test_connection_does_not_send_a_chat_request_body() -> None:
+    body = _tags_body("qwen3:8b")
+    client = FakeHTTPClient(ProviderHTTPResponse(status_code=200, json_data=body))
+    provider = make_provider(http_client=client)
+
+    provider.test_connection(model="qwen3:8b")
+
+    # /api/tags is a GET — the body must be empty (no system_prompt, no
+    # user_message, no persona, no memory, no tools).
+    assert client.last_payload == {}
+    assert "messages" not in (client.last_payload or {})
+    assert "options" not in (client.last_payload or {})
+    assert "system_prompt" not in (client.last_payload or {})
+
+
+def test_test_connection_model_not_found_when_model_missing_from_tags() -> None:
+    body = _tags_body("llama3:latest")  # qwen3 not installed
+    client = FakeHTTPClient(ProviderHTTPResponse(status_code=200, json_data=body))
+    provider = make_provider(http_client=client)
+
+    result = provider.test_connection(model="qwen3:8b")
+
+    assert result.error == "model_not_found"
+    assert result.model == "qwen3:8b"
+
+
+def test_test_connection_connection_refused_returns_ollama_unavailable() -> None:
+    client = RaisingHTTPClient(ConnectionRefusedError("refused"))
+    provider = make_provider(http_client=client)
+
+    result = provider.test_connection(model="qwen3:8b")
+
+    assert result.error == "ollama_unavailable"
+    assert client.call_count == 1
+
+
+def test_test_connection_timeout_returns_provider_timeout() -> None:
+    client = RaisingHTTPClient(httpx.TimeoutException("tags timeout"))
+    provider = make_provider(http_client=client)
+
+    result = provider.test_connection(model="qwen3:8b")
+
+    assert result.error == "provider_timeout"
+    assert client.call_count == 1
+
+
+def test_test_connection_non_2xx_returns_provider_error() -> None:
+    client = FakeHTTPClient(ProviderHTTPResponse(status_code=500, json_data=None))
+    provider = make_provider(http_client=client)
+
+    result = provider.test_connection(model="qwen3:8b")
+
+    assert result.error == "provider_error"
+
+
+def test_test_connection_malformed_json_returns_invalid_response() -> None:
+    client = FakeHTTPClient(MalformedJSONResponse())
+    provider = make_provider(http_client=client)
+
+    result = provider.test_connection(model="qwen3:8b")
+
+    assert result.error == "invalid_response"
+
+
+def test_test_connection_tags_body_not_a_dict_returns_invalid_response() -> None:
+    client = FakeHTTPClient(ProviderHTTPResponse(status_code=200, json_data=[1, 2, 3]))
+    provider = make_provider(http_client=client)
+
+    result = provider.test_connection(model="qwen3:8b")
+
+    assert result.error == "invalid_response"
+
+
+def test_test_connection_models_field_missing_returns_invalid_response() -> None:
+    client = FakeHTTPClient(ProviderHTTPResponse(status_code=200, json_data={}))
+    provider = make_provider(http_client=client)
+
+    result = provider.test_connection(model="qwen3:8b")
+
+    assert result.error == "invalid_response"
+
+
+def test_test_connection_unqualified_name_matches_tagged_entry() -> None:
+    body = _tags_body("qwen3:8b")
+    client = FakeHTTPClient(ProviderHTTPResponse(status_code=200, json_data=body))
+    provider = make_provider(http_client=client)
+
+    # Caller asks for "qwen3" (no tag) — should match "qwen3:8b" in the list.
+    result = provider.test_connection(model="qwen3")
+
+    assert result.error is None
+    assert result.text == "ok"
+
+
+def test_test_connection_exactly_one_http_call_on_failure() -> None:
+    client = RaisingHTTPClient(httpx.TimeoutException("once"))
+    provider = make_provider(http_client=client)
+
+    provider.test_connection(model="qwen3:8b")
+    # No retries — exactly one call attempt even on timeout.
+    assert client.call_count == 1
+
+
+def test_test_connection_falls_back_to_provider_model_when_arg_blank() -> None:
+    body = _tags_body("qwen3:8b")
+    client = FakeHTTPClient(ProviderHTTPResponse(status_code=200, json_data=body))
+    provider = make_provider(http_client=client, model="qwen3:8b")
+
+    result = provider.test_connection(model=None)
+
+    assert result.error is None
+    assert result.model == "qwen3:8b"
+
+
+def test_test_connection_raw_tags_body_not_leaked_on_error() -> None:
+    sentinel = "RAW_TAGS_BODY_SHOULD_NOT_LEAK"
+    body = {"error": sentinel}
+    client = FakeHTTPClient(ProviderHTTPResponse(status_code=500, json_data=body))
+    provider = make_provider(http_client=client)
+
+    result = provider.test_connection(model="qwen3:8b")
+    rendered = f"{result!r} {result!s} {result.error}"
+
+    assert result.error == "provider_error"
+    assert sentinel not in rendered

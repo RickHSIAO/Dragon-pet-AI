@@ -195,7 +195,7 @@ See `docs/PHASE4_PLAN.md`, `docs/LLM_ADAPTER_DESIGN.md`, `docs/LLM_PROVIDER_CONT
 
 **Goal:** Add a local LLM provider option via Ollama. No API key, no external network, no per-token cost. Runs on user's hardware.
 
-**Status:** CONTRACT TESTED (TASK-074) - OllamaLocalProvider is implemented behind flags, mocked contract tests pass, runtime smoke checklist is ready; no live Ollama smoke has been executed yet
+**Status:** LOCAL OLLAMA UX STABILIZED - OllamaLocalProvider implemented (TASK-073), mocked contract tests pass (TASK-074), runtime smoke PASS (TASK-075), Provider Settings UI Ollama option complete (TASK-076), README local LLM instructions complete (TASK-077), Electron end-to-end local chat smoke PASS (TASK-080), source/loading/error UX stabilized (TASK-081)
 
 **Local model candidates:**
 
@@ -212,8 +212,10 @@ See `docs/PHASE4_PLAN.md`, `docs/LLM_ADAPTER_DESIGN.md`, `docs/LLM_PROVIDER_CONT
 | TASK-073 | Ollama Provider Implementation Behind Feature Flag | DONE |
 | TASK-074 | Ollama Provider Contract Tests and Runtime Smoke Prep | DONE |
 | TASK-075 | Ollama Runtime Smoke Check | DONE |
-| TASK-076 | Provider Settings UI — Ollama Option | Pending |
-| TASK-077 | README Update for Local LLM Mode | Pending |
+| TASK-076 | Provider Settings UI — Ollama Option | DONE |
+| TASK-077 | README Update for Local LLM Mode | DONE |
+| TASK-080 | Electron End-to-End Local Chat Smoke | DONE |
+| TASK-081 | Local Ollama UX Stabilization / Runtime Follow-up | DONE |
 
 **Key design decisions:**
 - `OllamaLocalProvider` implements the same `ProviderInterface` as `AnthropicProvider` — no service layer changes required
@@ -224,6 +226,9 @@ See `docs/PHASE4_PLAN.md`, `docs/LLM_ADAPTER_DESIGN.md`, `docs/LLM_PROVIDER_CONT
 - Renderer never calls Ollama directly — backend-only architecture boundary preserved
 - New key status value: `not_required` for providers that need no key
 - TASK-074 strengthened mocked contract coverage to 34 Ollama tests and added `docs/OLLAMA_RUNTIME_SMOKE_CHECKLIST.md`; pytest: 504 passed; no external provider call and no API key used
+- TASK-077 documents Local LLM mode in README/backend README, including Ollama prerequisites, startup, Provider Settings UI behavior, `/chat` smoke test, troubleshooting, and safety constraints; latest pytest: 531 passed
+- TASK-080 confirms Electron Provider Settings, Test Connection, and chat UI work end-to-end with local Ollama; `/chat` response stayed `reply / mood / source`, `source=llm_local` was confirmed, and renderer still has no direct Ollama URL
+- TASK-081 makes source, provider state, local cold-start loading, backend offline, provider timeout, local error, and mock fallback states visible in the Electron UI; renderer smoke covers these states
 
 See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 

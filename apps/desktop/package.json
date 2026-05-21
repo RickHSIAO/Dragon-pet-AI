@@ -5,7 +5,8 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "electron . --dev"
+    "dev": "electron . --dev",
+    "test:renderer": "node scripts/renderer-chat-smoke.js"
   },
   "keywords": ["desktop", "electron", "ai-pet"],
   "author": "",

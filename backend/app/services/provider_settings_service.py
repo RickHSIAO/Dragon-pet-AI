@@ -21,8 +21,11 @@ from app.services.key_storage_service import (
 from app.services.usage_meter_service import get_usage_summary
 
 
-SUPPORTED_PROVIDERS = {"mock", "anthropic", "openai"}
+# TASK-076: added "ollama" to supported providers
+SUPPORTED_PROVIDERS = {"mock", "anthropic", "openai", "ollama"}
 REAL_PROVIDERS = {"anthropic", "openai"}
+# TASK-076: local providers — no API key, no external network
+LOCAL_PROVIDERS = {"ollama"}
 
 
 class ProviderKeyStorageError(RuntimeError):
@@ -60,6 +63,7 @@ class ProviderSettingsService:
     def __init__(self) -> None:
         self._lock = Lock()
         self._settings = ProviderSettings()
+        self._runtime_overridden = False
 
     def get_settings(self) -> dict[str, Any]:
         with self._lock:
@@ -87,12 +91,22 @@ class ProviderSettingsService:
             if update.fallback_to_mock is not None:
                 self._settings.fallback_to_mock = update.fallback_to_mock
 
+            self._runtime_overridden = True
             settings = deepcopy(self._settings)
         return self._serialize(settings)
 
     def reset(self) -> None:
         with self._lock:
             self._settings = ProviderSettings()
+            self._runtime_overridden = False
+
+    def get_runtime_settings(self) -> dict[str, Any]:
+        with self._lock:
+            settings = deepcopy(self._settings)
+            runtime_overridden = self._runtime_overridden
+        data = self._serialize(settings)
+        data["runtime_overridden"] = runtime_overridden
+        return data
 
     def _serialize(self, settings: ProviderSettings) -> dict[str, Any]:
         data = asdict(settings)
@@ -109,6 +123,9 @@ def _resolve_provider(settings: ProviderSettings) -> str:
         return "mock"
     if settings.provider == "mock":
         return "mock"
+    # TASK-076: local providers resolve to themselves — no key check required
+    if settings.provider in LOCAL_PROVIDERS:
+        return settings.provider
     if settings.provider not in REAL_PROVIDERS:
         return "mock"
     if get_provider_key_status(settings.provider) != "configured":
@@ -120,6 +137,9 @@ def _normalize_key_provider(provider: str) -> str:
     normalized = (provider or "").strip().lower()
     if normalized == "mock":
         raise ValueError("mock provider cannot store an api key")
+    # TASK-076: local providers do not use API keys
+    if normalized in LOCAL_PROVIDERS:
+        raise ValueError("local provider does not require an api key")
     if normalized not in REAL_PROVIDERS:
         raise ValueError("unsupported provider")
     return normalized
@@ -155,6 +175,9 @@ def get_provider_key_status(provider: str) -> str:
     normalized = (provider or "").strip().lower()
     if normalized == "mock":
         return "not_configured"
+    # TASK-076: local providers never require an API key
+    if normalized in LOCAL_PROVIDERS:
+        return "not_required"
     if normalized not in REAL_PROVIDERS:
         raise ValueError("unsupported provider")
     return get_key_status(normalized)
@@ -181,6 +204,10 @@ _service = ProviderSettingsService()
 
 def get_provider_settings() -> dict[str, Any]:
     return _service.get_settings()
+
+
+def get_runtime_provider_settings() -> dict[str, Any]:
+    return _service.get_runtime_settings()
 
 
 def update_provider_settings(update: ProviderSettingsUpdate) -> dict[str, Any]:
