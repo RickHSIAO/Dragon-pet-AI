@@ -98,3 +98,50 @@ def get_llm_timeout_seconds() -> int:
 
 def get_llm_fallback_to_mock() -> bool:
     return read_bool_env("LLM_FALLBACK_TO_MOCK", default=True)
+
+
+# ---------------------------------------------------------------------------
+# Ollama local provider config
+# ---------------------------------------------------------------------------
+
+_OLLAMA_ALLOWED_PREFIXES = ("http://localhost", "http://127.0.0.1")
+
+
+def get_ollama_base_url() -> str:
+    """
+    Return the Ollama server base URL.
+
+    Default: ``http://localhost:11434``.
+
+    Safety: Only localhost / 127.0.0.1 URLs are accepted.  If the env var
+    contains any other host, the safe default is returned instead.  This
+    prevents the renderer (or a misconfigured env) from routing Ollama traffic
+    to an external server.
+    """
+    url = read_str_env("OLLAMA_BASE_URL", default="http://localhost:11434").rstrip("/")
+    if not any(url.startswith(prefix) for prefix in _OLLAMA_ALLOWED_PREFIXES):
+        return "http://localhost:11434"
+    return url
+
+
+def get_ollama_keep_alive() -> str:
+    """Return the Ollama keep-alive duration string (e.g. ``10m``).
+
+    Default: ``10m`` — keeps the model loaded in memory for 10 minutes after
+    the last request, avoiding cold-start latency on repeated calls.
+    """
+    return read_str_env("OLLAMA_KEEP_ALIVE", default="10m")
+
+
+def get_ollama_timeout_seconds() -> int:
+    """Return the Ollama HTTP timeout in seconds.
+
+    Default: 30.  Clamped to [1, 120].  Ollama can be slow on first load
+    (model not yet warmed), so a generous default is appropriate.
+    """
+    return read_int_env(
+        "OLLAMA_TIMEOUT_SECONDS",
+        default=30,
+        min_value=1,
+        max_value=120,
+    )

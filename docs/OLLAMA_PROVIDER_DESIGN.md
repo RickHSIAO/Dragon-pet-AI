@@ -2,7 +2,7 @@
 
 > dragon-pet-ai
 > Task: TASK-072
-> Status: DESIGN COMPLETE — awaiting implementation
+> Status: DESIGN COMPLETE — implementation IN_PROGRESS (TASK-073)
 > Last Updated: 2026-05-21
 
 ---
@@ -390,7 +390,7 @@ class OllamaLocalProvider:
 | Task | Name | Type |
 |---|---|---|
 | TASK-072 | Local Ollama Provider Design | Design — **DONE** |
-| TASK-073 | Ollama Provider Implementation Behind Feature Flag | Implementation |
+| TASK-073 | Ollama Provider Implementation Behind Feature Flag | **IN_PROGRESS** |
 | TASK-074 | Ollama Provider Mocked / Local Contract Tests | Tests |
 | TASK-075 | Ollama Runtime Smoke Check | Manual smoke |
 | TASK-076 | Provider Settings UI — Ollama Option | Implementation |

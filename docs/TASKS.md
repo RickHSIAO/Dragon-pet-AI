@@ -3894,6 +3894,61 @@ TASK-073 - Ollama Provider Implementation Behind Feature Flag
 
 ---
 
+## TASK-073 - Ollama Provider Implementation Behind Feature Flag
+
+Status: DONE
+
+Goal:
+Implement OllamaLocalProvider behind existing LLM provider feature flags without changing /chat schema or Electron UI.
+
+Scope:
+- Add Ollama config helpers to backend/app/core/config.py
+- Create backend/app/llm/ollama_provider.py (OllamaLocalProvider)
+- Update backend/app/llm/factory.py to resolve provider=ollama without API key
+- Add backend/tests/test_llm_ollama_provider.py (19 mocked-HTTP tests)
+- No Electron UI changes
+- No /chat schema changes
+- No external provider calls
+- No API key required
+
+Acceptance Criteria:
+- TASK-073 is recorded as DONE ✅
+- OllamaLocalProvider exists ✅
+- Factory resolves provider=ollama when enabled ✅
+- Ollama provider calls localhost only ✅
+- Ollama provider requires no API key ✅
+- Request body includes model, messages, stream=false, think=false, keep_alive, options ✅
+- Response parses message.content ✅
+- Usage fields (eval_count, prompt_eval_count) mapped safely ✅
+- Errors map to safe categories (ollama_unavailable, provider_timeout, model_not_found, invalid_response, provider_error) ✅
+- No retries ✅
+- No streaming ✅
+- No tools ✅
+- /chat schema remains reply/mood/source ✅
+- Electron UI unchanged ✅
+- pytest: 489 passed ✅
+- No live external API call in tests ✅
+
+Implementation Summary:
+- backend/app/core/config.py: added get_ollama_base_url() (localhost-only validation — non-localhost URL silently returns safe default), get_ollama_keep_alive() (default 10m), get_ollama_timeout_seconds() (default 30, clamped 1–120)
+- backend/app/llm/ollama_provider.py: created — OllamaLocalProvider implements LLMProvider Protocol; injectable HTTPJSONClient; POST {base_url}/api/chat; no API key; maps message.content to LLMResponse.text; maps eval_count → output_tokens_actual, prompt_eval_count → input_tokens_actual; 5 error categories (ollama_unavailable, provider_timeout, model_not_found, invalid_response, provider_error); __repr__/__str__ safe (no secrets, no prompt text, no response body)
+- backend/app/llm/factory.py: added SUPPORTED_LOCAL_PROVIDERS = {"ollama"} separate from SUPPORTED_REAL_PROVIDERS; Ollama path bypasses API key check entirely in get_resolved_llm_provider_info(); get_llm_provider() returns OllamaLocalProvider() when provider_name="ollama" and LLM_PROVIDER_ENABLED=true; unknown provider behavior unchanged
+- backend/tests/test_llm_ollama_provider.py: 19 mocked-HTTP tests — success mapping, usage fields, missing eval counts → usage=None, connection refused, httpx.ConnectError, timeout, HTTP 404, HTTP 500, missing message key, empty content, message not dict, response not dict, factory resolves ollama without key, factory unknown provider fallback, resolved info skips key check for ollama, factory disabled returns mock, repr safety, provider_name, payload structure (stream/think/messages order)
+
+Completion Notes:
+- No live Ollama server required for any test — all 19 tests use injectable FakeHTTPClient or RaisingHTTPClient
+- NTFS stale cache workaround applied: rsync to /tmp/, verify with ast.parse(), pytest from /tmp/ — standard project workaround
+- ollama_provider.py imports HTTPJSONClient Protocol and HTTPXJSONClient from real_provider.py — no duplication
+- renderer never calls Ollama directly — backend-only architecture boundary preserved
+- /chat response schema (reply / mood / source) unchanged
+- Electron UI unchanged
+- No API key used or stored
+
+Next Task:
+TASK-074 - Ollama Provider Contract Tests and Runtime Smoke Prep
+
+---
+
 ## SIDE_TRACK — Streamer Companion Mode
 
 Status: NOT SCHEDULED — design exploration only
