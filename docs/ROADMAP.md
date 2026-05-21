@@ -171,6 +171,7 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 | TASK-069D | Portfolio Screenshot Capture Session | DONE |
 | TASK-070D | Embed Portfolio Screenshots in README | DONE |
 | TASK-071D | Portfolio Demo Final Review | DONE |
+| TASK-072 | Local Ollama Provider Design | DONE |
 
 **Phase 4 Key Safety Constraints:**
 - `LLM_PROVIDER_ENABLED=false` is the default; real provider requires explicit opt-in via env var
@@ -184,7 +185,44 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 - Live smoke is blocked until explicit user cost confirmation and TASK-044 go/no-go criteria are satisfied
 - BYOK is the recommended MVP path; provider settings UI design done (TASK-047); backend API design done (TASK-048); secure key storage design done (TASK-049); usage meter implementation done (TASK-050); non-secret settings API implementation done (TASK-051); Provider Settings UI implementation done (TASK-052); secure key storage abstraction done (TASK-053); provider key save/clear endpoints done (TASK-054); key UI enablement design done (TASK-055); Save Key / Clear Key UI done (TASK-056); key UI smoke passed (TASK-057); Test Connection design done (TASK-058); Test Connection backend done (TASK-059); safety review PASS (TASK-059R); Test Connection UI enabled in renderer (TASK-060); runtime smoke PASS WITH EXPECTED LIMITATION (TASK-061); hardening tests DONE — 470 passed (TASK-062); Provider Settings UI readability/layout polish DONE (TASK-063); runtime smoke re-check PASS WITH NON-BLOCKING UI NOTES (TASK-064); Phase 4 Provider Settings stabilization summary created (TASK-065); portfolio demo script created (TASK-066D); README polished as portfolio-friendly entry point (TASK-067D); no live external provider call has occurred; no real API key has been used; project is demo-ready as local-first prototype
 
-See `docs/PHASE4_PLAN.md`, `docs/LLM_ADAPTER_DESIGN.md`, `docs/LLM_PROVIDER_CONTRACT.md`, `docs/CHAT_LLM_WIRING_DESIGN.md`, `docs/CHAT_LLM_REAL_PROVIDER_WIRING_DESIGN.md`, `docs/COST_AND_MONETIZATION.md`, `docs/BYOK_PRODUCT_AND_SETTINGS.md`, `docs/USAGE_METER_DESIGN.md`, `docs/PROVIDER_SETTINGS_UI_DESIGN.md`, `docs/PROVIDER_SETTINGS_API_DESIGN.md`, `docs/SECURE_KEY_STORAGE_DESIGN.md`, and `docs/PROVIDER_TEST_CONNECTION_DESIGN.md` for full planning and design documents.
+See `docs/PHASE4_PLAN.md`, `docs/LLM_ADAPTER_DESIGN.md`, `docs/LLM_PROVIDER_CONTRACT.md`, `docs/CHAT_LLM_WIRING_DESIGN.md`, `docs/CHAT_LLM_REAL_PROVIDER_WIRING_DESIGN.md`, `docs/COST_AND_MONETIZATION.md`, `docs/BYOK_PRODUCT_AND_SETTINGS.md`, `docs/USAGE_METER_DESIGN.md`, `docs/PROVIDER_SETTINGS_UI_DESIGN.md`, `docs/PROVIDER_SETTINGS_API_DESIGN.md`, `docs/SECURE_KEY_STORAGE_DESIGN.md`, `docs/PROVIDER_TEST_CONNECTION_DESIGN.md`, and `docs/OLLAMA_PROVIDER_DESIGN.md` for full planning and design documents.
+
+---
+
+## Phase 4 Extension — Local Ollama Provider Track
+
+**Goal:** Add a local LLM provider option via Ollama. No API key, no external network, no per-token cost. Runs on user's hardware.
+
+**Status:** DESIGN COMPLETE (TASK-072) — implementation pending
+
+**Local model candidates:**
+
+| Model | Speed (warm) | Throughput | Verdict |
+|---|---|---|---|
+| `qwen3:8b` | ~0.35s | ~73 tok/s | **Recommended — MVP default** |
+| `gemma3:12b` | ~3.48s | ~13 tok/s | Usable; better tone, slower |
+
+**Task Sequence:**
+
+| Task | Name | Status |
+|---|---|---|
+| TASK-072 | Local Ollama Provider Design | DONE |
+| TASK-073 | Ollama Provider Implementation Behind Feature Flag | Pending |
+| TASK-074 | Ollama Provider Mocked / Local Contract Tests | Pending |
+| TASK-075 | Ollama Runtime Smoke Check | Pending |
+| TASK-076 | Provider Settings UI — Ollama Option | Pending |
+| TASK-077 | README Update for Local LLM Mode | Pending |
+
+**Key design decisions:**
+- `OllamaLocalProvider` implements the same `ProviderInterface` as `AnthropicProvider` — no service layer changes required
+- `source=llm_local` in `/chat` response — schema unchanged
+- No API key; no `explicit_cost_ack` required — local resource warning instead
+- `keep_alive=10m` to avoid cold-start latency on repeated calls
+- `think=false`, `stream=false` — concise, deterministic responses
+- Renderer never calls Ollama directly — backend-only architecture boundary preserved
+- New key status value: `not_required` for providers that need no key
+
+See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 ---
 

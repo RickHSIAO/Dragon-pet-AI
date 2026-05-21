@@ -47,7 +47,7 @@
 |---|---|
 | Architecture | Electron desktop + FastAPI backend, end-to-end working |
 | Phase 3 | ✅ Complete — Memory, Audit Logs, Memory-Aware Chat |
-| Phase 4 | 🔄 In Progress — Provider Settings / BYOK sub-track stabilized |
+| Phase 4 | 🔄 In Progress — Provider Settings / BYOK stabilized; Local Ollama provider design underway |
 | pytest | ✅ 470 passed, 0 failed |
 | Live external provider call | ❌ None — intentionally gated |
 | Real API key used | ❌ None — all tests use mocked runners |
@@ -186,6 +186,7 @@ npm start
 |---|---|
 | [docs/PORTFOLIO_DEMO_SCRIPT.md](docs/PORTFOLIO_DEMO_SCRIPT.md) | Full demo script: one-liner, 30-sec pitch, 2-min walk-through, interview talking points, screenshot checklist |
 | [docs/PORTFOLIO_SCREENSHOT_CHECKLIST.md](docs/PORTFOLIO_SCREENSHOT_CHECKLIST.md) | Screenshot capture plan: 9 required screenshots, naming convention, setup commands, what not to show |
+| [docs/OLLAMA_PROVIDER_DESIGN.md](docs/OLLAMA_PROVIDER_DESIGN.md) | Local Ollama provider design: API contract, qwen3:8b recommendation, provider settings integration, feature flags, security boundaries (design only — not yet implemented) |
 | [docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md](docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md) | Phase 4 stabilization summary: completed capabilities, safety boundaries, test results, live smoke go/no-go |
 | [docs/PROVIDER_TEST_CONNECTION_DESIGN.md](docs/PROVIDER_TEST_CONNECTION_DESIGN.md) | Test Connection design and hardening test results |
 | [docs/SECURE_KEY_STORAGE_DESIGN.md](docs/SECURE_KEY_STORAGE_DESIGN.md) | Key storage threat model, storage options, redaction rules |
@@ -268,6 +269,7 @@ dragon-pet-ai/
 | `docs/PROVIDER_SETTINGS_KEY_UI_ENABLEMENT_DESIGN.md` | Save Key / Clear Key UI flow, unavailable storage UX, key status display |
 | `docs/PROVIDER_TEST_CONNECTION_DESIGN.md` | Test Connection design and hardening test results (Opus review PASS) |
 | `docs/PORTFOLIO_DEMO_SCRIPT.md` | Portfolio demo script: 30-sec pitch, 2-min walk-through, interview talking points |
+| `docs/OLLAMA_PROVIDER_DESIGN.md` | Local Ollama provider design: API contract, qwen3:8b, no-key integration, security boundaries |
 | `docs/STREAMER_COMPANION_MODE.md` | Future side track: OBS overlay / Twitch companion (not scheduled) |
 
 ---

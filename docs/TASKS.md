@@ -3849,7 +3849,48 @@ No Runtime Code Modified:
 - No real API key used ✅
 
 Next Task:
-TASK-072D - (TBD — OS Keychain implementation or Phase 5 planning)
+TASK-072 - Local Ollama Provider Design
+
+---
+
+## TASK-072 - Local Ollama Provider Design
+
+Status: DONE
+
+Goal:
+Design the Ollama local LLM provider adapter for dragon-pet-ai. Local provider eliminates external API cost and API key requirements. Docs-only task — no runtime code changes.
+
+Scope:
+- Create docs/OLLAMA_PROVIDER_DESIGN.md
+- Document Ollama API contract, provider settings integration, feature flags, Test Connection behavior, /chat behavior, usage meter integration, security boundaries, and future implementation sequence
+- Update docs/TASKS.md, docs/ROADMAP.md, README.md
+- Do not modify backend/app
+- Do not modify apps/desktop
+- Do not add tests or APIs
+- Do not call external APIs
+
+Acceptance Criteria:
+- TASK-072 is recorded as DONE ✅
+- docs/OLLAMA_PROVIDER_DESIGN.md exists ✅
+- Ollama API contract documented ✅
+- Local model test results recorded ✅
+- Provider settings integration designed ✅
+- Feature flags / env vars documented ✅
+- Test Connection behavior designed ✅
+- /chat behavior designed ✅
+- Security boundaries documented ✅
+- Future task sequence defined ✅
+- No backend/app code modified ✅
+- No apps/desktop code modified ✅
+- No external API call made ✅
+
+Implementation Summary:
+- docs/OLLAMA_PROVIDER_DESIGN.md: created — covers purpose, local model test results (qwen3:8b recommended, gemma3:12b slower), Ollama API contract (POST /api/chat, response mapping), provider settings integration (key disabled for ollama, key_status=not_required), feature flags (6 env vars), Test Connection behavior (local resource warning, 5 error categories), /chat behavior (source=llm_local, schema unchanged), usage meter integration, security boundaries (no external URL in renderer, no prompt logging), and implementation sequence (TASK-073 → TASK-077)
+- docs/ROADMAP.md: Local Ollama Provider track added
+- README.md: local Ollama provider design note added
+
+Next Task:
+TASK-073 - Ollama Provider Implementation Behind Feature Flag
 
 ---
 
