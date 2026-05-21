@@ -3599,6 +3599,56 @@ TASK-067D - Portfolio README Polish
 
 ---
 
+## TASK-067D - Portfolio README Polish
+
+Status: DONE
+
+Goal:
+Polish the README as a portfolio-friendly entry point for interviews and GitHub viewers. Docs-only — no runtime code changes.
+
+Scope:
+- Rewrite README opening section with project one-liner and current status
+- Add completed capabilities summary (updated)
+- Add architecture summary
+- Add safety / BYOK summary
+- Add Quick Start with Windows PowerShell commands
+- Add Demo / Portfolio links section
+- Add clear current limitations section
+- Link to docs/PORTFOLIO_DEMO_SCRIPT.md
+- Move development journal (task update blocks) to a clearly labelled section
+- Update docs/TASKS.md and docs/ROADMAP.md
+- Do not modify backend/app
+- Do not modify apps/desktop
+- Do not add tests or APIs
+- Do not call external APIs
+
+Acceptance Criteria:
+- TASK-067D is recorded as DONE ✅
+- README opening section is clearer and portfolio-friendly ✅
+- Project one-liner is present ✅
+- Completed capabilities are summarized (updated) ✅
+- Architecture is summarized ✅
+- Safety / BYOK boundaries are summarized ✅
+- Demo / run commands are easy to find ✅
+- Current limitations are clearly stated ✅
+- Link to docs/PORTFOLIO_DEMO_SCRIPT.md exists ✅
+- No backend/app code is modified ✅
+- No apps/desktop code is modified ✅
+- No external API call is made ✅
+
+Implementation Summary:
+- README.md: completely rewritten as portfolio-friendly entry point — added project one-liner, current status table, completed capabilities table (21 items), architecture diagram with key design decisions, safety/BYOK summary table (10 rules), PowerShell quick start (pytest + backend + Electron), demo & portfolio links section (8 docs), current limitations table (8 items), updated directory structure, updated docs table (24 docs), development principles, and a collapsible Development Journal section (task update blocks TASK-054 through TASK-067D)
+- docs/TASKS.md: TASK-067D added as DONE
+- docs/ROADMAP.md: TASK-067D added as DONE
+- No backend/app code was modified
+- No apps/desktop code was modified
+- No external API call was made
+
+Next Task:
+TASK-068D - Portfolio Screenshot Checklist Capture
+
+---
+
 ## SIDE_TRACK — Streamer Companion Mode
 
 Status: NOT SCHEDULED — design exploration only

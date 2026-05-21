@@ -1,161 +1,184 @@
 # Dragon Pet AI
 
-> TASK-054 update: provider key save/clear endpoints are wired to the secure key storage abstraction. Runtime default remains a safe unavailable backend, tests use an in-memory fake backend, no key is written to SQLite or plain config files, and live test connection remains disabled. No external provider calls are made. Validation: `cd backend; python -m pytest` -> 449 passed.
->
-> TASK-055 update: Key UI enablement design complete. Save Key and Clear Key controls are now designed with full interaction flows, unavailable storage UX (503 → safe message, env var recommendation), key status display (6 safe values, no key fragments), and security boundaries. Test Connection remains disabled.
->
-> TASK-056 update: Save Key and Clear Key controls are now enabled in the Provider Settings UI. Key input is enabled for real providers only, disabled for mock. Save Key POSTs to local backend and clears the input field after every attempt. Clear Key shows a confirmation dialog and DELETEs via local backend. Storage unavailable (503) shows a safe message with env var instructions. API key is never logged, never stored in localStorage/sessionStorage, never sent to external providers. Test Connection remains disabled. pytest: 449 passed (also fixed pre-existing TASK-054 truncation in routes.py and main.py).
->
-> TASK-058 update: Provider Test Connection design is documented. Test Connection remains disabled in runtime, requires future per-click `explicit_cost_ack`, sends exactly one minimal request, uses no retries/tools/streaming/memory, and does not fallback to mock. No live provider call has occurred.
->
-> TASK-059 update: Backend `POST /provider/settings/test` is implemented with mocked-provider runner support. It requires per-click `explicit_cost_ack`, builds exactly one minimal no-memory/no-tools/no-streaming request, records safe aggregate usage, and never falls back to mock. Runtime default runner does not call external providers; Electron Test Connection UI remains disabled. pytest: 465 passed.
->
-> TASK-059R update: Opus safety review of TASK-059 backend: verdict PASS. No critical issues. explicit_cost_ack enforced at API boundary, response schema contains no secret-bearing fields, runtime default runner is UnavailableProviderTestRunner, no live external API calls in tests. TASK-060 unblocked.
->
-> TASK-060 update: Test Connection button enabled in Electron renderer. Enable conditions: real provider selected, key_status configured, real_provider_enabled true. Explicit cost acknowledgement (window.confirm) required on every click — covers all 4 required disclosures. POST to local backend only with body {provider, model, explicit_cost_ack: true} — no api_key, no prompt, no memory. Safe response fields rendered: status, safe_message, error_category, source, usage_estimate. No automatic test after Save Key. No external provider URL in renderer. API key never logged, never in localStorage/sessionStorage. node --check: PASS. pytest: 465 passed. Runtime smoke deferred to TASK-061.
->
-> TASK-061 update: Runtime smoke check PASS WITH EXPECTED LIMITATION. Test Connection button correctly remained disabled (key_status: not_configured, no key stored — expected safe behavior). No live external provider call was made.
->
-> TASK-062 update: Provider Test Connection hardening tests complete. Added 5 Opus-recommended hardening tests: provider_disabled branch with configured key (runner not called), invalid_model 400 before runner call, unknown error collapse to provider_error (raw string does not leak), extra field rejection without echoing value (ConfigDict extra=forbid), safe_message category sweep across all 11 error categories. pytest: 470 passed, 0 failed. No backend logic modified. No Electron UI modified.
->
-> TASK-063 update: Electron Provider Settings UI polish/layout fix complete. Renderer readability, vertical scrolling, Provider Settings status cards, usage summary, form spacing, button wrapping, and narrow-width DevTools-docked layout were improved. Save Key / Clear Key / Test Connection behavior is unchanged. No backend/app code was modified. No provider behavior changed. No external API call was made. Electron static checks passed.
->
-> TASK-064 update: Provider Settings UI runtime smoke re-check PASS WITH NON-BLOCKING UI NOTES. All provider settings controls verified readable and functional after TASK-063 polish. Test Connection correctly disabled (key_status: not_configured — expected safe behavior). No live external provider call. No real API key entered.
->
-> TASK-065 update: Phase 4 Provider Settings Stabilization Summary complete. Created docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md covering TASK-045 through TASK-064: completed capabilities, safety boundaries (16 rules), implemented vs intentionally-not-implemented, runtime limitations, non-blocking UI notes, test results (470 passed), live smoke go/no-go conditions (all unmet — no live call has occurred), and recommended next tasks. No backend/app code modified. No external API call made.
->
-> TASK-066D update: Portfolio Demo Script complete. Created docs/PORTFOLIO_DEMO_SCRIPT.md with project one-liner, 30-second pitch, 2-minute demo script (10 steps), architecture talking points, completed features table (21 items), safety/BYOK explanation, screenshot checklist (9 items), what not to claim (8 items), interview talking points (8 topics), and PowerShell demo commands. Project is demo-ready as a local-first prototype. No live external provider call has occurred. No real API key used. No backend/app code modified.
+> **Dragon Pet AI** is a local-first Electron + FastAPI desktop companion prototype with manual memory, memory audit logs, BYOK provider settings, usage metering, a safety-reviewed Test Connection endpoint, and mocked LLM integration — built with safety-first incremental development and a 470-test mocked backend suite.
 
-AI 驅動的桌面螢幕寵物 — 有個性、有記憶的桌面同伴。
+**Not production-ready.** No live external provider call has been made. No real API key has been used. This is a portfolio / prototype project.
+
+📄 **[Full Demo Script & Interview Talking Points →](docs/PORTFOLIO_DEMO_SCRIPT.md)**
+📋 **[Phase 4 Provider Settings Summary →](docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md)**
 
 ---
 
-## 目前狀態
+## Current Status
 
-**Phase 3 完成 — Memory-Aware Chat and Audit Inspection**
-**Phase 4 進行中 — LLM Adapter Integration（TASK-066D Portfolio Demo Script 完成；pytest: 470 passed；專案 demo-ready 作為 local-first prototype；無 live external provider call；無 real API key 使用）**
-
-Backend（FastAPI）和 Desktop（Electron）均可運行。Mock chat、Manual Memory、Memory-Aware Chat（two-layer gate）、Audit Inspection API 和 Audit Logs UI 全部完成並通過 runtime smoke check。pytest 最新結果：356 passed。Real provider adapter 已在 TASK-035 behind feature flags；Anthropic contract 已用 mocked HTTP 驗證（TASK-037）。`/chat` wiring 已放在 `LLM_CHAT_ENABLED` 後面，default false；mock runtime smoke passed（TASK-041）；live provider 仍預設停用。
-
-BYOK 已設計完成（TASK-045）：推薦方向 BYOK desktop app / personal companion，使用者自帶 API key 並承擔 provider billing。Usage meter 設計完成（TASK-046）：14 個追蹤欄位、token 估算規則、privacy 邊界。Provider Settings UI 設計完成（TASK-047）：UI sections、9-step settings flow、security boundaries、error UX。Backend Provider Settings API 設計完成（TASK-048）：5 個 endpoints、write-only key handling、safe status model、test connection safety。Secure Key Storage 設計進行中（TASK-049）：4 個 storage options 比較、MVP 推薦 env var only、future desktop 推薦 OS keychain、plain SQLite 明確禁止。尚未實作 settings API、settings UI、或 persistent key storage；API key 目前仍為 env-only（dev phase）；real provider 預設關閉。manual live smoke 暫緩，直到使用者明確接受成本風險。詳見 `docs/BYOK_PRODUCT_AND_SETTINGS.md`、`docs/USAGE_METER_DESIGN.md`、`docs/PROVIDER_SETTINGS_UI_DESIGN.md`、`docs/PROVIDER_SETTINGS_API_DESIGN.md`、`docs/COST_AND_MONETIZATION.md`。
+| Item | State |
+|---|---|
+| Architecture | Electron desktop + FastAPI backend, end-to-end working |
+| Phase 3 | ✅ Complete — Memory, Audit Logs, Memory-Aware Chat |
+| Phase 4 | 🔄 In Progress — Provider Settings / BYOK sub-track stabilized |
+| pytest | ✅ 470 passed, 0 failed |
+| Live external provider call | ❌ None — intentionally gated |
+| Real API key used | ❌ None — all tests use mocked runners |
+| Production-ready | ❌ Not yet — prototype / portfolio stage |
+| Demo-ready (local mock) | ✅ Yes |
 
 ---
 
-## 快速啟動
+## Completed Capabilities
 
-### 1. Backend（FastAPI）
+| Capability | Notes |
+|---|---|
+| `GET /health` | Backend liveness check |
+| `POST /chat` | Mock character response; LLM adapter behind feature flag |
+| Electron desktop UI | Chat, Memory, Audit Logs, Provider Settings sections |
+| Manual Memory CRUD | `POST/GET/DELETE /memory` — SQLite persistence |
+| Memory context preview | `GET /memory/context-preview` — safe, no injection |
+| Approved memory context builder | Type allowlist, confidence filter, 5-memory / 1500-char cap |
+| Memory-aware chat (two-layer gate) | `MEMORY_INJECTION_ENABLED` env flag + per-request `use_memory` |
+| Memory Injection Audit API | `GET /memory/audit` — safe metadata only, no raw content |
+| Audit Logs UI | Desktop section; shows injection events |
+| In-memory usage meter | 14 tracked fields; token estimation; privacy boundaries |
+| Provider Settings API | `GET/PATCH /provider/settings` — non-secret fields only |
+| Key status endpoint | `GET /provider/settings/key/status` — 6 safe values, no key fragment |
+| Save Key endpoint | `POST /provider/settings/key` — write-only; key never echoed |
+| Clear Key endpoint | `DELETE /provider/settings/key` — clears from storage abstraction |
+| Provider Settings UI | Provider/model select, Save Key, Clear Key, key status, usage summary |
+| Secure key storage abstraction | `UnavailableBackend` (runtime), `InMemoryBackend` (tests) |
+| Test Connection backend | `POST /provider/settings/test` — explicit cost ack required; Opus review PASS |
+| Test Connection UI | Cost confirm dialog; safe field rendering; no auto-run |
+| LLM adapter layer | Anthropic adapter behind `LLM_PROVIDER_ENABLED=false` |
+| Hardening tests | 5 Opus-recommended tests covering edge cases and safety boundaries |
+| 470 mocked tests | Full backend suite; no external HTTP; no real key |
 
-```bash
+---
+
+## Architecture
+
+```
+Electron renderer (HTML / CSS / JS)
+  └── localhost HTTP → FastAPI backend (:8000)
+        ├── api/routes.py                    — all HTTP endpoints
+        ├── services/
+        │     ├── chat_service               — /chat routing, LLM adapter wiring
+        │     ├── memory_service             — memory CRUD, approved context builder
+        │     ├── memory_audit_service       — audit row creation and inspection
+        │     ├── usage_meter_service        — token/cost tracking (in-memory)
+        │     ├── provider_settings_service  — non-secret settings persistence
+        │     ├── key_storage_service        — secure key storage abstraction
+        │     └── provider_test_connection_service — Test Connection logic
+        ├── providers/
+        │     ├── mock_provider              — always-on safe default
+        │     ├── anthropic_provider         — behind LLM_PROVIDER_ENABLED flag
+        │     └── provider_factory           — selects provider by config
+        ├── schemas/                         — Pydantic request/response models
+        └── db/                              — SQLModel / SQLite engine
+```
+
+**Key design decisions:**
+- **Adapter pattern** — adding a new LLM provider requires only a new adapter; service and route layers are unchanged
+- **Feature flags everywhere** — `LLM_PROVIDER_ENABLED`, `LLM_CHAT_ENABLED`, `MEMORY_INJECTION_ENABLED` all default `false`
+- **Schema stability** — `/chat` response (`reply / mood / source`) unchanged across all of Phase 4
+- **Write-only key handling** — no endpoint returns the API key or any fragment of it
+- **Test isolation** — `InMemoryKeyStorageBackend` and `FakeProviderTestRunner` injected via dependency inversion; no test touches a real provider or a real key
+
+---
+
+## Safety / BYOK
+
+**BYOK (Bring Your Own Key)** means the user supplies their own LLM provider API key. The app does not ship with a developer-owned key.
+
+| Rule | Implementation |
+|---|---|
+| API key never returned to frontend | Write-only endpoints; key never in any response body |
+| API key never stored in SQLite | `UnavailableBackend` runtime default; OS keychain designed (not yet wired) |
+| API key never logged | Forbidden fields enforced; provider `__repr__`/`__str__` redact secrets |
+| API key never in localStorage/sessionStorage | Electron renderer does not store or receive the key |
+| Test Connection requires cost ack | `explicit_cost_ack: true` required per click; `window.confirm()` with 4 disclosures |
+| Test Connection sends exactly one request | 16 output tokens; no memory, tools, streaming, or history |
+| Unknown errors return safe messages | `_safe_error_category()` collapses unknown strings to `"provider_error"` |
+| Extra request fields rejected | `ConfigDict(extra="forbid")` on all request schemas |
+| No live provider call | Runtime default is `UnavailableProviderTestRunner` and `UnavailableKeyStorageBackend` |
+| Independent safety review | Test Connection backend reviewed by Opus — verdict: **PASS** |
+
+---
+
+## Quick Start (Windows PowerShell)
+
+### Run tests
+
+```powershell
 cd backend
-
-# 建立虛擬環境（Windows）
 python -m venv .venv
-.venv\Scripts\activate
-
-# macOS / Linux
-# source .venv/bin/activate
-
-# 安裝依賴
+.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+python -m pytest
+# Expected: 470 passed
+```
 
-# 啟動開發伺服器
+### Start the backend
+
+```powershell
+cd backend
+.venv\Scripts\Activate.ps1
 uvicorn app.main:app --reload --port 8000
 ```
 
-啟動後可驗證：
-```bash
+### Verify backend
+
+```powershell
 # Health check
-curl http://localhost:8000/health
+Invoke-RestMethod -Uri http://localhost:8000/health
 
 # Mock chat
-curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Hello!"}'
+Invoke-RestMethod -Method POST `
+  -Uri http://localhost:8000/chat `
+  -ContentType "application/json" `
+  -Body '{"message": "Hello!"}'
 ```
 
-### 2. Desktop（Electron）
+### Start the Electron desktop
 
-> 需要先確認 backend 已在 localhost:8000 執行。
+> Requires backend running at localhost:8000.
 
-```bash
-cd apps/desktop
+```powershell
+cd apps\desktop
 npm install
 npm start
 ```
 
-桌面視窗啟動後：
-- 自動呼叫 `/health` 確認 backend 連線
-- 在輸入框輸入訊息，按 Send 或 Enter 送出
-- 顯示 mock 回應（`source: "mock"`，無真實 AI）
-
 ---
 
-## 目前功能
+## Demo & Portfolio Links
 
-| 功能 | 狀態 |
+| Document | Purpose |
 |---|---|
-| `GET /health` — liveness check | ✅ 可用 |
-| `POST /chat` — mock 角色回應 | ✅ 可用（無 AI） |
-| Desktop 視窗 | ✅ 可用 |
-| Desktop ↔ Backend 通訊 | ✅ 可用 |
-| SQLite 資料庫初始化 | ✅ 可用 |
-| Manual Memory API (`POST/GET/DELETE /memory`) | ✅ 可用 |
-| Memory Context Preview (`GET /memory/context-preview`) | ✅ 可用 |
-| Memory-aware chat toggle (`use_memory`, two-layer gate) | ✅ 可用 |
-| `GET /memory/audit` — read-only audit inspection API | ✅ 可用（TASK-026） |
-| Desktop Audit Logs UI | ✅ 可用（TASK-027） |
+| [docs/PORTFOLIO_DEMO_SCRIPT.md](docs/PORTFOLIO_DEMO_SCRIPT.md) | Full demo script: one-liner, 30-sec pitch, 2-min walk-through, interview talking points, screenshot checklist |
+| [docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md](docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md) | Phase 4 stabilization summary: completed capabilities, safety boundaries, test results, live smoke go/no-go |
+| [docs/PROVIDER_TEST_CONNECTION_DESIGN.md](docs/PROVIDER_TEST_CONNECTION_DESIGN.md) | Test Connection design and hardening test results |
+| [docs/SECURE_KEY_STORAGE_DESIGN.md](docs/SECURE_KEY_STORAGE_DESIGN.md) | Key storage threat model, storage options, redaction rules |
+| [docs/BYOK_PRODUCT_AND_SETTINGS.md](docs/BYOK_PRODUCT_AND_SETTINGS.md) | BYOK product design and security boundaries |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Full phase-by-phase development roadmap |
+| [docs/TASKS.md](docs/TASKS.md) | Complete task history |
+| [docs/STREAMER_COMPANION_MODE.md](docs/STREAMER_COMPANION_MODE.md) | Future side track — OBS overlay / Twitch companion design (not scheduled) |
 
 ---
 
-## 目前限制（TASK-003）
+## Current Limitations
 
-以下功能尚未實作：
-
-- `/chat` 回傳的是 hardcoded mock 回應，**未串接任何 AI API**
-- 無資料庫資料表（SQLite 檔案建立但為空）
-- 無記憶系統、無角色狀態持久化
-- 無語音（TTS / STT）
-- 無 Live2D 動畫
-- 無 shell 指令執行能力
-- 無使用者檔案存取能力
-
----
-
-## 如何閱讀 docs/
-
-| 文件 | 說明 |
+| Limitation | Detail |
 |---|---|
-| `docs/TASKS.md` | 目前任務狀態與進度追蹤 |
-| `docs/PHASE3_DEMO_SUMMARY.md` | Phase 3 demo summary、safety model、demo flow |
-| `docs/PHASE4_PLAN.md` | Phase 4 規劃：候選方向、建議路徑、安全約束、任務序列 |
-| `docs/LLM_ADAPTER_DESIGN.md` | LLM Adapter 架構設計：provider interface、feature flags、API key 安全規則、error handling（含 TASK-034R Opus 審查結果與 TASK-034F 修補） |
-| `docs/LLM_PROVIDER_CONTRACT.md` | TASK-036 vendor contract：Anthropic request / response / error mapping、mocked fixtures、manual smoke checklist |
-| `docs/CHAT_LLM_WIRING_DESIGN.md` | TASK-039 chat wiring design：`LLM_CHAT_ENABLED`、/chat adapter flow、fallback、memory interaction、logging/test plan |
-| `docs/CHAT_LLM_REAL_PROVIDER_WIRING_DESIGN.md` | TASK-042 real-provider /chat wiring design：flag matrix、source behavior、fallback、memory independence、manual live smoke prerequisites |
-| `docs/COST_AND_MONETIZATION.md` | TASK-044 cost control and go/no-go design：BYOK-first direction、live smoke criteria、monetization options |
-| `docs/BYOK_PRODUCT_AND_SETTINGS.md` | TASK-045 BYOK product/settings design：key ownership、storage options、settings UX、安全邊界、usage visibility |
-| `docs/USAGE_METER_DESIGN.md` | TASK-046 usage meter design：token/cost tracking、estimation rules、privacy boundaries、storage options、UI requirements |
-| `docs/PROVIDER_SETTINGS_UI_DESIGN.md` | TASK-047 provider settings UI design：UI sections、settings flow（9 steps）、security boundaries、error UX（7 types）、memory interaction、non-goals、implementation sequence |
-| `docs/PROVIDER_SETTINGS_API_DESIGN.md` | TASK-048 backend provider settings API design：5 endpoints、write-only key handling、safe status model、test connection safety rules、usage meter integration、security boundaries、error categories |
-| `docs/SECURE_KEY_STORAGE_DESIGN.md` | TASK-049 secure key storage design：4 storage options、MVP recommendation（env var）、future desktop recommendation（OS keychain）、key lifecycle、redaction rules、threat model、testing requirements |
-| `docs/PROVIDER_SETTINGS_KEY_UI_ENABLEMENT_DESIGN.md` | TASK-055 key UI enablement design：Save Key UI flow、Clear Key UI flow、unavailable storage UX、key status display（6 values）、Test Connection disabled state、security boundaries、error UX（7 messages）、future sequence（TASK-056 → 059） |
-| `docs/PROVIDER_TEST_CONNECTION_DESIGN.md` | TASK-058 Test Connection design：explicit cost acknowledgement、exactly-one minimal request、safe response model、no mock fallback、usage meter integration、UI behavior、logging/redaction rules |
-| `docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md` | TASK-065 Provider Settings Stabilization Summary：TASK-045～TASK-064 成果整合、safety boundaries、implemented vs not-implemented、runtime limitations、test results（470 passed）、live smoke go/no-go conditions、recommended next tasks |
-| `docs/PORTFOLIO_DEMO_SCRIPT.md` | TASK-066D Portfolio Demo Script：project one-liner、30-second pitch、2-minute demo script、architecture talking points、completed features、safety/BYOK explanation、screenshot checklist、what not to claim、interview talking points、PowerShell demo commands |
-| `docs/PRD.md` | 產品需求文件（MVP 定義） |
-| `docs/ARCHITECTURE.md` | 系統架構設計 |
-| `docs/MEMORY_SYSTEM.md` | 記憶系統設計 |
-| `docs/CHARACTER_SPEC.md` | 角色設定與人格規格 |
-| `docs/ROADMAP.md` | 開發路線圖 |
-| `docs/STREAMER_COMPANION_MODE.md` | Future side track（未排入 roadmap）：直播 companion 模式設計探索 |
-
-建議閱讀順序：`TASKS.md` → `PRD.md` → `ARCHITECTURE.md` → 其他文件
-
-> **Future Side Track（未排入 roadmap）：** Streamer Companion Mode — 未來可能的直播應用方向，讓 dragon-pet 成為 OBS overlay 角色、回應 Twitch/YouTube 事件與 chat 指令。此方向需要 Phase 4 LLM adapter 穩定、TTS 完成、以及專屬安全設計，目前不在實作計畫內。詳見 `docs/STREAMER_COMPANION_MODE.md`。
+| No live provider call | Runtime key storage unavailable; Test Connection button disabled by design |
+| No real API key used | All tests use mocked runners and in-memory fake storage |
+| OS keychain not wired | Storage abstraction is ready; `keytar` backend not yet implemented |
+| Usage meter is in-memory | Resets on backend restart; persistent meter deferred |
+| No automatic memory extraction | All memory is manually created |
+| No streaming / tools / TTS / Live2D | Out of scope for current phase |
+| No installer / packaging | Not packaged as distributable app |
+| Not billing-accurate | Token cost estimates use rule-based approximation |
 
 ---
 
-## 目錄結構
+## Directory Structure
 
 ```
 dragon-pet-ai/
@@ -165,88 +188,100 @@ dragon-pet-ai/
       src/
         main.js               # Electron main process
         renderer/
-          index.html          # 主視窗 HTML
-          renderer.js         # UI 邏輯、backend 呼叫
-          styles.css          # 樣式
+          index.html          # Main window HTML
+          renderer.js         # UI logic, backend calls
+          styles.css          # Styles
   backend/
     app/
-      main.py                 # FastAPI 入口
-      api/routes.py           # /health, /chat
-      db/database.py          # SQLModel engine 佔位
-      schemas/chat.py         # Request / Response schema
+      main.py                 # FastAPI entry point
+      api/routes.py           # All HTTP endpoints
+      core/config.py          # Feature flags, env config
+      db/database.py          # SQLModel engine
+      schemas/                # Pydantic request/response models
+      services/               # Business logic (one file per service)
+      providers/              # LLM adapter layer
+    tests/                    # pytest suite (470 tests)
     requirements.txt
-    README.md
-  docs/                       # 所有設計文件
-  scripts/                    # 工具腳本（待用）
+  docs/                       # All design documents
   .env.example
   README.md
 ```
 
 ---
 
-## 開發順序（Roadmap 摘要）
+## All Design Documents
 
-| Phase | 內容 |
+| Document | Topic |
 |---|---|
-| Phase 0 | 專案定義、規格文件（TASK-000 ~ 002） |
-| Phase 1 | Runtime Skeleton — FastAPI + Electron（TASK-003） ← 目前 |
-| Phase 2 | Chat + Character — 接 LLM、角色 prompt |
-| Phase 3 | Memory + State — SQLite 持久化、長期記憶 |
-| Phase 4 | Voice + Presence — TTS、情緒表情 |
-| Phase 5 | Assistant — Task List、專案輔助、工具執行 |
-
-詳見 `docs/ROADMAP.md`。
-
----
-
-## Backend Test
-
-```bash
-cd backend
-python -m pytest
-```
-
----
-
-## Memory Skeleton
-
-- Backend has a local SQLite `Memory` table skeleton for future long-term memory.
-- Manual memory API exists:
-  - `POST /memory` creates explicit memory.
-  - `GET /memory` lists active memory records.
-  - `GET /memory/context-preview` previews active memories as context text.
-  - `DELETE /memory/{id}` deactivates memory.
-- Desktop has a Memory Management placeholder for creating, listing, deactivating, and previewing local memories.
-- Memory is local SQLite only and is not used by `/chat` yet.
-- Manual memory injection is designed but not implemented.
-- Memory injection design was safety-reviewed; implementation remains disabled until future work.
-- Future runtime wiring will require `MEMORY_INJECTION_ENABLED`, default `False`.
-- Approved memory context builder exists but is not connected to `/chat` yet.
-- Approved context building applies type allowlist, confidence filtering, sensitive-content filtering, and 5-memory / 1500-character caps.
-- Prompt formatting uses delimiters and a reference-only safety instruction.
-- `MemoryInjectionAudit` table records injection events when memory-aware chat runs: selected memory IDs, count, total context chars, and feature flag state.
-- Audit rows store selected IDs and aggregate metadata only — raw memory content is never stored in audit rows.
-- An audit inspection design exists (TASK-025): a future `GET /memory/audit` endpoint and UI section will surface safe audit metadata. Not yet implemented.
-- Future audit inspection will show: id, created_at, selected_memory_ids, selected_count, total_context_chars, feature_flag_enabled. It will never expose raw memory content or prompt text.
-- Manual memory is intended to remain inspectable and controllable before any future chat use.
-- Context preview does not use semantic retrieval and does not update `last_used_at`.
-- No vector database is connected.
-- No automatic memory extraction is implemented.
-- A **memory-aware chat UI toggle** is implemented (TASK-023) using a two-layer safety model:
-  - Backend global gate: `MEMORY_INJECTION_ENABLED` (set before startup, defaults to `false`)
-  - Per-request opt-in: `use_memory` field in the POST `/chat` body (defaults to `false`)
-  - Only when both are `true` may `/chat` use approved memory context.
-  - The desktop UI shows a "Use approved memories" checkbox near the chat input.
-  - `/chat` response schema remains `reply / mood / source` regardless of flag or toggle state.
-  - Memory content is never returned in the `/chat` response.
-  - No `PATCH /config` endpoint. The backend flag is startup-time only.
-  - No Electron IPC required. The frontend sends `use_memory` in the POST body directly.
+| `docs/TASKS.md` | Task history and progress tracking |
+| `docs/ROADMAP.md` | Phase-by-phase development roadmap |
+| `docs/PRD.md` | MVP product requirements |
+| `docs/ARCHITECTURE.md` | System architecture |
+| `docs/CHARACTER_SPEC.md` | Character personality spec |
+| `docs/MEMORY_SYSTEM.md` | Memory system design |
+| `docs/PHASE3_DEMO_SUMMARY.md` | Phase 3 demo summary and safety model |
+| `docs/PHASE4_PLAN.md` | Phase 4 planning: options, safety constraints, task sequence |
+| `docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md` | Phase 4 Provider Settings stabilization summary (TASK-045–TASK-064) |
+| `docs/LLM_ADAPTER_DESIGN.md` | LLM adapter architecture: provider interface, feature flags, safety rules |
+| `docs/LLM_PROVIDER_CONTRACT.md` | Anthropic request/response/error mapping, mocked fixtures |
+| `docs/CHAT_LLM_WIRING_DESIGN.md` | Chat LLM wiring design: `LLM_CHAT_ENABLED`, adapter flow, fallback |
+| `docs/CHAT_LLM_REAL_PROVIDER_WIRING_DESIGN.md` | Real-provider /chat wiring design: flag matrix, source behavior |
+| `docs/COST_AND_MONETIZATION.md` | Cost control and live smoke go/no-go criteria |
+| `docs/BYOK_PRODUCT_AND_SETTINGS.md` | BYOK product design: key ownership, storage, security boundaries |
+| `docs/USAGE_METER_DESIGN.md` | Usage meter: 14 tracking fields, token estimation, privacy boundaries |
+| `docs/PROVIDER_SETTINGS_UI_DESIGN.md` | Provider Settings UI: 9-step settings flow, error UX, security boundaries |
+| `docs/PROVIDER_SETTINGS_API_DESIGN.md` | Provider Settings API: 6 endpoints, write-only key handling, safe status model |
+| `docs/SECURE_KEY_STORAGE_DESIGN.md` | Secure key storage: 4 options, threat model, redaction rules |
+| `docs/PROVIDER_SETTINGS_KEY_UI_ENABLEMENT_DESIGN.md` | Save Key / Clear Key UI flow, unavailable storage UX, key status display |
+| `docs/PROVIDER_TEST_CONNECTION_DESIGN.md` | Test Connection design and hardening test results (Opus review PASS) |
+| `docs/PORTFOLIO_DEMO_SCRIPT.md` | Portfolio demo script: 30-sec pitch, 2-min walk-through, interview talking points |
+| `docs/STREAMER_COMPANION_MODE.md` | Future side track: OBS overlay / Twitch companion (not scheduled) |
 
 ---
 
-## 開發規範
+## Development Principles
 
-- 每個 TASK 有明確 scope，不得自行擴張
-- 所有設計決策記錄於 `docs/` 對應文件中
-- 功能實作前必須先完成對應規格文件
-- 任何可執行系統操作的功能必須先設計安全層
+- **Docs before code** — every feature is specified before it is implemented
+- **Scope discipline** — features belong to one phase; no Phase N+1 work during Phase N
+- **Safety first** — any capability that touches user data or incurs cost requires a safety design step
+- **Local first** — all user data stays on device unless the user explicitly opts in to a cloud feature
+- **Reversible steps** — prefer designs that can be undone without data loss
+
+---
+
+## Development Journal
+
+> Internal task update log. Documents what changed in each task.
+
+<details>
+<summary>Expand task update history (TASK-054 → TASK-067D)</summary>
+
+> TASK-054: provider key save/clear endpoints are wired to the secure key storage abstraction. Runtime default remains a safe unavailable backend, tests use an in-memory fake backend, no key is written to SQLite or plain config files, and live test connection remains disabled. No external provider calls are made. pytest: 449 passed.
+
+> TASK-055: Key UI enablement design complete. Save Key and Clear Key controls are now designed with full interaction flows, unavailable storage UX (503 → safe message, env var recommendation), key status display (6 safe values, no key fragments), and security boundaries. Test Connection remains disabled.
+
+> TASK-056: Save Key and Clear Key controls are now enabled in the Provider Settings UI. Key input is enabled for real providers only, disabled for mock. Save Key POSTs to local backend and clears the input field after every attempt. Clear Key shows a confirmation dialog and DELETEs via local backend. Storage unavailable (503) shows a safe message with env var instructions. API key is never logged, never stored in localStorage/sessionStorage, never sent to external providers. Test Connection remains disabled. pytest: 449 passed.
+
+> TASK-058: Provider Test Connection design is documented. Test Connection remains disabled in runtime, requires future per-click `explicit_cost_ack`, sends exactly one minimal request, uses no retries/tools/streaming/memory, and does not fallback to mock. No live provider call has occurred.
+
+> TASK-059: Backend `POST /provider/settings/test` is implemented with mocked-provider runner support. It requires per-click `explicit_cost_ack`, builds exactly one minimal no-memory/no-tools/no-streaming request, records safe aggregate usage, and never falls back to mock. Runtime default runner does not call external providers; Electron Test Connection UI remains disabled. pytest: 465 passed.
+
+> TASK-059R: Opus safety review of TASK-059 backend: verdict PASS. No critical issues. explicit_cost_ack enforced at API boundary, response schema contains no secret-bearing fields, runtime default runner is UnavailableProviderTestRunner, no live external API calls in tests. TASK-060 unblocked.
+
+> TASK-060: Test Connection button enabled in Electron renderer. Enable conditions: real provider selected, key_status configured, real_provider_enabled true. Explicit cost acknowledgement (window.confirm) required on every click — covers all 4 required disclosures. POST to local backend only with body {provider, model, explicit_cost_ack: true} — no api_key, no prompt, no memory. Safe response fields rendered: status, safe_message, error_category, source, usage_estimate. No automatic test after Save Key. No external provider URL in renderer. API key never logged, never in localStorage/sessionStorage. node --check: PASS. pytest: 465 passed.
+
+> TASK-061: Runtime smoke check PASS WITH EXPECTED LIMITATION. Test Connection button correctly remained disabled (key_status: not_configured, no key stored — expected safe behavior). No live external provider call was made.
+
+> TASK-062: Provider Test Connection hardening tests complete. Added 5 Opus-recommended hardening tests: provider_disabled branch with configured key (runner not called), invalid_model 400 before runner call, unknown error collapse to provider_error (raw string does not leak), extra field rejection without echoing value (ConfigDict extra=forbid), safe_message category sweep across all 11 error categories. pytest: 470 passed, 0 failed. No backend logic modified. No Electron UI modified.
+
+> TASK-063: Electron Provider Settings UI polish/layout fix complete. Renderer readability, vertical scrolling, Provider Settings status cards, usage summary, form spacing, button wrapping, and narrow-width DevTools-docked layout were improved. Save Key / Clear Key / Test Connection behavior is unchanged. No backend/app code was modified. No provider behavior changed. No external API call was made. Electron static checks passed.
+
+> TASK-064: Provider Settings UI runtime smoke re-check PASS WITH NON-BLOCKING UI NOTES. All provider settings controls verified readable and functional after TASK-063 polish. Test Connection correctly disabled (key_status: not_configured — expected safe behavior). No live external provider call. No real API key entered.
+
+> TASK-065: Phase 4 Provider Settings Stabilization Summary complete. Created docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md covering TASK-045 through TASK-064: completed capabilities, safety boundaries (16 rules), implemented vs intentionally-not-implemented, runtime limitations, non-blocking UI notes, test results (470 passed), live smoke go/no-go conditions (all unmet — no live call has occurred), and recommended next tasks. No backend/app code modified. No external API call made.
+
+> TASK-066D: Portfolio Demo Script complete. Created docs/PORTFOLIO_DEMO_SCRIPT.md with project one-liner, 30-second pitch, 2-minute demo script (10 steps), architecture talking points, completed features table (21 items), safety/BYOK explanation, screenshot checklist (9 items), what not to claim (8 items), interview talking points (8 topics), and PowerShell demo commands. Project is demo-ready as a local-first prototype. No live external provider call has occurred. No real API key used. No backend/app code modified.
+
+> TASK-067D: README polished as portfolio-friendly entry point. Added project one-liner, current status table, completed capabilities table (21 items), architecture diagram with key design decisions, safety/BYOK summary table, PowerShell quick start, demo & portfolio links, current limitations table, updated directory structure, updated docs table. Moved task update history to collapsible Development Journal section. No backend/app code modified. No external API call made.
+
+</details>
