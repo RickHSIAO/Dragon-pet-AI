@@ -23,6 +23,8 @@
 > TASK-064 update: Provider Settings UI runtime smoke re-check PASS WITH NON-BLOCKING UI NOTES. All provider settings controls verified readable and functional after TASK-063 polish. Test Connection correctly disabled (key_status: not_configured — expected safe behavior). No live external provider call. No real API key entered.
 >
 > TASK-065 update: Phase 4 Provider Settings Stabilization Summary complete. Created docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md covering TASK-045 through TASK-064: completed capabilities, safety boundaries (16 rules), implemented vs intentionally-not-implemented, runtime limitations, non-blocking UI notes, test results (470 passed), live smoke go/no-go conditions (all unmet — no live call has occurred), and recommended next tasks. No backend/app code modified. No external API call made.
+>
+> TASK-066D update: Portfolio Demo Script complete. Created docs/PORTFOLIO_DEMO_SCRIPT.md with project one-liner, 30-second pitch, 2-minute demo script (10 steps), architecture talking points, completed features table (21 items), safety/BYOK explanation, screenshot checklist (9 items), what not to claim (8 items), interview talking points (8 topics), and PowerShell demo commands. Project is demo-ready as a local-first prototype. No live external provider call has occurred. No real API key used. No backend/app code modified.
 
 AI 驅動的桌面螢幕寵物 — 有個性、有記憶的桌面同伴。
 
@@ -31,7 +33,7 @@ AI 驅動的桌面螢幕寵物 — 有個性、有記憶的桌面同伴。
 ## 目前狀態
 
 **Phase 3 完成 — Memory-Aware Chat and Audit Inspection**
-**Phase 4 進行中 — LLM Adapter Integration（TASK-065 Provider Settings Stabilization Summary 完成；pytest: 470 passed；無 live external provider call；無 real API key 使用）**
+**Phase 4 進行中 — LLM Adapter Integration（TASK-066D Portfolio Demo Script 完成；pytest: 470 passed；專案 demo-ready 作為 local-first prototype；無 live external provider call；無 real API key 使用）**
 
 Backend（FastAPI）和 Desktop（Electron）均可運行。Mock chat、Manual Memory、Memory-Aware Chat（two-layer gate）、Audit Inspection API 和 Audit Logs UI 全部完成並通過 runtime smoke check。pytest 最新結果：356 passed。Real provider adapter 已在 TASK-035 behind feature flags；Anthropic contract 已用 mocked HTTP 驗證（TASK-037）。`/chat` wiring 已放在 `LLM_CHAT_ENABLED` 後面，default false；mock runtime smoke passed（TASK-041）；live provider 仍預設停用。
 
@@ -139,6 +141,7 @@ npm start
 | `docs/PROVIDER_SETTINGS_KEY_UI_ENABLEMENT_DESIGN.md` | TASK-055 key UI enablement design：Save Key UI flow、Clear Key UI flow、unavailable storage UX、key status display（6 values）、Test Connection disabled state、security boundaries、error UX（7 messages）、future sequence（TASK-056 → 059） |
 | `docs/PROVIDER_TEST_CONNECTION_DESIGN.md` | TASK-058 Test Connection design：explicit cost acknowledgement、exactly-one minimal request、safe response model、no mock fallback、usage meter integration、UI behavior、logging/redaction rules |
 | `docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md` | TASK-065 Provider Settings Stabilization Summary：TASK-045～TASK-064 成果整合、safety boundaries、implemented vs not-implemented、runtime limitations、test results（470 passed）、live smoke go/no-go conditions、recommended next tasks |
+| `docs/PORTFOLIO_DEMO_SCRIPT.md` | TASK-066D Portfolio Demo Script：project one-liner、30-second pitch、2-minute demo script、architecture talking points、completed features、safety/BYOK explanation、screenshot checklist、what not to claim、interview talking points、PowerShell demo commands |
 | `docs/PRD.md` | 產品需求文件（MVP 定義） |
 | `docs/ARCHITECTURE.md` | 系統架構設計 |
 | `docs/MEMORY_SYSTEM.md` | 記憶系統設計 |

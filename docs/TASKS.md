@@ -3549,7 +3549,53 @@ Implementation Summary:
 - No external API call was made
 
 Next Task:
-TASK-066 - OS Keychain Backend Implementation (recommended) or TASK-038 resolution
+TASK-066D - Portfolio Demo Script and Screenshots
+
+---
+
+## TASK-066D - Portfolio Demo Script and Screenshots
+
+Status: DONE
+
+Goal:
+Create a portfolio/demo script that explains the current dragon-pet-ai system for interviews, project showcases, and future demos. Docs-only task — no runtime code changes.
+
+Scope:
+- Create docs/PORTFOLIO_DEMO_SCRIPT.md with full demo narrative
+- Explain project purpose, architecture, completed features, safety boundaries
+- Provide demo walk-through steps, screenshot checklist, interview talking points
+- Provide PowerShell demo commands
+- Explain what not to claim
+- Update docs/TASKS.md, docs/ROADMAP.md, README.md
+- Do not modify backend/app
+- Do not modify apps/desktop
+- Do not add tests or APIs
+- Do not call external APIs
+- Do not use real API keys
+
+Acceptance Criteria:
+- TASK-066D is recorded as DONE ✅
+- docs/PORTFOLIO_DEMO_SCRIPT.md exists ✅
+- Demo narrative is documented ✅
+- Screenshot checklist is documented ✅
+- Interview talking points are documented ✅
+- Architecture explanation is documented ✅
+- Safety / BYOK explanation is documented ✅
+- Current limitations are documented ✅
+- No backend/app code is modified ✅
+- No apps/desktop code is modified ✅
+- No external API call is made ✅
+
+Implementation Summary:
+- docs/PORTFOLIO_DEMO_SCRIPT.md: created — covers project one-liner, 30-second pitch, 2-minute demo script (10 steps), architecture talking points with ASCII diagram, completed features table (21 items), safety/BYOK explanation (BYOK definition, key protection, storage, Test Connection, no live call confirmation), screenshot checklist (9 items), what not to claim (8 items), current limitations (6 items), interview talking points (8 topics), demo commands (PowerShell), suggested read-aloud demo flow, and next development options
+- docs/ROADMAP.md: TASK-066D DONE added under Phase 4 portfolio stabilization section
+- README.md: TASK-066D update block added; PORTFOLIO_DEMO_SCRIPT.md listed in docs table; Phase 4 status line updated
+- No backend/app code was modified
+- No apps/desktop code was modified
+- No external API call was made
+
+Next Task:
+TASK-067D - Portfolio README Polish
 
 ---
 
