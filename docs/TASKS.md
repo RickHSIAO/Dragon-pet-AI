@@ -5965,6 +5965,71 @@ No persona prompt changed. No images added. No renderer Ollama URL added.
 
 ### Next Task
 
-TASK-104 - TBD
+TASK-104 - Manual Windows Script Smoke
+
+---
+
+## TASK-104 — Manual Windows Script Smoke
+
+**Status:** DONE
+**Date:** 2026-05-23
+
+### Goal
+
+Manually verify the three TASK-103 PowerShell startup scripts on a real Windows host
+with Ollama running, confirming that port checks, venv activation, npm.cmd routing,
+ELECTRON_RUN_AS_NODE clearing, and the full `/chat` round-trip all work end-to-end.
+
+### Results
+
+| Check | Result |
+|-------|--------|
+| `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` required | ✓ — PowerShell default blocks `.ps1`; Process-scope bypass is the recommended workaround and does not persist after the terminal closes |
+| `dev-smoke.ps1` — `GET /health` | PASS |
+| `dev-smoke.ps1` — `GET /provider/settings` | PASS |
+| `dev-smoke.ps1` — `POST /provider/settings/test` | PASS |
+| `dev-smoke.ps1` — `POST /chat` | PASS |
+| `source` | `llm_local` — Ollama (`qwen3:8b`) generated the reply locally |
+| `mood` | `happy` |
+| `/chat` schema | `reply / mood / source` — unchanged |
+
+### Cold-start note
+
+The first `/chat` call timed out because `qwen3:8b` had not been loaded into memory yet.
+After warming the model with `ollama run qwen3:8b` (or by waiting for Ollama to finish
+loading), all subsequent smoke calls returned `source=llm_local` immediately.
+
+**Recommended warm-up step** (add to personal runbook before first smoke run):
+
+```powershell
+# Warm up the model before running the smoke script
+ollama run qwen3:8b
+# Type a short message, wait for a reply, then Ctrl+D to exit
+```
+
+The `dev-start-backend.ps1` already sets `LLM_LOCAL_CHAT_TIMEOUT_SECONDS=90`; on a
+warm model this is more than sufficient.  On first cold-start after a pull, running
+`ollama run` manually first avoids the timeout.
+
+### ExecutionPolicy guidance (added to runbook)
+
+```powershell
+# Allow .ps1 scripts for this terminal session only (does not persist)
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+This is already documented in `docs/LOCAL_DEV_RUNBOOK.md` under Common Errors.
+No script logic was changed.
+
+### Verification
+
+- All four smoke checks: PASS
+- `source=llm_local`: confirmed (real local Ollama generation, not mock)
+- `/chat` schema: `reply / mood / source` — unchanged
+- No product logic modified
+
+### Next Task
+
+TASK-105 - TBD
 
 ---

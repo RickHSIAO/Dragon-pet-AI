@@ -185,6 +185,30 @@ Invoke-RestMethod http://127.0.0.1:8000/health
 
 ---
 
+### PowerShell blocks `.ps1` scripts (`running scripts is disabled on this system`)
+
+Windows PowerShell's default execution policy (`Restricted`) prevents running `.ps1` files
+directly, including the startup scripts in `scripts/`.
+
+Fix — allow scripts for this terminal session only (does not persist after closing):
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+Then run the scripts normally:
+
+```powershell
+.\scripts\dev-start-backend.ps1
+.\scripts\dev-start-desktop.ps1
+.\scripts\dev-smoke.ps1
+```
+
+Using `-Scope Process` is the recommended approach — it does not change the system-wide
+or user-wide policy and takes effect only for the current terminal window.
+
+---
+
 ### `uvicorn: command not found` / `uvicorn not on PATH`
 
 The venv is not activated, or dependencies are not installed.
@@ -238,14 +262,22 @@ On first launch after `ollama pull qwen3:8b`, the model needs to load into memor
 The first `/chat` request may time out (default: 90 s via `LLM_LOCAL_CHAT_TIMEOUT_SECONDS`).
 
 The backend returns `source=llm_local_error` with a message explaining the model may
-still be loading. Wait 30–60 s and send another message — subsequent requests are fast.
+still be loading.
 
-You can verify the model is warm:
+**Recommended: warm up the model before running the smoke or starting chat.**
+Run a short interactive session in a separate terminal:
 
 ```powershell
-ollama list   # should show qwen3:8b
-# Then send one test request via dev-smoke.ps1
+ollama run qwen3:8b
+# Type any short message, wait for the reply, then Ctrl+D to exit
 ```
+
+Once `ollama run` has responded once, the model is in memory and subsequent `/chat`
+calls via the backend return `source=llm_local` immediately.
+
+If you skip the warm-up, the first `/chat` may return `source=llm_local_error`.
+Wait 30–60 s and retry — `dev-smoke.ps1` will report `source=llm_local` once the model
+finishes loading.
 
 ---
 
