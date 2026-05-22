@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Christina Expression 80x80 QA Preview</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.45;
+      color: #1f2933;
+      background: #f6f7f9;
+    }
+
+    body {
+      margin: 0;
+      padding: 24px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 22px;
+    }
+
+    p {
+      margin: 0 0 18px;
+      max-width: 980px;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      max-width: 1120px;
+      background: #ffffff;
+      border: 1px solid #d5dbe3;
+    }
+
+    th,
+    td {
+      border: 1px solid #d5dbe3;
+      padding: 10px;
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    th {
+      background: #e8edf3;
+      font-weight: 700;
+    }
+
+    .checker {
+      background:
+        linear-gradient(45deg, #d8dde5 25%, transparent 25%),
+        linear-gradient(-45deg, #d8dde5 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #d8dde5 75%),
+        linear-gradient(-45deg, transparent 75%, #d8dde5 75%);
+      background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+      background-size: 16px 16px;
+      background-color: #ffffff;
+      border: 1px solid #9aa6b2;
+      display: grid;
+      place-items: center;
+    }
+
+    .preview-80 {
+      width: 80px;
+      height: 80px;
+    }
+
+    .preview-160 {
+      width: 160px;
+      height: 160px;
+    }
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .note {
+      max-width: 340px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Christina Expression 80x80 QA Preview</h1>
+  <p>
+    TASK-092 local preview. Images are rendered with the same object-fit: contain
+    behavior used by the Electron pet display. The 160x160 column is only a
+    magnified inspection aid.
+  </p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Mood</th>
+        <th>80x80 runtime size</th>
+        <th>160x160 inspection</th>
+        <th>QA note</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>neutral</td>
+        <td><div class="checker preview-80"><img src="expressions/christina_neutral.png" alt="neutral"></div></td>
+        <td><div class="checker preview-160"><img src="expressions/christina_neutral.png" alt="neutral large"></div></td>
+        <td class="note">Best current baseline: square face/bust crop fills the 80x80 area.</td>
+      </tr>
+      <tr>
+        <td>focused</td>
+        <td><div class="checker preview-80"><img src="expressions/christina_focused.png" alt="focused"></div></td>
+        <td><div class="checker preview-160"><img src="expressions/christina_focused.png" alt="focused large"></div></td>
+        <td class="note">Loads correctly, but full-body framing makes the face and expression too small.</td>
+      </tr>
+      <tr>
+        <td>happy</td>
+        <td><div class="checker preview-80"><img src="expressions/christina_happy.png" alt="happy"></div></td>
+        <td><div class="checker preview-160"><img src="expressions/christina_happy.png" alt="happy large"></div></td>
+        <td class="note">Loads correctly, but full-body framing makes the face and expression too small.</td>
+      </tr>
+      <tr>
+        <td>proud</td>
+        <td><div class="checker preview-80"><img src="expressions/christina_proud.png" alt="proud"></div></td>
+        <td><div class="checker preview-160"><img src="expressions/christina_proud.png" alt="proud large"></div></td>
+        <td class="note">Loads correctly, but full-body framing makes the face and expression too small.</td>
+      </tr>
+      <tr>
+        <td>annoyed</td>
+        <td><div class="checker preview-80"><img src="expressions/christina_annoyed.png" alt="annoyed"></div></td>
+        <td><div class="checker preview-160"><img src="expressions/christina_annoyed.png" alt="annoyed large"></div></td>
+        <td class="note">Loads correctly, but full-body framing makes the face and expression too small.</td>
+      </tr>
+    </tbody>
+  </table>
+</body>
+</html>

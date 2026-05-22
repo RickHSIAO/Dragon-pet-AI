@@ -1,11 +1,11 @@
 # Dragon Pet AI
 
-> **Dragon Pet AI** is a local-first Electron + FastAPI desktop companion prototype with manual memory, memory audit logs, BYOK provider settings, usage metering, a safety-reviewed Test Connection endpoint, Anthropic/Ollama provider adapters behind flags, local Ollama `/chat` runtime smoke passed with `source=llm_local` and 克莉絲蒂娜 persona active, Ollama option in Provider Settings UI (no API key, local GPU/CPU) - built with safety-first incremental development and a 531-test mocked backend suite.
+> **Dragon Pet AI** is a local-first Electron + FastAPI desktop companion prototype with manual memory, memory audit logs, BYOK provider settings, usage metering, a safety-reviewed Test Connection endpoint, Anthropic/Ollama provider adapters behind flags, local Ollama `/chat` runtime smoke passed with `source=llm_local` and ??蝯脰?憡?persona active, Ollama option in Provider Settings UI (no API key, local GPU/CPU) - built with safety-first incremental development and a 531-test mocked backend suite.
 
 **Not production-ready.** No live external provider call has been made. No real API key has been used. This is a portfolio / prototype project.
 
-📄 **[Full Demo Script & Interview Talking Points →](docs/PORTFOLIO_DEMO_SCRIPT.md)**
-📋 **[Phase 4 Provider Settings Summary →](docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md)**
+?? **[Full Demo Script & Interview Talking Points ?(docs/PORTFOLIO_DEMO_SCRIPT.md)**
+?? **[Phase 4 Provider Settings Summary ?(docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md)**
 
 ---
 
@@ -13,13 +13,13 @@
 
 ![Main Chat UI](docs/screenshots/01_main_chat_ui.png)
 
-*Local-first Electron desktop companion UI with mock LLM source — no external provider call.*
+*Local-first Electron desktop companion UI with mock LLM source ??no external provider call.*
 
 ---
 
 ![Memory Audit Logs](docs/screenshots/03_audit_logs.png)
 
-*Safe metadata-only audit trail — raw memory content and prompt text are never stored in audit rows.*
+*Safe metadata-only audit trail ??raw memory content and prompt text are never stored in audit rows.*
 
 ---
 
@@ -31,7 +31,7 @@
 
 ![Usage Summary](docs/screenshots/05_usage_summary.png)
 
-*Safe aggregate usage counters only — no raw prompt text, no API key, no provider response body.*
+*Safe aggregate usage counters only ??no raw prompt text, no API key, no provider response body.*
 
 ---
 
@@ -46,14 +46,14 @@
 | Item | State |
 |---|---|
 | Architecture | Electron desktop + FastAPI backend, end-to-end working |
-| Phase 3 | ✅ Complete — Memory, Audit Logs, Memory-Aware Chat |
-| Phase 4 | IN_PROGRESS - Provider Settings / BYOK stabilized; Local Ollama runtime smoke PASSED; Ollama Provider Settings UI complete (TASK-076) |
-| pytest | 531 passed, 0 failed |
-| Local Ollama /chat smoke | ✅ PASS — `qwen3:8b`, `source=llm_local`, persona confirmed |
-| Live external provider call | ❌ None — intentionally gated |
-| Real API key used | ❌ None — all tests use mocked runners |
-| Production-ready | ❌ Not yet — prototype / portfolio stage |
-| Demo-ready (local mock) | ✅ Yes |
+| Phase 3 | ??Complete ??Memory, Audit Logs, Memory-Aware Chat |
+| Phase 4 | IN_PROGRESS - Provider Settings / BYOK stabilized; Local Ollama runtime smoke PASSED; Ollama Provider Settings UI complete (TASK-076); Mood -> Pet Expression Mapping complete (TASK-083); Christina neutral/focused v0 PNG assets present (focused is temporary duplicate placeholder, TASK-089) |
+| pytest | 555 passed, 0 failed |
+| Local Ollama /chat smoke | ??PASS ??`qwen3:8b`, `source=llm_local`, persona confirmed |
+| Live external provider call | ??None ??intentionally gated |
+| Real API key used | ??None ??all tests use mocked runners |
+| Production-ready | ??Not yet ??prototype / portfolio stage |
+| Demo-ready (local mock) | ??Yes |
 
 ---
 
@@ -64,24 +64,24 @@
 | `GET /health` | Backend liveness check |
 | `POST /chat` | Mock character response; LLM adapter behind feature flag |
 | Electron desktop UI | Chat, Memory, Audit Logs, Provider Settings sections |
-| Manual Memory CRUD | `POST/GET/DELETE /memory` — SQLite persistence |
-| Memory context preview | `GET /memory/context-preview` — safe, no injection |
+| Manual Memory CRUD | `POST/GET/DELETE /memory` ??SQLite persistence |
+| Memory context preview | `GET /memory/context-preview` ??safe, no injection |
 | Approved memory context builder | Type allowlist, confidence filter, 5-memory / 1500-char cap |
 | Memory-aware chat (two-layer gate) | `MEMORY_INJECTION_ENABLED` env flag + per-request `use_memory` |
-| Memory Injection Audit API | `GET /memory/audit` — safe metadata only, no raw content |
+| Memory Injection Audit API | `GET /memory/audit` ??safe metadata only, no raw content |
 | Audit Logs UI | Desktop section; shows injection events |
 | In-memory usage meter | 14 tracked fields; token estimation; privacy boundaries |
-| Provider Settings API | `GET/PATCH /provider/settings` — non-secret fields only |
-| Key status endpoint | `GET /provider/settings/key/status` — 6 safe values, no key fragment |
-| Save Key endpoint | `POST /provider/settings/key` — write-only; key never echoed |
-| Clear Key endpoint | `DELETE /provider/settings/key` — clears from storage abstraction |
+| Provider Settings API | `GET/PATCH /provider/settings` ??non-secret fields only |
+| Key status endpoint | `GET /provider/settings/key/status` ??6 safe values, no key fragment |
+| Save Key endpoint | `POST /provider/settings/key` ??write-only; key never echoed |
+| Clear Key endpoint | `DELETE /provider/settings/key` ??clears from storage abstraction |
 | Provider Settings UI | Provider/model select, Save Key, Clear Key, key status, usage summary |
 | Secure key storage abstraction | `UnavailableBackend` (runtime), `InMemoryBackend` (tests) |
-| Test Connection backend | `POST /provider/settings/test` — explicit cost ack required; Opus review PASS |
+| Test Connection backend | `POST /provider/settings/test` ??explicit cost ack required; Opus review PASS |
 | Test Connection UI | Cost confirm dialog; safe field rendering; no auto-run |
 | LLM adapter layer | Anthropic adapter behind `LLM_PROVIDER_ENABLED=false` |
 | Hardening tests | 5 Opus-recommended tests covering edge cases and safety boundaries |
-| Local Ollama provider | Implemented behind flags; no API key; localhost-only; runtime smoke PASSED — `source=llm_local`, 克莉絲蒂娜 persona active in qwen3:8b |
+| Local Ollama provider | Implemented behind flags; no API key; localhost-only; runtime smoke PASSED ??`source=llm_local`, ??蝯脰?憡?persona active in qwen3:8b |
 | Ollama Provider Settings UI | Provider selector includes `ollama`; API key input hidden/disabled for local provider; Test Connection uses Local Resource Warning; renderer never calls Ollama directly |
 | 531 mocked tests | Full backend suite; no external HTTP; no real key |
 
@@ -91,30 +91,30 @@
 
 ```
 Electron renderer (HTML / CSS / JS)
-  └── localhost HTTP → FastAPI backend (:8000)
-        ├── api/routes.py                    — all HTTP endpoints
-        ├── services/
-        │     ├── chat_service               — /chat routing, LLM adapter wiring
-        │     ├── memory_service             — memory CRUD, approved context builder
-        │     ├── memory_audit_service       — audit row creation and inspection
-        │     ├── usage_meter_service        — token/cost tracking (in-memory)
-        │     ├── provider_settings_service  — non-secret settings persistence
-        │     ├── key_storage_service        — secure key storage abstraction
-        │     └── provider_test_connection_service — Test Connection logic
-        ├── providers/
-        │     ├── mock_provider              — always-on safe default
-        │     ├── anthropic_provider         — behind LLM_PROVIDER_ENABLED flag
-        │     └── provider_factory           — selects provider by config
-        ├── schemas/                         — Pydantic request/response models
-        └── db/                              — SQLModel / SQLite engine
+  ??? localhost HTTP ??FastAPI backend (:8000)
+        ??? api/routes.py                    ??all HTTP endpoints
+        ??? services/
+        ??    ??? chat_service               ??/chat routing, LLM adapter wiring
+        ??    ??? memory_service             ??memory CRUD, approved context builder
+        ??    ??? memory_audit_service       ??audit row creation and inspection
+        ??    ??? usage_meter_service        ??token/cost tracking (in-memory)
+        ??    ??? provider_settings_service  ??non-secret settings persistence
+        ??    ??? key_storage_service        ??secure key storage abstraction
+        ??    ??? provider_test_connection_service ??Test Connection logic
+        ??? providers/
+        ??    ??? mock_provider              ??always-on safe default
+        ??    ??? anthropic_provider         ??behind LLM_PROVIDER_ENABLED flag
+        ??    ??? provider_factory           ??selects provider by config
+        ??? schemas/                         ??Pydantic request/response models
+        ??? db/                              ??SQLModel / SQLite engine
 ```
 
 **Key design decisions:**
-- **Adapter pattern** — adding a new LLM provider requires only a new adapter; service and route layers are unchanged
-- **Feature flags everywhere** — `LLM_PROVIDER_ENABLED`, `LLM_CHAT_ENABLED`, `MEMORY_INJECTION_ENABLED` all default `false`
-- **Schema stability** — `/chat` response (`reply / mood / source`) unchanged across all of Phase 4
-- **Write-only key handling** — no endpoint returns the API key or any fragment of it
-- **Test isolation** — `InMemoryKeyStorageBackend` and `FakeProviderTestRunner` injected via dependency inversion; no test touches a real provider or a real key
+- **Adapter pattern** ??adding a new LLM provider requires only a new adapter; service and route layers are unchanged
+- **Feature flags everywhere** ??`LLM_PROVIDER_ENABLED`, `LLM_CHAT_ENABLED`, `MEMORY_INJECTION_ENABLED` all default `false`
+- **Schema stability** ??`/chat` response (`reply / mood / source`) unchanged across all of Phase 4
+- **Write-only key handling** ??no endpoint returns the API key or any fragment of it
+- **Test isolation** ??`InMemoryKeyStorageBackend` and `FakeProviderTestRunner` injected via dependency inversion; no test touches a real provider or a real key
 
 ---
 
@@ -133,7 +133,7 @@ Electron renderer (HTML / CSS / JS)
 | Unknown errors return safe messages | `_safe_error_category()` collapses unknown strings to `"provider_error"` |
 | Extra request fields rejected | `ConfigDict(extra="forbid")` on all request schemas |
 | No live provider call | Runtime default is `UnavailableProviderTestRunner` and `UnavailableKeyStorageBackend` |
-| Independent safety review | Test Connection backend reviewed by Opus — verdict: **PASS** |
+| Independent safety review | Test Connection backend reviewed by Opus ??verdict: **PASS** |
 
 ---
 
@@ -225,7 +225,7 @@ npm start
 
 ### Provider Settings UI
 
-Open Provider Settings and select `ollama — local, no key`.
+Open Provider Settings and select `ollama ??local, no key`.
 
 Expected UI state:
 - API key input is disabled because Ollama does not use an API key.
@@ -243,7 +243,7 @@ cd F:\RickHSIAO\Python\dragon-pet-ai\backend
 
 $env:PYTHONIOENCODING="utf-8"
 
-python -c "import json, urllib.request; data=json.dumps({'message':'克莉絲蒂娜，稱讚我一下，我今天有努力做專案。'}, ensure_ascii=False).encode('utf-8'); req=urllib.request.Request('http://127.0.0.1:8000/chat', data=data, headers={'Content-Type':'application/json; charset=utf-8'}); raw=urllib.request.urlopen(req).read().decode('utf-8'); print(raw)"
+python -c "import json, urllib.request; data=json.dumps({'message':'??蝯脰?憡?蝔梯???銝???憭拇??芸???獢?}, ensure_ascii=False).encode('utf-8'); req=urllib.request.Request('http://127.0.0.1:8000/chat', data=data, headers={'Content-Type':'application/json; charset=utf-8'}); raw=urllib.request.urlopen(req).read().decode('utf-8'); print(raw)"
 ```
 
 Expected result:
@@ -251,7 +251,31 @@ Expected result:
 - Response schema remains `reply / mood / source`
 - `source` is `llm_local`
 - `reply` is generated locally by `qwen3:8b`
-- The reply should carry Christina's voice, such as `吾`, `汝`, `哼`, or a tsundere / arrogant tone.
+- The reply should carry Christina's voice, such as `?霉, `瘙, `?嬋, or a tsundere / arrogant tone.
+
+### Release Readiness Smoke Flow
+
+Use this checkpoint flow before calling Local LLM mode ready:
+
+1. Start Ollama: `ollama serve`.
+2. Confirm the model: `ollama list` should include `qwen3:8b`.
+3. Start the backend with `LLM_PROVIDER_ENABLED=true`, `LLM_CHAT_ENABLED=true`, `LLM_PROVIDER_NAME=ollama`, `LLM_MODEL=qwen3:8b`, and optionally `LLM_LOCAL_CHAT_TIMEOUT_SECONDS=90` for cold local model loads.
+4. PATCH `/provider/settings` to `provider=ollama`, `model=qwen3:8b`, `real_provider_enabled=true`, `llm_chat_enabled=true`, and `fallback_to_mock=false`.
+5. POST `/provider/settings/test` to confirm the backend can reach the local Ollama runtime and model. This is a lightweight local runtime/model check, not a full persona chat generation.
+6. POST `/chat` to verify generation, Christina persona, `mood`, and `source=llm_local`.
+7. Start Electron with the existing desktop command.
+8. In Provider Settings, select `ollama - local, no key`, verify `key_status=not_required`, run Test Connection, then send a chat message.
+9. Confirm the UI renders the reply, updates mood, and shows `source: llm_local` in the chat runtime status area.
+
+### Runtime UX and Fallback Policy
+
+- The chat runtime status area is intentionally visible in the main UI for MVP smoke and demo clarity. It shows the last `/chat` source and provider/resolved/model summary.
+- Local Ollama replies should show `source: llm_local`.
+- Local provider failures with fallback disabled show `source: llm_local_error` and a safe error-style status.
+- For development and smoke tests, use `fallback_to_mock=false` so provider failures are visible.
+- For safer demos where a mock reply is preferable to an error, `fallback_to_mock=true` is allowed, but the UI will show `source: mock` and explain that fallback may have occurred.
+- If you need to prove the local model is actually responding, turn fallback off.
+- First local responses may be slower while the model wakes up; the Electron UI shows a local cold-start loading message while `/chat` is pending. Local chat generation uses `LLM_LOCAL_CHAT_TIMEOUT_SECONDS` (default 90 seconds) so cold starts have more time than cloud-provider calls.
 
 ### Troubleshooting
 
@@ -260,7 +284,9 @@ Expected result:
 | `ollama` not found | Install Ollama and reopen the terminal so `ollama` is on PATH. |
 | `qwen3:8b` not found | Run `ollama pull qwen3:8b`, then confirm with `ollama list`. |
 | Test Connection fails | Confirm `ollama serve` is running and `OLLAMA_BASE_URL` is `http://localhost:11434`. |
-| `/chat` returns `source=mock` | Confirm backend was started with `LLM_PROVIDER_ENABLED=true`, `LLM_CHAT_ENABLED=true`, and `LLM_PROVIDER_NAME=ollama`; restart backend after changing env vars. |
+| `/chat` returns `source=mock` | Confirm `llm_chat_enabled=true`; if `resolved_provider=ollama`, check whether `fallback_to_mock=true` allowed a fallback after local provider failure. |
+| `/chat` returns `source=llm_local_error` | Ollama was selected but local generation failed. Check `ollama serve`, the model name, and timeout/cold-start behavior; increase `LLM_LOCAL_CHAT_TIMEOUT_SECONDS` if your first local response loads slowly. |
+| Provider Settings lose `model` or fallback changes unexpectedly | Refresh Provider Settings before saving. Partial PATCH preserves omitted fields, and Test Connection does not persist settings. |
 | Reply lacks Christina tone | Confirm latest backend code is running and restart backend so prompt changes are loaded. |
 | Backend seems to ignore new settings | Stop and restart backend; env vars and provider settings are read by the backend process. |
 
@@ -281,14 +307,14 @@ Expected result:
 | [docs/PORTFOLIO_DEMO_SCRIPT.md](docs/PORTFOLIO_DEMO_SCRIPT.md) | Full demo script: one-liner, 30-sec pitch, 2-min walk-through, interview talking points, screenshot checklist |
 | [docs/PORTFOLIO_SCREENSHOT_CHECKLIST.md](docs/PORTFOLIO_SCREENSHOT_CHECKLIST.md) | Screenshot capture plan: 9 required screenshots, naming convention, setup commands, what not to show |
 | [docs/OLLAMA_PROVIDER_DESIGN.md](docs/OLLAMA_PROVIDER_DESIGN.md) | Local Ollama provider design and TASK-074 contract test notes: API contract, qwen3:8b recommendation, provider settings integration, feature flags, security boundaries |
-| [docs/OLLAMA_RUNTIME_SMOKE_CHECKLIST.md](docs/OLLAMA_RUNTIME_SMOKE_CHECKLIST.md) | TASK-075 runtime smoke checklist — **PASS** (2026-05-21): `source=llm_local`, 克莉絲蒂娜 persona confirmed, no external API |
+| [docs/OLLAMA_RUNTIME_SMOKE_CHECKLIST.md](docs/OLLAMA_RUNTIME_SMOKE_CHECKLIST.md) | TASK-075 runtime smoke checklist ??**PASS** (2026-05-21): `source=llm_local`, ??蝯脰?憡?persona confirmed, no external API |
 | [docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md](docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md) | Phase 4 stabilization summary: completed capabilities, safety boundaries, test results, live smoke go/no-go |
 | [docs/PROVIDER_TEST_CONNECTION_DESIGN.md](docs/PROVIDER_TEST_CONNECTION_DESIGN.md) | Test Connection design and hardening test results |
 | [docs/SECURE_KEY_STORAGE_DESIGN.md](docs/SECURE_KEY_STORAGE_DESIGN.md) | Key storage threat model, storage options, redaction rules |
 | [docs/BYOK_PRODUCT_AND_SETTINGS.md](docs/BYOK_PRODUCT_AND_SETTINGS.md) | BYOK product design and security boundaries |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Full phase-by-phase development roadmap |
 | [docs/TASKS.md](docs/TASKS.md) | Complete task history |
-| [docs/STREAMER_COMPANION_MODE.md](docs/STREAMER_COMPANION_MODE.md) | Future side track — OBS overlay / Twitch companion design (not scheduled) |
+| [docs/STREAMER_COMPANION_MODE.md](docs/STREAMER_COMPANION_MODE.md) | Future side track ??OBS overlay / Twitch companion design (not scheduled) |
 
 ---
 
@@ -350,7 +376,7 @@ dragon-pet-ai/
 | `docs/MEMORY_SYSTEM.md` | Memory system design |
 | `docs/PHASE3_DEMO_SUMMARY.md` | Phase 3 demo summary and safety model |
 | `docs/PHASE4_PLAN.md` | Phase 4 planning: options, safety constraints, task sequence |
-| `docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md` | Phase 4 Provider Settings stabilization summary (TASK-045–TASK-064) |
+| `docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md` | Phase 4 Provider Settings stabilization summary (TASK-045?ASK-064) |
 | `docs/LLM_ADAPTER_DESIGN.md` | LLM adapter architecture: provider interface, feature flags, safety rules |
 | `docs/LLM_PROVIDER_CONTRACT.md` | Anthropic request/response/error mapping, mocked fixtures |
 | `docs/CHAT_LLM_WIRING_DESIGN.md` | Chat LLM wiring design: `LLM_CHAT_ENABLED`, adapter flow, fallback |
@@ -372,11 +398,11 @@ dragon-pet-ai/
 
 ## Development Principles
 
-- **Docs before code** — every feature is specified before it is implemented
-- **Scope discipline** — features belong to one phase; no Phase N+1 work during Phase N
-- **Safety first** — any capability that touches user data or incurs cost requires a safety design step
-- **Local first** — all user data stays on device unless the user explicitly opts in to a cloud feature
-- **Reversible steps** — prefer designs that can be undone without data loss
+- **Docs before code** ??every feature is specified before it is implemented
+- **Scope discipline** ??features belong to one phase; no Phase N+1 work during Phase N
+- **Safety first** ??any capability that touches user data or incurs cost requires a safety design step
+- **Local first** ??all user data stays on device unless the user explicitly opts in to a cloud feature
+- **Reversible steps** ??prefer designs that can be undone without data loss
 
 ---
 
@@ -385,11 +411,11 @@ dragon-pet-ai/
 > Internal task update log. Documents what changed in each task.
 
 <details>
-<summary>Expand task update history (TASK-054 → TASK-067D)</summary>
+<summary>Expand task update history (TASK-054 ??TASK-067D)</summary>
 
 > TASK-054: provider key save/clear endpoints are wired to the secure key storage abstraction. Runtime default remains a safe unavailable backend, tests use an in-memory fake backend, no key is written to SQLite or plain config files, and live test connection remains disabled. No external provider calls are made. pytest: 449 passed.
 
-> TASK-055: Key UI enablement design complete. Save Key and Clear Key controls are now designed with full interaction flows, unavailable storage UX (503 → safe message, env var recommendation), key status display (6 safe values, no key fragments), and security boundaries. Test Connection remains disabled.
+> TASK-055: Key UI enablement design complete. Save Key and Clear Key controls are now designed with full interaction flows, unavailable storage UX (503 ??safe message, env var recommendation), key status display (6 safe values, no key fragments), and security boundaries. Test Connection remains disabled.
 
 > TASK-056: Save Key and Clear Key controls are now enabled in the Provider Settings UI. Key input is enabled for real providers only, disabled for mock. Save Key POSTs to local backend and clears the input field after every attempt. Clear Key shows a confirmation dialog and DELETEs via local backend. Storage unavailable (503) shows a safe message with env var instructions. API key is never logged, never stored in localStorage/sessionStorage, never sent to external providers. Test Connection remains disabled. pytest: 449 passed.
 
@@ -399,17 +425,17 @@ dragon-pet-ai/
 
 > TASK-059R: Opus safety review of TASK-059 backend: verdict PASS. No critical issues. explicit_cost_ack enforced at API boundary, response schema contains no secret-bearing fields, runtime default runner is UnavailableProviderTestRunner, no live external API calls in tests. TASK-060 unblocked.
 
-> TASK-060: Test Connection button enabled in Electron renderer. Enable conditions: real provider selected, key_status configured, real_provider_enabled true. Explicit cost acknowledgement (window.confirm) required on every click — covers all 4 required disclosures. POST to local backend only with body {provider, model, explicit_cost_ack: true} — no api_key, no prompt, no memory. Safe response fields rendered: status, safe_message, error_category, source, usage_estimate. No automatic test after Save Key. No external provider URL in renderer. API key never logged, never in localStorage/sessionStorage. node --check: PASS. pytest: 465 passed.
+> TASK-060: Test Connection button enabled in Electron renderer. Enable conditions: real provider selected, key_status configured, real_provider_enabled true. Explicit cost acknowledgement (window.confirm) required on every click ??covers all 4 required disclosures. POST to local backend only with body {provider, model, explicit_cost_ack: true} ??no api_key, no prompt, no memory. Safe response fields rendered: status, safe_message, error_category, source, usage_estimate. No automatic test after Save Key. No external provider URL in renderer. API key never logged, never in localStorage/sessionStorage. node --check: PASS. pytest: 465 passed.
 
-> TASK-061: Runtime smoke check PASS WITH EXPECTED LIMITATION. Test Connection button correctly remained disabled (key_status: not_configured, no key stored — expected safe behavior). No live external provider call was made.
+> TASK-061: Runtime smoke check PASS WITH EXPECTED LIMITATION. Test Connection button correctly remained disabled (key_status: not_configured, no key stored ??expected safe behavior). No live external provider call was made.
 
 > TASK-062: Provider Test Connection hardening tests complete. Added 5 Opus-recommended hardening tests: provider_disabled branch with configured key (runner not called), invalid_model 400 before runner call, unknown error collapse to provider_error (raw string does not leak), extra field rejection without echoing value (ConfigDict extra=forbid), safe_message category sweep across all 11 error categories. pytest: 470 passed, 0 failed. No backend logic modified. No Electron UI modified.
 
 > TASK-063: Electron Provider Settings UI polish/layout fix complete. Renderer readability, vertical scrolling, Provider Settings status cards, usage summary, form spacing, button wrapping, and narrow-width DevTools-docked layout were improved. Save Key / Clear Key / Test Connection behavior is unchanged. No backend/app code was modified. No provider behavior changed. No external API call was made. Electron static checks passed.
 
-> TASK-064: Provider Settings UI runtime smoke re-check PASS WITH NON-BLOCKING UI NOTES. All provider settings controls verified readable and functional after TASK-063 polish. Test Connection correctly disabled (key_status: not_configured — expected safe behavior). No live external provider call. No real API key entered.
+> TASK-064: Provider Settings UI runtime smoke re-check PASS WITH NON-BLOCKING UI NOTES. All provider settings controls verified readable and functional after TASK-063 polish. Test Connection correctly disabled (key_status: not_configured ??expected safe behavior). No live external provider call. No real API key entered.
 
-> TASK-065: Phase 4 Provider Settings Stabilization Summary complete. Created docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md covering TASK-045 through TASK-064: completed capabilities, safety boundaries (16 rules), implemented vs intentionally-not-implemented, runtime limitations, non-blocking UI notes, test results (470 passed), live smoke go/no-go conditions (all unmet — no live call has occurred), and recommended next tasks. No backend/app code modified. No external API call made.
+> TASK-065: Phase 4 Provider Settings Stabilization Summary complete. Created docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md covering TASK-045 through TASK-064: completed capabilities, safety boundaries (16 rules), implemented vs intentionally-not-implemented, runtime limitations, non-blocking UI notes, test results (470 passed), live smoke go/no-go conditions (all unmet ??no live call has occurred), and recommended next tasks. No backend/app code modified. No external API call made.
 
 > TASK-066D: Portfolio Demo Script complete. Created docs/PORTFOLIO_DEMO_SCRIPT.md with project one-liner, 30-second pitch, 2-minute demo script (10 steps), architecture talking points, completed features table (21 items), safety/BYOK explanation, screenshot checklist (9 items), what not to claim (8 items), interview talking points (8 topics), and PowerShell demo commands. Project is demo-ready as a local-first prototype. No live external provider call has occurred. No real API key used. No backend/app code modified.
 

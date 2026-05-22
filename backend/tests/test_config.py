@@ -14,6 +14,7 @@ os.environ.setdefault("DB_PATH", "sqlite:///:memory:")
 from app.core.config import (  # noqa: E402
     get_llm_fallback_to_mock,
     get_llm_chat_enabled,
+    get_local_chat_timeout_seconds,
     get_llm_provider_enabled,
     get_llm_provider_name,
     get_llm_timeout_seconds,
@@ -126,6 +127,25 @@ class TestLLMProviderConfig:
     def test_llm_timeout_invalid_falls_back_to_default(self, monkeypatch):
         monkeypatch.setenv("LLM_TIMEOUT_SECONDS", "not-an-int")
         assert get_llm_timeout_seconds() == 30
+
+    def test_local_chat_timeout_default_90(self, monkeypatch):
+        monkeypatch.delenv("LLM_LOCAL_CHAT_TIMEOUT_SECONDS", raising=False)
+        monkeypatch.delenv("OLLAMA_TIMEOUT_SECONDS", raising=False)
+        assert get_local_chat_timeout_seconds() == 90
+
+    def test_local_chat_timeout_uses_new_env(self, monkeypatch):
+        monkeypatch.setenv("LLM_LOCAL_CHAT_TIMEOUT_SECONDS", "150")
+        monkeypatch.setenv("OLLAMA_TIMEOUT_SECONDS", "10")
+        assert get_local_chat_timeout_seconds() == 150
+
+    def test_local_chat_timeout_legacy_env_fallback(self, monkeypatch):
+        monkeypatch.delenv("LLM_LOCAL_CHAT_TIMEOUT_SECONDS", raising=False)
+        monkeypatch.setenv("OLLAMA_TIMEOUT_SECONDS", "45")
+        assert get_local_chat_timeout_seconds() == 45
+
+    def test_local_chat_timeout_clamps_safely(self, monkeypatch):
+        monkeypatch.setenv("LLM_LOCAL_CHAT_TIMEOUT_SECONDS", "999")
+        assert get_local_chat_timeout_seconds() == 300
 
     def test_llm_fallback_to_mock_default_true(self, monkeypatch):
         monkeypatch.delenv("LLM_FALLBACK_TO_MOCK", raising=False)

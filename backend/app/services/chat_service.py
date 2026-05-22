@@ -96,6 +96,10 @@ def _state_context_for_llm(
 
 
 _LOCAL_PROVIDER_NAMES = frozenset({"ollama"})
+LOCAL_PROVIDER_TIMEOUT_FALLBACK_TEXT = (
+    "Local Ollama timed out. The model may still be loading or waking up; "
+    "wait a moment and try again."
+)
 
 
 def _source_for_llm_response(provider: Any, response: LLMResponse) -> str:
@@ -183,8 +187,11 @@ def _safe_llm_fallback_response(
         source = "llm_local_error"
     else:
         source = "llm_real_error"
+    reply = CANONICAL_SAFE_FALLBACK_TEXT
+    if provider_name in _LOCAL_PROVIDER_NAMES and error_category == "provider_timeout":
+        reply = LOCAL_PROVIDER_TIMEOUT_FALLBACK_TEXT
     response = {
-        "reply": CANONICAL_SAFE_FALLBACK_TEXT,
+        "reply": reply,
         "mood": select_mock_mood(message),
         "source": source,
     }

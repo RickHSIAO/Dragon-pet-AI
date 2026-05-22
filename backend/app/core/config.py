@@ -133,18 +133,36 @@ def get_ollama_keep_alive() -> str:
     return read_str_env("OLLAMA_KEEP_ALIVE", default="10m")
 
 
-def get_ollama_timeout_seconds() -> int:
-    """Return the Ollama HTTP timeout in seconds.
+def get_local_chat_timeout_seconds() -> int:
+    """Return the local-provider chat/generation timeout in seconds.
 
-    Default: 30.  Clamped to [1, 120].  Ollama can be slow on first load
-    (model not yet warmed), so a generous default is appropriate.
+    Default: 90. Clamped to [1, 300]. Local models can be slow on first load
+    (model not yet warmed). Override with ``LLM_LOCAL_CHAT_TIMEOUT_SECONDS``.
+
+    Backward compatibility: if the new local-chat variable is absent but the
+    older ``OLLAMA_TIMEOUT_SECONDS`` is set, use the older value.
     """
+    if os.environ.get("LLM_LOCAL_CHAT_TIMEOUT_SECONDS") is not None:
+        return read_int_env(
+            "LLM_LOCAL_CHAT_TIMEOUT_SECONDS",
+            default=90,
+            min_value=1,
+            max_value=300,
+        )
     return read_int_env(
         "OLLAMA_TIMEOUT_SECONDS",
-        default=30,
+        default=90,
         min_value=1,
-        max_value=120,
+        max_value=300,
     )
+
+
+def get_ollama_timeout_seconds() -> int:
+    """Return the Ollama chat timeout.
+
+    Kept as a compatibility alias for older call sites and docs.
+    """
+    return get_local_chat_timeout_seconds()
 
 
 def get_local_test_timeout_seconds() -> int:
@@ -164,3 +182,24 @@ def get_local_test_timeout_seconds() -> int:
         min_value=1,
         max_value=60,
     )
+
+
+# ---------------------------------------------------------------------------
+# Non-secret settings persistence (TASK-099)
+# ---------------------------------------------------------------------------
+
+def get_settings_file_path() -> str:
+    """
+    Return the path for the non-secret provider settings JSON file.
+
+    Default: ``data/provider_settings.json`` relative to the backend working
+    directory (i.e. ``backend/data/provider_settings.json``).
+
+    Override with ``SETTINGS_FILE_PATH`` for testing or alternative layouts:
+    - Set to empty string to disable persistence (in-memory only).
+    - Set to ``/tmp/dragon-pet-ai-settings.json`` to isolate test runs.
+
+    Safety: This file stores ONLY non-secret fields (provider, model, booleans).
+    API keys are never written to this file.
+    """
+    return read_str_env("SETTINGS_FILE_PATH", default="data/provider_settings.json")

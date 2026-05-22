@@ -28,3 +28,8 @@ out/
 Thumbs.db
 .vscode/
 .idea/
+
+# TASK-099: non-secret provider settings persistence file
+# Contains provider/model/flag state. Excluded from git to keep user config local.
+backend/data/provider_settings.json
+backend/data/provider_settings.json.tmp

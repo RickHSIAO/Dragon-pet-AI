@@ -9,6 +9,7 @@ from app.llm.real_provider import CANONICAL_SAFE_FALLBACK_TEXT
 from app.llm.types import LLMResponse
 from app.main import app
 from app.services.provider_settings_service import reset_provider_settings
+from app.services.chat_service import LOCAL_PROVIDER_TIMEOUT_FALLBACK_TEXT
 from app.services.usage_meter_service import reset_usage_meter
 
 
@@ -122,7 +123,8 @@ def test_runtime_ollama_failure_without_mock_fallback_does_not_return_mock(monke
     assert len(fake.calls) == 1
     assert data["source"] == "llm_local_error"
     assert data["source"] != "mock"
-    assert data["reply"] == CANONICAL_SAFE_FALLBACK_TEXT
+    assert data["reply"] == LOCAL_PROVIDER_TIMEOUT_FALLBACK_TEXT
+    assert "loading" in data["reply"].lower()
     assert "raw provider fallback text" not in data["reply"]
     assert usage["source_counts"]["llm_local_error"] == 1
     assert usage["fallback_count"] == 0

@@ -38,9 +38,35 @@ class FakeElement {
     this.scrollHeight = 0;
     this.rows = 0;
     this.options = [];
+    // TASK-083: support innerHTML and data attributes for pet expression checks
+    this._innerHTML = "";
+    this._attributes = {};
+    // TASK-098: support element.dataset.xxx assignments (used for data-bool badges)
+    this.dataset = {};
+  }
+
+  set innerHTML(value) {
+    this._innerHTML = String(value);
+    this.children = [];
+    this.lastChild = null;
+  }
+
+  get innerHTML() {
+    return this._innerHTML;
+  }
+
+  setAttribute(name, value) {
+    this._attributes[name] = String(value);
+  }
+
+  getAttribute(name) {
+    return Object.prototype.hasOwnProperty.call(this._attributes, name)
+      ? this._attributes[name]
+      : null;
   }
 
   appendChild(child) {
+    this._innerHTML = "";
     child.parentNode = this;
     this.children.push(child);
     this.lastChild = child;
@@ -84,6 +110,22 @@ class FakeElement {
     this.parentNode.children = this.parentNode.children.filter((child) => child !== this);
     this.parentNode.lastChild = this.parentNode.children.at(-1) || null;
     this.parentNode = null;
+  }
+}
+
+// TASK-086: FakeImage — simulates browser Image() probe for PNG asset fallback tests.
+// availableImages is closed over per loadRenderer() call so each test is isolated.
+// set src() schedules onload (if path in availableImages) or onerror asynchronously,
+// matching real browser behaviour where image callbacks are never synchronous.
+class FakeImageBase {
+  constructor() {
+    this.onload = null;
+    this.onerror = null;
+    this._src = "";
+  }
+
+  get src() {
+    return this._src;
   }
 }
 
@@ -252,6 +294,18 @@ function createFetchStub(state) {
         });
       }
 
+      if (state.chatMode === "unknown_mood") {
+        state.providerSettings = {
+          ...state.providerSettings,
+          usage_summary: usageFor("llm_local"),
+        };
+        return new FakeResponse(200, {
+          reply: "Some reply.",
+          mood: "legendary",   // unknown mood — not in PET_EXPRESSIONS
+          source: "llm_local",
+        });
+      }
+
       state.providerSettings = {
         ...state.providerSettings,
         usage_summary: usageFor("llm_local"),
@@ -274,13 +328,30 @@ async function settle() {
 
 async function loadRenderer(options = {}) {
   const document = new FakeDocument();
+
+  // TASK-086: per-test set of PNG paths that "exist" for FakeImage probes.
+  // Default is empty — all probes fire onerror, SVG fallback stays active,
+  // and all pre-TASK-086 tests remain unaffected.
+  const availableImages = new Set(options.availableImages || []);
+
   const state = {
     calls: [],
     chatMode: options.chatMode || "success",
     pauseChat: Boolean(options.pauseChat),
     resolveChat: null,
     providerSettings: defaultProviderSettings(options.providerSettings || {}),
+    availableImages,
   };
+
+  // FakeImage closes over availableImages so each test run is isolated.
+  class FakeImage extends FakeImageBase {
+    set src(val) {
+      this._src = val;
+      const cb = availableImages.has(val) ? this.onload : this.onerror;
+      if (typeof cb === "function") setTimeout(cb, 0);
+    }
+  }
+
   const sandbox = {
     console,
     document,
@@ -294,6 +365,7 @@ async function loadRenderer(options = {}) {
     fetch: createFetchStub(state),
     setTimeout,
     clearTimeout,
+    Image: FakeImage,
     Event: class Event {
       constructor(type, init = {}) {
         this.type = type;
@@ -305,7 +377,7 @@ async function loadRenderer(options = {}) {
   const code = fs.readFileSync(rendererPath, "utf8");
   vm.runInNewContext(code, sandbox, { filename: rendererPath });
   await settle();
-  return { document, state };
+  return { document, state, sandbox };
 }
 
 function messageTexts(chatArea) {
@@ -426,6 +498,7 @@ async function testLocalProviderFailureWithoutFallbackIsVisible() {
 
   assert.equal(textOf(document, "chat-source-status"), "source: llm_local_error");
   assert.match(textOf(document, "chat-runtime-status"), /local provider failed safely/i);
+  assert.match(textOf(document, "chat-runtime-status"), /model may still be loading/i);
 }
 
 async function testMockFallbackStateIsDistinguishable() {
@@ -463,9 +536,283 @@ async function testProviderSettingsStatusAndTestConnectionSuccess() {
   await settle();
 
   const testCalls = state.calls.filter((call) => call.url.endsWith("/provider/settings/test"));
+  const patchCalls = state.calls.filter(
+    (call) => call.url.endsWith("/provider/settings") && call.method === "PATCH"
+  );
   assert.equal(testCalls.length, 1);
+  assert.equal(patchCalls.length, 0);
+  assert.equal(state.providerSettings.model, "qwen3:8b");
+  assert.equal(state.providerSettings.fallback_to_mock, false);
   assert.match(textOf(document, "provider-test-msg"), /Local Ollama connection successful/);
   assert.match(textOf(document, "provider-test-msg"), /source: llm_local/);
+}
+
+async function testSaveProviderSettingsOmitsBlankModelAndKeepsFallbackFalse() {
+  const { document, state } = await loadRenderer();
+
+  document.getElementById("provider-settings-model").value = "";
+  document.getElementById("provider-fallback-to-mock").checked = false;
+  document.getElementById("provider-settings-form").dispatchEvent({
+    type: "submit",
+    preventDefault() {},
+  });
+  await settle();
+
+  const patchCalls = state.calls.filter(
+    (call) => call.url.endsWith("/provider/settings") && call.method === "PATCH"
+  );
+  assert.equal(patchCalls.length, 1);
+  const body = JSON.parse(patchCalls[0].body);
+  assert.equal(Object.prototype.hasOwnProperty.call(body, "model"), false);
+  assert.equal(body.fallback_to_mock, false);
+  assert.equal(state.providerSettings.model, "qwen3:8b");
+  assert.equal(state.providerSettings.fallback_to_mock, false);
+}
+
+// ---------------------------------------------------------------------------
+// TASK-083: Pet expression tests
+// ---------------------------------------------------------------------------
+
+async function testSuccessfulChatWithFocusedMoodSetsFocusedExpression() {
+  const { document } = await loadRenderer();
+
+  await sendChat(document, "focus test");
+
+  // mood label updated from response
+  assert.equal(textOf(document, "mood-label"), "focused");
+  // pet expression set to focused (known mood)
+  assert.equal(document.getElementById("pet-face").getAttribute("data-mood"), "focused");
+  // innerHTML contains SVG content
+  assert.match(document.getElementById("pet-face").innerHTML, /<svg/);
+}
+
+async function testPendingExpressionSetBeforeResponse() {
+  const { document, state } = await loadRenderer({ pauseChat: true });
+
+  document.getElementById("message-input").value = "pending test";
+  document.getElementById("send-btn").click();
+  // Advance one tick — startup settled but chat not yet resolved
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  // While waiting, pet must show pending
+  assert.equal(document.getElementById("pet-face").getAttribute("data-mood"), "pending");
+  assert.match(document.getElementById("pet-face").innerHTML, /<svg/);
+
+  state.resolveChat();
+  await settle();
+  // After response arrives, mood updates to focused (from mock response)
+  assert.equal(document.getElementById("pet-face").getAttribute("data-mood"), "focused");
+}
+
+async function testUnknownMoodFallsBackToNeutralExpression() {
+  const { document } = await loadRenderer({ chatMode: "unknown_mood" });
+
+  await sendChat(document, "unknown mood test");
+
+  // mood label shows raw backend mood value
+  assert.equal(textOf(document, "mood-label"), "legendary");
+  // expression falls back to neutral (unknown mood → safe default)
+  assert.equal(document.getElementById("pet-face").getAttribute("data-mood"), "neutral");
+}
+
+async function testBackendOfflineSetsOfflineExpression() {
+  const { document } = await loadRenderer({ chatMode: "network_error" });
+
+  await sendChat(document, "offline test");
+
+  assert.equal(document.getElementById("pet-face").getAttribute("data-mood"), "offline");
+  assert.match(document.getElementById("pet-face").innerHTML, /<svg/);
+  // source status also shows offline
+  assert.equal(textOf(document, "chat-source-status"), "source: backend_offline");
+}
+
+async function testLocalErrorSetsErrorExpression() {
+  const { document } = await loadRenderer({ chatMode: "local_error" });
+
+  await sendChat(document, "error test");
+
+  // llm_local_error source must override mood expression to error
+  assert.equal(document.getElementById("pet-face").getAttribute("data-mood"), "error");
+  assert.match(document.getElementById("pet-face").innerHTML, /<svg/);
+  // source status still shows llm_local_error
+  assert.equal(textOf(document, "chat-source-status"), "source: llm_local_error");
+}
+
+async function testMockFallbackExpressionFollowsMoodNotSource() {
+  const { document } = await loadRenderer({
+    chatMode: "mock_fallback",
+    providerSettings: { fallback_to_mock: true },
+  });
+
+  await sendChat(document, "fallback expression test");
+
+  // source=mock, mood=focused — source status shows mock (not llm_local)
+  assert.equal(textOf(document, "chat-source-status"), "source: mock");
+  // mock fallback is not an error source, so expression follows the mood
+  assert.equal(document.getElementById("pet-face").getAttribute("data-mood"), "focused");
+}
+
+async function testSourceStatusRemainsVisibleAlongsidePetExpression() {
+  const { document } = await loadRenderer();
+
+  await sendChat(document, "source visibility test");
+
+  // Both pet expression and source status must be visible simultaneously
+  assert.equal(document.getElementById("pet-face").getAttribute("data-mood"), "focused");
+  assert.equal(textOf(document, "chat-source-status"), "source: llm_local");
+  assert.equal(textOf(document, "mood-label"), "focused");
+}
+
+async function testProviderTimeoutSetsErrorExpression() {
+  const { document } = await loadRenderer({ chatMode: "provider_timeout" });
+
+  await sendChat(document, "timeout expression test");
+
+  // Backend returns 504, which is a non-ok error response
+  const petMood = document.getElementById("pet-face").getAttribute("data-mood");
+  assert.equal(petMood, "error");
+}
+
+// ---------------------------------------------------------------------------
+// TASK-086: Image asset fallback tests
+// ---------------------------------------------------------------------------
+async function testNeutralMoodUsesPngImageWhenAvailable() {
+  // Startup triggers setMood("neutral") → setPetExpression("neutral").
+  // With neutral PNG marked available, FakeImage fires onload → petFace gets <img>.
+  const NEUTRAL_PATH = "assets/pet/christina/expressions/christina_neutral.png";
+  const { document } = await loadRenderer({
+    availableImages: [NEUTRAL_PATH],
+  });
+
+  const petFace = document.getElementById("pet-face");
+  // data-mood is set synchronously before the async probe
+  assert.equal(petFace.getAttribute("data-mood"), "neutral");
+  // After settle(), onload has fired and SVG was replaced by <img>
+  assert.equal(petFace.children.length, 1);
+  assert.equal(petFace.children[0].tagName, "IMG");
+  assert.match(petFace.children[0].src, /christina_neutral\.png/);
+  // innerHTML cleared when <img> was appended
+  assert.equal(petFace.innerHTML, "");
+}
+
+async function testIntegratedMoodPngAssetsLoadWhenAvailable() {
+  const moods = ["neutral", "focused", "happy", "proud", "annoyed"];
+  const paths = moods.map((mood) => `assets/pet/christina/expressions/christina_${mood}.png`);
+  const { document, sandbox } = await loadRenderer({
+    availableImages: paths,
+  });
+
+  for (const mood of moods) {
+    sandbox.setMood(mood);
+    await settle();
+
+    const petFace = document.getElementById("pet-face");
+    assert.equal(petFace.getAttribute("data-mood"), mood);
+    assert.equal(petFace.children.length, 1);
+    assert.equal(petFace.children[0].tagName, "IMG");
+    assert.match(petFace.children[0].src, new RegExp(`christina_${mood}\\.png`));
+    assert.equal(petFace.innerHTML, "");
+  }
+}
+
+async function testPngLoadFailureFallsBackToSvg() {
+  // No PNG available (default) → FakeImage fires onerror → SVG placeholder stays.
+  const { document } = await loadRenderer();
+
+  const petFace = document.getElementById("pet-face");
+  assert.equal(petFace.getAttribute("data-mood"), "neutral");
+  // SVG string remains in innerHTML; no IMG child was added
+  assert.match(petFace.innerHTML, /<svg/);
+  assert.equal(petFace.children.length, 0);
+}
+
+async function testFocusedMoodFallsBackToSvgWhenNoPng() {
+  // chat returns mood=focused; no PNG available → SVG fallback for focused.
+  const { document } = await loadRenderer();
+
+  await sendChat(document, "focused fallback test");
+
+  const petFace = document.getElementById("pet-face");
+  assert.equal(petFace.getAttribute("data-mood"), "focused");
+  assert.match(petFace.innerHTML, /<svg/);
+  assert.equal(petFace.children.length, 0);
+}
+
+async function testMissingExpressionPngsStillFallBackToSvg() {
+  const availableImages = [
+    "assets/pet/christina/expressions/christina_neutral.png",
+    "assets/pet/christina/expressions/christina_focused.png",
+    "assets/pet/christina/expressions/christina_happy.png",
+    "assets/pet/christina/expressions/christina_proud.png",
+    "assets/pet/christina/expressions/christina_annoyed.png",
+  ];
+  const missingMoods = ["worried", "sleepy", "pending", "error", "offline"];
+  const { document, sandbox } = await loadRenderer({ availableImages });
+
+  for (const mood of missingMoods) {
+    sandbox.setMood(mood);
+    await settle();
+
+    const petFace = document.getElementById("pet-face");
+    assert.equal(petFace.getAttribute("data-mood"), mood);
+    assert.match(petFace.innerHTML, /<svg/);
+    assert.equal(petFace.children.length, 0);
+  }
+}
+
+async function testImageAssetDoesNotBreakSourceOrMoodLabel() {
+  // With neutral PNG available, source status and mood label must still update normally.
+  const NEUTRAL_PATH = "assets/pet/christina/expressions/christina_neutral.png";
+  const { document } = await loadRenderer({
+    availableImages: [NEUTRAL_PATH],
+  });
+
+  await sendChat(document, "image + label test");
+
+  // After a focused-response chat: focused PNG not available → SVG for focused.
+  // Source label and mood label must still update correctly.
+  assert.equal(textOf(document, "mood-label"), "focused");
+  assert.equal(textOf(document, "chat-source-status"), "source: llm_local");
+  // pet-face updated to focused mood
+  assert.equal(document.getElementById("pet-face").getAttribute("data-mood"), "focused");
+}
+
+// TASK-098: UI polish tests
+
+async function testChatAreaAccumulatesMultipleMessages() {
+  // Verify that sending multiple messages grows the chat area correctly
+  // (tests scrollback accumulation — pixel scroll is layout-engine-dependent,
+  //  but DOM accumulation must be correct for scroll to be meaningful).
+  // Note: uses children.filter() because FakeElement does not implement querySelectorAll.
+  const { document } = await loadRenderer({ chatMode: "mock" });
+
+  await sendChat(document, "first message");
+  await sendChat(document, "second message");
+  await sendChat(document, "third message");
+
+  const chatArea = document.getElementById("chat-area");
+  const userMsgs = chatArea.children.filter(
+    (el) => el.className && el.className.includes("user")
+  );
+  assert.equal(userMsgs.length, 3, "Three user messages accumulated in chat area");
+
+  const petMsgs = chatArea.children.filter(
+    (el) => el.className && el.className.includes("pet")
+  );
+  // 1 greeting on startup + 3 replies
+  assert.ok(petMsgs.length >= 3, "At least three pet replies accumulated");
+}
+
+async function testFriendlySourceLabelShownAfterLocalChat() {
+  // Verify TASK-098: user-facing friendly label is shown alongside the technical source pill
+  const { document } = await loadRenderer();  // default: llm_local mode
+
+  await sendChat(document);
+
+  // Technical source pill: unchanged format required by smoke tests
+  assert.equal(textOf(document, "chat-source-status"), "source: llm_local");
+  // TASK-098: friendly label displayed in provider status pill
+  assert.equal(textOf(document, "chat-provider-status"), "Local Ollama");
 }
 
 function testRendererDoesNotContainDirectOllamaUrl() {
@@ -488,7 +835,27 @@ async function main() {
   await testLocalProviderFailureWithoutFallbackIsVisible();
   await testMockFallbackStateIsDistinguishable();
   await testProviderSettingsStatusAndTestConnectionSuccess();
+  await testSaveProviderSettingsOmitsBlankModelAndKeepsFallbackFalse();
   testRendererDoesNotContainDirectOllamaUrl();
+  // TASK-083: pet expression tests
+  await testSuccessfulChatWithFocusedMoodSetsFocusedExpression();
+  await testPendingExpressionSetBeforeResponse();
+  await testUnknownMoodFallsBackToNeutralExpression();
+  await testBackendOfflineSetsOfflineExpression();
+  await testLocalErrorSetsErrorExpression();
+  await testMockFallbackExpressionFollowsMoodNotSource();
+  await testSourceStatusRemainsVisibleAlongsidePetExpression();
+  await testProviderTimeoutSetsErrorExpression();
+  // TASK-086: image asset fallback tests
+  await testNeutralMoodUsesPngImageWhenAvailable();
+  await testIntegratedMoodPngAssetsLoadWhenAvailable();
+  await testPngLoadFailureFallsBackToSvg();
+  await testFocusedMoodFallsBackToSvgWhenNoPng();
+  await testMissingExpressionPngsStillFallBackToSvg();
+  await testImageAssetDoesNotBreakSourceOrMoodLabel();
+  // TASK-098: UI polish tests
+  await testChatAreaAccumulatesMultipleMessages();
+  await testFriendlySourceLabelShownAfterLocalChat();
   console.log("renderer chat smoke: PASS");
 }
 

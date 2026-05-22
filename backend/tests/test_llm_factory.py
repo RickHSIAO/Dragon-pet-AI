@@ -21,6 +21,8 @@ def clear_llm_env(monkeypatch):
         "LLM_MODEL",
         "LLM_TIMEOUT_SECONDS",
         "LLM_FALLBACK_TO_MOCK",
+        "LLM_LOCAL_CHAT_TIMEOUT_SECONDS",
+        "OLLAMA_TIMEOUT_SECONDS",
     ):
         monkeypatch.delenv(name, raising=False)
 
@@ -153,3 +155,25 @@ def test_chat_response_schema_remains_reply_mood_source():
 
     assert response.status_code == 200
     assert set(response.json().keys()) == {"reply", "mood", "source"}
+
+
+def test_ollama_provider_uses_local_chat_timeout_config(monkeypatch):
+    captured = {}
+
+    class FakeOllamaProvider:
+        provider_name = "ollama"
+
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setenv("LLM_PROVIDER_ENABLED", "true")
+    monkeypatch.setenv("LLM_PROVIDER_NAME", "ollama")
+    monkeypatch.setenv("LLM_MODEL", "qwen3:8b")
+    monkeypatch.setenv("LLM_LOCAL_CHAT_TIMEOUT_SECONDS", "123")
+    monkeypatch.setattr("app.llm.factory.OllamaLocalProvider", FakeOllamaProvider)
+
+    provider = get_llm_provider()
+
+    assert provider.provider_name == "ollama"
+    assert captured["model"] == "qwen3:8b"
+    assert captured["timeout_seconds"] == 123

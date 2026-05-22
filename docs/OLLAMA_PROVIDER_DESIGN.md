@@ -2,8 +2,8 @@
 
 > dragon-pet-ai
 > Task: TASK-072
-> Status: IMPLEMENTED — TASK-073 DONE; TASK-074 DONE; TASK-075 DONE (runtime smoke PASS); TASK-076 DONE (Provider Settings UI Ollama option); TASK-077 DONE (README Local LLM mode docs)
-> Last Updated: 2026-05-21
+> Status: RELEASE READINESS REVIEWED - TASK-073 through TASK-082 complete for Local Ollama MVP checkpoint
+> Last Updated: 2026-05-22
 
 ---
 
@@ -204,7 +204,9 @@ All new env vars follow the existing pattern: startup-time only, never runtime-p
 | `LLM_CHAT_ENABLED` | `false` | Must be `true` to route `/chat` through LLM adapter |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server endpoint |
 | `OLLAMA_KEEP_ALIVE` | `10m` | Keep model loaded in memory after last request |
-| `OLLAMA_TIMEOUT_SECONDS` | `30` | Request timeout; Ollama can be slow on first load |
+| `LLM_LOCAL_CHAT_TIMEOUT_SECONDS` | `90` | Local `/chat` generation timeout; Ollama can be slow on first load |
+| `OLLAMA_TIMEOUT_SECONDS` | `90` | Backward-compatible local chat timeout fallback when `LLM_LOCAL_CHAT_TIMEOUT_SECONDS` is unset |
+| `LLM_LOCAL_TEST_TIMEOUT_SECONDS` | `10` | Lightweight Test Connection timeout for `/api/tags`; does not perform generation |
 
 ### .env.example additions
 
@@ -214,7 +216,8 @@ All new env vars follow the existing pattern: startup-time only, never runtime-p
 # LLM_MODEL=qwen3:8b
 # OLLAMA_BASE_URL=http://localhost:11434
 # OLLAMA_KEEP_ALIVE=10m
-# OLLAMA_TIMEOUT_SECONDS=30
+# LLM_LOCAL_CHAT_TIMEOUT_SECONDS=90
+# LLM_LOCAL_TEST_TIMEOUT_SECONDS=10
 ```
 
 ### Minimum config to enable Ollama in development
@@ -303,14 +306,14 @@ When `LLM_PROVIDER_ENABLED=true`, `LLM_CHAT_ENABLED=true`, and `LLM_PROVIDER_NAM
 }
 ```
 
-**`source` value:** `llm_local` on success; `llm_local_error` on failure. Implemented in TASK-075F via `_LOCAL_PROVIDER_NAMES = frozenset({"ollama"})` in `chat_service.py`. This decision is now final — `llm_local` is the stable source value for all local providers.
+**`source` value:** `llm_local` on success; `llm_local_error` on local provider failure when fallback is disabled; `mock` when chat is disabled, provider resolves to mock, or `fallback_to_mock=true` permits mock fallback. Implemented in TASK-075F/TASK-079 via `_LOCAL_PROVIDER_NAMES = frozenset({"ollama"})` and runtime provider settings in `chat_service.py`. This decision is now final: `llm_local` is the stable success source value for local providers.
 
 **What does NOT change:**
 - `/chat` request and response schema — unchanged (`message`, `use_memory` in; `reply`, `mood`, `source` out)
 - Memory injection two-layer gate — unchanged
 - Memory audit logging — unchanged
 - Usage meter — extended with `provider=ollama`, `source=llm_local`
-- Fallback behavior — on failure, returns `source=llm_local_error` (no fallback to mock)
+- Fallback behavior is controlled by runtime provider settings: development/smoke should use `fallback_to_mock=false`; demo mode may use `fallback_to_mock=true`, but UI must show `source: mock` so fallback is not mistaken for local Ollama success.
 
 ---
 
@@ -539,3 +542,26 @@ Safety notes:
 - Renderer still must not call `localhost:11434` directly.
 - Ollama remains a local provider with `key_status=not_required`.
 - Automated tests remain mocked; no live external provider call is required for docs validation.
+
+## TASK-082 - Local Ollama Release Readiness Review
+
+Status: DONE
+
+Release checkpoint:
+- Local Ollama MVP is ready as a local-first checkpoint after TASK-081.
+- Test Connection uses the backend path only and performs a lightweight local runtime/model check. It is not a full `/chat` generation and does not validate persona tone.
+- `/chat` is the runtime path that validates generation, Christina persona, `mood`, and `source=llm_local`.
+- Provider Settings runtime state affects `/chat`; resolved provider, chat enablement, and fallback settings must be checked together.
+- Source display remains in the main chat runtime status area for MVP smoke/demo clarity.
+- Development and smoke should use `fallback_to_mock=false`; demo mode may allow `fallback_to_mock=true`, but `source: mock` must remain visible.
+- Local cold start is expected; the Electron UI shows a local model wake-up message while `/chat` is pending.
+- Renderer safety boundary remains unchanged: no direct Ollama URL in Electron renderer files.
+
+Recommended release smoke:
+1. Start `ollama serve`.
+2. Confirm `ollama list` includes `qwen3:8b`.
+3. Start backend with Ollama provider flags.
+4. PATCH `/provider/settings` to Ollama with `fallback_to_mock=false`.
+5. POST `/provider/settings/test`.
+6. POST `/chat` and confirm `reply / mood / source`, `source=llm_local`, and persona tone.
+7. Start Electron, run UI Test Connection, send a chat message, and confirm reply render, mood update, and `source: llm_local`.

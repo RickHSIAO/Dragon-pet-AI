@@ -65,6 +65,9 @@ const providerFallbackStatus = document.getElementById("provider-fallback-status
 const providerSettingsStatus = document.getElementById("provider-settings-status");
 const providerUsageSummary = document.getElementById("provider-usage-summary");
 const providerWarning = document.getElementById("provider-warning");
+// TASK-083: pet avatar expression area
+const petFace        = document.getElementById("pet-face");
+const petDisplayHint = document.getElementById("pet-display-hint");
 // TASK-056 / TASK-060: provider key save/clear/test controls
 // Safety: key value is never logged, never stored in localStorage/sessionStorage,
 // never sent to external providers, cleared from DOM immediately after every save attempt.
@@ -74,6 +77,7 @@ const providerWarning = document.getElementById("provider-warning");
 const providerApiKeyInput       = document.getElementById("provider-api-key-placeholder");
 const saveProviderKeyBtn        = document.getElementById("save-provider-key-btn");
 const clearProviderKeyBtn       = document.getElementById("clear-provider-key-btn");
+const saveProviderSettingsBtn   = document.getElementById("save-provider-settings-btn");
 const testProviderConnectionBtn = document.getElementById("test-provider-connection-btn");
 const providerKeyMsg            = document.getElementById("provider-key-msg");
 const providerTestMsg           = document.getElementById("provider-test-msg");
@@ -87,8 +91,181 @@ let isSending   = false;
 let isTestingConnection = false;
 // TASK-060: cache last-loaded provider settings for Test Connection enable conditions
 let currentProviderSettings = {};
+let providerSettingsLoaded = false;
 let lastChatSource = "not_checked";
 let lastChatStatusMessage = "No chat response yet.";
+
+// Avoid persisting default form values before the backend settings snapshot has
+// been restored and rendered.
+saveProviderSettingsBtn.disabled = true;
+
+// ---------------------------------------------------------------------------
+// Pet Expression (TASK-083) — mood → inline SVG face mapping
+//
+// Safety: SVG strings are static literals; no user input is interpolated.
+// Renderer never calls Ollama directly; all /chat calls go to BACKEND_URL.
+// ---------------------------------------------------------------------------
+
+// Base dragon face parts shared by all expressions.
+// Horns: two small filled triangles at the top of the 80×80 viewBox.
+// Face: filled circle with a 1.5px accent stroke.
+const _HORNS = `
+  <polygon points="26,21 20,7 33,17" fill="#e94560" opacity="0.7"/>
+  <polygon points="54,21 60,7 47,17" fill="#e94560" opacity="0.7"/>`;
+
+const _FACE_NORMAL  = `<circle cx="40" cy="44" r="26" fill="#1e1e3a" stroke="#e94560" stroke-width="1.5"/>`;
+const _FACE_ERROR   = `<circle cx="40" cy="44" r="26" fill="#1e1e3a" stroke="#9b2020" stroke-width="1.5"/>`;
+const _FACE_OFFLINE = `<circle cx="40" cy="44" r="26" fill="#12122a" stroke="#3a3a5a" stroke-width="1.5" stroke-dasharray="4,3"/>`;
+
+// Accent colour palette
+const _A  = "#e94560";  // main accent
+const _AD = "#7a2035";  // dimmed accent
+const _ER = "#ff5555";  // error red
+const _DM = "#4a4060";  // dim/offline
+
+// ---------------------------------------------------------------------------
+// SVG expression map — 10 supported moods
+// ---------------------------------------------------------------------------
+const PET_EXPRESSIONS = {
+
+  neutral: `<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Christina: neutral">${_HORNS}${_FACE_NORMAL}
+    <circle cx="30" cy="42" r="4.5" fill="${_A}"/><circle cx="31" cy="41" r="2" fill="#0d0d1a"/>
+    <circle cx="50" cy="42" r="4.5" fill="${_A}"/><circle cx="51" cy="41" r="2" fill="#0d0d1a"/>
+    <line x1="33" y1="54" x2="47" y2="54" stroke="${_A}" stroke-width="2" stroke-linecap="round"/>
+  </svg>`,
+
+  happy: `<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Christina: happy">${_HORNS}${_FACE_NORMAL}
+    <path d="M26 44 Q30 37 34 44" stroke="${_A}" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <path d="M46 44 Q50 37 54 44" stroke="${_A}" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <path d="M31 53 Q40 63 49 53" stroke="${_A}" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <circle cx="26" cy="50" r="3.5" fill="${_A}" opacity="0.3"/>
+    <circle cx="54" cy="50" r="3.5" fill="${_A}" opacity="0.3"/>
+  </svg>`,
+
+  focused: `<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Christina: focused">${_HORNS}${_FACE_NORMAL}
+    <rect x="24" y="40" width="12" height="4.5" rx="2.2" fill="${_A}"/>
+    <rect x="44" y="40" width="12" height="4.5" rx="2.2" fill="${_A}"/>
+    <line x1="23" y1="35" x2="36" y2="37.5" stroke="${_A}" stroke-width="1.8" stroke-linecap="round"/>
+    <line x1="44" y1="37.5" x2="57" y2="35" stroke="${_A}" stroke-width="1.8" stroke-linecap="round"/>
+    <path d="M33 55 Q40 52 47 55" stroke="${_A}" stroke-width="2" fill="none" stroke-linecap="round"/>
+  </svg>`,
+
+  proud: `<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Christina: proud">${_HORNS}${_FACE_NORMAL}
+    <path d="M26 44 Q30 37 34 44" stroke="${_A}" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <circle cx="50" cy="42" r="4.5" fill="${_A}"/><circle cx="51" cy="41" r="2" fill="#0d0d1a"/>
+    <path d="M34 54 Q42 62 49 55" stroke="${_A}" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  </svg>`,
+
+  annoyed: `<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Christina: annoyed">${_HORNS}${_FACE_NORMAL}
+    <circle cx="30" cy="43" r="4.5" fill="${_A}"/><circle cx="31" cy="42" r="2" fill="#0d0d1a"/>
+    <circle cx="50" cy="43" r="4.5" fill="${_A}"/><circle cx="51" cy="42" r="2" fill="#0d0d1a"/>
+    <line x1="23" y1="34" x2="36" y2="37" stroke="${_A}" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="44" y1="37" x2="57" y2="34" stroke="${_A}" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M33 57 Q40 51 47 57" stroke="${_A}" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <circle cx="26" cy="49" r="4" fill="${_A}" opacity="0.18"/>
+    <circle cx="54" cy="49" r="4" fill="${_A}" opacity="0.18"/>
+  </svg>`,
+
+  sleepy: `<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Christina: sleepy">${_HORNS}${_FACE_NORMAL}
+    <path d="M25 42 A5 5 0 0 1 35 42" fill="${_A}"/>
+    <path d="M45 42 A5 5 0 0 1 55 42" fill="${_A}"/>
+    <ellipse cx="40" cy="55" rx="5.5" ry="3.5" fill="${_A}" opacity="0.65"/>
+    <text x="58" y="33" font-family="sans-serif" font-size="10" fill="${_A}" opacity="0.8">z</text>
+    <text x="63" y="25" font-family="sans-serif" font-size="7"  fill="${_A}" opacity="0.5">z</text>
+  </svg>`,
+
+  worried: `<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Christina: worried">${_HORNS}${_FACE_NORMAL}
+    <circle cx="30" cy="43" r="4.5" fill="${_A}"/><circle cx="31" cy="42" r="2" fill="#0d0d1a"/>
+    <circle cx="50" cy="43" r="4.5" fill="${_A}"/><circle cx="51" cy="42" r="2" fill="#0d0d1a"/>
+    <line x1="25" y1="36" x2="35" y2="34" stroke="${_A}" stroke-width="2" stroke-linecap="round"/>
+    <line x1="45" y1="34" x2="55" y2="36" stroke="${_A}" stroke-width="2" stroke-linecap="round"/>
+    <path d="M32 55 Q36 51 40 55 Q44 59 48 55" stroke="${_A}" stroke-width="2" fill="none" stroke-linecap="round"/>
+  </svg>`,
+
+  pending: `<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Christina: thinking">${_HORNS}${_FACE_NORMAL}
+    <circle cx="30" cy="42" r="4.5" fill="${_A}"/><circle cx="31" cy="41" r="2" fill="#0d0d1a"/>
+    <circle cx="50" cy="42" r="4.5" fill="${_A}"/><circle cx="51" cy="41" r="2" fill="#0d0d1a"/>
+    <line x1="34" y1="54" x2="46" y2="54" stroke="${_A}" stroke-width="1.5" stroke-linecap="round"/>
+    <circle cx="31" cy="68" r="2.5" fill="${_A}" opacity="0.5"/>
+    <circle cx="40" cy="70" r="2.5" fill="${_A}" opacity="0.75"/>
+    <circle cx="49" cy="68" r="2.5" fill="${_A}" opacity="0.5"/>
+  </svg>`,
+
+  error: `<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Christina: error">${_HORNS}${_FACE_ERROR}
+    <line x1="25" y1="37" x2="34" y2="46" stroke="${_ER}" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="34" y1="37" x2="25" y2="46" stroke="${_ER}" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="46" y1="37" x2="55" y2="46" stroke="${_ER}" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="55" y1="37" x2="46" y2="46" stroke="${_ER}" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M33 57 Q40 51 47 57" stroke="${_ER}" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  </svg>`,
+
+  offline: `<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Christina: offline">
+    <polygon points="26,21 20,7 33,17" fill="${_DM}" opacity="0.5"/>
+    <polygon points="54,21 60,7 47,17" fill="${_DM}" opacity="0.5"/>
+    ${_FACE_OFFLINE}
+    <circle cx="30" cy="43" r="4.5" fill="${_DM}"/>
+    <circle cx="50" cy="43" r="4.5" fill="${_DM}"/>
+    <path d="M33 55 Q40 60 47 55" stroke="${_DM}" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <line x1="16" y1="62" x2="64" y2="26" stroke="#5a5a7a" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
+  </svg>`,
+};
+
+/** All moods the backend may return that have a defined expression. */
+const KNOWN_MOODS = new Set(Object.keys(PET_EXPRESSIONS));
+
+/**
+ * Update the pet face to reflect the given mood.
+ * Tries to load a PNG asset first; falls back to inline SVG placeholder.
+ * Unknown moods fall back to "neutral" for the expression (mood label is unaffected).
+ *
+ * Asset path: assets/pet/christina/expressions/christina_<mood>.png
+ * Safety: safeMood is always a key from KNOWN_MOODS — no user input in path or SVG.
+ *
+ * TASK-086: image-with-SVG-fallback strategy
+ *   1. Set inline SVG immediately (no flash while probe runs).
+ *   2. Probe PNG asset via Image(); if onload fires, replace SVG with <img>.
+ *   3. If onerror fires (file absent), SVG placeholder remains — UI never breaks.
+ *   4. Stale-mood guard: discard onload result if expression changed mid-flight.
+ *   5. typeof Image guard: no-op in non-browser / test environments without Image.
+ */
+function setPetExpression(mood) {
+  const safeMood = KNOWN_MOODS.has(mood) ? mood : "neutral";
+
+  // ── 1. Immediate SVG placeholder — no visible flash ───────────────────────
+  petFace.innerHTML = PET_EXPRESSIONS[safeMood];
+  petFace.setAttribute("data-mood", safeMood);
+  petFace.setAttribute("aria-label", `Christina expression: ${safeMood}`);
+
+  // ── 2. Probe PNG asset ─────────────────────────────────────────────────────
+  // Guard: Image may be undefined in non-browser / unit-test environments.
+  if (typeof Image === "undefined") return;
+  const imgPath = `assets/pet/christina/expressions/christina_${safeMood}.png`;
+  const probe = new Image();
+
+  probe.onload = function () {
+    // ── 3. Stale-mood guard ────────────────────────────────────────────────
+    // If the mood changed while the probe was in-flight, discard this result.
+    if (petFace.getAttribute("data-mood") !== safeMood) return;
+    // Replace SVG with <img>; keep object-fit so horns/head stay inside 80×80.
+    const el = document.createElement("img");
+    el.src = imgPath;
+    el.alt = `Christina expression: ${safeMood}`;
+    el.style.cssText = "width:100%;height:100%;object-fit:contain;";
+    petFace.innerHTML = "";
+    petFace.appendChild(el);
+  };
+
+  probe.onerror = function () {
+    // PNG absent or failed — SVG placeholder already set above; nothing to do.
+  };
+
+  probe.src = imgPath;
+}
+
+/** Update the small hint text under the pet face. */
+function setPetHint(text) {
+  petDisplayHint.textContent = text;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -101,7 +278,7 @@ function appendMessage(role, text) {
   sender.className = "sender";
   sender.textContent =
     role === "user"   ? "You" :
-    role === "pet"    ? "Dragon Pet" :
+    role === "pet"    ? "Christina" :
     role === "error"  ? "Error" :
     "System";
 
@@ -111,13 +288,23 @@ function appendMessage(role, text) {
   wrap.appendChild(sender);
   wrap.appendChild(body);
   chatArea.appendChild(wrap);
-  chatArea.scrollTop = chatArea.scrollHeight;
+
+  // TASK-098: requestAnimationFrame for reliable scroll-to-bottom after layout
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(() => { chatArea.scrollTop = chatArea.scrollHeight; });
+  } else {
+    chatArea.scrollTop = chatArea.scrollHeight;  // fallback for test environment
+  }
   return wrap;
 }
 
 function setMood(mood) {
   currentMood = mood || "neutral";
   moodLabel.textContent = currentMood;
+  // TASK-083: update pet expression to match mood (unknown moods fall back to neutral)
+  setPetExpression(currentMood);
+  // TASK-098: friendly hint label instead of raw mood name
+  setPetHint(moodHintLabel(currentMood));
 }
 
 function setSending(state) {
@@ -153,7 +340,7 @@ function sourceStatusMessage(source, settings = currentProviderSettings) {
     return "source=llm_local - local Ollama reply received through the backend.";
   }
   if (source === "llm_local_error") {
-    return "source=llm_local_error - local provider failed safely. Check Ollama server, model name, or timeout.";
+    return "source=llm_local_error - local provider failed safely. The local model may still be loading; check Ollama server, model name, or timeout.";
   }
   if (source === "mock") {
     if (settings.resolved_provider === "ollama" && !settings.llm_chat_enabled) {
@@ -184,10 +371,44 @@ function sourceStatusMessage(source, settings = currentProviderSettings) {
   return "Chat source will appear after the next response.";
 }
 
+// TASK-098: friendly user-facing label for chat source
+function sourceLabel(source) {
+  const LABELS = {
+    "llm_local":       "Local Ollama",
+    "llm_local_error": "Ollama Error",
+    "llm_real":        "Cloud AI",
+    "llm_real_error":  "Cloud Error",
+    "mock":            "Mock fallback",
+    "backend_offline": "Backend offline",
+    "pending":         "Thinking…",
+    "error":           "Error",
+    "not_checked":     "—",
+  };
+  return LABELS[source] || source || "—";
+}
+
+// TASK-098: friendly hint text for pet display state
+function moodHintLabel(mood) {
+  const HINTS = {
+    "neutral":  "Listening",
+    "focused":  "Focused",
+    "happy":    "Happy",
+    "proud":    "Proud",
+    "annoyed":  "Annoyed",
+    "worried":  "Worried",
+    "sleepy":   "Sleepy",
+    "pending":  "Thinking…",
+    "error":    "Something went wrong",
+    "offline":  "Offline",
+  };
+  return HINTS[mood] || mood || "";
+}
+
 function setChatRuntimeStatus(source, message = "", state = "normal") {
   lastChatSource = source || lastChatSource || "not_checked";
   lastChatStatusMessage = message || sourceStatusMessage(lastChatSource);
 
+  // Source pill: technical format — smoke tests depend on exact text "source: <value>"
   chatSourceStatus.textContent = `source: ${lastChatSource}`;
   chatSourceStatus.className =
     state === "error"
@@ -195,16 +416,31 @@ function setChatRuntimeStatus(source, message = "", state = "normal") {
       : state === "pending"
         ? "chat-runtime-pill pending"
         : "chat-runtime-pill";
-  chatProviderStatus.textContent = providerSummary();
+
+  // TASK-098: friendly label pill — user-facing, replaces raw provider summary after chat
+  chatProviderStatus.textContent = sourceLabel(lastChatSource);
+  chatProviderStatus.className =
+    state === "error"
+      ? "chat-runtime-pill error"
+      : state === "pending"
+        ? "chat-runtime-pill pending"
+        : "chat-runtime-pill friendly";
+
   chatRuntimeStatus.textContent = lastChatStatusMessage;
   chatRuntimeStatus.className = state === "error" ? "status-note error" : "status-note";
 }
 
 function syncChatRuntimeProviderStatus() {
-  chatProviderStatus.textContent = providerSummary();
   if (lastChatSource === "not_checked") {
-    setChatRuntimeStatus("not_checked", sourceStatusMessage("not_checked"));
+    // Before first chat: show short provider name instead of raw source label
+    const p = currentProviderSettings.provider || "mock";
+    chatProviderStatus.textContent = `provider: ${p}`;
+    chatProviderStatus.className = "chat-runtime-pill";
+    chatRuntimeStatus.textContent = lastChatStatusMessage;
   } else {
+    // After first chat: show friendly source label (TASK-098)
+    chatProviderStatus.textContent = sourceLabel(lastChatSource);
+    chatProviderStatus.className = "chat-runtime-pill friendly";
     chatRuntimeStatus.textContent = lastChatStatusMessage;
   }
 }
@@ -549,8 +785,11 @@ function renderProviderSettings(settings) {
   providerLastTestStatus.textContent = settings.last_test_status || "not_tested";
   providerResolvedProvider.textContent = settings.resolved_provider || "mock";
   providerRealEnabledStatus.textContent = String(Boolean(settings.real_provider_enabled));
+  providerRealEnabledStatus.dataset.bool = settings.real_provider_enabled ? "true" : "false";
   providerLlmChatEnabledStatus.textContent = String(Boolean(settings.llm_chat_enabled));
+  providerLlmChatEnabledStatus.dataset.bool = settings.llm_chat_enabled ? "true" : "false";
   providerFallbackStatus.textContent = String(settings.fallback_to_mock !== false);
+  providerFallbackStatus.dataset.bool = settings.fallback_to_mock !== false ? "true" : "false";
   providerWarning.textContent = settings.provider === "ollama"
     ? "Ollama runs locally and uses your CPU/GPU. No API key is required; the renderer still calls only the backend."
     : "Using a real provider may incur charges from your API provider.";
@@ -562,30 +801,45 @@ function renderProviderSettings(settings) {
 }
 
 async function loadProviderSettings() {
+  providerSettingsLoaded = false;
+  saveProviderSettingsBtn.disabled = true;
   setProviderSettingsStatus("Loading provider settings...");
 
   try {
     const res = await fetch(`${BACKEND_URL}/provider/settings`);
     const settings = await parseJsonResponse(res);
     renderProviderSettings(settings);
+    providerSettingsLoaded = true;
+    saveProviderSettingsBtn.disabled = false;
     setProviderSettingsStatus("Provider settings loaded.");
   } catch (err) {
     renderUsageSummary(null);
+    saveProviderSettingsBtn.disabled = true;
     setProviderSettingsStatus(formatBackendError(err), true);
   }
 }
 
 async function saveProviderSettings() {
+  if (!providerSettingsLoaded) {
+    setProviderSettingsStatus(
+      "Provider settings are still loading. Refresh settings before saving.",
+      true
+    );
+    return;
+  }
   setProviderSettingsStatus("Saving non-secret provider settings...");
 
   try {
     const body = {
       provider: providerSettingsProvider.value,
-      model: providerSettingsModel.value.trim() || null,
       real_provider_enabled: providerRealEnabled.checked,
       llm_chat_enabled: providerLlmChatEnabled.checked,
       fallback_to_mock: providerFallbackToMock.checked,
     };
+    const modelValue = providerSettingsModel.value.trim();
+    if (modelValue) {
+      body.model = modelValue;
+    }
 
     const res = await fetch(`${BACKEND_URL}/provider/settings`, {
       method: "PATCH",
@@ -1051,6 +1305,9 @@ async function sendMessage(text) {
       : "Waiting for backend reply..."
   );
   setChatRuntimeStatus("pending", sourceStatusMessage("pending"), "pending");
+  // TASK-083: show thinking expression while waiting for reply
+  setPetExpression("pending");
+  setPetHint("thinking…");
   msgInput.value = "";
   msgInput.style.height = "auto";
 
@@ -1074,9 +1331,15 @@ async function sendMessage(text) {
 
     loadingMessage.remove();
     appendMessage("pet", data.reply);
-    setMood(data.mood);
     const source = data.source || "unknown";
     const isSourceError = source === "llm_local_error" || source === "llm_real_error";
+    setMood(data.mood); // also calls setPetExpression via setMood
+    // TASK-083/098: if the source indicates a provider error, override expression to error
+    // even though a safe fallback reply was returned.
+    if (isSourceError) {
+      setPetExpression("error");
+      setPetHint(moodHintLabel("error"));
+    }
     setChatRuntimeStatus(
       source,
       sourceStatusMessage(source),
@@ -1091,6 +1354,14 @@ async function sendMessage(text) {
       : `Something went wrong: ${err.message}`;
 
     loadingMessage.remove();
+    // TASK-083: show offline/error expression on failure
+    if (isNetworkError) {
+      setPetExpression("offline");
+      setPetHint(moodHintLabel("offline"));
+    } else {
+      setPetExpression("error");
+      setPetHint(moodHintLabel("error"));
+    }
     setChatRuntimeStatus(
       isNetworkError ? "backend_offline" : "error",
       isNetworkError ? sourceStatusMessage("backend_offline") : err.message,
@@ -1212,7 +1483,7 @@ msgInput.addEventListener("input", () => {
       // Remove the connecting status
       chatArea.lastChild.remove();
       appendMessage("pet", "Hey. I'm here. What's on your mind?");
-      setMood("neutral");
+      setMood("neutral"); // also initialises pet expression and friendly hint via setPetExpression / moodHintLabel
       await loadMemories();
       await loadMemoryContextPreview();
       await loadAuditLogs();
@@ -1229,6 +1500,9 @@ msgInput.addEventListener("input", () => {
     setChatRuntimeStatus("backend_offline", sourceStatusMessage("backend_offline"), "error");
     setMemoryStatus(`Cannot reach backend at ${BACKEND_URL}.`, true);
     setProviderSettingsStatus(`Cannot reach backend at ${BACKEND_URL}.`, true);
+    // TASK-083: show offline expression on startup failure
+    setPetExpression("offline");
+    setPetHint(moodHintLabel("offline"));
   }
 
   msgInput.focus();

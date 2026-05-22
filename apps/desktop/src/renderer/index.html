@@ -42,6 +42,15 @@
     <span id="chat-runtime-status" class="status-note">mock mode - no AI connected</span>
   </div>
 
+  <!-- ── Pet Avatar (TASK-083) ────────────────────────── -->
+  <!-- Expression is updated by renderer.js via setPetExpression(mood).       -->
+  <!-- The SVG is injected into #pet-face; data-mood tracks current state.    -->
+  <!-- Renderer never calls Ollama directly — all backend calls go to FastAPI. -->
+  <section id="pet-display" aria-label="Dragon pet expression">
+    <div id="pet-face" class="pet-face" data-mood="neutral" role="img" aria-label="Christina expression: neutral"></div>
+    <p class="pet-display-hint" id="pet-display-hint">connecting…</p>
+  </section>
+
   <!-- ── Chat area ──────────────────────────────────────── -->
   <main id="chat-area">
     <!-- Messages are injected here by renderer.js -->

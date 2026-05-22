@@ -5,9 +5,9 @@ from app.core.config import (
     get_llm_api_key,
     get_llm_fallback_to_mock,
     get_llm_model,
+    get_local_chat_timeout_seconds,
     get_ollama_base_url,
     get_ollama_keep_alive,
-    get_ollama_timeout_seconds,
     get_llm_provider_enabled,
     get_llm_provider_name,
     get_llm_timeout_seconds,
@@ -75,7 +75,7 @@ def get_llm_provider() -> LLMProvider:
             model=model,
             base_url=get_ollama_base_url(),
             keep_alive=get_ollama_keep_alive(),
-            timeout_seconds=get_ollama_timeout_seconds(),
+            timeout_seconds=get_local_chat_timeout_seconds(),
         )
 
     return HTTPRealLLMProvider(
@@ -107,7 +107,7 @@ def get_llm_provider_from_runtime_settings(settings: dict[str, Any]) -> LLMProvi
             model=model or "qwen3:8b",
             base_url=get_ollama_base_url(),
             keep_alive=get_ollama_keep_alive(),
-            timeout_seconds=get_ollama_timeout_seconds(),
+            timeout_seconds=get_local_chat_timeout_seconds(),
         )
 
     if provider_name in SUPPORTED_REAL_PROVIDERS:

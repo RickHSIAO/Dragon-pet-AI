@@ -220,7 +220,10 @@ async def update_provider_settings_route(
         update_request = ProviderSettingsUpdateRequest(**body)
     except ValidationError as exc:
         raise HTTPException(status_code=400, detail="invalid provider settings") from exc
-    update = ProviderSettingsUpdate(**update_request.model_dump())
+    # Preserve partial PATCH semantics: fields omitted by the caller must not be
+    # converted into explicit None values that can later overwrite persisted
+    # settings.
+    update = ProviderSettingsUpdate(**update_request.model_dump(exclude_unset=True))
     try:
         settings = update_provider_settings(update)
     except ValueError as exc:
@@ -448,5 +451,5 @@ def deactivate_memory_route(
     """
     memory = deactivate_memory(session, memory_id)
     if memory is None:
-        raise HTTPException(status_code=404, detail="memory not found")
+        raise HTTPException(status_code=404, detail="memory record not found")
     return MemoryResponse.model_validate(memory)

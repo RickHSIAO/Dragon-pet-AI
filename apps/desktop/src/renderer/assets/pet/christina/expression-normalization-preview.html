@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Christina Expression Normalization Preview</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.45;
+      color: #1f2933;
+      background: #f6f7f9;
+    }
+
+    body {
+      margin: 0;
+      padding: 24px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 22px;
+    }
+
+    p {
+      margin: 0 0 18px;
+      max-width: 1040px;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      max-width: 1180px;
+      background: #ffffff;
+      border: 1px solid #d5dbe3;
+    }
+
+    th,
+    td {
+      border: 1px solid #d5dbe3;
+      padding: 10px;
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    th {
+      background: #e8edf3;
+      font-weight: 700;
+    }
+
+    .checker {
+      background:
+        linear-gradient(45deg, #d8dde5 25%, transparent 25%),
+        linear-gradient(-45deg, #d8dde5 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #d8dde5 75%),
+        linear-gradient(-45deg, transparent 75%, #d8dde5 75%);
+      background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+      background-size: 16px 16px;
+      background-color: #ffffff;
+      border: 1px solid #9aa6b2;
+      display: grid;
+      place-items: center;
+    }
+
+    .preview-80 {
+      width: 80px;
+      height: 80px;
+    }
+
+    .preview-160 {
+      width: 160px;
+      height: 160px;
+    }
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .note {
+      max-width: 340px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Christina Expression Normalization Preview</h1>
+  <p>
+    TASK-093 local QA preview. Runtime expression PNGs are shown next to
+    512x512 candidates. Candidates are QA-only and are not active runtime assets.
+  </p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Mood</th>
+        <th>Original runtime PNG at 80x80</th>
+        <th>512 candidate at 80x80</th>
+        <th>512 candidate at 160x160</th>
+        <th>QA note</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>focused</td>
+        <td><div class="checker preview-80"><img src="expressions/christina_focused.png" alt="focused original"></div></td>
+        <td><div class="checker preview-80"><img src="expressions/candidates/christina_focused_512_candidate.png" alt="focused candidate"></div></td>
+        <td><div class="checker preview-160"><img src="expressions/candidates/christina_focused_512_candidate.png" alt="focused candidate large"></div></td>
+        <td class="note">Candidate makes the face and focused eyes more readable; horns remain in frame.</td>
+      </tr>
+      <tr>
+        <td>happy</td>
+        <td><div class="checker preview-80"><img src="expressions/christina_happy.png" alt="happy original"></div></td>
+        <td><div class="checker preview-80"><img src="expressions/candidates/christina_happy_512_candidate.png" alt="happy candidate"></div></td>
+        <td><div class="checker preview-160"><img src="expressions/candidates/christina_happy_512_candidate.png" alt="happy candidate large"></div></td>
+        <td class="note">Candidate removes edge-connected checker remnants and makes the smile readable.</td>
+      </tr>
+      <tr>
+        <td>proud</td>
+        <td><div class="checker preview-80"><img src="expressions/christina_proud.png" alt="proud original"></div></td>
+        <td><div class="checker preview-80"><img src="expressions/candidates/christina_proud_512_candidate.png" alt="proud candidate"></div></td>
+        <td><div class="checker preview-160"><img src="expressions/candidates/christina_proud_512_candidate.png" alt="proud candidate large"></div></td>
+        <td class="note">Candidate improves the smug face scale while preserving upper-body context.</td>
+      </tr>
+      <tr>
+        <td>annoyed</td>
+        <td><div class="checker preview-80"><img src="expressions/christina_annoyed.png" alt="annoyed original"></div></td>
+        <td><div class="checker preview-80"><img src="expressions/candidates/christina_annoyed_512_candidate.png" alt="annoyed candidate"></div></td>
+        <td><div class="checker preview-160"><img src="expressions/candidates/christina_annoyed_512_candidate.png" alt="annoyed candidate large"></div></td>
+        <td class="note">Candidate removes edge-connected checker remnants and makes the frown readable.</td>
+      </tr>
+    </tbody>
+  </table>
+</body>
+</html>

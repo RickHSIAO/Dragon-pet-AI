@@ -26,7 +26,8 @@ $env:LLM_PROVIDER_NAME="ollama"
 $env:LLM_MODEL="qwen3:8b"
 $env:OLLAMA_BASE_URL="http://localhost:11434"
 $env:OLLAMA_KEEP_ALIVE="10m"
-$env:OLLAMA_TIMEOUT_SECONDS="30"
+$env:LLM_LOCAL_CHAT_TIMEOUT_SECONDS="90"
+$env:LLM_LOCAL_TEST_TIMEOUT_SECONDS="10"
 ```
 
 ## Start Commands

@@ -123,6 +123,93 @@ def test_patch_provider_settings_updates_non_secret_fields():
     assert data["resolved_provider"] == "safe_fallback"
 
 
+def test_partial_patch_preserves_existing_model_and_fallback_to_mock():
+    with TestClient(app) as client:
+        first = client.patch(
+            "/provider/settings",
+            json={
+                "provider": "ollama",
+                "model": "qwen3:8b",
+                "real_provider_enabled": True,
+                "llm_chat_enabled": True,
+                "fallback_to_mock": False,
+            },
+        )
+        assert first.status_code == 200
+
+        response = client.patch("/provider/settings", json={"provider": "ollama"})
+        data = response.json()
+
+    assert response.status_code == 200
+    assert data["provider"] == "ollama"
+    assert data["model"] == "qwen3:8b"
+    assert data["fallback_to_mock"] is False
+
+
+def test_explicit_null_model_does_not_clear_existing_model():
+    with TestClient(app) as client:
+        first = client.patch(
+            "/provider/settings",
+            json={
+                "provider": "ollama",
+                "model": "qwen3:8b",
+                "real_provider_enabled": True,
+                "llm_chat_enabled": True,
+                "fallback_to_mock": False,
+            },
+        )
+        assert first.status_code == 200
+
+        response = client.patch("/provider/settings", json={"model": None})
+        data = response.json()
+
+    assert response.status_code == 200
+    assert data["model"] == "qwen3:8b"
+    assert data["fallback_to_mock"] is False
+
+
+def test_provider_test_connection_does_not_mutate_provider_settings(monkeypatch):
+    def fake_test_connection(provider, model=None, explicit_cost_ack=False):
+        return {
+            "status": "success",
+            "provider": provider,
+            "model": model or "qwen3:8b",
+            "source": "llm_local",
+            "safe_message": "Local Ollama connection successful.",
+            "error_category": None,
+            "usage_estimate": {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2},
+        }
+
+    monkeypatch.setattr(
+        "app.api.routes.run_provider_test_connection",
+        fake_test_connection,
+    )
+
+    with TestClient(app) as client:
+        first = client.patch(
+            "/provider/settings",
+            json={
+                "provider": "ollama",
+                "model": "qwen3:8b",
+                "real_provider_enabled": True,
+                "llm_chat_enabled": True,
+                "fallback_to_mock": False,
+            },
+        )
+        assert first.status_code == 200
+
+        test = client.post(
+            "/provider/settings/test",
+            json={"provider": "ollama", "explicit_cost_ack": True},
+        )
+        settings = client.get("/provider/settings").json()
+
+    assert test.status_code == 200
+    assert settings["provider"] == "ollama"
+    assert settings["model"] == "qwen3:8b"
+    assert settings["fallback_to_mock"] is False
+
+
 def test_patch_provider_settings_rejects_api_key_field_without_echoing_value():
     secret = "sk-patch-secret-should-not-appear"
 

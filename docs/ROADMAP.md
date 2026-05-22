@@ -12,13 +12,13 @@
 The project is developed in discrete phases. Each phase has a clearly defined scope and must not implement features belonging to later phases.
 
 ```
-Phase 0 → Phase 1 → Phase 2 → Phase 3 → Phase 4 → Phase 5
+Phase 0 ??Phase 1 ??Phase 2 ??Phase 3 ??Phase 4 ??Phase 5
 Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 ```
 
 ---
 
-## Phase 0 — Project Definition
+## Phase 0 ??Project Definition
 
 **Goal:** Establish the project structure, specifications, and documentation before writing any runtime code.
 
@@ -32,9 +32,9 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 
 ---
 
-## Phase 1 — Basic Runtime Skeleton
+## Phase 1 ??Basic Runtime Skeleton
 
-**Goal:** Establish the running skeleton of both the backend and desktop app. No real AI, no real features — just the infrastructure working end-to-end.
+**Goal:** Establish the running skeleton of both the backend and desktop app. No real AI, no real features ??just the infrastructure working end-to-end.
 
 **Status:** COMPLETE
 
@@ -43,14 +43,14 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 | TASK-003 | FastAPI backend skeleton + /health + /chat mock | DONE |
 | TASK-004 | Electron desktop shell + chat UI | DONE |
 
-**Exit Criteria — Met:**
-- `uvicorn` starts the backend without errors ✅
-- `npm start` opens the Electron window ✅
-- Desktop can POST to `/chat` and display the mock response ✅
+**Exit Criteria ??Met:**
+- `uvicorn` starts the backend without errors ??
+- `npm start` opens the Electron window ??
+- Desktop can POST to `/chat` and display the mock response ??
 
 ---
 
-## Phase 2 — Chat and Character
+## Phase 2 ??Chat and Character
 
 **Goal:** Wire up character state, conversation history, and SQLite persistence.
 
@@ -62,7 +62,7 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 
 ---
 
-## Phase 3 — Memory and State
+## Phase 3 ??Memory and State
 
 **Goal:** Add long-term memory, memory-aware chat, and audit inspection.
 
@@ -87,16 +87,16 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 | TASK-029 | Phase 3 Stabilization and Demo Summary | DONE |
 
 **Phase 3 Deliverables Completed:**
-- All messages persisted to SQLite ✅
-- Manual memory CRUD API ✅
-- Memory management UI ✅
-- Approved memory context builder with safety filters ✅
-- Memory-aware chat with two-layer safety gate ✅
-- MemoryInjectionAudit model + audit row creation ✅
-- Audit inspection API (read-only, paginated, safe metadata only) ✅
-- Audit Logs UI ✅
-- pytest: 226 passed, 0 failed ✅
-- All runtime smoke checks passed ✅
+- All messages persisted to SQLite ??
+- Manual memory CRUD API ??
+- Memory management UI ??
+- Approved memory context builder with safety filters ??
+- Memory-aware chat with two-layer safety gate ??
+- MemoryInjectionAudit model + audit row creation ??
+- Audit inspection API (read-only, paginated, safe metadata only) ??
+- Audit Logs UI ??
+- pytest: 226 passed, 0 failed ??
+- All runtime smoke checks passed ??
 
 **Not implemented in Phase 3 (remains deferred):**
 - Real AI / LLM provider
@@ -107,20 +107,20 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 
 ---
 
-## Phase 4 — LLM Adapter Integration
+## Phase 4 ??LLM Adapter Integration
 
 **Goal:** Wire the approved memory context pipeline to a real LLM provider behind a feature flag, using an adapter pattern that keeps mock as the default.
 
-**Status:** IN PROGRESS — provider adapter exists behind flags; mock `/chat` LLM wiring smoke passed; real-provider `/chat` wiring contract tests passed with mocked HTTP only; in-memory usage meter, non-secret provider settings API, Provider Settings UI, secure key storage abstraction, key save/clear endpoints, key UI enablement, Provider Test Connection design, backend Test Connection implementation (TASK-059), Opus safety review PASS (TASK-059R), Test Connection UI enablement (TASK-060), hardening tests (TASK-062), and Provider Settings UI layout polish (TASK-063) are complete; explicit cost acknowledgement required per click; no automatic test after Save Key; no live external API call; live provider remains disabled by default
+**Status:** IN PROGRESS ??provider adapter exists behind flags; mock `/chat` LLM wiring smoke passed; real-provider `/chat` wiring contract tests passed with mocked HTTP only; in-memory usage meter, non-secret provider settings API, Provider Settings UI, secure key storage abstraction, key save/clear endpoints, key UI enablement, Provider Test Connection design, backend Test Connection implementation (TASK-059), Opus safety review PASS (TASK-059R), Test Connection UI enablement (TASK-060), hardening tests (TASK-062), and Provider Settings UI layout polish (TASK-063) are complete; explicit cost acknowledgement required per click; no automatic test after Save Key; no live external API call; live provider remains disabled by default
 
-**Recommended primary path: Option A — LLM Adapter Integration**
+**Recommended primary path: Option A ??LLM Adapter Integration**
 
 | Option | Description | Notes |
 |---|---|---|
-| **A — LLM adapter integration** ⬅ selected | Wire approved memory context to a real LLM behind explicit flags | TASK-031 → TASK-051 |
-| B — TTS voice output | Add basic text-to-speech output | Deferred — more valuable after real LLM is wired |
-| C — UI polish and packaging | Improve layouts, scrolling, package as installable app | Deferred — better after LLM adapter done |
-| D — Daily summary / memory review | Generate end-of-day summaries and memory review UI | Deferred — requires LLM adapter first |
+| **A ??LLM adapter integration** 漎?selected | Wire approved memory context to a real LLM behind explicit flags | TASK-031 ??TASK-051 |
+| B ??TTS voice output | Add basic text-to-speech output | Deferred ??more valuable after real LLM is wired |
+| C ??UI polish and packaging | Improve layouts, scrolling, package as installable app | Deferred ??better after LLM adapter done |
+| D ??Daily summary / memory review | Generate end-of-day summaries and memory review UI | Deferred ??requires LLM adapter first |
 
 **Task Sequence:**
 
@@ -131,7 +131,7 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 | TASK-032 | LLM Provider Interface Skeleton | DONE |
 | TASK-033 | Mock Provider Compatibility Tests | DONE |
 | TASK-034 | Real Provider Config Design | DONE |
-| TASK-034R | Real Provider Config Safety Review (Opus) | DONE — PASS WITH CHANGES |
+| TASK-034R | Real Provider Config Safety Review (Opus) | DONE ??PASS WITH CHANGES |
 | TASK-034F | Apply Real Provider Config Review Fixes | DONE |
 | TASK-035 | Real Provider Integration Behind Feature Flag | DONE |
 | TASK-036 | Real Provider Vendor Contract Design | DONE |
@@ -158,12 +158,12 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 | TASK-057 | Provider Settings Key UI Smoke Check | DONE |
 | TASK-058 | Provider Test Connection Design | DONE |
 | TASK-059 | Provider Test Connection Backend Implementation | DONE |
-| TASK-059R | Provider Test Connection Safety Review (Opus) | DONE — PASS |
+| TASK-059R | Provider Test Connection Safety Review (Opus) | DONE ??PASS |
 | TASK-060 | Provider Test Connection UI Enablement | DONE |
-| TASK-061 | Provider Test Connection Runtime Smoke Check | DONE — PASS WITH EXPECTED LIMITATION |
+| TASK-061 | Provider Test Connection Runtime Smoke Check | DONE ??PASS WITH EXPECTED LIMITATION |
 | TASK-062 | Provider Test Connection Hardening Tests | DONE |
 | TASK-063 | Electron Provider Settings UI Polish and Layout Fix | DONE |
-| TASK-064 | Provider Settings UI Runtime Smoke Re-check | DONE — PASS WITH NON-BLOCKING UI NOTES |
+| TASK-064 | Provider Settings UI Runtime Smoke Re-check | DONE ??PASS WITH NON-BLOCKING UI NOTES |
 | TASK-065 | Phase 4 Provider Settings Stabilization Summary | DONE |
 | TASK-066D | Portfolio Demo Script and Screenshots | DONE |
 | TASK-067D | Portfolio README Polish | DONE |
@@ -178,30 +178,30 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 **Phase 4 Key Safety Constraints:**
 - `LLM_PROVIDER_ENABLED=false` is the default; real provider requires explicit opt-in via env var
 - `LLM_CHAT_ENABLED=false` must gate `/chat` LLM adapter use separately from provider selection
-- API key loaded from environment variable only — never hardcoded, never logged, never sent to frontend, never in repr/str
-- `/chat` response schema remains `reply / mood / source` — unchanged
+- API key loaded from environment variable only ??never hardcoded, never logged, never sent to frontend, never in repr/str
+- `/chat` response schema remains `reply / mood / source` ??unchanged
 - Memory-aware chat two-layer gate is unchanged
 - No automatic retries in Phase 4 (at most one real provider call per `/chat` turn)
-- Non-2xx provider response bodies are opaque — not parsed, not logged, not returned
+- Non-2xx provider response bodies are opaque ??not parsed, not logged, not returned
 - No tool execution, no file access, no autonomous action, no automatic memory extraction
 - Live smoke is blocked until explicit user cost confirmation and TASK-044 go/no-go criteria are satisfied
-- BYOK is the recommended MVP path; provider settings UI design done (TASK-047); backend API design done (TASK-048); secure key storage design done (TASK-049); usage meter implementation done (TASK-050); non-secret settings API implementation done (TASK-051); Provider Settings UI implementation done (TASK-052); secure key storage abstraction done (TASK-053); provider key save/clear endpoints done (TASK-054); key UI enablement design done (TASK-055); Save Key / Clear Key UI done (TASK-056); key UI smoke passed (TASK-057); Test Connection design done (TASK-058); Test Connection backend done (TASK-059); safety review PASS (TASK-059R); Test Connection UI enabled in renderer (TASK-060); runtime smoke PASS WITH EXPECTED LIMITATION (TASK-061); hardening tests DONE — 470 passed (TASK-062); Provider Settings UI readability/layout polish DONE (TASK-063); runtime smoke re-check PASS WITH NON-BLOCKING UI NOTES (TASK-064); Phase 4 Provider Settings stabilization summary created (TASK-065); portfolio demo script created (TASK-066D); README polished as portfolio-friendly entry point (TASK-067D); no live external provider call has occurred; no real API key has been used; project is demo-ready as local-first prototype
+- BYOK is the recommended MVP path; provider settings UI design done (TASK-047); backend API design done (TASK-048); secure key storage design done (TASK-049); usage meter implementation done (TASK-050); non-secret settings API implementation done (TASK-051); Provider Settings UI implementation done (TASK-052); secure key storage abstraction done (TASK-053); provider key save/clear endpoints done (TASK-054); key UI enablement design done (TASK-055); Save Key / Clear Key UI done (TASK-056); key UI smoke passed (TASK-057); Test Connection design done (TASK-058); Test Connection backend done (TASK-059); safety review PASS (TASK-059R); Test Connection UI enabled in renderer (TASK-060); runtime smoke PASS WITH EXPECTED LIMITATION (TASK-061); hardening tests DONE ??470 passed (TASK-062); Provider Settings UI readability/layout polish DONE (TASK-063); runtime smoke re-check PASS WITH NON-BLOCKING UI NOTES (TASK-064); Phase 4 Provider Settings stabilization summary created (TASK-065); portfolio demo script created (TASK-066D); README polished as portfolio-friendly entry point (TASK-067D); no live external provider call has occurred; no real API key has been used; project is demo-ready as local-first prototype
 
 See `docs/PHASE4_PLAN.md`, `docs/LLM_ADAPTER_DESIGN.md`, `docs/LLM_PROVIDER_CONTRACT.md`, `docs/CHAT_LLM_WIRING_DESIGN.md`, `docs/CHAT_LLM_REAL_PROVIDER_WIRING_DESIGN.md`, `docs/COST_AND_MONETIZATION.md`, `docs/BYOK_PRODUCT_AND_SETTINGS.md`, `docs/USAGE_METER_DESIGN.md`, `docs/PROVIDER_SETTINGS_UI_DESIGN.md`, `docs/PROVIDER_SETTINGS_API_DESIGN.md`, `docs/SECURE_KEY_STORAGE_DESIGN.md`, `docs/PROVIDER_TEST_CONNECTION_DESIGN.md`, and `docs/OLLAMA_PROVIDER_DESIGN.md` for full planning and design documents.
 
 ---
 
-## Phase 4 Extension — Local Ollama Provider Track
+## Phase 4 Extension ??Local Ollama Provider Track
 
 **Goal:** Add a local LLM provider option via Ollama. No API key, no external network, no per-token cost. Runs on user's hardware.
 
-**Status:** LOCAL OLLAMA UX STABILIZED - OllamaLocalProvider implemented (TASK-073), mocked contract tests pass (TASK-074), runtime smoke PASS (TASK-075), Provider Settings UI Ollama option complete (TASK-076), README local LLM instructions complete (TASK-077), Electron end-to-end local chat smoke PASS (TASK-080), source/loading/error UX stabilized (TASK-081)
+**Status:** LOCAL OLLAMA MVP CHECKPOINT COMPLETE - OllamaLocalProvider implemented (TASK-073), mocked contract tests pass (TASK-074), runtime smoke PASS (TASK-075), Provider Settings UI Ollama option complete (TASK-076), README local LLM instructions complete (TASK-077), Electron end-to-end local chat smoke PASS (TASK-080), source/loading/error UX stabilized (TASK-081), release readiness review PASS (TASK-082), mood to pet expression mapping (TASK-083), Christina visual asset pipeline through normalized candidates complete (TASK-084 to TASK-093), persisted settings runtime smoke PASS WITH NOTES (TASK-101), partial persist guard and local cold-start UX fix complete (TASK-102)
 
 **Local model candidates:**
 
 | Model | Speed (warm) | Throughput | Verdict |
 |---|---|---|---|
-| `qwen3:8b` | ~0.35s | ~73 tok/s | **Recommended — MVP default** |
+| `qwen3:8b` | ~0.35s | ~73 tok/s | **Recommended ??MVP default** |
 | `gemma3:12b` | ~3.48s | ~13 tok/s | Usable; better tone, slower |
 
 **Task Sequence:**
@@ -212,29 +212,58 @@ See `docs/PHASE4_PLAN.md`, `docs/LLM_ADAPTER_DESIGN.md`, `docs/LLM_PROVIDER_CONT
 | TASK-073 | Ollama Provider Implementation Behind Feature Flag | DONE |
 | TASK-074 | Ollama Provider Contract Tests and Runtime Smoke Prep | DONE |
 | TASK-075 | Ollama Runtime Smoke Check | DONE |
-| TASK-076 | Provider Settings UI — Ollama Option | DONE |
+| TASK-076 | Provider Settings UI ??Ollama Option | DONE |
 | TASK-077 | README Update for Local LLM Mode | DONE |
 | TASK-080 | Electron End-to-End Local Chat Smoke | DONE |
 | TASK-081 | Local Ollama UX Stabilization / Runtime Follow-up | DONE |
+| TASK-082 | Local Ollama Release Readiness Review | DONE |
+| TASK-083 | Mood ??Pet Expression Mapping (Electron UI) | DONE |
+| TASK-084 | Christina Visual Asset Pipeline | DONE |
+| TASK-085 | Create Christina Neutral Expression PNG | DONE |
+| TASK-086 | Renderer Image Asset Fallback | DONE |
+| TASK-087 | Neutral PNG Electron Visual Verification | DONE |
+| TASK-088 | Phase 4 Extension Checkpoint / Commit Prep | DONE |
+| TASK-094 | Approve Normalized Christina Candidates and Replace Runtime PNGs | DONE |
+| TASK-095 | Create Christina Worried and Sleepy Expression PNGs | DONE (TASK-095-RESUME) |
+| TASK-096 | Create Christina System-State Expression PNGs (pending/error/offline) | BLOCKED — awaiting source images |
+| TASK-097 | Expression Set Checkpoint and Commit Review | DONE |
+| TASK-098 | UI Polish Pass | DONE |
+| TASK-099 | Desktop Settings Persistence Review | DONE |
+| TASK-100 | Settings Persistence Runtime Smoke | DONE |
+| TASK-101 | Post-Checkpoint Manual App Smoke | DONE |
+| TASK-101-RERUN | Post-TASK-102 Runtime Smoke | DONE |
+| TASK-102 | Provider Settings Partial Persist Guard + Ollama Cold Start UX | DONE |
+| TASK-089 | Create Christina Focused Expression PNG | DONE |
+| TASK-090 | Christina Real Expression Asset Plan | DONE |
+| TASK-091 | Integrate Existing Christina Expression PNG Assets | DONE |
+| TASK-092 | Christina Expression Visual QA and 512x512 Normalization Review | DONE |
+| TASK-093 | Normalize Existing Christina Expression PNGs to 512x512 Face/Bust | DONE |
 
 **Key design decisions:**
-- `OllamaLocalProvider` implements the same `ProviderInterface` as `AnthropicProvider` — no service layer changes required
-- `source=llm_local` in `/chat` response — schema unchanged
-- No API key; no `explicit_cost_ack` required — local resource warning instead
+- `OllamaLocalProvider` implements the same `ProviderInterface` as `AnthropicProvider` ??no service layer changes required
+- `source=llm_local` in `/chat` response ??schema unchanged
+- No API key; no `explicit_cost_ack` required ??local resource warning instead
 - `keep_alive=10m` to avoid cold-start latency on repeated calls
-- `think=false`, `stream=false` — concise, deterministic responses
-- Renderer never calls Ollama directly — backend-only architecture boundary preserved
+- `think=false`, `stream=false` ??concise, deterministic responses
+- Renderer never calls Ollama directly ??backend-only architecture boundary preserved
 - New key status value: `not_required` for providers that need no key
 - TASK-074 strengthened mocked contract coverage to 34 Ollama tests and added `docs/OLLAMA_RUNTIME_SMOKE_CHECKLIST.md`; pytest: 504 passed; no external provider call and no API key used
 - TASK-077 documents Local LLM mode in README/backend README, including Ollama prerequisites, startup, Provider Settings UI behavior, `/chat` smoke test, troubleshooting, and safety constraints; latest pytest: 531 passed
 - TASK-080 confirms Electron Provider Settings, Test Connection, and chat UI work end-to-end with local Ollama; `/chat` response stayed `reply / mood / source`, `source=llm_local` was confirmed, and renderer still has no direct Ollama URL
 - TASK-081 makes source, provider state, local cold-start loading, backend offline, provider timeout, local error, and mock fallback states visible in the Electron UI; renderer smoke covers these states
+- TASK-082 release readiness review confirms docs, smoke flow, fallback policy, source display strategy, dirty diff, and safety scans are aligned for a Local Ollama MVP checkpoint
+- TASK-091 integrates existing user-provided Christina expression PNGs for `focused`, `happy`, `proud`, and `annoyed`; renderer smoke verifies integrated PNG loading and SVG fallback for missing moods
+- TASK-092 adds an 80x80 local preview and confirms the full-body expression assets are functional but too small compared with neutral; preferred next step is 512x512 face/bust normalization, not a pet container resize
+- TASK-093 adds a reproducible normalization script plus QA-only 512x512 candidates for `focused`, `happy`, `proud`, and `annoyed`; runtime PNGs are not replaced yet
+- TASK-101 confirms the persisted Local Ollama checkpoint works in manual Windows runtime smoke, with notes on partial settings persistence risk and cold-start timeout.
+- TASK-102 fixes partial PATCH persistence guards, prevents renderer pre-load/default saves, isolates pytest from the developer runtime settings file, adds `LLM_LOCAL_CHAT_TIMEOUT_SECONDS`, and improves local cold-start timeout messaging without changing `/chat` schema.
+- TASK-101-RERUN verifies all TASK-102 behavioral guards in a sandbox runtime smoke: partial PATCH preservation ✓, explicit null model guard ✓, Test Connection no-mutate ✓, cold-start source=llm_local_error with fallback disabled ✓, persistence after restart ✓. pytest: 586 passed.
 
 See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 ---
 
-## Phase 5 — Assistant Capabilities
+## Phase 5 ??Assistant Capabilities
 
 **Goal:** Add task management, project context, and carefully scoped tool execution.
 
@@ -256,37 +285,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 ---
 
-## Future Product Track — Streamer Companion Mode
+## Future Product Track ??Streamer Companion Mode
 
-> Status: SIDE TRACK — design exploration only; not scheduled for implementation
+> Status: SIDE TRACK ??design exploration only; not scheduled for implementation
 > See: `docs/STREAMER_COMPANION_MODE.md`
-
-A potential future direction that adapts the dragon-pet AI for live streaming contexts (Twitch, YouTube Live). The pet would run as an OBS overlay, react to stream events (follows, subs, raids), and respond to chat commands — giving streamers an on-screen AI companion with personality.
-
-**This track is explicitly deferred** until the following are complete:
-- Phase 4 LLM adapter stable and safety-reviewed (TASK-037)
-- TTS voice output (Phase 5)
-- A dedicated Streamer Mode safety design (STREAM-001 — not yet created)
-
-| Future Task ID | Name | Status |
-|---|---|---|
-| STREAM-001 | Streamer Companion Mode Safety Design | Not scheduled |
-| STREAM-002 | OBS Browser Source Overlay Architecture | Not scheduled |
-| STREAM-003 | Twitch EventSub Integration Design | Not scheduled |
-| STREAM-004 | Chat Sampling and Filtering Design | Not scheduled |
-| STREAM-005 | Public Content Safety Layer Design | Not scheduled |
-| STREAM-006 | Per-Session Token Budget Design | Not scheduled |
-| STREAM-007 | Streamer Mode MVP Implementation | Not scheduled |
-| STREAM-008 | Streamer Mode Smoke Check | Not scheduled |
-
-Key differences from personal mode: public broadcast context, chat firehose input, per-session hard token budget, TTS required, higher content safety bar. See `docs/STREAMER_COMPANION_MODE.md` for full design exploration.
-
----
-
-## Principles Across All Phases
-
-1. **Docs before code.** Each feature must be specified before it is implemented.
-2. **Scope discipline.** Features belong to one phase; do not implement Phase N+1 features during Phase N.
-3. **Safety first.** Any capability that touches the user's system requires a safety design step before implementation.
-4. **Local first.** All user data stays on device unless the user explicitly opts into a cloud feature.
-5. **Reversible steps.** Prefer designs that can be undone or corrected without data loss.

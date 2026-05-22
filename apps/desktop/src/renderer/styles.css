@@ -101,23 +101,37 @@ textarea {
 }
 
 .status-note {
-  font-size: 13px;
+  font-size: 12px;
   margin-left: auto;
   overflow-wrap: anywhere;
+  color: var(--text-muted);
+  max-width: 340px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .status-note.error {
   color: #ff8a8a;
 }
 
+/* TASK-098: friendly source label pill (user-facing) */
 .chat-runtime-pill {
   background: var(--pet-bubble);
   border: 1px solid var(--border);
   border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 2px 7px;
+  overflow-wrap: anywhere;
+}
+
+/* TASK-098: friendly label variant — user-facing, more prominent */
+.chat-runtime-pill.friendly {
   color: var(--text);
   font-size: 13px;
-  padding: 3px 7px;
-  overflow-wrap: anywhere;
+  font-weight: 500;
+  border-color: var(--surface-alt);
 }
 
 .chat-runtime-pill.pending {
@@ -130,16 +144,67 @@ textarea {
   color: #ff8a8a;
 }
 
+/* ── Pet Avatar (TASK-083, TASK-098) ───────────────────── */
+#pet-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 18px 10px;
+  background: var(--pet-bubble);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.pet-face {
+  width: 112px;
+  height: 112px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.25s ease;
+}
+
+.pet-face svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* TASK-086: PNG expression asset — contain so horns/head are never cropped */
+.pet-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.pet-face[data-mood="pending"] {
+  opacity: 0.75;
+}
+
+.pet-face[data-mood="offline"],
+.pet-face[data-mood="error"] {
+  filter: saturate(0.6);
+}
+
+.pet-display-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+  letter-spacing: 0.02em;
+  min-height: 18px;
+}
+
 /* ── Chat area ──────────────────────────────────────────── */
 #chat-area {
   flex: 1 1 260px;
-  min-height: 200px;
-  max-height: 38vh;
+  min-height: 240px;
+  max-height: 44vh;
   overflow-y: auto;
-  padding: 18px;
+  padding: 16px 18px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   scroll-behavior: smooth;
 }
 
@@ -672,9 +737,19 @@ textarea {
 .provider-status-grid strong {
   color: var(--text);
   display: block;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   word-break: break-word;
+}
+
+/* TASK-098: boolean badge colours for provider status grid */
+.provider-status-grid strong[data-bool="true"] {
+  color: #6fd16f;
+}
+
+.provider-status-grid strong[data-bool="false"] {
+  color: var(--text-muted);
+  font-weight: 400;
 }
 
 /* TASK-056: key save/clear section (replaces .provider-key-placeholder) */
@@ -882,7 +957,7 @@ textarea {
 @media (max-width: 900px) {
   #chat-area {
     flex-basis: 220px;
-    max-height: 320px;
+    max-height: 360px;
   }
 
   .provider-status-grid {
