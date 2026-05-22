@@ -233,6 +233,7 @@ See `docs/PHASE4_PLAN.md`, `docs/LLM_ADAPTER_DESIGN.md`, `docs/LLM_PROVIDER_CONT
 | TASK-101 | Post-Checkpoint Manual App Smoke | DONE |
 | TASK-101-RERUN | Post-TASK-102 Runtime Smoke | DONE |
 | TASK-102 | Provider Settings Partial Persist Guard + Ollama Cold Start UX | DONE |
+| TASK-103 | Local Dev Launch / One-command Startup | DONE |
 | TASK-089 | Create Christina Focused Expression PNG | DONE |
 | TASK-090 | Christina Real Expression Asset Plan | DONE |
 | TASK-091 | Integrate Existing Christina Expression PNG Assets | DONE |
@@ -258,6 +259,7 @@ See `docs/PHASE4_PLAN.md`, `docs/LLM_ADAPTER_DESIGN.md`, `docs/LLM_PROVIDER_CONT
 - TASK-101 confirms the persisted Local Ollama checkpoint works in manual Windows runtime smoke, with notes on partial settings persistence risk and cold-start timeout.
 - TASK-102 fixes partial PATCH persistence guards, prevents renderer pre-load/default saves, isolates pytest from the developer runtime settings file, adds `LLM_LOCAL_CHAT_TIMEOUT_SECONDS`, and improves local cold-start timeout messaging without changing `/chat` schema.
 - TASK-101-RERUN verifies all TASK-102 behavioral guards in a sandbox runtime smoke: partial PATCH preservation ✓, explicit null model guard ✓, Test Connection no-mutate ✓, cold-start source=llm_local_error with fallback disabled ✓, persistence after restart ✓. pytest: 586 passed.
+- TASK-103 adds one-command PowerShell startup scripts (`dev-start-backend.ps1`, `dev-start-desktop.ps1`, `dev-smoke.ps1`) and `docs/LOCAL_DEV_RUNBOOK.md`; addresses port-8000 check, venv activation, `npm.cmd` vs `npm.ps1` execution-policy issue, `ELECTRON_RUN_AS_NODE` clear, cold-start timeout guidance, and settings persistence troubleshooting. No product features changed.
 
 See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 

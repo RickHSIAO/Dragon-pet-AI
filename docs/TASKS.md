@@ -5884,6 +5884,87 @@ backend and renderer smoke tests.
 
 ### Next Task
 
-TASK-103 - Re-run Post-Checkpoint Manual App Smoke
+TASK-103 - Local Dev Launch / One-command Startup
+
+---
+
+## TASK-103 — Local Dev Launch / One-command Startup
+
+**Status:** DONE
+**Date:** 2026-05-23
+
+### Goal
+
+Improve the local development startup flow so developers can reliably start the full
+Ollama + backend + Electron stack with a single command per service, and diagnose
+common environment problems without reading source code.
+
+### Changes
+
+No product features added. No `/chat` schema changed. No provider routing changed.
+No persona prompt changed. No images added. No renderer Ollama URL added.
+
+**New files:**
+
+| File | Purpose |
+|------|---------|
+| `scripts/dev-start-backend.ps1` | Port check, venv activation, env vars, uvicorn start |
+| `scripts/dev-start-desktop.ps1` | node_modules check, ELECTRON_RUN_AS_NODE clear, npm.cmd run dev |
+| `scripts/dev-smoke.ps1` | /health, /provider/settings, /provider/settings/test, /chat smoke; reports source |
+| `docs/LOCAL_DEV_RUNBOOK.md` | Full runbook: prerequisites, startup order, env var reference, troubleshooting |
+
+**Updated files:**
+
+| File | Change |
+|------|--------|
+| `README.md` | Added Quick Start section with one-liner scripts; updated pytest count to 586 |
+| `backend/README.md` | Added one-command script call; added Ollama-mode manual env var block |
+
+### Script features
+
+**`dev-start-backend.ps1`:**
+- Resolves repo root from script location (works from any working directory).
+- Checks port 8000 with a 200 ms TCP probe; exits with `netstat`/`taskkill` guidance.
+- Activates `backend\.venv\Scripts\Activate.ps1` if present; warns if absent.
+- Falls back to `python -m uvicorn` if `uvicorn` is not on PATH.
+- Sets: `LLM_PROVIDER_NAME=ollama`, `LLM_MODEL=qwen3:8b`, `LLM_PROVIDER_ENABLED=true`, `LLM_CHAT_ENABLED=true`, `LLM_LOCAL_CHAT_TIMEOUT_SECONDS=90`, `PYTHONIOENCODING=utf-8`.
+
+**`dev-start-desktop.ps1`:**
+- Checks `apps\desktop\node_modules` and prompts `npm.cmd install` if missing.
+- Clears `ELECTRON_RUN_AS_NODE` via both env var assignment and `Remove-Item Env:\`.
+- Uses `npm.cmd` (not `npm`) to avoid PowerShell execution-policy errors from `npm.ps1`.
+
+**`dev-smoke.ps1`:**
+- Fails fast on `/health` unreachable with a clear restart message.
+- Reports provider, model, key_status, resolved_provider from `/provider/settings`.
+- Sends `POST /provider/settings/test` with `explicit_cost_ack=true` (no API key).
+- Sends `POST /chat`, verifies `reply/mood/source` schema, classifies source with actionable hints.
+- Exit code 0 on all pass, 1 on any failure.
+
+### Issues addressed
+
+| Issue | Fix |
+|-------|-----|
+| `uvicorn not on PATH` | Falls back to `python -m uvicorn`; startup script detects and uses it |
+| `npm.ps1 execution policy` | All desktop calls use `npm.cmd` explicitly |
+| `ELECTRON_RUN_AS_NODE` | Cleared in `dev-start-desktop.ps1` before `npm.cmd run dev` |
+| Port 8000 occupied | 200 ms TCP probe; error message with `netstat`/`taskkill` commands |
+| Cold-start timeout | `LLM_LOCAL_CHAT_TIMEOUT_SECONDS=90`; smoke reports `llm_local_error` with retry hint |
+| Settings not persisting | Runbook section explains JSON file, gitignore, and `git check-ignore` verification |
+
+### Verification
+
+- `python -m pytest`: **586 passed, 0 failed**
+- `node --check apps/desktop/src/main.js`: PASS
+- `node --check apps/desktop/src/renderer/renderer.js`: PASS
+- `node --check apps/desktop/scripts/renderer-chat-smoke.js`: PASS
+- `npm run test:renderer`: PASS
+- Renderer safety scan: PASS (no direct Ollama URL in renderer.js or any new script)
+- Script safety scan: PASS (no API key values, no direct Ollama URL in scripts)
+- `git diff --check`: git index corrupt (pre-existing NTFS sandbox lock from v0.5.2 commit); source files verified clean via grep
+
+### Next Task
+
+TASK-104 - TBD
 
 ---

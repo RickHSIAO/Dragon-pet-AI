@@ -41,6 +41,45 @@
 
 ---
 
+## Quick Start (Local Ollama Mode)
+
+> Full instructions and troubleshooting: **[docs/LOCAL_DEV_RUNBOOK.md](docs/LOCAL_DEV_RUNBOOK.md)**
+
+Three terminals, in order:
+
+**Terminal 1 — Ollama (local LLM server)**
+```powershell
+ollama serve
+# First time: ollama pull qwen3:8b
+```
+
+**Terminal 2 — Backend**
+```powershell
+.\scripts\dev-start-backend.ps1
+# Sets all env vars, activates venv, starts uvicorn on :8000
+```
+
+**Terminal 3 — Electron desktop**
+```powershell
+.\scripts\dev-start-desktop.ps1
+# Uses npm.cmd (avoids execution-policy issues), clears ELECTRON_RUN_AS_NODE
+```
+
+**Optional smoke check**
+```powershell
+.\scripts\dev-smoke.ps1
+# Checks /health, /provider/settings, /provider/settings/test, /chat
+# Reports source=llm_local when Ollama is generating replies
+```
+
+Common issues:
+- `uvicorn not found` → `cd backend; .venv\Scripts\pip install -r requirements.txt`
+- `npm.ps1 is disabled` → always use `npm.cmd`, not `npm`
+- `ELECTRON_RUN_AS_NODE` → cleared automatically by the startup script
+- Cold-start timeout → first `/chat` can take up to 90 s while the model loads; retry after waiting
+
+---
+
 ## Current Status
 
 | Item | State |
@@ -48,7 +87,7 @@
 | Architecture | Electron desktop + FastAPI backend, end-to-end working |
 | Phase 3 | ??Complete ??Memory, Audit Logs, Memory-Aware Chat |
 | Phase 4 | IN_PROGRESS - Provider Settings / BYOK stabilized; Local Ollama runtime smoke PASSED; Ollama Provider Settings UI complete (TASK-076); Mood -> Pet Expression Mapping complete (TASK-083); Christina neutral/focused v0 PNG assets present (focused is temporary duplicate placeholder, TASK-089) |
-| pytest | 555 passed, 0 failed |
+| pytest | 586 passed, 0 failed |
 | Local Ollama /chat smoke | ??PASS ??`qwen3:8b`, `source=llm_local`, persona confirmed |
 | Live external provider call | ??None ??intentionally gated |
 | Real API key used | ??None ??all tests use mocked runners |

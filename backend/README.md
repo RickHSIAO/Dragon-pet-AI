@@ -4,18 +4,42 @@ FastAPI backend for the dragon-pet-ai desktop companion.
 
 ## Quick Start
 
+### Recommended: one-command dev script (from repo root)
+
+```powershell
+.\scripts\dev-start-backend.ps1
+```
+
+This activates `.venv`, sets all required env vars for Ollama mode, checks port 8000,
+and starts `uvicorn --reload`.  See [docs/LOCAL_DEV_RUNBOOK.md](../docs/LOCAL_DEV_RUNBOOK.md)
+for troubleshooting.
+
+### Manual setup
+
 ```bash
 cd backend
 
 # Create and activate virtual environment (Windows)
 python -m venv .venv
-.venv\Scripts\activate
+.venv\Scripts\Activate.ps1   # PowerShell
+# or: .venv\Scripts\activate.bat  (CMD)
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Start the development server
-uvicorn app.main:app --reload --port 8000
+# Start the development server (mock mode)
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+For Ollama mode set env vars before starting:
+```powershell
+$env:LLM_PROVIDER_NAME = "ollama"
+$env:LLM_MODEL = "qwen3:8b"
+$env:LLM_PROVIDER_ENABLED = "true"
+$env:LLM_CHAT_ENABLED = "true"
+$env:LLM_LOCAL_CHAT_TIMEOUT_SECONDS = "90"
+$env:PYTHONIOENCODING = "utf-8"
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 On macOS / Linux, activate with:
