@@ -1,4 +1,4 @@
-﻿# dragon-pet-ai ??Backend
+﻿# dragon-pet-ai 後端
 
 FastAPI backend for the dragon-pet-ai desktop companion.
 
@@ -90,7 +90,7 @@ cd F:\RickHSIAO\Python\dragon-pet-ai\backend
 
 $env:PYTHONIOENCODING="utf-8"
 
-python -c "import json, urllib.request; data=json.dumps({'message':'??蝯脰?憡?蝔梯???銝???憭拇??芸???獢?}, ensure_ascii=False).encode('utf-8'); req=urllib.request.Request('http://127.0.0.1:8000/chat', data=data, headers={'Content-Type':'application/json; charset=utf-8'}); raw=urllib.request.urlopen(req).read().decode('utf-8'); print(raw)"
+python -c "import json, urllib.request; data=json.dumps({'message':'你好！克莉絲蒂娜，請用你的口吻跟我說說話。'}, ensure_ascii=False).encode('utf-8'); req=urllib.request.Request('http://127.0.0.1:8000/chat', data=data, headers={'Content-Type':'application/json; charset=utf-8'}); raw=urllib.request.urlopen(req).read().decode('utf-8'); print(raw)"
 ```
 
 Expected result:
@@ -98,7 +98,7 @@ Expected result:
 - Response schema remains `reply / mood / source`.
 - `source` is `llm_local`.
 - No API key is required or sent.
-- The reply is generated locally by `qwen3:8b` and should keep Christina-style wording such as `?霉, `瘙, `?嬋, or a tsundere / arrogant tone.
+- The reply is generated locally by `qwen3:8b` and should keep Christina-style wording — 傲嬌語氣例如「哼」、「才不是」、「切」 (tsundere / arrogant tone).
 
 ### Release Readiness Smoke Flow
 
@@ -136,11 +136,11 @@ Safety constraints:
 - Do not call external providers for Ollama mode.
 - Do not add live network-dependent automated tests.
 
-## Endpoints (TASK-003 ??skeleton only)
+## Endpoints (TASK-003 — 端點清單)
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/health` | Liveness check ??returns `{"status": "ok"}` |
+| GET | `/health` | Liveness check — 回傳 `{"status": "ok"}` |
 | POST | `/chat` | Chat via service layer; mock by default, Ollama local when provider settings and flags enable it |
 
 | POST | `/memory` | Create an explicit local memory record |
@@ -152,7 +152,7 @@ Safety constraints:
 | POST | `/provider/settings/key` | Save provider key through secure key storage abstraction; never returns key |
 | DELETE | `/provider/settings/key` | Clear provider key through secure key storage abstraction |
 | POST | `/provider/settings/test` | Backend Test Connection endpoint; Ollama path performs a lightweight local runtime/model check via backend only |
-| GET | `/memory/audit` | Read-only audit inspection ??safe metadata only, no raw content |
+| GET | `/memory/audit` | Read-only audit inspection — 純安全元資料，不含原始內容 |
 
 ### POST /chat
 
@@ -173,7 +173,7 @@ Memory-aware chat toggle (two-layer gate, TASK-023):
 
 - `use_memory` defaults to `false`. Old callers that omit it continue to work unchanged.
 - Both `use_memory=true` AND `MEMORY_INJECTION_ENABLED=true` (env var, set before startup) must be true for `/chat` to use approved memory context.
-- `/chat` response schema is always `reply / mood / source` ??memory content is never returned.
+- `/chat` response schema is always `reply / mood / source` — 記憶內容絕不回傳。
 - No `PATCH /config` endpoint. No Electron IPC required.
 
 Supported mock modes: `casual`, `project`, `debug`, `support`, `reminder`.
@@ -181,7 +181,7 @@ Supported mock modes: `casual`, `project`, `debug`, `support`, `reminder`.
 Response:
 ```json
 {
-  "reply": "Got it. I'm listening ??what else is on your mind?",
+  "reply": "Got it. I'm listening — 還有什麼想說的嗎？",
   "mood": "focused",
   "source": "mock"
 }
@@ -222,9 +222,9 @@ Mock provider compatibility tests cover supported chat modes, optional memory/st
 
 Real provider config design (TASK-034), safety review (TASK-034R), and review fixes (TASK-034F) are complete. TASK-035 adds real provider selection behind `LLM_PROVIDER_ENABLED=false` by default. Unknown providers and missing keys fall back safely without exposing secrets. API keys must never appear in logs, SQLite, audit rows, API responses, provider repr/str, or the Electron frontend. No automatic retries are permitted in Phase 4. Non-2xx provider response bodies are opaque. Fallback responses must not claim `llm_real`.
 
-TASK-073/TASK-074 add and harden `OllamaLocalProvider` behind the same provider feature flags. `LLM_PROVIDER_NAME=ollama` resolves without `LLM_API_KEY`, uses a localhost-only `OLLAMA_BASE_URL` defaulting to `http://localhost:11434`, sends `stream=false` and `think=false`, does not send tools/history/API keys, maps safe aggregate token/duration metadata, and uses mocked HTTP contract tests only. TASK-075 runtime smoke passed: `source=llm_local`, ??蝯脰?憡?persona active.
+python -c "import json, urllib.request; data=json.dumps({'message':'你好！克莉絲蒂娜，請用你的口吻跟我說說話。'}, ensure_ascii=False).encode('utf-8'); req=urllib.request.Request('http://127.0.0.1:8000/chat', data=data, headers={'Content-Type':'application/json; charset=utf-8'}); raw=urllib.request.urlopen(req).read().decode('utf-8'); print(raw)"
 
-TASK-076 adds Ollama as a selectable option in Provider Settings. `provider_settings_service.py` introduces `LOCAL_PROVIDERS = {"ollama"}`: local providers return `key_status="not_required"`, are accepted by `PATCH /provider/settings`, resolve to `"ollama"` (not mock) when `real_provider_enabled=True`, and reject API key save/clear operations. `provider_test_connection_service.py` accepts `ollama` in the `_normalize_provider` path, uses `_resolve_model_for_local()` (falls back to `"qwen3:8b"` instead of raising `invalid_model`), and runs `OllamaLocalProvider.generate()` directly ??no API key, no external call, `source="llm_local"`. 15 new backend tests added (6 provider settings, 9 test connection Ollama path).
+TASK-076 adds Ollama as a selectable option in Provider Settings. `provider_settings_service.py` introduces `LOCAL_PROVIDERS = {"ollama"}`: local providers return `key_status="not_required"`, are accepted by `PATCH /provider/settings`, resolve to `"ollama"` (not mock) when `real_provider_enabled=True`, and reject API key save/clear operations. `provider_test_connection_service.py` accepts `ollama` in the `_normalize_provider` path, uses `_resolve_model_for_local()` (falls back to `"qwen3:8b"` instead of raising `invalid_model`), and runs `OllamaLocalProvider.generate()` directly — 無 API Key，無外部呼叫, `source="llm_local"`. 15 new backend tests added (6 provider settings, 9 test connection Ollama path).
 
 TASK-040 adds `/chat` internal LLM adapter wiring behind `LLM_CHAT_ENABLED=false` by default. With the flag disabled, `/chat` keeps the existing mock flow and does not call the provider factory. With the flag enabled, `/chat` can use the LLM adapter path. TASK-043 adds mocked-only `/chat` real-provider contract tests for the flag matrix, source behavior, fallback behavior, leakage checks, memory independence, and no-retry behavior. Live provider calls are still not part of automated tests.
 
@@ -236,7 +236,7 @@ TASK-053 adds a backend key storage abstraction in `app/services/key_storage_ser
 
 `MemoryInjectionAudit` records injection events when memory-aware chat runs with both `MEMORY_INJECTION_ENABLED=true` and `use_memory=true`. Each audit row stores: selected memory IDs (as a JSON array), selected count, total context chars, feature flag state, and timestamp. Raw memory content is never stored in audit rows.
 
-`GET /memory/audit` (TASK-026) is now implemented. It returns a read-only paginated list of memory injection audit records ??safe metadata only (IDs, counts, chars, flag state). Supports `limit` (default 20, max 100) and `offset` (default 0) query params. Results are sorted newest first. Raw memory content, prompt text, and system instructions are never returned. The endpoint does not create rows or modify any data. UI for this endpoint is planned for TASK-027.
+`GET /memory/audit` (TASK-026) is now implemented. It returns a read-only paginated list of memory injection audit records — safe metadata only (IDs, counts, chars, flag state). Supports `limit` (default 20, max 100) and `offset` (default 0) query params. Results are sorted newest first. Raw memory content, prompt text, and system instructions are never returned. The endpoint does not create rows or modify any data. UI for this endpoint is planned for TASK-027.
 
 ## Tests
 
@@ -245,11 +245,11 @@ cd backend
 python -m pytest
 ```
 
-Latest known full backend result after TASK-077: `531 passed`.
+Latest known full backend result after TASK-102/TASK-103: `586 passed`.
 
 ## Current Limitations (TASK-003)
 
-- `/chat` returns a service-generated mock reply ??no real AI model is connected.
+- `/chat` returns a service-generated mock reply — no real AI model is connected.
 - Backend creates a local SQLite database and stores conversation history.
 - Backend also has local `character_state` and `relationship_state` tables for internal MVP state.
 - Backend has a local SQLite `memory` table skeleton for future memory records.
@@ -291,3 +291,4 @@ backend/
   requirements.txt
   README.md
 ```
+   

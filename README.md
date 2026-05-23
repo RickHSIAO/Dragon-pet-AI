@@ -1,184 +1,197 @@
 # Dragon Pet AI
 
-> **Dragon Pet AI** is a local-first Electron + FastAPI desktop companion prototype with manual memory, memory audit logs, BYOK provider settings, usage metering, a safety-reviewed Test Connection endpoint, Anthropic/Ollama provider adapters behind flags, local Ollama `/chat` runtime smoke passed with `source=llm_local` and ??蝯脰?憡?persona active, Ollama option in Provider Settings UI (no API key, local GPU/CPU) - built with safety-first incremental development and a 531-test mocked backend suite.
+> **Dragon Pet AI** 是一個本地優先的 Electron + FastAPI 桌面陪伴原型，具備手動記憶、記憶稽核日誌、BYOK 提供者設定、使用量計量、安全審查過的 Test Connection 端點、Anthropic/Ollama 提供者轉接層（隱藏在 feature flag 後）、本地 Ollama `/chat` 執行期 smoke 通過（`source=llm_local`，克莉絲蒂娜人格確認），以及 Ollama Provider Settings UI（無需 API Key，使用本機 GPU/CPU）。以安全優先的增量開發方式建構，後端 mocked 測試套件共 **586 個測試通過**。
 
-**Not production-ready.** No live external provider call has been made. No real API key has been used. This is a portfolio / prototype project.
+**非生產環境。** 尚未進行任何外部 provider 的真實呼叫，亦未使用任何真實 API Key。本專案為 portfolio / prototype 性質。
 
-?? **[Full Demo Script & Interview Talking Points ?(docs/PORTFOLIO_DEMO_SCRIPT.md)**
-?? **[Phase 4 Provider Settings Summary ?(docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md)**
-
----
-
-## Screenshots
-
-![Main Chat UI](docs/screenshots/01_main_chat_ui.png)
-
-*Local-first Electron desktop companion UI with mock LLM source ??no external provider call.*
+📋 **[完整 Demo 腳本與面試重點](docs/PORTFOLIO_DEMO_SCRIPT.md)**
+📋 **[Phase 4 Provider Settings 摘要](docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md)**
 
 ---
 
-![Memory Audit Logs](docs/screenshots/03_audit_logs.png)
+## 截圖
 
-*Safe metadata-only audit trail ??raw memory content and prompt text are never stored in audit rows.*
+![主聊天介面](docs/screenshots/01_main_chat_ui.png)
 
----
-
-![Provider Settings](docs/screenshots/04_provider_settings_overview.png)
-
-*BYOK provider configuration with write-only key handling, key status display, and safety-gated controls.*
+*本地優先 Electron 桌面陪伴 UI，使用 mock LLM 來源 — 無外部 provider 呼叫。*
 
 ---
 
-![Usage Summary](docs/screenshots/05_usage_summary.png)
+![記憶稽核日誌](docs/screenshots/03_audit_logs.png)
 
-*Safe aggregate usage counters only ??no raw prompt text, no API key, no provider response body.*
-
----
-
-![Pytest 470 Passed](docs/screenshots/08_pytest_470_passed.png)
-
-*Mocked backend test suite screenshot from portfolio capture; latest known backend suite: 531 passing tests, zero failures, no external HTTP, no real API key.*
+*安全的純元資料稽核追蹤 — 稽核列不儲存原始記憶內容或提示文字。*
 
 ---
 
-## Quick Start (Local Ollama Mode)
+![Provider 設定](docs/screenshots/04_provider_settings_overview.png)
 
-> Full instructions and troubleshooting: **[docs/LOCAL_DEV_RUNBOOK.md](docs/LOCAL_DEV_RUNBOOK.md)**
+*BYOK provider 設定，具唯寫金鑰處理、金鑰狀態顯示與安全管控。*
 
-Three terminals, in order:
+---
 
-**Terminal 1 — Ollama (local LLM server)**
+![使用量摘要](docs/screenshots/05_usage_summary.png)
+
+*僅顯示安全的彙總使用量計數 — 不含原始提示文字、API Key 或 provider 回應內容。*
+
+---
+
+![Pytest 470 通過](docs/screenshots/08_pytest_470_passed.png)
+
+*後端 mocked 測試套件截圖（portfolio 紀錄用）；最新後端測試：586 通過，0 失敗，無外部 HTTP，無真實 API Key。*
+
+---
+
+## 快速啟動（本地 Ollama 模式）
+
+> 完整說明與疑難排解：**[docs/LOCAL_DEV_RUNBOOK.md](docs/LOCAL_DEV_RUNBOOK.md)**
+
+**Windows 第一步：解除 PowerShell 執行限制（僅本次視窗有效）**
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+依序開啟三個終端機（每個終端機都先執行上方指令）：
+
+**終端機 1 — Ollama（本地 LLM 伺服器）**
 ```powershell
 ollama serve
-# First time: ollama pull qwen3:8b
+# 第一次使用：ollama pull qwen3:8b
 ```
 
-**Terminal 2 — Backend**
+**終端機 2 — 後端**
 ```powershell
 .\scripts\dev-start-backend.ps1
-# Sets all env vars, activates venv, starts uvicorn on :8000
+# 自動設定所有環境變數、啟動 venv、在 :8000 啟動 uvicorn
 ```
 
-**Terminal 3 — Electron desktop**
+**終端機 3 — Electron 桌面應用**
 ```powershell
 .\scripts\dev-start-desktop.ps1
-# Uses npm.cmd (avoids execution-policy issues), clears ELECTRON_RUN_AS_NODE
+# 使用 npm.cmd（避免 execution-policy 問題），清除 ELECTRON_RUN_AS_NODE
 ```
 
-**Optional smoke check**
+**選用：smoke 快速檢查**
 ```powershell
 .\scripts\dev-smoke.ps1
-# Checks /health, /provider/settings, /provider/settings/test, /chat
-# Reports source=llm_local when Ollama is generating replies
+# 檢查 /health、/provider/settings、/provider/settings/test、/chat
+# 當 Ollama 正確產生回覆時會回報 source=llm_local
+# 首次 /chat 可能需要 30–90 秒等待模型 cold-start 載入
 ```
 
-Common issues:
+常見問題：
+- **`.ps1` 被封鎖** → 每個終端機先執行 `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`
 - `uvicorn not found` → `cd backend; .venv\Scripts\pip install -r requirements.txt`
-- `npm.ps1 is disabled` → always use `npm.cmd`, not `npm`
-- `ELECTRON_RUN_AS_NODE` → cleared automatically by the startup script
-- Cold-start timeout → first `/chat` can take up to 90 s while the model loads; retry after waiting
+- `npm.ps1 is disabled` → 啟動腳本已自動使用 `npm.cmd`；手動時請用 `npm.cmd` 而非 `npm`
+- `ELECTRON_RUN_AS_NODE` → 啟動腳本會自動清除
+- Cold-start timeout → 第一次 `/chat` 模型載入最長需 90 秒；若 smoke 顯示 warmup hint，依提示執行 `ollama run qwen3:8b "請用一句繁體中文回覆：ready"` 後重試
 
 ---
 
-## Current Status
+## 目前狀態
 
-| Item | State |
+| 項目 | 狀態 |
 |---|---|
-| Architecture | Electron desktop + FastAPI backend, end-to-end working |
-| Phase 3 | ??Complete ??Memory, Audit Logs, Memory-Aware Chat |
-| Phase 4 | IN_PROGRESS - Provider Settings / BYOK stabilized; Local Ollama runtime smoke PASSED; Ollama Provider Settings UI complete (TASK-076); Mood -> Pet Expression Mapping complete (TASK-083); Christina neutral/focused v0 PNG assets present (focused is temporary duplicate placeholder, TASK-089) |
-| pytest | 586 passed, 0 failed |
-| Local Ollama /chat smoke | ??PASS ??`qwen3:8b`, `source=llm_local`, persona confirmed |
-| Live external provider call | ??None ??intentionally gated |
-| Real API key used | ??None ??all tests use mocked runners |
-| Production-ready | ??Not yet ??prototype / portfolio stage |
-| Demo-ready (local mock) | ??Yes |
+| 架構 | Electron 桌面 + FastAPI 後端，端對端可運作 |
+| Phase 3 | ✅ 完成 — 記憶、稽核日誌、記憶感知聊天 |
+| Phase 4 / v0.5.2 | ✅ 完成 — Provider Settings 持久化、partial PATCH guard、本地 Ollama timeout/cold-start UX、Christina 桌面 UI polish |
+| 本地 Ollama `/chat` smoke | ✅ 通過 — `qwen3:8b`，`source=llm_local`，克莉絲蒂娜人格確認 |
+| Provider Settings 持久化 | ✅ 通過 — 重啟後設定保留，partial PATCH 保留省略欄位 |
+| UI polish | ✅ 通過 — 情緒→表情對應、Christina expression system |
+| 表情系統 | 7/10 real PNG（happy、focused、neutral、proud、annoyed、worried、sleepy）；pending/error/offline 為 SVG fallback |
+| pytest | **586 通過，0 失敗** |
+| renderer smoke | **24 tests PASS** |
+| 外部 provider 呼叫 | ❌ 無 — 刻意封鎖 |
+| 真實 API Key 使用 | ❌ 無 — 所有測試使用 mocked runner |
+| 生產就緒 | ❌ 尚未 — prototype / portfolio 階段 |
+| Demo 可用（本地 Ollama） | ✅ 是 |
 
 ---
 
-## Completed Capabilities
+## 已完成功能
 
-| Capability | Notes |
+| 功能 | 備註 |
 |---|---|
-| `GET /health` | Backend liveness check |
-| `POST /chat` | Mock character response; LLM adapter behind feature flag |
-| Electron desktop UI | Chat, Memory, Audit Logs, Provider Settings sections |
-| Manual Memory CRUD | `POST/GET/DELETE /memory` ??SQLite persistence |
-| Memory context preview | `GET /memory/context-preview` ??safe, no injection |
-| Approved memory context builder | Type allowlist, confidence filter, 5-memory / 1500-char cap |
-| Memory-aware chat (two-layer gate) | `MEMORY_INJECTION_ENABLED` env flag + per-request `use_memory` |
-| Memory Injection Audit API | `GET /memory/audit` ??safe metadata only, no raw content |
-| Audit Logs UI | Desktop section; shows injection events |
-| In-memory usage meter | 14 tracked fields; token estimation; privacy boundaries |
-| Provider Settings API | `GET/PATCH /provider/settings` ??non-secret fields only |
-| Key status endpoint | `GET /provider/settings/key/status` ??6 safe values, no key fragment |
-| Save Key endpoint | `POST /provider/settings/key` ??write-only; key never echoed |
-| Clear Key endpoint | `DELETE /provider/settings/key` ??clears from storage abstraction |
-| Provider Settings UI | Provider/model select, Save Key, Clear Key, key status, usage summary |
-| Secure key storage abstraction | `UnavailableBackend` (runtime), `InMemoryBackend` (tests) |
-| Test Connection backend | `POST /provider/settings/test` ??explicit cost ack required; Opus review PASS |
-| Test Connection UI | Cost confirm dialog; safe field rendering; no auto-run |
-| LLM adapter layer | Anthropic adapter behind `LLM_PROVIDER_ENABLED=false` |
-| Hardening tests | 5 Opus-recommended tests covering edge cases and safety boundaries |
-| Local Ollama provider | Implemented behind flags; no API key; localhost-only; runtime smoke PASSED ??`source=llm_local`, ??蝯脰?憡?persona active in qwen3:8b |
-| Ollama Provider Settings UI | Provider selector includes `ollama`; API key input hidden/disabled for local provider; Test Connection uses Local Resource Warning; renderer never calls Ollama directly |
-| 531 mocked tests | Full backend suite; no external HTTP; no real key |
+| `GET /health` | 後端存活確認 |
+| `POST /chat` | Mock 角色回應；LLM 轉接層隱藏在 feature flag 後 |
+| Electron 桌面 UI | 聊天、記憶、稽核日誌、Provider Settings 各區塊 |
+| 手動記憶 CRUD | `POST/GET/DELETE /memory` — SQLite 持久化 |
+| 記憶內容預覽 | `GET /memory/context-preview` — 安全，無注入 |
+| 已審核記憶內容建構器 | 類型允許清單、信心度過濾、5 條記憶 / 1500 字元上限 |
+| 記憶感知聊天（雙層閘道） | `MEMORY_INJECTION_ENABLED` 環境變數 + 每次請求 `use_memory` |
+| 記憶注入稽核 API | `GET /memory/audit` — 純安全元資料，不含原始內容 |
+| 稽核日誌 UI | 桌面區塊；顯示注入事件 |
+| 記憶體使用量計量 | 14 個追蹤欄位；token 估算；隱私邊界 |
+| Provider Settings API | `GET/PATCH /provider/settings` — 僅非敏感欄位 |
+| 金鑰狀態端點 | `GET /provider/settings/key/status` — 6 個安全值，不含金鑰片段 |
+| 儲存金鑰端點 | `POST /provider/settings/key` — 唯寫；金鑰不回傳 |
+| 清除金鑰端點 | `DELETE /provider/settings/key` — 透過儲存抽象層清除 |
+| Provider Settings UI | Provider/model 選擇、儲存金鑰、清除金鑰、金鑰狀態、使用量摘要 |
+| 安全金鑰儲存抽象層 | `UnavailableBackend`（執行期）、`InMemoryBackend`（測試） |
+| Test Connection 後端 | `POST /provider/settings/test` — 需明確費用確認；Opus 審查通過 |
+| Test Connection UI | 費用確認對話框；安全欄位呈現；不自動執行 |
+| LLM 轉接層 | Anthropic 轉接器隱藏在 `LLM_PROVIDER_ENABLED=false` 後 |
+| 強化測試 | 5 個 Opus 推薦的邊界案例與安全邊界測試 |
+| 本地 Ollama provider | 隱藏在 flag 後；無 API Key；僅本機；執行期 smoke 通過 — `source=llm_local`，克莉絲蒂娜人格確認 |
+| Ollama Provider Settings UI | Provider 選擇器含 `ollama`；本地 provider 的 API Key 輸入隱藏/停用；Test Connection 使用本地資源警告；renderer 不直接呼叫 Ollama |
+| 586 個 mocked 測試 | 完整後端測試套件；無外部 HTTP；無真實 API Key |
 
 ---
 
-## Architecture
+## 架構
 
 ```
-Electron renderer (HTML / CSS / JS)
-  ??? localhost HTTP ??FastAPI backend (:8000)
-        ??? api/routes.py                    ??all HTTP endpoints
-        ??? services/
-        ??    ??? chat_service               ??/chat routing, LLM adapter wiring
-        ??    ??? memory_service             ??memory CRUD, approved context builder
-        ??    ??? memory_audit_service       ??audit row creation and inspection
-        ??    ??? usage_meter_service        ??token/cost tracking (in-memory)
-        ??    ??? provider_settings_service  ??non-secret settings persistence
-        ??    ??? key_storage_service        ??secure key storage abstraction
-        ??    ??? provider_test_connection_service ??Test Connection logic
-        ??? providers/
-        ??    ??? mock_provider              ??always-on safe default
-        ??    ??? anthropic_provider         ??behind LLM_PROVIDER_ENABLED flag
-        ??    ??? provider_factory           ??selects provider by config
-        ??? schemas/                         ??Pydantic request/response models
-        ??? db/                              ??SQLModel / SQLite engine
+Electron renderer（HTML / CSS / JS）
+  └── localhost HTTP → FastAPI 後端 (:8000)
+        ├── api/routes.py                        — 所有 HTTP 端點
+        ├── services/
+        │    ├── chat_service                    — /chat routing、LLM 轉接層
+        │    ├── memory_service                  — 記憶 CRUD、已審核 context builder
+        │    ├── memory_audit_service            — 稽核列建立與查詢
+        │    ├── usage_meter_service             — token/費用追蹤（記憶體）
+        │    ├── provider_settings_service       — 非敏感設定持久化
+        │    ├── key_storage_service             — 安全金鑰儲存抽象層
+        │    └── provider_test_connection_service — Test Connection 邏輯
+        ├── providers/
+        │    ├── mock_provider                   — 永遠啟用的安全預設值
+        │    ├── anthropic_provider              — 需 LLM_PROVIDER_ENABLED flag
+        │    └── provider_factory               — 依設定選擇 provider
+        ├── schemas/                             — Pydantic 請求/回應模型
+        └── db/                                  — SQLModel / SQLite engine
 ```
 
-**Key design decisions:**
-- **Adapter pattern** ??adding a new LLM provider requires only a new adapter; service and route layers are unchanged
-- **Feature flags everywhere** ??`LLM_PROVIDER_ENABLED`, `LLM_CHAT_ENABLED`, `MEMORY_INJECTION_ENABLED` all default `false`
-- **Schema stability** ??`/chat` response (`reply / mood / source`) unchanged across all of Phase 4
-- **Write-only key handling** ??no endpoint returns the API key or any fragment of it
-- **Test isolation** ??`InMemoryKeyStorageBackend` and `FakeProviderTestRunner` injected via dependency inversion; no test touches a real provider or a real key
+**關鍵設計決策：**
+- **Adapter pattern** — 新增 LLM provider 只需加一個 adapter；service 與 route 層不變
+- **Feature flags 全面覆蓋** — `LLM_PROVIDER_ENABLED`、`LLM_CHAT_ENABLED`、`MEMORY_INJECTION_ENABLED` 預設皆為 `false`
+- **Schema 穩定性** — `/chat` 回應（`reply / mood / source`）在整個 Phase 4 保持不變
+- **唯寫金鑰處理** — 無任何端點回傳 API Key 或其片段
+- **測試隔離** — `InMemoryKeyStorageBackend` 與 `FakeProviderTestRunner` 透過依賴反轉注入；測試不接觸真實 provider 或真實金鑰
 
 ---
 
-## Safety / BYOK
+## 安全 / BYOK
 
-**BYOK (Bring Your Own Key)** means the user supplies their own LLM provider API key. The app does not ship with a developer-owned key.
+**BYOK（自帶金鑰）** 表示使用者自行提供 LLM provider API Key。應用程式不內建開發者金鑰。
 
-| Rule | Implementation |
+| 規則 | 實作方式 |
 |---|---|
-| API key never returned to frontend | Write-only endpoints; key never in any response body |
-| API key never stored in SQLite | `UnavailableBackend` runtime default; OS keychain designed (not yet wired) |
-| API key never logged | Forbidden fields enforced; provider `__repr__`/`__str__` redact secrets |
-| API key never in localStorage/sessionStorage | Electron renderer does not store or receive the key |
-| Test Connection requires cost ack | `explicit_cost_ack: true` required per click; `window.confirm()` with 4 disclosures |
-| Test Connection sends exactly one request | 16 output tokens; no memory, tools, streaming, or history |
-| Unknown errors return safe messages | `_safe_error_category()` collapses unknown strings to `"provider_error"` |
-| Extra request fields rejected | `ConfigDict(extra="forbid")` on all request schemas |
-| No live provider call | Runtime default is `UnavailableProviderTestRunner` and `UnavailableKeyStorageBackend` |
-| Independent safety review | Test Connection backend reviewed by Opus ??verdict: **PASS** |
+| API Key 不回傳給前端 | 唯寫端點；金鑰不出現在任何回應主體 |
+| API Key 不儲存於 SQLite | `UnavailableBackend` 執行期預設；OS keychain 已設計（尚未接線） |
+| API Key 不寫入日誌 | 禁止欄位強制執行；provider `__repr__`/`__str__` 遮蔽密文 |
+| API Key 不存入 localStorage/sessionStorage | Electron renderer 不儲存或接收金鑰 |
+| Test Connection 需費用確認 | 每次點擊需 `explicit_cost_ack: true`；`window.confirm()` 含 4 項揭露 |
+| Test Connection 僅送出一次請求 | 16 個輸出 token；無記憶、工具、串流或歷史 |
+| 未知錯誤回傳安全訊息 | `_safe_error_category()` 將未知字串歸類為 `"provider_error"` |
+| 額外請求欄位被拒絕 | 所有請求 schema 套用 `ConfigDict(extra="forbid")` |
+| 無真實 provider 呼叫 | 執行期預設為 `UnavailableProviderTestRunner` 與 `UnavailableKeyStorageBackend` |
+| 獨立安全審查 | Test Connection 後端由 Opus 審查 — 結果：**通過** |
 
 ---
 
-## Quick Start (Windows PowerShell)
+## 快速啟動（Windows PowerShell）
 
-### Run tests
+> 每個終端機視窗請先執行：`Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`
+
+### 執行測試
 
 ```powershell
 cd backend
@@ -186,64 +199,86 @@ python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 python -m pytest
-# Expected: 531 passed
+# 預期：586 通過
 ```
 
-### Start the backend
+### 啟動後端（推薦）
+
+```powershell
+# 從 repo 根目錄執行
+.\scripts\dev-start-backend.ps1
+# 自動設定所有 env、啟動 venv、在 :8000 啟動 uvicorn
+```
+
+<details>
+<summary>手動啟動後端（進階）</summary>
 
 ```powershell
 cd backend
 .venv\Scripts\Activate.ps1
+$env:LLM_PROVIDER_NAME = "ollama"
+$env:LLM_MODEL = "qwen3:8b"
+$env:LLM_PROVIDER_ENABLED = "true"
+$env:LLM_CHAT_ENABLED = "true"
+$env:LLM_LOCAL_CHAT_TIMEOUT_SECONDS = "90"
+$env:PYTHONIOENCODING = "utf-8"
 uvicorn app.main:app --reload --port 8000
 ```
 
-### Verify backend
+</details>
+
+### 驗證後端
 
 ```powershell
-# Health check
 Invoke-RestMethod -Uri http://localhost:8000/health
-
-# Mock chat
-Invoke-RestMethod -Method POST `
-  -Uri http://localhost:8000/chat `
-  -ContentType "application/json" `
-  -Body '{"message": "Hello!"}'
+# 預期：{ status: "ok", service: "dragon-pet-ai" }
 ```
 
-### Start the Electron desktop
+### 啟動 Electron 桌面應用（推薦）
 
-> Requires backend running at localhost:8000.
+> 需先確認後端在 localhost:8000 執行。
+
+```powershell
+# 從 repo 根目錄執行
+.\scripts\dev-start-desktop.ps1
+# 自動使用 npm.cmd、清除 ELECTRON_RUN_AS_NODE
+```
+
+<details>
+<summary>手動啟動 Electron（進階 / 第一次安裝）</summary>
 
 ```powershell
 cd apps\desktop
-npm install
-npm start
+npm.cmd install   # 只需第一次執行
+npm.cmd start
 ```
+
+</details>
 
 ---
 
-## Local LLM Mode (Ollama)
+## 本地 LLM 模式（Ollama）
 
-Local LLM mode uses Ollama on your own machine. It does not require an API key and does not send renderer data directly to Ollama. The Electron renderer only calls the FastAPI backend at `localhost:8000`; the backend owns provider selection, safety checks, usage metadata, and the Ollama request to `localhost:11434`.
+本地 LLM 模式在您自己的機器上使用 Ollama，無需 API Key，也不會將 renderer 資料直接送到 Ollama。Electron renderer 只呼叫 FastAPI 後端（`localhost:8000`）；後端負責 provider 選擇、安全檢查、使用量元資料，以及對 `localhost:11434` 的 Ollama 請求。
 
-### Preconditions
+### 前置條件
 
-Install Ollama, pull the recommended local model, and confirm it is available:
+安裝 Ollama，拉取推薦的本地模型，並確認可用：
 
 ```powershell
 ollama pull qwen3:8b
 ollama list
 ```
 
-### Start Local LLM Mode
+### 啟動本地 LLM 模式
 
-Start Ollama:
+啟動 Ollama：
 
 ```powershell
 ollama serve
 ```
 
-Start the backend:
+啟動後端：
 
 ```powershell
 cd backend
@@ -255,124 +290,124 @@ $env:OLLAMA_BASE_URL="http://localhost:11434"
 uvicorn app.main:app --reload
 ```
 
-Start Electron using the existing desktop command:
+啟動 Electron：
 
 ```powershell
 cd apps\desktop
-npm start
+npm.cmd start
 ```
 
 ### Provider Settings UI
 
-Open Provider Settings and select `ollama ??local, no key`.
+開啟 Provider Settings，選擇 `ollama — 本地，無需金鑰`。
 
-Expected UI state:
-- API key input is disabled because Ollama does not use an API key.
-- Key status shows `not_required`.
-- Save Key and Clear Key are unavailable for Ollama.
-- Test Connection is available when real provider is enabled.
-- Test Connection shows a Local Resource Warning because it uses local GPU/CPU, not an API cost warning.
+預期 UI 狀態：
+- Ollama 不使用 API Key，因此 API Key 輸入欄已停用。
+- 金鑰狀態顯示 `not_required`。
+- Ollama 的儲存金鑰與清除金鑰不可用。
+- 啟用 real provider 後，Test Connection 可用。
+- Test Connection 顯示本地資源警告（使用本機 GPU/CPU，非 API 費用警告）。
 
-### /chat Smoke Test
+### /chat Smoke 測試
 
-With backend running in Ollama mode:
+後端以 Ollama 模式執行時：
 
 ```powershell
 cd F:\RickHSIAO\Python\dragon-pet-ai\backend
 
 $env:PYTHONIOENCODING="utf-8"
 
-python -c "import json, urllib.request; data=json.dumps({'message':'??蝯脰?憡?蝔梯???銝???憭拇??芸???獢?}, ensure_ascii=False).encode('utf-8'); req=urllib.request.Request('http://127.0.0.1:8000/chat', data=data, headers={'Content-Type':'application/json; charset=utf-8'}); raw=urllib.request.urlopen(req).read().decode('utf-8'); print(raw)"
+python -c "import json, urllib.request; data=json.dumps({'message':'你好！克莉絲蒂娜，請用你的口吻跟我說說話。'}, ensure_ascii=False).encode('utf-8'); req=urllib.request.Request('http://127.0.0.1:8000/chat', data=data, headers={'Content-Type':'application/json; charset=utf-8'}); raw=urllib.request.urlopen(req).read().decode('utf-8'); print(raw)"
 ```
 
-Expected result:
+預期結果：
 - HTTP 200
-- Response schema remains `reply / mood / source`
-- `source` is `llm_local`
-- `reply` is generated locally by `qwen3:8b`
-- The reply should carry Christina's voice, such as `?霉, `瘙, `?嬋, or a tsundere / arrogant tone.
+- 回應 schema 維持 `reply / mood / source`
+- `source` 為 `llm_local`
+- `reply` 由本機 `qwen3:8b` 產生
+- 回覆應帶有克莉絲蒂娜的傲嬌語氣，例如「哼」、「才不是」、「切」等
 
-### Release Readiness Smoke Flow
+### 發布就緒 Smoke 流程
 
-Use this checkpoint flow before calling Local LLM mode ready:
+呼叫本地 LLM 模式就緒前，請依此流程確認：
 
-1. Start Ollama: `ollama serve`.
-2. Confirm the model: `ollama list` should include `qwen3:8b`.
-3. Start the backend with `LLM_PROVIDER_ENABLED=true`, `LLM_CHAT_ENABLED=true`, `LLM_PROVIDER_NAME=ollama`, `LLM_MODEL=qwen3:8b`, and optionally `LLM_LOCAL_CHAT_TIMEOUT_SECONDS=90` for cold local model loads.
-4. PATCH `/provider/settings` to `provider=ollama`, `model=qwen3:8b`, `real_provider_enabled=true`, `llm_chat_enabled=true`, and `fallback_to_mock=false`.
-5. POST `/provider/settings/test` to confirm the backend can reach the local Ollama runtime and model. This is a lightweight local runtime/model check, not a full persona chat generation.
-6. POST `/chat` to verify generation, Christina persona, `mood`, and `source=llm_local`.
-7. Start Electron with the existing desktop command.
-8. In Provider Settings, select `ollama - local, no key`, verify `key_status=not_required`, run Test Connection, then send a chat message.
-9. Confirm the UI renders the reply, updates mood, and shows `source: llm_local` in the chat runtime status area.
+1. 啟動 Ollama：`ollama serve`。
+2. 確認模型：`ollama list` 應包含 `qwen3:8b`。
+3. 以 `LLM_PROVIDER_ENABLED=true`、`LLM_CHAT_ENABLED=true`、`LLM_PROVIDER_NAME=ollama`、`LLM_MODEL=qwen3:8b`、選用 `LLM_LOCAL_CHAT_TIMEOUT_SECONDS=90` 啟動後端。
+4. PATCH `/provider/settings`：`provider=ollama`、`model=qwen3:8b`、`real_provider_enabled=true`、`llm_chat_enabled=true`、`fallback_to_mock=false`。
+5. POST `/provider/settings/test` 確認後端可連接本地 Ollama 執行期與模型（輕量本地 runtime/model 確認，非完整人格聊天產生）。
+6. POST `/chat` 驗證產生結果、克莉絲蒂娜人格、`mood` 與 `source=llm_local`。
+7. 以現有桌面指令啟動 Electron。
+8. 在 Provider Settings 選擇 `ollama — 本地，無需金鑰`，確認 `key_status=not_required`，執行 Test Connection，再傳送聊天訊息。
+9. 確認 UI 呈現回覆、更新情緒，並在聊天執行期狀態區顯示 `source: llm_local`。
 
-### Runtime UX and Fallback Policy
+### 執行期 UX 與 Fallback 政策
 
-- The chat runtime status area is intentionally visible in the main UI for MVP smoke and demo clarity. It shows the last `/chat` source and provider/resolved/model summary.
-- Local Ollama replies should show `source: llm_local`.
-- Local provider failures with fallback disabled show `source: llm_local_error` and a safe error-style status.
-- For development and smoke tests, use `fallback_to_mock=false` so provider failures are visible.
-- For safer demos where a mock reply is preferable to an error, `fallback_to_mock=true` is allowed, but the UI will show `source: mock` and explain that fallback may have occurred.
-- If you need to prove the local model is actually responding, turn fallback off.
-- First local responses may be slower while the model wakes up; the Electron UI shows a local cold-start loading message while `/chat` is pending. Local chat generation uses `LLM_LOCAL_CHAT_TIMEOUT_SECONDS` (default 90 seconds) so cold starts have more time than cloud-provider calls.
+- 聊天執行期狀態區刻意在主 UI 可見，用於 MVP smoke 與 demo 清晰度，顯示最後一次 `/chat` 的 source 與 provider/resolved/model 摘要。
+- 本地 Ollama 回覆應顯示 `source: llm_local`。
+- 停用 fallback 時，本地 provider 失敗顯示 `source: llm_local_error` 與安全錯誤狀態。
+- 開發與 smoke 測試使用 `fallback_to_mock=false`，讓 provider 失敗可見。
+- 若較偏好以 mock 回覆取代錯誤，可用 `fallback_to_mock=true`，但 UI 會顯示 `source: mock` 並說明可能發生了 fallback。
+- 若需確認本地模型確實在回應，請關閉 fallback。
+- 第一次本地回應可能較慢（模型冷啟動）；Electron UI 在 `/chat` 等待期間顯示冷啟動載入訊息。本地聊天產生使用 `LLM_LOCAL_CHAT_TIMEOUT_SECONDS`（預設 90 秒），比雲端 provider 呼叫有更長的等待時間。
 
-### Troubleshooting
+### 疑難排解
 
-| Symptom | Check |
+| 症狀 | 處理方式 |
 |---|---|
-| `ollama` not found | Install Ollama and reopen the terminal so `ollama` is on PATH. |
-| `qwen3:8b` not found | Run `ollama pull qwen3:8b`, then confirm with `ollama list`. |
-| Test Connection fails | Confirm `ollama serve` is running and `OLLAMA_BASE_URL` is `http://localhost:11434`. |
-| `/chat` returns `source=mock` | Confirm `llm_chat_enabled=true`; if `resolved_provider=ollama`, check whether `fallback_to_mock=true` allowed a fallback after local provider failure. |
-| `/chat` returns `source=llm_local_error` | Ollama was selected but local generation failed. Check `ollama serve`, the model name, and timeout/cold-start behavior; increase `LLM_LOCAL_CHAT_TIMEOUT_SECONDS` if your first local response loads slowly. |
-| Provider Settings lose `model` or fallback changes unexpectedly | Refresh Provider Settings before saving. Partial PATCH preserves omitted fields, and Test Connection does not persist settings. |
-| Reply lacks Christina tone | Confirm latest backend code is running and restart backend so prompt changes are loaded. |
-| Backend seems to ignore new settings | Stop and restart backend; env vars and provider settings are read by the backend process. |
+| `ollama` 找不到 | 安裝 Ollama 後重開終端機確認 `ollama` 在 PATH 上 |
+| `qwen3:8b` 找不到 | 執行 `ollama pull qwen3:8b`，再以 `ollama list` 確認 |
+| Test Connection 失敗 | 確認 `ollama serve` 執行中，且 `OLLAMA_BASE_URL` 為 `http://localhost:11434` |
+| `/chat` 回傳 `source=mock` | 確認 `llm_chat_enabled=true`；若 `resolved_provider=ollama`，確認 `fallback_to_mock=true` 未允許 fallback 後本地 provider 失敗 |
+| `/chat` 回傳 `source=llm_local_error` | Ollama 已選擇但本地產生失敗；確認 `ollama serve`、模型名稱、timeout/冷啟動行為；若首次本地回應載入慢，可增加 `LLM_LOCAL_CHAT_TIMEOUT_SECONDS` |
+| Provider Settings 失去 `model` 或 fallback 意外變更 | 儲存前先重新整理 Provider Settings；部分 PATCH 會保留省略欄位，Test Connection 不會持久化設定 |
+| 回覆缺乏克莉絲蒂娜口吻 | 確認後端執行最新程式碼，重啟後端以載入提示詞變更 |
+| 後端似乎忽略新設定 | 停止並重啟後端；環境變數與 provider 設定由後端程序讀取 |
 
-### Local LLM Safety Rules
+### 本地 LLM 安全規則
 
-- Do not add direct `localhost:11434` calls to the Electron renderer.
-- Do not treat Ollama as a provider that needs an API key.
-- Do not change the `/chat` response schema.
-- Do not call Anthropic/OpenAI or any external provider for Ollama mode.
-- Do not add live network-dependent tests; automated tests must keep using mocked transports.
+- 不在 Electron renderer 新增直接呼叫 `localhost:11434`。
+- 不將 Ollama 視為需要 API Key 的 provider。
+- 不更改 `/chat` 回應 schema。
+- 不在 Ollama 模式呼叫 Anthropic/OpenAI 或任何外部 provider。
+- 不新增依賴網路的自動化測試；測試必須繼續使用 mocked transport。
 
 ---
 
-## Demo & Portfolio Links
+## Demo 與 Portfolio 連結
 
-| Document | Purpose |
+| 文件 | 用途 |
 |---|---|
-| [docs/PORTFOLIO_DEMO_SCRIPT.md](docs/PORTFOLIO_DEMO_SCRIPT.md) | Full demo script: one-liner, 30-sec pitch, 2-min walk-through, interview talking points, screenshot checklist |
-| [docs/PORTFOLIO_SCREENSHOT_CHECKLIST.md](docs/PORTFOLIO_SCREENSHOT_CHECKLIST.md) | Screenshot capture plan: 9 required screenshots, naming convention, setup commands, what not to show |
-| [docs/OLLAMA_PROVIDER_DESIGN.md](docs/OLLAMA_PROVIDER_DESIGN.md) | Local Ollama provider design and TASK-074 contract test notes: API contract, qwen3:8b recommendation, provider settings integration, feature flags, security boundaries |
-| [docs/OLLAMA_RUNTIME_SMOKE_CHECKLIST.md](docs/OLLAMA_RUNTIME_SMOKE_CHECKLIST.md) | TASK-075 runtime smoke checklist ??**PASS** (2026-05-21): `source=llm_local`, ??蝯脰?憡?persona confirmed, no external API |
-| [docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md](docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md) | Phase 4 stabilization summary: completed capabilities, safety boundaries, test results, live smoke go/no-go |
-| [docs/PROVIDER_TEST_CONNECTION_DESIGN.md](docs/PROVIDER_TEST_CONNECTION_DESIGN.md) | Test Connection design and hardening test results |
-| [docs/SECURE_KEY_STORAGE_DESIGN.md](docs/SECURE_KEY_STORAGE_DESIGN.md) | Key storage threat model, storage options, redaction rules |
-| [docs/BYOK_PRODUCT_AND_SETTINGS.md](docs/BYOK_PRODUCT_AND_SETTINGS.md) | BYOK product design and security boundaries |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | Full phase-by-phase development roadmap |
-| [docs/TASKS.md](docs/TASKS.md) | Complete task history |
-| [docs/STREAMER_COMPANION_MODE.md](docs/STREAMER_COMPANION_MODE.md) | Future side track ??OBS overlay / Twitch companion design (not scheduled) |
+| [docs/PORTFOLIO_DEMO_SCRIPT.md](docs/PORTFOLIO_DEMO_SCRIPT.md) | 完整 demo 腳本：一句話介紹、30 秒 pitch、2 分鐘走場、面試重點、截圖清單 |
+| [docs/PORTFOLIO_SCREENSHOT_CHECKLIST.md](docs/PORTFOLIO_SCREENSHOT_CHECKLIST.md) | 截圖計畫：9 張必要截圖、命名規範、設定指令、不應顯示的內容 |
+| [docs/OLLAMA_PROVIDER_DESIGN.md](docs/OLLAMA_PROVIDER_DESIGN.md) | 本地 Ollama provider 設計與 TASK-074 contract test 說明：API 合約、qwen3:8b 建議、provider 設定整合、feature flags、安全邊界 |
+| [docs/OLLAMA_RUNTIME_SMOKE_CHECKLIST.md](docs/OLLAMA_RUNTIME_SMOKE_CHECKLIST.md) | TASK-075 執行期 smoke 清單 — **通過**（2026-05-21）：`source=llm_local`，克莉絲蒂娜人格確認，無外部 API |
+| [docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md](docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md) | Phase 4 穩定摘要：已完成功能、安全邊界、測試結果、正式 smoke 通過條件 |
+| [docs/PROVIDER_TEST_CONNECTION_DESIGN.md](docs/PROVIDER_TEST_CONNECTION_DESIGN.md) | Test Connection 設計與強化測試結果 |
+| [docs/SECURE_KEY_STORAGE_DESIGN.md](docs/SECURE_KEY_STORAGE_DESIGN.md) | 金鑰儲存威脅模型、儲存選項、遮蔽規則 |
+| [docs/BYOK_PRODUCT_AND_SETTINGS.md](docs/BYOK_PRODUCT_AND_SETTINGS.md) | BYOK 產品設計與安全邊界 |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖 |
+| [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄 |
+| [docs/STREAMER_COMPANION_MODE.md](docs/STREAMER_COMPANION_MODE.md) | 未來支線 — OBS overlay / Twitch 陪伴設計（尚未排程） |
 
 ---
 
-## Current Limitations
+## 目前限制
 
-| Limitation | Detail |
+| 限制 | 說明 |
 |---|---|
-| No live provider call | Runtime key storage unavailable; Test Connection button disabled by design |
-| No real API key used | All tests use mocked runners and in-memory fake storage |
-| OS keychain not wired | Storage abstraction is ready; `keytar` backend not yet implemented |
-| Usage meter is in-memory | Resets on backend restart; persistent meter deferred |
-| No automatic memory extraction | All memory is manually created |
-| No streaming / tools / TTS / Live2D | Out of scope for current phase |
-| No installer / packaging | Not packaged as distributable app |
-| Not billing-accurate | Token cost estimates use rule-based approximation |
+| 無真實 provider 呼叫 | 執行期金鑰儲存不可用；Test Connection 按鈕設計上停用 |
+| 未使用真實 API Key | 所有測試使用 mocked runner 與記憶體假儲存 |
+| OS keychain 未接線 | 儲存抽象層已就緒；`keytar` backend 尚未實作 |
+| 使用量計量為記憶體 | 後端重啟後重置；持久化計量延後 |
+| 無自動記憶擷取 | 所有記憶須手動建立 |
+| 無串流 / 工具 / TTS / Live2D | 超出目前階段範疇 |
+| 無安裝程式 / 封裝 | 尚未封裝為可發布應用程式 |
+| 非帳單精確 | token 費用估算使用規則式近似值 |
 
 ---
 
-## Directory Structure
+## 目錄結構
 
 ```
 dragon-pet-ai/
@@ -380,104 +415,106 @@ dragon-pet-ai/
     desktop/
       package.json
       src/
-        main.js               # Electron main process
+        main.js               # Electron 主程序
         renderer/
-          index.html          # Main window HTML
-          renderer.js         # UI logic, backend calls
-          styles.css          # Styles
+          index.html          # 主視窗 HTML
+          renderer.js         # UI 邏輯、後端呼叫
+          styles.css          # 樣式
   backend/
     app/
-      main.py                 # FastAPI entry point
-      api/routes.py           # All HTTP endpoints
-      core/config.py          # Feature flags, env config
+      main.py                 # FastAPI 進入點
+      api/routes.py           # 所有 HTTP 端點
+      core/config.py          # Feature flags、環境設定
       db/database.py          # SQLModel engine
-      schemas/                # Pydantic request/response models
-      services/               # Business logic (one file per service)
-      providers/              # LLM adapter layer
-    tests/                    # pytest suite (531 tests)
+      schemas/                # Pydantic 請求/回應模型
+      services/               # 業務邏輯（每個服務一個檔案）
+      providers/              # LLM 轉接層
+    tests/                    # pytest 套件（586 個測試）
     requirements.txt
-  docs/                       # All design documents
+  docs/                       # 所有設計文件
+  scripts/                    # PowerShell 啟動腳本
   .env.example
   README.md
 ```
 
 ---
 
-## All Design Documents
+## 所有設計文件
 
-| Document | Topic |
+| 文件 | 主題 |
 |---|---|
-| `docs/TASKS.md` | Task history and progress tracking |
-| `docs/ROADMAP.md` | Phase-by-phase development roadmap |
-| `docs/PRD.md` | MVP product requirements |
-| `docs/ARCHITECTURE.md` | System architecture |
-| `docs/CHARACTER_SPEC.md` | Character personality spec |
-| `docs/MEMORY_SYSTEM.md` | Memory system design |
-| `docs/PHASE3_DEMO_SUMMARY.md` | Phase 3 demo summary and safety model |
-| `docs/PHASE4_PLAN.md` | Phase 4 planning: options, safety constraints, task sequence |
-| `docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md` | Phase 4 Provider Settings stabilization summary (TASK-045?ASK-064) |
-| `docs/LLM_ADAPTER_DESIGN.md` | LLM adapter architecture: provider interface, feature flags, safety rules |
-| `docs/LLM_PROVIDER_CONTRACT.md` | Anthropic request/response/error mapping, mocked fixtures |
-| `docs/CHAT_LLM_WIRING_DESIGN.md` | Chat LLM wiring design: `LLM_CHAT_ENABLED`, adapter flow, fallback |
-| `docs/CHAT_LLM_REAL_PROVIDER_WIRING_DESIGN.md` | Real-provider /chat wiring design: flag matrix, source behavior |
-| `docs/COST_AND_MONETIZATION.md` | Cost control and live smoke go/no-go criteria |
-| `docs/BYOK_PRODUCT_AND_SETTINGS.md` | BYOK product design: key ownership, storage, security boundaries |
-| `docs/USAGE_METER_DESIGN.md` | Usage meter: 14 tracking fields, token estimation, privacy boundaries |
-| `docs/PROVIDER_SETTINGS_UI_DESIGN.md` | Provider Settings UI: 9-step settings flow, error UX, security boundaries |
-| `docs/PROVIDER_SETTINGS_API_DESIGN.md` | Provider Settings API: 6 endpoints, write-only key handling, safe status model |
-| `docs/SECURE_KEY_STORAGE_DESIGN.md` | Secure key storage: 4 options, threat model, redaction rules |
-| `docs/PROVIDER_SETTINGS_KEY_UI_ENABLEMENT_DESIGN.md` | Save Key / Clear Key UI flow, unavailable storage UX, key status display |
-| `docs/PROVIDER_TEST_CONNECTION_DESIGN.md` | Test Connection design and hardening test results (Opus review PASS) |
-| `docs/PORTFOLIO_DEMO_SCRIPT.md` | Portfolio demo script: 30-sec pitch, 2-min walk-through, interview talking points |
-| `docs/OLLAMA_PROVIDER_DESIGN.md` | Local Ollama provider design and contract test notes: API contract, qwen3:8b, no-key integration, security boundaries |
-| `docs/OLLAMA_RUNTIME_SMOKE_CHECKLIST.md` | TASK-075 local Ollama runtime smoke checklist |
-| `docs/STREAMER_COMPANION_MODE.md` | Future side track: OBS overlay / Twitch companion (not scheduled) |
+| `docs/TASKS.md` | 任務歷史與進度追蹤 |
+| `docs/ROADMAP.md` | 階段式開發路線圖 |
+| `docs/PRD.md` | MVP 產品需求 |
+| `docs/ARCHITECTURE.md` | 系統架構 |
+| `docs/CHARACTER_SPEC.md` | 角色人格規格 |
+| `docs/MEMORY_SYSTEM.md` | 記憶系統設計 |
+| `docs/PHASE3_DEMO_SUMMARY.md` | Phase 3 demo 摘要與安全模型 |
+| `docs/PHASE4_PLAN.md` | Phase 4 規劃：選項、安全限制、任務順序 |
+| `docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md` | Phase 4 Provider Settings 穩定摘要（TASK-045 至 TASK-064） |
+| `docs/LLM_ADAPTER_DESIGN.md` | LLM 轉接層架構：provider 介面、feature flags、安全規則 |
+| `docs/LLM_PROVIDER_CONTRACT.md` | Anthropic 請求/回應/錯誤對應、mocked fixtures |
+| `docs/CHAT_LLM_WIRING_DESIGN.md` | 聊天 LLM 接線設計：`LLM_CHAT_ENABLED`、轉接流程、fallback |
+| `docs/CHAT_LLM_REAL_PROVIDER_WIRING_DESIGN.md` | 真實 provider /chat 接線設計：flag 矩陣、source 行為 |
+| `docs/COST_AND_MONETIZATION.md` | 費用控制與正式 smoke 通過條件 |
+| `docs/BYOK_PRODUCT_AND_SETTINGS.md` | BYOK 產品設計：金鑰所有權、儲存、安全邊界 |
+| `docs/USAGE_METER_DESIGN.md` | 使用量計量：14 個追蹤欄位、token 估算、隱私邊界 |
+| `docs/PROVIDER_SETTINGS_UI_DESIGN.md` | Provider Settings UI：9 步設定流程、錯誤 UX、安全邊界 |
+| `docs/PROVIDER_SETTINGS_API_DESIGN.md` | Provider Settings API：6 個端點、唯寫金鑰處理、安全狀態模型 |
+| `docs/SECURE_KEY_STORAGE_DESIGN.md` | 安全金鑰儲存：4 個選項、威脅模型、遮蔽規則 |
+| `docs/PROVIDER_SETTINGS_KEY_UI_ENABLEMENT_DESIGN.md` | 儲存金鑰 / 清除金鑰 UI 流程、儲存不可用 UX、金鑰狀態顯示 |
+| `docs/PROVIDER_TEST_CONNECTION_DESIGN.md` | Test Connection 設計與強化測試結果（Opus 審查通過） |
+| `docs/PORTFOLIO_DEMO_SCRIPT.md` | Portfolio demo 腳本：30 秒 pitch、2 分鐘走場、面試重點 |
+| `docs/OLLAMA_PROVIDER_DESIGN.md` | 本地 Ollama provider 設計與 contract test 說明 |
+| `docs/OLLAMA_RUNTIME_SMOKE_CHECKLIST.md` | TASK-075 本地 Ollama 執行期 smoke 清單 |
+| `docs/LOCAL_DEV_RUNBOOK.md` | 本地開發執行手冊：啟動順序、腳本用法、環境變數、疑難排解 |
+| `docs/STREAMER_COMPANION_MODE.md` | 未來支線：OBS overlay / Twitch 陪伴（尚未排程） |
 
 ---
 
-## Development Principles
+## 開發原則
 
-- **Docs before code** ??every feature is specified before it is implemented
-- **Scope discipline** ??features belong to one phase; no Phase N+1 work during Phase N
-- **Safety first** ??any capability that touches user data or incurs cost requires a safety design step
-- **Local first** ??all user data stays on device unless the user explicitly opts in to a cloud feature
-- **Reversible steps** ??prefer designs that can be undone without data loss
+- **文件先於程式碼** — 每個功能在實作前先撰寫規格
+- **範疇紀律** — 功能屬於一個階段；Phase N 期間不做 Phase N+1 的工作
+- **安全優先** — 任何觸及使用者資料或產生費用的功能，都需要安全設計步驟
+- **本地優先** — 所有使用者資料留在裝置上，除非使用者明確選擇雲端功能
+- **可逆步驟** — 優先選擇不造成資料損失即可復原的設計
 
 ---
 
-## Development Journal
+## 開發日誌
 
-> Internal task update log. Documents what changed in each task.
+> 內部任務更新日誌，記錄每個任務的變更內容。
 
 <details>
-<summary>Expand task update history (TASK-054 ??TASK-067D)</summary>
+<summary>展開任務更新歷史（TASK-054 — TASK-067D）</summary>
 
-> TASK-054: provider key save/clear endpoints are wired to the secure key storage abstraction. Runtime default remains a safe unavailable backend, tests use an in-memory fake backend, no key is written to SQLite or plain config files, and live test connection remains disabled. No external provider calls are made. pytest: 449 passed.
+> TASK-054：provider 金鑰儲存/清除端點已接線至安全金鑰儲存抽象層。執行期預設維持安全的不可用後端；測試使用記憶體假後端進行儲存/清除/冪等清除/取代行為；金鑰不寫入 SQLite 或純文字設定檔；正式 Test Connection 維持停用。無外部 provider 呼叫。pytest：449 通過。
 
-> TASK-055: Key UI enablement design complete. Save Key and Clear Key controls are now designed with full interaction flows, unavailable storage UX (503 ??safe message, env var recommendation), key status display (6 safe values, no key fragments), and security boundaries. Test Connection remains disabled.
+> TASK-055：金鑰 UI 啟用設計完成。儲存金鑰與清除金鑰控制項現已設計完整互動流程、儲存不可用 UX（503 — 安全訊息、環境變數建議）、金鑰狀態顯示（6 個安全值，不含金鑰片段）與安全邊界。Test Connection 維持停用。
 
-> TASK-056: Save Key and Clear Key controls are now enabled in the Provider Settings UI. Key input is enabled for real providers only, disabled for mock. Save Key POSTs to local backend and clears the input field after every attempt. Clear Key shows a confirmation dialog and DELETEs via local backend. Storage unavailable (503) shows a safe message with env var instructions. API key is never logged, never stored in localStorage/sessionStorage, never sent to external providers. Test Connection remains disabled. pytest: 449 passed.
+> TASK-056：儲存金鑰與清除金鑰控制項現已在 Provider Settings UI 啟用。真實 provider 才啟用金鑰輸入，mock 時停用。儲存金鑰 POST 至本地後端，每次嘗試後清除輸入欄位。清除金鑰顯示確認對話框並 DELETE 透過本地後端。儲存不可用（503）顯示安全訊息與環境變數說明。API Key 不寫入日誌、不存入 localStorage/sessionStorage、不送至外部 provider。Test Connection 維持停用。pytest：449 通過。
 
-> TASK-058: Provider Test Connection design is documented. Test Connection remains disabled in runtime, requires future per-click `explicit_cost_ack`, sends exactly one minimal request, uses no retries/tools/streaming/memory, and does not fallback to mock. No live provider call has occurred.
+> TASK-058：Provider Test Connection 設計已文件化。Test Connection 在執行期維持停用，需未來的每次點擊 `explicit_cost_ack`，僅送出一次最小請求，不重試/工具/串流/記憶，且不 fallback 至 mock。無真實 provider 呼叫。
 
-> TASK-059: Backend `POST /provider/settings/test` is implemented with mocked-provider runner support. It requires per-click `explicit_cost_ack`, builds exactly one minimal no-memory/no-tools/no-streaming request, records safe aggregate usage, and never falls back to mock. Runtime default runner does not call external providers; Electron Test Connection UI remains disabled. pytest: 465 passed.
+> TASK-059：後端 `POST /provider/settings/test` 已實作，支援 mocked-provider runner。需每次點擊 `explicit_cost_ack`，建立一次最小無記憶/無工具/無串流請求，記錄安全彙總使用量，且不 fallback 至 mock。執行期預設 runner 不呼叫外部 provider；Electron Test Connection UI 維持停用。pytest：465 通過。
 
-> TASK-059R: Opus safety review of TASK-059 backend: verdict PASS. No critical issues. explicit_cost_ack enforced at API boundary, response schema contains no secret-bearing fields, runtime default runner is UnavailableProviderTestRunner, no live external API calls in tests. TASK-060 unblocked.
+> TASK-059R：TASK-059 後端的 Opus 安全審查：結果通過。無重大問題。`explicit_cost_ack` 在 API 邊界強制執行，回應 schema 不含敏感欄位，執行期預設 runner 為 UnavailableProviderTestRunner，測試中無真實外部 API 呼叫。TASK-060 解除封鎖。
 
-> TASK-060: Test Connection button enabled in Electron renderer. Enable conditions: real provider selected, key_status configured, real_provider_enabled true. Explicit cost acknowledgement (window.confirm) required on every click ??covers all 4 required disclosures. POST to local backend only with body {provider, model, explicit_cost_ack: true} ??no api_key, no prompt, no memory. Safe response fields rendered: status, safe_message, error_category, source, usage_estimate. No automatic test after Save Key. No external provider URL in renderer. API key never logged, never in localStorage/sessionStorage. node --check: PASS. pytest: 465 passed.
+> TASK-060：Test Connection 按鈕已在 Electron renderer 啟用。啟用條件：已選真實 provider、key_status configured、real_provider_enabled true。每次點擊需明確費用確認（window.confirm）— 涵蓋全部 4 項必要揭露。僅 POST 至本地後端，body 為 {provider, model, explicit_cost_ack: true} — 無 api_key、無 prompt、無記憶。安全回應欄位呈現：status、safe_message、error_category、source、usage_estimate。儲存金鑰後不自動測試。renderer 無外部 provider URL。API Key 不寫入日誌、不存入 localStorage/sessionStorage。node --check：通過。pytest：465 通過。
 
-> TASK-061: Runtime smoke check PASS WITH EXPECTED LIMITATION. Test Connection button correctly remained disabled (key_status: not_configured, no key stored ??expected safe behavior). No live external provider call was made.
+> TASK-061：執行期 smoke 確認（預期限制）。Test Connection 按鈕正確維持停用（key_status: not_configured，無金鑰儲存 — 預期安全行為）。無真實外部 provider 呼叫。
 
-> TASK-062: Provider Test Connection hardening tests complete. Added 5 Opus-recommended hardening tests: provider_disabled branch with configured key (runner not called), invalid_model 400 before runner call, unknown error collapse to provider_error (raw string does not leak), extra field rejection without echoing value (ConfigDict extra=forbid), safe_message category sweep across all 11 error categories. pytest: 470 passed, 0 failed. No backend logic modified. No Electron UI modified.
+> TASK-062：Provider Test Connection 強化測試完成。新增 5 個 Opus 推薦的強化測試：provider_disabled branch 含已設定金鑰（runner 不被呼叫）、invalid_model 在 runner 呼叫前回傳 400、未知錯誤歸類為 provider_error（原始字串不洩漏）、額外欄位拒絕且不回傳值（ConfigDict extra=forbid）、safe_message 類別涵蓋全部 11 個錯誤類別。pytest：470 通過，0 失敗。未修改後端邏輯。未修改 Electron UI。
 
-> TASK-063: Electron Provider Settings UI polish/layout fix complete. Renderer readability, vertical scrolling, Provider Settings status cards, usage summary, form spacing, button wrapping, and narrow-width DevTools-docked layout were improved. Save Key / Clear Key / Test Connection behavior is unchanged. No backend/app code was modified. No provider behavior changed. No external API call was made. Electron static checks passed.
+> TASK-063：Electron Provider Settings UI 排版修正完成。改善 renderer 可讀性、垂直捲動、Provider Settings 狀態卡片、使用量摘要、表單間距、按鈕換行及窄視窗 DevTools 停靠版面。儲存金鑰 / 清除金鑰 / Test Connection 行為不變。未修改後端/應用程式程式碼。未變更 provider 行為。無外部 API 呼叫。Electron 靜態檢查通過。
 
-> TASK-064: Provider Settings UI runtime smoke re-check PASS WITH NON-BLOCKING UI NOTES. All provider settings controls verified readable and functional after TASK-063 polish. Test Connection correctly disabled (key_status: not_configured ??expected safe behavior). No live external provider call. No real API key entered.
+> TASK-064：Provider Settings UI 執行期 smoke 再確認（非阻塞 UI 備注）。TASK-063 修整後所有 provider 設定控制項確認可讀且可用。Test Connection 正確停用（key_status: not_configured — 預期安全行為）。無真實外部 provider 呼叫。未輸入真實 API Key。
 
-> TASK-065: Phase 4 Provider Settings Stabilization Summary complete. Created docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md covering TASK-045 through TASK-064: completed capabilities, safety boundaries (16 rules), implemented vs intentionally-not-implemented, runtime limitations, non-blocking UI notes, test results (470 passed), live smoke go/no-go conditions (all unmet ??no live call has occurred), and recommended next tasks. No backend/app code modified. No external API call made.
+> TASK-065：Phase 4 Provider Settings 穩定摘要完成。建立 docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md，涵蓋 TASK-045 至 TASK-064：已完成功能、安全邊界（16 條規則）、已實作與刻意未實作、執行期限制、非阻塞 UI 備注、測試結果（470 通過）、正式 smoke 通過條件（全部未達成 — 無真實呼叫）及建議後續任務。未修改後端/應用程式程式碼。無外部 API 呼叫。
 
-> TASK-066D: Portfolio Demo Script complete. Created docs/PORTFOLIO_DEMO_SCRIPT.md with project one-liner, 30-second pitch, 2-minute demo script (10 steps), architecture talking points, completed features table (21 items), safety/BYOK explanation, screenshot checklist (9 items), what not to claim (8 items), interview talking points (8 topics), and PowerShell demo commands. Project is demo-ready as a local-first prototype. No live external provider call has occurred. No real API key used. No backend/app code modified.
+> TASK-066D：Portfolio Demo 腳本完成。建立 docs/PORTFOLIO_DEMO_SCRIPT.md，含專案一句話介紹、30 秒 pitch、2 分鐘 demo 腳本（10 步）、架構重點、已完成功能表（21 項）、安全/BYOK 說明、截圖清單（9 項）、不應宣稱的事項（8 項）、面試重點（8 個主題）及 PowerShell demo 指令。專案已達 demo 就緒（本地 mock）。無真實外部 provider 呼叫。未使用真實 API Key。未修改後端/應用程式程式碼。
 
-> TASK-067D: README polished as portfolio-friendly entry point. Added project one-liner, current status table, completed capabilities table (21 items), architecture diagram with key design decisions, safety/BYOK summary table, PowerShell quick start, demo & portfolio links, current limitations table, updated directory structure, updated docs table. Moved task update history to collapsible Development Journal section. No backend/app code modified. No external API call made.
+> TASK-067D：README 整理為 portfolio 友善的進入點。新增專案一句話介紹、目前狀態表、已完成功能表（21 項）、含關鍵設計決策的架構圖、安全/BYOK 摘要表、PowerShell 快速啟動、demo & portfolio 連結、目前限制表、更新目錄結構、更新文件表。將任務更新歷史移至可折疊的開發日誌區塊。未修改後端/應用程式程式碼。無外部 API 呼叫。
 
 </details>

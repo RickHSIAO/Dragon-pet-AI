@@ -265,19 +265,20 @@ The backend returns `source=llm_local_error` with a message explaining the model
 still be loading.
 
 **Recommended: warm up the model before running the smoke or starting chat.**
-Run a short interactive session in a separate terminal:
+Run a one-shot warm-up in a separate terminal:
 
 ```powershell
-ollama run qwen3:8b
-# Type any short message, wait for the reply, then Ctrl+D to exit
+ollama run qwen3:8b "請用一句繁體中文回覆：ready"
+# Wait until qwen3:8b replies, then the model is loaded in memory.
 ```
 
 Once `ollama run` has responded once, the model is in memory and subsequent `/chat`
 calls via the backend return `source=llm_local` immediately.
 
-If you skip the warm-up, the first `/chat` may return `source=llm_local_error`.
-Wait 30–60 s and retry — `dev-smoke.ps1` will report `source=llm_local` once the model
-finishes loading.
+If you skip the warm-up, the first `/chat` may return `source=llm_local_error`
+(this is a cold-start loading issue — not a broken backend or settings problem).
+Wait 30–60 s and retry — `dev-smoke.ps1` will show the warmup hint and report
+`source=llm_local` once the model finishes loading.
 
 ---
 

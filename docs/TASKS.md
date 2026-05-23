@@ -6030,6 +6030,172 @@ No script logic was changed.
 
 ### Next Task
 
-TASK-105 - TBD
+TASK-105 - Cold-start Warmup UX for dev-smoke
+
+---
+
+## TASK-105 — Cold-start Warmup UX for dev-smoke
+
+**Status:** DONE
+**Date:** 2026-05-23
+
+### Goal
+
+Improve `scripts/dev-smoke.ps1` so that when the local `qwen3:8b` model is still
+loading (cold-start), the script prints a clear, actionable warm-up hint instead of a
+generic failure message. No backend provider logic changed. No `/chat` schema changed.
+No renderer modified.
+
+### Root cause
+
+`Invoke-BackendPost` previously used `TimeoutSec 15` for `/chat`. The backend's own
+`LLM_LOCAL_CHAT_TIMEOUT_SECONDS` defaults to 90 s. On cold-start, the PowerShell
+client timed out first (after 15 s) and raised a network exception, which was caught and
+printed as a generic `[FAIL] /chat failed: ...` with no guidance. The
+`source=llm_local_error` branch (which did have a partial hint) was never reached.
+
+### Changes
+
+**`scripts/dev-smoke.ps1`** only — no other file modified.
+
+| Change | Details |
+|--------|---------|
+| New `-ChatTimeoutSec` param | Default 100 s — intentionally above backend 90 s so backend can return JSON |
+| New `Write-WarmupHint` function | Prints the exact `ollama run qwen3:8b` warm-up command and rerun instruction |
+| New `Is-TimeoutError` helper | Detects PowerShell network-timeout exception messages |
+| `/chat` network-timeout branch | Detects timeout, calls `Write-WarmupHint`, increments fail counter |
+| `llm_local_error` branch improved | Checks reply text for cold-start keywords; if matched calls `Write-WarmupHint`; if not matched shows possible-causes list then `Write-WarmupHint` |
+| `$WARN` tag added | `[WARN]` in Yellow — distinguishes transient cold-start from hard failures |
+| Header shows timeout | `Chat timeout: N s` visible in smoke header |
+| Cold-start note in header | `(cold-start may take up to 90 s on first load — please wait)` |
+
+### Warm-up hint displayed on cold-start
+
+```
+[WARN] /chat request timed out at the network level (100 s).
+[WARN] The backend may still be waiting for Ollama to load the model.
+
+  *** Local model may still be loading / waking up ***
+
+  Warm up the model by running this in a separate terminal:
+
+    ollama run qwen3:8b "請用一句繁體中文回覆：ready"
+
+  Wait until it replies, then rerun:
+
+    .\scripts\dev-smoke.ps1
+
+  This is a cold-start loading issue — not a settings or backend problem.
+```
+
+### Safety invariants
+
+- `/chat` schema unchanged: `reply / mood / source`.
+- Renderer not modified.
+- No direct Ollama URL in any script.
+- Backend provider logic not modified.
+- `llm_local_error` is not counted as a hard failure (exit 0) — it is a transient
+  cold-start state, not a broken backend or settings problem.
+
+### Verification
+
+- `python -m pytest`: **586 passed, 0 failed**
+- `node --check apps/desktop/src/main.js`: PASS
+- `node --check apps/desktop/src/renderer/renderer.js`: PASS
+- `node --check apps/desktop/scripts/renderer-chat-smoke.js`: PASS
+- `npm run test:renderer`: PASS
+- Renderer safety scan: PASS (no direct Ollama URL)
+- `dev-smoke.ps1` safety scan: PASS (no direct Ollama URL, no API key)
+- Trailing whitespace check on `dev-smoke.ps1`: CLEAN
+
+### Next Task
+
+TASK-106 - Manual Cold-start Warmup UX Smoke
+
+---
+
+## TASK-106 — Manual Cold-start Warmup UX Smoke
+
+**Status:** PENDING MANUAL VERIFICATION
+**Date:** 2026-05-23
+
+### Goal
+
+在 Windows 本機手動驗證 TASK-105 的 cold-start warm-up UX：
+確認 `dev-smoke.ps1` 在 `qwen3:8b` 尚未載入時正確顯示暖機提示，
+暖機完成後 smoke 全 PASS 且 `source=llm_local`。
+
+不新增功能，不修改程式邏輯。
+
+### 手動驗證步驟
+
+```powershell
+# 1. 停止 qwen3:8b（讓模型進入 cold 狀態）
+ollama stop qwen3:8b
+
+# 2. 確認模型不在執行中
+ollama ps
+
+# 3. 確認 backend 已啟動（另一個 terminal）
+.\scripts\dev-start-backend.ps1
+
+# 4. 第一次執行 smoke（模型 cold，預期顯示暖機提示）
+.\scripts\dev-smoke.ps1
+
+# 5. 觀察 /chat 的輸出：
+#    - 是否顯示 [WARN] ... local model may still be loading
+#    - 是否顯示 ollama run qwen3:8b "請用一句繁體中文回覆：ready"
+#    - 是否說明「cold-start loading issue — not a settings or backend problem」
+
+# 6. 暖機（另一個 terminal）
+ollama run qwen3:8b "請用一句繁體中文回覆：ready"
+# 等待 qwen3:8b 回覆後 Ctrl+D 結束
+
+# 7. 再次執行 smoke（模型已暖機，預期全 PASS）
+.\scripts\dev-smoke.ps1
+```
+
+### 預期第一次 smoke（cold-start）
+
+| 檢查項目 | 預期結果 |
+|---------|---------|
+| `/health` | `[PASS]` |
+| `/provider/settings` | `[PASS]`，provider=ollama |
+| `/provider/settings/test` | `[PASS]`（僅檢查 ollama runtime，不做 generation） |
+| `/chat` | `[WARN]` timeout 或 `source=llm_local_error`，顯示暖機提示 |
+| 暖機提示顯示 | ✅ `*** Local model may still be loading / waking up ***` |
+| 暖機指令顯示 | ✅ `ollama run qwen3:8b "請用一句繁體中文回覆：ready"` |
+| 錯誤分類 | ✅ 明確說明是 cold-start，不是 settings/backend 壞掉 |
+
+### 預期第二次 smoke（暖機後）
+
+| 檢查項目 | 預期結果 |
+|---------|---------|
+| `/health` | `[PASS]` |
+| `/provider/settings` | `[PASS]` |
+| `/provider/settings/test` | `[PASS]` |
+| `/chat` | `[PASS]`，`source=llm_local` |
+| Schema guard | `[PASS]`，`reply / mood / source` |
+| 總結 | `Smoke result: ALL CHECKS PASSED` |
+
+### Safety invariants
+
+- `/chat` schema 不變：`reply / mood / source`
+- Renderer 不修改
+- Backend provider logic 不修改
+- 不新增圖片
+- 不呼叫外部 API
+
+### 完成後回報
+
+1. cold-start 時是否成功顯示 warmup hint
+2. warmup 後 dev-smoke 是否全 PASS
+3. `/chat` 是否 `source=llm_local`
+4. 是否需要再調整 timeout 或提示文字
+5. 是否建議 commit
+
+### Next Task
+
+TASK-107 - TBD
 
 ---
