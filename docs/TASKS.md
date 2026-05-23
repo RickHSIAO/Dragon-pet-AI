@@ -6423,3 +6423,70 @@ TASK-111 - Expression Timing Polish
 - Phase 5 所有任務（TASK-107~112）全數完成 → Phase 5 COMPLETE
 
 **下一步**：Phase 5 完整收尾，可考慮 commit / tag；若繼續開發可規劃 Phase 6。
+
+---
+
+## TASK-113 — Sticky Chat Composer / Better Chat Scroll UX（DONE）
+
+### 問題
+
+1. Input bar 在 HTML 中位於 memory / audit / provider settings 之後 — 使用者需捲動才能輸入
+2. AI 回覆每次強制捲到底部，中斷閱讀歷史記錄的體驗
+3. 不適合 desktop-pet + chat 的使用情境
+
+### 實作內容
+
+**`index.html`**
+- 將 `<div id="memory-toggle-bar">` 和 `<footer id="input-bar">` 移至 `<main id="chat-area">` 之後，settings sections 之前
+- Settings sections（memory / audit / provider）現在位於 chat + input 區塊之下（below the fold）
+
+**`styles.css`**
+- `body`：`padding-bottom: 14px` → `padding-bottom: 0`
+- `#input-bar`：加入 `position: sticky; bottom: 0; z-index: 10`
+- `@media (max-width: 700px)` body：移除 `padding-bottom: 10px`
+
+**`renderer.js`**
+- 新增 `CHAT_NEAR_BOTTOM_THRESHOLD_PX = 80` 常數
+- 新增三個 scroll 輔助函式：`isChatNearBottom()`、`scrollChatToBottom()`、`maybeScrollChatToBottom()`
+- `appendMessage(role, text)` → `appendMessage(role, text, { autoScroll = false } = {})`：移除無條件捲動，改由 caller 控制
+- `sendMessage()`：
+  - user 訊息、loading 訊息：`{ autoScroll: true }` — 永遠捲到底
+  - pet 回覆：`maybeScrollChatToBottom()` — 只在 user 接近底部時才捲
+  - error 訊息：`maybeScrollChatToBottom()`
+- 同步修正：`testLoadingColdStartStatusIsVisible` 的根本原因（`currentProviderSettings = {}` 在 startup 時）已由既有 startup IIFE 中的 `loadProviderSettings()` 解決；
+  TASK-113 patch 從 git clean version 重新套用，確保 IIFE 完整保留
+
+**`renderer-chat-smoke.js`**（FakeElement 更新 + 5 個新測試）
+- `FakeElement`：新增 `this.clientHeight = 0`；`appendChild` 改為 `Math.max(scrollHeight, children.length)`
+- `testChatComposerExistsAndIsNotRemovedByMessageAppend`：input bar 在訊息追加後仍存在
+- `testUserSendScrollsChatToBottom`：user send 時強制捲到底
+- `testAiReplyDoesNotScrollWhenUserScrolledUp`：user 捲上去時 AI 回覆不干擾位置
+- `testAiReplyScrollsWhenUserIsNearBottom`：user 在底部時 AI 回覆自動捲動
+- `testScrollHelpersExistInSandbox`：三個 scroll 輔助函式存在於 sandbox
+
+### 安全限制（均未違反）
+
+- 不自動呼叫 `/chat` ✗
+- 不新增 backend route ✗
+- 不修改 `/chat` schema ✗
+- 不修改 provider settings / Ollama routing ✗
+- 不修改 persona prompt ✗
+- 不新增外部 API ✗
+
+### 驗收條件
+
+- `node --check renderer.js` PASS ✓
+- `node scripts/renderer-chat-smoke.js` PASS（56 個測試，含 5 個新 TASK-113 測試）✓
+- safety scan CLEAN ✓
+- `python -m pytest` 586 passed ✓
+- trailing whitespace CLEAN ✓
+
+### 完成記錄
+
+- `apps/desktop/src/renderer/index.html`：input bar 移至 chat area 之後
+- `apps/desktop/src/renderer/styles.css`：input bar sticky bottom
+- `apps/desktop/src/renderer/renderer.js`：scroll helpers + autoScroll appendMessage
+- `apps/desktop/scripts/renderer-chat-smoke.js`：FakeElement clientHeight + 5 新測試
+- 全部驗收通過：syntax PASS、smoke 56/56 PASS、safety CLEAN、pytest 586 passed
+
+**下一步**：可 commit TASK-113；繼續規劃 Phase 6 或下一個 UX 改善任務。

@@ -120,6 +120,27 @@ let awayGreetingFired    = false;
 const HINT_LOCK_MS = 8 * 1000; // 8 seconds
 let hintLockedUntil = 0;       // epoch ms; 0 = always unlocked
 
+// TASK-113: smarter auto-scroll helpers — user sends always scroll,
+// AI replies only scroll when user is already near the bottom.
+const CHAT_NEAR_BOTTOM_THRESHOLD_PX = 80;
+
+function isChatNearBottom() {
+  return (chatArea.scrollHeight - chatArea.scrollTop - (chatArea.clientHeight || 0))
+    < CHAT_NEAR_BOTTOM_THRESHOLD_PX;
+}
+
+function scrollChatToBottom() {
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(() => { chatArea.scrollTop = chatArea.scrollHeight; });
+  } else {
+    chatArea.scrollTop = chatArea.scrollHeight;
+  }
+}
+
+function maybeScrollChatToBottom() {
+  if (isChatNearBottom()) scrollChatToBottom();
+}
+
 // Avoid persisting default form values before the backend settings snapshot has
 // been restored and rendered.
 saveProviderSettingsBtn.disabled = true;
@@ -295,7 +316,7 @@ function setPetHint(text) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-function appendMessage(role, text) {
+function appendMessage(role, text, { autoScroll = false } = {}) {
   const wrap = document.createElement("div");
   wrap.className = `message ${role}`;
 
@@ -314,12 +335,9 @@ function appendMessage(role, text) {
   wrap.appendChild(body);
   chatArea.appendChild(wrap);
 
-  // TASK-098: requestAnimationFrame for reliable scroll-to-bottom after layout
-  if (typeof requestAnimationFrame === "function") {
-    requestAnimationFrame(() => { chatArea.scrollTop = chatArea.scrollHeight; });
-  } else {
-    chatArea.scrollTop = chatArea.scrollHeight;  // fallback for test environment
-  }
+  // TASK-113: caller controls scroll via autoScroll flag.
+  // User sends always pass { autoScroll: true }; AI replies use maybeScrollChatToBottom().
+  if (autoScroll) scrollChatToBottom();
   return wrap;
 }
 
@@ -1426,13 +1444,14 @@ async function sendMessage(text) {
   if (isSending || !text.trim()) return;
   setSending(true);
 
-  // Show user message immediately
-  appendMessage("user", text);
+  // Show user message immediately — always scroll so the user sees their own send.
+  appendMessage("user", text, { autoScroll: true });
   const loadingMessage = appendMessage(
     "status",
     isOllamaChatPath()
       ? "Local model is waking up. First Ollama responses can take longer..."
-      : "Waiting for backend reply..."
+      : "Waiting for backend reply...",
+    { autoScroll: true }
   );
   setChatRuntimeStatus("pending", sourceStatusMessage("pending"), "pending");
   // TASK-083: show thinking expression while waiting for reply
@@ -1461,6 +1480,7 @@ async function sendMessage(text) {
 
     loadingMessage.remove();
     appendMessage("pet", data.reply);
+    maybeScrollChatToBottom(); // TASK-113: only scroll if user was near the bottom
     const source = data.source || "unknown";
     const isSourceError = source === "llm_local_error" || source === "llm_real_error";
     setMood(data.mood); // also calls setPetExpression via setMood
@@ -1498,6 +1518,7 @@ async function sendMessage(text) {
       "error"
     );
     appendMessage("error", errText);
+    maybeScrollChatToBottom(); // TASK-113: scroll to error only if user was near bottom
   } finally {
     setSending(false);
     msgInput.focus();

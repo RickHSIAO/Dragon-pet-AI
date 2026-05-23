@@ -56,7 +56,37 @@
     <!-- Messages are injected here by renderer.js -->
   </main>
 
-  <!-- ── Input bar ──────────────────────────────────────── -->
+  <!-- ── Memory-aware chat toggle ──────────────────────────── -->
+  <!-- Placed here (above input bar) so the toggle is always visible alongside -->
+  <!-- the composer without scrolling into the settings sections below.         -->
+  <!-- TASK-023: per-request opt-in. Backend MEMORY_INJECTION_ENABLED must   -->
+  <!-- also be true. Toggle only controls the use_memory field in /chat body. -->
+  <div id="memory-toggle-bar">
+    <label id="memory-toggle-label" for="use-memory-toggle">
+      <input type="checkbox" id="use-memory-toggle" />
+      Use approved memories
+    </label>
+    <span id="memory-toggle-hint">
+      Requires backend <code>MEMORY_INJECTION_ENABLED=true</code>.
+      Only active approved memories may be used.
+    </span>
+  </div>
+
+  <!-- ── Input bar (sticky composer) ──────────────────────── -->
+  <!-- TASK-113: positioned here (before settings sections) so it is always   -->
+  <!-- visible above the fold. CSS makes it sticky at the viewport bottom.    -->
+  <footer id="input-bar">
+    <textarea
+      id="message-input"
+      placeholder="Type a message... (Enter to send, Shift+Enter for newline)"
+      rows="1"
+      autocomplete="off"
+      spellcheck="true"
+    ></textarea>
+    <button id="send-btn">Send</button>
+  </footer>
+
+  <!-- ── Settings sections (below the fold) ────────────────── -->
   <!-- Memory management placeholder -->
   <section id="memory-section" aria-labelledby="memory-title">
     <div class="section-header">
@@ -158,9 +188,6 @@ No active memories.</pre>
     </div>
   </section>
 
-  <!-- ── Memory-aware chat toggle ──────────────────────────── -->
-  <!-- TASK-023: per-request opt-in. Backend MEMORY_INJECTION_ENABLED must   -->
-  <!-- also be true. Toggle only controls the use_memory field in /chat body. -->
   <!-- Provider Settings section (TASK-052) -->
   <section id="provider-settings-section" aria-labelledby="provider-settings-title">
     <div class="section-header">
@@ -305,28 +332,6 @@ No active memories.</pre>
       </dl>
     </div>
   </section>
-
-  <div id="memory-toggle-bar">
-    <label id="memory-toggle-label" for="use-memory-toggle">
-      <input type="checkbox" id="use-memory-toggle" />
-      Use approved memories
-    </label>
-    <span id="memory-toggle-hint">
-      Requires backend <code>MEMORY_INJECTION_ENABLED=true</code>.
-      Only active approved memories may be used.
-    </span>
-  </div>
-
-  <footer id="input-bar">
-    <textarea
-      id="message-input"
-      placeholder="Type a message... (Enter to send, Shift+Enter for newline)"
-      rows="1"
-      autocomplete="off"
-      spellcheck="true"
-    ></textarea>
-    <button id="send-btn">Send</button>
-  </footer>
 
   <script src="renderer.js"></script>
 </body>

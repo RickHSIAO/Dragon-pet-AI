@@ -287,6 +287,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 | TASK-110 | Return-from-Away Greeting | DONE |
 | TASK-111 | Expression Timing Polish | DONE |
 | TASK-112 | Companion Behavior Smoke Tests | DONE |
+| TASK-113 | Sticky Chat Composer / Better Chat Scroll UX | DONE |
 
 **Phase 5 安全邊界（永久性限制）：**
 - Renderer 不自動讀取任何本機檔案
@@ -312,3 +313,4 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 > Status: SIDE TRACK — design exploration only; not scheduled for implementation
 > See: `docs/STREAMER_COMPANION_MODE.md`
+                                        

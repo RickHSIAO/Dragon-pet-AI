@@ -36,6 +36,8 @@ class FakeElement {
     this.title = "";
     this.scrollTop = 0;
     this.scrollHeight = 0;
+    // TASK-113: clientHeight needed for isChatNearBottom() helper
+    this.clientHeight = 0;
     this.rows = 0;
     this.options = [];
     // TASK-083: support innerHTML and data attributes for pet expression checks
@@ -70,7 +72,9 @@ class FakeElement {
     child.parentNode = this;
     this.children.push(child);
     this.lastChild = child;
-    this.scrollHeight = this.children.length;
+    // TASK-113: use Math.max so tests can pre-set a large scrollHeight to
+    // simulate a long chat history without it being overwritten by the append.
+    this.scrollHeight = Math.max(this.scrollHeight, this.children.length);
     return child;
   }
 
@@ -1312,6 +1316,149 @@ async function testPendingStateOverridesGreetingLock() {
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// TASK-113: Sticky Chat Composer / Better Chat Scroll UX
+// ---------------------------------------------------------------------------
+
+async function testChatComposerExistsAndIsNotRemovedByMessageAppend() {
+  // send-btn and message-input must remain in the DOM after messages are
+  // appended — the composer must not be displaced or removed.
+  const { document } = await loadRenderer();
+
+  // Both composer elements must exist at startup.
+  assert.ok(
+    document.getElementById("send-btn"),
+    "send-btn must exist in the DOM at startup"
+  );
+  assert.ok(
+    document.getElementById("message-input"),
+    "message-input must exist at startup"
+  );
+
+  // Send a message and receive an AI reply — append multiple messages.
+  await sendChat(document, "composer persistence test");
+
+  // Composer must still be present after the chat round-trip.
+  assert.ok(
+    document.getElementById("send-btn"),
+    "send-btn must remain in the DOM after message append"
+  );
+  assert.ok(
+    document.getElementById("message-input"),
+    "message-input must remain after message append"
+  );
+}
+
+async function testUserSendScrollsChatToBottom() {
+  // When the user sends a message, the chat area must scroll to the bottom
+  // immediately (autoScroll:true on the user message and loading indicator).
+  const { document } = await loadRenderer({ pauseChat: true });
+
+  const chatArea = document.getElementById("chat-area");
+  // Simulate user having scrolled up (scrollTop = 0, large scrollHeight).
+  chatArea.scrollHeight = 500;
+  chatArea.clientHeight = 200;
+  chatArea.scrollTop = 0; // user is at the top
+
+  document.getElementById("message-input").value = "auto-scroll send test";
+  document.getElementById("send-btn").click();
+  // One tick so appendMessage runs synchronously (no requestAnimationFrame in sandbox).
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  // After the user sends, scrollTop must equal scrollHeight (scrolled to bottom).
+  assert.equal(
+    chatArea.scrollTop,
+    chatArea.scrollHeight,
+    "chat area must scroll to bottom when user sends a message"
+  );
+
+  // Clean up paused chat.
+  const { state } = await loadRenderer({ pauseChat: false });
+  void state; // unused but silences linter
+}
+
+async function testAiReplyDoesNotScrollWhenUserScrolledUp() {
+  // If the user has scrolled up to read history (not near bottom), the AI
+  // reply must NOT force-scroll to the bottom.
+  const { document, state } = await loadRenderer();
+
+  const chatArea = document.getElementById("chat-area");
+  // Set up: large scrollHeight (many messages above), user scrolled to the top.
+  // clientHeight = 200, scrollHeight = 500, scrollTop = 0
+  // → isChatNearBottom() = 500 - 0 - 200 = 300 > 80 → NOT near bottom
+  chatArea.scrollHeight = 500;
+  chatArea.clientHeight = 200;
+  chatArea.scrollTop = 0;
+
+  // Snapshot scrollTop before the chat response arrives.
+  const scrollTopBeforeReply = chatArea.scrollTop;
+
+  await sendChat(document, "scrolled-up ai reply test");
+
+  // scrollTop must NOT have changed to scrollHeight — user's position preserved.
+  assert.equal(
+    chatArea.scrollTop,
+    scrollTopBeforeReply,
+    "chat area must NOT auto-scroll when user is scrolled up reading history"
+  );
+
+  // Source/mood/expression must still update normally.
+  assert.equal(textOf(document, "chat-source-status"), "source: llm_local");
+  assert.equal(textOf(document, "mood-label"), "focused");
+  assert.equal(
+    document.getElementById("pet-face").getAttribute("data-mood"),
+    "focused"
+  );
+  void state;
+}
+
+async function testAiReplyScrollsWhenUserIsNearBottom() {
+  // If the user is near the bottom (default / fresh state), the AI reply
+  // must scroll the chat area to the bottom.
+  const { document } = await loadRenderer();
+
+  const chatArea = document.getElementById("chat-area");
+  // Default FakeElement: scrollHeight = children.length, scrollTop = 0, clientHeight = 0.
+  // With clientHeight = 0: isChatNearBottom() = scrollHeight - 0 - 0 < 80.
+  // After a couple of messages scrollHeight will be a small number < 80 → near bottom.
+  // Verify this is the near-bottom case.
+  assert.ok(
+    chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight < 80,
+    "pre-condition: chat area should be near bottom in default state"
+  );
+
+  await sendChat(document, "near-bottom auto-scroll test");
+
+  // After AI reply, scrollTop must equal scrollHeight (scrolled to bottom).
+  assert.equal(
+    chatArea.scrollTop,
+    chatArea.scrollHeight,
+    "chat area must scroll to bottom when user was near bottom and AI replies"
+  );
+}
+
+async function testScrollHelpersExistInSandbox() {
+  // isChatNearBottom, scrollChatToBottom, maybeScrollChatToBottom must be
+  // accessible as top-level functions in the sandbox (vm.runInNewContext).
+  const { sandbox } = await loadRenderer();
+
+  assert.equal(
+    typeof sandbox.isChatNearBottom,
+    "function",
+    "isChatNearBottom must be a top-level function"
+  );
+  assert.equal(
+    typeof sandbox.scrollChatToBottom,
+    "function",
+    "scrollChatToBottom must be a top-level function"
+  );
+  assert.equal(
+    typeof sandbox.maybeScrollChatToBottom,
+    "function",
+    "maybeScrollChatToBottom must be a top-level function"
+  );
+}
+
 // TASK-112: Phase 5 Companion Behavior Integration Checkpoint
 // ---------------------------------------------------------------------------
 // Each test below verifies a cross-task integration scenario not covered by

@@ -32,7 +32,8 @@ body {
   flex-direction: column;
   overflow-x: hidden;
   overflow-y: auto;
-  padding-bottom: 14px;
+  /* TASK-113: no bottom padding needed — input-bar is sticky, not at page end */
+  padding-bottom: 0;
 }
 
 html {
@@ -894,6 +895,8 @@ textarea {
 }
 
 /* ── Input bar ──────────────────────────────────────────── */
+/* TASK-113: sticky composer — sticks to the bottom of the viewport when      */
+/* the user scrolls into the settings sections below.                          */
 #input-bar {
   background: var(--surface);
   border-top: 1px solid var(--border);
@@ -903,6 +906,10 @@ textarea {
   gap: 10px;
   align-items: flex-end;
   flex-shrink: 0;
+  /* Sticky: stays at viewport bottom when scrolling into settings panels */
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
 }
 
 #message-input {
@@ -972,7 +979,7 @@ textarea {
 @media (max-width: 700px) {
   body {
     font-size: 15px;
-    padding-bottom: 10px;
+    /* TASK-113: padding-bottom removed — sticky input-bar handles bottom spacing */
   }
 
   #header,
