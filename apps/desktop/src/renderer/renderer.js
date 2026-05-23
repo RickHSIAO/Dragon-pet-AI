@@ -95,6 +95,18 @@ let providerSettingsLoaded = false;
 let lastChatSource = "not_checked";
 let lastChatStatusMessage = "No chat response yet.";
 
+// ---------------------------------------------------------------------------
+// Idle State (TASK-108) — Companion Behavior Loop
+// Safety: idle logic is UI-only. No /chat calls, no network, no file access.
+// ---------------------------------------------------------------------------
+const IDLE_THRESHOLD_SHORT_MS  = 3 * 60 * 1000;    // 3 min  → neutral expression + hint
+const IDLE_THRESHOLD_LONG_MS   = 10 * 60 * 1000;   // 10 min → sleepy expression + hint
+const IDLE_THRESHOLD_RETURN_MS = 15 * 60 * 1000;   // 15 min — epoch for return greeting (TASK-110)
+const IDLE_CHECK_INTERVAL_MS   = 60 * 1000;         // polling cadence: 1 min
+
+let lastActivityTime = Date.now();
+let currentIdleState  = "active"; // "active" | "short_idle" | "long_idle"
+
 // Avoid persisting default form values before the backend settings snapshot has
 // been restored and rendered.
 saveProviderSettingsBtn.disabled = true;
@@ -403,6 +415,65 @@ function moodHintLabel(mood) {
   };
   return HINTS[mood] || mood || "";
 }
+
+// ---------------------------------------------------------------------------
+// Idle Timer (TASK-108) — UI-only, no /chat calls
+// ---------------------------------------------------------------------------
+
+/**
+ * Mark user activity, resetting the idle clock.
+ * If returning from idle, restores expression and shows a brief welcome-back hint.
+ *
+ * Safety: no /chat, no fetch, no file access, no external API.
+ * Exposed as a top-level named function so smoke tests can call it directly.
+ */
+function resetActivity() {
+  const wasIdle = currentIdleState !== "active";
+  lastActivityTime = Date.now();
+  currentIdleState = "active";
+
+  if (wasIdle && !isSending) {
+    // Restore expression from idle override back to the current mood.
+    // Treat a sleepy/idle-driven currentMood as neutral (safe fallback).
+    const resumeMood = KNOWN_MOODS.has(currentMood) ? currentMood : "neutral";
+    setPetExpression(resumeMood === "sleepy" ? "neutral" : resumeMood);
+    setPetHint("終於回來了嗎，汝這傢伙。");
+  }
+}
+
+/**
+ * Idle check tick — driven by setInterval(idleTick, IDLE_CHECK_INTERVAL_MS).
+ * Exposed as a top-level named function so renderer smoke tests can call it
+ * directly with a synthetic timestamp to avoid real-time delays.
+ *
+ * @param {number} [_now] - Optional current timestamp in ms. Defaults to Date.now().
+ *   Smoke tests pass a future timestamp to simulate elapsed time without waiting.
+ *   Production code omits this parameter (setInterval calls idleTick with no args).
+ *
+ * State machine (one-way escalation until resetActivity is called):
+ *   active     → short_idle  (elapsed ≥ 3 min):  neutral expression + waiting hint
+ *   short_idle → long_idle   (elapsed ≥ 10 min): sleepy expression  + sleepy hint
+ *   long_idle  : no further state change until resetActivity() is called
+ *
+ * Safety: no /chat, no fetch, no file access. Only touches setPetExpression / setPetHint.
+ */
+function idleTick(_now) {
+  if (isSending) return; // guard: never override loading/response expressions
+  const elapsed = (typeof _now === "number" ? _now : Date.now()) - lastActivityTime;
+  if (elapsed >= IDLE_THRESHOLD_LONG_MS && currentIdleState !== "long_idle") {
+    currentIdleState = "long_idle";
+    setPetExpression("sleepy");
+    setPetHint("哼……吾才沒有等到想睡。");
+  } else if (elapsed >= IDLE_THRESHOLD_SHORT_MS && currentIdleState === "active") {
+    currentIdleState = "short_idle";
+    setPetExpression("neutral");
+    setPetHint("吾在這裡。汝只是暫時發呆吧？");
+  }
+}
+
+// Start the idle check timer — fires every IDLE_CHECK_INTERVAL_MS (60 s in production).
+// Tests bypass this by calling sandbox.idleTick() directly with a mocked Date.
+setInterval(idleTick, IDLE_CHECK_INTERVAL_MS);
 
 function setChatRuntimeStatus(source, message = "", state = "normal") {
   lastChatSource = source || lastChatSource || "not_checked";
@@ -1417,6 +1488,8 @@ clearProviderKeyBtn.addEventListener("click", () => {
 });
 
 // TASK-060: Test Connection button.
+
+// TASK-060: Test Connection button.
 // Sends POST to local backend only. No external provider URL. No api_key in body.
 // Explicit cost acknowledgement required via window.confirm() inside runTestConnection().
 testProviderConnectionBtn.addEventListener("click", () => {
@@ -1469,6 +1542,20 @@ msgInput.addEventListener("input", () => {
   msgInput.style.height = "auto";
   msgInput.style.height = Math.min(msgInput.scrollHeight, 100) + "px";
 });
+
+// TASK-108: idle timer — reset activity on user interactions.
+// Adding extra listeners on existing elements is intentional (stacking is fine).
+// Guards for window/document: addEventListener may be absent in test environments.
+// Safety: resetActivity() is UI-only — no /chat, no fetch, no external API.
+msgInput.addEventListener("keydown", resetActivity);
+msgInput.addEventListener("input",   resetActivity);
+sendBtn.addEventListener("click",    resetActivity);
+if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+  window.addEventListener("focus", resetActivity);
+}
+if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+  document.addEventListener("pointerdown", resetActivity);
+}
 
 // ---------------------------------------------------------------------------
 // Startup

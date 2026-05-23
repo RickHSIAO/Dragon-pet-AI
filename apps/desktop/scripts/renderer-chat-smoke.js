@@ -132,6 +132,14 @@ class FakeImageBase {
 class FakeDocument {
   constructor() {
     this.elements = new Map();
+    // TASK-108: support document.addEventListener (used by idle timer pointerdown guard)
+    this._docListeners = {};
+  }
+
+  // TASK-108: document-level event listener registration (idle timer guard)
+  addEventListener(type, fn) {
+    if (!this._docListeners[type]) this._docListeners[type] = [];
+    this._docListeners[type].push(fn);
   }
 
   getElementById(id) {
@@ -334,6 +342,10 @@ async function loadRenderer(options = {}) {
   // and all pre-TASK-086 tests remain unaffected.
   const availableImages = new Set(options.availableImages || []);
 
+  // TASK-108: fake setInterval — stores callbacks without firing them.
+  // Tests call sandbox.idleTick() directly to avoid real-time waits.
+  const intervalCallbacks = [];
+
   const state = {
     calls: [],
     chatMode: options.chatMode || "success",
@@ -341,6 +353,7 @@ async function loadRenderer(options = {}) {
     resolveChat: null,
     providerSettings: defaultProviderSettings(options.providerSettings || {}),
     availableImages,
+    intervalCallbacks,  // exposed for verification if needed
   };
 
   // FakeImage closes over availableImages so each test run is isolated.
@@ -360,11 +373,20 @@ async function loadRenderer(options = {}) {
         search: "?backend=http%3A%2F%2Flocalhost%3A8000",
       },
       confirm: () => true,
+      // TASK-108: idle timer registers window.addEventListener("focus", ...) — stub it
+      addEventListener() {},
     },
     URLSearchParams,
     fetch: createFetchStub(state),
     setTimeout,
     clearTimeout,
+    // TASK-108: fake setInterval/clearInterval — stores callbacks, never fires them.
+    // Tests invoke sandbox.idleTick() directly.
+    setInterval(fn, ms) {
+      intervalCallbacks.push({ fn, ms });
+      return intervalCallbacks.length; // fake numeric ID
+    },
+    clearInterval() {},
     Image: FakeImage,
     Event: class Event {
       constructor(type, init = {}) {
@@ -825,6 +847,123 @@ function testRendererDoesNotContainDirectOllamaUrl() {
   assert.equal(/\b11434\b/.test(haystack), false);
 }
 
+// ---------------------------------------------------------------------------
+// TASK-108: Idle State UI Behavior tests
+// ---------------------------------------------------------------------------
+
+async function testIdleShortThresholdSetsNeutralExpressionAndHint() {
+  // After 3 min of inactivity, idleTick() should set neutral expression and hint.
+  const { document, state, sandbox } = await loadRenderer();
+
+  // Advance fake clock by 3 min + 1 ms to cross the short threshold
+  sandbox.idleTick(Date.now() + 3 * 60 * 1000 + 1);
+  await settle();
+
+  const petFace = document.getElementById("pet-face");
+  assert.equal(petFace.getAttribute("data-mood"), "neutral",
+    "short idle: expression must be neutral");
+  const hint = document.getElementById("pet-display-hint").textContent;
+  assert.match(hint, /吾在這裡/, "short idle: hint must contain waiting text");
+}
+
+async function testIdleLongThresholdSetsSleepyExpressionAndHint() {
+  // After 10 min of inactivity, idleTick() should set sleepy expression and hint.
+  const { document, state, sandbox } = await loadRenderer();
+
+  // Advance fake clock by 10 min + 1 ms to cross the long threshold
+  sandbox.idleTick(Date.now() + 10 * 60 * 1000 + 1);
+  await settle();
+
+  const petFace = document.getElementById("pet-face");
+  assert.equal(petFace.getAttribute("data-mood"), "sleepy",
+    "long idle: expression must be sleepy");
+  const hint = document.getElementById("pet-display-hint").textContent;
+  assert.match(hint, /哼/, "long idle: hint must contain sleepy tsundere text");
+}
+
+async function testUserInteractionResetsIdleState() {
+  // Enter short_idle, then resetActivity() should restore expression and show return hint.
+  const { document, state, sandbox } = await loadRenderer();
+
+  // Enter short_idle state
+  sandbox.idleTick(Date.now() + 3 * 60 * 1000 + 1);
+  await settle();
+  assert.equal(document.getElementById("pet-face").getAttribute("data-mood"), "neutral",
+    "must be neutral before reset");
+
+  // User interacts — resetActivity() resets the clock
+  sandbox.resetActivity();
+  await settle();
+
+  // After reset, hint shows return greeting
+  const hint = document.getElementById("pet-display-hint").textContent;
+  assert.match(hint, /終於回來/, "return from idle: hint must show welcome-back text");
+  // Expression should be restored (not sleepy)
+  const mood = document.getElementById("pet-face").getAttribute("data-mood");
+  assert.notEqual(mood, "sleepy", "return from idle: expression must not be sleepy");
+}
+
+async function testIdleTickDoesNotCallChatEndpoint() {
+  // idleTick() must never trigger a /chat fetch call.
+  const { state, sandbox } = await loadRenderer();
+  const chatCallsBefore = state.calls.filter((c) => c.url.endsWith("/chat")).length;
+
+  sandbox.idleTick(Date.now() + 10 * 60 * 1000 + 1);
+  await settle();
+
+  const chatCallsAfter = state.calls.filter((c) => c.url.endsWith("/chat")).length;
+  assert.equal(chatCallsAfter, chatCallsBefore,
+    "idleTick must never call /chat — no new chat requests");
+}
+
+async function testIdleTickNotFiredDuringActiveChatRequest() {
+  // idleTick() called while isSending must not override the pending/loading expression.
+  const { document, state, sandbox } = await loadRenderer({ pauseChat: true });
+
+  // Trigger a chat request (sets isSending=true, expression=pending)
+  document.getElementById("message-input").value = "idle during send";
+  document.getElementById("send-btn").click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  // Verify we are in loading state
+  assert.equal(document.getElementById("pet-face").getAttribute("data-mood"), "pending",
+    "must show pending while awaiting response");
+
+  // Advance time past long threshold and tick — must be a no-op since isSending=true
+  sandbox.idleTick(Date.now() + 10 * 60 * 1000 + 1);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  // Expression must still be pending (not sleepy)
+  assert.equal(document.getElementById("pet-face").getAttribute("data-mood"), "pending",
+    "idleTick during send must not override pending expression");
+
+  // Resolve the chat
+  state.resolveChat();
+  await settle();
+}
+
+async function testSourceStatusStillVisibleAfterIdleThenChat() {
+  // After idle -> resetActivity -> send chat, source status must update normally.
+  const { document, state, sandbox } = await loadRenderer();
+
+  // Enter idle state
+  sandbox.idleTick(Date.now() + 3 * 60 * 1000 + 1);
+  await settle();
+
+  // User returns and sends a chat message
+  sandbox.resetActivity();
+  await sendChat(document, "post-idle chat");
+
+  // Source status must reflect the chat response, not idle state
+  assert.equal(
+    document.getElementById("chat-source-status").textContent,
+    "source: llm_local",
+    "source status must update correctly after returning from idle"
+  );
+  assert.equal(document.getElementById("mood-label").textContent, "focused",
+    "mood label must update from chat response after idle");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulLocalChatUpdatesMoodAndSourceStatus();
@@ -856,6 +995,13 @@ async function main() {
   // TASK-098: UI polish tests
   await testChatAreaAccumulatesMultipleMessages();
   await testFriendlySourceLabelShownAfterLocalChat();
+  // TASK-108: idle state behavior tests
+  await testIdleShortThresholdSetsNeutralExpressionAndHint();
+  await testIdleLongThresholdSetsSleepyExpressionAndHint();
+  await testUserInteractionResetsIdleState();
+  await testIdleTickDoesNotCallChatEndpoint();
+  await testIdleTickNotFiredDuringActiveChatRequest();
+  await testSourceStatusStillVisibleAfterIdleThenChat();
   console.log("renderer chat smoke: PASS");
 }
 

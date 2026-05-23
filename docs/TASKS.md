@@ -6201,8 +6201,8 @@ TASK-108 - Idle State UI Behavior
 
 ## TASK-108 — Idle State UI Behavior
 
-**Status:** PENDING
-**Date:** —
+**Status:** DONE
+**Date:** 2026-05-23
 
 ### Goal
 
@@ -6225,6 +6225,16 @@ TASK-108 - Idle State UI Behavior
 - `node --check apps/desktop/src/renderer/renderer.js` PASS（lint clean）
 - `npm run test:renderer` PASS
 - Renderer safety scan：無 Ollama 直連
+
+### 完成記錄
+
+- `renderer.js`：新增 `IDLE_THRESHOLD_SHORT_MS`（3 min）、`IDLE_THRESHOLD_LONG_MS`（10 min）常數；
+  `resetActivity()` 頂層函式（vm sandbox 可存取）；`idleTick(_now)` 接受選用合成時間戳（供測試用）；
+  `setInterval(idleTick, IDLE_CHECK_INTERVAL_MS)` 啟動輪詢；
+  `msgInput / sendBtn / window / document` 互動事件 listener。
+- `renderer-chat-smoke.js`：新增 `FakeDocument.addEventListener`、fake `setInterval`、
+  `window.addEventListener` stub；新增 6 個 idle behavior 測試。
+- 全部驗收條件通過：syntax check PASS、smoke tests PASS（含 6 新測試）、safety scan CLEAN、pytest 586 passed。
 
 ### Next Task
 
