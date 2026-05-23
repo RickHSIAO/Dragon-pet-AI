@@ -36,3 +36,6 @@ backend/data/provider_settings.json.tmp
 
 # Local image drafts
 備選圖/
+
+# Local rejected / draft images
+備選圖/
