@@ -106,6 +106,13 @@ const IDLE_CHECK_INTERVAL_MS   = 60 * 1000;         // polling cadence: 1 min
 
 let lastActivityTime = Date.now();
 let currentIdleState  = "active"; // "active" | "short_idle" | "long_idle"
+// TASK-110: return-from-away greeting flags.
+// awayGreetingEligible: set by idleTick once elapsed ≥ IDLE_THRESHOLD_RETURN_MS;
+//   cleared after greeting fires.
+// awayGreetingFired: spam guard — prevents duplicate greeting within the same away
+//   session; reset when user re-enters long_idle so the next away cycle works.
+let awayGreetingEligible = false;
+let awayGreetingFired    = false;
 
 // Avoid persisting default form values before the backend settings snapshot has
 // been restored and rendered.
@@ -429,12 +436,24 @@ function moodHintLabel(mood) {
  */
 function resetActivity() {
   const wasIdle = currentIdleState !== "active";
+  // TASK-110: capture return-from-away eligibility BEFORE resetting state.
+  // awayGreetingEligible is set by idleTick when elapsed ≥ 15 min.
+  // awayGreetingFired prevents the same away session from showing the greeting twice.
+  const shouldReturnGreet = awayGreetingEligible && !awayGreetingFired;
   lastActivityTime = Date.now();
   currentIdleState = "active";
 
-  if (wasIdle && !isSending) {
-    // Restore expression from idle override back to the current mood.
-    // Treat a sleepy/idle-driven currentMood as neutral (safe fallback).
+  if (isSending) return; // never override loading expression
+
+  if (shouldReturnGreet) {
+    // TASK-110: long-away return greeting — shown once per away session.
+    // Safety: no /chat, no fetch, no network, no external API.
+    awayGreetingEligible = false;
+    awayGreetingFired    = true;
+    setPetExpression("annoyed");
+    setPetHint("哼，汝終於回來了。吾才沒有一直等汝。");
+  } else if (wasIdle) {
+    // Short/medium idle return — restore expression and show brief welcome-back.
     const resumeMood = KNOWN_MOODS.has(currentMood) ? currentMood : "neutral";
     setPetExpression(resumeMood === "sleepy" ? "neutral" : resumeMood);
     setPetHint("終於回來了嗎，汝這傢伙。");
@@ -459,15 +478,27 @@ function resetActivity() {
  */
 function idleTick(_now) {
   if (isSending) return; // guard: never override loading/response expressions
-  const elapsed = (typeof _now === "number" ? _now : Date.now()) - lastActivityTime;
+  const now = typeof _now === "number" ? _now : Date.now();
+  const elapsed = now - lastActivityTime;
   if (elapsed >= IDLE_THRESHOLD_LONG_MS && currentIdleState !== "long_idle") {
     currentIdleState = "long_idle";
     setPetExpression("sleepy");
     setPetHint("哼……吾才沒有等到想睡。");
+    // TASK-110: entering long_idle resets the spam guard so the next away → return
+    // cycle is allowed to fire the return greeting once more.
+    awayGreetingFired = false;
   } else if (elapsed >= IDLE_THRESHOLD_SHORT_MS && currentIdleState === "active") {
     currentIdleState = "short_idle";
     setPetExpression("neutral");
     setPetHint("吾在這裡。汝只是暫時發呆吧？");
+  }
+  // TASK-110: mark eligible when ≥ 15 min have elapsed and user is in long_idle.
+  // This flag is consumed (and cleared) by resetActivity() the next time the user
+  // interacts, showing the one-shot return greeting.
+  if (currentIdleState === "long_idle" &&
+      elapsed >= IDLE_THRESHOLD_RETURN_MS &&
+      !awayGreetingFired) {
+    awayGreetingEligible = true;
   }
 }
 

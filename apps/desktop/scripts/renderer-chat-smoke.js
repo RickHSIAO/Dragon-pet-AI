@@ -1033,6 +1033,129 @@ async function testIdleStillWorksAfterStartupGreeting() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// TASK-110: Return-from-away greeting tests
+// ---------------------------------------------------------------------------
+
+async function testReturnFromLongIdleShowsReturnGreeting() {
+  // After ≥ 15 min idle, the first resetActivity() call must show the
+  // long-away return greeting ("哼，汝終於回來了。吾才沒有一直等汝。")
+  // and set annoyed expression. No /chat is called.
+  const { document, sandbox } = await loadRenderer();
+
+  // Advance past long-away threshold (15 min + 1 ms)
+  sandbox.idleTick(Date.now() + 15 * 60 * 1000 + 1);
+  await settle();
+
+  // Verify long_idle state was entered and awayGreetingEligible was set
+  // (idleTick crosses 10-min first, then 15-min in one shot here)
+  sandbox.resetActivity();
+  await settle();
+
+  const hint = document.getElementById("pet-display-hint").textContent;
+  assert.match(hint, /吾才沒有/, "long-away return: hint must contain 吾才沒有");
+  assert.match(hint, /終於回來了/, "long-away return: hint must contain 終於回來了");
+
+  const mood = document.getElementById("pet-face").getAttribute("data-mood");
+  assert.equal(mood, "annoyed", "long-away return: expression must be annoyed");
+}
+
+async function testReturnGreetingDoesNotCallChat() {
+  // resetActivity() after long idle must NEVER trigger a /chat fetch.
+  const { state, sandbox } = await loadRenderer();
+
+  sandbox.idleTick(Date.now() + 15 * 60 * 1000 + 1);
+  await settle();
+
+  const chatCallsBefore = state.calls.filter((c) => c.url.endsWith("/chat")).length;
+  sandbox.resetActivity();
+  await settle();
+
+  const chatCallsAfter = state.calls.filter((c) => c.url.endsWith("/chat")).length;
+  assert.equal(
+    chatCallsAfter,
+    chatCallsBefore,
+    "return greeting must not call /chat — no new chat requests"
+  );
+}
+
+async function testReturnGreetingOnlyFiresOncePerAwaySession() {
+  // Within the same away session, the return greeting must appear only once.
+  // Subsequent resetActivity() calls (user keeps interacting) must not repeat it.
+  const { document, sandbox } = await loadRenderer();
+
+  sandbox.idleTick(Date.now() + 15 * 60 * 1000 + 1);
+  await settle();
+
+  // First return — shows greeting
+  sandbox.resetActivity();
+  await settle();
+  const firstHint = document.getElementById("pet-display-hint").textContent;
+  assert.match(firstHint, /吾才沒有/, "first return must show long-away greeting");
+
+  // Second interaction immediately after — must NOT repeat the return greeting
+  // (wasIdle=false now, awayGreetingFired=true)
+  sandbox.resetActivity();
+  await settle();
+  const secondHint = document.getElementById("pet-display-hint").textContent;
+  // Hint should still be the greeting from the first call (no override for short idle)
+  assert.match(secondHint, /吾才沒有/,
+    "second resetActivity must not clear the greeting (hint unchanged, no wasIdle)");
+  // Critically: the second call must NOT have changed the expression to a different mood
+  const mood = document.getElementById("pet-face").getAttribute("data-mood");
+  assert.equal(mood, "annoyed", "expression must stay annoyed after second reset");
+}
+
+async function testShortIdleDoesNotTriggerReturnGreeting() {
+  // Only ≥ 15 min idle triggers the long-away greeting.
+  // 3-min idle should give the regular short-return hint, not the away greeting.
+  const { document, sandbox } = await loadRenderer();
+
+  // Cross only the short_idle threshold (3 min)
+  sandbox.idleTick(Date.now() + 3 * 60 * 1000 + 1);
+  await settle();
+
+  sandbox.resetActivity();
+  await settle();
+
+  const hint = document.getElementById("pet-display-hint").textContent;
+  assert.doesNotMatch(
+    hint,
+    /吾才沒有/,
+    "short idle must not show long-away return greeting"
+  );
+  assert.match(hint, /終於回來了嗎/, "short idle return must show regular return hint");
+}
+
+async function testReturnGreetingResetAfterReenteringLongIdle() {
+  // After a return greeting fires, the user must be able to get another one
+  // on the NEXT long-idle → return cycle.
+  const { document, sandbox } = await loadRenderer();
+
+  // ── First away cycle ──
+  sandbox.idleTick(Date.now() + 15 * 60 * 1000 + 1);
+  await settle();
+  sandbox.resetActivity(); // greeting fires, awayGreetingFired=true
+  await settle();
+  const firstHint = document.getElementById("pet-display-hint").textContent;
+  assert.match(firstHint, /吾才沒有/, "first away cycle must show greeting");
+
+  // ── User is now active (resetActivity set lastActivityTime ≈ Date.now()) ──
+  // ── Second away cycle: idle again for 15+ min ──
+  // idleTick at 10 min → enters long_idle, resets awayGreetingFired=false
+  sandbox.idleTick(Date.now() + 10 * 60 * 1000 + 1);
+  await settle();
+  // idleTick at 15 min → marks awayGreetingEligible=true
+  sandbox.idleTick(Date.now() + 15 * 60 * 1000 + 1);
+  await settle();
+
+  sandbox.resetActivity(); // should fire greeting again for this new away session
+  await settle();
+  const secondHint = document.getElementById("pet-display-hint").textContent;
+  assert.match(secondHint, /吾才沒有/,
+    "second away cycle must also show greeting after re-entering long_idle");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulLocalChatUpdatesMoodAndSourceStatus();
@@ -1076,6 +1199,12 @@ async function main() {
   await testStartupGreetingExpressionIsProud();
   await testStartupGreetingDoesNotCallChat();
   await testIdleStillWorksAfterStartupGreeting();
+  // TASK-110: return-from-away greeting tests
+  await testReturnFromLongIdleShowsReturnGreeting();
+  await testReturnGreetingDoesNotCallChat();
+  await testReturnGreetingOnlyFiresOncePerAwaySession();
+  await testShortIdleDoesNotTriggerReturnGreeting();
+  await testReturnGreetingResetAfterReenteringLongIdle();
   console.log("renderer chat smoke: PASS");
 }
 

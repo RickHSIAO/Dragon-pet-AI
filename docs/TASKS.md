@@ -6283,28 +6283,40 @@ TASK-110 - Return-from-Away Greeting
 
 ## TASK-110 — Return-from-Away Greeting
 
-**Status:** PENDING
-**Date:** —
+**Status:** DONE
+**Date:** 2026-05-23
 
 ### Goal
 
-使用者在長時間 idle（≥ 15 分鐘）後重新互動時，在 `/chat` 請求之前插入一句 return greeting。
-設定 `setPetExpression("happy")`。不修改 `/chat` 請求或回應格式。
+使用者在長時間 idle（≥ 15 分鐘）後重新互動時，顯示一句 return greeting。
+設定 `setPetExpression("annoyed")`。不修改 `/chat` 請求或回應格式，不呼叫 LLM。
 
 ### 範圍
 
-- `RETURN_THRESHOLD = 15 分鐘`
-- long-idle 後首次互動 → 插入 pre-written return greeting
-- `hasReturnGreetedThisSession` flag（每次 long-idle 後可重設一次）
+- `IDLE_THRESHOLD_RETURN_MS = 15 分鐘`（已存在於常數）
+- `awayGreetingEligible` flag：`idleTick` 於 elapsed ≥ 15 min 時設為 true
+- `awayGreetingFired` flag：spam guard，同一次 away 只觸發一次；進入 long_idle 時重設
+- long-idle（≥ 10 min）後首次互動 + elapsed ≥ 15 min → 顯示 return greeting
 - 短時間 idle 不觸發
+- **不呼叫 `/chat`**
 - **不修改 `/chat` schema**
 
 ### 驗收條件
 
-- long-idle 後互動可見 return greeting
-- 短 idle 後互動不觸發
-- `node --check` PASS
-- `npm run test:renderer` PASS
+- long-idle 後互動可見 return greeting ✓
+- 短 idle 後互動不觸發 ✓
+- 同一次 away 只觸發一次 ✓
+- 再次進入 long_idle 後可再次觸發 ✓
+- `node --check` PASS ✓
+- `npm run test:renderer` PASS（含 5 個新測試）✓
+
+### 完成記錄
+
+- `renderer.js`：新增 `awayGreetingEligible`、`awayGreetingFired` 兩個狀態變數；
+  更新 `idleTick()` — 進入 long_idle 重設 `awayGreetingFired`，elapsed ≥ 15 min 設 `awayGreetingEligible`；
+  更新 `resetActivity()` — 若 `shouldReturnGreet` 則顯示「哼，汝終於回來了。吾才沒有一直等汝。」+ annoyed 表情。
+- `renderer-chat-smoke.js`：新增 5 個測試（greeting visible、no /chat、spam guard、short-idle no trigger、re-entry reset）。
+- 全部驗收通過：syntax check PASS、smoke 全部通過、safety scan CLEAN、pytest 586 passed、git diff --check CLEAN。
 
 ### Next Task
 
