@@ -699,15 +699,19 @@ async function testProviderTimeoutSetsErrorExpression() {
 // TASK-086: Image asset fallback tests
 // ---------------------------------------------------------------------------
 async function testNeutralMoodUsesPngImageWhenAvailable() {
-  // Startup triggers setMood("neutral") → setPetExpression("neutral").
+  // TASK-109: startup now ends with setPetExpression("proud"), so we explicitly
+  // call setMood("neutral") after startup to test the neutral PNG load path.
   // With neutral PNG marked available, FakeImage fires onload → petFace gets <img>.
   const NEUTRAL_PATH = "assets/pet/christina/expressions/christina_neutral.png";
-  const { document } = await loadRenderer({
+  const { document, sandbox } = await loadRenderer({
     availableImages: [NEUTRAL_PATH],
   });
 
+  // Explicitly set neutral mood to trigger the neutral PNG probe.
+  sandbox.setMood("neutral");
+  await settle();
+
   const petFace = document.getElementById("pet-face");
-  // data-mood is set synchronously before the async probe
   assert.equal(petFace.getAttribute("data-mood"), "neutral");
   // After settle(), onload has fired and SVG was replaced by <img>
   assert.equal(petFace.children.length, 1);
@@ -739,11 +743,13 @@ async function testIntegratedMoodPngAssetsLoadWhenAvailable() {
 
 async function testPngLoadFailureFallsBackToSvg() {
   // No PNG available (default) → FakeImage fires onerror → SVG placeholder stays.
+  // TASK-109: startup ends with setPetExpression("proud"), so data-mood is now "proud".
   const { document } = await loadRenderer();
 
   const petFace = document.getElementById("pet-face");
-  assert.equal(petFace.getAttribute("data-mood"), "neutral");
-  // SVG string remains in innerHTML; no IMG child was added
+  assert.equal(petFace.getAttribute("data-mood"), "proud",
+    "startup greeting sets proud expression; PNG fallback must still show SVG");
+  // SVG string remains in innerHTML; no IMG child was added (no proud PNG available)
   assert.match(petFace.innerHTML, /<svg/);
   assert.equal(petFace.children.length, 0);
 }
@@ -964,6 +970,69 @@ async function testSourceStatusStillVisibleAfterIdleThenChat() {
     "mood label must update from chat response after idle");
 }
 
+// ---------------------------------------------------------------------------
+// TASK-109: Startup greeting tests
+// ---------------------------------------------------------------------------
+
+async function testStartupGreetingHintIsVisible() {
+  // After a successful startup, pet-display-hint must show the greeting text.
+  // No /chat is called; this is a purely static UI update.
+  const { document } = await loadRenderer();
+
+  const hint = document.getElementById("pet-display-hint").textContent;
+  assert.match(
+    hint,
+    /哼，汝終於把吾叫醒/,
+    "startup greeting hint must contain character greeting text"
+  );
+}
+
+async function testStartupGreetingExpressionIsProud() {
+  // After startup the pet face must show the "proud" expression.
+  const { document } = await loadRenderer();
+
+  const mood = document.getElementById("pet-face").getAttribute("data-mood");
+  assert.equal(mood, "proud", "startup greeting expression must be proud");
+}
+
+async function testStartupGreetingDoesNotCallChat() {
+  // Startup greeting must NEVER trigger a /chat fetch.
+  const { state } = await loadRenderer();
+
+  const chatCalls = state.calls.filter((c) => c.url.endsWith("/chat"));
+  assert.equal(
+    chatCalls.length,
+    0,
+    "startup greeting must not call /chat — no automatic chat requests"
+  );
+}
+
+async function testIdleStillWorksAfterStartupGreeting() {
+  // After startup greeting, idle timer must still fire normally.
+  // 3-min idle → neutral expression + idle hint (overrides greeting).
+  const { document, sandbox } = await loadRenderer();
+
+  // Verify greeting is showing first
+  const greetingHint = document.getElementById("pet-display-hint").textContent;
+  assert.match(greetingHint, /哼，汝終於把吾叫醒/, "greeting must be visible before idle");
+
+  // Advance past short idle threshold
+  sandbox.idleTick(Date.now() + 3 * 60 * 1000 + 1);
+  await settle();
+
+  const idleHint = document.getElementById("pet-display-hint").textContent;
+  assert.match(
+    idleHint,
+    /吾在這裡/,
+    "idle hint must override startup greeting after 3 min"
+  );
+  assert.equal(
+    document.getElementById("pet-face").getAttribute("data-mood"),
+    "neutral",
+    "idle must set neutral expression even after startup greeting"
+  );
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulLocalChatUpdatesMoodAndSourceStatus();
@@ -1002,6 +1071,11 @@ async function main() {
   await testIdleTickDoesNotCallChatEndpoint();
   await testIdleTickNotFiredDuringActiveChatRequest();
   await testSourceStatusStillVisibleAfterIdleThenChat();
+  // TASK-109: startup greeting tests
+  await testStartupGreetingHintIsVisible();
+  await testStartupGreetingExpressionIsProud();
+  await testStartupGreetingDoesNotCallChat();
+  await testIdleStillWorksAfterStartupGreeting();
   console.log("renderer chat smoke: PASS");
 }
 

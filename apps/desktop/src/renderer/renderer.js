@@ -1571,6 +1571,12 @@ if (typeof document !== "undefined" && typeof document.addEventListener === "fun
       chatArea.lastChild.remove();
       appendMessage("pet", "Hey. I'm here. What's on your mind?");
       setMood("neutral"); // also initialises pet expression and friendly hint via setPetExpression / moodHintLabel
+      // TASK-109: Startup greeting — static character line, no /chat call, no backend request.
+      // setPetExpression("proud") overrides the neutral set above; currentMood stays "neutral"
+      // so idle timer restores correctly after inactivity.
+      // Safety: this line contains no user data, no LLM call, no network request.
+      setPetExpression("proud");
+      setPetHint("哼，汝終於把吾叫醒了。今天也要好好努力，知道嗎？");
       await loadMemories();
       await loadMemoryContextPreview();
       await loadAuditLogs();

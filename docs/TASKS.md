@@ -6244,28 +6244,36 @@ TASK-109 - Startup Greeting
 
 ## TASK-109 — Startup Greeting
 
-**Status:** PENDING
-**Date:** —
+**Status:** DONE
+**Date:** 2026-05-23
 
 ### Goal
 
-App 啟動（`DOMContentLoaded`）時，依前端系統時段顯示一句 pre-written 問候語，
-設定 `setPetExpression("happy")`。不依賴 LLM，不呼叫 `/chat`。
+App 啟動成功後，在 pet hint 區域顯示一句靜態角色問候語，
+設定 `setPetExpression("proud")`。不依賴 LLM，不呼叫 `/chat`。
 
 ### 範圍
 
-- 4 個時段：早晨（6–11）、下午（12–17）、傍晚（18–22）、深夜（23–5）
-- 問候語以 assistant 樣式顯示在聊天區
-- `hasGreetedThisSession` flag 防止重複（每 session 只觸發一次）
-- `new Date().getHours()` 判斷時段（不上傳時間資訊至 backend）
-- **不呼叫 `/chat`**（pre-written，避免依賴 LLM 可用性）
+- `setPetExpression("proud")` + `setPetHint("哼，汝終於把吾叫醒了。今天也要好好努力，知道嗎？")`
+- 於 startup IIFE `setMood("neutral")` 之後立即呼叫
+- `currentMood` 維持 "neutral"，idle timer restore 正確
+- **不呼叫 `/chat`**（純靜態 UI 更新，不依賴 LLM 可用性）
 
 ### 驗收條件
 
-- app 啟動可見問候語
-- 不同時段語氣正確
-- `node --check` PASS
-- `npm run test:renderer` PASS
+- app 啟動後 pet-display-hint 含問候語 ✓
+- startup 後 pet-face data-mood = "proud" ✓
+- 無 /chat 呼叫 ✓
+- idle 3 分鐘後 hint 正常切換（問候語被覆蓋）✓
+- `node --check` PASS ✓
+- `npm run test:renderer` PASS（含 4 個新測試）✓
+- 受影響的 TASK-086 PNG fallback 測試已更新（testNeutralMoodUsesPngImageWhenAvailable、testPngLoadFailureFallsBackToSvg）✓
+
+### 完成記錄
+
+- `renderer.js`：在 startup IIFE 的 `setMood("neutral")` 之後加入 `setPetExpression("proud")` 與 `setPetHint(greeting)`。
+- `renderer-chat-smoke.js`：新增 4 個測試（hint visible、expression proud、no /chat、idle still works）；更新 2 個受影響的 TASK-086 PNG 測試。
+- 全部驗收通過：syntax check PASS、smoke 全部通過（含新測試）、safety scan CLEAN、pytest 586 passed、git diff --check CLEAN。
 
 ### Next Task
 
