@@ -113,6 +113,12 @@ let currentIdleState  = "active"; // "active" | "short_idle" | "long_idle"
 //   session; reset when user re-enters long_idle so the next away cycle works.
 let awayGreetingEligible = false;
 let awayGreetingFired    = false;
+// TASK-111: companion hint lock — idleTick will not override important greetings
+// for HINT_LOCK_MS ms after they are shown. High-priority states (chat response,
+// pending, error, offline) bypass the lock entirely by calling setPetExpression
+// directly; only idleTick checks the lock.
+const HINT_LOCK_MS = 8 * 1000; // 8 seconds
+let hintLockedUntil = 0;       // epoch ms; 0 = always unlocked
 
 // Avoid persisting default form values before the backend settings snapshot has
 // been restored and rendered.
@@ -428,6 +434,20 @@ function moodHintLabel(mood) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Lock the companion hint/expression against idleTick overrides for durationMs ms.
+ * Startup greeting and return-from-away greeting call this so the idle timer cannot
+ * immediately replace the greeting hint with a low-priority idle update.
+ *
+ * Exposed as a top-level named function so smoke tests can extend the lock with a
+ * large value to test lock behaviour without real-time delays.
+ *
+ * Safety: no /chat, no fetch, no external API. Pure timestamp arithmetic.
+ */
+function lockCompanionHint(durationMs) {
+  hintLockedUntil = Date.now() + durationMs;
+}
+
+/**
  * Mark user activity, resetting the idle clock.
  * If returning from idle, restores expression and shows a brief welcome-back hint.
  *
@@ -452,6 +472,7 @@ function resetActivity() {
     awayGreetingFired    = true;
     setPetExpression("annoyed");
     setPetHint("哼，汝終於回來了。吾才沒有一直等汝。");
+    lockCompanionHint(HINT_LOCK_MS); // TASK-111: protect return greeting from idle override
   } else if (wasIdle) {
     // Short/medium idle return — restore expression and show brief welcome-back.
     const resumeMood = KNOWN_MOODS.has(currentMood) ? currentMood : "neutral";
@@ -480,17 +501,24 @@ function idleTick(_now) {
   if (isSending) return; // guard: never override loading/response expressions
   const now = typeof _now === "number" ? _now : Date.now();
   const elapsed = now - lastActivityTime;
+  // TASK-111: hint lock — state machine always advances, but expression/hint changes
+  // are suppressed while a greeting lock is active. High-priority states (pending,
+  // error, chat response) bypass this entirely since they call setPetExpression directly.
+  const locked = now < hintLockedUntil;
   if (elapsed >= IDLE_THRESHOLD_LONG_MS && currentIdleState !== "long_idle") {
     currentIdleState = "long_idle";
-    setPetExpression("sleepy");
-    setPetHint("哼……吾才沒有等到想睡。");
-    // TASK-110: entering long_idle resets the spam guard so the next away → return
-    // cycle is allowed to fire the return greeting once more.
+    // TASK-110: entering long_idle resets the spam guard.
     awayGreetingFired = false;
+    if (!locked) {
+      setPetExpression("sleepy");
+      setPetHint("哼……吾才沒有等到想睡。");
+    }
   } else if (elapsed >= IDLE_THRESHOLD_SHORT_MS && currentIdleState === "active") {
     currentIdleState = "short_idle";
-    setPetExpression("neutral");
-    setPetHint("吾在這裡。汝只是暫時發呆吧？");
+    if (!locked) {
+      setPetExpression("neutral");
+      setPetHint("吾在這裡。汝只是暫時發呆吧？");
+    }
   }
   // TASK-110: mark eligible when ≥ 15 min have elapsed and user is in long_idle.
   // This flag is consumed (and cleared) by resetActivity() the next time the user
@@ -1608,6 +1636,7 @@ if (typeof document !== "undefined" && typeof document.addEventListener === "fun
       // Safety: this line contains no user data, no LLM call, no network request.
       setPetExpression("proud");
       setPetHint("哼，汝終於把吾叫醒了。今天也要好好努力，知道嗎？");
+      lockCompanionHint(HINT_LOCK_MS); // TASK-111: protect startup greeting from idle override
       await loadMemories();
       await loadMemoryContextPreview();
       await loadAuditLogs();

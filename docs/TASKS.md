@@ -6305,17 +6305,18 @@ TASK-110 - Return-from-Away Greeting
 
 - long-idle 後互動可見 return greeting ✓
 - 短 idle 後互動不觸發 ✓
-- 同一次 away 只觸發一次 ✓
-- 再次進入 long_idle 後可再次觸發 ✓
+- 同一次 away- 同一次 away 只觸發一次 ✓
+- 重新進入 long_idle 可重置資格 ✓
+- 無 /chat 呼叫 ✓
 - `node --check` PASS ✓
-- `npm run test:renderer` PASS（含 5 個新測試）✓
+- `npm run test:renderer` PASS（含 5 個新測試） ✓
 
 ### 完成記錄
 
-- `renderer.js`：新增 `awayGreetingEligible`、`awayGreetingFired` 兩個狀態變數；
-  更新 `idleTick()` — 進入 long_idle 重設 `awayGreetingFired`，elapsed ≥ 15 min 設 `awayGreetingEligible`；
-  更新 `resetActivity()` — 若 `shouldReturnGreet` 則顯示「哼，汝終於回來了。吾才沒有一直等汝。」+ annoyed 表情。
-- `renderer-chat-smoke.js`：新增 5 個測試（greeting visible、no /chat、spam guard、short-idle no trigger、re-entry reset）。
+- `renderer.js`：新增 `IDLE_THRESHOLD_RETURN_MS`、`awayGreetingEligible`、`awayGreetingFired` 狀態變數；
+  `idleTick` 新增 elapsed ≥ 15 min 時設 `awayGreetingEligible = true`；
+  `resetActivity` 新增 return greeting 邏輯：`awayGreetingEligible && !awayGreetingFired` 時顯示 annoyed 表情與 hint；進入 long_idle 時重設 `awayGreetingFired = false`。
+- `renderer-chat-smoke.js`：新增 5 個測試（return greeting 可觸發、no /chat、spam guard、short idle 不觸發、re-entry reset）。
 - 全部驗收通過：syntax check PASS、smoke 全部通過、safety scan CLEAN、pytest 586 passed、git diff --check CLEAN。
 
 ### Next Task
@@ -6326,60 +6327,41 @@ TASK-111 - Expression Timing Polish
 
 ## TASK-111 — Expression Timing Polish
 
-**Status:** PENDING
-**Date:** —
+**Status:** DONE
+**Date:** 2026-05-23
 
 ### Goal
 
-細化表情切換時機，確保 `/chat` response mood 不被 idle timer 覆蓋，
-loading 期間顯示 `"focused"`，transition 行為一致。
+改善表情與 hint 的 timing，避免 startup greeting、idle hint、return greeting
+被其他狀態太快覆蓋。保持 UI-only，不新增 backend、不呼叫 LLM。
 
 ### 範圍
 
-- `/chat` loading 期間確認顯示 `"focused"` 表情
-- `/chat` 回應後立即套用 backend `mood` 欄位（優先於 idle state）
-- idle timer 只在無活躍 `/chat` 請求時觸發切換
-- CSS transition 確認一致（若已有）
+- `HINT_LOCK_MS = 8000`：重要 greeting 後的 hint lock 期間
+- `hintLockedUntil`：timestamp；`lockCompanionHint(durationMs)` 頂層函式（vm sandbox 可存取）
+- `idleTick` 検查 `now < hintLockedUntil`；lock 期間不覆蓋 hint/expression
+- startup greeting （TASK-109）後立即呼叫 `lockCompanionHint(HINT_LOCK_MS)`
+- return-from-away greeting （TASK-110）後立即呼叫 `lockCompanionHint(HINT_LOCK_MS)`
+- error/offline/pending 仍可覆蓋（重要 runtime 狀態，不検查 lock）
+- chat response mood 仍可覆蓋（`setMood` 直接呼叫 `setPetExpression`，不検查 lock）
+- **不呼叫 `/chat`**
+- **不修改 `/chat` schema**
 
 ### 驗收條件
 
-- `/chat` 回應 mood 不被 idle 覆蓋
-- loading 表情正確
-- `node --check` PASS
-- `npm run test:renderer` PASS
+- startup lock 阻止 idleTick 覆蓋 greeting ✓
+- lock 過期後 idle 正常生效 ✓
+- return greeting lock 阻止 idleTick 覆蓋 ✓
+- chat response mood 可覆蓋 lock ✓
+- pending/error/offline 可覆蓋 lock ✓
+- `node --check` PASS ✓
+- `npm run test:renderer` PASS（含 5 個新測試） ✓
 
-### Next Task
+### 完成記錄
 
-TASK-112 - Companion Behavior Smoke Tests
-
----
-
-## TASK-112 — Companion Behavior Smoke Tests
-
-**Status:** PENDING
-**Date:** —
-
-### Goal
-
-為 TASK-108～111 新增 renderer smoke 測試，確保 companion behavior 邏輯正確且不破壞現有行為。
-不修改 backend tests。
-
-### 範圍
-
-- idle timer 單元測試（mock `Date.now()`，驗證 `setPetExpression` 呼叫）
-- startup greeting 測試（DOM 載入後訊息存在、flag 防重複）
-- return greeting 測試（long-idle 後首次互動觸發；短 idle 不觸發）
-- expression 衝突測試（`/chat` response mood 優先於 idle mood）
-- renderer smoke test count 從 24 增加
-
-### 驗收條件
-
-- `npm run test:renderer` PASS（含新增測試）
-- `node --check` PASS
-- 所有 companion behavior 場景有測試覆蓋
-
-### Next Task
-
-TASK-113 - TBD
-
----
+- `renderer.js`：新增 `HINT_LOCK_MS = 8000`、`hintLockedUntil = 0`、`lockCompanionHint(durationMs)` 頂層函式；
+  `idleTick` 新增 `locked` 検查；lock 期間跳過 hint/expression 更新；
+  startup IIFE `setPetHint(greeting)` 後呼叫 `lockCompanionHint(HINT_LOCK_MS)`；
+  `resetActivity` 的 return greeting 後呼叫 `lockCompanionHint(HINT_LOCK_MS)`。
+- `renderer-chat-smoke.js`：新增 5 個測試（startup lock 阻止 idle、lock 過期可 idle、return lock 阻止 idle、chat 可覆蓋、pending 可覆蓋）。
+- 全部驗收通過：syntax check PASS、smoke 全部通過（含 TASK-108、109、110、111 所有測試）、safety scan CLEAN、pytest 586 passed、git diff --check CLEAN。

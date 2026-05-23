@@ -1156,6 +1156,161 @@ async function testReturnGreetingResetAfterReenteringLongIdle() {
     "second away cycle must also show greeting after re-entering long_idle");
 }
 
+// ---------------------------------------------------------------------------
+// TASK-111: Companion hint lock tests
+// ---------------------------------------------------------------------------
+
+async function testStartupGreetingLocksHintFromIdleTransition() {
+  // idleTick must not override the startup greeting while the lock is active.
+  // We extend the lock to 10 min via sandbox.lockCompanionHint so it outlasts
+  // the synthetic 3-min idle tick.
+  const { document, sandbox } = await loadRenderer();
+
+  // Verify startup greeting is showing
+  const greetingHint = document.getElementById("pet-display-hint").textContent;
+  assert.match(greetingHint, /哼，汝終於把吾叫醒/, "startup greeting must be visible");
+
+  // Extend the lock so it spans the synthetic tick timestamp
+  sandbox.lockCompanionHint(10 * 60 * 1000); // 10 min >> 3-min idle threshold
+
+  // Fire idleTick at 3-min threshold — would normally switch hint to idle text
+  sandbox.idleTick(Date.now() + 3 * 60 * 1000 + 1);
+  await settle();
+
+  // Hint must still show the startup greeting (lock protected it)
+  const hintAfter = document.getElementById("pet-display-hint").textContent;
+  assert.match(
+    hintAfter,
+    /哼，汝終於把吾叫醒/,
+    "hint lock must protect startup greeting from idle transition"
+  );
+  // Expression must also be unchanged
+  assert.equal(
+    document.getElementById("pet-face").getAttribute("data-mood"),
+    "proud",
+    "hint lock must protect proud expression from idle transition"
+  );
+}
+
+async function testGreetingLockExpiresAllowingIdleHint() {
+  // Once the 8-second lock expires, idleTick should update hint and expression normally.
+  // A synthetic timestamp past the lock expiry (8 s) + idle threshold (3 min) must work.
+  const { document, sandbox } = await loadRenderer();
+
+  // Verify startup greeting and lock are in place
+  const HINT_LOCK_MS = 8 * 1000;
+  assert.match(
+    document.getElementById("pet-display-hint").textContent,
+    /哼，汝終於把吾叫醒/,
+    "startup greeting must be showing before lock expiry test"
+  );
+
+  // Tick past both lock expiry and 3-min idle threshold
+  // (now = Date.now() + HINT_LOCK_MS + 1 + 3 min > hintLockedUntil ≈ Date.now() + 8s)
+  sandbox.idleTick(Date.now() + HINT_LOCK_MS + 1 + 3 * 60 * 1000);
+  await settle();
+
+  // Lock is expired → idle transition applies
+  assert.match(
+    document.getElementById("pet-display-hint").textContent,
+    /吾在這裡/,
+    "expired lock: idle hint must replace startup greeting"
+  );
+  assert.equal(
+    document.getElementById("pet-face").getAttribute("data-mood"),
+    "neutral",
+    "expired lock: idle neutral expression must be applied"
+  );
+}
+
+async function testReturnGreetingLocksHintFromIdleTransition() {
+  // Return-from-away greeting must also be protected by the hint lock.
+  const { document, sandbox } = await loadRenderer();
+
+  // Enter long idle + eligibility
+  sandbox.idleTick(Date.now() + 15 * 60 * 1000 + 1);
+  await settle();
+
+  // User returns — shows return greeting + sets 8-second lock
+  sandbox.resetActivity();
+  await settle();
+  assert.match(
+    document.getElementById("pet-display-hint").textContent,
+    /吾才沒有/,
+    "return greeting must be showing"
+  );
+
+  // Extend the lock so it outlasts the synthetic idle tick
+  sandbox.lockCompanionHint(10 * 60 * 1000);
+
+  // Idle tick at 3-min threshold — must NOT override return greeting
+  sandbox.idleTick(Date.now() + 3 * 60 * 1000 + 1);
+  await settle();
+
+  assert.match(
+    document.getElementById("pet-display-hint").textContent,
+    /吾才沒有/,
+    "hint lock must protect return greeting from immediate idle transition"
+  );
+}
+
+async function testChatResponseMoodOverridesGreetingLock() {
+  // A chat response must always update the expression and mood label,
+  // regardless of any active greeting lock.
+  const { document } = await loadRenderer();
+
+  // Startup greeting is showing with lock active
+  assert.match(
+    document.getElementById("pet-display-hint").textContent,
+    /哼，汝終於把吾叫醒/,
+    "startup greeting must be showing before chat"
+  );
+
+  // Send a chat — response has mood=focused
+  await sendChat(document, "chat during greeting lock test");
+
+  // Chat response must override lock — setMood calls setPetExpression directly
+  assert.equal(
+    document.getElementById("pet-face").getAttribute("data-mood"),
+    "focused",
+    "chat response mood must override greeting lock"
+  );
+  assert.equal(
+    document.getElementById("mood-label").textContent,
+    "focused",
+    "mood label must update from chat response despite greeting lock"
+  );
+}
+
+async function testPendingStateOverridesGreetingLock() {
+  // The pending expression (set by sendMessage) must show immediately,
+  // bypassing any active greeting lock.
+  const { document, state } = await loadRenderer({ pauseChat: true });
+
+  // Startup greeting is showing with lock active
+  assert.match(
+    document.getElementById("pet-display-hint").textContent,
+    /哼，汝終於把吾叫醒/,
+    "startup greeting must be showing before send"
+  );
+
+  // Trigger a chat request — sendMessage sets pending expression directly
+  document.getElementById("message-input").value = "pending lock override test";
+  document.getElementById("send-btn").click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  // Pending expression must override the greeting lock
+  assert.equal(
+    document.getElementById("pet-face").getAttribute("data-mood"),
+    "pending",
+    "pending expression must override greeting lock"
+  );
+
+  // Clean up
+  state.resolveChat();
+  await settle();
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulLocalChatUpdatesMoodAndSourceStatus();
@@ -1205,6 +1360,12 @@ async function main() {
   await testReturnGreetingOnlyFiresOncePerAwaySession();
   await testShortIdleDoesNotTriggerReturnGreeting();
   await testReturnGreetingResetAfterReenteringLongIdle();
+  // TASK-111: companion hint lock tests
+  await testStartupGreetingLocksHintFromIdleTransition();
+  await testGreetingLockExpiresAllowingIdleHint();
+  await testReturnGreetingLocksHintFromIdleTransition();
+  await testChatResponseMoodOverridesGreetingLock();
+  await testPendingStateOverridesGreetingLock();
   console.log("renderer chat smoke: PASS");
 }
 

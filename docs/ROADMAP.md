@@ -275,7 +275,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 **Goal:** 讓克莉絲蒂娜從「聊天框」進化為真正的桌面寵物，具備 idle 狀態、greeting、time-aware 語氣、expression 整合，以及輕量 proactive 存在感。
 
-**Status:** IN PROGRESS — TASK-107（規劃）DONE；TASK-108～110 DONE；TASK-111～112 待實作
+**Status:** IN PROGRESS — TASK-107（規劃）DONE；TASK-108～111 DONE；TASK-112 待實作
 
 > 設計文件：`docs/PHASE5_COMPANION_BEHAVIOR_PLAN.md`
 
@@ -285,7 +285,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 | TASK-108 | Idle State UI Behavior | DONE |
 | TASK-109 | Startup Greeting | DONE |
 | TASK-110 | Return-from-Away Greeting | DONE |
-| TASK-111 | Expression Timing Polish | Pending |
+| TASK-111 | Expression Timing Polish | DONE |
 | TASK-112 | Companion Behavior Smoke Tests | Pending |
 
 **Phase 5 安全邊界（永久性限制）：**
