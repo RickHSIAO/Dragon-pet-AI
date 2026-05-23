@@ -33,3 +33,6 @@ Thumbs.db
 # Contains provider/model/flag state. Excluded from git to keep user config local.
 backend/data/provider_settings.json
 backend/data/provider_settings.json.tmp
+
+# Local image drafts
+³Æ¿ï¹Ï/
