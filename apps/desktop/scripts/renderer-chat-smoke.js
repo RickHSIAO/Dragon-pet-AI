@@ -1311,6 +1311,220 @@ async function testPendingStateOverridesGreetingLock() {
   await settle();
 }
 
+// ---------------------------------------------------------------------------
+// TASK-112: Phase 5 Companion Behavior Integration Checkpoint
+// ---------------------------------------------------------------------------
+// Each test below verifies a cross-task integration scenario not covered by
+// the individual TASK-108~111 unit tests.  No new behaviour is introduced —
+// these are pure checkpoint / coverage-gap tests.
+
+async function testNetworkErrorOverridesGreetingLock() {
+  // A network error (backend unreachable) must override the startup greeting
+  // lock.  The offline expression must appear even while hintLockedUntil is
+  // in the future, because the error path calls setPetExpression() directly
+  // rather than through idleTick.
+  const { document } = await loadRenderer({ chatMode: "network_error" });
+
+  // Startup greeting and lock are both active at this point.
+  assert.match(
+    document.getElementById("pet-display-hint").textContent,
+    /哼，汝終於把吾叫醒/,
+    "startup greeting must be showing before network error"
+  );
+  assert.equal(
+    document.getElementById("pet-face").getAttribute("data-mood"),
+    "proud",
+    "expression must be proud before network error"
+  );
+
+  // Send a message that results in a network error.
+  await sendChat(document, "network error during greeting lock test");
+
+  // Error path calls setPetExpression("offline") directly — must bypass lock.
+  assert.equal(
+    document.getElementById("pet-face").getAttribute("data-mood"),
+    "offline",
+    "network error must override greeting lock with offline expression"
+  );
+  assert.equal(
+    textOf(document, "chat-source-status"),
+    "source: backend_offline",
+    "source status must reflect backend_offline after network error"
+  );
+}
+
+async function testProviderErrorOverridesGreetingLock() {
+  // A provider timeout (HTTP 504) must set the error expression even while
+  // the startup greeting lock is active.  The error path calls
+  // setPetExpression("error") directly, bypassing hintLockedUntil.
+  const { document } = await loadRenderer({ chatMode: "provider_timeout" });
+
+  // Startup greeting and lock are both active.
+  assert.match(
+    document.getElementById("pet-display-hint").textContent,
+    /哼，汝終於把吾叫醒/,
+    "startup greeting must be showing before provider timeout"
+  );
+  assert.equal(
+    document.getElementById("pet-face").getAttribute("data-mood"),
+    "proud",
+    "expression must be proud before provider timeout"
+  );
+
+  // Send a message that results in a provider timeout (HTTP 504).
+  await sendChat(document, "provider timeout during greeting lock test");
+
+  // Error path calls setPetExpression("error") directly — must bypass lock.
+  assert.equal(
+    document.getElementById("pet-face").getAttribute("data-mood"),
+    "error",
+    "provider timeout must override greeting lock with error expression"
+  );
+}
+
+async function testSourceRuntimeStatusNotClearedByStartupGreeting() {
+  // Startup greeting sets pet-display-hint and the proud expression.
+  // Verify that (a) mood-label is initialised at startup and (b) the
+  // source/runtime status area still updates correctly after a subsequent
+  // chat — i.e. the startup greeting setup does not break the status pipeline.
+  const { document } = await loadRenderer();
+
+  // Startup greeting must be visible.
+  assert.match(
+    document.getElementById("pet-display-hint").textContent,
+    /哼，汝終於把吾叫醒/,
+    "startup greeting must be visible"
+  );
+
+  // mood-label is set by setMood("neutral") at startup — must not be empty.
+  const moodText = textOf(document, "mood-label");
+  assert.ok(
+    typeof moodText === "string" && moodText.length > 0,
+    `mood-label must be non-empty after startup, got: ${JSON.stringify(moodText)}`
+  );
+
+  // pet-face data-mood must be proud (startup expression).
+  assert.equal(
+    document.getElementById("pet-face").getAttribute("data-mood"),
+    "proud",
+    "pet-face must show proud expression at startup"
+  );
+
+  // Sending a chat must still update the source/runtime status area, confirming
+  // the startup greeting did not break the status pipeline.
+  await sendChat(document, "source status integration check");
+  assert.equal(
+    textOf(document, "chat-source-status"),
+    "source: llm_local",
+    "source status must update after chat even after startup greeting was shown"
+  );
+  assert.equal(
+    textOf(document, "mood-label"),
+    "focused",
+    "mood-label must update after chat even after startup greeting was shown"
+  );
+}
+
+async function testPhase5FullCompanionIntegrationFlow() {
+  // End-to-end integration across TASK-108~111:
+  //   startup -> lock blocks idle -> lock expires -> idle works -> long idle ->
+  //   away eligible -> return greeting (annoyed) -> no /chat at any point.
+  //
+  // Each sub-phase uses a fresh renderer load to keep state isolated.
+
+  const HINT_LOCK_MS = 8 * 1000;
+
+  // --- Phase A: startup greeting, proud expression, no /chat ---------------
+  {
+    const { document, state } = await loadRenderer();
+    assert.match(
+      document.getElementById("pet-display-hint").textContent,
+      /哼，汝終於把吾叫醒/,
+      "phase5[A]: startup greeting must be visible"
+    );
+    assert.equal(
+      document.getElementById("pet-face").getAttribute("data-mood"),
+      "proud",
+      "phase5[A]: startup expression must be proud"
+    );
+    const chatCalls = state.calls.filter((c) => c.url.endsWith("/chat"));
+    assert.equal(chatCalls.length, 0, "phase5[A]: startup must not call /chat");
+  }
+
+  // --- Phase B: lock blocks 3-min idle hint --------------------------------
+  {
+    const { document, sandbox } = await loadRenderer();
+    sandbox.lockCompanionHint(10 * 60 * 1000);
+    sandbox.idleTick(Date.now() + 3 * 60 * 1000 + 1);
+    await settle();
+    assert.match(
+      document.getElementById("pet-display-hint").textContent,
+      /哼，汝終於把吾叫醒/,
+      "phase5[B]: lock must protect startup greeting from 3-min idle"
+    );
+    assert.equal(
+      document.getElementById("pet-face").getAttribute("data-mood"),
+      "proud",
+      "phase5[B]: expression must remain proud while lock is active"
+    );
+  }
+
+  // --- Phase C: lock expires -> idle hint applies ---------------------------
+  {
+    const { document, sandbox } = await loadRenderer();
+    sandbox.idleTick(Date.now() + HINT_LOCK_MS + 1 + 3 * 60 * 1000);
+    await settle();
+    assert.match(
+      document.getElementById("pet-display-hint").textContent,
+      /吾在這裡/,
+      "phase5[C]: expired lock must allow 3-min idle hint"
+    );
+    assert.equal(
+      document.getElementById("pet-face").getAttribute("data-mood"),
+      "neutral",
+      "phase5[C]: expired lock must allow neutral idle expression"
+    );
+  }
+
+  // --- Phase D: 10-min idle -> sleepy --------------------------------------
+  {
+    const { document, sandbox } = await loadRenderer();
+    sandbox.idleTick(Date.now() + HINT_LOCK_MS + 1 + 10 * 60 * 1000);
+    await settle();
+    assert.equal(
+      document.getElementById("pet-face").getAttribute("data-mood"),
+      "sleepy",
+      "phase5[D]: 10-min idle must set sleepy expression after lock expires"
+    );
+    assert.match(
+      document.getElementById("pet-display-hint").textContent,
+      /哼……吾才沒有等到想睡/,
+      "phase5[D]: 10-min idle must set sleepy hint"
+    );
+  }
+
+  // --- Phase E: return-from-away greeting (annoyed, no /chat) -------------
+  {
+    const { document, sandbox, state } = await loadRenderer();
+    sandbox.idleTick(Date.now() + 15 * 60 * 1000 + 1);
+    await settle();
+    sandbox.resetActivity();
+    await settle();
+    assert.match(
+      document.getElementById("pet-display-hint").textContent,
+      /吾才沒有/,
+      "phase5[E]: return greeting must appear after 15-min away"
+    );
+    assert.equal(
+      document.getElementById("pet-face").getAttribute("data-mood"),
+      "annoyed",
+      "phase5[E]: return greeting must set annoyed expression"
+    );
+    const chatCalls = state.calls.filter((c) => c.url.endsWith("/chat"));
+    assert.equal(chatCalls.length, 0, "phase5[E]: return greeting must not call /chat");
+  }
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulLocalChatUpdatesMoodAndSourceStatus();
@@ -1366,6 +1580,11 @@ async function main() {
   await testReturnGreetingLocksHintFromIdleTransition();
   await testChatResponseMoodOverridesGreetingLock();
   await testPendingStateOverridesGreetingLock();
+  // TASK-112: Phase 5 integration checkpoint tests
+  await testNetworkErrorOverridesGreetingLock();
+  await testProviderErrorOverridesGreetingLock();
+  await testSourceRuntimeStatusNotClearedByStartupGreeting();
+  await testPhase5FullCompanionIntegrationFlow();
   console.log("renderer chat smoke: PASS");
 }
 

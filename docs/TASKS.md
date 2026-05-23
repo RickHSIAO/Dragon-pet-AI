@@ -6365,3 +6365,61 @@ TASK-111 - Expression Timing Polish
   `resetActivity` 的 return greeting 後呼叫 `lockCompanionHint(HINT_LOCK_MS)`。
 - `renderer-chat-smoke.js`：新增 5 個測試（startup lock 阻止 idle、lock 過期可 idle、return lock 阻止 idle、chat 可覆蓋、pending 可覆蓋）。
 - 全部驗收通過：syntax check PASS、smoke 全部通過（含 TASK-108、109、110、111 所有測試）、safety scan CLEAN、pytest 586 passed、git diff --check CLEAN。
+
+---
+
+## TASK-112：Phase 5 Companion Behavior Smoke Tests / Checkpoint
+
+**狀態：DONE**
+**日期：2026-05-24**
+
+### 目標
+
+不新增功能。針對 Phase 5 companion behavior（TASK-108~111）進行整體 smoke / checkpoint，
+確認各流程整合穩定，補強測試覆蓋率，並更新文件。
+
+### 範圍
+
+- 純測試補強：不修改 `renderer.js`，不新增 backend route，不修改 `/chat` schema
+- 檢查並補強 smoke 測試的覆蓋缺口：
+  - **error/offline 可覆蓋 greeting lock**（TASK-111 原始測試未覆蓋 lock 期間的 error/offline）
+  - **startup greeting 不破壞 source/runtime status pipeline**
+  - **Phase 5 端對端整合流程**（startup → lock → 過期 → idle → long idle → return greeting）
+- 安全驗證：確認 renderer 無直接 Ollama URL、不自動呼叫 /chat
+
+### 新增測試（4 個）
+
+1. `testNetworkErrorOverridesGreetingLock`：network error 在 lock 期間 → expression = "offline"
+2. `testProviderErrorOverridesGreetingLock`：provider timeout 在 lock 期間 → expression = "error"
+3. `testSourceRuntimeStatusNotClearedByStartupGreeting`：startup greeting 不破壞 mood-label / source-status pipeline；chat 後仍可正確更新
+4. `testPhase5FullCompanionIntegrationFlow`：端對端整合（5 個子階段 A~E）：
+   - A：startup greeting, proud expression, 不呼叫 /chat
+   - B：lock 阻止 3-min idle hint
+   - C：lock 過期後 idle hint 生效
+   - D：10-min idle → sleepy
+   - E：15-min + resetActivity → return greeting, annoyed, 不呼叫 /chat
+
+### 驗收條件
+
+- startup greeting ✓，proud expression ✓，不呼叫 /chat ✓，source/runtime status pipeline 正常 ✓
+- 3-min idle → neutral hint ✓，10-min idle → sleepy ✓
+- lock 阻止 idle 覆蓋 ✓，lock 過期後 idle 生效 ✓
+- 15-min + resetActivity → return greeting（annoyed）✓，不 spam ✓，re-enter 後可再觸發 ✓
+- pending 可覆蓋 lock ✓，error/offline 可覆蓋 lock ✓，chat response 可覆蓋 lock ✓
+- PNG/SVG fallback 仍正常 ✓
+- renderer 無直接 Ollama URL ✓，不自動呼叫 /chat ✓
+- `node --check` PASS ✓
+- `npm run test:renderer` PASS（含 4 個新 TASK-112 測試，共 53 個測試） ✓
+- safety scan CLEAN ✓
+- `python -m pytest` 586 passed ✓
+- `git diff --check` CLEAN ✓
+
+### 完成記錄
+
+- `renderer.js`：未修改（TASK-112 為純 checkpoint，不新增功能）
+- `renderer-chat-smoke.js`：新增 4 個 TASK-112 測試（error/offline override lock、
+  source/runtime status pipeline、Phase 5 端對端整合 A~E）；smoke harness 共 53 個測試
+- 全部驗收通過：syntax PASS、smoke 53/53 PASS、safety CLEAN、pytest 586 passed、git diff --check exit 0
+- Phase 5 所有任務（TASK-107~112）全數完成 → Phase 5 COMPLETE
+
+**下一步**：Phase 5 完整收尾，可考慮 commit / tag；若繼續開發可規劃 Phase 6。
