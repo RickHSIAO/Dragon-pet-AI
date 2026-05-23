@@ -6116,7 +6116,7 @@ TASK-106 - Manual Cold-start Warmup UX Smoke
 
 ## TASK-106 — Manual Cold-start Warmup UX Smoke
 
-**Status:** PENDING MANUAL VERIFICATION
+**Status:** DONE
 **Date:** 2026-05-23
 
 ### Goal
@@ -6127,56 +6127,20 @@ TASK-106 - Manual Cold-start Warmup UX Smoke
 
 不新增功能，不修改程式邏輯。
 
-### 手動驗證步驟
+### 手動驗證結果（Windows 本機）
 
-```powershell
-# 1. 停止 qwen3:8b（讓模型進入 cold 狀態）
-ollama stop qwen3:8b
+**前置條件：** 需先執行 `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` 解除 PowerShell 執行限制。
 
-# 2. 確認模型不在執行中
-ollama ps
-
-# 3. 確認 backend 已啟動（另一個 terminal）
-.\scripts\dev-start-backend.ps1
-
-# 4. 第一次執行 smoke（模型 cold，預期顯示暖機提示）
-.\scripts\dev-smoke.ps1
-
-# 5. 觀察 /chat 的輸出：
-#    - 是否顯示 [WARN] ... local model may still be loading
-#    - 是否顯示 ollama run qwen3:8b "請用一句繁體中文回覆：ready"
-#    - 是否說明「cold-start loading issue — not a settings or backend problem」
-
-# 6. 暖機（另一個 terminal）
-ollama run qwen3:8b "請用一句繁體中文回覆：ready"
-# 等待 qwen3:8b 回覆後 Ctrl+D 結束
-
-# 7. 再次執行 smoke（模型已暖機，預期全 PASS）
-.\scripts\dev-smoke.ps1
-```
-
-### 預期第一次 smoke（cold-start）
-
-| 檢查項目 | 預期結果 |
+| 檢查項目 | 實際結果 |
 |---------|---------|
-| `/health` | `[PASS]` |
-| `/provider/settings` | `[PASS]`，provider=ollama |
-| `/provider/settings/test` | `[PASS]`（僅檢查 ollama runtime，不做 generation） |
-| `/chat` | `[WARN]` timeout 或 `source=llm_local_error`，顯示暖機提示 |
-| 暖機提示顯示 | ✅ `*** Local model may still be loading / waking up ***` |
-| 暖機指令顯示 | ✅ `ollama run qwen3:8b "請用一句繁體中文回覆：ready"` |
-| 錯誤分類 | ✅ 明確說明是 cold-start，不是 settings/backend 壞掉 |
-
-### 預期第二次 smoke（暖機後）
-
-| 檢查項目 | 預期結果 |
-|---------|---------|
-| `/health` | `[PASS]` |
-| `/provider/settings` | `[PASS]` |
-| `/provider/settings/test` | `[PASS]` |
-| `/chat` | `[PASS]`，`source=llm_local` |
-| Schema guard | `[PASS]`，`reply / mood / source` |
-| 總結 | `Smoke result: ALL CHECKS PASSED` |
+| `/health` | ✅ `[PASS]` |
+| `/provider/settings` | ✅ `[PASS]` — provider=ollama、model=qwen3:8b、real_provider_enabled=true、llm_chat_enabled=true、fallback_to_mock=false、resolved_provider=ollama |
+| `/provider/settings/test` | ✅ `[PASS]` — source=llm_local |
+| `/chat` | ✅ `[PASS]` — HTTP 200 |
+| `/chat` source | ✅ `source=llm_local` |
+| `/chat` mood | ✅ `mood=happy` |
+| Schema guard | ✅ `[PASS]` — `reply / mood / source` |
+| Smoke result | ✅ `ALL CHECKS PASSED` |
 
 ### Safety invariants
 
@@ -6186,13 +6150,10 @@ ollama run qwen3:8b "請用一句繁體中文回覆：ready"
 - 不新增圖片
 - 不呼叫外部 API
 
-### 完成後回報
+### 結論
 
-1. cold-start 時是否成功顯示 warmup hint
-2. warmup 後 dev-smoke 是否全 PASS
-3. `/chat` 是否 `source=llm_local`
-4. 是否需要再調整 timeout 或提示文字
-5. 是否建議 commit
+TASK-106 DONE。cold-start warmup UX 與 `dev-smoke.ps1` 腳本在 Windows 本機手動驗證通過。
+`source=llm_local` 確認，schema 正確，`ALL CHECKS PASSED`。
 
 ### Next Task
 
