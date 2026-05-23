@@ -12,13 +12,13 @@
 The project is developed in discrete phases. Each phase has a clearly defined scope and must not implement features belonging to later phases.
 
 ```
-Phase 0 ??Phase 1 ??Phase 2 ??Phase 3 ??Phase 4 ??Phase 5
+Phase 0 → Phase 1 → Phase 2 → Phase 3 → Phase 4 → Phase 5
 Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 ```
 
 ---
 
-## Phase 0 ??Project Definition
+## Phase 0 — Project Definition
 
 **Goal:** Establish the project structure, specifications, and documentation before writing any runtime code.
 
@@ -32,7 +32,7 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 
 ---
 
-## Phase 1 ??Basic Runtime Skeleton
+## Phase 1 — Basic Runtime Skeleton
 
 **Goal:** Establish the running skeleton of both the backend and desktop app. No real AI, no real features ??just the infrastructure working end-to-end.
 
@@ -50,7 +50,7 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 
 ---
 
-## Phase 2 ??Chat and Character
+## Phase 2 — Chat and Character
 
 **Goal:** Wire up character state, conversation history, and SQLite persistence.
 
@@ -62,7 +62,7 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 
 ---
 
-## Phase 3 ??Memory and State
+## Phase 3 — Memory and State
 
 **Goal:** Add long-term memory, memory-aware chat, and audit inspection.
 
@@ -107,7 +107,7 @@ Docs      Skeleton  Chat+Char  Memory    LLM+AI    Assistant
 
 ---
 
-## Phase 4 ??LLM Adapter Integration
+## Phase 4 — LLM Adapter Integration
 
 **Goal:** Wire the approved memory context pipeline to a real LLM provider behind a feature flag, using an adapter pattern that keeps mock as the default.
 
@@ -271,29 +271,44 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 ---
 
-## Phase 5 ??Assistant Capabilities
+## Phase 5 — Companion Behavior Loop
 
-**Goal:** Add task management, project context, and carefully scoped tool execution.
+**Goal:** 讓克莉絲蒂娜從「聊天框」進化為真正的桌面寵物，具備 idle 狀態、greeting、time-aware 語氣、expression 整合，以及輕量 proactive 存在感。
 
-**Status:** NOT STARTED
+**Status:** IN PROGRESS — TASK-107（規劃）DONE；TASK-108～112 待實作
+
+> 設計文件：`docs/PHASE5_COMPANION_BEHAVIOR_PLAN.md`
 
 | Task | Name | Status |
 |---|---|---|
-| (TBD) | Basic task list (CRUD via chat) | Pending |
-| (TBD) | Project planning support (conversational) | Pending |
-| (TBD) | Read-only project file context (with safety layer) | Pending |
-| (TBD) | Scheduled reminders | Pending |
-| (TBD) | Tool execution framework (safety-gated) | Pending |
+| TASK-107 | Phase 5 Planning: Companion Behavior Loop | DONE |
+| TASK-108 | Idle State UI Behavior | Pending |
+| TASK-109 | Startup Greeting | Pending |
+| TASK-110 | Return-from-Away Greeting | Pending |
+| TASK-111 | Expression Timing Polish | Pending |
+| TASK-112 | Companion Behavior Smoke Tests | Pending |
 
-**Safety Requirements for Phase 5:**
-- No shell command execution without a dedicated safety review
-- File access restricted to user-approved directories only
-- All tool actions logged and reversible where possible
-- User must explicitly enable tool execution capability
+**Phase 5 安全邊界（永久性限制）：**
+- Renderer 不自動讀取任何本機檔案
+- 不整合 Email / Calendar / 任何外部系統資料
+- 不執行 shell 命令或系統操作
+- 不呼叫任何外部 API（僅允許 `localhost:8000`）
+- 不使用精確定位（僅 `new Date().getHours()` 判斷時段）
+- 所有 proactive 訊息僅顯示於 UI，不自動操作系統
+- `/chat` schema 維持 `reply / mood / source` 不變
+- Renderer 不直連 Ollama（`localhost:11434`）
+
+**Key design decisions:**
+- TASK-107 confirms Phase 5 MVP is pure-frontend (renderer.js only); no new backend endpoints for companion behavior.
+- Idle timer uses `setInterval` + `lastActivityTime`; expression changes via existing `setPetExpression(mood)`.
+- Startup and return greetings are pre-written (not LLM calls) to avoid cold-start dependency.
+- Time-aware behavior uses `new Date().getHours()` client-side only; no time data sent to backend.
+- Anti-spam: `hasGreetedThisSession` flag + `RETURN_THRESHOLD` guard; max one proactive per session.
+- Expression priority: `/chat` backend `mood` field overrides idle state immediately on response.
 
 ---
 
-## Future Product Track ??Streamer Companion Mode
+## Future Product Track — Streamer Companion Mode
 
-> Status: SIDE TRACK ??design exploration only; not scheduled for implementation
+> Status: SIDE TRACK — design exploration only; not scheduled for implementation
 > See: `docs/STREAMER_COMPANION_MODE.md`
