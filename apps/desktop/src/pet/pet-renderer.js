@@ -51,6 +51,29 @@ function handlePlaceholderSubmit(event, documentRef = document) {
   setText(message, PET_MODE_DEFAULTS.bubbleMessage);
 }
 
+function handleOpenFullApp(documentRef = document, dragonPetApi = null) {
+  const message = documentRef.getElementById("pet-bubble-message");
+  const api =
+    dragonPetApi ||
+    (typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null);
+
+  if (!api || typeof api.openFullApp !== "function") {
+    setText(message, "Full App switch is not available in this preview.");
+    return null;
+  }
+
+  setText(message, "Opening Full App...");
+  const result = api.openFullApp();
+
+  if (result && typeof result.catch === "function") {
+    result.catch(() => {
+      setText(message, "Full App switch failed.");
+    });
+  }
+
+  return result;
+}
+
 function initializePetMode(documentRef = document) {
   const root = documentRef.getElementById("pet-mode-root");
   const dragRegion = documentRef.getElementById("pet-drag-region");
@@ -63,6 +86,7 @@ function initializePetMode(documentRef = document) {
   const bubbleMessage = documentRef.getElementById("pet-bubble-message");
   const bubblePlaceholder = documentRef.getElementById("pet-bubble-placeholder");
   const chatForm = documentRef.getElementById("pet-chat-form-hook");
+  const openFullAppHook = documentRef.getElementById("pet-open-full-app-hook");
 
   if (root) {
     root.dataset.initialized = "true";
@@ -104,6 +128,10 @@ function initializePetMode(documentRef = document) {
   if (chatForm && typeof chatForm.addEventListener === "function") {
     chatForm.addEventListener("submit", (event) => handlePlaceholderSubmit(event, documentRef));
   }
+
+  if (openFullAppHook && typeof openFullAppHook.addEventListener === "function") {
+    openFullAppHook.addEventListener("click", () => handleOpenFullApp(documentRef));
+  }
 }
 
 if (typeof document !== "undefined") {
@@ -119,6 +147,7 @@ if (typeof module !== "undefined") {
     PET_MODE_DEFAULTS,
     collapseBubble,
     expandBubble,
+    handleOpenFullApp,
     handlePlaceholderSubmit,
     initializePetMode,
     setBubbleState,

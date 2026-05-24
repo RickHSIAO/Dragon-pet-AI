@@ -6762,7 +6762,8 @@ Verification:
 
 ## TASK-119 - Mode Switch Full App <-> Pet Mode
 
-**Status:** TODO
+**Status:** DONE
+**Date:** 2026-05-24
 
 Goal:
 
@@ -6772,9 +6773,50 @@ Scope:
 
 - Main process manages both windows.
 - Pet Mode can open/focus Full App.
-- Full App can open/show Pet Mode.
-- Decide coexist vs hide behavior.
+- Full App can stay open alongside Pet Mode.
+- Keep Pet-to-Full switch one-way for this task.
 - Preserve Full App as the settings/memory/audit surface.
+
+Changes:
+
+- Added `apps/desktop/src/pet/pet-preload.js`.
+- Added narrow preload API: `window.dragonPet.openFullApp()`.
+- Added fixed IPC channel `pet:open-full-app` in `apps/desktop/src/main.js`.
+- Added `fullAppWindow` tracking in `apps/desktop/src/main.js`.
+- Added `showFullAppWindow()` to create/show/restore/focus the Full App window.
+- Added Pet Window preload wiring while keeping `nodeIntegration: false`, `contextIsolation: true`, and `sandbox: true`.
+- Wired `#pet-open-full-app-hook` in `apps/desktop/src/pet/pet-renderer.js`.
+- Removed disabled state from the Full App hook button in `pet.html`.
+- Updated `pet-renderer-smoke.js` and `pet-window-smoke.js`.
+
+Runtime behavior:
+
+- Pet Window still opens only when `PET_MODE_ENABLED=true`.
+- Full App still opens by default.
+- Clicking Full App in Pet Mode calls `window.dragonPet.openFullApp()` when available.
+- If the preload API is unavailable, Pet Mode shows a local fallback message and does not throw.
+- The IPC handler accepts no renderer-controlled behavior and only shows/restores/focuses Full App.
+
+Safety boundaries:
+
+- No arbitrary IPC exposed.
+- No `ipcRenderer` object exposed to renderer.
+- No shell, fs, process, or openExternal API exposed.
+- No backend call added.
+- No `/chat` call added.
+- No `/chat` schema change.
+- No provider settings or Ollama routing change.
+- No external API, file, Email, or Calendar access.
+
+Verification:
+
+- `node --check apps/desktop/src/main.js`: PASS.
+- `node --check apps/desktop/src/pet/pet-renderer.js`: PASS.
+- `node --check apps/desktop/src/pet/pet-preload.js`: PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js`: PASS.
+- `node --check apps/desktop/scripts/pet-window-smoke.js`: PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: PASS, 9 checks.
+- `node apps/desktop/scripts/pet-window-smoke.js`: PASS, 8 checks.
 
 ---
 

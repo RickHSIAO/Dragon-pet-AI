@@ -91,6 +91,8 @@ function testPetHtmlReferencesStaticAssets() {
   assertIncludes(html, 'id="pet-bubble-placeholder"', "pet.html");
   assertIncludes(html, 'id="pet-context-menu-hook"', "pet.html");
   assertIncludes(html, 'id="pet-open-full-app-hook"', "pet.html");
+  assertRegex(html, /id="pet-open-full-app-hook"(?:(?!>).)*data-hook="open-full-app"/, "pet.html");
+  assert.equal(/id="pet-open-full-app-hook"(?:(?!>).)*disabled/.test(html), false);
   assertRegex(html, /id="pet-drag-region"[^>]*class="[^"]*\bpet-drag-region\b/, "pet.html");
   assertRegex(html, /id="pet-bubble"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-chat-form-hook"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
@@ -200,6 +202,7 @@ function testPetRendererClickAndSubmitHandlersAreLocalOnly() {
     "pet-bubble-message",
     "pet-bubble-placeholder",
     "pet-chat-form-hook",
+    "pet-open-full-app-hook",
   ]);
 
   initializePetMode(fakeDocument);
@@ -223,6 +226,56 @@ function testPetRendererClickAndSubmitHandlersAreLocalOnly() {
   assert.equal(fakeDocument.getElementById("pet-bubble-message").textContent, PET_MODE_DEFAULTS.bubbleMessage);
 }
 
+function testPetRendererOpenFullAppUsesNarrowApi() {
+  const { handleOpenFullApp } = require(petRendererPath);
+  const fakeDocument = new FakeDocument(["pet-bubble-message"]);
+  let called = false;
+
+  const result = handleOpenFullApp(fakeDocument, {
+    openFullApp() {
+      called = true;
+      return Promise.resolve({ ok: true });
+    },
+  });
+
+  assert.equal(called, true);
+  assert.equal(typeof result.then, "function");
+  assert.equal(fakeDocument.getElementById("pet-bubble-message").textContent, "Opening Full App...");
+}
+
+function testPetRendererOpenFullAppFallbackDoesNotCrash() {
+  const { handleOpenFullApp, initializePetMode } = require(petRendererPath);
+  const directDocument = new FakeDocument(["pet-bubble-message"]);
+
+  assert.equal(handleOpenFullApp(directDocument, {}), null);
+  assert.equal(
+    directDocument.getElementById("pet-bubble-message").textContent,
+    "Full App switch is not available in this preview."
+  );
+
+  const clickDocument = new FakeDocument([
+    "pet-mode-root",
+    "pet-drag-region",
+    "pet-avatar-container",
+    "pet-avatar",
+    "pet-hint",
+    "pet-bubble",
+    "pet-bubble-open-hook",
+    "pet-bubble-close-hook",
+    "pet-bubble-message",
+    "pet-bubble-placeholder",
+    "pet-chat-form-hook",
+    "pet-open-full-app-hook",
+  ]);
+
+  initializePetMode(clickDocument);
+  clickDocument.getElementById("pet-open-full-app-hook").dispatchEvent({ type: "click" });
+  assert.equal(
+    clickDocument.getElementById("pet-bubble-message").textContent,
+    "Full App switch is not available in this preview."
+  );
+}
+
 function run() {
   const tests = [
     testPetFilesExist,
@@ -232,6 +285,8 @@ function run() {
     testPetRendererInitializesBubbleCollapsed,
     testPetRendererTogglesBubbleState,
     testPetRendererClickAndSubmitHandlersAreLocalOnly,
+    testPetRendererOpenFullAppUsesNarrowApi,
+    testPetRendererOpenFullAppFallbackDoesNotCrash,
   ];
 
   for (const test of tests) {

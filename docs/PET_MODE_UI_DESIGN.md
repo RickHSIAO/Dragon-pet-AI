@@ -708,6 +708,8 @@ Completion notes:
 
 ### TASK-119 - Mode Switch Full App <-> Pet Mode
 
+Status: DONE on 2026-05-24 for Pet-to-Full switch. Full-to-Pet controls remain deferred.
+
 Goal:
 
 - Add explicit switching between Full App Mode and Pet Mode.
@@ -724,6 +726,16 @@ Acceptance:
 - Switching does not lose chat input unexpectedly.
 - Full App remains the settings/memory/audit surface.
 - Pet Mode remains compact.
+
+Completion notes:
+
+- Added `apps/desktop/src/pet/pet-preload.js`.
+- Exposed only `window.dragonPet.openFullApp()`.
+- Added fixed IPC channel `pet:open-full-app`.
+- Main process handler only creates/shows/restores/focuses the Full App window.
+- Pet renderer calls the narrow API from `#pet-open-full-app-hook`.
+- If the API is unavailable, Pet Mode shows a local fallback message instead of throwing.
+- No arbitrary IPC, shell, fs, process, openExternal, backend call, `/chat` call, or schema change was added.
 
 ### TASK-120 - Pet Mode Smoke Tests
 

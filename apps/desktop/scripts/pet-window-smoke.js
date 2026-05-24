@@ -6,6 +6,7 @@ const desktopRoot = path.resolve(__dirname, "..");
 const mainPath = path.join(desktopRoot, "src", "main.js");
 const rendererPath = path.join(desktopRoot, "src", "renderer", "renderer.js");
 const petRendererPath = path.join(desktopRoot, "src", "pet", "pet-renderer.js");
+const petPreloadPath = path.join(desktopRoot, "src", "pet", "pet-preload.js");
 
 function readText(filePath) {
   return fs.readFileSync(filePath, "utf8");
@@ -26,10 +27,12 @@ function assertRegex(haystack, regex, label) {
 function testMainHasPetWindowPrototype() {
   const main = readText(mainPath);
   assertIncludes(main, "let petWindow = null", "main.js");
+  assertIncludes(main, "let fullAppWindow = null", "main.js");
   assertIncludes(main, "function createPetWindow()", "main.js");
   assertIncludes(main, "PET_MODE_ENABLED", "main.js");
   assertIncludes(main, 'process.env.PET_MODE_ENABLED === "true"', "main.js");
   assertIncludes(main, 'path.join(__dirname, "pet", "pet.html")', "main.js");
+  assertIncludes(main, 'path.join(__dirname, "pet", "pet-preload.js")', "main.js");
 }
 
 function testPetWindowOptionsAreSafeAndPetSpecific() {
@@ -50,9 +53,21 @@ function testPetWindowOptionsAreSafeAndPetSpecific() {
 function testFullAppWindowStillExists() {
   const main = readText(mainPath);
   assertIncludes(main, "function createWindow()", "main.js");
+  assertIncludes(main, "function showFullAppWindow()", "main.js");
   assertIncludes(main, 'path.join(__dirname, "renderer", "index.html")', "main.js");
   assertIncludes(main, "BACKEND_URL", "main.js");
   assertIncludes(main, "createWindow();", "main.js");
+}
+
+function testPetOpenFullAppIpcIsFixedAndNarrow() {
+  const main = readText(mainPath);
+  assertIncludes(main, 'PET_OPEN_FULL_APP_CHANNEL = "pet:open-full-app"', "main.js");
+  assertIncludes(main, "ipcMain.handle(PET_OPEN_FULL_APP_CHANNEL, () =>", "main.js");
+  assertIncludes(main, "showFullAppWindow();", "main.js");
+  assertIncludes(main, "win.restore();", "main.js");
+  assertIncludes(main, "win.show();", "main.js");
+  assertIncludes(main, "win.focus();", "main.js");
+  assertNotIncludes(main, "ipcMain.on(", "main.js");
 }
 
 function testPetWindowDoesNotReplaceFullAppByDefault() {
@@ -79,14 +94,31 @@ function testPetRendererDoesNotCallChat() {
   assertNotIncludes(text, 'fetch("/chat"', "pet-renderer.js");
 }
 
+function testPetPreloadExposesOnlyOpenFullApp() {
+  const preload = readText(petPreloadPath);
+  assertIncludes(preload, 'PET_OPEN_FULL_APP_CHANNEL = "pet:open-full-app"', "pet-preload.js");
+  assertIncludes(preload, 'contextBridge.exposeInMainWorld(', "pet-preload.js");
+  assertIncludes(preload, '"dragonPet"', "pet-preload.js");
+  assertIncludes(preload, "openFullApp: () => ipcRenderer.invoke(PET_OPEN_FULL_APP_CHANNEL)", "pet-preload.js");
+  assertNotIncludes(preload, "exposeInMainWorld(\"ipcRenderer\"", "pet-preload.js");
+  assertNotIncludes(preload, "send(", "pet-preload.js");
+  assertNotIncludes(preload, "sendSync", "pet-preload.js");
+  assertNotIncludes(preload, 'require("fs")', "pet-preload.js");
+  assertNotIncludes(preload, 'require("node:fs")', "pet-preload.js");
+  assertNotIncludes(preload, "shell", "pet-preload.js");
+  assertNotIncludes(preload, "process", "pet-preload.js");
+}
+
 function run() {
   const tests = [
     testMainHasPetWindowPrototype,
     testPetWindowOptionsAreSafeAndPetSpecific,
     testFullAppWindowStillExists,
+    testPetOpenFullAppIpcIsFixedAndNarrow,
     testPetWindowDoesNotReplaceFullAppByDefault,
     testNoRendererDirectOllamaAccess,
     testPetRendererDoesNotCallChat,
+    testPetPreloadExposesOnlyOpenFullApp,
   ];
 
   for (const test of tests) {
