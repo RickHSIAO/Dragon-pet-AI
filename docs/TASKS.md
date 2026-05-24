@@ -6707,7 +6707,8 @@ Verification:
 
 ## TASK-118 - Pet Bubble Chat Design
 
-**Status:** TODO
+**Status:** DONE
+**Date:** 2026-05-24
 
 Goal:
 
@@ -6716,10 +6717,46 @@ Add compact Bubble Chat behavior for Pet Mode.
 Scope:
 
 - Add collapsed, compact, and expanded bubble states.
-- Add local backend `/chat` call path.
+- Add placeholder input and send button UI.
+- Add local-only open/collapse/submit state handling.
+- Keep backend `/chat` wiring deferred.
 - Keep response schema `reply / mood / source`.
-- Clamp long replies and support internal scroll.
-- Update expression from backend mood.
+- Keep bubble/input/buttons as no-drag regions.
+
+Changes:
+
+- Updated `apps/desktop/src/pet/pet.html` with collapsed initial bubble markup, bubble message area, input placeholder, send button, open hook, and close/collapse control.
+- Updated `apps/desktop/src/pet/pet.css` with expanded bubble state, compact expanded layout, shrunken avatar state, bubble message styling, and input/send layout.
+- Updated `apps/desktop/src/pet/pet-renderer.js` with `setBubbleState`, `expandBubble`, `collapseBubble`, `toggleBubble`, and local-only placeholder submit handling.
+- Updated `apps/desktop/scripts/pet-renderer-smoke.js` to verify collapsed/expanded state transitions, click handlers, local submit behavior, no-drag hooks, and no backend/Ollama calls.
+
+Runtime behavior:
+
+- Initial state is collapsed.
+- Clicking the pet drag region expands the bubble.
+- Clicking the Chat hook expands the bubble.
+- Clicking the close control collapses the bubble.
+- Submitting the placeholder form prevents default behavior and updates only local bubble text.
+
+Safety boundaries:
+
+- No backend call was added.
+- No `/chat` call was added.
+- No `/chat` schema change.
+- No IPC added.
+- No preload API added.
+- `apps/desktop/src/main.js` was not modified.
+- No provider settings or Ollama routing change.
+- No external API, file, Email, or Calendar access.
+
+Verification:
+
+- `node --check apps/desktop/src/main.js`: PASS.
+- `node --check apps/desktop/src/pet/pet-renderer.js`: PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js`: PASS.
+- `node --check apps/desktop/scripts/pet-window-smoke.js`: PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: PASS, 7 checks.
+- `node apps/desktop/scripts/pet-window-smoke.js`: PASS, 6 checks.
 
 ---
 

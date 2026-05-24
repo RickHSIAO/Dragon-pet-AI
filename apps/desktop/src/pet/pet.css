@@ -28,7 +28,7 @@ body {
   width: 220px;
   min-height: 280px;
   display: grid;
-  grid-template-rows: 1fr auto auto;
+  grid-template-rows: auto auto auto;
   gap: 8px;
   padding: 10px;
   border: 1px solid rgba(64, 38, 28, 0.22);
@@ -47,6 +47,10 @@ body {
   -webkit-app-region: drag;
 }
 
+.pet-shell[data-bubble-state="expanded"] .pet-stage {
+  min-height: 122px;
+}
+
 .pet-avatar-container {
   width: 150px;
   height: 150px;
@@ -56,12 +60,22 @@ body {
   background: rgba(255, 255, 255, 0.36);
 }
 
+.pet-shell[data-bubble-state="expanded"] .pet-avatar-container {
+  width: 96px;
+  height: 96px;
+}
+
 .pet-avatar {
   width: 142px;
   height: 142px;
   object-fit: contain;
   user-select: none;
   -webkit-user-drag: none;
+}
+
+.pet-shell[data-bubble-state="expanded"] .pet-avatar {
+  width: 92px;
+  height: 92px;
 }
 
 .pet-hint {
@@ -77,6 +91,10 @@ body {
   text-align: center;
 }
 
+.pet-shell[data-bubble-state="expanded"] .pet-hint {
+  display: none;
+}
+
 .pet-bubble {
   display: grid;
   gap: 6px;
@@ -89,8 +107,8 @@ body {
   transition: max-height 140ms ease, opacity 140ms ease;
 }
 
-.pet-bubble[data-state="placeholder"] {
-  max-height: 96px;
+.pet-bubble[data-state="expanded"] {
+  max-height: 126px;
   padding: 8px;
   opacity: 1;
   pointer-events: auto;
@@ -119,7 +137,28 @@ body {
 }
 
 .pet-chat-form {
-  display: none;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.pet-bubble-message {
+  min-height: 18px;
+  color: #3d2a22;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.pet-chat-form input {
+  min-width: 0;
+  height: 24px;
+  border: 1px solid rgba(72, 45, 34, 0.18);
+  border-radius: 8px;
+  padding: 0 7px;
+  background: rgba(255, 255, 255, 0.76);
+  color: #3d2a22;
+  font-size: 11px;
 }
 
 .pet-mode-actions {

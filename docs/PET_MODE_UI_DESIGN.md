@@ -677,6 +677,8 @@ Completion notes:
 
 ### TASK-118 - Pet Bubble Chat Design
 
+Status: DONE on 2026-05-24 for local UI state only. Backend `/chat` wiring remains deferred.
+
 Goal:
 
 - Add compact Bubble Chat Mode inside Pet Window.
@@ -693,6 +695,16 @@ Acceptance:
 - User can open bubble, send message, see reply.
 - Reply mood updates expression.
 - `/chat` schema remains unchanged.
+
+Completion notes:
+
+- Added collapsed and expanded bubble UI states.
+- Added bubble message area, placeholder input, send button, Chat open hook, and close/collapse control.
+- Clicking the pet drag region or Chat hook expands the bubble.
+- Clicking the close control collapses the bubble.
+- Placeholder submit prevents default behavior and updates only local UI text.
+- Bubble, input, form, and buttons remain no-drag regions.
+- No backend call, `/chat` call, IPC, preload API, main-process change, or schema change was added.
 
 ### TASK-119 - Mode Switch Full App <-> Pet Mode
 
