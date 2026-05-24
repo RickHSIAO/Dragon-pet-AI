@@ -785,6 +785,29 @@ Checkpoint note:
 - No code was changed for TASK-121.
 - No backend call, `/chat` wiring, `/chat` schema change, external API, image, file access, Email access, Calendar access, screenshot, microphone, or screen-monitoring behavior was added.
 
+### TASK-122 - Pet Window Position Persistence
+
+Status: DONE on 2026-05-24.
+
+Implementation summary:
+
+- Pet Window position is saved by Electron main process only.
+- State path is Electron `app.getPath("userData")` plus `pet-window-state.json`.
+- Stored values are `x`, `y`, `width`, and `height`; Pet Window size remains fixed at `220 x 280`.
+- Position saves after Pet Window `move` with a small debounce and again on `close`.
+- Pet Window loads saved `x/y` when `PET_MODE_ENABLED=true` creates the Pet Window.
+
+Off-screen behavior:
+
+- Saved position is accepted only if the Pet Window center point is inside a current display work area from `screen.getAllDisplays()`.
+- Missing, invalid, or off-screen saved state falls back to a bottom-right default on the primary display work area.
+
+Safety note:
+
+- Full App Window position is not affected.
+- No backend call, `/chat` call, `/chat` schema change, provider settings change, Ollama routing change, external API, image, menu implementation, or bubble backend wiring was added.
+- The only file read/write is the local app-owned Pet Window state JSON under Electron `userData`.
+
 ---
 
 ## 9. Explicit Non-goals for TASK-114
@@ -813,7 +836,7 @@ Recommended product direction:
 - Implement Bubble Chat inside the Pet Window first, not as a separate floating window.
 - Use transparent/frameless/always-on-top for Pet Mode only.
 - Keep click-through out of MVP.
-- Add right-click menu and position persistence after the first Pet Window prototype.
+- Add right-click menu after the first Pet Window prototype; position persistence is implemented in TASK-122.
 - Preserve the current local backend-only chat architecture.
 
 Recommended technical direction:
@@ -833,4 +856,4 @@ Recommended technical direction:
 - Should Pet Mode be hidden from taskbar only after tray support exists?
 - Should click-through be a power-user option?
 - Should Bubble Chat show only current session messages or reuse recent persisted history?
-- Should position persistence live in Electron user data or through an existing backend settings endpoint?
+- Position persistence now lives in Electron user data as of TASK-122.

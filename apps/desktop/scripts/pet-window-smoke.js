@@ -37,8 +37,10 @@ function testMainHasPetWindowPrototype() {
 
 function testPetWindowOptionsAreSafeAndPetSpecific() {
   const main = readText(mainPath);
-  assertRegex(main, /width:\s*220/, "main.js");
-  assertRegex(main, /height:\s*280/, "main.js");
+  assertIncludes(main, "PET_WINDOW_WIDTH = 220", "main.js");
+  assertIncludes(main, "PET_WINDOW_HEIGHT = 280", "main.js");
+  assertRegex(main, /width:\s*PET_WINDOW_WIDTH/, "main.js");
+  assertRegex(main, /height:\s*PET_WINDOW_HEIGHT/, "main.js");
   assertRegex(main, /frame:\s*false/, "main.js");
   assertRegex(main, /transparent:\s*true/, "main.js");
   assertRegex(main, /alwaysOnTop:\s*true/, "main.js");
@@ -48,6 +50,31 @@ function testPetWindowOptionsAreSafeAndPetSpecific() {
   assertRegex(main, /contextIsolation:\s*true/, "main.js");
   assertRegex(main, /sandbox:\s*true/, "main.js");
   assertIncludes(main, 'once("ready-to-show"', "main.js");
+}
+
+function testPetWindowPositionPersistenceIsLocalAndGuarded() {
+  const main = readText(mainPath);
+  assertIncludes(main, 'PET_WINDOW_STATE_FILE = "pet-window-state.json"', "main.js");
+  assertIncludes(main, 'app.getPath("userData")', "main.js");
+  assertIncludes(main, "function getPetWindowStatePath()", "main.js");
+  assertIncludes(main, "function getDefaultPetWindowBounds()", "main.js");
+  assertIncludes(main, "function isPetWindowBoundsVisible(bounds)", "main.js");
+  assertIncludes(main, "function loadPetWindowBounds()", "main.js");
+  assertIncludes(main, "function savePetWindowBounds(win = petWindow)", "main.js");
+  assertIncludes(main, "function schedulePetWindowBoundsSave()", "main.js");
+  assertIncludes(main, "screen.getAllDisplays()", "main.js");
+  assertIncludes(main, "screen.getPrimaryDisplay().workArea", "main.js");
+  assertIncludes(main, "const centerX = normalizedBounds.x + normalizedBounds.width / 2", "main.js");
+  assertIncludes(main, "const centerY = normalizedBounds.y + normalizedBounds.height / 2", "main.js");
+  assertIncludes(main, "fs.readFileSync(getPetWindowStatePath()", "main.js");
+  assertIncludes(main, "fs.writeFileSync(getPetWindowStatePath()", "main.js");
+  assertIncludes(main, "const petBounds = loadPetWindowBounds();", "main.js");
+  assertRegex(main, /x:\s*petBounds\.x/, "main.js");
+  assertRegex(main, /y:\s*petBounds\.y/, "main.js");
+  assertIncludes(main, 'petWindow.on("move"', "main.js");
+  assertIncludes(main, 'petWindow.on("close"', "main.js");
+  assertIncludes(main, "schedulePetWindowBoundsSave();", "main.js");
+  assertIncludes(main, "savePetWindowBounds();", "main.js");
 }
 
 function testFullAppWindowStillExists() {
@@ -115,6 +142,7 @@ function run() {
   const tests = [
     testMainHasPetWindowPrototype,
     testPetWindowOptionsAreSafeAndPetSpecific,
+    testPetWindowPositionPersistenceIsLocalAndGuarded,
     testFullAppWindowStillExists,
     testPetOpenFullAppIpcIsFixedAndNarrow,
     testPetWindowDoesNotReplaceFullAppByDefault,

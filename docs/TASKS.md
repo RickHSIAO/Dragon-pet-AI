@@ -6927,3 +6927,69 @@ Safety boundaries:
 Conclusion:
 
 Pet Mode manual Windows smoke is PASS WITH NOTE. The only note is expected: the Menu hook is still a placeholder and should be handled in a future tray/right-click/menu task.
+
+---
+
+## TASK-122 - Pet Window Position Persistence
+
+**Status:** DONE
+**Date:** 2026-05-24
+
+Goal:
+
+Persist the Pet Window position locally so the next `PET_MODE_ENABLED=true` launch restores the user's last Pet Window location.
+
+Scope:
+
+- Save Pet Window position in Electron main process.
+- Load saved Pet Window position during Pet Window creation.
+- Use a local-only storage path outside the repo.
+- Add an off-screen guard for display changes.
+- Keep Pet Window size fixed at `220 x 280`.
+- Do not modify backend, `/chat`, provider settings, Ollama routing, renderer chat behavior, or menu behavior.
+
+Changes:
+
+- Updated `apps/desktop/src/main.js`.
+- Added `PET_WINDOW_WIDTH`, `PET_WINDOW_HEIGHT`, `PET_WINDOW_STATE_FILE`, edge margin, and save debounce constants.
+- Added `getPetWindowStatePath()` using `app.getPath("userData")`.
+- Added `getDefaultPetWindowBounds()`.
+- Added `isPetWindowBoundsVisible(bounds)` using `screen.getAllDisplays()`.
+- Added `loadPetWindowBounds()`.
+- Added `savePetWindowBounds(win = petWindow)`.
+- Added `schedulePetWindowBoundsSave()`.
+- Pet Window now uses loaded `x/y` bounds when created.
+- Pet Window saves bounds on `move` with debounce.
+- Pet Window saves bounds on `close`.
+- Updated `apps/desktop/scripts/pet-window-smoke.js` to cover persistence and off-screen guard invariants.
+
+Storage:
+
+- Pet Window state is stored in Electron `userData` as `pet-window-state.json`.
+- Stored data is local-only and outside the git repo.
+- Current persisted fields are `x`, `y`, `width`, and `height`; size remains fixed to `220 x 280`.
+
+Off-screen guard:
+
+- Saved bounds are accepted only if the Pet Window center point is inside a current display work area.
+- If the saved position is missing, invalid, or no longer visible after display changes, Pet Window falls back to a default bottom-right position on the primary display work area.
+
+Safety boundaries:
+
+- Full App Window position is not persisted or modified.
+- No backend call added.
+- No `/chat` call added.
+- No `/chat` schema change.
+- No provider settings or Ollama routing change.
+- No external API, Email, Calendar, image, menu, or bubble backend wiring added.
+- The only file read/write is the local app-owned Pet Window state file under Electron `userData`.
+
+Verification:
+
+- `node --check apps/desktop/src/main.js`: PASS.
+- `node --check apps/desktop/src/pet/pet-renderer.js`: PASS.
+- `node --check apps/desktop/src/pet/pet-preload.js`: PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js`: PASS.
+- `node --check apps/desktop/scripts/pet-window-smoke.js`: PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: PASS.
+- `node apps/desktop/scripts/pet-window-smoke.js`: PASS, 9 checks.

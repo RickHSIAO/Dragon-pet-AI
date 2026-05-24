@@ -8,15 +8,126 @@
  * - No shell execution, no file system access, no live2D
  */
 
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, screen } = require("electron");
+const fs = require("fs");
 const path = require("path");
 
 const BACKEND_URL = "http://localhost:8000";
 const PET_MODE_ENABLED = process.env.PET_MODE_ENABLED === "true";
 const PET_OPEN_FULL_APP_CHANNEL = "pet:open-full-app";
+const PET_WINDOW_WIDTH = 220;
+const PET_WINDOW_HEIGHT = 280;
+const PET_WINDOW_STATE_FILE = "pet-window-state.json";
+const PET_WINDOW_EDGE_MARGIN = 24;
+const PET_WINDOW_SAVE_DEBOUNCE_MS = 300;
 
 let fullAppWindow = null;
 let petWindow = null;
+let petWindowSaveTimer = null;
+
+function getPetWindowStatePath() {
+  return path.join(app.getPath("userData"), PET_WINDOW_STATE_FILE);
+}
+
+function getDefaultPetWindowBounds() {
+  const workArea = screen.getPrimaryDisplay().workArea;
+  const x = Math.max(
+    workArea.x,
+    workArea.x + workArea.width - PET_WINDOW_WIDTH - PET_WINDOW_EDGE_MARGIN
+  );
+  const y = Math.max(
+    workArea.y,
+    workArea.y + workArea.height - PET_WINDOW_HEIGHT - PET_WINDOW_EDGE_MARGIN
+  );
+
+  return {
+    x,
+    y,
+    width: PET_WINDOW_WIDTH,
+    height: PET_WINDOW_HEIGHT,
+  };
+}
+
+function isPetWindowBoundsVisible(bounds) {
+  if (!bounds || !Number.isFinite(bounds.x) || !Number.isFinite(bounds.y)) {
+    return false;
+  }
+
+  const normalizedBounds = {
+    x: Math.round(bounds.x),
+    y: Math.round(bounds.y),
+    width: PET_WINDOW_WIDTH,
+    height: PET_WINDOW_HEIGHT,
+  };
+
+  return screen.getAllDisplays().some(({ workArea }) => {
+    const centerX = normalizedBounds.x + normalizedBounds.width / 2;
+    const centerY = normalizedBounds.y + normalizedBounds.height / 2;
+    const displayLeft = workArea.x;
+    const displayRight = workArea.x + workArea.width;
+    const displayTop = workArea.y;
+    const displayBottom = workArea.y + workArea.height;
+
+    return (
+      centerX >= displayLeft &&
+      centerX <= displayRight &&
+      centerY >= displayTop &&
+      centerY <= displayBottom
+    );
+  });
+}
+
+function loadPetWindowBounds() {
+  try {
+    const raw = fs.readFileSync(getPetWindowStatePath(), "utf8");
+    const parsed = JSON.parse(raw);
+    const savedBounds = {
+      x: Number(parsed.x),
+      y: Number(parsed.y),
+      width: PET_WINDOW_WIDTH,
+      height: PET_WINDOW_HEIGHT,
+    };
+
+    if (isPetWindowBoundsVisible(savedBounds)) {
+      return savedBounds;
+    }
+  } catch (_error) {
+    // Missing or invalid local state should never block Pet Mode startup.
+  }
+
+  return getDefaultPetWindowBounds();
+}
+
+function savePetWindowBounds(win = petWindow) {
+  if (!win || win.isDestroyed()) {
+    return;
+  }
+
+  const bounds = win.getBounds();
+  const state = {
+    x: bounds.x,
+    y: bounds.y,
+    width: PET_WINDOW_WIDTH,
+    height: PET_WINDOW_HEIGHT,
+  };
+
+  try {
+    fs.writeFileSync(getPetWindowStatePath(), `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  } catch (_error) {
+    // Position persistence is best-effort and should not affect runtime use.
+  }
+}
+
+function schedulePetWindowBoundsSave() {
+  if (petWindowSaveTimer) {
+    clearTimeout(petWindowSaveTimer);
+  }
+
+  petWindowSaveTimer = setTimeout(() => {
+    petWindowSaveTimer = null;
+    savePetWindowBounds();
+  }, PET_WINDOW_SAVE_DEBOUNCE_MS);
+}
 
 function createWindow() {
   if (fullAppWindow && !fullAppWindow.isDestroyed()) {
@@ -75,9 +186,13 @@ function createPetWindow() {
     return petWindow;
   }
 
+  const petBounds = loadPetWindowBounds();
+
   petWindow = new BrowserWindow({
-    width: 220,
-    height: 280,
+    x: petBounds.x,
+    y: petBounds.y,
+    width: PET_WINDOW_WIDTH,
+    height: PET_WINDOW_HEIGHT,
     frame: false,
     transparent: true,
     alwaysOnTop: true,
@@ -98,7 +213,19 @@ function createPetWindow() {
     }
   });
 
+  petWindow.on("move", () => {
+    schedulePetWindowBoundsSave();
+  });
+
+  petWindow.on("close", () => {
+    savePetWindowBounds();
+  });
+
   petWindow.on("closed", () => {
+    if (petWindowSaveTimer) {
+      clearTimeout(petWindowSaveTimer);
+      petWindowSaveTimer = null;
+    }
     petWindow = null;
   });
 
