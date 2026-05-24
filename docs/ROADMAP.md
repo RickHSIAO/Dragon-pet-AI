@@ -320,7 +320,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 **Goal:** Move the product from a full management interface toward a small desktop pet plus compact chat bubble, while keeping Full App Mode as the control center.
 
-**Status:** CHECKPOINT COMPLETE - TASK-114 design complete; TASK-115 static renderer skeleton complete; TASK-116 env-gated BrowserWindow prototype complete; TASK-117 CSS drag behavior complete; TASK-118 local-only bubble UI state complete; TASK-119 narrow Pet-to-Full mode switch complete; TASK-120 smoke checkpoint passed; TASK-121 manual Windows visual smoke passed with menu placeholder note; TASK-122 Pet Window position persistence complete; TASK-123 Pet menu/right-click menu complete.
+**Status:** CHECKPOINT COMPLETE - TASK-114 design complete; TASK-115 static renderer skeleton complete; TASK-116 env-gated BrowserWindow prototype complete; TASK-117 CSS drag behavior complete; TASK-118 local-only bubble UI state complete; TASK-119 narrow Pet-to-Full mode switch complete; TASK-120 smoke checkpoint passed; TASK-121 manual Windows visual smoke passed with menu placeholder note; TASK-122 Pet Window position persistence complete; TASK-123 Pet menu/right-click menu complete; TASK-124 manual menu smoke passed with right-click drag-region note; TASK-125 right-click menu hotspot fix complete; TASK-126 menu UX regression fixed; TASK-127 explicit drag handle complete.
 
 > Design reference: `docs/PET_MODE_UI_DESIGN.md`
 
@@ -336,6 +336,10 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 | TASK-121 | Manual Windows Pet Mode Visual Smoke | DONE - PASS WITH NOTE |
 | TASK-122 | Pet Window Position Persistence | DONE |
 | TASK-123 | Pet Mode Menu / Right-click Menu | DONE |
+| TASK-124 | Manual Windows Pet Menu Smoke | DONE - PASS WITH NOTE |
+| TASK-125 | Fix Pet Right-click Menu Hit Area | DONE |
+| TASK-126 | Fix Pet Menu UX Regression | DONE |
+| TASK-127 | Replace Large Pet Drag Region with Explicit Drag Handle | DONE |
 
 **Recommended direction:**
 
@@ -364,4 +368,8 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 - TASK-121 manual Windows visual smoke passed: drag, bubble expand/collapse, Full App focus hook, backend/provider status, and always-on-top all passed. Menu hook remains a placeholder note and is not implemented yet.
 - TASK-122 persists Pet Window position to Electron `userData/pet-window-state.json`, saves on move/close, restores on next `PET_MODE_ENABLED=true` startup, and falls back to a primary-display bottom-right default if the saved center point is off-screen.
 - TASK-123 implements the Menu hook and right-click DOM menu with Open Full App, Reset Pet Position, Hide Pet Window, and Close Menu. Reset/Hide use fixed narrow preload APIs and fixed IPC channels only.
+- TASK-124 manual Windows Pet Menu smoke passed with note: Menu hook, close, Open Full App, Reset Pet Position, Hide Pet Window, relaunch position restore, and Bubble Chat placeholder passed; right-click works only on non-drag/lower area because the top avatar/image drag region does not receive renderer `contextmenu` events. Follow-up: TASK-125 Fix Pet right-click menu hit area.
+- TASK-125 fixes the practical right-click hit area by adding an explicit upper-right `pet-no-drag` menu hotspot inside the Pet stage. The main avatar/stage remains draggable; right-click on pure drag-region pixels may still be limited by Electron behavior, so the supported target is now visible and reliable.
+- TASK-126 removes the visible upper-right hotspot after Windows UX testing showed it looked like a duplicate Menu button. The bottom Menu button is now the primary custom menu entry and toggles open/closed. Windows drag-region right-click may show the OS system menu; full-window custom right-click is deferred unless a future custom drag implementation replaces CSS native drag.
+- TASK-127 replaces the large avatar/stage drag region with a small explicit top `#pet-drag-handle`. Avatar, bubble, menu, and controls are no-drag interaction areas. Right-click on the handle may still show the Windows OS system menu; whole-character drag without that behavior is deferred to a future custom drag implementation.
                                         

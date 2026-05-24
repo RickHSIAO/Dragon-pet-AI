@@ -18,17 +18,19 @@
 </head>
 <body>
   <main id="pet-mode-root" class="pet-shell" data-mode="pet" data-bubble-state="collapsed" data-menu-state="closed" aria-label="Christina pet mode skeleton">
-    <section id="pet-drag-region" class="pet-stage pet-drag-region" aria-label="Pet drag region placeholder">
-      <div id="pet-avatar-container" class="pet-avatar-container" data-expression="neutral">
+    <div id="pet-drag-handle" class="pet-drag-handle" aria-label="Drag pet window" title="Drag"></div>
+
+    <section id="pet-drag-region" class="pet-stage pet-no-drag" aria-label="Pet interaction region">
+      <div id="pet-avatar-container" class="pet-avatar-container pet-no-drag" data-expression="neutral">
         <img
           id="pet-avatar"
-          class="pet-avatar"
+          class="pet-avatar pet-no-drag"
           src="../renderer/assets/pet/christina/expressions/christina_neutral.png"
           alt="Christina neutral expression"
         />
       </div>
 
-      <p id="pet-hint" class="pet-hint" aria-live="polite">&#x54FC;&#xFF0C;&#x6C5D;&#x53EB;&#x543E;&#x51FA;&#x4F86;&#x505A;&#x4EC0;&#x9EBC;&#xFF1F;</p>
+      <p id="pet-hint" class="pet-hint pet-no-drag" aria-live="polite">&#x54FC;&#xFF0C;&#x6C5D;&#x53EB;&#x543E;&#x51FA;&#x4F86;&#x505A;&#x4EC0;&#x9EBC;&#xFF1F;</p>
     </section>
 
     <section

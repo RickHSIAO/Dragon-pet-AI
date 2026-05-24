@@ -52,6 +52,15 @@ function closeMenu(documentRef = document) {
   setMenuState(documentRef, false);
 }
 
+function isMenuOpen(documentRef = document) {
+  const menu = documentRef.getElementById("pet-menu");
+  return Boolean(menu && menu.dataset.state === "open");
+}
+
+function toggleMenu(documentRef = document) {
+  setMenuState(documentRef, !isMenuOpen(documentRef));
+}
+
 function expandBubble(documentRef = document) {
   setBubbleState(documentRef, true);
 }
@@ -207,12 +216,12 @@ function initializePetMode(documentRef = document) {
       if (event && typeof event.preventDefault === "function") {
         event.preventDefault();
       }
-      openMenu(documentRef);
+      toggleMenu(documentRef);
     });
   }
 
   if (contextMenuHook && typeof contextMenuHook.addEventListener === "function") {
-    contextMenuHook.addEventListener("click", () => openMenu(documentRef));
+    contextMenuHook.addEventListener("click", () => toggleMenu(documentRef));
   }
 
   if (menuOpenFullApp && typeof menuOpenFullApp.addEventListener === "function") {
@@ -239,6 +248,14 @@ function initializePetMode(documentRef = document) {
   if (menuClose && typeof menuClose.addEventListener === "function") {
     menuClose.addEventListener("click", () => closeMenu(documentRef));
   }
+
+  if (typeof documentRef.addEventListener === "function") {
+    documentRef.addEventListener("keydown", (event) => {
+      if (event && event.key === "Escape") {
+        closeMenu(documentRef);
+      }
+    });
+  }
 }
 
 if (typeof document !== "undefined") {
@@ -260,9 +277,11 @@ if (typeof module !== "undefined") {
     handlePlaceholderSubmit,
     handleResetPetPosition,
     initializePetMode,
+    isMenuOpen,
     openMenu,
     setBubbleState,
     setMenuState,
     toggleBubble,
+    toggleMenu,
   };
 }

@@ -42,10 +42,23 @@ class FakeElement {
 class FakeDocument {
   constructor(ids) {
     this.elements = new Map(ids.map((id) => [id, new FakeElement(id)]));
+    this.listeners = {};
   }
 
   getElementById(id) {
     return this.elements.get(id) || null;
+  }
+
+  addEventListener(type, listener) {
+    if (!this.listeners[type]) this.listeners[type] = [];
+    this.listeners[type].push(listener);
+  }
+
+  dispatchEvent(event) {
+    const listeners = this.listeners[event.type] || [];
+    for (const listener of listeners) {
+      listener(event);
+    }
   }
 }
 
@@ -79,6 +92,7 @@ function testPetHtmlReferencesStaticAssets() {
   const html = readText(petHtmlPath);
   assertIncludes(html, 'href="pet.css"', "pet.html");
   assertIncludes(html, 'src="pet-renderer.js"', "pet.html");
+  assertIncludes(html, 'id="pet-drag-handle"', "pet.html");
   assertIncludes(html, 'id="pet-avatar-container"', "pet.html");
   assertIncludes(html, 'id="pet-avatar"', "pet.html");
   assertIncludes(html, 'id="pet-hint"', "pet.html");
@@ -100,7 +114,11 @@ function testPetHtmlReferencesStaticAssets() {
   assertRegex(html, /id="pet-open-full-app-hook"(?:(?!>).)*data-hook="open-full-app"/, "pet.html");
   assert.equal(/id="pet-open-full-app-hook"(?:(?!>).)*disabled/.test(html), false);
   assert.equal(/id="pet-context-menu-hook"(?:(?!>).)*disabled/.test(html), false);
-  assertRegex(html, /id="pet-drag-region"[^>]*class="[^"]*\bpet-drag-region\b/, "pet.html");
+  assertRegex(html, /id="pet-drag-handle"[^>]*class="[^"]*\bpet-drag-handle\b/, "pet.html");
+  assertRegex(html, /id="pet-drag-region"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
+  assert.equal(/id="pet-drag-region"[^>]*class="[^"]*\bpet-drag-region\b/.test(html), false);
+  assertRegex(html, /id="pet-avatar-container"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
+  assertRegex(html, /id="pet-avatar"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-menu"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-bubble"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-chat-form-hook"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
@@ -115,6 +133,8 @@ function testPetHtmlReferencesStaticAssets() {
   assertRegex(html, /id="pet-menu-hide-window"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-menu-close"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertIncludes(html, "&#x54FC;&#xFF0C;", "pet.html");
+  assertNotIncludes(html, 'id="pet-menu-hotspot"', "pet.html");
+  assertNotIncludes(html, 'data-hook="menu-hotspot"', "pet.html");
   assertIncludes(
     html,
     "../renderer/assets/pet/christina/expressions/christina_neutral.png",
@@ -131,6 +151,7 @@ function testPetCssUsesStaticPetDimensions() {
   assertIncludes(css, "background: transparent", "pet.css");
   assertIncludes(css, "-webkit-app-region: drag", "pet.css");
   assertIncludes(css, "-webkit-app-region: no-drag", "pet.css");
+  assertIncludes(css, ".pet-drag-handle", "pet.css");
   assertIncludes(css, ".pet-drag-region", "pet.css");
   assertIncludes(css, ".pet-no-drag", "pet.css");
   assertIncludes(css, '[data-bubble-state="expanded"]', "pet.css");
@@ -141,6 +162,11 @@ function testPetCssUsesStaticPetDimensions() {
   assertIncludes(css, ".pet-menu-item", "pet.css");
   assertIncludes(css, "position: relative", "pet.css");
   assertIncludes(css, "grid-template-columns: 1fr auto", "pet.css");
+  assertNotIncludes(css, ".pet-menu-hotspot", "pet.css");
+  assert.equal((css.match(/-webkit-app-region:\s*drag\b/g) || []).length, 1);
+  assertRegex(css, /\.pet-drag-handle[\s\S]*-webkit-app-region:\s*drag\b/, "pet.css");
+  assertRegex(css, /\.pet-stage,\s*\r?\n\.pet-drag-region[\s\S]*-webkit-app-region:\s*no-drag\b/, "pet.css");
+  assertRegex(css, /\.pet-avatar[\s\S]*-webkit-app-region:\s*no-drag\b/, "pet.css");
   assertRegex(css, /button,\s*\r?\ninput[\s\S]*-webkit-app-region:\s*no-drag/, "pet.css");
   assertRegex(css, /textarea[\s\S]*-webkit-app-region:\s*no-drag/, "pet.css");
 }
@@ -191,7 +217,7 @@ function testPetRendererInitializesBubbleCollapsed() {
 }
 
 function testPetRendererTogglesMenuState() {
-  const { closeMenu, openMenu, setMenuState } = require(petRendererPath);
+  const { closeMenu, openMenu, setMenuState, toggleMenu } = require(petRendererPath);
   const fakeDocument = new FakeDocument(["pet-mode-root", "pet-menu"]);
 
   openMenu(fakeDocument);
@@ -205,6 +231,12 @@ function testPetRendererTogglesMenuState() {
   assert.equal(fakeDocument.getElementById("pet-menu").hidden, true);
 
   setMenuState(fakeDocument, true);
+  assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "open");
+
+  toggleMenu(fakeDocument);
+  assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "closed");
+
+  toggleMenu(fakeDocument);
   assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "open");
 }
 
@@ -301,6 +333,15 @@ function testPetRendererMenuHooksAreLocalAndNarrow() {
   fakeDocument.getElementById("pet-context-menu-hook").dispatchEvent({ type: "click" });
   assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "open");
 
+  fakeDocument.getElementById("pet-context-menu-hook").dispatchEvent({ type: "click" });
+  assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "closed");
+
+  fakeDocument.getElementById("pet-context-menu-hook").dispatchEvent({ type: "click" });
+  assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "open");
+
+  fakeDocument.getElementById("pet-menu-close").dispatchEvent({ type: "click" });
+  assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "closed");
+
   let contextPrevented = false;
   fakeDocument.getElementById("pet-mode-root").dispatchEvent({
     type: "contextmenu",
@@ -309,6 +350,21 @@ function testPetRendererMenuHooksAreLocalAndNarrow() {
     },
   });
   assert.equal(contextPrevented, true);
+  assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "open");
+
+  fakeDocument.getElementById("pet-mode-root").dispatchEvent({
+    type: "contextmenu",
+    preventDefault() {},
+  });
+  assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "closed");
+
+  fakeDocument.getElementById("pet-context-menu-hook").dispatchEvent({ type: "click" });
+  assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "open");
+
+  fakeDocument.dispatchEvent({ type: "keydown", key: "Escape" });
+  assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "closed");
+
+  fakeDocument.getElementById("pet-context-menu-hook").dispatchEvent({ type: "click" });
   assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "open");
 
   fakeDocument.getElementById("pet-menu-close").dispatchEvent({ type: "click" });

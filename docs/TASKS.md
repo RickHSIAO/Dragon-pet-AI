@@ -6996,6 +6996,53 @@ Verification:
 
 ---
 
+## TASK-124 - Manual Windows Pet Menu Smoke
+
+**Status:** DONE - PASS WITH NOTE
+**Date:** 2026-05-24
+
+Goal:
+
+Record the user-run manual Windows Pet Menu smoke after TASK-123.
+
+Scope:
+
+- Record manual Windows runtime observations.
+- Update tracking documents only.
+- Do not modify code.
+- Do not implement a fix.
+- Do not modify Electron `main.js`, Pet renderer, backend, provider settings, Ollama routing, or `/chat` schema.
+
+Manual Windows Pet Menu smoke results:
+
+| Check | Result | Notes |
+|---|---|---|
+| Click Menu hook | PASS | Menu opens. |
+| Right-click Pet Window | PASS WITH NOTE | Lower / non-drag area opens the menu; top avatar/image drag region does not respond to right-click. |
+| Close Menu | PASS | Menu collapses. |
+| Open Full App | PASS | Full App is brought back to foreground. |
+| Reset Pet Position | PASS | Pet Window returns to the safe default position. |
+| Hide Pet Window | PASS | Pet Window hides; Full App remains open. |
+| Relaunch with `PET_MODE_ENABLED=true` | PASS | Saved position is restored. |
+| Bubble Chat | PASS | Still local placeholder; not wired to `/chat`. |
+
+Right-click note:
+
+- Right-click menu currently works only on non-drag / lower area.
+- Top avatar/image drag region does not receive right-click.
+- Likely cause: `-webkit-app-region: drag` consumes renderer `contextmenu` events in the upper drag region.
+- Follow-up recommended: TASK-125 - Fix Pet right-click menu hit area.
+
+Safety boundaries:
+
+- No code modified.
+- No backend call or `/chat` wiring added.
+- No `/chat` schema change.
+- No external API added.
+- No file, Email, Calendar, screenshot, microphone, or screen-monitoring behavior added.
+
+---
+
 ## TASK-123 - Pet Mode Menu / Right-click Menu
 
 **Status:** DONE
@@ -7064,3 +7111,172 @@ Verification:
 - `node --check apps/desktop/scripts/pet-window-smoke.js`: PASS.
 - `node apps/desktop/scripts/pet-renderer-smoke.js`: PASS, 13 checks.
 - `node apps/desktop/scripts/pet-window-smoke.js`: PASS, 9 checks.
+
+---
+
+## TASK-125 - Fix Pet Right-click Menu Hit Area
+
+**Status:** DONE
+**Date:** 2026-05-24
+
+Goal:
+
+Fix the Pet Window right-click menu hit area after TASK-124 found that the top avatar/image drag region did not receive renderer `contextmenu` events.
+
+Root cause:
+
+- The upper Pet avatar/image area is part of the Electron CSS drag region.
+- Electron `-webkit-app-region: drag` can consume renderer mouse/context menu events.
+- Keeping the entire top area draggable is useful for the desktop pet, so the fix should not turn the whole avatar surface into `no-drag`.
+
+Implementation:
+
+- Added a clear upper-right `#pet-menu-hotspot` button inside the Pet drag stage.
+- Marked the hotspot as `pet-no-drag` so it can receive click and right-click events.
+- Wired hotspot click and hotspot `contextmenu` to the existing local menu open state.
+- Kept the existing lower Menu hook and root `contextmenu` behavior.
+- Kept the main Pet stage as the primary drag region.
+
+Draggable areas:
+
+- `#pet-drag-region` remains the main draggable region.
+- Avatar/image surrounding area remains draggable except for the explicit menu hotspot.
+
+Right-click/menu areas:
+
+- `#pet-menu-hotspot` supports click and right-click.
+- Existing `#pet-context-menu-hook` supports click.
+- Existing non-drag/lower area can still open the menu through the root `contextmenu` listener.
+- Full-window right-click is still limited by Electron drag-region behavior; the supported target is now explicit and visible.
+
+Safety boundaries:
+
+- No IPC added.
+- No preload API added.
+- No backend call added.
+- No `/chat` call added.
+- No `/chat` schema change.
+- No provider settings or Ollama routing change.
+- No external API, Email, Calendar, file access, image, or bubble backend wiring added.
+
+Verification:
+
+- `node --check apps/desktop/src/pet/pet-renderer.js`: PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js`: PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: PASS, 13 checks.
+- `node apps/desktop/scripts/pet-window-smoke.js`: PASS, 9 checks.
+- `npm.cmd run test:renderer`: PASS.
+- `python -m pytest`: PASS, 586 passed.
+- Direct Ollama URL safety scan for `main.js`, `renderer.js`, `pet-renderer.js`, and `pet-preload.js`: PASS, no `localhost:11434`, `127.0.0.1:11434`, or bare `11434` match.
+- `git diff --check`: PASS, no whitespace errors.
+
+---
+
+## TASK-127 - Replace Large Pet Drag Region with Explicit Drag Handle
+
+**Status:** DONE
+**Date:** 2026-05-24
+
+Goal:
+
+Reduce Windows OS system menu interference by removing the large Pet Mode CSS drag region and replacing it with a small explicit drag handle.
+
+Root cause:
+
+- On Windows, `-webkit-app-region: drag` behaves like a native title bar region.
+- Right-clicking that region may show the Windows system menu instead of the Pet DOM menu.
+- A large avatar/stage drag region makes normal Pet interactions overlap with native window behavior.
+
+Implementation:
+
+- Added `#pet-drag-handle` as a small top drag grip.
+- Changed `#pet-drag-region` / avatar stage from a large drag region to a no-drag interaction region.
+- Marked avatar container, avatar image, hint, bubble, menu, action hooks, buttons, inputs, and textareas as no-drag.
+- Kept the bottom `Menu` button toggle behavior from TASK-126.
+- Kept `Close Menu` and Escape-to-close behavior.
+- Kept no-drag-area right-click as a local Pet menu toggle where renderer events are delivered.
+
+UX rule:
+
+- Only the small `#pet-drag-handle` uses CSS-native `-webkit-app-region: drag`.
+- Avatar, bubble, and controls are interaction-first no-drag areas.
+- Right-clicking the drag handle may still show the Windows OS system menu; that is acceptable because the handle is small and explicit.
+- If a future task wants the whole character to be draggable without OS system menu interference, it should use a custom drag implementation instead of large-area CSS `app-region: drag`.
+
+Safety boundaries:
+
+- No IPC added.
+- No preload API added.
+- No `main.js` change.
+- No backend call added.
+- No `/chat` call added.
+- No `/chat` schema change.
+- No provider settings or Ollama routing change.
+- No external API, Email, Calendar, file access, image, or bubble backend wiring added.
+
+Verification:
+
+- `node --check apps/desktop/src/pet/pet-renderer.js`: PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js`: PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: PASS, 13 checks.
+- `node apps/desktop/scripts/pet-window-smoke.js`: PASS, 9 checks.
+- `npm.cmd run test:renderer`: PASS.
+- `python -m pytest`: PASS, 586 passed.
+- Direct Ollama URL safety scan for `main.js`, `renderer.js`, `pet-renderer.js`, and `pet-preload.js`: PASS, no `localhost:11434`, `127.0.0.1:11434`, or bare `11434` match.
+- `git diff --check`: PASS, no whitespace errors.
+
+## TASK-126 - Fix Pet Menu UX Regression
+
+**Status:** DONE
+**Date:** 2026-05-24
+
+Goal:
+
+Fix the Pet Menu UX regression found after TASK-125 manual Windows testing.
+
+Root cause:
+
+- The visible upper-right `#pet-menu-hotspot` solved a hit-area problem but created a duplicated Menu affordance.
+- On Windows, right-clicking Electron `-webkit-app-region: drag` behaves like right-clicking a title bar and may show the OS system menu.
+- Renderer `contextmenu` is not reliable on drag-region pixels, so full-window custom right-click conflicts with native dragging.
+
+Implementation:
+
+- Removed the visible upper-right `#pet-menu-hotspot`.
+- Removed hotspot CSS and renderer event wiring.
+- Kept the bottom `Chat / Full App / Menu` action row.
+- Changed the bottom `Menu` button to toggle the Pet DOM menu:
+  - closed -> open
+  - open -> closed
+- Kept `Close Menu` behavior.
+- Added Escape-to-close for the local DOM menu.
+- Kept no-drag-area right-click as a local menu toggle where renderer events are delivered.
+
+UX rule:
+
+- Drag region is primarily for dragging.
+- On Windows, right-clicking the drag region may trigger the OS system menu.
+- Pet custom menu primary entry is the bottom `Menu` button.
+- Full-window custom right-click is deferred unless a future task introduces custom drag behavior instead of CSS native drag.
+
+Safety boundaries:
+
+- No IPC added.
+- No preload API added.
+- No `main.js` change.
+- No backend call added.
+- No `/chat` call added.
+- No `/chat` schema change.
+- No provider settings or Ollama routing change.
+- No external API, Email, Calendar, file access, image, or bubble backend wiring added.
+
+Verification:
+
+- `node --check apps/desktop/src/pet/pet-renderer.js`: PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js`: PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: PASS, 13 checks.
+- `node apps/desktop/scripts/pet-window-smoke.js`: PASS, 9 checks.
+- `npm.cmd run test:renderer`: PASS.
+- `python -m pytest`: PASS, 586 passed.
+- Direct Ollama URL safety scan for `main.js`, `renderer.js`, `pet-renderer.js`, and `pet-preload.js`: PASS, no `localhost:11434`, `127.0.0.1:11434`, or bare `11434` match.
+- `git diff --check`: PASS, no whitespace errors.

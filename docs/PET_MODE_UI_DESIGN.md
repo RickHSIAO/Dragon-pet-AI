@@ -178,9 +178,10 @@ Required for MVP.
 
 Recommended approach:
 
-- Use CSS `-webkit-app-region: drag` on a dedicated drag surface around the pet body.
-- Use `-webkit-app-region: no-drag` on buttons, inputs, right-click targets, and bubble controls.
-- Avoid implementing manual drag math first unless CSS drag is insufficient.
+- Use CSS `-webkit-app-region: drag` only on a small explicit drag handle.
+- Use `-webkit-app-region: no-drag` on avatar, pet body, buttons, inputs, right-click targets, bubble controls, and menus.
+- Avoid large-area CSS drag regions on Windows because they can behave like native title bars and trigger the OS system menu on right-click.
+- Use a future custom drag implementation if whole-character drag is required.
 
 ### Click-through
 
@@ -675,6 +676,12 @@ Completion notes:
 - CSS applies `-webkit-app-region: no-drag` to `.pet-no-drag`, bubble, form, action area, buttons, inputs, and textareas.
 - No IPC, preload API, mousemove drag implementation, click-through behavior, backend call, or `/chat` call was added.
 
+TASK-127 supersedes the large drag-region approach:
+
+- `#pet-drag-region` is now a no-drag interaction region.
+- `#pet-drag-handle` is the only CSS-native drag region.
+- Avatar, bubble, menu, and controls are no-drag.
+
 ### TASK-118 - Pet Bubble Chat Design
 
 Status: DONE on 2026-05-24 for local UI state only. Backend `/chat` wiring remains deferred.
@@ -834,6 +841,122 @@ Safety note:
 - The menu uses fixed narrow preload APIs only.
 - Renderer cannot send arbitrary IPC channels or arbitrary x/y coordinates.
 - No fs, shell, process, openExternal, backend call, `/chat` call, `/chat` schema change, provider settings change, Ollama routing change, external API, image, or bubble backend wiring was added.
+
+### TASK-124 - Manual Windows Pet Menu Smoke
+
+Status: DONE - PASS WITH NOTE on 2026-05-24.
+
+Manual smoke summary:
+
+| Check | Result | Notes |
+|---|---|---|
+| Click Menu hook | PASS | Menu opens. |
+| Right-click Pet Window | PASS WITH NOTE | Lower / non-drag area opens menu; top avatar/image drag region does not respond to right-click. |
+| Close Menu | PASS | Menu collapses. |
+| Open Full App | PASS | Full App is brought back to foreground. |
+| Reset Pet Position | PASS | Pet Window returns to safe default position. |
+| Hide Pet Window | PASS | Pet Window hides; Full App remains open. |
+| Relaunch with `PET_MODE_ENABLED=true` | PASS | Saved position is restored. |
+| Bubble Chat | PASS | Still local placeholder; not wired to `/chat`. |
+
+Right-click note:
+
+- Right-click menu currently works only on non-drag / lower area.
+- Top avatar/image drag region does not receive right-click.
+- Likely cause: `-webkit-app-region: drag` consumes renderer `contextmenu` events in the upper drag region.
+- Follow-up recommended: TASK-125 - Fix Pet right-click menu hit area.
+
+Safety note:
+
+- No code was changed for TASK-124.
+- No backend call, `/chat` wiring, `/chat` schema change, external API, image, file access, Email access, Calendar access, screenshot, microphone, or screen-monitoring behavior was added.
+
+### TASK-125 - Fix Pet Right-click Menu Hit Area
+
+Status: DONE on 2026-05-24.
+
+Root cause:
+
+- The upper avatar/image area is intentionally part of the Electron CSS drag region.
+- Electron `-webkit-app-region: drag` can prevent renderer `contextmenu` events from reaching the Pet renderer.
+- Full-window right-click and full-window drag are not both reliable on the same pixels.
+
+Implementation summary:
+
+- Added an explicit upper-right `#pet-menu-hotspot` inside the Pet stage.
+- The hotspot is `pet-no-drag`, so it can receive click and right-click events.
+- Hotspot click and hotspot right-click open the existing local DOM menu.
+- The main avatar stage remains draggable.
+- The existing lower Menu hook and non-drag lower/root context menu behavior remain available.
+
+Resulting hit areas:
+
+- Dragging: main Pet drag stage and avatar surrounding area.
+- Right-click/menu: explicit upper-right menu hotspot, lower non-drag area, and existing Menu hook.
+- Known limitation: pixels assigned to `-webkit-app-region: drag` may still not deliver renderer right-click events; the UI now provides a clear visible no-drag target instead of relying on those pixels.
+
+Safety note:
+
+- No IPC, preload API, backend call, `/chat` call, `/chat` schema change, provider settings change, Ollama routing change, external API, image, file access, Email access, Calendar access, screenshot, microphone, screen-monitoring behavior, or bubble backend wiring was added.
+
+### TASK-126 - Fix Pet Menu UX Regression
+
+Status: DONE on 2026-05-24.
+
+Root cause:
+
+- The visible upper-right `#pet-menu-hotspot` added in TASK-125 created a duplicated Menu affordance.
+- On Windows, right-clicking a `-webkit-app-region: drag` area can behave like right-clicking a native title bar and may show the OS system menu.
+- Renderer `contextmenu` cannot be relied on for pixels assigned to the native drag region.
+
+Implementation summary:
+
+- Removed the visible upper-right menu hotspot.
+- Kept the bottom `Chat / Full App / Menu` action row as the Pet menu entry point.
+- Changed the bottom `Menu` button to toggle the DOM menu open and closed.
+- Kept `Close Menu` and added Escape-to-close for the local DOM menu.
+- Kept no-drag-area right-click as a local toggle where renderer events are delivered.
+
+Current UX rule:
+
+- The drag region is primarily for moving the Pet Window.
+- The bottom `Menu` button is the primary custom menu entry.
+- Right-click in the native drag region may show the Windows system menu; this is accepted for the CSS-native drag MVP.
+- Full-window custom right-click is deferred unless a future task replaces CSS native drag with a custom drag implementation.
+
+Safety note:
+
+- No IPC, preload API, `main.js` change, backend call, `/chat` call, `/chat` schema change, provider settings change, Ollama routing change, external API, image, file access, Email access, Calendar access, screenshot, microphone, screen-monitoring behavior, or bubble backend wiring was added.
+
+### TASK-127 - Replace Large Pet Drag Region with Explicit Drag Handle
+
+Status: DONE on 2026-05-24.
+
+Root cause:
+
+- On Windows, `-webkit-app-region: drag` behaves like a native title bar region.
+- Right-clicking a native drag region may show the Windows system menu instead of the Pet DOM menu.
+- A large avatar/stage drag region creates too much overlap between Pet interactions and OS window behavior.
+
+Implementation summary:
+
+- Added a small top `#pet-drag-handle` grip as the only CSS-native drag region.
+- Removed CSS-native drag behavior from the large avatar/stage region.
+- Avatar container, avatar image, hint, bubble, menu, action hooks, buttons, inputs, and textareas are no-drag interaction areas.
+- The bottom `Menu` button continues to toggle the Pet DOM menu.
+- `Close Menu` and Escape-to-close remain available.
+- Right-click in no-drag interaction areas can still toggle the Pet DOM menu when renderer events are delivered.
+
+Current UX rule:
+
+- Dragging uses the explicit top handle.
+- Avatar / bubble / controls are interaction-first no-drag areas.
+- Right-clicking the drag handle may still show the Windows OS system menu; this is accepted because the handle is small and clearly for moving the window.
+- Restoring whole-character drag without OS menu interference should be handled by a future custom drag implementation, not by large-area CSS `app-region: drag`.
+
+Safety note:
+
+- No IPC, preload API, `main.js` change, backend call, `/chat` call, `/chat` schema change, provider settings change, Ollama routing change, external API, image, file access, Email access, Calendar access, screenshot, microphone, screen-monitoring behavior, or bubble backend wiring was added.
 
 ---
 
