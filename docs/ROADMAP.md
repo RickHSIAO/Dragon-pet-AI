@@ -320,7 +320,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 **Goal:** Move the product from a full management interface toward a small desktop pet plus compact chat bubble, while keeping Full App Mode as the control center.
 
-**Status:** RELEASE CHECKPOINT COMPLETE - TASK-114 design complete; TASK-115 static renderer skeleton complete; TASK-116 env-gated BrowserWindow prototype complete; TASK-117 CSS drag behavior complete; TASK-118 local-only bubble UI state complete; TASK-119 narrow Pet-to-Full mode switch complete; TASK-120 smoke checkpoint passed; TASK-121 manual Windows visual smoke passed with menu placeholder note; TASK-122 Pet Window position persistence complete; TASK-123 Pet menu/right-click menu complete; TASK-124 manual menu smoke passed with right-click drag-region note; TASK-125 right-click menu hotspot fix complete; TASK-126 menu UX regression fixed; TASK-127 explicit drag handle complete; TASK-128 Full App -> Show Pet bridge complete; TASK-129 drag regression fix complete; TASK-130 manual Windows drag/menu smoke passed; TASK-131 Pet Mode release checkpoint complete; TASK-132 Bubble Chat wiring design complete; TASK-133 static bubble state refinement complete; TASK-134 Pet Bubble `/chat` client wiring complete; TASK-135 Pet Bubble loading/error UX complete; TASK-136 Pet Bubble mood/expression integration complete.
+**Status:** RELEASE CHECKPOINT COMPLETE - TASK-114 design complete; TASK-115 static renderer skeleton complete; TASK-116 env-gated BrowserWindow prototype complete; TASK-117 CSS drag behavior complete; TASK-118 local-only bubble UI state complete; TASK-119 narrow Pet-to-Full mode switch complete; TASK-120 smoke checkpoint passed; TASK-121 manual Windows visual smoke passed with menu placeholder note; TASK-122 Pet Window position persistence complete; TASK-123 Pet menu/right-click menu complete; TASK-124 manual menu smoke passed with right-click drag-region note; TASK-125 right-click menu hotspot fix complete; TASK-126 menu UX regression fixed; TASK-127 explicit drag handle complete; TASK-128 Full App -> Show Pet bridge complete; TASK-129 drag regression fix complete; TASK-130 manual Windows drag/menu smoke passed; TASK-131 Pet Mode release checkpoint complete; TASK-132 Bubble Chat wiring design complete; TASK-133 static bubble state refinement complete; TASK-134 Pet Bubble `/chat` client wiring complete; TASK-135 Pet Bubble loading/error UX complete; TASK-136 Pet Bubble mood/expression integration complete; TASK-137 Pet Bubble long reply handling complete.
 
 > Design reference: `docs/PET_MODE_UI_DESIGN.md`
 > Release checkpoint: `docs/PET_MODE_RELEASE_CHECKPOINT.md`
@@ -351,6 +351,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 | TASK-134 | Pet Bubble `/chat` Client Wiring | DONE |
 | TASK-135 | Pet Bubble Loading/Error UX | DONE |
 | TASK-136 | Pet Bubble Mood/Expression Integration | DONE |
+| TASK-137 | Pet Bubble Long Reply Handling | DONE |
 
 **Recommended direction:**
 
@@ -392,8 +393,9 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 - TASK-134 wires Pet Bubble Chat to the existing local backend `/chat` using the Full App request shape `{ message, use_memory }` and response schema `reply / mood / source`. Pet Mode fixes `use_memory=false`, maps `source` into compact bubble states, maps `mood` to existing Christina expression PNGs, handles network failure as `backend_offline`, and keeps direct Ollama access blocked.
 - TASK-135 adds Pet Bubble timeout/cold-start handling with `PET_CHAT_TIMEOUT_MS = 100000`, restores input/send after completion, preserves input for retry on offline/timeout/local-error/malformed responses, prevents duplicate pending submits, and keeps raw diagnostics out of the bubble.
 - TASK-136 unifies Pet Bubble mood/expression mapping through `normalizePetMood`, `setPetExpression`, and `setPetExpressionForBubbleState`. Response `success` uses backend `mood`; local states map to existing Christina PNG moods only: pending/focused, offline/worried, timeout/sleepy, local-error/worried, mock/proud, empty-input/annoyed, long-reply/focused.
+- TASK-137 defines long reply threshold as `PET_REPLY_LONG_THRESHOLD = 160`, routes long backend replies through `long_reply`, shows `回覆較長，可開 Full App 查看完整內容。`, keeps response text internally scrollable, and reinforces `220 x 280` layout constraints with no new backend, IPC, API, or schema change.
 
 **Next recommended task:**
 
-- TASK-137 - Pet Bubble Long Reply Handling. Refine real long-reply reading behavior while preserving the `220 x 280` Pet Window and `/chat` schema.
+- TASK-138 - Pet Bubble Chat Smoke Tests. Consolidate Pet Bubble success/error/long-reply smoke coverage and prepare for manual Windows validation.
                                         

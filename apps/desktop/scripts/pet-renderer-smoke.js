@@ -188,8 +188,13 @@ function testPetCssUsesStaticPetDimensions() {
   assertRegex(css, /\.pet-drag-handle[\s\S]*pointer-events:\s*auto/, "pet.css");
   assertRegex(css, /\.pet-drag-handle::before/, "pet.css");
   assertRegex(css, /\.pet-shell[\s\S]*height:\s*280px/, "pet.css");
+  assertRegex(css, /\.pet-shell[\s\S]*max-height:\s*280px/, "pet.css");
+  assertRegex(css, /\.pet-shell[\s\S]*overflow:\s*hidden/, "pet.css");
+  assertRegex(css, /\.pet-bubble[\s\S]*overflow:\s*hidden/, "pet.css");
   assertRegex(css, /\.pet-bubble-response[\s\S]*max-height:\s*30px/, "pet.css");
   assertRegex(css, /\.pet-bubble-response[\s\S]*overflow-y:\s*auto/, "pet.css");
+  assertRegex(css, /\.pet-bubble-response[\s\S]*overflow-wrap:\s*anywhere/, "pet.css");
+  assertRegex(css, /\.pet-bubble-response[\s\S]*white-space:\s*pre-wrap/, "pet.css");
   assertRegex(css, /\.pet-bubble\[data-state="long_reply"\] \.pet-bubble-response[\s\S]*max-height:\s*36px/, "pet.css");
   assertRegex(css, /\.pet-stage,\s*\r?\n\.pet-drag-region[\s\S]*-webkit-app-region:\s*no-drag\b/, "pet.css");
   assertRegex(css, /\.pet-avatar[\s\S]*-webkit-app-region:\s*no-drag\b/, "pet.css");
@@ -201,6 +206,9 @@ function testPetRendererUsesBackendChatWithoutDirectOllama() {
   const renderer = readText(petRendererPath);
   assertIncludes(renderer, "sendPetChatMessage", "pet-renderer.js");
   assertIncludes(renderer, "PET_CHAT_TIMEOUT_MS = 100000", "pet-renderer.js");
+  assertIncludes(renderer, "PET_REPLY_LONG_THRESHOLD = 160", "pet-renderer.js");
+  assertIncludes(renderer, "PET_LONG_REPLY_HINT", "pet-renderer.js");
+  assertIncludes(renderer, "function isLongReply", "pet-renderer.js");
   assertIncludes(renderer, "const PET_BUBBLE_STATE_EXPRESSIONS = Object.freeze", "pet-renderer.js");
   assertIncludes(renderer, "function normalizePetMood", "pet-renderer.js");
   assertIncludes(renderer, "function setPetExpressionForBubbleState", "pet-renderer.js");
@@ -215,6 +223,7 @@ function testPetRendererUsesBackendChatWithoutDirectOllama() {
   assertIncludes(renderer, 'mood: data && typeof data.mood === "string"', "pet-renderer.js");
   assertIncludes(renderer, 'source: data && typeof data.source === "string"', "pet-renderer.js");
   assertIncludes(renderer, '`${backendUrl}/chat`', "pet-renderer.js");
+  assertIncludes(renderer, 'if (isLongReply(reply)) return "long_reply"', "pet-renderer.js");
   for (const mood of ["neutral", "focused", "happy", "proud", "annoyed", "worried", "sleepy"]) {
     assertIncludes(renderer, `christina_${mood}.png`, "pet-renderer.js");
   }
@@ -270,7 +279,7 @@ function testPetRendererDefinesBubbleStates() {
   );
   assertIncludes(
     renderer,
-    "\\u56de\\u8986\\u592a\\u9577\\uff0c\\u4e4b\\u5f8c\\u53ef\\u5230 Full App \\u67e5\\u770b\\u5b8c\\u6574\\u5167\\u5bb9\\u3002",
+    "\\u56de\\u8986\\u8f03\\u9577\\uff0c\\u53ef\\u958b Full App \\u67e5\\u770b\\u5b8c\\u6574\\u5167\\u5bb9\\u3002",
     "pet-renderer.js"
   );
 }
@@ -393,6 +402,19 @@ function testPetExpressionMappingHelpersUseExistingAssets() {
   setPetExpressionForBubbleState(fakeDocument, "empty_input");
   assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "annoyed");
   assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_annoyed\.png$/);
+}
+
+function testPetLongReplyThresholdHelper() {
+  const { PET_REPLY_LONG_THRESHOLD, isLongReply, stateForChatSource } = require(petRendererPath);
+  const shortReply = "x".repeat(PET_REPLY_LONG_THRESHOLD);
+  const longReply = "x".repeat(PET_REPLY_LONG_THRESHOLD + 1);
+
+  assert.equal(PET_REPLY_LONG_THRESHOLD, 160);
+  assert.equal(isLongReply(shortReply), false);
+  assert.equal(isLongReply(longReply), true);
+  assert.equal(stateForChatSource("llm_local", shortReply), "success");
+  assert.equal(stateForChatSource("llm_local", longReply), "long_reply");
+  assert.equal(stateForChatSource("mock", longReply), "fallback_mock");
 }
 
 function testPetRendererTogglesMenuState() {
@@ -841,7 +863,7 @@ async function testPetChatMalformedResponseUsesSafeErrorState() {
 }
 
 async function testPetChatLongReplyUsesLongReplyState() {
-  const { handleChatSubmit } = require(petRendererPath);
+  const { PET_LONG_REPLY_HINT, handleChatSubmit } = require(petRendererPath);
   const fakeDocument = createPetChatDocument();
   const longReply = "Long reply. ".repeat(30);
   fakeDocument.getElementById("pet-chat-input-hook").value = "long please";
@@ -864,8 +886,11 @@ async function testPetChatLongReplyUsesLongReplyState() {
 
   assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "long_reply");
   assert.equal(fakeDocument.getElementById("pet-bubble-status").textContent, "local");
+  assert.equal(fakeDocument.getElementById("pet-bubble-message").textContent, PET_LONG_REPLY_HINT);
   assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, longReply);
   assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "focused");
+  assert.equal(fakeDocument.getElementById("pet-chat-input-hook").disabled, false);
+  assert.equal(fakeDocument.getElementById("pet-chat-send-hook").disabled, false);
 }
 
 function testPetRendererMenuHooksAreLocalAndNarrow() {
@@ -1043,6 +1068,7 @@ async function run() {
     testPetRendererInitializesBubbleCollapsed,
     testPetRendererRendersAllLocalBubbleStates,
     testPetExpressionMappingHelpersUseExistingAssets,
+    testPetLongReplyThresholdHelper,
     testPetRendererTogglesBubbleState,
     testPetRendererTogglesMenuState,
     testPetRendererClickAndSubmitHandlersAreLocalOnly,

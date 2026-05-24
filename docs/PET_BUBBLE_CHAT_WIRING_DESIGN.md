@@ -447,3 +447,53 @@ Validation:
 Next recommendation:
 
 - TASK-137 - Pet Bubble Long Reply Handling.
+
+## 16. TASK-137 Long Reply Handling Checkpoint
+
+Status: DONE on 2026-05-24.
+
+TASK-137 improved long reply detection and constrained reading behavior for Pet Bubble Chat.
+
+Completed:
+
+- Kept the long reply threshold explicit as `PET_REPLY_LONG_THRESHOLD = 160`.
+- Added `isLongReply(reply)`.
+- `stateForChatSource(...)` now routes long non-mock, non-error replies through `isLongReply(...)`.
+- Added shared `PET_LONG_REPLY_HINT`.
+- `long_reply` state message is `回覆較長，可開 Full App 查看完整內容。`
+- Long reply content remains in `#pet-bubble-response`.
+- No automatic Full App opening was added.
+- No new window was added.
+
+Layout behavior:
+
+- Pet shell remains fixed to the `220 x 280` design target.
+- Pet shell explicitly keeps `max-height: 280px` and `overflow: hidden`.
+- Bubble response keeps `overflow-y: auto`.
+- Long reply response area remains capped at `36px`.
+- Response text uses `overflow-wrap: anywhere` and `white-space: pre-wrap`.
+- Avatar remains visible in expanded mode.
+- Input and Send remain available after long replies.
+- Explicit drag handle and no-drag hooks remain intact.
+
+Reading path:
+
+- The existing Full App button/hook remains the path for longer reading.
+- The bubble only displays a compact hint; it does not duplicate Full App.
+
+Safety confirmation:
+
+- Backend code was not changed.
+- `/chat` schema remains `reply`, `mood`, `source`.
+- No backend route or API was added.
+- No IPC or preload API was added.
+- No direct Ollama access was added.
+- No external API, file access, Email access, Calendar access, image, provider settings, screenshot, microphone, or screen monitoring behavior was added.
+
+Validation:
+
+- Pet renderer smoke covers long reply state routing, threshold helper, long reply hint, internal scroll/max-height CSS, input/send restoration, Full App hook presence, drag handle presence, no-drag hooks, fixed Pet Window size assumptions, `/chat` schema field assumptions, and direct-Ollama safety.
+
+Next recommendation:
+
+- TASK-138 - Pet Bubble Chat Smoke Tests.

@@ -8,6 +8,7 @@ const PET_MODE_DEFAULTS = Object.freeze({
 const PET_BACKEND_DEFAULT_URL = "http://localhost:8000";
 const PET_CHAT_TIMEOUT_MS = 100000;
 const PET_REPLY_LONG_THRESHOLD = 160;
+const PET_LONG_REPLY_HINT = "\u56de\u8986\u8f03\u9577\uff0c\u53ef\u958b Full App \u67e5\u770b\u5b8c\u6574\u5167\u5bb9\u3002";
 let petChatPending = false;
 
 const CHRISTINA_EXPRESSION_ASSETS = Object.freeze({
@@ -139,7 +140,7 @@ const BUBBLE_STATES = Object.freeze({
     expanded: true,
     source: "local",
     statusText: "long reply",
-    message: "\u56de\u8986\u592a\u9577\uff0c\u4e4b\u5f8c\u53ef\u5230 Full App \u67e5\u770b\u5b8c\u6574\u5167\u5bb9\u3002",
+    message: PET_LONG_REPLY_HINT,
     response:
       "This is a long reply placeholder. It stays inside the bubble response area and scrolls internally instead of resizing the Pet Window.",
     inputDisabled: false,
@@ -217,10 +218,14 @@ function sourceStatusLabel(source) {
   return source || "unknown source";
 }
 
+function isLongReply(reply) {
+  return typeof reply === "string" && reply.length > PET_REPLY_LONG_THRESHOLD;
+}
+
 function stateForChatSource(source, reply) {
   if (source === "llm_local_error") return "llm_local_error";
   if (source === "mock") return "fallback_mock";
-  if (typeof reply === "string" && reply.length > PET_REPLY_LONG_THRESHOLD) return "long_reply";
+  if (isLongReply(reply)) return "long_reply";
   return "success";
 }
 
@@ -494,7 +499,7 @@ async function handleChatSubmit(event, documentRef = document, options = {}) {
       nextState === "fallback_mock" || nextState === "llm_local_error"
         ? BUBBLE_STATES[nextState].message
         : isLongReply
-          ? "\u56de\u8986\u8f03\u9577\uff0c\u53ef\u958b Full App \u67e5\u770b\u5b8c\u6574\u5167\u5bb9\u3002"
+          ? PET_LONG_REPLY_HINT
           : "Reply received.";
 
     setBubbleState(documentRef, nextState, {
@@ -721,7 +726,9 @@ if (typeof module !== "undefined") {
     CHRISTINA_EXPRESSION_ASSETS,
     PET_BACKEND_DEFAULT_URL,
     PET_BUBBLE_STATE_EXPRESSIONS,
+    PET_LONG_REPLY_HINT,
     PET_MODE_DEFAULTS,
+    PET_REPLY_LONG_THRESHOLD,
     buildChatPayload,
     collapseBubble,
     closeMenu,
@@ -736,6 +743,7 @@ if (typeof module !== "undefined") {
     handlePlaceholderSubmit,
     handleResetPetPosition,
     initializePetMode,
+    isLongReply,
     isMenuOpen,
     openMenu,
     parseChatResponse,

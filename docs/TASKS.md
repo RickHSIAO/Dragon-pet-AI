@@ -7172,6 +7172,73 @@ Verification:
 
 ---
 
+## TASK-137 - Pet Bubble Long Reply Handling
+
+**Status:** DONE
+**Date:** 2026-05-24
+
+Goal:
+
+Improve Pet Bubble long reply detection, constrained display, and Full App reading path while preserving the `220 x 280` Pet Window.
+
+Changed files:
+
+- `apps/desktop/src/pet/pet-renderer.js`
+- `apps/desktop/src/pet/pet.css`
+- `apps/desktop/scripts/pet-renderer-smoke.js`
+- `docs/TASKS.md`
+- `docs/ROADMAP.md`
+- `docs/PET_BUBBLE_CHAT_WIRING_DESIGN.md`
+
+Long reply threshold:
+
+- `PET_REPLY_LONG_THRESHOLD = 160`.
+- Added `isLongReply(reply)`.
+- `stateForChatSource(...)` now routes long non-mock, non-error replies through `isLongReply(...)`.
+- `source=mock` still maps to `fallback_mock` before long reply handling.
+- `source=llm_local_error` still maps to `llm_local_error` before long reply handling.
+
+Long reply UI:
+
+- Added shared `PET_LONG_REPLY_HINT`.
+- `long_reply` message shows: `回覆較長，可開 Full App 查看完整內容。`
+- Reply text renders in `#pet-bubble-response`.
+- The bubble does not auto-open Full App and does not create a new window.
+- Existing Full App button/hook remains the reading path for longer context.
+
+Layout safety:
+
+- Pet shell remains fixed at `220 x 280`.
+- Pet shell now explicitly has `max-height: 280px` and `overflow: hidden`.
+- Bubble response remains internally scrollable with `overflow-y: auto`.
+- Long reply response area remains capped at `36px`.
+- Response text uses `overflow-wrap: anywhere` and `white-space: pre-wrap`.
+- Avatar remains visible in expanded mode.
+- Input and Send remain available after `long_reply`.
+- Explicit drag handle, no-drag hooks, and Full App hook remain intact.
+
+Safety boundaries:
+
+- Backend code was not modified.
+- `/chat` schema was not modified.
+- No backend route or API was added.
+- No IPC or preload API was added.
+- No direct Ollama access was added.
+- No external API, file access, Email access, Calendar access, image, or provider settings behavior was added.
+
+Validation:
+
+- `node --check apps/desktop/src/pet/pet-renderer.js` - PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js` - PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js` - PASS, 28 checks.
+
+Next recommendation:
+
+- TASK-138 - Pet Bubble Chat Smoke Tests.
+- TASK-138 should consolidate Pet Bubble success/error/long-reply smoke coverage and prepare for manual Windows validation.
+
+---
+
 ## TASK-136 - Pet Bubble Mood/Expression Integration
 
 **Status:** DONE
