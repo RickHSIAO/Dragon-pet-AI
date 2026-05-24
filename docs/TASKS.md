@@ -7172,6 +7172,96 @@ Verification:
 
 ---
 
+## TASK-132 - Pet Bubble Chat `/chat` Wiring Design
+
+**Status:** DONE
+**Date:** 2026-05-24
+
+Goal:
+
+Design how Pet Bubble Chat should safely connect to the existing backend `/chat` endpoint in a later implementation task, without changing runtime code or `/chat` schema.
+
+Scope:
+
+- Documentation update only.
+- No runtime code changes.
+- No backend route added.
+- No `/chat` wiring added.
+- No `/chat` schema change.
+- No external API, image, provider settings, or Ollama routing change.
+
+Design document:
+
+- Added `docs/PET_BUBBLE_CHAT_WIRING_DESIGN.md`.
+
+Recommended design:
+
+- Pet Bubble Chat should call the existing local backend `/chat`.
+- Pet Bubble Chat should keep the existing response schema: `reply`, `mood`, `source`.
+- Pet Mode should remain a compact companion surface, not a duplicate of Full App.
+- Full App remains the troubleshooting and full-reading path.
+
+UI state design:
+
+- `collapsed`
+- `expanded`
+- `composing`
+- `empty_input`
+- `pending`
+- `success`
+- `backend_offline`
+- `timeout`
+- `llm_local_error`
+- `fallback_mock`
+- `long_reply`
+
+Loading / timeout / cold-start design:
+
+- Disable input and Send while pending.
+- Show a visible pending hint such as `吾正在想，別催。`.
+- Do not make the window look stuck.
+- On timeout or local provider failure, show a short local cold-start hint.
+- Use Open Full App as the troubleshooting path.
+
+Source / mood / expression design:
+
+- Show compact source badges such as `local`, `mock`, `local error`, or `offline`.
+- Use backend `mood` to update Christina expression after successful replies.
+- Use pending/error/offline expression fallbacks where available.
+- Unknown mood falls back to neutral.
+
+Long reply design:
+
+- Keep the Pet Window fixed at `220 x 280`.
+- Use a constrained scrollable reply area.
+- Do not resize the BrowserWindow for long replies.
+- Offer Open Full App for more reading room.
+
+Safety boundaries:
+
+- Pet renderer does not directly call Ollama.
+- Pet renderer calls only the local backend.
+- Pet renderer does not read files, Email, or Calendar.
+- Pet renderer does not execute commands.
+- Pet renderer does not call external APIs.
+- Pet Mode does not screenshot, record audio, or monitor the screen.
+- Pet Mode does not modify provider settings.
+- Pet Mode does not change `/chat` schema.
+- Pet Mode does not add arbitrary IPC.
+- Preload does not expose arbitrary `ipcRenderer`, fs, shell, or process.
+
+Follow-up task breakdown:
+
+- TASK-133 - Pet Bubble Chat Static State Refinement.
+- TASK-134 - Pet Bubble `/chat` Client Wiring.
+- TASK-135 - Pet Bubble Loading/Error UX.
+- TASK-136 - Pet Bubble Mood/Expression Integration.
+- TASK-137 - Pet Bubble Long Reply Handling.
+- TASK-138 - Pet Bubble Chat Smoke Tests.
+- TASK-139 - Manual Windows Pet Bubble Chat Smoke.
+
+---
+
 ## TASK-131 - Pet Mode Release Checkpoint
 
 **Status:** DONE

@@ -1075,6 +1075,52 @@ Next recommendation:
 - TASK-132 - Pet Bubble Chat `/chat` Wiring Design.
 - TASK-132 should be design-only first and cover loading state, backend offline, `llm_local` / `mock` / error source display, mood to expression integration, long reply handling, timeout / cold-start hints, safe send flow, and no schema change unless explicitly planned.
 
+### TASK-132 - Pet Bubble Chat `/chat` Wiring Design
+
+Status: DONE on 2026-05-24.
+
+Design reference:
+
+- `docs/PET_BUBBLE_CHAT_WIRING_DESIGN.md`
+
+Summary:
+
+- Pet Bubble Chat should wire to the existing local backend `/chat` in a later implementation task.
+- `/chat` response schema remains `reply`, `mood`, `source`.
+- Pet Mode should render compact bubble replies, source/status badges, loading/error states, and mood-to-expression updates without duplicating Full App.
+- Full App remains the troubleshooting and long-reading path.
+- Implementation remains deferred.
+
+Planned bubble states:
+
+- collapsed
+- expanded
+- composing
+- empty input
+- pending / thinking
+- success
+- backend offline
+- timeout / local cold-start
+- llm local error
+- fallback mock
+- long reply
+
+Safety note:
+
+- No runtime code, backend route, `/chat` call, `/chat` schema change, IPC expansion, external API, file access, Email access, Calendar access, screenshot, microphone, screen monitoring, image, provider settings, Ollama routing, or bubble backend wiring was added for TASK-132.
+- Pet renderer must not call Ollama directly.
+- Pet renderer may call only the local backend when wiring is implemented.
+
+Follow-up tasks:
+
+- TASK-133 - Pet Bubble Chat Static State Refinement.
+- TASK-134 - Pet Bubble `/chat` Client Wiring.
+- TASK-135 - Pet Bubble Loading/Error UX.
+- TASK-136 - Pet Bubble Mood/Expression Integration.
+- TASK-137 - Pet Bubble Long Reply Handling.
+- TASK-138 - Pet Bubble Chat Smoke Tests.
+- TASK-139 - Manual Windows Pet Bubble Chat Smoke.
+
 ---
 
 ## 9. Explicit Non-goals for TASK-114

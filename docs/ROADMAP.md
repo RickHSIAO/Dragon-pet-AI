@@ -320,10 +320,11 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 **Goal:** Move the product from a full management interface toward a small desktop pet plus compact chat bubble, while keeping Full App Mode as the control center.
 
-**Status:** RELEASE CHECKPOINT COMPLETE - TASK-114 design complete; TASK-115 static renderer skeleton complete; TASK-116 env-gated BrowserWindow prototype complete; TASK-117 CSS drag behavior complete; TASK-118 local-only bubble UI state complete; TASK-119 narrow Pet-to-Full mode switch complete; TASK-120 smoke checkpoint passed; TASK-121 manual Windows visual smoke passed with menu placeholder note; TASK-122 Pet Window position persistence complete; TASK-123 Pet menu/right-click menu complete; TASK-124 manual menu smoke passed with right-click drag-region note; TASK-125 right-click menu hotspot fix complete; TASK-126 menu UX regression fixed; TASK-127 explicit drag handle complete; TASK-128 Full App -> Show Pet bridge complete; TASK-129 drag regression fix complete; TASK-130 manual Windows drag/menu smoke passed; TASK-131 Pet Mode release checkpoint complete.
+**Status:** RELEASE CHECKPOINT COMPLETE - TASK-114 design complete; TASK-115 static renderer skeleton complete; TASK-116 env-gated BrowserWindow prototype complete; TASK-117 CSS drag behavior complete; TASK-118 local-only bubble UI state complete; TASK-119 narrow Pet-to-Full mode switch complete; TASK-120 smoke checkpoint passed; TASK-121 manual Windows visual smoke passed with menu placeholder note; TASK-122 Pet Window position persistence complete; TASK-123 Pet menu/right-click menu complete; TASK-124 manual menu smoke passed with right-click drag-region note; TASK-125 right-click menu hotspot fix complete; TASK-126 menu UX regression fixed; TASK-127 explicit drag handle complete; TASK-128 Full App -> Show Pet bridge complete; TASK-129 drag regression fix complete; TASK-130 manual Windows drag/menu smoke passed; TASK-131 Pet Mode release checkpoint complete; TASK-132 Bubble Chat wiring design complete.
 
 > Design reference: `docs/PET_MODE_UI_DESIGN.md`
 > Release checkpoint: `docs/PET_MODE_RELEASE_CHECKPOINT.md`
+> Bubble Chat wiring design: `docs/PET_BUBBLE_CHAT_WIRING_DESIGN.md`
 
 | Task | Name | Status |
 |---|---|---|
@@ -345,6 +346,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 | TASK-129 | Fix Pet Window Drag Regression | DONE |
 | TASK-130 | Manual Windows Pet Drag/Menu Smoke | DONE - PASS |
 | TASK-131 | Pet Mode Release Checkpoint | DONE |
+| TASK-132 | Pet Bubble Chat `/chat` Wiring Design | DONE |
 
 **Recommended direction:**
 
@@ -381,8 +383,9 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 - TASK-129 fixes the drag regression by enlarging the explicit `#pet-drag-handle` from a tiny grip into a `156 x 24 px` top bar with a visible CSS grip line, higher z-index, and pointer-events enabled. Large avatar/body drag remains intentionally disabled to avoid Windows system menu interference.
 - TASK-130 manual Windows drag/menu smoke passed: drag handle, avatar no-system-menu behavior, Menu toggle, Escape close, bubble expand/collapse, Pet -> Full App, Hide Pet Window, Full App Show Pet, and Reset Position all passed. No remaining note for this checkpoint.
 - TASK-131 closes the first-stage Pet Mode MVP checkpoint in `docs/PET_MODE_RELEASE_CHECKPOINT.md`. Pet Mode is maintainable behind `PET_MODE_ENABLED=true`; Bubble Chat `/chat` wiring remains deferred to TASK-132 design.
+- TASK-132 designs Pet Bubble Chat `/chat` wiring in `docs/PET_BUBBLE_CHAT_WIRING_DESIGN.md`. It preserves `/chat` schema as `reply / mood / source`, plans loading/offline/source/mood/long-reply UX, and keeps implementation deferred.
 
 **Next recommended task:**
 
-- TASK-132 - Pet Bubble Chat `/chat` Wiring Design. Design loading, backend offline, `llm_local` / `mock` / error source display, mood to expression integration, long reply handling, timeout / cold-start hints, and safe send flow before implementation.
+- TASK-133 - Pet Bubble Chat Static State Refinement. Stabilize static state hooks and layout constraints before adding `/chat` client wiring.
                                         
