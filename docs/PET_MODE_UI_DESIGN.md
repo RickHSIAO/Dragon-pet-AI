@@ -1010,6 +1010,36 @@ Safety note:
 
 - No IPC, preload API, `main.js` change, backend call, `/chat` call, `/chat` schema change, provider settings change, Ollama routing change, external API, image, file access, Email access, Calendar access, screenshot, microphone, screen-monitoring behavior, or bubble backend wiring was added.
 
+### TASK-130 - Manual Windows Pet Drag/Menu Smoke
+
+Status: DONE - PASS on 2026-05-24.
+
+Manual smoke summary:
+
+| Check | Result | Notes |
+|---|---|---|
+| Top drag handle drags Pet Window | PASS | Enlarged `156 x 24 px` handle is usable. |
+| Avatar / image area avoids broad Windows system menu behavior | PASS | Large avatar/body drag region remains removed. |
+| Bottom Menu opens on first click | PASS | Menu toggle open path works. |
+| Bottom Menu closes on second click | PASS | Menu toggle close path works. |
+| Escape closes Menu | PASS | Keyboard close path works. |
+| Chat bubble expands/collapses | PASS | Still local placeholder UI. |
+| Full App hook brings main window forward | PASS | Pet -> Full App bridge works. |
+| Hide Pet Window hides the small window | PASS | Full App remains open. |
+| Full App Show Pet brings Pet Window back | PASS | Full App -> Pet Window bridge works. |
+| Reset Position returns to safe default | PASS | Position reset remains functional. |
+
+Notes:
+
+- No remaining manual smoke note for TASK-130.
+- The Windows drag-region limitation remains accepted and documented.
+- Pet Mode keeps explicit-handle drag; avatar, bubble, and controls remain no-drag interaction areas.
+- Bubble Chat remains local placeholder UI and is not wired to `/chat`.
+
+Safety note:
+
+- No code, IPC, preload API, `main.js`, backend, `/chat`, `/chat` schema, provider settings, Ollama routing, external API, image, file access, Email access, Calendar access, screenshot, microphone, screen-monitoring behavior, or bubble backend wiring was changed for TASK-130.
+
 ---
 
 ## 9. Explicit Non-goals for TASK-114

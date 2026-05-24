@@ -7172,6 +7172,52 @@ Verification:
 
 ---
 
+## TASK-130 - Manual Windows Pet Drag/Menu Smoke
+
+**Status:** DONE - PASS
+**Date:** 2026-05-24
+
+Goal:
+
+Record the user-run Windows manual smoke after TASK-127 through TASK-129 stabilized Pet Window drag/menu behavior and TASK-128 added Full App -> Show Pet Window.
+
+Scope:
+
+- Documentation update only.
+- No runtime code changes.
+- No `main.js`, Pet renderer, backend, provider settings, Ollama routing, or `/chat` schema changes.
+
+Manual Windows smoke results:
+
+| Check | Result | Notes |
+|---|---|---|
+| Top drag handle drags Pet Window | PASS | Enlarged handle is usable. |
+| Avatar / image area no longer broadly opens Windows system menu | PASS | Large avatar/body drag region remains removed. |
+| Bottom Menu opens on first click | PASS | Menu toggle open path works. |
+| Bottom Menu closes on second click | PASS | Menu toggle close path works. |
+| Escape closes Menu | PASS | Keyboard close path works. |
+| Chat bubble expands/collapses | PASS | Bubble remains local placeholder UI. |
+| Full App hook brings main window forward | PASS | Pet -> Full App bridge works. |
+| Hide Pet Window hides the small window | PASS | Full App remains open. |
+| Full App Show Pet brings Pet Window back | PASS | Full App -> Pet Window bridge works. |
+| Reset Position returns to safe default | PASS | Position reset remains functional. |
+
+Notes:
+
+- No remaining manual smoke note for TASK-130.
+- Windows drag-region limitation remains documented: only the explicit drag handle uses CSS-native drag; large avatar/body drag is intentionally not restored.
+- Bubble Chat remains local placeholder UI and is not wired to `/chat`.
+
+Safety boundaries:
+
+- No code modified for TASK-130.
+- No backend call added.
+- No `/chat` call added.
+- No `/chat` schema change.
+- No IPC, preload API, external API, file access, Email access, Calendar access, image, or bubble backend wiring added.
+
+---
+
 ## TASK-129 - Fix Pet Window Drag Regression
 
 **Status:** DONE
