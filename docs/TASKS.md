@@ -7172,6 +7172,71 @@ Verification:
 
 ---
 
+## TASK-141 - Redesign Pet Bubble as Display-only Speech Bubble
+
+**Status:** DONE
+**Date:** 2026-05-24
+
+Goal:
+
+Change Pet Bubble from a tiny input chat panel into a display-only speech bubble that supports the screen-pet product direction.
+
+Why:
+
+- The `220 x 280` Pet Window is too small to be the main text input surface.
+- Pet Mode should feel like a desktop companion, not a compressed Full App.
+- Christina should mostly show short character replies beside the avatar.
+- Full App remains the primary text input, troubleshooting, settings, and long-reading surface.
+- Future voice input or push-to-talk should be designed separately.
+
+Implementation:
+
+- Converted visible Pet Bubble UI into a comic-style speech bubble.
+- Added `pet-speech-bubble` styling with a light rounded bubble and CSS tail pointing toward Christina.
+- Kept compact status/source badge display.
+- Kept response text as the primary visible content.
+- Added display-oriented states: `speaking` and `thinking`.
+- Kept legacy state aliases (`success`, `pending`, `expanded`, `composing`, `empty_input`) so existing local helpers and tests remain compatible.
+- Changed normal `/chat` success routing from `success` to `speaking`.
+- Changed pending submit rendering from `pending` to `thinking`.
+- Long replies now show the Full App reading hint in the visible speech bubble instead of trying to display the whole reply in the tiny Pet Window.
+- Kept the existing Pet `/chat` client functions for future voice input or Full App dispatch reuse.
+- Demoted the Pet form/input/send DOM to hidden dev-only hooks; they are not visible primary UI.
+
+Text input rule:
+
+- Pet Window no longer asks the user to type in the small bubble.
+- Full App is the primary text input interface.
+- Pet Bubble may show "打字請開 Full App。"
+- Pet Bubble does not automatically open Full App.
+
+Safety boundaries:
+
+- Backend code was not changed.
+- `/chat` schema remains `reply`, `mood`, `source`.
+- No backend route or API was added.
+- No IPC or preload API was added.
+- No speech-to-text, voice input, tray, packaging, autostart, image, provider settings, Ollama routing, file access, Email access, Calendar access, screenshot, microphone, screen monitoring, or external API behavior was added.
+- Pet renderer still does not call Ollama directly.
+
+Verification:
+
+- `node --check apps/desktop/src/pet/pet-renderer.js`: PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js`: PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: PASS, 31 checks.
+- `node apps/desktop/scripts/pet-window-smoke.js`: PASS, 10 checks.
+- `npm.cmd run test:renderer`: PASS.
+- `python -m pytest`: PASS, 586 passed.
+- Direct Ollama `11434` safety scan: PASS.
+- `git diff --check`: PASS.
+
+Next recommendation:
+
+- Re-run Windows manual Pet Bubble smoke and validate the display-only speech bubble visually.
+- Follow-up design task recommended: Pet input source design for Full App dispatch / voice / push-to-talk.
+
+---
+
 ## TASK-140 - Fix Pet Bubble Input Visibility
 
 **Status:** DONE

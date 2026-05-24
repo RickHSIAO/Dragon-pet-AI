@@ -23,7 +23,7 @@
     data-mode="pet"
     data-bubble-state="collapsed"
     data-menu-state="closed"
-    data-supported-bubble-states="collapsed expanded composing empty_input pending success backend_offline timeout llm_local_error fallback_mock long_reply"
+    data-supported-bubble-states="collapsed expanded speaking thinking composing empty_input pending success backend_offline timeout llm_local_error fallback_mock long_reply"
     aria-label="Christina pet mode skeleton"
   >
     <div id="pet-drag-handle" class="pet-drag-handle" aria-label="Drag pet window" title="Drag"></div>
@@ -43,37 +43,46 @@
 
     <section
       id="pet-bubble"
-      class="pet-bubble pet-no-drag"
+      class="pet-bubble pet-speech-bubble pet-no-drag"
       data-state="collapsed"
-      aria-label="Bubble chat placeholder"
+      aria-label="Christina speech bubble"
       aria-expanded="false"
       hidden
     >
       <div class="pet-bubble-header">
-        <span id="pet-bubble-title">Bubble Chat</span>
+        <span id="pet-bubble-title" class="pet-sr-only">Christina Speech</span>
         <button id="pet-bubble-close-hook" class="pet-icon-button pet-no-drag" type="button" data-hook="bubble-close" aria-label="Collapse bubble">x</button>
       </div>
       <div id="pet-bubble-status" class="pet-bubble-status pet-no-drag" data-source="local">
         local placeholder
       </div>
       <div id="pet-bubble-message" class="pet-bubble-message pet-no-drag" aria-live="polite">
-        Bubble chat is not wired yet.
+        打字請開 Full App。
       </div>
       <div id="pet-bubble-response" class="pet-bubble-response pet-no-drag" aria-live="polite">
-        Bubble response placeholder.
+        哼，汝要吾說話，就去 Full App 下令。
       </div>
       <div id="pet-bubble-placeholder" class="pet-bubble-body pet-no-drag">
-        <p>&#x5C0D;&#x8A71;&#x6CE1;&#x6CE1;&#x9810;&#x7559;&#x5340;&#x3002;TASK-133 &#x53EA;&#x6574;&#x7406;&#x672C;&#x5730; UI state&#x3002;</p>
+        <p>Display-only speech bubble. Type in Full App.</p>
       </div>
-      <form id="pet-chat-form-hook" class="pet-chat-form pet-no-drag" data-hook="chat-form">
+      <form
+        id="pet-chat-form-hook"
+        class="pet-chat-form pet-dev-chat-form pet-no-drag"
+        data-hook="chat-form"
+        data-dev-only="true"
+        aria-hidden="true"
+        hidden
+      >
         <input
           id="pet-chat-input-hook"
           class="pet-no-drag"
           type="text"
-          placeholder="Type later... bubble chat is not wired yet"
+          placeholder="Dev-only hidden Pet chat input"
           autocomplete="off"
+          tabindex="-1"
+          hidden
         />
-        <button id="pet-chat-send-hook" class="pet-no-drag" type="submit">Send</button>
+        <button id="pet-chat-send-hook" class="pet-no-drag" type="submit" tabindex="-1" hidden>Send</button>
       </form>
     </section>
 

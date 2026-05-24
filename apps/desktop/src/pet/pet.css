@@ -31,7 +31,7 @@ body {
   max-height: 280px;
   min-height: 280px;
   display: grid;
-  grid-template-rows: auto auto auto;
+  grid-template-rows: 1fr auto;
   gap: 8px;
   padding: 10px;
   border: 1px solid rgba(64, 38, 28, 0.22);
@@ -68,7 +68,7 @@ body {
 
 .pet-stage,
 .pet-drag-region {
-  min-height: 178px;
+  min-height: 216px;
   display: grid;
   justify-items: center;
   align-content: end;
@@ -76,8 +76,8 @@ body {
   -webkit-app-region: no-drag;
 }
 
-.pet-shell[data-bubble-state="expanded"] .pet-stage {
-  min-height: 94px;
+.pet-shell:not([data-bubble-state="collapsed"]) .pet-stage {
+  min-height: 216px;
 }
 
 .pet-avatar-container {
@@ -90,9 +90,9 @@ body {
   -webkit-app-region: no-drag;
 }
 
-.pet-shell[data-bubble-state="expanded"] .pet-avatar-container {
-  width: 76px;
-  height: 76px;
+.pet-shell:not([data-bubble-state="collapsed"]) .pet-avatar-container {
+  width: 112px;
+  height: 112px;
 }
 
 .pet-avatar {
@@ -104,9 +104,9 @@ body {
   -webkit-app-region: no-drag;
 }
 
-.pet-shell[data-bubble-state="expanded"] .pet-avatar {
-  width: 74px;
-  height: 74px;
+.pet-shell:not([data-bubble-state="collapsed"]) .pet-avatar {
+  width: 106px;
+  height: 106px;
 }
 
 .pet-hint {
@@ -122,32 +122,51 @@ body {
   text-align: center;
 }
 
-.pet-shell[data-bubble-state="expanded"] .pet-hint {
+.pet-shell:not([data-bubble-state="collapsed"]) .pet-hint {
   display: none;
 }
 
 .pet-bubble {
+  position: absolute;
+  top: 30px;
+  left: 12px;
+  right: 14px;
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
-  gap: 4px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 5px;
   max-height: 0;
   min-height: 0;
   overflow: hidden;
   opacity: 0;
   pointer-events: none;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(72, 45, 34, 0.16);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 10px 22px rgba(33, 24, 20, 0.16);
   transition: max-height 140ms ease, opacity 140ms ease;
+  z-index: 4;
 }
 
-.pet-bubble[data-state="expanded"] {
-  height: 116px;
-  max-height: 116px;
-  padding: 8px;
-  opacity: 1;
-  pointer-events: auto;
+.pet-speech-bubble::after {
+  content: "";
+  position: absolute;
+  right: 34px;
+  bottom: -9px;
+  width: 18px;
+  height: 18px;
+  border-right: 1px solid rgba(72, 45, 34, 0.16);
+  border-bottom: 1px solid rgba(72, 45, 34, 0.16);
+  background: rgba(255, 255, 255, 0.94);
+  transform: rotate(45deg);
 }
 
+.pet-bubble[hidden] {
+  display: none;
+}
+
+.pet-bubble[data-state="expanded"],
+.pet-bubble[data-state="speaking"],
+.pet-bubble[data-state="thinking"],
 .pet-bubble[data-state="composing"],
 .pet-bubble[data-state="empty_input"],
 .pet-bubble[data-state="pending"],
@@ -157,11 +176,21 @@ body {
 .pet-bubble[data-state="llm_local_error"],
 .pet-bubble[data-state="fallback_mock"],
 .pet-bubble[data-state="long_reply"] {
-  height: 116px;
-  max-height: 116px;
-  padding: 8px;
+  min-height: 68px;
+  max-height: 104px;
+  padding: 10px 12px 9px;
   opacity: 1;
   pointer-events: auto;
+}
+
+.pet-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
 }
 
 .pet-bubble-header,
@@ -173,10 +202,14 @@ body {
 }
 
 .pet-bubble-header {
-  justify-content: space-between;
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  justify-content: flex-end;
   color: #5b3b30;
   font-size: 12px;
   font-weight: 600;
+  z-index: 2;
 }
 
 .pet-bubble-body p {
@@ -191,8 +224,9 @@ body {
 }
 
 .pet-bubble-status {
+  order: 1;
   justify-self: start;
-  max-width: 100%;
+  max-width: calc(100% - 24px);
   min-height: 14px;
   border-radius: 999px;
   padding: 1px 6px;
@@ -214,6 +248,7 @@ body {
 }
 
 .pet-bubble-message {
+  order: 3;
   min-height: 14px;
   max-height: 16px;
   overflow: hidden;
@@ -225,6 +260,7 @@ body {
 }
 
 .pet-bubble-response {
+  order: 2;
   max-width: 100%;
   max-height: none;
   min-height: 0;
@@ -240,6 +276,11 @@ body {
 
 .pet-bubble[data-state="long_reply"] .pet-bubble-response {
   max-height: none;
+}
+
+.pet-dev-chat-form,
+.pet-dev-chat-form[hidden] {
+  display: none;
 }
 
 .pet-chat-form input {

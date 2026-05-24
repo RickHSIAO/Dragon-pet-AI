@@ -1121,6 +1121,29 @@ Follow-up tasks:
 - TASK-138 - Pet Bubble Chat Smoke Tests.
 - TASK-139 - Manual Windows Pet Bubble Chat Smoke.
 
+### TASK-141 - Display-only Speech Bubble Redesign
+
+Status: DONE on 2026-05-24.
+
+Product direction update:
+
+- Pet Bubble is no longer treated as a tiny full chat panel.
+- The visible Pet Bubble is now a display-only comic-style speech bubble.
+- Pet Mode focuses on Christina's presence, short replies, mood/expression, and companion feeling.
+- Full App is the primary text input, troubleshooting, settings, and long-reading interface.
+- Future voice input or push-to-talk should be designed in a separate task.
+
+UI summary:
+
+- Speech bubble uses a light rounded panel with a CSS tail pointing toward Christina.
+- Bubble content prioritizes response text and compact source/status.
+- Long replies show a short Full App reading hint rather than trying to fit the full answer into `220 x 280`.
+- The Pet form/input/send hooks are hidden dev-only hooks retained for `/chat` client helper tests and future dispatch reuse.
+
+Safety note:
+
+- No backend route, `/chat` schema change, IPC expansion, preload API, direct Ollama call, voice feature, speech-to-text, external API, image, file access, Email access, Calendar access, screenshot, microphone, screen-monitoring behavior, tray, packaging, or autostart was added.
+
 ---
 
 ## 9. Explicit Non-goals for TASK-114

@@ -2,7 +2,7 @@ const PET_MODE_DEFAULTS = Object.freeze({
   expression: "neutral",
   hint: "\u54fc\uff0c\u6c5d\u53eb\u543e\u51fa\u4f86\u505a\u4ec0\u9ebc\uff1f",
   avatarSrc: "../renderer/assets/pet/christina/expressions/christina_neutral.png",
-  bubbleMessage: "Bubble chat is not wired yet.",
+  bubbleMessage: "\u6253\u5b57\u8acb\u958b Full App\u3002",
 });
 
 const PET_BACKEND_DEFAULT_URL = "http://localhost:8000";
@@ -24,6 +24,8 @@ const CHRISTINA_EXPRESSION_ASSETS = Object.freeze({
 const PET_BUBBLE_STATE_EXPRESSIONS = Object.freeze({
   collapsed: "neutral",
   expanded: "neutral",
+  speaking: "neutral",
+  thinking: "focused",
   composing: "neutral",
   empty_input: "annoyed",
   pending: "focused",
@@ -39,49 +41,69 @@ const BUBBLE_STATES = Object.freeze({
   collapsed: {
     expanded: false,
     source: "local",
-    statusText: "local placeholder",
+    statusText: "speech bubble",
     message: PET_MODE_DEFAULTS.bubbleMessage,
-    response: "Open Chat to prepare a local bubble message.",
+    response: "\u9ede Full App \u6253\u5b57\uff0c\u543e\u6703\u5728\u9019\u88e1\u56de\u5634\u3002",
     inputDisabled: false,
     sendDisabled: false,
-    inputPlaceholder: "Type later... bubble chat is not wired yet",
+    inputPlaceholder: "Dev-only hidden Pet chat input",
   },
   expanded: {
     expanded: true,
     source: "local",
-    statusText: "local placeholder",
+    statusText: "speech bubble",
     message: PET_MODE_DEFAULTS.bubbleMessage,
-    response: "Bubble response placeholder.",
+    response: "\u54fc\uff0c\u6c5d\u8981\u543e\u8aaa\u8a71\uff0c\u5c31\u53bb Full App \u4e0b\u4ee4\u3002",
     inputDisabled: false,
     sendDisabled: false,
-    inputPlaceholder: "Type later... bubble chat is not wired yet",
+    inputPlaceholder: "Dev-only hidden Pet chat input",
+  },
+  speaking: {
+    expanded: true,
+    source: "local",
+    statusText: "local reply",
+    message: PET_MODE_DEFAULTS.bubbleMessage,
+    response: "\u543e\u5728\u9019\u88e1\u56de\u61c9\u6c5d\u3002",
+    inputDisabled: false,
+    sendDisabled: false,
+    inputPlaceholder: "Dev-only hidden Pet chat input",
+  },
+  thinking: {
+    expanded: true,
+    source: "local",
+    statusText: "thinking",
+    message: PET_MODE_DEFAULTS.bubbleMessage,
+    response: "\u543e\u6b63\u5728\u60f3\uff0c\u5225\u50ac\u3002",
+    inputDisabled: true,
+    sendDisabled: true,
+    inputPlaceholder: "Thinking...",
   },
   composing: {
     expanded: true,
     source: "local",
-    statusText: "composing",
-    message: "Local composing state.",
-    response: "This input is still local.",
+    statusText: "dev composing",
+    message: PET_MODE_DEFAULTS.bubbleMessage,
+    response: "\u958b Full App \u6253\u5b57\u624d\u50cf\u6a23\u3002",
     inputDisabled: false,
     sendDisabled: false,
-    inputPlaceholder: "Type a short message...",
+    inputPlaceholder: "Dev-only hidden Pet chat input",
   },
   empty_input: {
     expanded: true,
     source: "local",
     statusText: "empty input",
-    message: "Type something before sending.",
-    response: "The bubble stayed local and did not send anything.",
+    message: PET_MODE_DEFAULTS.bubbleMessage,
+    response: "\u4ec0\u9ebc\u90fd\u6c92\u8aaa\uff0c\u6c5d\u8981\u543e\u56de\u4ec0\u9ebc\uff1f",
     inputDisabled: false,
     sendDisabled: false,
-    inputPlaceholder: "Type a short message...",
+    inputPlaceholder: "Dev-only hidden Pet chat input",
   },
   pending: {
     expanded: true,
     source: "local",
     statusText: "thinking",
-    message: "\u543e\u6b63\u5728\u60f3\uff0c\u5225\u50ac\u3002",
-    response: "Local model replies can take longer while waking up.",
+    message: PET_MODE_DEFAULTS.bubbleMessage,
+    response: "\u543e\u6b63\u5728\u60f3\uff0c\u5225\u50ac\u3002",
     inputDisabled: true,
     sendDisabled: true,
     inputPlaceholder: "Thinking...",
@@ -90,62 +112,62 @@ const BUBBLE_STATES = Object.freeze({
     expanded: true,
     source: "local",
     statusText: "local reply",
-    message: "Reply received.",
-    response: "Bubble rendering is ready for a future reply.",
+    message: PET_MODE_DEFAULTS.bubbleMessage,
+    response: "\u543e\u5728\u9019\u88e1\u56de\u61c9\u6c5d\u3002",
     inputDisabled: false,
     sendDisabled: false,
-    inputPlaceholder: "Type another short message...",
+    inputPlaceholder: "Dev-only hidden Pet chat input",
   },
   backend_offline: {
     expanded: true,
     source: "backend_offline",
     statusText: "backend offline",
-    message: "\u5f8c\u7aef\u4f3c\u4e4e\u4e0d\u5728\uff0c\u6c5d\u5148\u53bb\u628a\u5b83\u53eb\u9192\u3002",
-    response: "\u53ef\u4ee5\u5148\u6253\u958b Full App \u6aa2\u67e5\u72c0\u614b\u3002\u6c5d\u53ef\u4ee5\u518d\u8a66\u4e00\u6b21\u3002",
+    message: PET_MODE_DEFAULTS.bubbleMessage,
+    response: "\u5f8c\u7aef\u4f3c\u4e4e\u4e0d\u5728\uff0c\u6c5d\u5148\u53bb Full App \u628a\u5b83\u53eb\u9192\u3002",
     inputDisabled: false,
     sendDisabled: false,
-    inputPlaceholder: "Try again later...",
+    inputPlaceholder: "Dev-only hidden Pet chat input",
   },
   timeout: {
     expanded: true,
     source: "timeout",
     statusText: "local timeout",
-    message: "\u672c\u5730\u6a21\u578b\u53ef\u80fd\u9084\u5728\u9192\u4f86\u3002",
-    response: "\u53ef\u4ee5\u5148\u6253\u958b Full App \u6aa2\u67e5\u72c0\u614b\u3002\u6c5d\u53ef\u4ee5\u518d\u8a66\u4e00\u6b21\u3002",
+    message: PET_MODE_DEFAULTS.bubbleMessage,
+    response: "\u672c\u5730\u6a21\u578b\u53ef\u80fd\u9084\u5728\u9192\u4f86\u3002\u53bb Full App \u770b\u770b\u72c0\u614b\u5427\u3002",
     inputDisabled: false,
     sendDisabled: false,
-    inputPlaceholder: "Try again after it wakes...",
+    inputPlaceholder: "Dev-only hidden Pet chat input",
   },
   llm_local_error: {
     expanded: true,
     source: "llm_local_error",
     statusText: "local model error",
-    message: "\u543e\u7684\u9b54\u529b\u66ab\u6642\u5361\u4f4f\u4e86\u3002",
-    response: "\u53ef\u4ee5\u5148\u6253\u958b Full App \u6aa2\u67e5\u72c0\u614b\u3002\u6c5d\u53ef\u4ee5\u518d\u8a66\u4e00\u6b21\u3002",
+    message: PET_MODE_DEFAULTS.bubbleMessage,
+    response: "\u543e\u7684\u9b54\u529b\u66ab\u6642\u5361\u4f4f\u4e86\u3002\u53bb Full App \u6aa2\u67e5\u72c0\u614b\u3002",
     inputDisabled: false,
     sendDisabled: false,
-    inputPlaceholder: "Try again later...",
+    inputPlaceholder: "Dev-only hidden Pet chat input",
   },
   fallback_mock: {
     expanded: true,
     source: "mock",
     statusText: "mock fallback",
-    message: "\u9019\u662f\u66ab\u6642\u56de\u61c9\uff0c\u5225\u592a\u5f97\u610f\u3002",
-    response: "Mock-style local placeholder.",
+    message: PET_MODE_DEFAULTS.bubbleMessage,
+    response: "\u9019\u662f\u66ab\u6642\u56de\u61c9\uff0c\u5225\u592a\u5f97\u610f\u3002",
     inputDisabled: false,
     sendDisabled: false,
-    inputPlaceholder: "Type a short message...",
+    inputPlaceholder: "Dev-only hidden Pet chat input",
   },
   long_reply: {
     expanded: true,
     source: "local",
     statusText: "long reply",
-    message: PET_LONG_REPLY_HINT,
+    message: PET_MODE_DEFAULTS.bubbleMessage,
     response:
-      "This is a long reply placeholder. It stays inside the bubble response area and scrolls internally instead of resizing the Pet Window.",
+      PET_LONG_REPLY_HINT,
     inputDisabled: false,
     sendDisabled: false,
-    inputPlaceholder: "Open Full App for long replies...",
+    inputPlaceholder: "Dev-only hidden Pet chat input",
   },
 });
 
@@ -198,7 +220,7 @@ function setPetExpression(documentRef, mood) {
 }
 
 function expressionForBubbleState(state, responseMood) {
-  if (state === "success" && responseMood) {
+  if ((state === "speaking" || state === "success") && responseMood) {
     return normalizePetMood(responseMood);
   }
 
@@ -226,7 +248,7 @@ function stateForChatSource(source, reply) {
   if (source === "llm_local_error") return "llm_local_error";
   if (source === "mock") return "fallback_mock";
   if (isLongReply(reply)) return "long_reply";
-  return "success";
+  return "speaking";
 }
 
 function isFetchNetworkError(error) {
@@ -341,6 +363,7 @@ function setBubbleState(firstArg, secondArg, thirdArg) {
   const message = documentRef.getElementById("pet-bubble-message");
   const response = documentRef.getElementById("pet-bubble-response");
   const placeholder = documentRef.getElementById("pet-bubble-placeholder");
+  const form = documentRef.getElementById("pet-chat-form-hook");
   const input = documentRef.getElementById("pet-chat-input-hook");
   const send = documentRef.getElementById("pet-chat-send-hook");
 
@@ -369,14 +392,24 @@ function setBubbleState(firstArg, secondArg, thirdArg) {
     placeholder.dataset.state = state;
   }
 
+  if (form) {
+    form.hidden = true;
+    form.dataset.devOnly = "true";
+    form.setAttribute("aria-hidden", "true");
+  }
+
   if (input) {
+    input.hidden = true;
     input.disabled = Boolean(config.inputDisabled);
     input.setAttribute("placeholder", options.inputPlaceholder || config.inputPlaceholder);
     input.setAttribute("aria-invalid", state === "empty_input" ? "true" : "false");
+    input.setAttribute("tabindex", "-1");
   }
 
   if (send) {
+    send.hidden = true;
     send.disabled = Boolean(config.sendDisabled);
+    send.setAttribute("tabindex", "-1");
   }
 
   setPetExpressionForBubbleState(documentRef, state, { mood: options.mood });
@@ -488,7 +521,7 @@ async function handleChatSubmit(event, documentRef = document, options = {}) {
   }
 
   petChatPending = true;
-  setBubbleState(documentRef, "pending");
+  setBubbleState(documentRef, "thinking");
 
   try {
     const data = await sendPetChatMessage(value, options);
@@ -499,14 +532,14 @@ async function handleChatSubmit(event, documentRef = document, options = {}) {
       nextState === "fallback_mock" || nextState === "llm_local_error"
         ? BUBBLE_STATES[nextState].message
         : isLongReply
-          ? PET_LONG_REPLY_HINT
-          : "Reply received.";
+          ? BUBBLE_STATES.long_reply.message
+          : PET_MODE_DEFAULTS.bubbleMessage;
 
     setBubbleState(documentRef, nextState, {
       source: data.source,
       statusText,
       message: stateMessage,
-      response: data.reply,
+      response: isLongReply ? PET_LONG_REPLY_HINT : data.reply,
       mood: data.mood,
     });
 
@@ -635,7 +668,7 @@ function initializePetMode(documentRef = document) {
   if (bubblePlaceholder && !bubblePlaceholder.textContent.trim()) {
     setText(
       bubblePlaceholder,
-      "\u5c0d\u8a71\u6ce1\u6ce1\u9810\u7559\u5340\u3002TASK-133 \u53ea\u6574\u7406\u672c\u5730 UI state\u3002"
+      "Display-only speech bubble. Type in Full App."
     );
   }
 

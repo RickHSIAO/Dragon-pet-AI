@@ -99,6 +99,7 @@ function testPetHtmlReferencesStaticAssets() {
   assertIncludes(html, 'id="pet-avatar"', "pet.html");
   assertIncludes(html, 'id="pet-hint"', "pet.html");
   assertIncludes(html, 'id="pet-bubble"', "pet.html");
+  assertRegex(html, /id="pet-bubble"[^>]*class="[^"]*\bpet-speech-bubble\b/, "pet.html");
   assertIncludes(html, 'data-state="collapsed"', "pet.html");
   assertIncludes(html, 'hidden', "pet.html");
   assertIncludes(html, 'id="pet-bubble-message"', "pet.html");
@@ -113,7 +114,7 @@ function testPetHtmlReferencesStaticAssets() {
   assertIncludes(html, 'data-menu-state="closed"', "pet.html");
   assertIncludes(
     html,
-    'data-supported-bubble-states="collapsed expanded composing empty_input pending success backend_offline timeout llm_local_error fallback_mock long_reply"',
+    'data-supported-bubble-states="collapsed expanded speaking thinking composing empty_input pending success backend_offline timeout llm_local_error fallback_mock long_reply"',
     "pet.html"
   );
   assertIncludes(html, 'id="pet-menu-open-full-app"', "pet.html");
@@ -135,8 +136,16 @@ function testPetHtmlReferencesStaticAssets() {
   assertRegex(html, /id="pet-bubble-response"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-bubble-placeholder"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-chat-form-hook"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
+  assertRegex(html, /id="pet-chat-form-hook"[^>]*class="[^"]*\bpet-dev-chat-form\b/, "pet.html");
+  assertRegex(html, /id="pet-chat-form-hook"[\s\S]*?data-dev-only="true"/, "pet.html");
+  assertRegex(html, /id="pet-chat-form-hook"[\s\S]*?aria-hidden="true"/, "pet.html");
+  assertRegex(html, /id="pet-chat-form-hook"[\s\S]*?hidden/, "pet.html");
   assertRegex(html, /id="pet-chat-input-hook"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
+  assertRegex(html, /id="pet-chat-input-hook"[\s\S]*?tabindex="-1"/, "pet.html");
+  assertRegex(html, /id="pet-chat-input-hook"[\s\S]*?hidden/, "pet.html");
   assertRegex(html, /id="pet-chat-send-hook"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
+  assertRegex(html, /id="pet-chat-send-hook"[\s\S]*?tabindex="-1"/, "pet.html");
+  assertRegex(html, /id="pet-chat-send-hook"[\s\S]*?hidden/, "pet.html");
   assertRegex(html, /id="pet-bubble-open-hook"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-bubble-close-hook"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-context-menu-hook"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
@@ -146,6 +155,7 @@ function testPetHtmlReferencesStaticAssets() {
   assertRegex(html, /id="pet-menu-hide-window"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-menu-close"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertIncludes(html, "&#x54FC;&#xFF0C;", "pet.html");
+  assertIncludes(html, "Display-only speech bubble. Type in Full App.", "pet.html");
   assertNotIncludes(html, 'id="pet-menu-hotspot"', "pet.html");
   assertNotIncludes(html, 'data-hook="menu-hotspot"', "pet.html");
   assertIncludes(
@@ -169,11 +179,13 @@ function testPetCssUsesStaticPetDimensions() {
   assertIncludes(css, ".pet-drag-handle", "pet.css");
   assertIncludes(css, ".pet-drag-region", "pet.css");
   assertIncludes(css, ".pet-no-drag", "pet.css");
-  assertIncludes(css, '[data-bubble-state="expanded"]', "pet.css");
+  assertIncludes(css, ':not([data-bubble-state="collapsed"])', "pet.css");
   assertIncludes(css, '.pet-bubble[data-state="expanded"]', "pet.css");
   assertIncludes(css, ".pet-bubble-message", "pet.css");
   assertIncludes(css, ".pet-bubble-status", "pet.css");
   assertIncludes(css, ".pet-bubble-response", "pet.css");
+  assertIncludes(css, ".pet-speech-bubble::after", "pet.css");
+  assertIncludes(css, ".pet-dev-chat-form", "pet.css");
   assertIncludes(css, ".pet-menu", "pet.css");
   assertIncludes(css, '.pet-menu[hidden]', "pet.css");
   assertIncludes(css, ".pet-menu-item", "pet.css");
@@ -190,16 +202,20 @@ function testPetCssUsesStaticPetDimensions() {
   assertRegex(css, /\.pet-shell[\s\S]*height:\s*280px/, "pet.css");
   assertRegex(css, /\.pet-shell[\s\S]*max-height:\s*280px/, "pet.css");
   assertRegex(css, /\.pet-shell[\s\S]*overflow:\s*hidden/, "pet.css");
+  assertRegex(css, /\.pet-bubble[\s\S]*position:\s*absolute/, "pet.css");
+  assertRegex(css, /\.pet-bubble[\s\S]*top:\s*30px/, "pet.css");
+  assertRegex(css, /\.pet-speech-bubble::after[\s\S]*content:\s*""/, "pet.css");
+  assertRegex(css, /\.pet-speech-bubble::after[\s\S]*transform:\s*rotate\(45deg\)/, "pet.css");
   assertRegex(css, /\.pet-bubble[\s\S]*overflow:\s*hidden/, "pet.css");
   assertRegex(
     css,
-    /\.pet-bubble[\s\S]*grid-template-rows:\s*auto auto auto minmax\(0,\s*1fr\) auto/,
+    /\.pet-bubble[\s\S]*grid-template-rows:\s*auto minmax\(0,\s*1fr\) auto/,
     "pet.css"
   );
-  assertRegex(css, /\.pet-bubble[\s\S]*gap:\s*4px/, "pet.css");
-  assertRegex(css, /\.pet-bubble\[data-state="expanded"\][\s\S]*height:\s*116px/, "pet.css");
+  assertRegex(css, /\.pet-bubble[\s\S]*gap:\s*5px/, "pet.css");
+  assertRegex(css, /\.pet-bubble\[data-state="expanded"\][\s\S]*max-height:\s*104px/, "pet.css");
   assertRegex(css, /\.pet-bubble-body[\s\S]*display:\s*none/, "pet.css");
-  assertRegex(css, /\.pet-chat-form[\s\S]*min-height:\s*24px/, "pet.css");
+  assertRegex(css, /\.pet-dev-chat-form,\s*\r?\n\.pet-dev-chat-form\[hidden\][\s\S]*display:\s*none/, "pet.css");
   assertRegex(css, /\.pet-bubble-message[\s\S]*max-height:\s*16px/, "pet.css");
   assertRegex(css, /\.pet-bubble-message[\s\S]*overflow:\s*hidden/, "pet.css");
   assertRegex(css, /\.pet-bubble-response[\s\S]*max-height:\s*none/, "pet.css");
@@ -255,6 +271,8 @@ function testPetRendererDefinesBubbleStates() {
   for (const state of [
     "collapsed",
     "expanded",
+    "speaking",
+    "thinking",
     "composing",
     "empty_input",
     "pending",
@@ -271,7 +289,7 @@ function testPetRendererDefinesBubbleStates() {
   assertIncludes(renderer, "\\u543e\\u6b63\\u5728\\u60f3\\uff0c\\u5225\\u50ac\\u3002", "pet-renderer.js");
   assertIncludes(
     renderer,
-    "\\u5f8c\\u7aef\\u4f3c\\u4e4e\\u4e0d\\u5728\\uff0c\\u6c5d\\u5148\\u53bb\\u628a\\u5b83\\u53eb\\u9192\\u3002",
+    "\\u5f8c\\u7aef\\u4f3c\\u4e4e\\u4e0d\\u5728\\uff0c\\u6c5d\\u5148\\u53bb Full App \\u628a\\u5b83\\u53eb\\u9192\\u3002",
     "pet-renderer.js"
   );
   assertIncludes(
@@ -332,8 +350,8 @@ function testPetRendererInitializesBubbleCollapsed() {
   assert.equal(fakeDocument.getElementById("pet-menu").getAttribute("aria-hidden"), "true");
   assert.equal(fakeDocument.getElementById("pet-menu").hidden, true);
   assert.equal(fakeDocument.getElementById("pet-bubble-message").textContent, PET_MODE_DEFAULTS.bubbleMessage);
-  assert.equal(fakeDocument.getElementById("pet-bubble-status").textContent, "local placeholder");
-  assert.match(fakeDocument.getElementById("pet-bubble-placeholder").textContent, /TASK-133/);
+  assert.equal(fakeDocument.getElementById("pet-bubble-status").textContent, "speech bubble");
+  assert.match(fakeDocument.getElementById("pet-bubble-placeholder").textContent, /Display-only speech bubble/);
 }
 
 function testPetRendererRendersAllLocalBubbleStates() {
@@ -364,19 +382,21 @@ function testPetRendererRendersAllLocalBubbleStates() {
   }
 }
 
-function assertComposerVisible(fakeDocument, expectedDisabled) {
+function assertDevComposerHidden(fakeDocument, expectedDisabled) {
   const form = fakeDocument.getElementById("pet-chat-form-hook");
   const input = fakeDocument.getElementById("pet-chat-input-hook");
   const send = fakeDocument.getElementById("pet-chat-send-hook");
 
-  assert.ok(form, "chat form should exist");
-  assert.ok(input, "chat input should exist");
-  assert.ok(send, "chat send button should exist");
-  assert.equal(form.hidden, false, "chat form should stay visible");
-  assert.equal(input.hidden, false, "chat input should stay visible");
-  assert.equal(send.hidden, false, "chat send button should stay visible");
-  assert.equal(input.disabled, expectedDisabled, "chat input disabled state should match");
-  assert.equal(send.disabled, expectedDisabled, "chat send disabled state should match");
+  assert.ok(form, "dev chat form should exist");
+  assert.ok(input, "dev chat input should exist");
+  assert.ok(send, "dev chat send button should exist");
+  assert.equal(form.hidden, true, "dev chat form should stay hidden");
+  assert.equal(input.hidden, true, "dev chat input should stay hidden");
+  assert.equal(send.hidden, true, "dev chat send button should stay hidden");
+  assert.equal(form.getAttribute("aria-hidden"), "true");
+  assert.equal(form.dataset.devOnly, "true");
+  assert.equal(input.disabled, expectedDisabled, "dev chat input disabled state should match");
+  assert.equal(send.disabled, expectedDisabled, "dev chat send disabled state should match");
 }
 
 function createPetBubbleStateDocument() {
@@ -396,11 +416,12 @@ function createPetBubbleStateDocument() {
   ]);
 }
 
-function testPetComposerStaysVisibleAcrossBubbleStates() {
+function testPetSpeechBubbleKeepsDevComposerHiddenAcrossDisplayStates() {
   const { setBubbleState } = require(petRendererPath);
   const fakeDocument = createPetBubbleStateDocument();
   const enabledStates = [
     "expanded",
+    "speaking",
     "composing",
     "empty_input",
     "success",
@@ -414,12 +435,16 @@ function testPetComposerStaysVisibleAcrossBubbleStates() {
   for (const state of enabledStates) {
     setBubbleState(fakeDocument, state);
     assert.equal(fakeDocument.getElementById("pet-bubble").hidden, false);
-    assertComposerVisible(fakeDocument, false);
+    assertDevComposerHidden(fakeDocument, false);
   }
+
+  setBubbleState(fakeDocument, "thinking");
+  assert.equal(fakeDocument.getElementById("pet-bubble").hidden, false);
+  assertDevComposerHidden(fakeDocument, true);
 
   setBubbleState(fakeDocument, "pending");
   assert.equal(fakeDocument.getElementById("pet-bubble").hidden, false);
-  assertComposerVisible(fakeDocument, true);
+  assertDevComposerHidden(fakeDocument, true);
 }
 
 function testFullAppStatusDoesNotRemoveComposer() {
@@ -427,7 +452,7 @@ function testFullAppStatusDoesNotRemoveComposer() {
   const fakeDocument = createPetBubbleStateDocument();
 
   setBubbleState(fakeDocument, "expanded");
-  assertComposerVisible(fakeDocument, false);
+  assertDevComposerHidden(fakeDocument, false);
 
   handleOpenFullApp(fakeDocument, {
     openFullApp() {
@@ -436,7 +461,7 @@ function testFullAppStatusDoesNotRemoveComposer() {
   });
 
   assert.equal(fakeDocument.getElementById("pet-bubble-message").textContent, "Opening Full App...");
-  assertComposerVisible(fakeDocument, false);
+  assertDevComposerHidden(fakeDocument, false);
 }
 
 function testPetExpressionMappingHelpersUseExistingAssets() {
@@ -468,12 +493,14 @@ function testPetExpressionMappingHelpersUseExistingAssets() {
   assert.equal(normalizePetMood("focused"), "focused");
   assert.equal(normalizePetMood("not_a_mood"), "neutral");
   assert.equal(expressionForBubbleState("pending"), "focused");
+  assert.equal(expressionForBubbleState("thinking"), "focused");
   assert.equal(expressionForBubbleState("backend_offline"), "worried");
   assert.equal(expressionForBubbleState("timeout"), "sleepy");
   assert.equal(expressionForBubbleState("llm_local_error"), "worried");
   assert.equal(expressionForBubbleState("fallback_mock"), "proud");
   assert.equal(expressionForBubbleState("empty_input"), "annoyed");
   assert.equal(expressionForBubbleState("long_reply"), "focused");
+  assert.equal(expressionForBubbleState("speaking", "happy"), "happy");
   assert.equal(expressionForBubbleState("success", "happy"), "happy");
   assert.equal(expressionForBubbleState("success", "unknown"), "neutral");
   assert.equal(PET_BUBBLE_STATE_EXPRESSIONS.composing, "neutral");
@@ -499,7 +526,7 @@ function testPetLongReplyThresholdHelper() {
   assert.equal(PET_REPLY_LONG_THRESHOLD, 160);
   assert.equal(isLongReply(shortReply), false);
   assert.equal(isLongReply(longReply), true);
-  assert.equal(stateForChatSource("llm_local", shortReply), "success");
+  assert.equal(stateForChatSource("llm_local", shortReply), "speaking");
   assert.equal(stateForChatSource("llm_local", longReply), "long_reply");
   assert.equal(stateForChatSource("mock", longReply), "fallback_mock");
 }
@@ -642,7 +669,7 @@ async function testPetChatEmptyInputDoesNotFetch() {
   assert.equal(result, null);
   assert.equal(fetchCalled, false);
   assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "empty_input");
-  assertComposerVisible(fakeDocument, false);
+  assertDevComposerHidden(fakeDocument, false);
 }
 
 async function testPetChatSubmitUsesBackendChatAndRendersSuccess() {
@@ -671,10 +698,10 @@ async function testPetChatSubmitUsesBackendChatAndRendersSuccess() {
     }
   );
 
-  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "pending");
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "thinking");
   assert.equal(fakeDocument.getElementById("pet-chat-input-hook").disabled, true);
   assert.equal(fakeDocument.getElementById("pet-chat-send-hook").disabled, true);
-  assertComposerVisible(fakeDocument, true);
+  assertDevComposerHidden(fakeDocument, true);
   assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "focused");
   assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_focused\.png$/);
 
@@ -693,12 +720,12 @@ async function testPetChatSubmitUsesBackendChatAndRendersSuccess() {
   assert.deepEqual(JSON.parse(capturedOptions.body), { message: "hello", use_memory: false });
   assert.equal(capturedOptions.method, "POST");
   assert.equal(capturedOptions.headers["Content-Type"], "application/json");
-  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "success");
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "speaking");
   assert.equal(fakeDocument.getElementById("pet-bubble-status").textContent, "local");
   assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, "Pet reply");
   assert.equal(fakeDocument.getElementById("pet-chat-input-hook").disabled, false);
   assert.equal(fakeDocument.getElementById("pet-chat-send-hook").disabled, false);
-  assertComposerVisible(fakeDocument, false);
+  assertDevComposerHidden(fakeDocument, false);
   assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "happy");
   assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_happy\.png$/);
   assert.equal(input.value, "");
@@ -725,7 +752,7 @@ async function testPetChatFocusedMoodUpdatesFocusedExpression() {
     }
   );
 
-  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "success");
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "speaking");
   assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "focused");
   assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_focused\.png$/);
 }
@@ -751,7 +778,7 @@ async function testPetChatProudMoodUpdatesProudExpression() {
     }
   );
 
-  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "success");
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "speaking");
   assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "proud");
   assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_proud\.png$/);
 }
@@ -777,7 +804,7 @@ async function testPetChatUnknownMoodFallsBackToNeutralExpression() {
     }
   );
 
-  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "success");
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "speaking");
   assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "neutral");
   assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_neutral\.png$/);
 }
@@ -820,7 +847,7 @@ async function testPetChatDoubleSubmitDuringPendingDoesNotDuplicateFetch() {
 
   assert.equal(secondSubmit, null);
   assert.equal(fetchCalls, 1);
-  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "pending");
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "thinking");
 
   resolveFetch({
     ok: true,
@@ -833,7 +860,7 @@ async function testPetChatDoubleSubmitDuringPendingDoesNotDuplicateFetch() {
 
   await firstSubmit;
   assert.equal(fetchCalls, 1);
-  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "success");
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "speaking");
 
   input.value = "send after pending";
   const nextSubmit = await handleChatSubmit(
@@ -860,7 +887,7 @@ async function testPetChatDoubleSubmitDuringPendingDoesNotDuplicateFetch() {
   assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, "Second done");
   assert.equal(fakeDocument.getElementById("pet-chat-input-hook").disabled, false);
   assert.equal(fakeDocument.getElementById("pet-chat-send-hook").disabled, false);
-  assertComposerVisible(fakeDocument, false);
+  assertDevComposerHidden(fakeDocument, false);
 }
 
 async function testPetChatSourceMockUsesFallbackState() {
@@ -889,7 +916,7 @@ async function testPetChatSourceMockUsesFallbackState() {
   assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, "Mock reply");
   assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "proud");
   assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_proud\.png$/);
-  assertComposerVisible(fakeDocument, false);
+  assertDevComposerHidden(fakeDocument, false);
 }
 
 async function testPetChatSourceLocalErrorUsesErrorState() {
@@ -921,7 +948,7 @@ async function testPetChatSourceLocalErrorUsesErrorState() {
   assert.equal(fakeDocument.getElementById("pet-chat-input-hook").value, "error please");
   assert.equal(fakeDocument.getElementById("pet-chat-input-hook").disabled, false);
   assert.equal(fakeDocument.getElementById("pet-chat-send-hook").disabled, false);
-  assertComposerVisible(fakeDocument, false);
+  assertDevComposerHidden(fakeDocument, false);
 }
 
 async function testPetChatNetworkFailureUsesBackendOfflineState() {
@@ -943,13 +970,13 @@ async function testPetChatNetworkFailureUsesBackendOfflineState() {
   assert.equal(result, null);
   assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "backend_offline");
   assert.equal(fakeDocument.getElementById("pet-bubble-status").textContent, "backend offline");
-  assert.match(fakeDocument.getElementById("pet-bubble-response").textContent, /\u518d\u8a66\u4e00\u6b21/);
+  assert.match(fakeDocument.getElementById("pet-bubble-response").textContent, /Full App/);
   assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "worried");
   assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_worried\.png$/);
   assert.equal(fakeDocument.getElementById("pet-chat-input-hook").value, "network please");
   assert.equal(fakeDocument.getElementById("pet-chat-input-hook").disabled, false);
   assert.equal(fakeDocument.getElementById("pet-chat-send-hook").disabled, false);
-  assertComposerVisible(fakeDocument, false);
+  assertDevComposerHidden(fakeDocument, false);
 }
 
 async function testPetChatTimeoutUsesTimeoutStateAndKeepsInput() {
@@ -970,14 +997,15 @@ async function testPetChatTimeoutUsesTimeoutStateAndKeepsInput() {
   assert.equal(result, null);
   assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "timeout");
   assert.equal(fakeDocument.getElementById("pet-bubble-status").textContent, "local timeout");
-  assert.match(fakeDocument.getElementById("pet-bubble-message").textContent, /\u9192\u4f86/);
+  assert.equal(fakeDocument.getElementById("pet-bubble-message").textContent, "打字請開 Full App。");
+  assert.match(fakeDocument.getElementById("pet-bubble-response").textContent, /\u9192\u4f86/);
   assert.match(fakeDocument.getElementById("pet-bubble-response").textContent, /Full App/);
   assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "sleepy");
   assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_sleepy\.png$/);
   assert.equal(fakeDocument.getElementById("pet-chat-input-hook").value, "timeout please");
   assert.equal(fakeDocument.getElementById("pet-chat-input-hook").disabled, false);
   assert.equal(fakeDocument.getElementById("pet-chat-send-hook").disabled, false);
-  assertComposerVisible(fakeDocument, false);
+  assertDevComposerHidden(fakeDocument, false);
 }
 
 async function testPetChatMalformedResponseUsesSafeErrorState() {
@@ -1010,7 +1038,7 @@ async function testPetChatMalformedResponseUsesSafeErrorState() {
   assert.equal(fakeDocument.getElementById("pet-chat-input-hook").value, "malformed please");
   assert.equal(fakeDocument.getElementById("pet-chat-input-hook").disabled, false);
   assert.equal(fakeDocument.getElementById("pet-chat-send-hook").disabled, false);
-  assertComposerVisible(fakeDocument, false);
+  assertDevComposerHidden(fakeDocument, false);
 }
 
 async function testPetChatLongReplyUsesLongReplyState() {
@@ -1037,12 +1065,12 @@ async function testPetChatLongReplyUsesLongReplyState() {
 
   assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "long_reply");
   assert.equal(fakeDocument.getElementById("pet-bubble-status").textContent, "local");
-  assert.equal(fakeDocument.getElementById("pet-bubble-message").textContent, PET_LONG_REPLY_HINT);
-  assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, longReply);
+  assert.equal(fakeDocument.getElementById("pet-bubble-message").textContent, "打字請開 Full App。");
+  assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, PET_LONG_REPLY_HINT);
   assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "focused");
   assert.equal(fakeDocument.getElementById("pet-chat-input-hook").disabled, false);
   assert.equal(fakeDocument.getElementById("pet-chat-send-hook").disabled, false);
-  assertComposerVisible(fakeDocument, false);
+  assertDevComposerHidden(fakeDocument, false);
 }
 
 function testPetRendererMenuHooksAreLocalAndNarrow() {
@@ -1219,7 +1247,7 @@ async function run() {
     testPetRendererDefinesBubbleStates,
     testPetRendererInitializesBubbleCollapsed,
     testPetRendererRendersAllLocalBubbleStates,
-    testPetComposerStaysVisibleAcrossBubbleStates,
+    testPetSpeechBubbleKeepsDevComposerHiddenAcrossDisplayStates,
     testFullAppStatusDoesNotRemoveComposer,
     testPetExpressionMappingHelpersUseExistingAssets,
     testPetLongReplyThresholdHelper,

@@ -611,3 +611,68 @@ Validation:
 Next recommendation:
 
 - Re-run TASK-139 Manual Windows Pet Bubble Chat Smoke and verify the input and Send composer are visible and usable in the real Windows Pet Window.
+
+## 19. TASK-141 Display-only Speech Bubble Redesign
+
+Status: DONE on 2026-05-24.
+
+TASK-141 changes the Pet Bubble product direction after Windows hands-on use.
+
+Design shift:
+
+- Previous direction: Pet Bubble behaved like a tiny chat panel with input and Send inside the `220 x 280` Pet Window.
+- New direction: Pet Bubble is a display-only comic-style speech bubble for Christina's short replies and status.
+- Full App is the main text input, troubleshooting, provider/settings, and long-reading surface.
+- Future voice input or push-to-talk should be designed as a separate task.
+
+UI behavior:
+
+- Visible bubble uses `pet-speech-bubble`.
+- Bubble has a light rounded panel and CSS tail pointing toward Christina.
+- Visible content is compact: source/status badge, response text, and a short Full App hint.
+- The bubble no longer presents input/send as primary UI.
+- The hidden `pet-chat-form-hook`, `pet-chat-input-hook`, and `pet-chat-send-hook` remain as dev-only hooks for the existing client helper tests and possible future dispatch path.
+
+State model:
+
+- `collapsed`: bubble hidden.
+- `expanded`: display-only prompt telling the user to type in Full App.
+- `speaking`: shows a backend reply in the speech bubble.
+- `thinking`: shows `吾正在想，別催。`.
+- `backend_offline`: short Full App troubleshooting prompt.
+- `timeout`: short local-model waking-up prompt.
+- `llm_local_error`: short local model error prompt.
+- `fallback_mock`: short mock fallback reply.
+- `long_reply`: shows the Full App reading hint instead of trying to show the whole long reply in the small window.
+
+Compatibility:
+
+- The existing Pet `/chat` client function remains.
+- Request body remains `{ message, use_memory: false }`.
+- Response parsing still uses only `reply`, `mood`, and `source`.
+- Normal successful replies now render through `speaking`.
+- Legacy aliases such as `success` and `pending` remain for compatibility, but visible product language is `speaking` / `thinking`.
+
+Safety confirmation:
+
+- Backend code was not changed.
+- `/chat` schema remains `reply`, `mood`, `source`.
+- No backend route or API was added.
+- No IPC or preload API was added.
+- No direct Ollama access was added.
+- No speech-to-text, voice input, provider settings change, external API, file access, Email access, Calendar access, image, tray, packaging, autostart, screenshot, microphone, or screen monitoring behavior was added.
+
+Validation:
+
+- Pet renderer smoke covers speech bubble DOM, CSS tail, hidden dev-only composer, speaking/thinking states, long-reply Full App hint, Full App hook, drag handle, Menu toggle, `/chat` schema assumptions, and direct-Ollama safety.
+- Pet renderer smoke passes 31 checks.
+- Pet window smoke passes 10 checks.
+- Existing desktop renderer smoke passes.
+- Backend pytest passes with 586 tests.
+- Direct Ollama `11434` safety scan passes.
+- `git diff --check` passes.
+
+Next recommendation:
+
+- Manual Windows visual smoke for the display-only speech bubble.
+- Follow-up design task: Pet input source design for Full App dispatch, voice, or push-to-talk.
