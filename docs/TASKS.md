@@ -7172,6 +7172,80 @@ Verification:
 
 ---
 
+## TASK-131 - Pet Mode Release Checkpoint
+
+**Status:** DONE
+**Date:** 2026-05-24
+
+Goal:
+
+Consolidate TASK-114 through TASK-130 into a first-stage Pet Mode release checkpoint without adding runtime behavior.
+
+Scope:
+
+- Documentation update only.
+- No runtime code changes.
+- No backend route added.
+- No `/chat` wiring added.
+- No `/chat` schema change.
+
+Checkpoint document:
+
+- Added `docs/PET_MODE_RELEASE_CHECKPOINT.md`.
+
+Completed Pet Mode MVP capabilities:
+
+- Optional `PET_MODE_ENABLED=true` Pet Window.
+- Full App remains the default management surface.
+- `220 x 280` frameless, transparent, always-on-top Pet Window.
+- Separate static Pet renderer.
+- Christina avatar, local hint, and Bubble Chat placeholder.
+- Explicit top drag handle.
+- No-drag avatar, bubble, menu, buttons, inputs, and controls.
+- Local bubble collapsed / expanded state.
+- Pet -> Full App focus bridge.
+- Full App -> Show Pet Window bridge.
+- Hide Pet Window / Show Pet.
+- Reset Position.
+- Local position persistence with off-screen guard.
+- Menu toggle, Close Menu, and Escape close.
+- Manual Windows smoke PASS.
+
+Deferred items:
+
+- Bubble Chat is not wired to `/chat`.
+- Pet Mode does not display real LLM responses yet.
+- Pet bubble does not yet show source / mood / error / loading states from backend responses.
+- Tray icon, packaging, autostart, and full custom drag implementation are deferred.
+- Whole-character drag is deferred; large avatar/body CSS drag is intentionally not restored.
+
+Safety boundaries:
+
+- No automatic file, Email, Calendar, screen, microphone, command, or external API access.
+- No screenshot, recording, or screen monitoring behavior.
+- No `/chat` schema change.
+- Pet renderer does not call Ollama directly.
+- Pet renderer currently does not call backend `/chat`.
+- IPC remains fixed and narrow.
+- Preload APIs do not expose arbitrary `ipcRenderer`, fs, shell, or process.
+
+Checkpoint results:
+
+- `node --check` coverage for main, full renderer, full preload, pet renderer, pet preload, and smoke scripts: PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: PASS, 13 checks.
+- `node apps/desktop/scripts/pet-window-smoke.js`: PASS, 10 checks.
+- `npm.cmd run test:renderer`: PASS.
+- `python -m pytest`: PASS, 586 passed.
+- Direct Ollama `11434` safety scan: PASS.
+- Manual Windows Pet drag/menu smoke: PASS.
+
+Next recommendation:
+
+- TASK-132 - Pet Bubble Chat `/chat` Wiring Design.
+- TASK-132 should be design-only first and cover loading state, backend offline, `llm_local` / `mock` / error source display, mood to expression integration, long reply handling, timeout / cold-start hints, safe send flow, and no schema change unless explicitly planned.
+
+---
+
 ## TASK-130 - Manual Windows Pet Drag/Menu Smoke
 
 **Status:** DONE - PASS

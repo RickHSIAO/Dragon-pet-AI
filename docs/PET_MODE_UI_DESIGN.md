@@ -1040,6 +1040,41 @@ Safety note:
 
 - No code, IPC, preload API, `main.js`, backend, `/chat`, `/chat` schema, provider settings, Ollama routing, external API, image, file access, Email access, Calendar access, screenshot, microphone, screen-monitoring behavior, or bubble backend wiring was changed for TASK-130.
 
+### TASK-131 - Pet Mode Release Checkpoint
+
+Status: DONE on 2026-05-24.
+
+Checkpoint reference:
+
+- `docs/PET_MODE_RELEASE_CHECKPOINT.md`
+
+Release summary:
+
+- Pet Mode first-stage MVP is checkpointed and maintainable behind `PET_MODE_ENABLED=true`.
+- Full App remains the default management surface.
+- Pet Window supports explicit-handle drag, no-drag interaction zones, local bubble state, position persistence, menu actions, Pet -> Full App focus, Full App -> Show Pet, Hide Pet Window, Reset Position, and manual Windows smoke PASS.
+- Bubble Chat remains a local UI placeholder and is not wired to backend `/chat`.
+
+Deferred items:
+
+- Real Pet Bubble Chat responses.
+- Bubble loading / offline / source / mood / error states.
+- Mood to expression integration from bubble replies.
+- Tray icon.
+- Packaging and autostart.
+- Full custom drag implementation for whole-character drag.
+
+Safety note:
+
+- No runtime code, backend route, `/chat` call, `/chat` schema change, IPC expansion, external API, file access, Email access, Calendar access, screenshot, microphone, screen-monitoring behavior, image, or bubble backend wiring was added for TASK-131.
+- Renderer still does not directly call Ollama.
+- Preload APIs remain fixed and narrow.
+
+Next recommendation:
+
+- TASK-132 - Pet Bubble Chat `/chat` Wiring Design.
+- TASK-132 should be design-only first and cover loading state, backend offline, `llm_local` / `mock` / error source display, mood to expression integration, long reply handling, timeout / cold-start hints, safe send flow, and no schema change unless explicitly planned.
+
 ---
 
 ## 9. Explicit Non-goals for TASK-114
