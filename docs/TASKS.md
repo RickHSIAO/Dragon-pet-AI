@@ -7172,6 +7172,76 @@ Verification:
 
 ---
 
+## TASK-138 - Pet Bubble Chat Smoke Tests
+
+**Status:** DONE
+**Date:** 2026-05-24
+
+Goal:
+
+Strengthen Pet Bubble Chat smoke coverage before Windows manual validation, without adding runtime features.
+
+Changed files:
+
+- `apps/desktop/scripts/pet-renderer-smoke.js`
+- `docs/TASKS.md`
+- `docs/ROADMAP.md`
+- `docs/PET_BUBBLE_CHAT_WIRING_DESIGN.md`
+
+Runtime code:
+
+- No runtime code was modified for TASK-138.
+
+Smoke coverage added or confirmed:
+
+- Non-empty input sends the existing backend `/chat` path.
+- Request body remains `{ message, use_memory: false }`.
+- Pending state appears before mocked response resolves.
+- Pending state disables input/send.
+- Pending state maps expression to `focused`.
+- Successful response renders `reply`, source status, and response mood expression.
+- Successful response clears input and restores Send.
+- Empty input maps to `empty_input`, does not fetch, and maps expression to `annoyed`.
+- `source=llm_local` maps to `success` / local status.
+- `source=mock` maps to `fallback_mock` / `proud`.
+- `source=llm_local_error` maps to `llm_local_error` / `worried`.
+- Network failure maps to `backend_offline` / `worried`.
+- Timeout maps to `timeout` / `sleepy`.
+- Malformed response maps to safe `llm_local_error`.
+- `mood=happy` maps to `christina_happy.png`.
+- `mood=focused` maps to `christina_focused.png`.
+- `mood=proud` maps to `christina_proud.png`.
+- Unknown mood falls back to `neutral`.
+- Long replies over `PET_REPLY_LONG_THRESHOLD = 160` map to `long_reply`.
+- Long reply hint and response rendering are covered.
+- Bubble response CSS keeps max-height and internal scroll assumptions.
+- Pet shell remains `220 x 280`.
+- Full App hook, drag handle, and no-drag hooks remain present.
+- Duplicate submit while pending does not create a second fetch.
+- After pending completes, the next message can be sent.
+- Pet renderer contains no direct Ollama `11434` access.
+
+Safety boundaries:
+
+- Backend code was not modified.
+- `/chat` schema was not modified.
+- No backend route or API was added.
+- No IPC or preload API was added.
+- No direct Ollama access was added.
+- No external API, file access, Email access, Calendar access, image, or provider settings behavior was added.
+
+Validation:
+
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js` - PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js` - PASS, 29 checks.
+
+Next recommendation:
+
+- TASK-139 - Manual Windows Pet Bubble Chat Smoke.
+- TASK-139 should validate the wired Pet Bubble on Windows with backend running and optional local Ollama path.
+
+---
+
 ## TASK-137 - Pet Bubble Long Reply Handling
 
 **Status:** DONE

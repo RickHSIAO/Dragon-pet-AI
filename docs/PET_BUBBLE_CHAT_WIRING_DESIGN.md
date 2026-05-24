@@ -497,3 +497,57 @@ Validation:
 Next recommendation:
 
 - TASK-138 - Pet Bubble Chat Smoke Tests.
+
+## 17. TASK-138 Smoke Checkpoint
+
+Status: DONE on 2026-05-24.
+
+TASK-138 strengthened Pet Bubble Chat smoke coverage before manual Windows validation.
+
+Runtime scope:
+
+- Runtime code was not changed.
+- Smoke coverage was expanded in `apps/desktop/scripts/pet-renderer-smoke.js`.
+
+Coverage:
+
+- Non-empty input sends the existing backend `/chat` path.
+- Request body remains `{ message, use_memory: false }`.
+- Pending state appears before mocked response resolves.
+- Pending disables input/send and maps expression to `focused`.
+- Success renders `reply`, source status, and mood expression.
+- Success clears input and restores Send.
+- Empty input maps to `empty_input`, does not fetch, and maps expression to `annoyed`.
+- `source=llm_local` maps to `success` / local status.
+- `source=mock` maps to `fallback_mock` / `proud`.
+- `source=llm_local_error` maps to `llm_local_error` / `worried`.
+- Network failure maps to `backend_offline` / `worried`.
+- Timeout maps to `timeout` / `sleepy`.
+- Malformed response maps to safe `llm_local_error`.
+- `mood=happy` maps to `christina_happy.png`.
+- `mood=focused` maps to `christina_focused.png`.
+- `mood=proud` maps to `christina_proud.png`.
+- Unknown mood falls back to `neutral`.
+- Long replies over `PET_REPLY_LONG_THRESHOLD = 160` map to `long_reply`.
+- Long reply hint, response rendering, max-height, internal scroll, and `220 x 280` layout assumptions are covered.
+- Full App hook, drag handle, and no-drag hooks remain present.
+- Duplicate submit while pending does not create a second fetch.
+- After pending completes, a next message can be sent.
+- Pet renderer contains no direct Ollama `11434` access.
+
+Safety confirmation:
+
+- Backend code was not changed.
+- `/chat` schema remains `reply`, `mood`, `source`.
+- No backend route or API was added.
+- No IPC or preload API was added.
+- No direct Ollama access was added.
+- No external API, file access, Email access, Calendar access, image, provider settings, screenshot, microphone, or screen monitoring behavior was added.
+
+Validation:
+
+- `node apps/desktop/scripts/pet-renderer-smoke.js` passes 29 checks.
+
+Next recommendation:
+
+- TASK-139 - Manual Windows Pet Bubble Chat Smoke.

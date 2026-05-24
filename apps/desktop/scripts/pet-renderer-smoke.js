@@ -585,6 +585,8 @@ async function testPetChatSubmitUsesBackendChatAndRendersSuccess() {
   assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "pending");
   assert.equal(fakeDocument.getElementById("pet-chat-input-hook").disabled, true);
   assert.equal(fakeDocument.getElementById("pet-chat-send-hook").disabled, true);
+  assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "focused");
+  assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_focused\.png$/);
 
   resolveFetch({
     ok: true,
@@ -635,6 +637,32 @@ async function testPetChatFocusedMoodUpdatesFocusedExpression() {
   assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "success");
   assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "focused");
   assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_focused\.png$/);
+}
+
+async function testPetChatProudMoodUpdatesProudExpression() {
+  const { handleChatSubmit } = require(petRendererPath);
+  const fakeDocument = createPetChatDocument();
+  fakeDocument.getElementById("pet-chat-input-hook").value = "proud please";
+
+  await handleChatSubmit(
+    { preventDefault() {} },
+    fakeDocument,
+    {
+      backendUrl: "http://localhost:8000",
+      fetchImpl: async () => ({
+        ok: true,
+        json: async () => ({
+          reply: "Proud reply",
+          mood: "proud",
+          source: "llm_local",
+        }),
+      }),
+    }
+  );
+
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "success");
+  assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "proud");
+  assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_proud\.png$/);
 }
 
 async function testPetChatUnknownMoodFallsBackToNeutralExpression() {
@@ -715,6 +743,32 @@ async function testPetChatDoubleSubmitDuringPendingDoesNotDuplicateFetch() {
   await firstSubmit;
   assert.equal(fetchCalls, 1);
   assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "success");
+
+  input.value = "send after pending";
+  const nextSubmit = await handleChatSubmit(
+    { preventDefault() {} },
+    fakeDocument,
+    {
+      backendUrl: "http://localhost:8000",
+      fetchImpl() {
+        fetchCalls += 1;
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            reply: "Second done",
+            mood: "happy",
+            source: "llm_local",
+          }),
+        });
+      },
+    }
+  );
+
+  assert.deepEqual(nextSubmit, { reply: "Second done", mood: "happy", source: "llm_local" });
+  assert.equal(fetchCalls, 2);
+  assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, "Second done");
+  assert.equal(fakeDocument.getElementById("pet-chat-input-hook").disabled, false);
+  assert.equal(fakeDocument.getElementById("pet-chat-send-hook").disabled, false);
 }
 
 async function testPetChatSourceMockUsesFallbackState() {
@@ -1075,6 +1129,7 @@ async function run() {
     testPetChatEmptyInputDoesNotFetch,
     testPetChatSubmitUsesBackendChatAndRendersSuccess,
     testPetChatFocusedMoodUpdatesFocusedExpression,
+    testPetChatProudMoodUpdatesProudExpression,
     testPetChatUnknownMoodFallsBackToNeutralExpression,
     testPetChatDoubleSubmitDuringPendingDoesNotDuplicateFetch,
     testPetChatSourceMockUsesFallbackState,
