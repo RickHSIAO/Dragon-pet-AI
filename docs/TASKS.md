@@ -7172,6 +7172,83 @@ Verification:
 
 ---
 
+## TASK-136 - Pet Bubble Mood/Expression Integration
+
+**Status:** DONE
+**Date:** 2026-05-24
+
+Goal:
+
+Unify Pet Bubble response mood, source state, local state, and Christina expression mapping without modifying backend code or `/chat` schema.
+
+Changed files:
+
+- `apps/desktop/src/pet/pet-renderer.js`
+- `apps/desktop/scripts/pet-renderer-smoke.js`
+- `docs/TASKS.md`
+- `docs/ROADMAP.md`
+- `docs/PET_BUBBLE_CHAT_WIRING_DESIGN.md`
+
+Expression helper design:
+
+- Added explicit `PET_BUBBLE_STATE_EXPRESSIONS` mapping.
+- Added `normalizePetMood(mood)`.
+- Kept `setPetExpression(documentRef, mood)` as the single avatar update helper.
+- Added `expressionForBubbleState(state, responseMood)`.
+- Added `setPetExpressionForBubbleState(documentRef, state, options)`.
+- `setBubbleState(...)` now routes bubble-state expression updates through `setPetExpressionForBubbleState(...)`.
+- Unknown moods fall back to `neutral`.
+
+Response mood mapping:
+
+- Supported response moods map to existing Christina PNG assets:
+  - `neutral` -> `christina_neutral.png`
+  - `focused` -> `christina_focused.png`
+  - `happy` -> `christina_happy.png`
+  - `proud` -> `christina_proud.png`
+  - `annoyed` -> `christina_annoyed.png`
+  - `worried` -> `christina_worried.png`
+  - `sleepy` -> `christina_sleepy.png`
+- `success` uses response `mood`.
+- Unknown response mood falls back to `neutral`.
+
+Local state expression mapping:
+
+- `collapsed` -> `neutral`
+- `expanded` -> `neutral`
+- `composing` -> `neutral`
+- `empty_input` -> `annoyed`
+- `pending` -> `focused`
+- `success` -> response mood
+- `backend_offline` -> `worried`
+- `timeout` -> `sleepy`
+- `llm_local_error` -> `worried`
+- `fallback_mock` -> `proud`
+- `long_reply` -> `focused`
+
+Safety boundaries:
+
+- No image asset was added.
+- Backend code was not modified.
+- `/chat` schema was not modified.
+- No backend route or API was added.
+- No direct Ollama access was added.
+- No IPC or preload API was added.
+- No provider settings, external API, file access, Email access, Calendar access, tray, package, autostart, screenshot, microphone, or screen-monitoring behavior was added.
+
+Validation:
+
+- `node --check apps/desktop/src/pet/pet-renderer.js` - PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js` - PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js` - PASS, 27 checks.
+
+Next recommendation:
+
+- TASK-137 - Pet Bubble Long Reply Handling.
+- TASK-137 should refine scroll/read-more behavior for real long replies while keeping the `220 x 280` Pet Window stable.
+
+---
+
 ## TASK-135 - Pet Bubble Loading/Error UX
 
 **Status:** DONE

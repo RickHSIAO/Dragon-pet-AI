@@ -388,3 +388,62 @@ Validation:
 Next recommendation:
 
 - TASK-136 - Pet Bubble Mood/Expression Integration.
+
+## 15. TASK-136 Mood/Expression Integration Checkpoint
+
+Status: DONE on 2026-05-24.
+
+TASK-136 unified Pet Bubble mood, source/local state, and Christina expression mapping.
+
+Completed:
+
+- Added explicit `PET_BUBBLE_STATE_EXPRESSIONS` mapping.
+- Added `normalizePetMood(mood)`.
+- Kept `setPetExpression(documentRef, mood)` as the single avatar update helper.
+- Added `expressionForBubbleState(state, responseMood)`.
+- Added `setPetExpressionForBubbleState(documentRef, state, options)`.
+- Routed `setBubbleState(...)` through `setPetExpressionForBubbleState(...)`.
+- Response `success` state uses backend response `mood`.
+- Unknown response mood falls back to `neutral`.
+
+Response mood mapping:
+
+- `neutral` -> `christina_neutral.png`
+- `focused` -> `christina_focused.png`
+- `happy` -> `christina_happy.png`
+- `proud` -> `christina_proud.png`
+- `annoyed` -> `christina_annoyed.png`
+- `worried` -> `christina_worried.png`
+- `sleepy` -> `christina_sleepy.png`
+
+Local state expression mapping:
+
+- `collapsed` -> `neutral`
+- `expanded` -> `neutral`
+- `composing` -> `neutral`
+- `empty_input` -> `annoyed`
+- `pending` -> `focused`
+- `success` -> backend response mood
+- `backend_offline` -> `worried`
+- `timeout` -> `sleepy`
+- `llm_local_error` -> `worried`
+- `fallback_mock` -> `proud`
+- `long_reply` -> `focused`
+
+Safety confirmation:
+
+- No image asset was added.
+- Backend code was not changed.
+- `/chat` schema remains `reply`, `mood`, `source`.
+- No backend route or API was added.
+- No direct Ollama access was added.
+- No IPC or preload API was added.
+- No provider settings, external API, file access, Email access, Calendar access, tray, packaging, autostart, screenshot, microphone, or screen monitoring behavior was added.
+
+Validation:
+
+- Pet renderer smoke covers response mood `happy`, response mood `focused`, unknown mood fallback, pending expression, backend offline expression, timeout expression, local error expression, mock fallback expression, empty input expression, long reply expression, existing asset mapping, and direct-Ollama safety.
+
+Next recommendation:
+
+- TASK-137 - Pet Bubble Long Reply Handling.

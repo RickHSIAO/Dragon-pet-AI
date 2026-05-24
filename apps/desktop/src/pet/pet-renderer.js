@@ -20,6 +20,20 @@ const CHRISTINA_EXPRESSION_ASSETS = Object.freeze({
   sleepy: "../renderer/assets/pet/christina/expressions/christina_sleepy.png",
 });
 
+const PET_BUBBLE_STATE_EXPRESSIONS = Object.freeze({
+  collapsed: "neutral",
+  expanded: "neutral",
+  composing: "neutral",
+  empty_input: "annoyed",
+  pending: "focused",
+  success: "neutral",
+  backend_offline: "worried",
+  timeout: "sleepy",
+  llm_local_error: "worried",
+  fallback_mock: "proud",
+  long_reply: "focused",
+});
+
 const BUBBLE_STATES = Object.freeze({
   collapsed: {
     expanded: false,
@@ -160,12 +174,12 @@ function getPetBackendUrl(windowRef = typeof window !== "undefined" ? window : n
   return params.get("backend") || PET_BACKEND_DEFAULT_URL;
 }
 
-function normalizeMood(mood) {
+function normalizePetMood(mood) {
   return CHRISTINA_EXPRESSION_ASSETS[mood] ? mood : PET_MODE_DEFAULTS.expression;
 }
 
 function setPetExpression(documentRef, mood) {
-  const normalizedMood = normalizeMood(mood);
+  const normalizedMood = normalizePetMood(mood);
   const avatarContainer = documentRef.getElementById("pet-avatar-container");
   const avatar = documentRef.getElementById("pet-avatar");
   const assetPath = CHRISTINA_EXPRESSION_ASSETS[normalizedMood];
@@ -180,6 +194,18 @@ function setPetExpression(documentRef, mood) {
   }
 
   return normalizedMood;
+}
+
+function expressionForBubbleState(state, responseMood) {
+  if (state === "success" && responseMood) {
+    return normalizePetMood(responseMood);
+  }
+
+  return PET_BUBBLE_STATE_EXPRESSIONS[state] || PET_MODE_DEFAULTS.expression;
+}
+
+function setPetExpressionForBubbleState(documentRef, state, options = {}) {
+  return setPetExpression(documentRef, expressionForBubbleState(state, options.mood));
 }
 
 function sourceStatusLabel(source) {
@@ -348,6 +374,8 @@ function setBubbleState(firstArg, secondArg, thirdArg) {
     send.disabled = Boolean(config.sendDisabled);
   }
 
+  setPetExpressionForBubbleState(documentRef, state, { mood: options.mood });
+
   return state;
 }
 
@@ -456,7 +484,6 @@ async function handleChatSubmit(event, documentRef = document, options = {}) {
 
   petChatPending = true;
   setBubbleState(documentRef, "pending");
-  setPetExpression(documentRef, PET_MODE_DEFAULTS.expression);
 
   try {
     const data = await sendPetChatMessage(value, options);
@@ -475,9 +502,8 @@ async function handleChatSubmit(event, documentRef = document, options = {}) {
       statusText,
       message: stateMessage,
       response: data.reply,
+      mood: data.mood,
     });
-
-    setPetExpression(documentRef, data.source === "llm_local_error" ? PET_MODE_DEFAULTS.expression : data.mood);
 
     if (input && data.source !== "llm_local_error") {
       input.value = "";
@@ -492,7 +518,6 @@ async function handleChatSubmit(event, documentRef = document, options = {}) {
     } else {
       setBubbleState(documentRef, "llm_local_error");
     }
-    setPetExpression(documentRef, PET_MODE_DEFAULTS.expression);
     return null;
   } finally {
     petChatPending = false;
@@ -695,11 +720,13 @@ if (typeof module !== "undefined") {
     BUBBLE_STATES,
     CHRISTINA_EXPRESSION_ASSETS,
     PET_BACKEND_DEFAULT_URL,
+    PET_BUBBLE_STATE_EXPRESSIONS,
     PET_MODE_DEFAULTS,
     buildChatPayload,
     collapseBubble,
     closeMenu,
     expandBubble,
+    expressionForBubbleState,
     getPetBackendUrl,
     getBubbleStateConfig,
     handleBubbleInput,
@@ -716,6 +743,8 @@ if (typeof module !== "undefined") {
     setBubbleState,
     setMenuState,
     setPetExpression,
+    setPetExpressionForBubbleState,
+    normalizePetMood,
     sourceStatusLabel,
     stateForChatSource,
     toggleBubble,

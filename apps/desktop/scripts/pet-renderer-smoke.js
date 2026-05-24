@@ -201,6 +201,10 @@ function testPetRendererUsesBackendChatWithoutDirectOllama() {
   const renderer = readText(petRendererPath);
   assertIncludes(renderer, "sendPetChatMessage", "pet-renderer.js");
   assertIncludes(renderer, "PET_CHAT_TIMEOUT_MS = 100000", "pet-renderer.js");
+  assertIncludes(renderer, "const PET_BUBBLE_STATE_EXPRESSIONS = Object.freeze", "pet-renderer.js");
+  assertIncludes(renderer, "function normalizePetMood", "pet-renderer.js");
+  assertIncludes(renderer, "function setPetExpressionForBubbleState", "pet-renderer.js");
+  assertIncludes(renderer, "function expressionForBubbleState", "pet-renderer.js");
   assertIncludes(renderer, "fetchWithTimeout", "pet-renderer.js");
   assertIncludes(renderer, "PetChatTimeoutError", "pet-renderer.js");
   assertIncludes(renderer, "buildChatPayload", "pet-renderer.js");
@@ -211,6 +215,9 @@ function testPetRendererUsesBackendChatWithoutDirectOllama() {
   assertIncludes(renderer, 'mood: data && typeof data.mood === "string"', "pet-renderer.js");
   assertIncludes(renderer, 'source: data && typeof data.source === "string"', "pet-renderer.js");
   assertIncludes(renderer, '`${backendUrl}/chat`', "pet-renderer.js");
+  for (const mood of ["neutral", "focused", "happy", "proud", "annoyed", "worried", "sleepy"]) {
+    assertIncludes(renderer, `christina_${mood}.png`, "pet-renderer.js");
+  }
   assertNotIncludes(renderer, "fetch('/chat'", "pet-renderer.js");
   assertNotIncludes(renderer, 'fetch("/chat"', "pet-renderer.js");
   assertNotIncludes(renderer, "localhost:11434", "pet-renderer.js");
@@ -336,6 +343,58 @@ function testPetRendererRendersAllLocalBubbleStates() {
   }
 }
 
+function testPetExpressionMappingHelpersUseExistingAssets() {
+  const {
+    CHRISTINA_EXPRESSION_ASSETS,
+    PET_BUBBLE_STATE_EXPRESSIONS,
+    expressionForBubbleState,
+    normalizePetMood,
+    setPetExpression,
+    setPetExpressionForBubbleState,
+  } = require(petRendererPath);
+  const fakeDocument = new FakeDocument(["pet-avatar-container", "pet-avatar"]);
+
+  assert.deepEqual(Object.keys(CHRISTINA_EXPRESSION_ASSETS).sort(), [
+    "annoyed",
+    "focused",
+    "happy",
+    "neutral",
+    "proud",
+    "sleepy",
+    "worried",
+  ]);
+
+  for (const [mood, assetPath] of Object.entries(CHRISTINA_EXPRESSION_ASSETS)) {
+    assert.match(assetPath, new RegExp(`christina_${mood}\\.png$`));
+  }
+
+  assert.equal(normalizePetMood("happy"), "happy");
+  assert.equal(normalizePetMood("focused"), "focused");
+  assert.equal(normalizePetMood("not_a_mood"), "neutral");
+  assert.equal(expressionForBubbleState("pending"), "focused");
+  assert.equal(expressionForBubbleState("backend_offline"), "worried");
+  assert.equal(expressionForBubbleState("timeout"), "sleepy");
+  assert.equal(expressionForBubbleState("llm_local_error"), "worried");
+  assert.equal(expressionForBubbleState("fallback_mock"), "proud");
+  assert.equal(expressionForBubbleState("empty_input"), "annoyed");
+  assert.equal(expressionForBubbleState("long_reply"), "focused");
+  assert.equal(expressionForBubbleState("success", "happy"), "happy");
+  assert.equal(expressionForBubbleState("success", "unknown"), "neutral");
+  assert.equal(PET_BUBBLE_STATE_EXPRESSIONS.composing, "neutral");
+
+  setPetExpression(fakeDocument, "focused");
+  assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "focused");
+  assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_focused\.png$/);
+
+  setPetExpression(fakeDocument, "unknown");
+  assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "neutral");
+  assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_neutral\.png$/);
+
+  setPetExpressionForBubbleState(fakeDocument, "empty_input");
+  assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "annoyed");
+  assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_annoyed\.png$/);
+}
+
 function testPetRendererTogglesMenuState() {
   const { closeMenu, openMenu, setMenuState, toggleMenu } = require(petRendererPath);
   const fakeDocument = new FakeDocument(["pet-mode-root", "pet-menu"]);
@@ -433,6 +492,8 @@ function testPetRendererClickAndSubmitHandlersAreLocalOnly() {
   });
   assert.equal(prevented, true);
   assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "empty_input");
+  assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "annoyed");
+  assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_annoyed\.png$/);
 }
 
 function createPetChatDocument() {
@@ -528,6 +589,58 @@ async function testPetChatSubmitUsesBackendChatAndRendersSuccess() {
   assert.equal(input.value, "");
 }
 
+async function testPetChatFocusedMoodUpdatesFocusedExpression() {
+  const { handleChatSubmit } = require(petRendererPath);
+  const fakeDocument = createPetChatDocument();
+  fakeDocument.getElementById("pet-chat-input-hook").value = "focus please";
+
+  await handleChatSubmit(
+    { preventDefault() {} },
+    fakeDocument,
+    {
+      backendUrl: "http://localhost:8000",
+      fetchImpl: async () => ({
+        ok: true,
+        json: async () => ({
+          reply: "Focused reply",
+          mood: "focused",
+          source: "llm_local",
+        }),
+      }),
+    }
+  );
+
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "success");
+  assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "focused");
+  assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_focused\.png$/);
+}
+
+async function testPetChatUnknownMoodFallsBackToNeutralExpression() {
+  const { handleChatSubmit } = require(petRendererPath);
+  const fakeDocument = createPetChatDocument();
+  fakeDocument.getElementById("pet-chat-input-hook").value = "unknown mood please";
+
+  await handleChatSubmit(
+    { preventDefault() {} },
+    fakeDocument,
+    {
+      backendUrl: "http://localhost:8000",
+      fetchImpl: async () => ({
+        ok: true,
+        json: async () => ({
+          reply: "Unknown mood reply",
+          mood: "mysterious",
+          source: "llm_local",
+        }),
+      }),
+    }
+  );
+
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "success");
+  assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "neutral");
+  assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_neutral\.png$/);
+}
+
 async function testPetChatDoubleSubmitDuringPendingDoesNotDuplicateFetch() {
   const { handleChatSubmit } = require(petRendererPath);
   const fakeDocument = createPetChatDocument();
@@ -607,6 +720,7 @@ async function testPetChatSourceMockUsesFallbackState() {
   assert.equal(fakeDocument.getElementById("pet-bubble-status").textContent, "mock fallback");
   assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, "Mock reply");
   assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "proud");
+  assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_proud\.png$/);
 }
 
 async function testPetChatSourceLocalErrorUsesErrorState() {
@@ -633,7 +747,8 @@ async function testPetChatSourceLocalErrorUsesErrorState() {
   assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "llm_local_error");
   assert.equal(fakeDocument.getElementById("pet-bubble-status").textContent, "local model error");
   assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, "Safe fallback reply");
-  assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "neutral");
+  assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "worried");
+  assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_worried\.png$/);
   assert.equal(fakeDocument.getElementById("pet-chat-input-hook").value, "error please");
   assert.equal(fakeDocument.getElementById("pet-chat-input-hook").disabled, false);
   assert.equal(fakeDocument.getElementById("pet-chat-send-hook").disabled, false);
@@ -659,7 +774,8 @@ async function testPetChatNetworkFailureUsesBackendOfflineState() {
   assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "backend_offline");
   assert.equal(fakeDocument.getElementById("pet-bubble-status").textContent, "backend offline");
   assert.match(fakeDocument.getElementById("pet-bubble-response").textContent, /\u518d\u8a66\u4e00\u6b21/);
-  assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "neutral");
+  assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "worried");
+  assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_worried\.png$/);
   assert.equal(fakeDocument.getElementById("pet-chat-input-hook").value, "network please");
   assert.equal(fakeDocument.getElementById("pet-chat-input-hook").disabled, false);
   assert.equal(fakeDocument.getElementById("pet-chat-send-hook").disabled, false);
@@ -685,6 +801,8 @@ async function testPetChatTimeoutUsesTimeoutStateAndKeepsInput() {
   assert.equal(fakeDocument.getElementById("pet-bubble-status").textContent, "local timeout");
   assert.match(fakeDocument.getElementById("pet-bubble-message").textContent, /\u9192\u4f86/);
   assert.match(fakeDocument.getElementById("pet-bubble-response").textContent, /Full App/);
+  assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "sleepy");
+  assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_sleepy\.png$/);
   assert.equal(fakeDocument.getElementById("pet-chat-input-hook").value, "timeout please");
   assert.equal(fakeDocument.getElementById("pet-chat-input-hook").disabled, false);
   assert.equal(fakeDocument.getElementById("pet-chat-send-hook").disabled, false);
@@ -715,6 +833,8 @@ async function testPetChatMalformedResponseUsesSafeErrorState() {
   assert.equal(fakeDocument.getElementById("pet-bubble-status").textContent, "local model error");
   assert.match(fakeDocument.getElementById("pet-bubble-response").textContent, /Full App/);
   assert.doesNotMatch(fakeDocument.getElementById("pet-bubble-response").textContent, /PetChatResponseError/);
+  assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "worried");
+  assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_worried\.png$/);
   assert.equal(fakeDocument.getElementById("pet-chat-input-hook").value, "malformed please");
   assert.equal(fakeDocument.getElementById("pet-chat-input-hook").disabled, false);
   assert.equal(fakeDocument.getElementById("pet-chat-send-hook").disabled, false);
@@ -922,11 +1042,14 @@ async function run() {
     testPetRendererDefinesBubbleStates,
     testPetRendererInitializesBubbleCollapsed,
     testPetRendererRendersAllLocalBubbleStates,
+    testPetExpressionMappingHelpersUseExistingAssets,
     testPetRendererTogglesBubbleState,
     testPetRendererTogglesMenuState,
     testPetRendererClickAndSubmitHandlersAreLocalOnly,
     testPetChatEmptyInputDoesNotFetch,
     testPetChatSubmitUsesBackendChatAndRendersSuccess,
+    testPetChatFocusedMoodUpdatesFocusedExpression,
+    testPetChatUnknownMoodFallsBackToNeutralExpression,
     testPetChatDoubleSubmitDuringPendingDoesNotDuplicateFetch,
     testPetChatSourceMockUsesFallbackState,
     testPetChatSourceLocalErrorUsesErrorState,
