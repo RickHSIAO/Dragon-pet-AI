@@ -91,9 +91,17 @@ function testPetHtmlReferencesStaticAssets() {
   assertIncludes(html, 'id="pet-bubble-placeholder"', "pet.html");
   assertIncludes(html, 'id="pet-context-menu-hook"', "pet.html");
   assertIncludes(html, 'id="pet-open-full-app-hook"', "pet.html");
+  assertIncludes(html, 'id="pet-menu"', "pet.html");
+  assertIncludes(html, 'data-menu-state="closed"', "pet.html");
+  assertIncludes(html, 'id="pet-menu-open-full-app"', "pet.html");
+  assertIncludes(html, 'id="pet-menu-reset-position"', "pet.html");
+  assertIncludes(html, 'id="pet-menu-hide-window"', "pet.html");
+  assertIncludes(html, 'id="pet-menu-close"', "pet.html");
   assertRegex(html, /id="pet-open-full-app-hook"(?:(?!>).)*data-hook="open-full-app"/, "pet.html");
   assert.equal(/id="pet-open-full-app-hook"(?:(?!>).)*disabled/.test(html), false);
+  assert.equal(/id="pet-context-menu-hook"(?:(?!>).)*disabled/.test(html), false);
   assertRegex(html, /id="pet-drag-region"[^>]*class="[^"]*\bpet-drag-region\b/, "pet.html");
+  assertRegex(html, /id="pet-menu"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-bubble"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-chat-form-hook"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-chat-input-hook"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
@@ -102,6 +110,10 @@ function testPetHtmlReferencesStaticAssets() {
   assertRegex(html, /id="pet-bubble-close-hook"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-context-menu-hook"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-open-full-app-hook"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
+  assertRegex(html, /id="pet-menu-open-full-app"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
+  assertRegex(html, /id="pet-menu-reset-position"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
+  assertRegex(html, /id="pet-menu-hide-window"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
+  assertRegex(html, /id="pet-menu-close"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertIncludes(html, "&#x54FC;&#xFF0C;", "pet.html");
   assertIncludes(
     html,
@@ -124,6 +136,10 @@ function testPetCssUsesStaticPetDimensions() {
   assertIncludes(css, '[data-bubble-state="expanded"]', "pet.css");
   assertIncludes(css, '.pet-bubble[data-state="expanded"]', "pet.css");
   assertIncludes(css, ".pet-bubble-message", "pet.css");
+  assertIncludes(css, ".pet-menu", "pet.css");
+  assertIncludes(css, '.pet-menu[hidden]', "pet.css");
+  assertIncludes(css, ".pet-menu-item", "pet.css");
+  assertIncludes(css, "position: relative", "pet.css");
   assertIncludes(css, "grid-template-columns: 1fr auto", "pet.css");
   assertRegex(css, /button,\s*\r?\ninput[\s\S]*-webkit-app-region:\s*no-drag/, "pet.css");
   assertRegex(css, /textarea[\s\S]*-webkit-app-region:\s*no-drag/, "pet.css");
@@ -153,6 +169,7 @@ function testPetRendererInitializesBubbleCollapsed() {
     "pet-bubble-message",
     "pet-bubble-placeholder",
     "pet-chat-form-hook",
+    "pet-menu",
   ]);
 
   initializePetMode(fakeDocument);
@@ -165,8 +182,30 @@ function testPetRendererInitializesBubbleCollapsed() {
   assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "collapsed");
   assert.equal(fakeDocument.getElementById("pet-bubble").getAttribute("aria-expanded"), "false");
   assert.equal(fakeDocument.getElementById("pet-bubble").hidden, true);
+  assert.equal(fakeDocument.getElementById("pet-mode-root").dataset.menuState, "closed");
+  assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "closed");
+  assert.equal(fakeDocument.getElementById("pet-menu").getAttribute("aria-hidden"), "true");
+  assert.equal(fakeDocument.getElementById("pet-menu").hidden, true);
   assert.equal(fakeDocument.getElementById("pet-bubble-message").textContent, PET_MODE_DEFAULTS.bubbleMessage);
   assert.match(fakeDocument.getElementById("pet-bubble-placeholder").textContent, /TASK-118/);
+}
+
+function testPetRendererTogglesMenuState() {
+  const { closeMenu, openMenu, setMenuState } = require(petRendererPath);
+  const fakeDocument = new FakeDocument(["pet-mode-root", "pet-menu"]);
+
+  openMenu(fakeDocument);
+  assert.equal(fakeDocument.getElementById("pet-mode-root").dataset.menuState, "open");
+  assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "open");
+  assert.equal(fakeDocument.getElementById("pet-menu").getAttribute("aria-hidden"), "false");
+  assert.equal(fakeDocument.getElementById("pet-menu").hidden, false);
+
+  closeMenu(fakeDocument);
+  assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "closed");
+  assert.equal(fakeDocument.getElementById("pet-menu").hidden, true);
+
+  setMenuState(fakeDocument, true);
+  assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "open");
 }
 
 function testPetRendererTogglesBubbleState() {
@@ -205,6 +244,12 @@ function testPetRendererClickAndSubmitHandlersAreLocalOnly() {
     "pet-bubble-placeholder",
     "pet-chat-form-hook",
     "pet-open-full-app-hook",
+    "pet-context-menu-hook",
+    "pet-menu",
+    "pet-menu-open-full-app",
+    "pet-menu-reset-position",
+    "pet-menu-hide-window",
+    "pet-menu-close",
   ]);
 
   initializePetMode(fakeDocument);
@@ -228,6 +273,48 @@ function testPetRendererClickAndSubmitHandlersAreLocalOnly() {
   assert.equal(fakeDocument.getElementById("pet-bubble-message").textContent, PET_MODE_DEFAULTS.bubbleMessage);
 }
 
+function testPetRendererMenuHooksAreLocalAndNarrow() {
+  const { initializePetMode } = require(petRendererPath);
+  const fakeDocument = new FakeDocument([
+    "pet-mode-root",
+    "pet-drag-region",
+    "pet-avatar-container",
+    "pet-avatar",
+    "pet-hint",
+    "pet-bubble",
+    "pet-bubble-open-hook",
+    "pet-bubble-close-hook",
+    "pet-bubble-message",
+    "pet-bubble-placeholder",
+    "pet-chat-form-hook",
+    "pet-open-full-app-hook",
+    "pet-context-menu-hook",
+    "pet-menu",
+    "pet-menu-open-full-app",
+    "pet-menu-reset-position",
+    "pet-menu-hide-window",
+    "pet-menu-close",
+  ]);
+
+  initializePetMode(fakeDocument);
+
+  fakeDocument.getElementById("pet-context-menu-hook").dispatchEvent({ type: "click" });
+  assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "open");
+
+  let contextPrevented = false;
+  fakeDocument.getElementById("pet-mode-root").dispatchEvent({
+    type: "contextmenu",
+    preventDefault() {
+      contextPrevented = true;
+    },
+  });
+  assert.equal(contextPrevented, true);
+  assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "open");
+
+  fakeDocument.getElementById("pet-menu-close").dispatchEvent({ type: "click" });
+  assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "closed");
+}
+
 function testPetRendererOpenFullAppUsesNarrowApi() {
   const { handleOpenFullApp } = require(petRendererPath);
   const fakeDocument = new FakeDocument(["pet-bubble-message"]);
@@ -243,6 +330,55 @@ function testPetRendererOpenFullAppUsesNarrowApi() {
   assert.equal(called, true);
   assert.equal(typeof result.then, "function");
   assert.equal(fakeDocument.getElementById("pet-bubble-message").textContent, "Opening Full App...");
+}
+
+function testPetRendererMenuActionsUseNarrowApis() {
+  const { handleHidePetWindow, handleResetPetPosition } = require(petRendererPath);
+  const fakeDocument = new FakeDocument(["pet-bubble-message"]);
+  const originalWindow = global.window;
+  const calls = [];
+
+  global.window = {
+    dragonPet: {
+      resetPetPosition() {
+        calls.push("reset");
+        return Promise.resolve({ ok: true });
+      },
+      hidePetWindow() {
+        calls.push("hide");
+        return Promise.resolve({ ok: true });
+      },
+    },
+  };
+
+  const resetResult = handleResetPetPosition(fakeDocument);
+  const hideResult = handleHidePetWindow(fakeDocument);
+
+  global.window = originalWindow;
+
+  assert.deepEqual(calls, ["reset", "hide"]);
+  assert.equal(typeof resetResult.then, "function");
+  assert.equal(typeof hideResult.then, "function");
+}
+
+function testPetRendererMenuActionFallbacksDoNotCrash() {
+  const { handleHidePetWindow, handleResetPetPosition } = require(petRendererPath);
+  const fakeDocument = new FakeDocument(["pet-bubble-message"]);
+  const originalWindow = global.window;
+
+  global.window = {};
+  assert.equal(handleResetPetPosition(fakeDocument), null);
+  assert.equal(
+    fakeDocument.getElementById("pet-bubble-message").textContent,
+    "Reset Pet Position is not available in this preview."
+  );
+
+  assert.equal(handleHidePetWindow(fakeDocument), null);
+  assert.equal(
+    fakeDocument.getElementById("pet-bubble-message").textContent,
+    "Hide Pet Window is not available in this preview."
+  );
+  global.window = originalWindow;
 }
 
 function testPetRendererOpenFullAppFallbackDoesNotCrash() {
@@ -286,8 +422,12 @@ function run() {
     testPetRendererHasNoBackendOrOllamaCalls,
     testPetRendererInitializesBubbleCollapsed,
     testPetRendererTogglesBubbleState,
+    testPetRendererTogglesMenuState,
     testPetRendererClickAndSubmitHandlersAreLocalOnly,
+    testPetRendererMenuHooksAreLocalAndNarrow,
     testPetRendererOpenFullAppUsesNarrowApi,
+    testPetRendererMenuActionsUseNarrowApis,
+    testPetRendererMenuActionFallbacksDoNotCrash,
     testPetRendererOpenFullAppFallbackDoesNotCrash,
   ];
 

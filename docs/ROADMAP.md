@@ -320,7 +320,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 **Goal:** Move the product from a full management interface toward a small desktop pet plus compact chat bubble, while keeping Full App Mode as the control center.
 
-**Status:** CHECKPOINT COMPLETE - TASK-114 design complete; TASK-115 static renderer skeleton complete; TASK-116 env-gated BrowserWindow prototype complete; TASK-117 CSS drag behavior complete; TASK-118 local-only bubble UI state complete; TASK-119 narrow Pet-to-Full mode switch complete; TASK-120 smoke checkpoint passed; TASK-121 manual Windows visual smoke passed with menu placeholder note; TASK-122 Pet Window position persistence complete.
+**Status:** CHECKPOINT COMPLETE - TASK-114 design complete; TASK-115 static renderer skeleton complete; TASK-116 env-gated BrowserWindow prototype complete; TASK-117 CSS drag behavior complete; TASK-118 local-only bubble UI state complete; TASK-119 narrow Pet-to-Full mode switch complete; TASK-120 smoke checkpoint passed; TASK-121 manual Windows visual smoke passed with menu placeholder note; TASK-122 Pet Window position persistence complete; TASK-123 Pet menu/right-click menu complete.
 
 > Design reference: `docs/PET_MODE_UI_DESIGN.md`
 
@@ -335,6 +335,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 | TASK-120 | Pet Mode Smoke Tests | DONE |
 | TASK-121 | Manual Windows Pet Mode Visual Smoke | DONE - PASS WITH NOTE |
 | TASK-122 | Pet Window Position Persistence | DONE |
+| TASK-123 | Pet Mode Menu / Right-click Menu | DONE |
 
 **Recommended direction:**
 
@@ -362,4 +363,5 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 - TASK-120 verification passed: pet renderer smoke, pet window/preload smoke, existing renderer smoke, backend pytest 586 passed, direct-Ollama scan clean, and `git diff --check` clean.
 - TASK-121 manual Windows visual smoke passed: drag, bubble expand/collapse, Full App focus hook, backend/provider status, and always-on-top all passed. Menu hook remains a placeholder note and is not implemented yet.
 - TASK-122 persists Pet Window position to Electron `userData/pet-window-state.json`, saves on move/close, restores on next `PET_MODE_ENABLED=true` startup, and falls back to a primary-display bottom-right default if the saved center point is off-screen.
+- TASK-123 implements the Menu hook and right-click DOM menu with Open Full App, Reset Pet Position, Hide Pet Window, and Close Menu. Reset/Hide use fixed narrow preload APIs and fixed IPC channels only.
                                         

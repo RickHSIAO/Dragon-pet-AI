@@ -808,6 +808,33 @@ Safety note:
 - No backend call, `/chat` call, `/chat` schema change, provider settings change, Ollama routing change, external API, image, menu implementation, or bubble backend wiring was added.
 - The only file read/write is the local app-owned Pet Window state JSON under Electron `userData`.
 
+### TASK-123 - Pet Mode Menu / Right-click Menu
+
+Status: DONE on 2026-05-24.
+
+Implementation summary:
+
+- Pet Mode now has a local DOM popup menu.
+- The visible Menu hook opens the menu.
+- Right-click on the Pet root opens the menu.
+- Close Menu collapses the popup.
+- Open Full App uses the existing `window.dragonPet.openFullApp()`.
+- Reset Pet Position uses `window.dragonPet.resetPetPosition()` over fixed IPC channel `pet:reset-position`.
+- Hide Pet Window uses `window.dragonPet.hidePetWindow()` over fixed IPC channel `pet:hide-window`.
+
+Menu items:
+
+- Open Full App.
+- Reset Pet Position.
+- Hide Pet Window.
+- Close Menu.
+
+Safety note:
+
+- The menu uses fixed narrow preload APIs only.
+- Renderer cannot send arbitrary IPC channels or arbitrary x/y coordinates.
+- No fs, shell, process, openExternal, backend call, `/chat` call, `/chat` schema change, provider settings change, Ollama routing change, external API, image, or bubble backend wiring was added.
+
 ---
 
 ## 9. Explicit Non-goals for TASK-114
@@ -836,7 +863,7 @@ Recommended product direction:
 - Implement Bubble Chat inside the Pet Window first, not as a separate floating window.
 - Use transparent/frameless/always-on-top for Pet Mode only.
 - Keep click-through out of MVP.
-- Add right-click menu after the first Pet Window prototype; position persistence is implemented in TASK-122.
+- Right-click menu is implemented in TASK-123; position persistence is implemented in TASK-122.
 - Preserve the current local backend-only chat architecture.
 
 Recommended technical direction:

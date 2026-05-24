@@ -89,11 +89,19 @@ function testFullAppWindowStillExists() {
 function testPetOpenFullAppIpcIsFixedAndNarrow() {
   const main = readText(mainPath);
   assertIncludes(main, 'PET_OPEN_FULL_APP_CHANNEL = "pet:open-full-app"', "main.js");
+  assertIncludes(main, 'PET_RESET_POSITION_CHANNEL = "pet:reset-position"', "main.js");
+  assertIncludes(main, 'PET_HIDE_WINDOW_CHANNEL = "pet:hide-window"', "main.js");
   assertIncludes(main, "ipcMain.handle(PET_OPEN_FULL_APP_CHANNEL, () =>", "main.js");
+  assertIncludes(main, "ipcMain.handle(PET_RESET_POSITION_CHANNEL, () => resetPetWindowPosition())", "main.js");
+  assertIncludes(main, "ipcMain.handle(PET_HIDE_WINDOW_CHANNEL, () => hidePetWindow())", "main.js");
   assertIncludes(main, "showFullAppWindow();", "main.js");
   assertIncludes(main, "win.restore();", "main.js");
   assertIncludes(main, "win.show();", "main.js");
   assertIncludes(main, "win.focus();", "main.js");
+  assertIncludes(main, "function resetPetWindowPosition()", "main.js");
+  assertIncludes(main, "function hidePetWindow()", "main.js");
+  assertIncludes(main, "petWindow.setBounds(bounds)", "main.js");
+  assertIncludes(main, "petWindow.hide();", "main.js");
   assertNotIncludes(main, "ipcMain.on(", "main.js");
 }
 
@@ -123,12 +131,16 @@ function testPetRendererDoesNotCallChat() {
   assertNotIncludes(text, 'fetch("/chat"', "pet-renderer.js");
 }
 
-function testPetPreloadExposesOnlyOpenFullApp() {
+function testPetPreloadExposesOnlyFixedPetActions() {
   const preload = readText(petPreloadPath);
   assertIncludes(preload, 'PET_OPEN_FULL_APP_CHANNEL = "pet:open-full-app"', "pet-preload.js");
+  assertIncludes(preload, 'PET_RESET_POSITION_CHANNEL = "pet:reset-position"', "pet-preload.js");
+  assertIncludes(preload, 'PET_HIDE_WINDOW_CHANNEL = "pet:hide-window"', "pet-preload.js");
   assertIncludes(preload, 'contextBridge.exposeInMainWorld(', "pet-preload.js");
   assertIncludes(preload, '"dragonPet"', "pet-preload.js");
   assertIncludes(preload, "openFullApp: () => ipcRenderer.invoke(PET_OPEN_FULL_APP_CHANNEL)", "pet-preload.js");
+  assertIncludes(preload, "resetPetPosition: () => ipcRenderer.invoke(PET_RESET_POSITION_CHANNEL)", "pet-preload.js");
+  assertIncludes(preload, "hidePetWindow: () => ipcRenderer.invoke(PET_HIDE_WINDOW_CHANNEL)", "pet-preload.js");
   assertNotIncludes(preload, "exposeInMainWorld(\"ipcRenderer\"", "pet-preload.js");
   assertNotIncludes(preload, "send(", "pet-preload.js");
   assertNotIncludes(preload, "sendSync", "pet-preload.js");
@@ -148,7 +160,7 @@ function run() {
     testPetWindowDoesNotReplaceFullAppByDefault,
     testNoRendererDirectOllamaAccess,
     testPetRendererDoesNotCallChat,
-    testPetPreloadExposesOnlyOpenFullApp,
+    testPetPreloadExposesOnlyFixedPetActions,
   ];
 
   for (const test of tests) {

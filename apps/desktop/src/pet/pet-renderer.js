@@ -28,6 +28,30 @@ function setBubbleState(documentRef, expanded) {
   }
 }
 
+function setMenuState(documentRef, open) {
+  const root = documentRef.getElementById("pet-mode-root");
+  const menu = documentRef.getElementById("pet-menu");
+  const state = open ? "open" : "closed";
+
+  if (root) {
+    root.dataset.menuState = state;
+  }
+
+  if (menu) {
+    menu.dataset.state = state;
+    menu.setAttribute("aria-hidden", open ? "false" : "true");
+    menu.hidden = !open;
+  }
+}
+
+function openMenu(documentRef = document) {
+  setMenuState(documentRef, true);
+}
+
+function closeMenu(documentRef = document) {
+  setMenuState(documentRef, false);
+}
+
 function expandBubble(documentRef = document) {
   setBubbleState(documentRef, true);
 }
@@ -74,6 +98,45 @@ function handleOpenFullApp(documentRef = document, dragonPetApi = null) {
   return result;
 }
 
+function callPetApiAction(documentRef, methodName, pendingMessage, fallbackMessage) {
+  const message = documentRef.getElementById("pet-bubble-message");
+  const api = typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null;
+
+  if (!api || typeof api[methodName] !== "function") {
+    setText(message, fallbackMessage);
+    return null;
+  }
+
+  setText(message, pendingMessage);
+  const result = api[methodName]();
+
+  if (result && typeof result.catch === "function") {
+    result.catch(() => {
+      setText(message, fallbackMessage);
+    });
+  }
+
+  return result;
+}
+
+function handleResetPetPosition(documentRef = document) {
+  return callPetApiAction(
+    documentRef,
+    "resetPetPosition",
+    "Resetting Pet position...",
+    "Reset Pet Position is not available in this preview."
+  );
+}
+
+function handleHidePetWindow(documentRef = document) {
+  return callPetApiAction(
+    documentRef,
+    "hidePetWindow",
+    "Hiding Pet Window...",
+    "Hide Pet Window is not available in this preview."
+  );
+}
+
 function initializePetMode(documentRef = document) {
   const root = documentRef.getElementById("pet-mode-root");
   const dragRegion = documentRef.getElementById("pet-drag-region");
@@ -87,6 +150,11 @@ function initializePetMode(documentRef = document) {
   const bubblePlaceholder = documentRef.getElementById("pet-bubble-placeholder");
   const chatForm = documentRef.getElementById("pet-chat-form-hook");
   const openFullAppHook = documentRef.getElementById("pet-open-full-app-hook");
+  const contextMenuHook = documentRef.getElementById("pet-context-menu-hook");
+  const menuOpenFullApp = documentRef.getElementById("pet-menu-open-full-app");
+  const menuResetPosition = documentRef.getElementById("pet-menu-reset-position");
+  const menuHideWindow = documentRef.getElementById("pet-menu-hide-window");
+  const menuClose = documentRef.getElementById("pet-menu-close");
 
   if (root) {
     root.dataset.initialized = "true";
@@ -105,6 +173,7 @@ function initializePetMode(documentRef = document) {
   setText(bubbleMessage, PET_MODE_DEFAULTS.bubbleMessage);
 
   collapseBubble(documentRef);
+  closeMenu(documentRef);
 
   if (bubblePlaceholder && !bubblePlaceholder.textContent.trim()) {
     setText(
@@ -132,6 +201,44 @@ function initializePetMode(documentRef = document) {
   if (openFullAppHook && typeof openFullAppHook.addEventListener === "function") {
     openFullAppHook.addEventListener("click", () => handleOpenFullApp(documentRef));
   }
+
+  if (root && typeof root.addEventListener === "function") {
+    root.addEventListener("contextmenu", (event) => {
+      if (event && typeof event.preventDefault === "function") {
+        event.preventDefault();
+      }
+      openMenu(documentRef);
+    });
+  }
+
+  if (contextMenuHook && typeof contextMenuHook.addEventListener === "function") {
+    contextMenuHook.addEventListener("click", () => openMenu(documentRef));
+  }
+
+  if (menuOpenFullApp && typeof menuOpenFullApp.addEventListener === "function") {
+    menuOpenFullApp.addEventListener("click", () => {
+      handleOpenFullApp(documentRef);
+      closeMenu(documentRef);
+    });
+  }
+
+  if (menuResetPosition && typeof menuResetPosition.addEventListener === "function") {
+    menuResetPosition.addEventListener("click", () => {
+      handleResetPetPosition(documentRef);
+      closeMenu(documentRef);
+    });
+  }
+
+  if (menuHideWindow && typeof menuHideWindow.addEventListener === "function") {
+    menuHideWindow.addEventListener("click", () => {
+      handleHidePetWindow(documentRef);
+      closeMenu(documentRef);
+    });
+  }
+
+  if (menuClose && typeof menuClose.addEventListener === "function") {
+    menuClose.addEventListener("click", () => closeMenu(documentRef));
+  }
 }
 
 if (typeof document !== "undefined") {
@@ -146,11 +253,16 @@ if (typeof module !== "undefined") {
   module.exports = {
     PET_MODE_DEFAULTS,
     collapseBubble,
+    closeMenu,
     expandBubble,
     handleOpenFullApp,
+    handleHidePetWindow,
     handlePlaceholderSubmit,
+    handleResetPetPosition,
     initializePetMode,
+    openMenu,
     setBubbleState,
+    setMenuState,
     toggleBubble,
   };
 }

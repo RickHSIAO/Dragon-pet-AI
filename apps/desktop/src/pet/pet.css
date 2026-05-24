@@ -25,6 +25,7 @@ body {
 }
 
 .pet-shell {
+  position: relative;
   width: 220px;
   min-height: 280px;
   display: grid;
@@ -165,6 +166,31 @@ body {
   justify-content: center;
 }
 
+.pet-menu {
+  position: absolute;
+  right: 10px;
+  bottom: 42px;
+  width: 160px;
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid rgba(72, 45, 34, 0.2);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 12px 24px rgba(33, 24, 20, 0.2);
+  z-index: 5;
+}
+
+.pet-menu[hidden] {
+  display: none;
+}
+
+.pet-menu-item {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+}
+
 button,
 input {
   font: inherit;
@@ -194,6 +220,8 @@ input:disabled {
 .pet-no-drag,
 .pet-bubble,
 .pet-chat-form,
+.pet-menu,
+.pet-menu-item,
 .pet-mode-actions,
 button,
 input,

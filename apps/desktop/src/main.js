@@ -15,6 +15,8 @@ const path = require("path");
 const BACKEND_URL = "http://localhost:8000";
 const PET_MODE_ENABLED = process.env.PET_MODE_ENABLED === "true";
 const PET_OPEN_FULL_APP_CHANNEL = "pet:open-full-app";
+const PET_RESET_POSITION_CHANNEL = "pet:reset-position";
+const PET_HIDE_WINDOW_CHANNEL = "pet:hide-window";
 const PET_WINDOW_WIDTH = 220;
 const PET_WINDOW_HEIGHT = 280;
 const PET_WINDOW_STATE_FILE = "pet-window-state.json";
@@ -233,10 +235,35 @@ function createPetWindow() {
   return petWindow;
 }
 
+function resetPetWindowPosition() {
+  if (!petWindow || petWindow.isDestroyed()) {
+    return { ok: false };
+  }
+
+  const bounds = getDefaultPetWindowBounds();
+  petWindow.setBounds(bounds);
+  savePetWindowBounds(petWindow);
+  return { ok: true };
+}
+
+function hidePetWindow() {
+  if (!petWindow || petWindow.isDestroyed()) {
+    return { ok: false };
+  }
+
+  savePetWindowBounds(petWindow);
+  petWindow.hide();
+  return { ok: true };
+}
+
 ipcMain.handle(PET_OPEN_FULL_APP_CHANNEL, () => {
   showFullAppWindow();
   return { ok: true };
 });
+
+ipcMain.handle(PET_RESET_POSITION_CHANNEL, () => resetPetWindowPosition());
+
+ipcMain.handle(PET_HIDE_WINDOW_CHANNEL, () => hidePetWindow());
 
 app.whenReady().then(() => {
   createWindow();

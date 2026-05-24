@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="pet.css" />
 </head>
 <body>
-  <main id="pet-mode-root" class="pet-shell" data-mode="pet" data-bubble-state="collapsed" aria-label="Christina pet mode skeleton">
+  <main id="pet-mode-root" class="pet-shell" data-mode="pet" data-bubble-state="collapsed" data-menu-state="closed" aria-label="Christina pet mode skeleton">
     <section id="pet-drag-region" class="pet-stage pet-drag-region" aria-label="Pet drag region placeholder">
       <div id="pet-avatar-container" class="pet-avatar-container" data-expression="neutral">
         <img
@@ -64,8 +64,22 @@
     <nav id="pet-mode-actions" class="pet-mode-actions pet-no-drag" aria-label="Pet mode action hooks">
       <button id="pet-bubble-open-hook" class="pet-no-drag" type="button" data-hook="bubble-open">Chat</button>
       <button id="pet-open-full-app-hook" class="pet-no-drag" type="button" data-hook="open-full-app">Full App</button>
-      <button id="pet-context-menu-hook" class="pet-no-drag" type="button" data-hook="context-menu" disabled>Menu</button>
+      <button id="pet-context-menu-hook" class="pet-no-drag" type="button" data-hook="context-menu">Menu</button>
     </nav>
+
+    <section
+      id="pet-menu"
+      class="pet-menu pet-no-drag"
+      data-state="closed"
+      aria-label="Pet menu"
+      aria-hidden="true"
+      hidden
+    >
+      <button id="pet-menu-open-full-app" class="pet-menu-item pet-no-drag" type="button" data-menu-action="open-full-app">Open Full App</button>
+      <button id="pet-menu-reset-position" class="pet-menu-item pet-no-drag" type="button" data-menu-action="reset-position">Reset Pet Position</button>
+      <button id="pet-menu-hide-window" class="pet-menu-item pet-no-drag" type="button" data-menu-action="hide-window">Hide Pet Window</button>
+      <button id="pet-menu-close" class="pet-menu-item pet-no-drag" type="button" data-menu-action="close-menu">Close Menu</button>
+    </section>
   </main>
 
   <script src="pet-renderer.js"></script>

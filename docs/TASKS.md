@@ -6993,3 +6993,74 @@ Verification:
 - `node --check apps/desktop/scripts/pet-window-smoke.js`: PASS.
 - `node apps/desktop/scripts/pet-renderer-smoke.js`: PASS.
 - `node apps/desktop/scripts/pet-window-smoke.js`: PASS, 9 checks.
+
+---
+
+## TASK-123 - Pet Mode Menu / Right-click Menu
+
+**Status:** DONE
+**Date:** 2026-05-24
+
+Goal:
+
+Implement the minimal safe Pet Mode menu so the visible Menu hook works and right-click can open the menu.
+
+Scope:
+
+- Add local DOM popup menu in Pet Mode.
+- Support opening the menu from the Menu hook.
+- Support opening the menu from right-click on the Pet Window root.
+- Support closing the menu.
+- Add fixed narrow preload/main-process actions for Reset Pet Position and Hide Pet Window.
+- Do not connect Bubble Chat to `/chat`.
+- Do not call backend or add backend routes.
+- Do not expose arbitrary IPC, fs, shell, process, or external APIs.
+
+Changes:
+
+- Updated `apps/desktop/src/main.js`.
+- Added fixed IPC channel `pet:reset-position`.
+- Added fixed IPC channel `pet:hide-window`.
+- Added `resetPetWindowPosition()` in main process; it resets Pet Window to the safe default bounds and saves that local state.
+- Added `hidePetWindow()` in main process; it saves current Pet Window bounds and hides only the Pet Window.
+- Updated `apps/desktop/src/pet/pet-preload.js`.
+- Added `window.dragonPet.resetPetPosition()`.
+- Added `window.dragonPet.hidePetWindow()`.
+- Updated `apps/desktop/src/pet/pet.html`.
+- Enabled the Menu hook and added DOM menu items: Open Full App, Reset Pet Position, Hide Pet Window, Close Menu.
+- Updated `apps/desktop/src/pet/pet.css`.
+- Added menu popup styling and no-drag coverage for menu/menu items.
+- Updated `apps/desktop/src/pet/pet-renderer.js`.
+- Added local menu open/close state.
+- Added right-click `contextmenu` handler on Pet root.
+- Wired menu actions to the narrow preload APIs with local fallback messages.
+- Updated `pet-renderer-smoke.js` and `pet-window-smoke.js`.
+
+Menu items:
+
+- Open Full App.
+- Reset Pet Position.
+- Hide Pet Window.
+- Close Menu.
+
+Safety boundaries:
+
+- No arbitrary IPC exposed.
+- No renderer-controlled x/y or command argument accepted.
+- No `ipcRenderer` object exposed.
+- No fs, shell, process, or openExternal API exposed to renderer.
+- No backend call added.
+- No `/chat` call added.
+- No `/chat` schema change.
+- No provider settings or Ollama routing change.
+- No external API, Email, Calendar, image, or bubble backend wiring added.
+
+Verification:
+
+- `node --check apps/desktop/src/main.js`: PASS.
+- `node --check apps/desktop/src/pet/pet-renderer.js`: PASS.
+- `node --check apps/desktop/src/pet/pet-preload.js`: PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js`: PASS.
+- `node --check apps/desktop/scripts/pet-window-smoke.js`: PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: PASS, 13 checks.
+- `node apps/desktop/scripts/pet-window-smoke.js`: PASS, 9 checks.
