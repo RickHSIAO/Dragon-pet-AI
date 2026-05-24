@@ -115,6 +115,7 @@ function testPetHtmlReferencesStaticAssets() {
   assert.equal(/id="pet-open-full-app-hook"(?:(?!>).)*disabled/.test(html), false);
   assert.equal(/id="pet-context-menu-hook"(?:(?!>).)*disabled/.test(html), false);
   assertRegex(html, /id="pet-drag-handle"[^>]*class="[^"]*\bpet-drag-handle\b/, "pet.html");
+  assert.equal(/id="pet-drag-handle"[^>]*class="[^"]*\bpet-no-drag\b/.test(html), false);
   assertRegex(html, /id="pet-drag-region"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assert.equal(/id="pet-drag-region"[^>]*class="[^"]*\bpet-drag-region\b/.test(html), false);
   assertRegex(html, /id="pet-avatar-container"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
@@ -165,6 +166,11 @@ function testPetCssUsesStaticPetDimensions() {
   assertNotIncludes(css, ".pet-menu-hotspot", "pet.css");
   assert.equal((css.match(/-webkit-app-region:\s*drag\b/g) || []).length, 1);
   assertRegex(css, /\.pet-drag-handle[\s\S]*-webkit-app-region:\s*drag\b/, "pet.css");
+  assertRegex(css, /\.pet-drag-handle[\s\S]*height:\s*24px/, "pet.css");
+  assertRegex(css, /\.pet-drag-handle[\s\S]*width:\s*156px/, "pet.css");
+  assertRegex(css, /\.pet-drag-handle[\s\S]*z-index:\s*8/, "pet.css");
+  assertRegex(css, /\.pet-drag-handle[\s\S]*pointer-events:\s*auto/, "pet.css");
+  assertRegex(css, /\.pet-drag-handle::before/, "pet.css");
   assertRegex(css, /\.pet-stage,\s*\r?\n\.pet-drag-region[\s\S]*-webkit-app-region:\s*no-drag\b/, "pet.css");
   assertRegex(css, /\.pet-avatar[\s\S]*-webkit-app-region:\s*no-drag\b/, "pet.css");
   assertRegex(css, /button,\s*\r?\ninput[\s\S]*-webkit-app-region:\s*no-drag/, "pet.css");

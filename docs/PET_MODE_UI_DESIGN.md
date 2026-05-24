@@ -982,6 +982,34 @@ Safety note:
 - No arbitrary IPC, fs, shell, process, backend route, backend call, `/chat` call, `/chat` schema change, Ollama call, external API, image, Email access, Calendar access, screenshot, microphone, screen-monitoring behavior, or bubble backend wiring was added.
 - Bubble Chat remains local placeholder UI only.
 
+### TASK-129 - Fix Pet Window Drag Regression
+
+Status: DONE on 2026-05-24.
+
+Root cause:
+
+- TASK-127 correctly removed the large avatar/stage drag region.
+- The replacement explicit drag handle existed, was not no-drag, and used `-webkit-app-region: drag`.
+- The handle was only `58 x 10 px`, which was too small and too subtle for reliable Windows manual dragging.
+
+Implementation summary:
+
+- Kept the explicit handle strategy and did not restore large-area avatar/body drag.
+- Enlarged `#pet-drag-handle` to a `156 x 24 px` top bar.
+- Added a subtle CSS grip line, higher `z-index`, `pointer-events: auto`, and `user-select: none`.
+- Avatar, bubble, menu, controls, buttons, inputs, and textareas remain no-drag interaction areas.
+
+Current UX rule:
+
+- Dragging uses only the top explicit handle.
+- Right-click on the handle may still show the Windows OS system menu because it is a native drag region.
+- The rest of the Pet Window remains interaction-first and no-drag.
+- Whole-character drag remains deferred to a future custom drag implementation.
+
+Safety note:
+
+- No IPC, preload API, `main.js` change, backend call, `/chat` call, `/chat` schema change, provider settings change, Ollama routing change, external API, image, file access, Email access, Calendar access, screenshot, microphone, screen-monitoring behavior, or bubble backend wiring was added.
+
 ---
 
 ## 9. Explicit Non-goals for TASK-114

@@ -320,7 +320,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 **Goal:** Move the product from a full management interface toward a small desktop pet plus compact chat bubble, while keeping Full App Mode as the control center.
 
-**Status:** CHECKPOINT COMPLETE - TASK-114 design complete; TASK-115 static renderer skeleton complete; TASK-116 env-gated BrowserWindow prototype complete; TASK-117 CSS drag behavior complete; TASK-118 local-only bubble UI state complete; TASK-119 narrow Pet-to-Full mode switch complete; TASK-120 smoke checkpoint passed; TASK-121 manual Windows visual smoke passed with menu placeholder note; TASK-122 Pet Window position persistence complete; TASK-123 Pet menu/right-click menu complete; TASK-124 manual menu smoke passed with right-click drag-region note; TASK-125 right-click menu hotspot fix complete; TASK-126 menu UX regression fixed; TASK-127 explicit drag handle complete; TASK-128 Full App -> Show Pet bridge complete.
+**Status:** CHECKPOINT COMPLETE - TASK-114 design complete; TASK-115 static renderer skeleton complete; TASK-116 env-gated BrowserWindow prototype complete; TASK-117 CSS drag behavior complete; TASK-118 local-only bubble UI state complete; TASK-119 narrow Pet-to-Full mode switch complete; TASK-120 smoke checkpoint passed; TASK-121 manual Windows visual smoke passed with menu placeholder note; TASK-122 Pet Window position persistence complete; TASK-123 Pet menu/right-click menu complete; TASK-124 manual menu smoke passed with right-click drag-region note; TASK-125 right-click menu hotspot fix complete; TASK-126 menu UX regression fixed; TASK-127 explicit drag handle complete; TASK-128 Full App -> Show Pet bridge complete; TASK-129 drag regression fix complete.
 
 > Design reference: `docs/PET_MODE_UI_DESIGN.md`
 
@@ -341,6 +341,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 | TASK-126 | Fix Pet Menu UX Regression | DONE |
 | TASK-127 | Replace Large Pet Drag Region with Explicit Drag Handle | DONE |
 | TASK-128 | Full App -> Show Pet Window Bridge | DONE |
+| TASK-129 | Fix Pet Window Drag Regression | DONE |
 
 **Recommended direction:**
 
@@ -374,4 +375,5 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 - TASK-126 removes the visible upper-right hotspot after Windows UX testing showed it looked like a duplicate Menu button. The bottom Menu button is now the primary custom menu entry and toggles open/closed. Windows drag-region right-click may show the OS system menu; full-window custom right-click is deferred unless a future custom drag implementation replaces CSS native drag.
 - TASK-127 replaces the large avatar/stage drag region with a small explicit top `#pet-drag-handle`. Avatar, bubble, menu, and controls are no-drag interaction areas. Right-click on the handle may still show the Windows OS system menu; whole-character drag without that behavior is deferred to a future custom drag implementation.
 - TASK-128 adds a narrow Full App -> Pet Window bridge. The Full App header has a `Show Pet` button that calls only `window.dragonPet.showPetWindow()` through fixed IPC channel `pet:show-window`. If Pet Mode is disabled, the Full App shows a local disabled message. Bubble Chat remains local placeholder UI only.
+- TASK-129 fixes the drag regression by enlarging the explicit `#pet-drag-handle` from a tiny grip into a `156 x 24 px` top bar with a visible CSS grip line, higher z-index, and pointer-events enabled. Large avatar/body drag remains intentionally disabled to avoid Windows system menu interference.
                                         

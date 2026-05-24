@@ -7172,6 +7172,63 @@ Verification:
 
 ---
 
+## TASK-129 - Fix Pet Window Drag Regression
+
+**Status:** DONE
+**Date:** 2026-05-24
+
+Goal:
+
+Fix the Pet Window drag regression after TASK-127 replaced the large avatar/stage drag region with a small explicit drag handle.
+
+Root cause:
+
+- The explicit `#pet-drag-handle` existed and was the only CSS-native drag region.
+- It was not marked `pet-no-drag`, and it had `-webkit-app-region: drag`.
+- The practical problem was hit target size: the handle was only `58 x 10 px`, too small for reliable manual dragging on Windows.
+- The handle was subtle enough that users could miss it and assume the Pet Window was not draggable.
+
+Implementation:
+
+- Kept the explicit drag handle approach.
+- Enlarged `#pet-drag-handle` to a top bar: `156 x 24 px`.
+- Raised handle stacking with `z-index: 8`.
+- Added `pointer-events: auto` and `user-select: none`.
+- Added a subtle visual grip line using CSS `::before`.
+- Kept avatar, pet body, bubble, menu, buttons, input, and textarea as no-drag.
+- Did not restore large-area avatar/body drag region.
+
+UX rule:
+
+- The top drag handle is the only draggable area.
+- Avatar, bubble, and controls remain interaction-first no-drag areas.
+- Windows drag-region right-click limitation remains accepted only for the explicit handle.
+- Whole-character drag remains deferred to a future custom drag implementation.
+
+Safety boundaries:
+
+- No IPC added.
+- No preload API added.
+- No `main.js` change.
+- No backend call added.
+- No `/chat` call added.
+- No `/chat` schema change.
+- No provider settings or Ollama routing change.
+- No external API, Email, Calendar, file access, image, or bubble backend wiring added.
+
+Verification:
+
+- `node --check apps/desktop/src/pet/pet-renderer.js`: PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js`: PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: PASS, 13 checks.
+- `node apps/desktop/scripts/pet-window-smoke.js`: PASS, 10 checks.
+- `npm.cmd run test:renderer`: PASS.
+- `python -m pytest`: PASS, 586 passed.
+- Direct Ollama URL safety scan: PASS, no `localhost:11434`, `127.0.0.1:11434`, or bare `11434` match.
+- `git diff --check`: PASS, no whitespace errors.
+
+---
+
 ## TASK-128 - Full App -> Show Pet Window Bridge
 
 **Status:** DONE

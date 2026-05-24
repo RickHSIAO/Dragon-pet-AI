@@ -40,15 +40,27 @@ body {
 
 .pet-drag-handle {
   position: absolute;
-  top: 6px;
+  top: 0;
   left: 50%;
-  width: 58px;
-  height: 10px;
-  border-radius: 999px;
-  background: rgba(72, 45, 34, 0.18);
+  width: 156px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 0 0 12px 12px;
+  background: rgba(72, 45, 34, 0.1);
   transform: translateX(-50%);
-  z-index: 4;
+  z-index: 8;
+  pointer-events: auto;
+  user-select: none;
   -webkit-app-region: drag;
+}
+
+.pet-drag-handle::before {
+  content: "";
+  width: 42px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(72, 45, 34, 0.34);
 }
 
 .pet-stage,
