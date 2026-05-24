@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="
+      default-src 'self';
+      script-src 'self';
+      style-src 'self';
+      img-src 'self' data:;
+      connect-src 'none';
+    "
+  />
+  <title>Dragon Pet AI - Pet Mode Skeleton</title>
+  <link rel="stylesheet" href="pet.css" />
+</head>
+<body>
+  <main id="pet-mode-root" class="pet-shell" data-mode="pet" aria-label="Christina pet mode skeleton">
+    <section id="pet-drag-region" class="pet-stage" aria-label="Pet drag region placeholder">
+      <div id="pet-avatar-container" class="pet-avatar-container" data-expression="neutral">
+        <img
+          id="pet-avatar"
+          class="pet-avatar"
+          src="../renderer/assets/pet/christina/expressions/christina_neutral.png"
+          alt="Christina neutral expression"
+        />
+      </div>
+
+      <p id="pet-hint" class="pet-hint" aria-live="polite">&#x54FC;&#xFF0C;&#x6C5D;&#x53EB;&#x543E;&#x51FA;&#x4F86;&#x505A;&#x4EC0;&#x9EBC;&#xFF1F;</p>
+    </section>
+
+    <section
+      id="pet-bubble"
+      class="pet-bubble"
+      data-state="collapsed"
+      aria-label="Bubble chat placeholder"
+      aria-expanded="false"
+    >
+      <div class="pet-bubble-header">
+        <span id="pet-bubble-title">Bubble Chat</span>
+        <button id="pet-bubble-close-hook" class="pet-icon-button" type="button" data-hook="bubble-close" disabled>x</button>
+      </div>
+      <div id="pet-bubble-placeholder" class="pet-bubble-body">
+        <p>&#x5C0D;&#x8A71;&#x6CE1;&#x6CE1;&#x9810;&#x7559;&#x5340;&#x3002;TASK-115 &#x4E0D;&#x9023;&#x63A5; /chat&#x3002;</p>
+      </div>
+      <form id="pet-chat-form-hook" class="pet-chat-form" data-hook="chat-form">
+        <input
+          id="pet-chat-input-hook"
+          type="text"
+          placeholder="Bubble chat input placeholder"
+          autocomplete="off"
+          disabled
+        />
+        <button id="pet-chat-send-hook" type="submit" disabled>Send</button>
+      </form>
+    </section>
+
+    <nav id="pet-mode-actions" class="pet-mode-actions" aria-label="Pet mode action hooks">
+      <button id="pet-open-full-app-hook" type="button" data-hook="open-full-app" disabled>Full App</button>
+      <button id="pet-context-menu-hook" type="button" data-hook="context-menu" disabled>Menu</button>
+    </nav>
+  </main>
+
+  <script src="pet-renderer.js"></script>
+</body>
+</html>

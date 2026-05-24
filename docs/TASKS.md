@@ -6552,7 +6552,8 @@ Plan the product and technical design for a future Pet Mode without changing run
 
 ## TASK-115 - Create Pet Window Design Skeleton
 
-**Status:** TODO
+**Status:** DONE
+**Date:** 2026-05-24
 
 Goal:
 
@@ -6565,6 +6566,36 @@ Scope:
 - Keep files disconnected from runtime until TASK-116.
 - Do not add BrowserWindow behavior.
 - Do not change backend or `/chat` schema.
+
+Changes:
+
+- Added `apps/desktop/src/pet/pet.html`.
+- Added `apps/desktop/src/pet/pet.css`.
+- Added `apps/desktop/src/pet/pet-renderer.js`.
+- Added `apps/desktop/scripts/pet-renderer-smoke.js`.
+
+Skeleton notes:
+
+- Static design target is `220 x 280`.
+- Uses existing Christina neutral expression asset path.
+- Includes avatar container, short hint, bubble placeholder, chat form hooks, context-menu hook, and Full App mode-switch hook.
+- `pet-renderer.js` only initializes static DOM state.
+- Pet skeleton is not loaded by Electron main process.
+
+Safety boundaries:
+
+- No `BrowserWindow` was added.
+- `apps/desktop/src/main.js` was not modified.
+- Existing `renderer.js` was not modified.
+- Backend was not modified.
+- `/chat` schema was not modified.
+- No backend, `/chat`, Ollama, external API, file, Email, or Calendar access was added.
+
+Verification:
+
+- `node --check apps/desktop/src/pet/pet-renderer.js`: PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: PASS, 6 checks.
+- Safety scan for `localhost:11434`, `127.0.0.1:11434`, bare `11434`, and `fetch(` in `pet-renderer.js`: PASS.
 
 ---
 

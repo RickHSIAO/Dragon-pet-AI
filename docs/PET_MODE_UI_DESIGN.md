@@ -590,6 +590,8 @@ Renderer safety requirements:
 
 ### TASK-115 - Create Pet Window Design Skeleton
 
+Status: DONE on 2026-05-24.
+
 Goal:
 
 - Add static design skeleton files for Pet Mode without changing Electron window behavior.
@@ -606,6 +608,15 @@ Acceptance:
 - Static files exist.
 - No app runtime path uses them yet.
 - Existing Full App remains unchanged.
+
+Completion notes:
+
+- Added `apps/desktop/src/pet/pet.html`.
+- Added `apps/desktop/src/pet/pet.css`.
+- Added `apps/desktop/src/pet/pet-renderer.js`.
+- Added `apps/desktop/scripts/pet-renderer-smoke.js`.
+- The skeleton includes avatar, hint, bubble placeholder, right-click/menu hook, and Full App mode-switch hook.
+- It is not connected to Electron `main.js`, backend, `/chat`, or Ollama.
 
 ### TASK-116 - Pet Mode BrowserWindow Prototype
 

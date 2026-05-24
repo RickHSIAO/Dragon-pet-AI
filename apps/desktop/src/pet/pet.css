@@ -1,0 +1,153 @@
+:root {
+  color-scheme: light;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: transparent;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 220px;
+  min-width: 220px;
+  min-height: 280px;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+body {
+  display: grid;
+  place-items: center;
+  color: #2b1c16;
+}
+
+.pet-shell {
+  width: 220px;
+  min-height: 280px;
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(64, 38, 28, 0.22);
+  border-radius: 18px;
+  background: rgba(255, 250, 244, 0.72);
+  box-shadow: 0 12px 30px rgba(33, 24, 20, 0.18);
+}
+
+.pet-stage {
+  min-height: 178px;
+  display: grid;
+  justify-items: center;
+  align-content: end;
+  gap: 8px;
+  -webkit-app-region: drag;
+}
+
+.pet-avatar-container {
+  width: 150px;
+  height: 150px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.36);
+}
+
+.pet-avatar {
+  width: 142px;
+  height: 142px;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.pet-hint {
+  width: 100%;
+  min-height: 34px;
+  margin: 0;
+  padding: 7px 9px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.68);
+  color: #3a2720;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.pet-bubble {
+  display: grid;
+  gap: 6px;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.82);
+  transition: max-height 140ms ease, opacity 140ms ease;
+  -webkit-app-region: no-drag;
+}
+
+.pet-bubble[data-state="placeholder"] {
+  max-height: 96px;
+  padding: 8px;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.pet-bubble-header,
+.pet-mode-actions,
+.pet-chat-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pet-bubble-header {
+  justify-content: space-between;
+  color: #5b3b30;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pet-bubble-body p {
+  margin: 0;
+  color: #6c4a3c;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.pet-chat-form {
+  display: none;
+}
+
+.pet-mode-actions {
+  justify-content: center;
+  -webkit-app-region: no-drag;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  min-height: 24px;
+  border: 1px solid rgba(72, 45, 34, 0.22);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #4b3128;
+  font-size: 11px;
+}
+
+button:disabled,
+input:disabled {
+  cursor: default;
+  opacity: 0.58;
+}
+
+.pet-icon-button {
+  width: 24px;
+  padding: 0;
+}
