@@ -320,7 +320,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 **Goal:** Move the product from a full management interface toward a small desktop pet plus compact chat bubble, while keeping Full App Mode as the control center.
 
-**Status:** RELEASE CHECKPOINT COMPLETE - TASK-114 design complete; TASK-115 static renderer skeleton complete; TASK-116 env-gated BrowserWindow prototype complete; TASK-117 CSS drag behavior complete; TASK-118 local-only bubble UI state complete; TASK-119 narrow Pet-to-Full mode switch complete; TASK-120 smoke checkpoint passed; TASK-121 manual Windows visual smoke passed with menu placeholder note; TASK-122 Pet Window position persistence complete; TASK-123 Pet menu/right-click menu complete; TASK-124 manual menu smoke passed with right-click drag-region note; TASK-125 right-click menu hotspot fix complete; TASK-126 menu UX regression fixed; TASK-127 explicit drag handle complete; TASK-128 Full App -> Show Pet bridge complete; TASK-129 drag regression fix complete; TASK-130 manual Windows drag/menu smoke passed; TASK-131 Pet Mode release checkpoint complete; TASK-132 Bubble Chat wiring design complete; TASK-133 static bubble state refinement complete; TASK-134 Pet Bubble `/chat` client wiring complete; TASK-135 Pet Bubble loading/error UX complete; TASK-136 Pet Bubble mood/expression integration complete; TASK-137 Pet Bubble long reply handling complete; TASK-138 Pet Bubble chat smoke checkpoint complete; TASK-140 Pet Bubble input visibility regression fixed; TASK-141 display-only speech bubble redesign complete.
+**Status:** RELEASE CHECKPOINT COMPLETE - TASK-114 design complete; TASK-115 static renderer skeleton complete; TASK-116 env-gated BrowserWindow prototype complete; TASK-117 CSS drag behavior complete; TASK-118 local-only bubble UI state complete; TASK-119 narrow Pet-to-Full mode switch complete; TASK-120 smoke checkpoint passed; TASK-121 manual Windows visual smoke passed with menu placeholder note; TASK-122 Pet Window position persistence complete; TASK-123 Pet menu/right-click menu complete; TASK-124 manual menu smoke passed with right-click drag-region note; TASK-125 right-click menu hotspot fix complete; TASK-126 menu UX regression fixed; TASK-127 explicit drag handle complete; TASK-128 Full App -> Show Pet bridge complete; TASK-129 drag regression fix complete; TASK-130 manual Windows drag/menu smoke passed; TASK-131 Pet Mode release checkpoint complete; TASK-132 Bubble Chat wiring design complete; TASK-133 static bubble state refinement complete; TASK-134 Pet Bubble `/chat` client wiring complete; TASK-135 Pet Bubble loading/error UX complete; TASK-136 Pet Bubble mood/expression integration complete; TASK-137 Pet Bubble long reply handling complete; TASK-138 Pet Bubble chat smoke checkpoint complete; TASK-140 Pet Bubble input visibility regression fixed; TASK-141 display-only speech bubble redesign complete; TASK-143 Full App reply mirror bridge complete.
 
 > Design reference: `docs/PET_MODE_UI_DESIGN.md`
 > Release checkpoint: `docs/PET_MODE_RELEASE_CHECKPOINT.md`
@@ -356,6 +356,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 | TASK-139 | Manual Windows Pet Bubble Chat Smoke | IN_PROGRESS - INPUT VISIBILITY REGRESSION FOUND |
 | TASK-140 | Fix Pet Bubble Input Visibility | DONE |
 | TASK-141 | Redesign Pet Bubble as Display-only Speech Bubble | DONE |
+| TASK-143 | Mirror Full App Chat Reply to Pet Speech Bubble | DONE |
 
 **Recommended direction:**
 
@@ -403,8 +404,9 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 - TASK-139 Windows manual smoke found a Pet Bubble layout regression: the bubble expanded and displayed status/response/legacy placeholder text, but input and Send were clipped out of the visible Pet Window.
 - TASK-140 fixes the composer visibility regression by making the bubble a fixed-height grid, hiding the legacy placeholder body from layout, keeping response text in the scrollable middle row, and pinning the input/Send composer as the bottom row. Input and Send stay visible in every non-collapsed state; pending only disables them.
 - TASK-141 changes product direction: the visible Pet Bubble is now a display-only comic-style speech bubble with a CSS tail, compact status, and response text. The Pet form/input/send hooks are hidden dev-only hooks retained for the existing `/chat` client tests and future voice/dispatch reuse. Full App is now the primary text input surface.
+- TASK-143 adds a narrow Full App -> Pet speech bridge. After Full App receives `/chat`, it sends only `{ reply, mood, source }` through `window.dragonPet.updatePetSpeech()` on fixed IPC channel `pet:speech-update`; main sanitizes/truncates and forwards to Pet Window on `pet:speech-received`; Pet preload exposes only `onSpeechUpdate(callback)`; hidden Pet Window is not automatically shown.
 
 **Next recommended task:**
 
-- Re-run Windows Pet Bubble visual smoke for TASK-141. Confirm the display-only speech bubble looks correct, does not hide Christina too much, keeps Menu/Full App/drag behavior intact, and still shows `/chat` replies when triggered by the hidden test hook or future dispatch path.
+- Run Windows manual smoke for TASK-143. Confirm Full App chat replies mirror into the Pet speech bubble with source/mood expression updates, and confirm Hide Pet Window remains respected.
                                         

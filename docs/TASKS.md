@@ -7172,6 +7172,75 @@ Verification:
 
 ---
 
+## TASK-143 - Mirror Full App Chat Reply to Pet Speech Bubble
+
+**Status:** DONE
+**Date:** 2026-05-24
+
+Goal:
+
+Mirror successful Full App `/chat` replies into the Pet Window display-only speech bubble.
+
+Problem:
+
+- Full App is now the primary text input surface.
+- Pet Window is the screen-pet display surface.
+- Windows testing showed Full App could send chat and receive `/chat` replies, but the Pet speech bubble stayed on its default hint.
+
+Implementation:
+
+- Full App renderer now calls `window.dragonPet.updatePetSpeech({ reply, mood, source })` after a successful `/chat` response.
+- Full App sends only the whitelisted fields `reply`, `mood`, and `source`.
+- Full App does not crash if the Pet bridge API is unavailable.
+- Full App preload exposes only `updatePetSpeech(payload)` for fixed channel `pet:speech-update`.
+- Main process handles fixed channel `pet:speech-update`.
+- Main process sanitizes speech payload:
+  - `reply` must be a string and is truncated to `PET_SPEECH_REPLY_MAX_LENGTH = 800`.
+  - `mood` falls back to `neutral`.
+  - `source` falls back to `unknown`.
+- Main process forwards sanitized payload to Pet Window through fixed channel `pet:speech-received`.
+- If Pet Window does not exist or is hidden, main process returns a safe status and does not crash.
+- Hidden Pet Window is not automatically shown, preserving the user's Hide Pet Window intent.
+- Pet preload exposes only `onSpeechUpdate(callback)` for fixed channel `pet:speech-received`.
+- Pet preload returns an unsubscribe function that removes only the fixed speech listener.
+- Pet renderer updates the display-only speech bubble through `renderPetSpeechUpdate(...)`.
+- Pet renderer maps reply/source/mood into `speaking`, `long_reply`, `fallback_mock`, or `llm_local_error` style states and updates Christina expression from `mood`.
+
+Safety boundaries:
+
+- Backend code was not changed.
+- `/chat` schema remains `reply`, `mood`, `source`.
+- No backend route or API was added.
+- No arbitrary IPC was exposed.
+- Preloads do not expose arbitrary `ipcRenderer`, fs, shell, process, or arbitrary channel send.
+- Pet renderer does not call backend or `/chat` for mirrored speech updates.
+- No direct Ollama access was added.
+- No external API, file access, Email access, Calendar access, image, voice, speech-to-text, tray, packaging, autostart, screenshot, microphone, or screen monitoring behavior was added.
+
+Verification:
+
+- `node --check apps/desktop/src/main.js`: PASS.
+- `node --check apps/desktop/src/renderer/renderer.js`: PASS.
+- `node --check apps/desktop/src/renderer/preload.js`: PASS.
+- `node --check apps/desktop/src/pet/pet-renderer.js`: PASS.
+- `node --check apps/desktop/src/pet/pet-preload.js`: PASS.
+- `node --check apps/desktop/scripts/renderer-chat-smoke.js`: PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js`: PASS.
+- `node --check apps/desktop/scripts/pet-window-smoke.js`: PASS.
+- `node apps/desktop/scripts/renderer-chat-smoke.js`: PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: PASS, 34 checks.
+- `node apps/desktop/scripts/pet-window-smoke.js`: PASS, 10 checks.
+- `cd apps/desktop && npm.cmd run test:renderer`: PASS.
+- `python -m pytest`: PASS, 586 passed.
+- Direct Ollama `11434` safety scan across main, Full App renderer/preload, Pet renderer/preload, and Pet HTML: PASS.
+- `git diff --check`: PASS.
+
+Next recommendation:
+
+- Run Windows manual smoke with `PET_MODE_ENABLED=true`: send a message in Full App and verify Pet Window speech bubble mirrors the AI reply, source badge, and mood expression without auto-showing a hidden Pet Window.
+
+---
+
 ## TASK-141 - Redesign Pet Bubble as Display-only Speech Bubble
 
 **Status:** DONE

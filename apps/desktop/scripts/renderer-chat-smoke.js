@@ -442,6 +442,41 @@ async function testChatSendCallsBackendAndRendersReply() {
   assert.match(rendered, /Hmph, local dragon reply/);
 }
 
+async function testSuccessfulChatMirrorsReplyToPetSpeech() {
+  const speechUpdates = [];
+  const { document } = await loadRenderer({
+    dragonPet: {
+      updatePetSpeech(payload) {
+        speechUpdates.push(payload);
+        return Promise.resolve({ ok: true });
+      },
+      showPetWindow() {
+        return Promise.resolve({ ok: true });
+      },
+    },
+  });
+
+  await sendChat(document, "mirror to pet");
+
+  assert.equal(speechUpdates.length, 1);
+  assert.deepEqual(Object.keys(speechUpdates[0]).sort(), ["mood", "reply", "source"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(speechUpdates[0])), {
+    reply: "Hmph, local dragon reply.",
+    mood: "focused",
+    source: "llm_local",
+  });
+}
+
+async function testSuccessfulChatDoesNotRequirePetSpeechApi() {
+  const { document } = await loadRenderer();
+
+  await sendChat(document, "no pet speech api");
+
+  const rendered = messageTexts(document.getElementById("chat-area")).join("\n");
+  assert.match(rendered, /Hmph, local dragon reply/);
+  assert.equal(textOf(document, "chat-source-status"), "source: llm_local");
+}
+
 async function testSuccessfulLocalChatUpdatesMoodAndSourceStatus() {
   const { document } = await loadRenderer();
 
@@ -1730,6 +1765,8 @@ async function testPhase5FullCompanionIntegrationFlow() {
 
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
+  await testSuccessfulChatMirrorsReplyToPetSpeech();
+  await testSuccessfulChatDoesNotRequirePetSpeechApi();
   await testSuccessfulLocalChatUpdatesMoodAndSourceStatus();
   await testLoadingColdStartStatusIsVisible();
   await testEnterKeySendsChat();

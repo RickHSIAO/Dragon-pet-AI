@@ -464,6 +464,91 @@ function testFullAppStatusDoesNotRemoveComposer() {
   assertDevComposerHidden(fakeDocument, false);
 }
 
+function testPetRendererAppliesSpeechUpdateToSpeechBubble() {
+  const { renderPetSpeechUpdate } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+
+  const renderedState = renderPetSpeechUpdate(fakeDocument, {
+    reply: "Speech from Full App.",
+    mood: "happy",
+    source: "llm_local",
+  });
+
+  assert.equal(renderedState, "speaking");
+  assert.equal(fakeDocument.getElementById("pet-bubble").hidden, false);
+  assert.equal(fakeDocument.getElementById("pet-bubble-status").textContent, "local");
+  assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, "Speech from Full App.");
+  assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "happy");
+  assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_happy\.png$/);
+}
+
+function testPetRendererSpeechUpdateHandlesLongReply() {
+  const { PET_LONG_REPLY_HINT, PET_REPLY_LONG_THRESHOLD, renderPetSpeechUpdate } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+  const longReply = "x".repeat(PET_REPLY_LONG_THRESHOLD + 1);
+
+  const renderedState = renderPetSpeechUpdate(fakeDocument, {
+    reply: longReply,
+    mood: "focused",
+    source: "llm_local",
+  });
+
+  assert.equal(renderedState, "long_reply");
+  assert.equal(fakeDocument.getElementById("pet-bubble").hidden, false);
+  assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, PET_LONG_REPLY_HINT);
+  assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "focused");
+}
+
+function testPetRendererRegistersFixedSpeechUpdateListener() {
+  const { initializePetMode } = require(petRendererPath);
+  const fakeDocument = new FakeDocument([
+    "pet-mode-root",
+    "pet-drag-region",
+    "pet-avatar-container",
+    "pet-avatar",
+    "pet-hint",
+    "pet-bubble",
+    "pet-bubble-title",
+    "pet-bubble-status",
+    "pet-bubble-message",
+    "pet-bubble-response",
+    "pet-bubble-placeholder",
+    "pet-chat-form-hook",
+    "pet-chat-input-hook",
+    "pet-chat-send-hook",
+    "pet-bubble-open-hook",
+    "pet-bubble-close-hook",
+    "pet-open-full-app-hook",
+    "pet-context-menu-hook",
+    "pet-menu",
+  ]);
+  const originalWindow = global.window;
+  let registeredCallback = null;
+
+  global.window = {
+    dragonPet: {
+      onSpeechUpdate(callback) {
+        registeredCallback = callback;
+        return () => {};
+      },
+    },
+  };
+
+  initializePetMode(fakeDocument);
+  global.window = originalWindow;
+
+  assert.equal(typeof registeredCallback, "function");
+  registeredCallback({
+    reply: "Mirrored reply.",
+    mood: "proud",
+    source: "llm_local",
+  });
+
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "speaking");
+  assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, "Mirrored reply.");
+  assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "proud");
+}
+
 function testPetExpressionMappingHelpersUseExistingAssets() {
   const {
     CHRISTINA_EXPRESSION_ASSETS,
@@ -1249,6 +1334,9 @@ async function run() {
     testPetRendererRendersAllLocalBubbleStates,
     testPetSpeechBubbleKeepsDevComposerHiddenAcrossDisplayStates,
     testFullAppStatusDoesNotRemoveComposer,
+    testPetRendererAppliesSpeechUpdateToSpeechBubble,
+    testPetRendererSpeechUpdateHandlesLongReply,
+    testPetRendererRegistersFixedSpeechUpdateListener,
     testPetExpressionMappingHelpersUseExistingAssets,
     testPetLongReplyThresholdHelper,
     testPetRendererTogglesBubbleState,

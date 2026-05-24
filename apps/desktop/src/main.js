@@ -18,11 +18,14 @@ const PET_OPEN_FULL_APP_CHANNEL = "pet:open-full-app";
 const PET_SHOW_WINDOW_CHANNEL = "pet:show-window";
 const PET_RESET_POSITION_CHANNEL = "pet:reset-position";
 const PET_HIDE_WINDOW_CHANNEL = "pet:hide-window";
+const PET_SPEECH_UPDATE_CHANNEL = "pet:speech-update";
+const PET_SPEECH_RECEIVED_CHANNEL = "pet:speech-received";
 const PET_WINDOW_WIDTH = 220;
 const PET_WINDOW_HEIGHT = 280;
 const PET_WINDOW_STATE_FILE = "pet-window-state.json";
 const PET_WINDOW_EDGE_MARGIN = 24;
 const PET_WINDOW_SAVE_DEBOUNCE_MS = 300;
+const PET_SPEECH_REPLY_MAX_LENGTH = 800;
 
 let fullAppWindow = null;
 let petWindow = null;
@@ -274,6 +277,33 @@ function showPetWindow() {
   return { ok: true };
 }
 
+function normalizePetSpeechField(value, fallback = "") {
+  return typeof value === "string" ? value : fallback;
+}
+
+function sanitizePetSpeechPayload(payload = {}) {
+  const reply = normalizePetSpeechField(payload.reply).slice(0, PET_SPEECH_REPLY_MAX_LENGTH);
+  const mood = normalizePetSpeechField(payload.mood, "neutral");
+  const source = normalizePetSpeechField(payload.source, "unknown");
+
+  return { reply, mood, source };
+}
+
+function forwardPetSpeechUpdate(payload = {}) {
+  const safePayload = sanitizePetSpeechPayload(payload);
+
+  if (!petWindow || petWindow.isDestroyed()) {
+    return { ok: false, reason: "pet_window_unavailable" };
+  }
+
+  if (!petWindow.isVisible()) {
+    return { ok: false, reason: "pet_window_hidden" };
+  }
+
+  petWindow.webContents.send(PET_SPEECH_RECEIVED_CHANNEL, safePayload);
+  return { ok: true };
+}
+
 ipcMain.handle(PET_OPEN_FULL_APP_CHANNEL, () => {
   showFullAppWindow();
   return { ok: true };
@@ -284,6 +314,8 @@ ipcMain.handle(PET_SHOW_WINDOW_CHANNEL, () => showPetWindow());
 ipcMain.handle(PET_RESET_POSITION_CHANNEL, () => resetPetWindowPosition());
 
 ipcMain.handle(PET_HIDE_WINDOW_CHANNEL, () => hidePetWindow());
+
+ipcMain.handle(PET_SPEECH_UPDATE_CHANNEL, (_event, payload) => forwardPetSpeechUpdate(payload));
 
 app.whenReady().then(() => {
   createWindow();

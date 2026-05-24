@@ -626,6 +626,22 @@ function handleHidePetWindow(documentRef = document) {
   );
 }
 
+function renderPetSpeechUpdate(documentRef = document, payload = {}) {
+  const reply = typeof payload.reply === "string" ? payload.reply : "";
+  const mood = typeof payload.mood === "string" ? payload.mood : PET_MODE_DEFAULTS.expression;
+  const source = typeof payload.source === "string" ? payload.source : "unknown";
+  const nextState = stateForChatSource(source, reply);
+  const isReplyLong = nextState === "long_reply";
+
+  return setBubbleState(documentRef, nextState, {
+    source,
+    statusText: sourceStatusLabel(source),
+    message: isReplyLong ? BUBBLE_STATES.long_reply.message : PET_MODE_DEFAULTS.bubbleMessage,
+    response: isReplyLong ? PET_LONG_REPLY_HINT : reply,
+    mood,
+  });
+}
+
 function initializePetMode(documentRef = document) {
   const root = documentRef.getElementById("pet-mode-root");
   const dragRegion = documentRef.getElementById("pet-drag-region");
@@ -743,6 +759,14 @@ function initializePetMode(documentRef = document) {
       }
     });
   }
+
+  const api =
+    typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null;
+  if (api && typeof api.onSpeechUpdate === "function") {
+    api.onSpeechUpdate((payload) => {
+      renderPetSpeechUpdate(documentRef, payload);
+    });
+  }
 }
 
 if (typeof document !== "undefined") {
@@ -780,6 +804,7 @@ if (typeof module !== "undefined") {
     isMenuOpen,
     openMenu,
     parseChatResponse,
+    renderPetSpeechUpdate,
     sendPetChatMessage,
     setBubbleState,
     setMenuState,

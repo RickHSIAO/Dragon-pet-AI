@@ -1144,6 +1144,28 @@ Safety note:
 
 - No backend route, `/chat` schema change, IPC expansion, preload API, direct Ollama call, voice feature, speech-to-text, external API, image, file access, Email access, Calendar access, screenshot, microphone, screen-monitoring behavior, tray, packaging, or autostart was added.
 
+### TASK-143 - Full App Reply Mirror Bridge
+
+Status: DONE on 2026-05-24.
+
+Design update:
+
+- Full App remains the primary text input and chat surface.
+- Pet speech bubble mirrors the latest Full App AI reply.
+- Pet Window does not take over input.
+- Full App sends only `reply`, `mood`, and `source` to Pet Mode after successful `/chat`.
+- The bridge uses fixed narrow IPC channels: `pet:speech-update` and `pet:speech-received`.
+- Pet Window displays mirrored replies through the display-only speech bubble and updates Christina expression from mood.
+- Hidden Pet Window is not automatically shown; the Full App `Show Pet` button remains the explicit recovery path.
+
+Safety note:
+
+- No backend route, `/chat` schema change, arbitrary IPC, direct Ollama call, external API, file access, Email access, Calendar access, voice feature, speech-to-text, screenshot, microphone, screen-monitoring behavior, image, tray, packaging, or autostart was added.
+
+Validation note:
+
+- Renderer chat smoke, Pet renderer smoke, Pet window smoke, desktop renderer smoke, backend pytest, direct Ollama `11434` safety scan, and `git diff --check` pass for the bridge checkpoint.
+
 ---
 
 ## 9. Explicit Non-goals for TASK-114

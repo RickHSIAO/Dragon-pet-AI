@@ -135,6 +135,28 @@ async function showPetWindowFromFullApp() {
   }
 }
 
+function updatePetSpeechFromChatResponse(data) {
+  const api =
+    typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null;
+
+  if (!api || typeof api.updatePetSpeech !== "function" || !data) {
+    return null;
+  }
+
+  const payload = {
+    reply: typeof data.reply === "string" ? data.reply : "",
+    mood: typeof data.mood === "string" ? data.mood : "neutral",
+    source: typeof data.source === "string" ? data.source : "unknown",
+  };
+
+  const result = api.updatePetSpeech(payload);
+  if (result && typeof result.catch === "function") {
+    result.catch(() => {});
+  }
+
+  return result || null;
+}
+
 // ---------------------------------------------------------------------------
 // Idle State (TASK-108) — Companion Behavior Loop
 // Safety: idle logic is UI-only. No /chat calls, no network, no file access.
@@ -1523,6 +1545,11 @@ async function sendMessage(text) {
     maybeScrollChatToBottom(); // TASK-113: only scroll if user was near the bottom
     const source = data.source || "unknown";
     const isSourceError = source === "llm_local_error" || source === "llm_real_error";
+    updatePetSpeechFromChatResponse({
+      reply: data.reply,
+      mood: data.mood,
+      source,
+    });
     setMood(data.mood); // also calls setPetExpression via setMood
     // TASK-083/098: if the source indicates a provider error, override expression to error
     // even though a safe fallback reply was returned.

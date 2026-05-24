@@ -676,3 +676,60 @@ Next recommendation:
 
 - Manual Windows visual smoke for the display-only speech bubble.
 - Follow-up design task: Pet input source design for Full App dispatch, voice, or push-to-talk.
+
+## 20. TASK-143 Full App Reply Mirror Bridge
+
+Status: DONE on 2026-05-24.
+
+TASK-143 connects the display-only Pet speech bubble to the Full App chat flow.
+
+Behavior:
+
+- Full App remains the primary text input interface.
+- After Full App receives a successful `/chat` response, it mirrors only `reply`, `mood`, and `source` to Pet Mode.
+- Pet Window does not provide visible text input.
+- Pet speech bubble displays the latest AI reply and source/status.
+- Pet expression updates from the mirrored `mood`.
+- Long replies use the existing compact Full App reading hint.
+
+IPC bridge:
+
+- Full App renderer calls `window.dragonPet.updatePetSpeech({ reply, mood, source })`.
+- Full App preload exposes fixed method `updatePetSpeech(payload)`.
+- Fixed IPC channel from Full App to main: `pet:speech-update`.
+- Main process sanitizes/truncates payload and forwards only `{ reply, mood, source }`.
+- Fixed IPC channel from main to Pet Window: `pet:speech-received`.
+- Pet preload exposes fixed listener `onSpeechUpdate(callback)`.
+- Pet preload returns an unsubscribe function for only the fixed speech listener.
+
+Hidden Pet Window behavior:
+
+- If Pet Window does not exist or is hidden, main process returns a safe status and does not crash.
+- Hidden Pet Window is not automatically shown, so a user-initiated Hide Pet Window remains respected.
+- Full App `Show Pet` remains the explicit way to bring Pet Window back.
+
+Safety confirmation:
+
+- Backend code was not changed.
+- `/chat` schema remains `reply`, `mood`, `source`.
+- No backend route or API was added.
+- No arbitrary IPC was exposed.
+- Preloads do not expose arbitrary `ipcRenderer`, fs, shell, process, or arbitrary channel send.
+- Pet renderer does not call backend `/chat` for mirrored speech updates.
+- No direct Ollama access was added.
+- No external API, file access, Email access, Calendar access, image, voice, speech-to-text, tray, packaging, autostart, screenshot, microphone, or screen monitoring behavior was added.
+
+Validation:
+
+- Full App renderer smoke verifies successful `/chat` response mirrors only `reply`, `mood`, and `source`.
+- Full App renderer smoke verifies missing `updatePetSpeech` API does not crash.
+- Pet renderer smoke verifies speech updates display bubble text, source, mood expression, and long-reply hint.
+- Pet window smoke verifies fixed channels `pet:speech-update` and `pet:speech-received`, narrow preload APIs, and hidden-window safe status logic.
+- Desktop renderer smoke passes.
+- Backend pytest passes with 586 tests.
+- Direct Ollama `11434` safety scan passes.
+- `git diff --check` passes.
+
+Next recommendation:
+
+- Manual Windows smoke for Full App reply mirroring into Pet speech bubble.
