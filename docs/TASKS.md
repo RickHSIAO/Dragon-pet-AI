@@ -6886,3 +6886,44 @@ Verification:
 Next Task:
 
 Pet Mode MVP checkpoint complete. Future work can start a new task for real Pet Bubble Chat `/chat` wiring, position persistence, tray/menu behavior, or manual runtime visual smoke.
+
+---
+
+## TASK-121 - Manual Windows Pet Mode Visual Smoke
+
+**Status:** DONE - PASS WITH NOTE
+**Date:** 2026-05-24
+
+Goal:
+
+Record the user-run manual Windows visual smoke result for Pet Mode after TASK-115 through TASK-120.
+
+Scope:
+
+- Record manual Windows runtime observations.
+- Update tracking documents only.
+- Do not modify code.
+- Do not add features.
+- Do not implement Menu behavior.
+- Do not modify Electron `main.js`, renderer code, backend code, provider settings, Ollama routing, or `/chat` schema.
+
+Manual Windows visual smoke results:
+
+- Pet small window can be dragged: PASS.
+- Chat can expand/collapse the bubble: PASS.
+- Full App hook can bring the main window back to foreground: PASS.
+- Menu hook cannot be clicked / used yet: NOTE. It remains a placeholder; menu behavior is not implemented.
+- After backend startup, Full App provider/backend status is normal: PASS.
+- Pet small window stays always-on-top: PASS.
+
+Safety boundaries:
+
+- No code modified.
+- No backend call or `/chat` wiring added.
+- No `/chat` schema change.
+- No external API added.
+- No file, Email, Calendar, screenshot, microphone, or screen-monitoring behavior added.
+
+Conclusion:
+
+Pet Mode manual Windows smoke is PASS WITH NOTE. The only note is expected: the Menu hook is still a placeholder and should be handled in a future tray/right-click/menu task.

@@ -767,6 +767,24 @@ Completion notes:
 - `/chat` schema remains unchanged.
 - No runtime feature was added in TASK-120.
 
+### TASK-121 - Manual Windows Pet Mode Visual Smoke
+
+Status: DONE - PASS WITH NOTE on 2026-05-24.
+
+Manual smoke summary:
+
+- Pet small window can be dragged: PASS.
+- Chat can expand/collapse the bubble: PASS.
+- Full App hook can bring the main window back to foreground: PASS.
+- Menu hook cannot be clicked / used yet: NOTE. This remains an expected placeholder; menu behavior is not implemented.
+- After backend startup, Full App provider/backend status is normal: PASS.
+- Pet small window stays always-on-top: PASS.
+
+Checkpoint note:
+
+- No code was changed for TASK-121.
+- No backend call, `/chat` wiring, `/chat` schema change, external API, image, file access, Email access, Calendar access, screenshot, microphone, or screen-monitoring behavior was added.
+
 ---
 
 ## 9. Explicit Non-goals for TASK-114
