@@ -18,7 +18,7 @@
 </head>
 <body>
   <main id="pet-mode-root" class="pet-shell" data-mode="pet" aria-label="Christina pet mode skeleton">
-    <section id="pet-drag-region" class="pet-stage" aria-label="Pet drag region placeholder">
+    <section id="pet-drag-region" class="pet-stage pet-drag-region" aria-label="Pet drag region placeholder">
       <div id="pet-avatar-container" class="pet-avatar-container" data-expression="neutral">
         <img
           id="pet-avatar"
@@ -33,33 +33,34 @@
 
     <section
       id="pet-bubble"
-      class="pet-bubble"
+      class="pet-bubble pet-no-drag"
       data-state="collapsed"
       aria-label="Bubble chat placeholder"
       aria-expanded="false"
     >
       <div class="pet-bubble-header">
         <span id="pet-bubble-title">Bubble Chat</span>
-        <button id="pet-bubble-close-hook" class="pet-icon-button" type="button" data-hook="bubble-close" disabled>x</button>
+        <button id="pet-bubble-close-hook" class="pet-icon-button pet-no-drag" type="button" data-hook="bubble-close" disabled>x</button>
       </div>
       <div id="pet-bubble-placeholder" class="pet-bubble-body">
         <p>&#x5C0D;&#x8A71;&#x6CE1;&#x6CE1;&#x9810;&#x7559;&#x5340;&#x3002;TASK-115 &#x4E0D;&#x9023;&#x63A5; /chat&#x3002;</p>
       </div>
-      <form id="pet-chat-form-hook" class="pet-chat-form" data-hook="chat-form">
+      <form id="pet-chat-form-hook" class="pet-chat-form pet-no-drag" data-hook="chat-form">
         <input
           id="pet-chat-input-hook"
+          class="pet-no-drag"
           type="text"
           placeholder="Bubble chat input placeholder"
           autocomplete="off"
           disabled
         />
-        <button id="pet-chat-send-hook" type="submit" disabled>Send</button>
+        <button id="pet-chat-send-hook" class="pet-no-drag" type="submit" disabled>Send</button>
       </form>
     </section>
 
-    <nav id="pet-mode-actions" class="pet-mode-actions" aria-label="Pet mode action hooks">
-      <button id="pet-open-full-app-hook" type="button" data-hook="open-full-app" disabled>Full App</button>
-      <button id="pet-context-menu-hook" type="button" data-hook="context-menu" disabled>Menu</button>
+    <nav id="pet-mode-actions" class="pet-mode-actions pet-no-drag" aria-label="Pet mode action hooks">
+      <button id="pet-open-full-app-hook" class="pet-no-drag" type="button" data-hook="open-full-app" disabled>Full App</button>
+      <button id="pet-context-menu-hook" class="pet-no-drag" type="button" data-hook="context-menu" disabled>Menu</button>
     </nav>
   </main>
 

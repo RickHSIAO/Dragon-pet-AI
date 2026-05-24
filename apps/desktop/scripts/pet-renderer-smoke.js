@@ -51,6 +51,10 @@ function assertNotIncludes(haystack, needle, label) {
   assert.equal(haystack.includes(needle), false, `${label} should not include ${needle}`);
 }
 
+function assertRegex(haystack, regex, label) {
+  assert.equal(regex.test(haystack), true, `${label} should match ${regex}`);
+}
+
 function testPetFilesExist() {
   assertFileExists(petHtmlPath);
   assertFileExists(petCssPath);
@@ -68,6 +72,11 @@ function testPetHtmlReferencesStaticAssets() {
   assertIncludes(html, 'id="pet-bubble-placeholder"', "pet.html");
   assertIncludes(html, 'id="pet-context-menu-hook"', "pet.html");
   assertIncludes(html, 'id="pet-open-full-app-hook"', "pet.html");
+  assertRegex(html, /id="pet-drag-region"[^>]*class="[^"]*\bpet-drag-region\b/, "pet.html");
+  assertRegex(html, /id="pet-bubble"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
+  assertRegex(html, /id="pet-chat-form-hook"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
+  assertRegex(html, /id="pet-context-menu-hook"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
+  assertRegex(html, /id="pet-open-full-app-hook"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertIncludes(html, "&#x54FC;&#xFF0C;", "pet.html");
   assertIncludes(
     html,
@@ -83,6 +92,10 @@ function testPetCssUsesStaticPetDimensions() {
   assertIncludes(css, "background: transparent", "pet.css");
   assertIncludes(css, "-webkit-app-region: drag", "pet.css");
   assertIncludes(css, "-webkit-app-region: no-drag", "pet.css");
+  assertIncludes(css, ".pet-drag-region", "pet.css");
+  assertIncludes(css, ".pet-no-drag", "pet.css");
+  assertRegex(css, /button,\s*\r?\ninput[\s\S]*-webkit-app-region:\s*no-drag/, "pet.css");
+  assertRegex(css, /textarea[\s\S]*-webkit-app-region:\s*no-drag/, "pet.css");
 }
 
 function testPetRendererHasNoBackendOrOllamaCalls() {

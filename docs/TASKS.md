@@ -6660,7 +6660,8 @@ Verification:
 
 ## TASK-117 - Pet Mode Drag Behavior
 
-**Status:** TODO
+**Status:** DONE
+**Date:** 2026-05-24
 
 Goal:
 
@@ -6672,6 +6673,35 @@ Scope:
 - Mark chat controls and buttons as no-drag.
 - Verify drag behavior on Windows.
 - Design or implement last-position persistence with display bounds clamping.
+
+Changes:
+
+- Added explicit `.pet-drag-region` class to `#pet-drag-region` in `apps/desktop/src/pet/pet.html`.
+- Added explicit `.pet-no-drag` class to bubble, chat form, input, buttons, context-menu hook, and Full App hook.
+- Updated `apps/desktop/src/pet/pet.css` so the pet stage / drag region uses `-webkit-app-region: drag`.
+- Updated `apps/desktop/src/pet/pet.css` so `.pet-no-drag`, bubble, form, action area, buttons, inputs, and textareas use `-webkit-app-region: no-drag`.
+- Updated `apps/desktop/scripts/pet-renderer-smoke.js` to verify drag/no-drag CSS and DOM hooks.
+
+Safety boundaries:
+
+- No IPC added.
+- No preload API added.
+- No mousemove drag logic added.
+- No right-click menu behavior added.
+- No bubble chat behavior added.
+- `apps/desktop/src/main.js` was not modified.
+- No backend call was added.
+- No `/chat` call was added.
+- No `/chat` schema change.
+
+Verification:
+
+- `node --check apps/desktop/src/main.js`: PASS.
+- `node --check apps/desktop/src/pet/pet-renderer.js`: PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js`: PASS.
+- `node --check apps/desktop/scripts/pet-window-smoke.js`: PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: PASS, 5 checks.
+- `node apps/desktop/scripts/pet-window-smoke.js`: PASS, 6 checks.
 
 ---
 

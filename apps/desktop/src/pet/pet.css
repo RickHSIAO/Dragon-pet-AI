@@ -37,7 +37,8 @@ body {
   box-shadow: 0 12px 30px rgba(33, 24, 20, 0.18);
 }
 
-.pet-stage {
+.pet-stage,
+.pet-drag-region {
   min-height: 178px;
   display: grid;
   justify-items: center;
@@ -86,7 +87,6 @@ body {
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.82);
   transition: max-height 140ms ease, opacity 140ms ease;
-  -webkit-app-region: no-drag;
 }
 
 .pet-bubble[data-state="placeholder"] {
@@ -124,12 +124,12 @@ body {
 
 .pet-mode-actions {
   justify-content: center;
-  -webkit-app-region: no-drag;
 }
 
 button,
 input {
   font: inherit;
+  -webkit-app-region: no-drag;
 }
 
 button {
@@ -150,4 +150,14 @@ input:disabled {
 .pet-icon-button {
   width: 24px;
   padding: 0;
+}
+
+.pet-no-drag,
+.pet-bubble,
+.pet-chat-form,
+.pet-mode-actions,
+button,
+input,
+textarea {
+  -webkit-app-region: no-drag;
 }

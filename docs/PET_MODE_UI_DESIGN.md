@@ -650,6 +650,8 @@ Completion notes:
 
 ### TASK-117 - Pet Mode Drag Behavior
 
+Status: DONE on 2026-05-24.
+
 Goal:
 
 - Make the Pet Window draggable and position-stable.
@@ -665,6 +667,13 @@ Acceptance:
 - User can drag the pet.
 - Chat controls remain clickable.
 - No click-through yet.
+
+Completion notes:
+
+- `#pet-drag-region` now has `.pet-drag-region` and uses CSS `-webkit-app-region: drag`.
+- Bubble, chat form, input, buttons, context-menu hook, and Full App hook now have `.pet-no-drag`.
+- CSS applies `-webkit-app-region: no-drag` to `.pet-no-drag`, bubble, form, action area, buttons, inputs, and textareas.
+- No IPC, preload API, mousemove drag implementation, click-through behavior, backend call, or `/chat` call was added.
 
 ### TASK-118 - Pet Bubble Chat Design
 
