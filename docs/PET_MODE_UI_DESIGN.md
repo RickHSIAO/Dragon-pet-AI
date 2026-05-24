@@ -620,6 +620,8 @@ Completion notes:
 
 ### TASK-116 - Pet Mode BrowserWindow Prototype
 
+Status: DONE on 2026-05-24.
+
 Goal:
 
 - Add an Electron Pet Window prototype behind a safe dev-only or explicit mode switch.
@@ -636,6 +638,15 @@ Acceptance:
 - Pet Window opens only through explicit dev command or menu.
 - Full App still works.
 - `nodeIntegration: false`, `contextIsolation: true`.
+
+Completion notes:
+
+- Added `createPetWindow()` and `petWindow` in `apps/desktop/src/main.js`.
+- Pet Window is gated by `PET_MODE_ENABLED=true`; default startup remains Full App only.
+- Pet Window loads `apps/desktop/src/pet/pet.html`.
+- Pet Window uses `220 x 280`, `frame: false`, `transparent: true`, `alwaysOnTop: true`, `resizable: false`, `show: false`, and `ready-to-show` display.
+- Pet Window uses `nodeIntegration: false`, `contextIsolation: true`, and `sandbox: true`.
+- No preload API, backend call, `/chat` call, drag behavior, context menu behavior, bubble chat behavior, or mode switch behavior was added.
 
 ### TASK-117 - Pet Mode Drag Behavior
 

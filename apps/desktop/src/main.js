@@ -11,6 +11,9 @@ const { app, BrowserWindow } = require("electron");
 const path = require("path");
 
 const BACKEND_URL = "http://localhost:8000";
+const PET_MODE_ENABLED = process.env.PET_MODE_ENABLED === "true";
+
+let petWindow = null;
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -38,11 +41,55 @@ function createWindow() {
   );
 }
 
+function createPetWindow() {
+  if (petWindow && !petWindow.isDestroyed()) {
+    petWindow.focus();
+    return petWindow;
+  }
+
+  petWindow = new BrowserWindow({
+    width: 220,
+    height: 280,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    resizable: false,
+    show: false,
+    title: "Dragon Pet AI - Pet Mode",
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+    },
+  });
+
+  petWindow.once("ready-to-show", () => {
+    if (petWindow && !petWindow.isDestroyed()) {
+      petWindow.show();
+    }
+  });
+
+  petWindow.on("closed", () => {
+    petWindow = null;
+  });
+
+  petWindow.loadFile(path.join(__dirname, "pet", "pet.html"));
+  return petWindow;
+}
+
 app.whenReady().then(() => {
   createWindow();
+  if (PET_MODE_ENABLED) {
+    createPetWindow();
+  }
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+      if (PET_MODE_ENABLED) {
+        createPetWindow();
+      }
+    }
   });
 });
 

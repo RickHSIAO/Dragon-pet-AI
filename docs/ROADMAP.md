@@ -320,7 +320,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 **Goal:** Move the product from a full management interface toward a small desktop pet plus compact chat bubble, while keeping Full App Mode as the control center.
 
-**Status:** IN PROGRESS - TASK-114 design complete; TASK-115 static renderer skeleton complete; BrowserWindow runtime remains deferred to TASK-116.
+**Status:** IN PROGRESS - TASK-114 design complete; TASK-115 static renderer skeleton complete; TASK-116 env-gated BrowserWindow prototype complete; drag behavior remains deferred to TASK-117.
 
 > Design reference: `docs/PET_MODE_UI_DESIGN.md`
 
@@ -328,7 +328,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 |---|---|---|
 | TASK-114 | Pet Mode UI Design | DONE |
 | TASK-115 | Create Pet Window Design Skeleton | DONE |
-| TASK-116 | Pet Mode BrowserWindow Prototype | TODO |
+| TASK-116 | Pet Mode BrowserWindow Prototype | DONE |
 | TASK-117 | Pet Mode Drag Behavior | TODO |
 | TASK-118 | Pet Bubble Chat Design | TODO |
 | TASK-119 | Mode Switch Full App <-> Pet Mode | TODO |

@@ -6601,7 +6601,8 @@ Verification:
 
 ## TASK-116 - Pet Mode BrowserWindow Prototype
 
-**Status:** TODO
+**Status:** DONE
+**Date:** 2026-05-24
 
 Goal:
 
@@ -6614,6 +6615,46 @@ Scope:
 - Keep Full App Mode available.
 - Keep `nodeIntegration: false` and `contextIsolation: true`.
 - Do not add click-through yet.
+
+Changes:
+
+- Added `PET_MODE_ENABLED` env flag in `apps/desktop/src/main.js`.
+- Added `petWindow` variable.
+- Added `createPetWindow()`.
+- Pet Window loads `apps/desktop/src/pet/pet.html`.
+- Pet Window size is `220 x 280`.
+- Pet Window uses `frame: false`, `transparent: true`, `alwaysOnTop: true`, `resizable: false`, and `show: false`.
+- Pet Window shows after `ready-to-show`.
+- Added `apps/desktop/scripts/pet-window-smoke.js`.
+- Updated `apps/desktop/scripts/pet-renderer-smoke.js` so it remains focused on static Pet renderer skeleton checks.
+
+Runtime behavior:
+
+- Pet Window is disabled by default.
+- To open the prototype, start Electron with `PET_MODE_ENABLED=true`.
+- Full App still opens normally.
+- No drag behavior, context menu behavior, bubble chat behavior, or mode switch behavior is implemented yet.
+
+Safety boundaries:
+
+- `nodeIntegration: false`.
+- `contextIsolation: true`.
+- `sandbox: true` for Pet Window.
+- No preload API was added.
+- No backend call was added.
+- No `/chat` call was added.
+- No `/chat` schema change.
+- No provider settings or Ollama routing change.
+- No external API, file, Email, or Calendar access.
+
+Verification:
+
+- `node --check apps/desktop/src/main.js`: PASS.
+- `node --check apps/desktop/src/pet/pet-renderer.js`: PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js`: PASS.
+- `node --check apps/desktop/scripts/pet-window-smoke.js`: PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: PASS, 5 checks.
+- `node apps/desktop/scripts/pet-window-smoke.js`: PASS, 6 checks.
 
 ---
 

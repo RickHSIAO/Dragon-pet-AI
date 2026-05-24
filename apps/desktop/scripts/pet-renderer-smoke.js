@@ -7,7 +7,6 @@ const petRoot = path.join(desktopRoot, "src", "pet");
 const petHtmlPath = path.join(petRoot, "pet.html");
 const petCssPath = path.join(petRoot, "pet.css");
 const petRendererPath = path.join(petRoot, "pet-renderer.js");
-const mainPath = path.join(desktopRoot, "src", "main.js");
 
 class FakeElement {
   constructor(id) {
@@ -118,14 +117,6 @@ function testPetRendererInitializesStaticDom() {
   assert.match(fakeDocument.getElementById("pet-bubble-placeholder").textContent, /TASK-115/);
 }
 
-function testMainProcessDoesNotLoadPetRuntime() {
-  const main = readText(mainPath);
-  assertNotIncludes(main, "src/pet", "main.js");
-  assertNotIncludes(main, "pet.html", "main.js");
-  assertNotIncludes(main, "createPetWindow", "main.js");
-  assertNotIncludes(main, "transparent: true", "main.js");
-}
-
 function run() {
   const tests = [
     testPetFilesExist,
@@ -133,7 +124,6 @@ function run() {
     testPetCssUsesStaticPetDimensions,
     testPetRendererHasNoBackendOrOllamaCalls,
     testPetRendererInitializesStaticDom,
-    testMainProcessDoesNotLoadPetRuntime,
   ];
 
   for (const test of tests) {
