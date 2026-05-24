@@ -6,7 +6,9 @@ const PET_MODE_DEFAULTS = Object.freeze({
 });
 
 const PET_BACKEND_DEFAULT_URL = "http://localhost:8000";
+const PET_CHAT_TIMEOUT_MS = 100000;
 const PET_REPLY_LONG_THRESHOLD = 160;
+let petChatPending = false;
 
 const CHRISTINA_EXPRESSION_ASSETS = Object.freeze({
   neutral: "../renderer/assets/pet/christina/expressions/christina_neutral.png",
@@ -64,7 +66,7 @@ const BUBBLE_STATES = Object.freeze({
     source: "local",
     statusText: "thinking",
     message: "\u543e\u6b63\u5728\u60f3\uff0c\u5225\u50ac\u3002",
-    response: "Request placeholder only. Wiring happens in TASK-134.",
+    response: "Local model replies can take longer while waking up.",
     inputDisabled: true,
     sendDisabled: true,
     inputPlaceholder: "Thinking...",
@@ -84,7 +86,7 @@ const BUBBLE_STATES = Object.freeze({
     source: "backend_offline",
     statusText: "backend offline",
     message: "\u5f8c\u7aef\u4f3c\u4e4e\u4e0d\u5728\uff0c\u6c5d\u5148\u53bb\u628a\u5b83\u53eb\u9192\u3002",
-    response: "Use Full App later for troubleshooting.",
+    response: "\u53ef\u4ee5\u5148\u6253\u958b Full App \u6aa2\u67e5\u72c0\u614b\u3002\u6c5d\u53ef\u4ee5\u518d\u8a66\u4e00\u6b21\u3002",
     inputDisabled: false,
     sendDisabled: false,
     inputPlaceholder: "Try again later...",
@@ -94,7 +96,7 @@ const BUBBLE_STATES = Object.freeze({
     source: "timeout",
     statusText: "local timeout",
     message: "\u672c\u5730\u6a21\u578b\u53ef\u80fd\u9084\u5728\u9192\u4f86\u3002",
-    response: "The bubble stays responsive while the model wakes up.",
+    response: "\u53ef\u4ee5\u5148\u6253\u958b Full App \u6aa2\u67e5\u72c0\u614b\u3002\u6c5d\u53ef\u4ee5\u518d\u8a66\u4e00\u6b21\u3002",
     inputDisabled: false,
     sendDisabled: false,
     inputPlaceholder: "Try again after it wakes...",
@@ -104,7 +106,7 @@ const BUBBLE_STATES = Object.freeze({
     source: "llm_local_error",
     statusText: "local model error",
     message: "\u543e\u7684\u9b54\u529b\u66ab\u6642\u5361\u4f4f\u4e86\u3002",
-    response: "Open Full App later for provider details.",
+    response: "\u53ef\u4ee5\u5148\u6253\u958b Full App \u6aa2\u67e5\u72c0\u614b\u3002\u6c5d\u53ef\u4ee5\u518d\u8a66\u4e00\u6b21\u3002",
     inputDisabled: false,
     sendDisabled: false,
     inputPlaceholder: "Try again later...",
@@ -135,6 +137,20 @@ const BUBBLE_STATES = Object.freeze({
 function setText(element, value) {
   if (element) {
     element.textContent = value;
+  }
+}
+
+class PetChatTimeoutError extends Error {
+  constructor() {
+    super("Pet Bubble chat request timed out.");
+    this.name = "PetChatTimeoutError";
+  }
+}
+
+class PetChatResponseError extends Error {
+  constructor() {
+    super("Pet Bubble chat response was not usable.");
+    this.name = "PetChatResponseError";
   }
 }
 
@@ -189,6 +205,51 @@ function isFetchNetworkError(error) {
   );
 }
 
+function isPetChatTimeoutError(error) {
+  return Boolean(error && error.name === "PetChatTimeoutError");
+}
+
+function createTimeoutSignal(timeoutMs, AbortControllerImpl = globalThis.AbortController) {
+  if (typeof AbortControllerImpl !== "function") {
+    return {
+      signal: undefined,
+      cancel() {},
+    };
+  }
+
+  const controller = new AbortControllerImpl();
+  return {
+    signal: controller.signal,
+    cancel() {
+      controller.abort();
+    },
+  };
+}
+
+function fetchWithTimeout(fetchImpl, url, fetchOptions, timeoutMs, timerApi = globalThis) {
+  const timeoutValue = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : PET_CHAT_TIMEOUT_MS;
+  const timeoutController = createTimeoutSignal(timeoutValue);
+  let timer = null;
+
+  const requestOptions = {
+    ...fetchOptions,
+    signal: fetchOptions.signal || timeoutController.signal,
+  };
+
+  const timeoutPromise = new Promise((_, reject) => {
+    timer = timerApi.setTimeout(() => {
+      timeoutController.cancel();
+      reject(new PetChatTimeoutError());
+    }, timeoutValue);
+  });
+
+  return Promise.race([fetchImpl(url, requestOptions), timeoutPromise]).finally(() => {
+    if (timer) {
+      timerApi.clearTimeout(timer);
+    }
+  });
+}
+
 function buildChatPayload(message) {
   return {
     message,
@@ -197,8 +258,12 @@ function buildChatPayload(message) {
 }
 
 function parseChatResponse(data) {
+  if (!data || typeof data.reply !== "string") {
+    throw new PetChatResponseError();
+  }
+
   return {
-    reply: data && typeof data.reply === "string" ? data.reply : "",
+    reply: data.reply,
     mood: data && typeof data.mood === "string" ? data.mood : PET_MODE_DEFAULTS.expression,
     source: data && typeof data.source === "string" ? data.source : "unknown",
   };
@@ -350,11 +415,17 @@ async function sendPetChatMessage(message, options = {}) {
   }
 
   const backendUrl = options.backendUrl || getPetBackendUrl(options.windowRef);
-  const response = await fetchImpl(`${backendUrl}/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(buildChatPayload(message)),
-  });
+  const response = await fetchWithTimeout(
+    fetchImpl,
+    `${backendUrl}/chat`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildChatPayload(message)),
+    },
+    options.timeoutMs,
+    options.timerApi || globalThis
+  );
 
   const data = await response.json().catch(() => null);
 
@@ -374,11 +445,16 @@ async function handleChatSubmit(event, documentRef = document, options = {}) {
   const input = documentRef.getElementById("pet-chat-input-hook");
   const value = input && typeof input.value === "string" ? input.value.trim() : "";
 
+  if (petChatPending) {
+    return null;
+  }
+
   if (!value) {
     setBubbleState(documentRef, "empty_input");
     return null;
   }
 
+  petChatPending = true;
   setBubbleState(documentRef, "pending");
   setPetExpression(documentRef, PET_MODE_DEFAULTS.expression);
 
@@ -403,22 +479,23 @@ async function handleChatSubmit(event, documentRef = document, options = {}) {
 
     setPetExpression(documentRef, data.source === "llm_local_error" ? PET_MODE_DEFAULTS.expression : data.mood);
 
-    if (input) {
+    if (input && data.source !== "llm_local_error") {
       input.value = "";
     }
 
     return data;
   } catch (error) {
-    if (isFetchNetworkError(error)) {
+    if (isPetChatTimeoutError(error)) {
+      setBubbleState(documentRef, "timeout");
+    } else if (isFetchNetworkError(error)) {
       setBubbleState(documentRef, "backend_offline");
     } else {
-      setBubbleState(documentRef, "llm_local_error", {
-        statusText: "chat error",
-        response: error && error.message ? error.message : "Chat request failed.",
-      });
+      setBubbleState(documentRef, "llm_local_error");
     }
     setPetExpression(documentRef, PET_MODE_DEFAULTS.expression);
     return null;
+  } finally {
+    petChatPending = false;
   }
 }
 

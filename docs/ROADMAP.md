@@ -320,7 +320,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 **Goal:** Move the product from a full management interface toward a small desktop pet plus compact chat bubble, while keeping Full App Mode as the control center.
 
-**Status:** RELEASE CHECKPOINT COMPLETE - TASK-114 design complete; TASK-115 static renderer skeleton complete; TASK-116 env-gated BrowserWindow prototype complete; TASK-117 CSS drag behavior complete; TASK-118 local-only bubble UI state complete; TASK-119 narrow Pet-to-Full mode switch complete; TASK-120 smoke checkpoint passed; TASK-121 manual Windows visual smoke passed with menu placeholder note; TASK-122 Pet Window position persistence complete; TASK-123 Pet menu/right-click menu complete; TASK-124 manual menu smoke passed with right-click drag-region note; TASK-125 right-click menu hotspot fix complete; TASK-126 menu UX regression fixed; TASK-127 explicit drag handle complete; TASK-128 Full App -> Show Pet bridge complete; TASK-129 drag regression fix complete; TASK-130 manual Windows drag/menu smoke passed; TASK-131 Pet Mode release checkpoint complete; TASK-132 Bubble Chat wiring design complete; TASK-133 static bubble state refinement complete; TASK-134 Pet Bubble `/chat` client wiring complete.
+**Status:** RELEASE CHECKPOINT COMPLETE - TASK-114 design complete; TASK-115 static renderer skeleton complete; TASK-116 env-gated BrowserWindow prototype complete; TASK-117 CSS drag behavior complete; TASK-118 local-only bubble UI state complete; TASK-119 narrow Pet-to-Full mode switch complete; TASK-120 smoke checkpoint passed; TASK-121 manual Windows visual smoke passed with menu placeholder note; TASK-122 Pet Window position persistence complete; TASK-123 Pet menu/right-click menu complete; TASK-124 manual menu smoke passed with right-click drag-region note; TASK-125 right-click menu hotspot fix complete; TASK-126 menu UX regression fixed; TASK-127 explicit drag handle complete; TASK-128 Full App -> Show Pet bridge complete; TASK-129 drag regression fix complete; TASK-130 manual Windows drag/menu smoke passed; TASK-131 Pet Mode release checkpoint complete; TASK-132 Bubble Chat wiring design complete; TASK-133 static bubble state refinement complete; TASK-134 Pet Bubble `/chat` client wiring complete; TASK-135 Pet Bubble loading/error UX complete.
 
 > Design reference: `docs/PET_MODE_UI_DESIGN.md`
 > Release checkpoint: `docs/PET_MODE_RELEASE_CHECKPOINT.md`
@@ -349,6 +349,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 | TASK-132 | Pet Bubble Chat `/chat` Wiring Design | DONE |
 | TASK-133 | Pet Bubble Chat Static State Refinement | DONE |
 | TASK-134 | Pet Bubble `/chat` Client Wiring | DONE |
+| TASK-135 | Pet Bubble Loading/Error UX | DONE |
 
 **Recommended direction:**
 
@@ -388,8 +389,9 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 - TASK-132 designs Pet Bubble Chat `/chat` wiring in `docs/PET_BUBBLE_CHAT_WIRING_DESIGN.md`. It preserves `/chat` schema as `reply / mood / source`, plans loading/offline/source/mood/long-reply UX, and keeps implementation deferred.
 - TASK-133 refines Pet Bubble static DOM/CSS/local renderer state for `collapsed`, `expanded`, `composing`, `empty_input`, `pending`, `success`, `backend_offline`, `timeout`, `llm_local_error`, `fallback_mock`, and `long_reply`. It keeps all behavior local: no backend call, no `/chat` call, no schema change, no IPC expansion.
 - TASK-134 wires Pet Bubble Chat to the existing local backend `/chat` using the Full App request shape `{ message, use_memory }` and response schema `reply / mood / source`. Pet Mode fixes `use_memory=false`, maps `source` into compact bubble states, maps `mood` to existing Christina expression PNGs, handles network failure as `backend_offline`, and keeps direct Ollama access blocked.
+- TASK-135 adds Pet Bubble timeout/cold-start handling with `PET_CHAT_TIMEOUT_MS = 100000`, restores input/send after completion, preserves input for retry on offline/timeout/local-error/malformed responses, prevents duplicate pending submits, and keeps raw diagnostics out of the bubble.
 
 **Next recommended task:**
 
-- TASK-135 - Pet Bubble Loading/Error UX. Refine timeout/cold-start/offline/error copy and retry ergonomics on top of the working `/chat` client while preserving `/chat` schema.
+- TASK-136 - Pet Bubble Mood/Expression Integration. Refine mood/expression behavior from real `/chat` responses and error/offline states while preserving `/chat` schema.
                                         

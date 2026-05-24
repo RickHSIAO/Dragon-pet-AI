@@ -346,3 +346,45 @@ Validation:
 Next recommendation:
 
 - TASK-135 - Pet Bubble Loading/Error UX.
+
+## 14. TASK-135 Loading/Error UX Checkpoint
+
+Status: DONE on 2026-05-24.
+
+TASK-135 refined the Pet Bubble `/chat` loading, timeout, error, and retry behavior.
+
+Completed:
+
+- Added Pet Bubble fetch timeout helper.
+- Timeout duration is `PET_CHAT_TIMEOUT_MS = 100000`.
+- Timeout maps to `timeout` state.
+- Timeout copy tells the user the local model may still be waking up and suggests opening Full App to check status.
+- Pending state disables input and send.
+- A pending guard prevents duplicate submit while a request is in flight.
+- Request completion restores input and send.
+- Empty input renders `empty_input` and does not fetch.
+- Network fetch failure maps to `backend_offline`.
+- `source=llm_local_error` maps to `llm_local_error`.
+- Malformed response or missing `reply` maps to `llm_local_error` with safe generic copy.
+- `source=mock` continues to map to `fallback_mock`.
+- Offline, timeout, local-error, and malformed-response paths preserve the user's input for retry.
+- Successful response clears the input.
+- Existing Send button is the retry path; no Retry button was added.
+
+Safety confirmation:
+
+- Backend code was not changed.
+- `/chat` schema remains `reply`, `mood`, `source`.
+- No backend route or API was added.
+- No direct Ollama access was added.
+- No IPC or preload API was added.
+- No raw stack trace or raw diagnostics are rendered in the Pet Bubble.
+- No provider settings, Ollama routing, external API, file access, Email access, Calendar access, image, tray, packaging, autostart, screenshot, microphone, or screen monitoring behavior was added.
+
+Validation:
+
+- Pet renderer smoke covers pending disabled state, restored input/send after completion, empty input no-fetch, timeout state, timeout retry input preservation, backend offline, malformed response safe error, `llm_local_error`, `mock`, duplicate pending submit guard, and direct-Ollama safety.
+
+Next recommendation:
+
+- TASK-136 - Pet Bubble Mood/Expression Integration.

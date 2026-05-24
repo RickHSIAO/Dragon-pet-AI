@@ -200,9 +200,14 @@ function testPetCssUsesStaticPetDimensions() {
 function testPetRendererUsesBackendChatWithoutDirectOllama() {
   const renderer = readText(petRendererPath);
   assertIncludes(renderer, "sendPetChatMessage", "pet-renderer.js");
+  assertIncludes(renderer, "PET_CHAT_TIMEOUT_MS = 100000", "pet-renderer.js");
+  assertIncludes(renderer, "fetchWithTimeout", "pet-renderer.js");
+  assertIncludes(renderer, "PetChatTimeoutError", "pet-renderer.js");
   assertIncludes(renderer, "buildChatPayload", "pet-renderer.js");
   assertIncludes(renderer, 'use_memory: false', "pet-renderer.js");
-  assertIncludes(renderer, 'reply: data && typeof data.reply === "string"', "pet-renderer.js");
+  assertIncludes(renderer, 'if (!data || typeof data.reply !== "string")', "pet-renderer.js");
+  assertIncludes(renderer, "throw new PetChatResponseError()", "pet-renderer.js");
+  assertIncludes(renderer, "reply: data.reply", "pet-renderer.js");
   assertIncludes(renderer, 'mood: data && typeof data.mood === "string"', "pet-renderer.js");
   assertIncludes(renderer, 'source: data && typeof data.source === "string"', "pet-renderer.js");
   assertIncludes(renderer, '`${backendUrl}/chat`', "pet-renderer.js");
@@ -211,6 +216,7 @@ function testPetRendererUsesBackendChatWithoutDirectOllama() {
   assertNotIncludes(renderer, "localhost:11434", "pet-renderer.js");
   assertNotIncludes(renderer, "127.0.0.1:11434", "pet-renderer.js");
   assertNotIncludes(renderer, "11434", "pet-renderer.js");
+  assertNotIncludes(renderer, "error.stack", "pet-renderer.js");
 }
 
 function testPetRendererDefinesBubbleStates() {
@@ -515,9 +521,65 @@ async function testPetChatSubmitUsesBackendChatAndRendersSuccess() {
   assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "success");
   assert.equal(fakeDocument.getElementById("pet-bubble-status").textContent, "local");
   assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, "Pet reply");
+  assert.equal(fakeDocument.getElementById("pet-chat-input-hook").disabled, false);
+  assert.equal(fakeDocument.getElementById("pet-chat-send-hook").disabled, false);
   assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "happy");
   assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_happy\.png$/);
   assert.equal(input.value, "");
+}
+
+async function testPetChatDoubleSubmitDuringPendingDoesNotDuplicateFetch() {
+  const { handleChatSubmit } = require(petRendererPath);
+  const fakeDocument = createPetChatDocument();
+  const input = fakeDocument.getElementById("pet-chat-input-hook");
+  let fetchCalls = 0;
+  let resolveFetch;
+
+  input.value = "do not duplicate";
+  const pendingFetch = new Promise((resolve) => {
+    resolveFetch = resolve;
+  });
+
+  const firstSubmit = handleChatSubmit(
+    { preventDefault() {} },
+    fakeDocument,
+    {
+      backendUrl: "http://localhost:8000",
+      fetchImpl() {
+        fetchCalls += 1;
+        return pendingFetch;
+      },
+    }
+  );
+
+  const secondSubmit = await handleChatSubmit(
+    { preventDefault() {} },
+    fakeDocument,
+    {
+      backendUrl: "http://localhost:8000",
+      fetchImpl() {
+        fetchCalls += 1;
+        return pendingFetch;
+      },
+    }
+  );
+
+  assert.equal(secondSubmit, null);
+  assert.equal(fetchCalls, 1);
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "pending");
+
+  resolveFetch({
+    ok: true,
+    json: async () => ({
+      reply: "Done",
+      mood: "neutral",
+      source: "llm_local",
+    }),
+  });
+
+  await firstSubmit;
+  assert.equal(fetchCalls, 1);
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "success");
 }
 
 async function testPetChatSourceMockUsesFallbackState() {
@@ -572,6 +634,9 @@ async function testPetChatSourceLocalErrorUsesErrorState() {
   assert.equal(fakeDocument.getElementById("pet-bubble-status").textContent, "local model error");
   assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, "Safe fallback reply");
   assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "neutral");
+  assert.equal(fakeDocument.getElementById("pet-chat-input-hook").value, "error please");
+  assert.equal(fakeDocument.getElementById("pet-chat-input-hook").disabled, false);
+  assert.equal(fakeDocument.getElementById("pet-chat-send-hook").disabled, false);
 }
 
 async function testPetChatNetworkFailureUsesBackendOfflineState() {
@@ -593,7 +658,66 @@ async function testPetChatNetworkFailureUsesBackendOfflineState() {
   assert.equal(result, null);
   assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "backend_offline");
   assert.equal(fakeDocument.getElementById("pet-bubble-status").textContent, "backend offline");
+  assert.match(fakeDocument.getElementById("pet-bubble-response").textContent, /\u518d\u8a66\u4e00\u6b21/);
   assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "neutral");
+  assert.equal(fakeDocument.getElementById("pet-chat-input-hook").value, "network please");
+  assert.equal(fakeDocument.getElementById("pet-chat-input-hook").disabled, false);
+  assert.equal(fakeDocument.getElementById("pet-chat-send-hook").disabled, false);
+}
+
+async function testPetChatTimeoutUsesTimeoutStateAndKeepsInput() {
+  const { handleChatSubmit } = require(petRendererPath);
+  const fakeDocument = createPetChatDocument();
+  fakeDocument.getElementById("pet-chat-input-hook").value = "timeout please";
+
+  const result = await handleChatSubmit(
+    { preventDefault() {} },
+    fakeDocument,
+    {
+      backendUrl: "http://localhost:8000",
+      timeoutMs: 1,
+      fetchImpl: async () => new Promise(() => {}),
+    }
+  );
+
+  assert.equal(result, null);
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "timeout");
+  assert.equal(fakeDocument.getElementById("pet-bubble-status").textContent, "local timeout");
+  assert.match(fakeDocument.getElementById("pet-bubble-message").textContent, /\u9192\u4f86/);
+  assert.match(fakeDocument.getElementById("pet-bubble-response").textContent, /Full App/);
+  assert.equal(fakeDocument.getElementById("pet-chat-input-hook").value, "timeout please");
+  assert.equal(fakeDocument.getElementById("pet-chat-input-hook").disabled, false);
+  assert.equal(fakeDocument.getElementById("pet-chat-send-hook").disabled, false);
+}
+
+async function testPetChatMalformedResponseUsesSafeErrorState() {
+  const { handleChatSubmit } = require(petRendererPath);
+  const fakeDocument = createPetChatDocument();
+  fakeDocument.getElementById("pet-chat-input-hook").value = "malformed please";
+
+  const result = await handleChatSubmit(
+    { preventDefault() {} },
+    fakeDocument,
+    {
+      backendUrl: "http://localhost:8000",
+      fetchImpl: async () => ({
+        ok: true,
+        json: async () => ({
+          mood: "happy",
+          source: "llm_local",
+        }),
+      }),
+    }
+  );
+
+  assert.equal(result, null);
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "llm_local_error");
+  assert.equal(fakeDocument.getElementById("pet-bubble-status").textContent, "local model error");
+  assert.match(fakeDocument.getElementById("pet-bubble-response").textContent, /Full App/);
+  assert.doesNotMatch(fakeDocument.getElementById("pet-bubble-response").textContent, /PetChatResponseError/);
+  assert.equal(fakeDocument.getElementById("pet-chat-input-hook").value, "malformed please");
+  assert.equal(fakeDocument.getElementById("pet-chat-input-hook").disabled, false);
+  assert.equal(fakeDocument.getElementById("pet-chat-send-hook").disabled, false);
 }
 
 async function testPetChatLongReplyUsesLongReplyState() {
@@ -803,9 +927,12 @@ async function run() {
     testPetRendererClickAndSubmitHandlersAreLocalOnly,
     testPetChatEmptyInputDoesNotFetch,
     testPetChatSubmitUsesBackendChatAndRendersSuccess,
+    testPetChatDoubleSubmitDuringPendingDoesNotDuplicateFetch,
     testPetChatSourceMockUsesFallbackState,
     testPetChatSourceLocalErrorUsesErrorState,
     testPetChatNetworkFailureUsesBackendOfflineState,
+    testPetChatTimeoutUsesTimeoutStateAndKeepsInput,
+    testPetChatMalformedResponseUsesSafeErrorState,
     testPetChatLongReplyUsesLongReplyState,
     testPetRendererMenuHooksAreLocalAndNarrow,
     testPetRendererOpenFullAppUsesNarrowApi,

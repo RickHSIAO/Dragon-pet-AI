@@ -7172,6 +7172,76 @@ Verification:
 
 ---
 
+## TASK-135 - Pet Bubble Loading/Error UX
+
+**Status:** DONE
+**Date:** 2026-05-24
+
+Goal:
+
+Improve Pet Bubble loading, timeout, error, and retry UX on top of the TASK-134 `/chat` client wiring.
+
+Changed files:
+
+- `apps/desktop/src/pet/pet-renderer.js`
+- `apps/desktop/scripts/pet-renderer-smoke.js`
+- `docs/TASKS.md`
+- `docs/ROADMAP.md`
+- `docs/PET_BUBBLE_CHAT_WIRING_DESIGN.md`
+
+Timeout / cold-start behavior:
+
+- Added `PET_CHAT_TIMEOUT_MS = 100000`.
+- Pet Bubble `/chat` fetch now uses a local timeout helper.
+- Timeout maps to `timeout` state.
+- Timeout copy explicitly explains that the local model may still be waking up.
+- Timeout state suggests opening Full App to check status.
+- Backend timeout behavior was not changed.
+
+Retry UX:
+
+- Empty input does not fetch and renders `empty_input`.
+- Network failure, timeout, malformed response, and `source=llm_local_error` preserve the user's input for retry.
+- Send button and input are restored after request completion.
+- No separate Retry button was added; the existing Send button remains the retry path.
+
+Pending UX:
+
+- Pending state disables input and send.
+- A `petChatPending` guard prevents duplicate `/chat` requests from repeated submit while pending.
+- Request completion clears the pending guard in `finally`.
+
+Error/source mapping:
+
+- fetch/network failure -> `backend_offline`.
+- timeout -> `timeout`.
+- `source=llm_local_error` -> `llm_local_error`.
+- malformed response or missing `reply` -> `llm_local_error` with safe generic copy.
+- `source=mock` -> `fallback_mock`.
+- Raw stack traces and raw diagnostics are not rendered into the Pet Bubble.
+
+Safety boundaries:
+
+- Backend code was not modified.
+- `/chat` schema was not modified.
+- No backend route or API was added.
+- No direct Ollama access was added.
+- No IPC or preload API was added.
+- No file, Email, Calendar, external API, image, tray, package, autostart, provider settings, Ollama routing, screenshot, microphone, or screen-monitoring behavior was added.
+
+Validation:
+
+- `node --check apps/desktop/src/pet/pet-renderer.js` - PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js` - PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js` - PASS, 24 checks.
+
+Next recommendation:
+
+- TASK-136 - Pet Bubble Mood/Expression Integration.
+- TASK-136 should refine expression/state behavior from real `mood` and error/offline states without adding new assets unless explicitly planned.
+
+---
+
 ## TASK-134 - Pet Bubble `/chat` Client Wiring
 
 **Status:** DONE
