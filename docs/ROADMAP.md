@@ -320,7 +320,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 **Goal:** Move the product from a full management interface toward a small desktop pet plus compact chat bubble, while keeping Full App Mode as the control center.
 
-**Status:** RELEASE CHECKPOINT COMPLETE - TASK-114 design complete; TASK-115 static renderer skeleton complete; TASK-116 env-gated BrowserWindow prototype complete; TASK-117 CSS drag behavior complete; TASK-118 local-only bubble UI state complete; TASK-119 narrow Pet-to-Full mode switch complete; TASK-120 smoke checkpoint passed; TASK-121 manual Windows visual smoke passed with menu placeholder note; TASK-122 Pet Window position persistence complete; TASK-123 Pet menu/right-click menu complete; TASK-124 manual menu smoke passed with right-click drag-region note; TASK-125 right-click menu hotspot fix complete; TASK-126 menu UX regression fixed; TASK-127 explicit drag handle complete; TASK-128 Full App -> Show Pet bridge complete; TASK-129 drag regression fix complete; TASK-130 manual Windows drag/menu smoke passed; TASK-131 Pet Mode release checkpoint complete; TASK-132 Bubble Chat wiring design complete.
+**Status:** RELEASE CHECKPOINT COMPLETE - TASK-114 design complete; TASK-115 static renderer skeleton complete; TASK-116 env-gated BrowserWindow prototype complete; TASK-117 CSS drag behavior complete; TASK-118 local-only bubble UI state complete; TASK-119 narrow Pet-to-Full mode switch complete; TASK-120 smoke checkpoint passed; TASK-121 manual Windows visual smoke passed with menu placeholder note; TASK-122 Pet Window position persistence complete; TASK-123 Pet menu/right-click menu complete; TASK-124 manual menu smoke passed with right-click drag-region note; TASK-125 right-click menu hotspot fix complete; TASK-126 menu UX regression fixed; TASK-127 explicit drag handle complete; TASK-128 Full App -> Show Pet bridge complete; TASK-129 drag regression fix complete; TASK-130 manual Windows drag/menu smoke passed; TASK-131 Pet Mode release checkpoint complete; TASK-132 Bubble Chat wiring design complete; TASK-133 static bubble state refinement complete.
 
 > Design reference: `docs/PET_MODE_UI_DESIGN.md`
 > Release checkpoint: `docs/PET_MODE_RELEASE_CHECKPOINT.md`
@@ -347,6 +347,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 | TASK-130 | Manual Windows Pet Drag/Menu Smoke | DONE - PASS |
 | TASK-131 | Pet Mode Release Checkpoint | DONE |
 | TASK-132 | Pet Bubble Chat `/chat` Wiring Design | DONE |
+| TASK-133 | Pet Bubble Chat Static State Refinement | DONE |
 
 **Recommended direction:**
 
@@ -384,8 +385,9 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 - TASK-130 manual Windows drag/menu smoke passed: drag handle, avatar no-system-menu behavior, Menu toggle, Escape close, bubble expand/collapse, Pet -> Full App, Hide Pet Window, Full App Show Pet, and Reset Position all passed. No remaining note for this checkpoint.
 - TASK-131 closes the first-stage Pet Mode MVP checkpoint in `docs/PET_MODE_RELEASE_CHECKPOINT.md`. Pet Mode is maintainable behind `PET_MODE_ENABLED=true`; Bubble Chat `/chat` wiring remains deferred to TASK-132 design.
 - TASK-132 designs Pet Bubble Chat `/chat` wiring in `docs/PET_BUBBLE_CHAT_WIRING_DESIGN.md`. It preserves `/chat` schema as `reply / mood / source`, plans loading/offline/source/mood/long-reply UX, and keeps implementation deferred.
+- TASK-133 refines Pet Bubble static DOM/CSS/local renderer state for `collapsed`, `expanded`, `composing`, `empty_input`, `pending`, `success`, `backend_offline`, `timeout`, `llm_local_error`, `fallback_mock`, and `long_reply`. It keeps all behavior local: no backend call, no `/chat` call, no schema change, no IPC expansion.
 
 **Next recommended task:**
 
-- TASK-133 - Pet Bubble Chat Static State Refinement. Stabilize static state hooks and layout constraints before adding `/chat` client wiring.
+- TASK-134 - Pet Bubble `/chat` Client Wiring. Add the smallest safe local backend client path while preserving `/chat` schema as `reply / mood / source` and keeping direct Ollama access blocked.
                                         

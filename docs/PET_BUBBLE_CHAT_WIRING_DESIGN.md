@@ -241,3 +241,39 @@ TASK-132 does not:
 Proceed with TASK-133 before wiring network behavior.
 
 The reason is pragmatic: the Pet Window is small, and the state/layout constraints should be stable before `/chat` request handling is added.
+
+## 12. TASK-133 Static State Checkpoint
+
+Status: DONE on 2026-05-24.
+
+TASK-133 implemented the static Pet Bubble state foundation without wiring backend chat.
+
+Completed:
+
+- Added explicit DOM hooks for bubble status, message, response, placeholder, input, and send button.
+- Added local renderer state rendering through `BUBBLE_STATES` and `setBubbleState(...)`.
+- Added local states for `collapsed`, `expanded`, `composing`, `empty_input`, `pending`, `success`, `backend_offline`, `timeout`, `llm_local_error`, `fallback_mock`, and `long_reply`.
+- Added local placeholder handling for empty input and non-empty send preview.
+- Added fixed `220 x 280` layout constraints and an internal scroll response area.
+- Preserved no-drag interaction zones and explicit drag handle behavior.
+- Updated Pet renderer smoke checks for state hooks, placeholders, no-drag boundaries, no `fetch(`, no `/chat` call, and no direct Ollama `11434` reference.
+
+Still deferred:
+
+- Real `/chat` request wiring.
+- Backend offline detection from transport errors.
+- Real `source` display from backend response.
+- Real `mood` to expression updates from backend response.
+- Long reply behavior with real backend replies.
+
+Safety confirmation:
+
+- No backend code changed.
+- `/chat` schema remains `reply`, `mood`, `source`.
+- Pet renderer still does not call backend or `/chat`.
+- No IPC or preload API was added.
+- No provider settings, Ollama routing, external API, file access, Email access, Calendar access, image, screenshot, microphone, or screen monitoring behavior was added.
+
+Next recommendation:
+
+- TASK-134 - Pet Bubble `/chat` Client Wiring.

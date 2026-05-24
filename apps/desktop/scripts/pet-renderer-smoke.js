@@ -15,6 +15,8 @@ class FakeElement {
     this.textContent = "";
     this.attributes = {};
     this.hidden = false;
+    this.disabled = false;
+    this.value = "";
     this.listeners = {};
   }
 
@@ -100,6 +102,8 @@ function testPetHtmlReferencesStaticAssets() {
   assertIncludes(html, 'data-state="collapsed"', "pet.html");
   assertIncludes(html, 'hidden', "pet.html");
   assertIncludes(html, 'id="pet-bubble-message"', "pet.html");
+  assertIncludes(html, 'id="pet-bubble-status"', "pet.html");
+  assertIncludes(html, 'id="pet-bubble-response"', "pet.html");
   assertIncludes(html, 'id="pet-bubble-open-hook"', "pet.html");
   assertIncludes(html, 'id="pet-bubble-close-hook"', "pet.html");
   assertIncludes(html, 'id="pet-bubble-placeholder"', "pet.html");
@@ -107,6 +111,11 @@ function testPetHtmlReferencesStaticAssets() {
   assertIncludes(html, 'id="pet-open-full-app-hook"', "pet.html");
   assertIncludes(html, 'id="pet-menu"', "pet.html");
   assertIncludes(html, 'data-menu-state="closed"', "pet.html");
+  assertIncludes(
+    html,
+    'data-supported-bubble-states="collapsed expanded composing empty_input pending success backend_offline timeout llm_local_error fallback_mock long_reply"',
+    "pet.html"
+  );
   assertIncludes(html, 'id="pet-menu-open-full-app"', "pet.html");
   assertIncludes(html, 'id="pet-menu-reset-position"', "pet.html");
   assertIncludes(html, 'id="pet-menu-hide-window"', "pet.html");
@@ -122,6 +131,9 @@ function testPetHtmlReferencesStaticAssets() {
   assertRegex(html, /id="pet-avatar"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-menu"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-bubble"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
+  assertRegex(html, /id="pet-bubble-status"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
+  assertRegex(html, /id="pet-bubble-response"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
+  assertRegex(html, /id="pet-bubble-placeholder"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-chat-form-hook"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-chat-input-hook"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-chat-send-hook"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
@@ -158,6 +170,8 @@ function testPetCssUsesStaticPetDimensions() {
   assertIncludes(css, '[data-bubble-state="expanded"]', "pet.css");
   assertIncludes(css, '.pet-bubble[data-state="expanded"]', "pet.css");
   assertIncludes(css, ".pet-bubble-message", "pet.css");
+  assertIncludes(css, ".pet-bubble-status", "pet.css");
+  assertIncludes(css, ".pet-bubble-response", "pet.css");
   assertIncludes(css, ".pet-menu", "pet.css");
   assertIncludes(css, '.pet-menu[hidden]', "pet.css");
   assertIncludes(css, ".pet-menu-item", "pet.css");
@@ -171,6 +185,10 @@ function testPetCssUsesStaticPetDimensions() {
   assertRegex(css, /\.pet-drag-handle[\s\S]*z-index:\s*8/, "pet.css");
   assertRegex(css, /\.pet-drag-handle[\s\S]*pointer-events:\s*auto/, "pet.css");
   assertRegex(css, /\.pet-drag-handle::before/, "pet.css");
+  assertRegex(css, /\.pet-shell[\s\S]*height:\s*280px/, "pet.css");
+  assertRegex(css, /\.pet-bubble-response[\s\S]*max-height:\s*30px/, "pet.css");
+  assertRegex(css, /\.pet-bubble-response[\s\S]*overflow-y:\s*auto/, "pet.css");
+  assertRegex(css, /\.pet-bubble\[data-state="long_reply"\] \.pet-bubble-response[\s\S]*max-height:\s*36px/, "pet.css");
   assertRegex(css, /\.pet-stage,\s*\r?\n\.pet-drag-region[\s\S]*-webkit-app-region:\s*no-drag\b/, "pet.css");
   assertRegex(css, /\.pet-avatar[\s\S]*-webkit-app-region:\s*no-drag\b/, "pet.css");
   assertRegex(css, /button,\s*\r?\ninput[\s\S]*-webkit-app-region:\s*no-drag/, "pet.css");
@@ -180,11 +198,61 @@ function testPetCssUsesStaticPetDimensions() {
 function testPetRendererHasNoBackendOrOllamaCalls() {
   const renderer = readText(petRendererPath);
   assertNotIncludes(renderer, "fetch(", "pet-renderer.js");
+  assertNotIncludes(renderer, "/chat", "pet-renderer.js");
   assertNotIncludes(renderer, "fetch('/chat'", "pet-renderer.js");
   assertNotIncludes(renderer, 'fetch("/chat"', "pet-renderer.js");
   assertNotIncludes(renderer, "localhost:11434", "pet-renderer.js");
   assertNotIncludes(renderer, "127.0.0.1:11434", "pet-renderer.js");
   assertNotIncludes(renderer, "11434", "pet-renderer.js");
+}
+
+function testPetRendererDefinesBubbleStates() {
+  const renderer = readText(petRendererPath);
+  assertIncludes(renderer, "const BUBBLE_STATES = Object.freeze", "pet-renderer.js");
+  assertIncludes(renderer, "function setBubbleState", "pet-renderer.js");
+
+  for (const state of [
+    "collapsed",
+    "expanded",
+    "composing",
+    "empty_input",
+    "pending",
+    "success",
+    "backend_offline",
+    "timeout",
+    "llm_local_error",
+    "fallback_mock",
+    "long_reply",
+  ]) {
+    assertIncludes(renderer, `${state}:`, "pet-renderer.js");
+  }
+
+  assertIncludes(renderer, "\\u543e\\u6b63\\u5728\\u60f3\\uff0c\\u5225\\u50ac\\u3002", "pet-renderer.js");
+  assertIncludes(
+    renderer,
+    "\\u5f8c\\u7aef\\u4f3c\\u4e4e\\u4e0d\\u5728\\uff0c\\u6c5d\\u5148\\u53bb\\u628a\\u5b83\\u53eb\\u9192\\u3002",
+    "pet-renderer.js"
+  );
+  assertIncludes(
+    renderer,
+    "\\u672c\\u5730\\u6a21\\u578b\\u53ef\\u80fd\\u9084\\u5728\\u9192\\u4f86\\u3002",
+    "pet-renderer.js"
+  );
+  assertIncludes(
+    renderer,
+    "\\u543e\\u7684\\u9b54\\u529b\\u66ab\\u6642\\u5361\\u4f4f\\u4e86\\u3002",
+    "pet-renderer.js"
+  );
+  assertIncludes(
+    renderer,
+    "\\u9019\\u662f\\u66ab\\u6642\\u56de\\u61c9\\uff0c\\u5225\\u592a\\u5f97\\u610f\\u3002",
+    "pet-renderer.js"
+  );
+  assertIncludes(
+    renderer,
+    "\\u56de\\u8986\\u592a\\u9577\\uff0c\\u4e4b\\u5f8c\\u53ef\\u5230 Full App \\u67e5\\u770b\\u5b8c\\u6574\\u5167\\u5bb9\\u3002",
+    "pet-renderer.js"
+  );
 }
 
 function testPetRendererInitializesBubbleCollapsed() {
@@ -198,8 +266,12 @@ function testPetRendererInitializesBubbleCollapsed() {
     "pet-bubble",
     "pet-bubble-open-hook",
     "pet-bubble-close-hook",
+    "pet-bubble-status",
     "pet-bubble-message",
+    "pet-bubble-response",
     "pet-bubble-placeholder",
+    "pet-chat-input-hook",
+    "pet-chat-send-hook",
     "pet-chat-form-hook",
     "pet-menu",
   ]);
@@ -219,7 +291,36 @@ function testPetRendererInitializesBubbleCollapsed() {
   assert.equal(fakeDocument.getElementById("pet-menu").getAttribute("aria-hidden"), "true");
   assert.equal(fakeDocument.getElementById("pet-menu").hidden, true);
   assert.equal(fakeDocument.getElementById("pet-bubble-message").textContent, PET_MODE_DEFAULTS.bubbleMessage);
-  assert.match(fakeDocument.getElementById("pet-bubble-placeholder").textContent, /TASK-118/);
+  assert.equal(fakeDocument.getElementById("pet-bubble-status").textContent, "local placeholder");
+  assert.match(fakeDocument.getElementById("pet-bubble-placeholder").textContent, /TASK-133/);
+}
+
+function testPetRendererRendersAllLocalBubbleStates() {
+  const { BUBBLE_STATES, setBubbleState } = require(petRendererPath);
+  const fakeDocument = new FakeDocument([
+    "pet-mode-root",
+    "pet-bubble",
+    "pet-bubble-title",
+    "pet-bubble-status",
+    "pet-bubble-message",
+    "pet-bubble-response",
+    "pet-bubble-placeholder",
+    "pet-chat-input-hook",
+    "pet-chat-send-hook",
+  ]);
+
+  for (const [state, config] of Object.entries(BUBBLE_STATES)) {
+    const renderedState = setBubbleState(fakeDocument, state);
+    assert.equal(renderedState, state);
+    assert.equal(fakeDocument.getElementById("pet-mode-root").dataset.bubbleState, state);
+    assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, state);
+    assert.equal(fakeDocument.getElementById("pet-bubble-status").textContent, config.statusText);
+    assert.equal(fakeDocument.getElementById("pet-bubble-message").textContent, config.message);
+    assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, config.response);
+    assert.equal(fakeDocument.getElementById("pet-chat-input-hook").disabled, config.inputDisabled);
+    assert.equal(fakeDocument.getElementById("pet-chat-send-hook").disabled, config.sendDisabled);
+    assert.equal(fakeDocument.getElementById("pet-bubble").hidden, !config.expanded);
+  }
 }
 
 function testPetRendererTogglesMenuState() {
@@ -268,7 +369,7 @@ function testPetRendererTogglesBubbleState() {
 }
 
 function testPetRendererClickAndSubmitHandlersAreLocalOnly() {
-  const { initializePetMode, PET_MODE_DEFAULTS } = require(petRendererPath);
+  const { initializePetMode } = require(petRendererPath);
   const fakeDocument = new FakeDocument([
     "pet-mode-root",
     "pet-drag-region",
@@ -278,8 +379,12 @@ function testPetRendererClickAndSubmitHandlersAreLocalOnly() {
     "pet-bubble",
     "pet-bubble-open-hook",
     "pet-bubble-close-hook",
+    "pet-bubble-status",
     "pet-bubble-message",
+    "pet-bubble-response",
     "pet-bubble-placeholder",
+    "pet-chat-input-hook",
+    "pet-chat-send-hook",
     "pet-chat-form-hook",
     "pet-open-full-app-hook",
     "pet-context-menu-hook",
@@ -300,7 +405,13 @@ function testPetRendererClickAndSubmitHandlersAreLocalOnly() {
   fakeDocument.getElementById("pet-bubble-open-hook").dispatchEvent({ type: "click" });
   assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "expanded");
 
+  const input = fakeDocument.getElementById("pet-chat-input-hook");
+  input.value = "hello";
+  input.dispatchEvent({ type: "input", target: input });
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "composing");
+
   let prevented = false;
+  input.value = "";
   fakeDocument.getElementById("pet-chat-form-hook").dispatchEvent({
     type: "submit",
     preventDefault() {
@@ -308,7 +419,18 @@ function testPetRendererClickAndSubmitHandlersAreLocalOnly() {
     },
   });
   assert.equal(prevented, true);
-  assert.equal(fakeDocument.getElementById("pet-bubble-message").textContent, PET_MODE_DEFAULTS.bubbleMessage);
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "empty_input");
+
+  input.value = "local preview";
+  fakeDocument.getElementById("pet-chat-form-hook").dispatchEvent({
+    type: "submit",
+    preventDefault() {},
+  });
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "success");
+  assert.equal(
+    fakeDocument.getElementById("pet-bubble-response").textContent,
+    "Local send preview only. Backend chat wiring starts in TASK-134."
+  );
 }
 
 function testPetRendererMenuHooksAreLocalAndNarrow() {
@@ -482,7 +604,9 @@ function run() {
     testPetHtmlReferencesStaticAssets,
     testPetCssUsesStaticPetDimensions,
     testPetRendererHasNoBackendOrOllamaCalls,
+    testPetRendererDefinesBubbleStates,
     testPetRendererInitializesBubbleCollapsed,
+    testPetRendererRendersAllLocalBubbleStates,
     testPetRendererTogglesBubbleState,
     testPetRendererTogglesMenuState,
     testPetRendererClickAndSubmitHandlersAreLocalOnly,

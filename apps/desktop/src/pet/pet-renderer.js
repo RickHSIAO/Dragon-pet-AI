@@ -5,27 +5,206 @@ const PET_MODE_DEFAULTS = Object.freeze({
   bubbleMessage: "Bubble chat is not wired yet.",
 });
 
+const BUBBLE_STATES = Object.freeze({
+  collapsed: {
+    expanded: false,
+    source: "local",
+    statusText: "local placeholder",
+    message: PET_MODE_DEFAULTS.bubbleMessage,
+    response: "Open Chat to prepare a local bubble message.",
+    inputDisabled: false,
+    sendDisabled: false,
+    inputPlaceholder: "Type later... bubble chat is not wired yet",
+  },
+  expanded: {
+    expanded: true,
+    source: "local",
+    statusText: "local placeholder",
+    message: PET_MODE_DEFAULTS.bubbleMessage,
+    response: "Bubble response placeholder.",
+    inputDisabled: false,
+    sendDisabled: false,
+    inputPlaceholder: "Type later... bubble chat is not wired yet",
+  },
+  composing: {
+    expanded: true,
+    source: "local",
+    statusText: "composing",
+    message: "Local composing state.",
+    response: "This input is still local.",
+    inputDisabled: false,
+    sendDisabled: false,
+    inputPlaceholder: "Type a short message...",
+  },
+  empty_input: {
+    expanded: true,
+    source: "local",
+    statusText: "empty input",
+    message: "Type something before sending.",
+    response: "The bubble stayed local and did not send anything.",
+    inputDisabled: false,
+    sendDisabled: false,
+    inputPlaceholder: "Type a short message...",
+  },
+  pending: {
+    expanded: true,
+    source: "local",
+    statusText: "thinking",
+    message: "\u543e\u6b63\u5728\u60f3\uff0c\u5225\u50ac\u3002",
+    response: "Request placeholder only. Wiring happens in TASK-134.",
+    inputDisabled: true,
+    sendDisabled: true,
+    inputPlaceholder: "Thinking...",
+  },
+  success: {
+    expanded: true,
+    source: "local",
+    statusText: "success placeholder",
+    message: "Local success preview.",
+    response: "Bubble rendering is ready for a future reply.",
+    inputDisabled: false,
+    sendDisabled: false,
+    inputPlaceholder: "Type another short message...",
+  },
+  backend_offline: {
+    expanded: true,
+    source: "backend_offline",
+    statusText: "backend offline",
+    message: "\u5f8c\u7aef\u4f3c\u4e4e\u4e0d\u5728\uff0c\u6c5d\u5148\u53bb\u628a\u5b83\u53eb\u9192\u3002",
+    response: "Use Full App later for troubleshooting.",
+    inputDisabled: false,
+    sendDisabled: false,
+    inputPlaceholder: "Try again later...",
+  },
+  timeout: {
+    expanded: true,
+    source: "timeout",
+    statusText: "local timeout",
+    message: "\u672c\u5730\u6a21\u578b\u53ef\u80fd\u9084\u5728\u9192\u4f86\u3002",
+    response: "The bubble stays responsive while the model wakes up.",
+    inputDisabled: false,
+    sendDisabled: false,
+    inputPlaceholder: "Try again after it wakes...",
+  },
+  llm_local_error: {
+    expanded: true,
+    source: "llm_local_error",
+    statusText: "local model error",
+    message: "\u543e\u7684\u9b54\u529b\u66ab\u6642\u5361\u4f4f\u4e86\u3002",
+    response: "Open Full App later for provider details.",
+    inputDisabled: false,
+    sendDisabled: false,
+    inputPlaceholder: "Try again later...",
+  },
+  fallback_mock: {
+    expanded: true,
+    source: "mock",
+    statusText: "mock fallback",
+    message: "\u9019\u662f\u66ab\u6642\u56de\u61c9\uff0c\u5225\u592a\u5f97\u610f\u3002",
+    response: "Mock-style local placeholder.",
+    inputDisabled: false,
+    sendDisabled: false,
+    inputPlaceholder: "Type a short message...",
+  },
+  long_reply: {
+    expanded: true,
+    source: "local",
+    statusText: "long reply",
+    message: "\u56de\u8986\u592a\u9577\uff0c\u4e4b\u5f8c\u53ef\u5230 Full App \u67e5\u770b\u5b8c\u6574\u5167\u5bb9\u3002",
+    response:
+      "This is a long reply placeholder. It stays inside the bubble response area and scrolls internally instead of resizing the Pet Window.",
+    inputDisabled: false,
+    sendDisabled: false,
+    inputPlaceholder: "Open Full App for long replies...",
+  },
+});
+
 function setText(element, value) {
   if (element) {
     element.textContent = value;
   }
 }
 
-function setBubbleState(documentRef, expanded) {
+function getBubbleStateConfig(state) {
+  return BUBBLE_STATES[state] || BUBBLE_STATES.expanded;
+}
+
+function normalizeBubbleStateArgs(firstArg, secondArg, thirdArg) {
+  if (firstArg && typeof firstArg.getElementById === "function") {
+    return {
+      documentRef: firstArg,
+      state: typeof secondArg === "boolean" ? (secondArg ? "expanded" : "collapsed") : secondArg,
+      options: thirdArg || {},
+    };
+  }
+
+  return {
+    documentRef: typeof document !== "undefined" ? document : null,
+    state: typeof firstArg === "boolean" ? (firstArg ? "expanded" : "collapsed") : firstArg,
+    options: secondArg || {},
+  };
+}
+
+function setBubbleState(firstArg, secondArg, thirdArg) {
+  const { documentRef, state: requestedState, options } = normalizeBubbleStateArgs(
+    firstArg,
+    secondArg,
+    thirdArg
+  );
+
+  if (!documentRef) {
+    return null;
+  }
+
+  const state = requestedState && BUBBLE_STATES[requestedState] ? requestedState : "expanded";
+  const config = getBubbleStateConfig(state);
+  const expanded = Boolean(config.expanded);
   const root = documentRef.getElementById("pet-mode-root");
   const bubble = documentRef.getElementById("pet-bubble");
-
-  const state = expanded ? "expanded" : "collapsed";
+  const title = documentRef.getElementById("pet-bubble-title");
+  const status = documentRef.getElementById("pet-bubble-status");
+  const message = documentRef.getElementById("pet-bubble-message");
+  const response = documentRef.getElementById("pet-bubble-response");
+  const placeholder = documentRef.getElementById("pet-bubble-placeholder");
+  const input = documentRef.getElementById("pet-chat-input-hook");
+  const send = documentRef.getElementById("pet-chat-send-hook");
 
   if (root) {
     root.dataset.bubbleState = state;
+    root.dataset.bubbleSource = options.source || config.source;
   }
 
   if (bubble) {
     bubble.dataset.state = state;
+    bubble.dataset.source = options.source || config.source;
     bubble.setAttribute("aria-expanded", expanded ? "true" : "false");
     bubble.hidden = !expanded;
   }
+
+  setText(title, options.title || "Bubble Chat");
+  setText(status, options.statusText || config.statusText);
+  setText(message, options.message || config.message);
+  setText(response, options.response || config.response);
+
+  if (status) {
+    status.dataset.source = options.source || config.source;
+  }
+
+  if (placeholder) {
+    placeholder.dataset.state = state;
+  }
+
+  if (input) {
+    input.disabled = Boolean(config.inputDisabled);
+    input.setAttribute("placeholder", options.inputPlaceholder || config.inputPlaceholder);
+    input.setAttribute("aria-invalid", state === "empty_input" ? "true" : "false");
+  }
+
+  if (send) {
+    send.disabled = Boolean(config.sendDisabled);
+  }
+
+  return state;
 }
 
 function setMenuState(documentRef, open) {
@@ -62,17 +241,25 @@ function toggleMenu(documentRef = document) {
 }
 
 function expandBubble(documentRef = document) {
-  setBubbleState(documentRef, true);
+  setBubbleState(documentRef, "expanded");
 }
 
 function collapseBubble(documentRef = document) {
-  setBubbleState(documentRef, false);
+  setBubbleState(documentRef, "collapsed");
 }
 
 function toggleBubble(documentRef = document) {
   const bubble = documentRef.getElementById("pet-bubble");
-  const shouldExpand = !bubble || bubble.dataset.state !== "expanded";
-  setBubbleState(documentRef, shouldExpand);
+  const shouldExpand = !bubble || bubble.dataset.state === "collapsed";
+  setBubbleState(documentRef, shouldExpand ? "expanded" : "collapsed");
+}
+
+function handleBubbleInput(event, documentRef = document) {
+  const input =
+    event && event.target ? event.target : documentRef.getElementById("pet-chat-input-hook");
+  const value = input && typeof input.value === "string" ? input.value.trim() : "";
+
+  setBubbleState(documentRef, value ? "composing" : "expanded");
 }
 
 function handlePlaceholderSubmit(event, documentRef = document) {
@@ -80,8 +267,17 @@ function handlePlaceholderSubmit(event, documentRef = document) {
     event.preventDefault();
   }
 
-  const message = documentRef.getElementById("pet-bubble-message");
-  setText(message, PET_MODE_DEFAULTS.bubbleMessage);
+  const input = documentRef.getElementById("pet-chat-input-hook");
+  const value = input && typeof input.value === "string" ? input.value.trim() : "";
+
+  if (!value) {
+    setBubbleState(documentRef, "empty_input");
+    return;
+  }
+
+  setBubbleState(documentRef, "success", {
+    response: "Local send preview only. Backend chat wiring starts in TASK-134.",
+  });
 }
 
 function handleOpenFullApp(documentRef = document, dragonPetApi = null) {
@@ -157,6 +353,7 @@ function initializePetMode(documentRef = document) {
   const bubbleCloseHook = documentRef.getElementById("pet-bubble-close-hook");
   const bubbleMessage = documentRef.getElementById("pet-bubble-message");
   const bubblePlaceholder = documentRef.getElementById("pet-bubble-placeholder");
+  const chatInput = documentRef.getElementById("pet-chat-input-hook");
   const chatForm = documentRef.getElementById("pet-chat-form-hook");
   const openFullAppHook = documentRef.getElementById("pet-open-full-app-hook");
   const contextMenuHook = documentRef.getElementById("pet-context-menu-hook");
@@ -181,13 +378,13 @@ function initializePetMode(documentRef = document) {
   setText(hint, PET_MODE_DEFAULTS.hint);
   setText(bubbleMessage, PET_MODE_DEFAULTS.bubbleMessage);
 
-  collapseBubble(documentRef);
+  setBubbleState(documentRef, "collapsed");
   closeMenu(documentRef);
 
   if (bubblePlaceholder && !bubblePlaceholder.textContent.trim()) {
     setText(
       bubblePlaceholder,
-      "\u5c0d\u8a71\u6ce1\u6ce1\u9810\u7559\u5340\u3002TASK-118 \u53ea\u505a UI state\uff0c\u4e0d\u9023\u63a5 /chat\u3002"
+      "\u5c0d\u8a71\u6ce1\u6ce1\u9810\u7559\u5340\u3002TASK-133 \u53ea\u6574\u7406\u672c\u5730 UI state\u3002"
     );
   }
 
@@ -201,6 +398,10 @@ function initializePetMode(documentRef = document) {
 
   if (bubbleCloseHook && typeof bubbleCloseHook.addEventListener === "function") {
     bubbleCloseHook.addEventListener("click", () => collapseBubble(documentRef));
+  }
+
+  if (chatInput && typeof chatInput.addEventListener === "function") {
+    chatInput.addEventListener("input", (event) => handleBubbleInput(event, documentRef));
   }
 
   if (chatForm && typeof chatForm.addEventListener === "function") {
@@ -268,10 +469,13 @@ if (typeof document !== "undefined") {
 
 if (typeof module !== "undefined") {
   module.exports = {
+    BUBBLE_STATES,
     PET_MODE_DEFAULTS,
     collapseBubble,
     closeMenu,
     expandBubble,
+    getBubbleStateConfig,
+    handleBubbleInput,
     handleOpenFullApp,
     handleHidePetWindow,
     handlePlaceholderSubmit,

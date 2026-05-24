@@ -7172,6 +7172,79 @@ Verification:
 
 ---
 
+## TASK-133 - Pet Bubble Chat Static State Refinement
+
+**Status:** DONE
+**Date:** 2026-05-24
+
+Goal:
+
+Prepare Pet Bubble Chat for later `/chat` wiring by refining static DOM hooks, CSS constraints, and local renderer state only.
+
+Changed files:
+
+- `apps/desktop/src/pet/pet.html`
+- `apps/desktop/src/pet/pet.css`
+- `apps/desktop/src/pet/pet-renderer.js`
+- `apps/desktop/scripts/pet-renderer-smoke.js`
+- `docs/TASKS.md`
+- `docs/ROADMAP.md`
+- `docs/PET_BUBBLE_CHAT_WIRING_DESIGN.md`
+
+Bubble local states now represented:
+
+- `collapsed`
+- `expanded`
+- `composing`
+- `empty_input`
+- `pending`
+- `success`
+- `backend_offline`
+- `timeout`
+- `llm_local_error`
+- `fallback_mock`
+- `long_reply`
+
+Implementation summary:
+
+- Added explicit bubble state hooks for status, message, response, placeholder, input, and send button.
+- Added a local `BUBBLE_STATES` map and `setBubbleState(...)` renderer function.
+- Kept all state rendering local; no backend request is made.
+- Added local composing and submit handling:
+  - Empty submit renders `empty_input`.
+  - Non-empty submit renders a local `success` preview for TASK-134 preparation.
+- Kept Menu, Full App hook, Reset Position, Hide Window, and explicit drag handle behavior intact.
+
+Layout constraints:
+
+- Pet shell remains fixed to the `220 x 280` design target.
+- Expanded avatar size is reduced while bubble is open.
+- Bubble response area has internal scroll behavior.
+- Long reply state stays inside the bubble response area instead of resizing the Pet Window.
+- Bubble, input, send button, Menu, action hooks, avatar, and response area remain `no-drag`.
+- Explicit drag handle remains the only drag region.
+
+Safety boundaries:
+
+- Pet renderer does not call backend.
+- Pet renderer does not call `/chat`.
+- Pet renderer does not contain `fetch(`.
+- Pet renderer does not contain direct Ollama `11434` references.
+- No backend route, `/chat` schema, provider settings, Ollama routing, IPC, preload API, external API, file access, Email access, Calendar access, image, screenshot, microphone, or screen monitoring behavior was added.
+
+Validation:
+
+- `node --check apps/desktop/src/pet/pet-renderer.js` - PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js` - PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js` - PASS, 15 checks.
+
+Next recommendation:
+
+- TASK-134 - Pet Bubble `/chat` Client Wiring.
+- TASK-134 should add the smallest safe local backend client path, preserve `/chat` schema as `reply / mood / source`, and keep direct Ollama access blocked.
+
+---
+
 ## TASK-132 - Pet Bubble Chat `/chat` Wiring Design
 
 **Status:** DONE
