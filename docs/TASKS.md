@@ -7172,6 +7172,96 @@ Verification:
 
 ---
 
+## TASK-134 - Pet Bubble `/chat` Client Wiring
+
+**Status:** DONE
+**Date:** 2026-05-24
+
+Goal:
+
+Wire Pet Bubble Chat to the existing local backend `/chat` endpoint using the existing Full App request/response contract.
+
+Changed files:
+
+- `apps/desktop/src/pet/pet.html`
+- `apps/desktop/src/pet/pet-renderer.js`
+- `apps/desktop/scripts/pet-renderer-smoke.js`
+- `apps/desktop/scripts/pet-window-smoke.js`
+- `docs/TASKS.md`
+- `docs/ROADMAP.md`
+- `docs/PET_BUBBLE_CHAT_WIRING_DESIGN.md`
+
+Backend contract:
+
+- Pet Bubble uses the same backend base pattern as Full App: URL query param `backend`, fallback `http://localhost:8000`.
+- Pet Bubble posts to `${backendUrl}/chat`.
+- Request body follows the Full App chat contract:
+  - `message`
+  - `use_memory`
+- Pet Mode has no memory toggle, so `use_memory` is fixed to `false`.
+- Response parsing uses the existing `/chat` schema:
+  - `reply`
+  - `mood`
+  - `source`
+
+Send flow:
+
+- Empty input renders `empty_input` and does not fetch.
+- Non-empty submit renders `pending`, disables input/send, and posts to local backend `/chat`.
+- Success renders backend `reply`, clears the input, updates source status, and updates expression from `mood`.
+- Input clearing policy: clear after a successful response; preserve input on offline/error so the user can retry.
+
+Source mapping:
+
+- `source=llm_local` -> `success` or `long_reply`, status `local`.
+- `source=mock` -> `fallback_mock`, status `mock fallback`.
+- `source=llm_local_error` -> `llm_local_error`, status `local model error`.
+- network failure -> `backend_offline`.
+- timeout-specific handling remains deferred unless a later task adds a timeout helper.
+
+Mood / expression mapping:
+
+- Supported moods map to existing Christina PNG assets:
+  - `neutral`
+  - `focused`
+  - `happy`
+  - `proud`
+  - `annoyed`
+  - `worried`
+  - `sleepy`
+- Unknown mood falls back to `neutral`.
+- Pending, backend offline, and local error currently fall back to `neutral`; no new images were added.
+
+Long reply handling:
+
+- Replies longer than the Pet threshold render `long_reply`.
+- Existing internal scroll area keeps the `220 x 280` Pet Window from resizing.
+- Long reply message tells the user they can open Full App for complete reading.
+
+Safety boundaries:
+
+- Backend code was not modified.
+- `/chat` schema was not modified.
+- No backend route or API was added.
+- Pet renderer does not call Ollama directly.
+- No `localhost:11434`, `127.0.0.1:11434`, or bare `11434` reference was added.
+- No IPC or preload API was added.
+- No provider settings, Ollama routing, external API, file access, Email access, Calendar access, image, tray, packaging, autostart, screenshot, microphone, or screen monitoring behavior was added.
+
+Validation:
+
+- `node --check apps/desktop/src/pet/pet-renderer.js` - PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js` - PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js` - PASS, 21 checks.
+- `node apps/desktop/scripts/pet-window-smoke.js` - PASS, 10 checks.
+
+Next recommendation:
+
+- TASK-135 - Pet Bubble Loading/Error UX.
+- TASK-135 should refine timeout/cold-start/offline UX on top of the working `/chat` client without changing `/chat` schema.
+
+---
+
 ## TASK-133 - Pet Bubble Chat Static State Refinement
 
 **Status:** DONE

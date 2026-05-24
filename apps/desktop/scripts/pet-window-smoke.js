@@ -158,11 +158,17 @@ function testFullAppShowPetEntryAndPreloadAreNarrow() {
   assertNotIncludes(preload, "process", "renderer/preload.js");
 }
 
-function testPetRendererDoesNotCallChat() {
+function testPetRendererUsesOnlyBackendChatPath() {
   const text = readText(petRendererPath);
-  assertNotIncludes(text, "fetch(", "pet-renderer.js");
+  assertIncludes(text, "sendPetChatMessage", "pet-renderer.js");
+  assertIncludes(text, '`${backendUrl}/chat`', "pet-renderer.js");
+  assertIncludes(text, "buildChatPayload", "pet-renderer.js");
+  assertIncludes(text, 'use_memory: false', "pet-renderer.js");
   assertNotIncludes(text, "fetch('/chat'", "pet-renderer.js");
   assertNotIncludes(text, 'fetch("/chat"', "pet-renderer.js");
+  assertNotIncludes(text, "localhost:11434", "pet-renderer.js");
+  assertNotIncludes(text, "127.0.0.1:11434", "pet-renderer.js");
+  assertNotIncludes(text, "11434", "pet-renderer.js");
 }
 
 function testPetPreloadExposesOnlyFixedPetActions() {
@@ -194,7 +200,7 @@ function run() {
     testPetWindowDoesNotReplaceFullAppByDefault,
     testNoRendererDirectOllamaAccess,
     testFullAppShowPetEntryAndPreloadAreNarrow,
-    testPetRendererDoesNotCallChat,
+    testPetRendererUsesOnlyBackendChatPath,
     testPetPreloadExposesOnlyFixedPetActions,
   ];
 

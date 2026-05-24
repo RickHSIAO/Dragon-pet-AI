@@ -5,6 +5,19 @@ const PET_MODE_DEFAULTS = Object.freeze({
   bubbleMessage: "Bubble chat is not wired yet.",
 });
 
+const PET_BACKEND_DEFAULT_URL = "http://localhost:8000";
+const PET_REPLY_LONG_THRESHOLD = 160;
+
+const CHRISTINA_EXPRESSION_ASSETS = Object.freeze({
+  neutral: "../renderer/assets/pet/christina/expressions/christina_neutral.png",
+  focused: "../renderer/assets/pet/christina/expressions/christina_focused.png",
+  happy: "../renderer/assets/pet/christina/expressions/christina_happy.png",
+  proud: "../renderer/assets/pet/christina/expressions/christina_proud.png",
+  annoyed: "../renderer/assets/pet/christina/expressions/christina_annoyed.png",
+  worried: "../renderer/assets/pet/christina/expressions/christina_worried.png",
+  sleepy: "../renderer/assets/pet/christina/expressions/christina_sleepy.png",
+});
+
 const BUBBLE_STATES = Object.freeze({
   collapsed: {
     expanded: false,
@@ -59,8 +72,8 @@ const BUBBLE_STATES = Object.freeze({
   success: {
     expanded: true,
     source: "local",
-    statusText: "success placeholder",
-    message: "Local success preview.",
+    statusText: "local reply",
+    message: "Reply received.",
     response: "Bubble rendering is ready for a future reply.",
     inputDisabled: false,
     sendDisabled: false,
@@ -123,6 +136,72 @@ function setText(element, value) {
   if (element) {
     element.textContent = value;
   }
+}
+
+function getPetBackendUrl(windowRef = typeof window !== "undefined" ? window : null) {
+  const search = windowRef && windowRef.location ? windowRef.location.search || "" : "";
+  const params = new URLSearchParams(search);
+  return params.get("backend") || PET_BACKEND_DEFAULT_URL;
+}
+
+function normalizeMood(mood) {
+  return CHRISTINA_EXPRESSION_ASSETS[mood] ? mood : PET_MODE_DEFAULTS.expression;
+}
+
+function setPetExpression(documentRef, mood) {
+  const normalizedMood = normalizeMood(mood);
+  const avatarContainer = documentRef.getElementById("pet-avatar-container");
+  const avatar = documentRef.getElementById("pet-avatar");
+  const assetPath = CHRISTINA_EXPRESSION_ASSETS[normalizedMood];
+
+  if (avatarContainer) {
+    avatarContainer.dataset.expression = normalizedMood;
+  }
+
+  if (avatar) {
+    avatar.setAttribute("src", assetPath);
+    avatar.setAttribute("alt", `Christina ${normalizedMood} expression`);
+  }
+
+  return normalizedMood;
+}
+
+function sourceStatusLabel(source) {
+  if (source === "llm_local") return "local";
+  if (source === "mock") return "mock fallback";
+  if (source === "llm_local_error") return "local model error";
+  if (source === "backend_offline") return "backend offline";
+  if (source === "timeout") return "local timeout";
+  return source || "unknown source";
+}
+
+function stateForChatSource(source, reply) {
+  if (source === "llm_local_error") return "llm_local_error";
+  if (source === "mock") return "fallback_mock";
+  if (typeof reply === "string" && reply.length > PET_REPLY_LONG_THRESHOLD) return "long_reply";
+  return "success";
+}
+
+function isFetchNetworkError(error) {
+  return (
+    error instanceof TypeError ||
+    (error && typeof error.message === "string" && /failed to fetch|network/i.test(error.message))
+  );
+}
+
+function buildChatPayload(message) {
+  return {
+    message,
+    use_memory: false,
+  };
+}
+
+function parseChatResponse(data) {
+  return {
+    reply: data && typeof data.reply === "string" ? data.reply : "",
+    mood: data && typeof data.mood === "string" ? data.mood : PET_MODE_DEFAULTS.expression,
+    source: data && typeof data.source === "string" ? data.source : "unknown",
+  };
 }
 
 function getBubbleStateConfig(state) {
@@ -262,7 +341,32 @@ function handleBubbleInput(event, documentRef = document) {
   setBubbleState(documentRef, value ? "composing" : "expanded");
 }
 
-function handlePlaceholderSubmit(event, documentRef = document) {
+async function sendPetChatMessage(message, options = {}) {
+  const fetchImpl =
+    options.fetchImpl || (typeof fetch === "function" ? fetch.bind(globalThis) : null);
+
+  if (!fetchImpl) {
+    throw new TypeError("fetch is not available");
+  }
+
+  const backendUrl = options.backendUrl || getPetBackendUrl(options.windowRef);
+  const response = await fetchImpl(`${backendUrl}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(buildChatPayload(message)),
+  });
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const detail = data && data.detail ? data.detail : `HTTP ${response.status}`;
+    throw new Error(detail);
+  }
+
+  return parseChatResponse(data);
+}
+
+async function handleChatSubmit(event, documentRef = document, options = {}) {
   if (event && typeof event.preventDefault === "function") {
     event.preventDefault();
   }
@@ -272,13 +376,53 @@ function handlePlaceholderSubmit(event, documentRef = document) {
 
   if (!value) {
     setBubbleState(documentRef, "empty_input");
-    return;
+    return null;
   }
 
-  setBubbleState(documentRef, "success", {
-    response: "Local send preview only. Backend chat wiring starts in TASK-134.",
-  });
+  setBubbleState(documentRef, "pending");
+  setPetExpression(documentRef, PET_MODE_DEFAULTS.expression);
+
+  try {
+    const data = await sendPetChatMessage(value, options);
+    const nextState = stateForChatSource(data.source, data.reply);
+    const statusText = sourceStatusLabel(data.source);
+    const isLongReply = nextState === "long_reply";
+    const stateMessage =
+      nextState === "fallback_mock" || nextState === "llm_local_error"
+        ? BUBBLE_STATES[nextState].message
+        : isLongReply
+          ? "\u56de\u8986\u8f03\u9577\uff0c\u53ef\u958b Full App \u67e5\u770b\u5b8c\u6574\u5167\u5bb9\u3002"
+          : "Reply received.";
+
+    setBubbleState(documentRef, nextState, {
+      source: data.source,
+      statusText,
+      message: stateMessage,
+      response: data.reply,
+    });
+
+    setPetExpression(documentRef, data.source === "llm_local_error" ? PET_MODE_DEFAULTS.expression : data.mood);
+
+    if (input) {
+      input.value = "";
+    }
+
+    return data;
+  } catch (error) {
+    if (isFetchNetworkError(error)) {
+      setBubbleState(documentRef, "backend_offline");
+    } else {
+      setBubbleState(documentRef, "llm_local_error", {
+        statusText: "chat error",
+        response: error && error.message ? error.message : "Chat request failed.",
+      });
+    }
+    setPetExpression(documentRef, PET_MODE_DEFAULTS.expression);
+    return null;
+  }
 }
+
+const handlePlaceholderSubmit = handleChatSubmit;
 
 function handleOpenFullApp(documentRef = document, dragonPetApi = null) {
   const message = documentRef.getElementById("pet-bubble-message");
@@ -405,7 +549,9 @@ function initializePetMode(documentRef = document) {
   }
 
   if (chatForm && typeof chatForm.addEventListener === "function") {
-    chatForm.addEventListener("submit", (event) => handlePlaceholderSubmit(event, documentRef));
+    chatForm.addEventListener("submit", (event) => {
+      handleChatSubmit(event, documentRef);
+    });
   }
 
   if (openFullAppHook && typeof openFullAppHook.addEventListener === "function") {
@@ -470,12 +616,17 @@ if (typeof document !== "undefined") {
 if (typeof module !== "undefined") {
   module.exports = {
     BUBBLE_STATES,
+    CHRISTINA_EXPRESSION_ASSETS,
+    PET_BACKEND_DEFAULT_URL,
     PET_MODE_DEFAULTS,
+    buildChatPayload,
     collapseBubble,
     closeMenu,
     expandBubble,
+    getPetBackendUrl,
     getBubbleStateConfig,
     handleBubbleInput,
+    handleChatSubmit,
     handleOpenFullApp,
     handleHidePetWindow,
     handlePlaceholderSubmit,
@@ -483,8 +634,13 @@ if (typeof module !== "undefined") {
     initializePetMode,
     isMenuOpen,
     openMenu,
+    parseChatResponse,
+    sendPetChatMessage,
     setBubbleState,
     setMenuState,
+    setPetExpression,
+    sourceStatusLabel,
+    stateForChatSource,
     toggleBubble,
     toggleMenu,
   };

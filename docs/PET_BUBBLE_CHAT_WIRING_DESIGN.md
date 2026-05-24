@@ -277,3 +277,72 @@ Safety confirmation:
 Next recommendation:
 
 - TASK-134 - Pet Bubble `/chat` Client Wiring.
+
+## 13. TASK-134 `/chat` Client Wiring Checkpoint
+
+Status: DONE on 2026-05-24.
+
+TASK-134 implemented the first Pet Bubble Chat backend wiring without modifying backend code or `/chat` schema.
+
+Completed:
+
+- Pet Bubble submit now posts non-empty input to the existing local backend `/chat`.
+- Request shape follows Full App chat behavior:
+  - `message`
+  - `use_memory`
+- Pet Mode has no memory toggle, so `use_memory` is fixed to `false`.
+- Response parsing uses the existing `/chat` fields:
+  - `reply`
+  - `mood`
+  - `source`
+- `reply` renders inside the constrained Pet bubble response area.
+- Successful send clears the input after the response returns.
+- Offline/error paths preserve input so the user can retry.
+- Pet HTML CSP now allows only local backend connections to `http://localhost:8000` and `http://127.0.0.1:8000`.
+
+Source mapping:
+
+- `llm_local` renders as `success` or `long_reply` with compact `local` status.
+- `mock` renders as `fallback_mock` with `mock fallback` status.
+- `llm_local_error` renders as `llm_local_error`.
+- Network fetch failure renders as `backend_offline`.
+- Dedicated timeout handling remains deferred until a timeout helper is introduced.
+
+Mood / expression mapping:
+
+- Supported moods map to existing Christina expression PNG assets:
+  - `neutral`
+  - `focused`
+  - `happy`
+  - `proud`
+  - `annoyed`
+  - `worried`
+  - `sleepy`
+- Unknown mood falls back to `neutral`.
+- Pending, backend offline, and local error currently fall back to `neutral`.
+- No image asset was added.
+
+Long reply handling:
+
+- Replies above the compact threshold render `long_reply`.
+- The existing internal scroll response area prevents the `220 x 280` Pet Window from expanding.
+- The state message points users to Full App for complete reading.
+
+Safety confirmation:
+
+- Backend code was not changed.
+- `/chat` schema remains `reply`, `mood`, `source`.
+- No backend route or API was added.
+- Pet renderer does not call Ollama directly.
+- No direct Ollama `11434` reference was added.
+- No IPC or preload API was added.
+- No provider settings, Ollama routing, external API, file access, Email access, Calendar access, image, tray, packaging, autostart, screenshot, microphone, or screen monitoring behavior was added.
+
+Validation:
+
+- Pet renderer smoke now uses mocked fetch for success, empty input, mock source, local error source, network failure, long reply, mood expression mapping, and direct-Ollama safety.
+- Pet window smoke now allows the intended local backend `/chat` client while still blocking direct Ollama access.
+
+Next recommendation:
+
+- TASK-135 - Pet Bubble Loading/Error UX.
