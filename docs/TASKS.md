@@ -6490,3 +6490,166 @@ TASK-111 - Expression Timing Polish
 - 全部驗收通過：syntax PASS、smoke 56/56 PASS、safety CLEAN、pytest 586 passed
 
 **下一步**：可 commit TASK-113；繼續規劃 Phase 6 或下一個 UX 改善任務。
+
+---
+
+## TASK-114 - Pet Mode UI Design
+
+**Status:** DONE
+**Date:** 2026-05-24
+
+### Goal
+
+Plan the product and technical design for a future Pet Mode without changing runtime behavior.
+
+### Scope
+
+- Add `docs/PET_MODE_UI_DESIGN.md`.
+- Define Full App Mode, Pet Mode, and optional Bubble Chat Mode.
+- Draft Pet Mode window behavior: small transparent/frameless/always-on-top desktop pet, draggable, right-click menu, future position persistence.
+- Define click, double-click, drag, bubble chat, mode switch, startup, idle, and return-from-away interactions.
+- Define Electron architecture direction for future work.
+- Preserve existing `/chat` schema and local-backend-only boundary.
+- Update `docs/TASKS.md` and `docs/ROADMAP.md`.
+- Do not modify product code.
+
+### Design Summary
+
+- Full App Mode remains the complete management, chat, memory, audit, provider settings, and debug surface.
+- Pet Mode becomes a compact desktop companion surface for Christina.
+- Bubble Chat Mode should be implemented inside the Pet Window first to avoid extra window-management complexity.
+- Pet Mode should use a separate renderer in later implementation tasks instead of reusing the full management UI.
+- Pet Mode should reuse existing Christina expression assets and call only the local backend `/chat`.
+
+### Safety Boundaries
+
+- No automatic file, Email, Calendar, screen, microphone, command, or external API access.
+- No autonomous LLM call for startup, idle, or return-from-away.
+- No `/chat` schema change.
+- No direct renderer-to-Ollama call.
+- No API key exposure to renderer code.
+- Pet Mode calls only the local backend.
+
+### Verification
+
+- Documentation-only change.
+- No backend code modified.
+- No Electron runtime code modified.
+- No renderer files added.
+- No external API added.
+- No images added.
+
+### Next Tasks
+
+- TASK-115 - Create Pet Window Design Skeleton
+- TASK-116 - Pet Mode BrowserWindow Prototype
+- TASK-117 - Pet Mode Drag Behavior
+- TASK-118 - Pet Bubble Chat Design
+- TASK-119 - Mode Switch Full App <-> Pet Mode
+- TASK-120 - Pet Mode Smoke Tests
+
+---
+
+## TASK-115 - Create Pet Window Design Skeleton
+
+**Status:** TODO
+
+Goal:
+
+Create static Pet Mode renderer skeleton files without changing Electron window behavior.
+
+Scope:
+
+- Draft `pet.html`, `pet.css`, and `pet-renderer.js`.
+- Reuse existing Christina expression asset paths.
+- Keep files disconnected from runtime until TASK-116.
+- Do not add BrowserWindow behavior.
+- Do not change backend or `/chat` schema.
+
+---
+
+## TASK-116 - Pet Mode BrowserWindow Prototype
+
+**Status:** TODO
+
+Goal:
+
+Add an explicit Pet Window prototype behind a safe manual/dev entry point.
+
+Scope:
+
+- Add future `createPetWindow()` in Electron main process.
+- Evaluate `frame: false`, `transparent: true`, `alwaysOnTop: true`, and fixed compact size.
+- Keep Full App Mode available.
+- Keep `nodeIntegration: false` and `contextIsolation: true`.
+- Do not add click-through yet.
+
+---
+
+## TASK-117 - Pet Mode Drag Behavior
+
+**Status:** TODO
+
+Goal:
+
+Make Pet Mode movable and prepare position persistence.
+
+Scope:
+
+- Add CSS drag region.
+- Mark chat controls and buttons as no-drag.
+- Verify drag behavior on Windows.
+- Design or implement last-position persistence with display bounds clamping.
+
+---
+
+## TASK-118 - Pet Bubble Chat Design
+
+**Status:** TODO
+
+Goal:
+
+Add compact Bubble Chat behavior for Pet Mode.
+
+Scope:
+
+- Add collapsed, compact, and expanded bubble states.
+- Add local backend `/chat` call path.
+- Keep response schema `reply / mood / source`.
+- Clamp long replies and support internal scroll.
+- Update expression from backend mood.
+
+---
+
+## TASK-119 - Mode Switch Full App <-> Pet Mode
+
+**Status:** TODO
+
+Goal:
+
+Add explicit switching between the full management app and Pet Mode.
+
+Scope:
+
+- Main process manages both windows.
+- Pet Mode can open/focus Full App.
+- Full App can open/show Pet Mode.
+- Decide coexist vs hide behavior.
+- Preserve Full App as the settings/memory/audit surface.
+
+---
+
+## TASK-120 - Pet Mode Smoke Tests
+
+**Status:** TODO
+
+Goal:
+
+Add smoke tests and safety checks for Pet Mode.
+
+Scope:
+
+- Pet renderer smoke tests for state transitions.
+- Safety scan for no direct Ollama URL and no external API.
+- Verify `/chat` schema remains unchanged.
+- Add visual/runtime smoke path when BrowserWindow prototype exists.

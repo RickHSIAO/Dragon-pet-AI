@@ -2,7 +2,7 @@
 
 > dragon-pet-ai
 > Status: LIVING DOCUMENT
-> Last Updated: 2026-05-21
+> Last Updated: 2026-05-24
 > Owner: TASK-001
 
 ---
@@ -313,4 +313,41 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 > Status: SIDE TRACK — design exploration only; not scheduled for implementation
 > See: `docs/STREAMER_COMPANION_MODE.md`
+
+---
+
+## Phase 6 - Pet Mode UI Track
+
+**Goal:** Move the product from a full management interface toward a small desktop pet plus compact chat bubble, while keeping Full App Mode as the control center.
+
+**Status:** PLANNED - TASK-114 design complete; implementation deferred to TASK-115 and later.
+
+> Design reference: `docs/PET_MODE_UI_DESIGN.md`
+
+| Task | Name | Status |
+|---|---|---|
+| TASK-114 | Pet Mode UI Design | DONE |
+| TASK-115 | Create Pet Window Design Skeleton | TODO |
+| TASK-116 | Pet Mode BrowserWindow Prototype | TODO |
+| TASK-117 | Pet Mode Drag Behavior | TODO |
+| TASK-118 | Pet Bubble Chat Design | TODO |
+| TASK-119 | Mode Switch Full App <-> Pet Mode | TODO |
+| TASK-120 | Pet Mode Smoke Tests | TODO |
+
+**Recommended direction:**
+
+- Full App Mode remains the full chat, memory, audit, provider settings, usage, and debug surface.
+- Pet Mode becomes a compact transparent/frameless/always-on-top desktop companion window.
+- Bubble Chat should live inside the Pet Window for MVP.
+- Pet Mode should use a separate renderer instead of reusing the full management UI directly.
+- Pet Mode should reuse Christina expression assets.
+- Pet Mode should call only the local backend and preserve `/chat` response schema: `reply / mood / source`.
+
+**Safety constraints:**
+
+- No automatic file, Email, Calendar, screen, microphone, command, or external API access.
+- No autonomous LLM calls for startup, idle, or return-from-away.
+- No renderer direct Ollama calls.
+- No API key exposure to renderer code.
+- No `/chat` schema change.
                                         
