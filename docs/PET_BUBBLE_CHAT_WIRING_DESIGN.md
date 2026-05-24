@@ -551,3 +551,63 @@ Validation:
 Next recommendation:
 
 - TASK-139 - Manual Windows Pet Bubble Chat Smoke.
+
+## 18. TASK-140 Composer Visibility Fix Checkpoint
+
+Status: DONE on 2026-05-24.
+
+TASK-139 Windows manual smoke found a Pet Bubble input visibility regression during the wired bubble chat validation.
+
+Manual finding:
+
+- Full App chat worked.
+- Pet Bubble expanded in the Pet Window.
+- The bubble showed status/response text and the legacy TASK-133 placeholder body.
+- The input and Send composer were not visible, so the user could not type in Pet Bubble.
+
+Root cause:
+
+- The form/input/send DOM remained present in `pet.html`.
+- The bug was caused by layout clipping, not by missing DOM or `/chat` wiring.
+- The expanded bubble had only a small visual budget inside the `220 x 280` Pet Window.
+- Header, status, message, response, legacy placeholder body, and composer all participated in layout.
+- Because `.pet-bubble` used `overflow: hidden`, the composer could be pushed below the visible area and clipped.
+
+Fix:
+
+- Pet Bubble now uses a fixed-height grid layout.
+- The composer is pinned as the bottom grid row.
+- The response area is the flexible scrollable row.
+- The legacy `#pet-bubble-placeholder` body is hidden from layout.
+- Message/status rows are compact so they cannot push the composer out.
+- Long replies keep internal response scrolling and do not remove the composer.
+
+Composer state rules:
+
+- `expanded`, `composing`, `empty_input`, `success`, `backend_offline`, `timeout`, `llm_local_error`, `fallback_mock`, and `long_reply`: input and Send stay visible and enabled.
+- `pending`: input and Send stay visible but disabled.
+- `collapsed`: the whole bubble remains collapsed/hidden.
+
+Safety confirmation:
+
+- Backend code was not changed.
+- `/chat` schema remains `reply`, `mood`, `source`.
+- No backend route or API was added.
+- No IPC or preload API was added.
+- No direct Ollama access was added.
+- No provider settings, external API, file access, Email access, Calendar access, image, tray, packaging, autostart, screenshot, microphone, or screen monitoring behavior was added.
+
+Validation:
+
+- Pet renderer smoke now covers composer visibility for expanded, composing, pending, success, backend_offline, timeout, llm_local_error, fallback_mock, and long_reply states.
+- Pet renderer smoke also covers the Full App "Opening Full App..." status path without removing the composer.
+- Pet renderer smoke passes 31 checks.
+- Pet window smoke passes 10 checks.
+- Existing desktop renderer smoke passes.
+- Backend pytest passes with 586 tests.
+- Direct Ollama `11434` safety scan passes.
+- `git diff --check` passes.
+
+Next recommendation:
+
+- Re-run TASK-139 Manual Windows Pet Bubble Chat Smoke and verify the input and Send composer are visible and usable in the real Windows Pet Window.

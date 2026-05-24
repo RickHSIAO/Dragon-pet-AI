@@ -128,8 +128,10 @@ body {
 
 .pet-bubble {
   display: grid;
-  gap: 6px;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  gap: 4px;
   max-height: 0;
+  min-height: 0;
   overflow: hidden;
   opacity: 0;
   pointer-events: none;
@@ -139,6 +141,7 @@ body {
 }
 
 .pet-bubble[data-state="expanded"] {
+  height: 116px;
   max-height: 116px;
   padding: 8px;
   opacity: 1;
@@ -154,6 +157,7 @@ body {
 .pet-bubble[data-state="llm_local_error"],
 .pet-bubble[data-state="fallback_mock"],
 .pet-bubble[data-state="long_reply"] {
+  height: 116px;
   max-height: 116px;
   padding: 8px;
   opacity: 1;
@@ -182,12 +186,16 @@ body {
   line-height: 1.35;
 }
 
+.pet-bubble-body {
+  display: none;
+}
+
 .pet-bubble-status {
   justify-self: start;
   max-width: 100%;
-  min-height: 16px;
+  min-height: 14px;
   border-radius: 999px;
-  padding: 2px 6px;
+  padding: 1px 6px;
   overflow: hidden;
   background: rgba(72, 45, 34, 0.08);
   color: #6b4b3f;
@@ -202,19 +210,24 @@ body {
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: 6px;
+  min-height: 24px;
 }
 
 .pet-bubble-message {
-  min-height: 16px;
+  min-height: 14px;
+  max-height: 16px;
+  overflow: hidden;
   color: #3d2a22;
   font-size: 11px;
   line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pet-bubble-response {
   max-width: 100%;
-  max-height: 30px;
-  min-height: 16px;
+  max-height: none;
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   color: #3d2a22;
@@ -226,7 +239,7 @@ body {
 }
 
 .pet-bubble[data-state="long_reply"] .pet-bubble-response {
-  max-height: 36px;
+  max-height: none;
 }
 
 .pet-chat-form input {

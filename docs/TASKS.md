@@ -7172,6 +7172,82 @@ Verification:
 
 ---
 
+## TASK-140 - Fix Pet Bubble Input Visibility
+
+**Status:** DONE
+**Date:** 2026-05-24
+
+Goal:
+
+Fix the Windows manual smoke regression where Pet Bubble expanded but the input and Send composer were not visible in the `220 x 280` Pet Window.
+
+TASK-139 manual smoke finding:
+
+- Full App chat worked.
+- Pet Bubble could expand.
+- Pet Bubble showed status/response/old placeholder text.
+- Pet Bubble input and Send area were clipped out of view, so the user could not type in the small Pet Window.
+
+Root cause:
+
+- `pet.html` still contained the bubble form, input, and Send button.
+- The regression was layout-only.
+- The expanded bubble had a small fixed visual budget, but it still rendered header, status, message, response, the legacy TASK-133 placeholder body, and the composer.
+- `.pet-bubble` used `overflow: hidden`, so the composer was pushed below the visible bubble area and clipped.
+- Long/status text could also consume too much vertical space and squeeze the composer.
+
+Implementation:
+
+- Kept the Pet Window fixed to the `220 x 280` design target.
+- Changed the bubble layout to a fixed-height grid.
+- Kept the composer as the final grid row at the bottom of the bubble.
+- Hid the legacy `#pet-bubble-placeholder` body from layout so it no longer consumes vertical space.
+- Made the response area the only flexible/scrollable row.
+- Capped the message row so status/hint text cannot push the composer out.
+- Kept input and Send visible in all expanded/non-collapsed states.
+- Pending state disables input and Send but keeps both visible.
+- Non-pending states restore input and Send.
+- Drag handle, Menu toggle, Full App hook, Hide/Show Pet bridge, and no-drag hooks remain unchanged.
+
+Composer behavior by state:
+
+- `expanded`: input and Send visible/enabled.
+- `composing`: input and Send visible/enabled.
+- `empty_input`: input and Send visible/enabled.
+- `pending`: input and Send visible/disabled.
+- `success`: input and Send visible/enabled.
+- `backend_offline`: input and Send visible/enabled.
+- `timeout`: input and Send visible/enabled.
+- `llm_local_error`: input and Send visible/enabled.
+- `fallback_mock`: input and Send visible/enabled.
+- `long_reply`: input and Send visible/enabled; response area scrolls internally.
+
+Safety boundaries:
+
+- Backend code was not changed.
+- `/chat` schema remains `reply`, `mood`, `source`.
+- No backend route or API was added.
+- No IPC or preload API was added.
+- No direct Ollama access was added.
+- No external API, file access, Email access, Calendar access, image, provider settings, tray, package, autostart, screenshot, microphone, or screen monitoring behavior was added.
+
+Verification:
+
+- `node --check apps/desktop/src/pet/pet-renderer.js`: PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js`: PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: PASS, 31 checks.
+- `node apps/desktop/scripts/pet-window-smoke.js`: PASS, 10 checks.
+- `npm.cmd run test:renderer`: PASS.
+- `python -m pytest`: PASS, 586 passed.
+- Direct Ollama `11434` safety scan: PASS.
+- `git diff --check`: PASS.
+
+Next recommendation:
+
+- Re-run TASK-139 Manual Windows Pet Bubble Chat Smoke to confirm the input and Send composer are visible and usable on the real Windows Pet Window.
+
+---
+
 ## TASK-138 - Pet Bubble Chat Smoke Tests
 
 **Status:** DONE

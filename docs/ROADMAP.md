@@ -320,7 +320,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 **Goal:** Move the product from a full management interface toward a small desktop pet plus compact chat bubble, while keeping Full App Mode as the control center.
 
-**Status:** RELEASE CHECKPOINT COMPLETE - TASK-114 design complete; TASK-115 static renderer skeleton complete; TASK-116 env-gated BrowserWindow prototype complete; TASK-117 CSS drag behavior complete; TASK-118 local-only bubble UI state complete; TASK-119 narrow Pet-to-Full mode switch complete; TASK-120 smoke checkpoint passed; TASK-121 manual Windows visual smoke passed with menu placeholder note; TASK-122 Pet Window position persistence complete; TASK-123 Pet menu/right-click menu complete; TASK-124 manual menu smoke passed with right-click drag-region note; TASK-125 right-click menu hotspot fix complete; TASK-126 menu UX regression fixed; TASK-127 explicit drag handle complete; TASK-128 Full App -> Show Pet bridge complete; TASK-129 drag regression fix complete; TASK-130 manual Windows drag/menu smoke passed; TASK-131 Pet Mode release checkpoint complete; TASK-132 Bubble Chat wiring design complete; TASK-133 static bubble state refinement complete; TASK-134 Pet Bubble `/chat` client wiring complete; TASK-135 Pet Bubble loading/error UX complete; TASK-136 Pet Bubble mood/expression integration complete; TASK-137 Pet Bubble long reply handling complete; TASK-138 Pet Bubble chat smoke checkpoint complete.
+**Status:** RELEASE CHECKPOINT COMPLETE - TASK-114 design complete; TASK-115 static renderer skeleton complete; TASK-116 env-gated BrowserWindow prototype complete; TASK-117 CSS drag behavior complete; TASK-118 local-only bubble UI state complete; TASK-119 narrow Pet-to-Full mode switch complete; TASK-120 smoke checkpoint passed; TASK-121 manual Windows visual smoke passed with menu placeholder note; TASK-122 Pet Window position persistence complete; TASK-123 Pet menu/right-click menu complete; TASK-124 manual menu smoke passed with right-click drag-region note; TASK-125 right-click menu hotspot fix complete; TASK-126 menu UX regression fixed; TASK-127 explicit drag handle complete; TASK-128 Full App -> Show Pet bridge complete; TASK-129 drag regression fix complete; TASK-130 manual Windows drag/menu smoke passed; TASK-131 Pet Mode release checkpoint complete; TASK-132 Bubble Chat wiring design complete; TASK-133 static bubble state refinement complete; TASK-134 Pet Bubble `/chat` client wiring complete; TASK-135 Pet Bubble loading/error UX complete; TASK-136 Pet Bubble mood/expression integration complete; TASK-137 Pet Bubble long reply handling complete; TASK-138 Pet Bubble chat smoke checkpoint complete; TASK-140 Pet Bubble input visibility regression fixed.
 
 > Design reference: `docs/PET_MODE_UI_DESIGN.md`
 > Release checkpoint: `docs/PET_MODE_RELEASE_CHECKPOINT.md`
@@ -353,6 +353,8 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 | TASK-136 | Pet Bubble Mood/Expression Integration | DONE |
 | TASK-137 | Pet Bubble Long Reply Handling | DONE |
 | TASK-138 | Pet Bubble Chat Smoke Tests | DONE |
+| TASK-139 | Manual Windows Pet Bubble Chat Smoke | IN_PROGRESS - INPUT VISIBILITY REGRESSION FOUND |
+| TASK-140 | Fix Pet Bubble Input Visibility | DONE |
 
 **Recommended direction:**
 
@@ -396,8 +398,10 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 - TASK-136 unifies Pet Bubble mood/expression mapping through `normalizePetMood`, `setPetExpression`, and `setPetExpressionForBubbleState`. Response `success` uses backend `mood`; local states map to existing Christina PNG moods only: pending/focused, offline/worried, timeout/sleepy, local-error/worried, mock/proud, empty-input/annoyed, long-reply/focused.
 - TASK-137 defines long reply threshold as `PET_REPLY_LONG_THRESHOLD = 160`, routes long backend replies through `long_reply`, shows `回覆較長，可開 Full App 查看完整內容。`, keeps response text internally scrollable, and reinforces `220 x 280` layout constraints with no new backend, IPC, API, or schema change.
 - TASK-138 strengthens Pet Bubble smoke coverage to 29 checks across success, empty input, source mapping, mood expression, timeout/offline/malformed errors, long replies, pending duplicate guard, retry/next-send behavior, layout hooks, and direct-Ollama safety. Runtime code was not changed.
+- TASK-139 Windows manual smoke found a Pet Bubble layout regression: the bubble expanded and displayed status/response/legacy placeholder text, but input and Send were clipped out of the visible Pet Window.
+- TASK-140 fixes the composer visibility regression by making the bubble a fixed-height grid, hiding the legacy placeholder body from layout, keeping response text in the scrollable middle row, and pinning the input/Send composer as the bottom row. Input and Send stay visible in every non-collapsed state; pending only disables them.
 
 **Next recommended task:**
 
-- TASK-139 - Manual Windows Pet Bubble Chat Smoke. Validate the wired Pet Bubble on Windows with backend running and optional local Ollama path.
+- Re-run TASK-139 - Manual Windows Pet Bubble Chat Smoke. Confirm the wired Pet Bubble input and Send composer are visible and usable on Windows with backend running and optional local Ollama path.
                                         
