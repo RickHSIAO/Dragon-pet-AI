@@ -4,7 +4,7 @@
  * TASK-003: Minimal skeleton window.
  * - Opens a BrowserWindow pointing to renderer/index.html
  * - Full App renderer calls backend directly via fetch
- * - Pet Mode has a narrow IPC bridge for focusing the Full App only
+ * - Full App and Pet Mode use narrow IPC bridges for window visibility only
  * - No shell execution, no file system access, no live2D
  */
 
@@ -15,6 +15,7 @@ const path = require("path");
 const BACKEND_URL = "http://localhost:8000";
 const PET_MODE_ENABLED = process.env.PET_MODE_ENABLED === "true";
 const PET_OPEN_FULL_APP_CHANNEL = "pet:open-full-app";
+const PET_SHOW_WINDOW_CHANNEL = "pet:show-window";
 const PET_RESET_POSITION_CHANNEL = "pet:reset-position";
 const PET_HIDE_WINDOW_CHANNEL = "pet:hide-window";
 const PET_WINDOW_WIDTH = 220;
@@ -151,6 +152,7 @@ function createWindow() {
       // nodeIntegration disabled — renderer uses fetch() for backend calls
       nodeIntegration: false,
       contextIsolation: true,
+      preload: path.join(__dirname, "renderer", "preload.js"),
     },
     resizable: true,
     // alwaysOnTop can be enabled by user preference in a later task
@@ -163,8 +165,8 @@ function createWindow() {
 
   fullAppWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
 
-  // Pass backend URL to renderer via URL query param
-  // (avoids need for IPC or preload for skeleton phase)
+  // Pass backend URL to renderer via URL query param.
+  // Preload remains narrow and only exposes window visibility controls.
   fullAppWindow.loadURL(
     `file://${path.join(__dirname, "renderer", "index.html")}?backend=${encodeURIComponent(BACKEND_URL)}`
   );
@@ -256,10 +258,28 @@ function hidePetWindow() {
   return { ok: true };
 }
 
+function showPetWindow() {
+  if (!PET_MODE_ENABLED) {
+    return { ok: false, reason: "pet_mode_disabled" };
+  }
+
+  const win = petWindow && !petWindow.isDestroyed() ? petWindow : createPetWindow();
+
+  if (win.isMinimized()) {
+    win.restore();
+  }
+
+  win.show();
+  win.focus();
+  return { ok: true };
+}
+
 ipcMain.handle(PET_OPEN_FULL_APP_CHANNEL, () => {
   showFullAppWindow();
   return { ok: true };
 });
+
+ipcMain.handle(PET_SHOW_WINDOW_CHANNEL, () => showPetWindow());
 
 ipcMain.handle(PET_RESET_POSITION_CHANNEL, () => resetPetWindowPosition());
 

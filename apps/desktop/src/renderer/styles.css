@@ -75,6 +75,33 @@ textarea {
 }
 
 /* ── Character status bar ───────────────────────────────── */
+.header-action-btn {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  min-height: 28px;
+  padding: 4px 10px;
+}
+
+.header-action-btn:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+
+.header-action-status {
+  color: var(--text-muted);
+  font-size: 12px;
+  min-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.header-action-status.error {
+  color: #ff8a8a;
+}
+
 #character-status {
   background: var(--surface);
   border-bottom: 1px solid var(--border);

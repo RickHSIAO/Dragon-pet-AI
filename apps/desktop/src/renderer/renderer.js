@@ -27,6 +27,8 @@ const moodLabel   = document.getElementById("mood-label");
 const chatSourceStatus = document.getElementById("chat-source-status");
 const chatProviderStatus = document.getElementById("chat-provider-status");
 const chatRuntimeStatus = document.getElementById("chat-runtime-status");
+const showPetWindowBtn = document.getElementById("show-pet-window-btn");
+const showPetWindowStatus = document.getElementById("show-pet-window-status");
 const memoryForm  = document.getElementById("memory-form");
 const memoryType  = document.getElementById("memory-type");
 const memoryContent = document.getElementById("memory-content");
@@ -94,6 +96,44 @@ let currentProviderSettings = {};
 let providerSettingsLoaded = false;
 let lastChatSource = "not_checked";
 let lastChatStatusMessage = "No chat response yet.";
+
+function setShowPetWindowStatus(message, isError = false) {
+  if (!showPetWindowStatus) {
+    return;
+  }
+
+  showPetWindowStatus.textContent = message;
+  showPetWindowStatus.className = isError
+    ? "header-action-status error"
+    : "header-action-status";
+}
+
+async function showPetWindowFromFullApp() {
+  const api =
+    typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null;
+
+  if (!api || typeof api.showPetWindow !== "function") {
+    setShowPetWindowStatus("Pet Mode bridge unavailable.", true);
+    return null;
+  }
+
+  setShowPetWindowStatus("Showing Pet Window...");
+
+  try {
+    const result = await api.showPetWindow();
+    if (result && result.ok) {
+      setShowPetWindowStatus("Pet Window shown.");
+    } else if (result && result.reason === "pet_mode_disabled") {
+      setShowPetWindowStatus("Pet Mode disabled. Start with PET_MODE_ENABLED=true.", true);
+    } else {
+      setShowPetWindowStatus("Pet Window is not available.", true);
+    }
+    return result || null;
+  } catch (_error) {
+    setShowPetWindowStatus("Pet Window request failed.", true);
+    return null;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Idle State (TASK-108) — Companion Behavior Loop
@@ -1531,6 +1571,12 @@ async function sendMessage(text) {
 sendBtn.addEventListener("click", () => {
   sendMessage(msgInput.value);
 });
+
+if (showPetWindowBtn) {
+  showPetWindowBtn.addEventListener("click", () => {
+    showPetWindowFromFullApp();
+  });
+}
 
 memoryForm.addEventListener("submit", (e) => {
   e.preventDefault();

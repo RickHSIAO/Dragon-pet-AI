@@ -7172,6 +7172,59 @@ Verification:
 
 ---
 
+## TASK-128 - Full App -> Show Pet Window Bridge
+
+**Status:** DONE
+**Date:** 2026-05-24
+
+Goal:
+
+Allow the Full App to show/focus Pet Window again after the Pet menu `Hide Pet Window` action hides it.
+
+Implementation:
+
+- Added a Full App header button: `Show Pet`.
+- Added a Full App local status label for Show Pet results.
+- Added Full App preload `apps/desktop/src/renderer/preload.js`.
+- Exposed only `window.dragonPet.showPetWindow()`.
+- Added fixed IPC channel `pet:show-window`.
+- Added `showPetWindow()` in main process:
+  - if Pet Mode is disabled, returns `{ ok: false, reason: "pet_mode_disabled" }`;
+  - if Pet Window exists, restores/shows/focuses it;
+  - if Pet Window does not exist and `PET_MODE_ENABLED=true`, creates it and shows/focuses it.
+
+Safety boundaries:
+
+- Full App preload does not expose arbitrary `ipcRenderer`.
+- Full App preload does not expose fs, shell, process, or arbitrary channel send.
+- Renderer does not pass commands, coordinates, or arbitrary payloads.
+- Full App Window is not hidden, closed, or repositioned.
+- No backend route added.
+- No backend call added.
+- No `/chat` call added.
+- No `/chat` schema change.
+- No Ollama call added.
+- Bubble Chat remains local placeholder UI only.
+
+Verification:
+
+- `node --check apps/desktop/src/main.js`: PASS.
+- `node --check apps/desktop/src/renderer/renderer.js`: PASS.
+- `node --check apps/desktop/src/renderer/preload.js`: PASS.
+- `node --check apps/desktop/src/pet/pet-renderer.js`: PASS.
+- `node --check apps/desktop/src/pet/pet-preload.js`: PASS.
+- `node --check apps/desktop/scripts/renderer-chat-smoke.js`: PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js`: PASS.
+- `node --check apps/desktop/scripts/pet-window-smoke.js`: PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: PASS, 13 checks.
+- `node apps/desktop/scripts/pet-window-smoke.js`: PASS, 10 checks.
+- `npm.cmd run test:renderer`: PASS.
+- `python -m pytest`: PASS, 586 passed.
+- Direct Ollama URL safety scan for `main.js`, `renderer.js`, `renderer/preload.js`, `pet-renderer.js`, and `pet-preload.js`: PASS, no `localhost:11434`, `127.0.0.1:11434`, or bare `11434` match.
+- `git diff --check`: PASS, no whitespace errors.
+
+---
+
 ## TASK-127 - Replace Large Pet Drag Region with Explicit Drag Handle
 
 **Status:** DONE

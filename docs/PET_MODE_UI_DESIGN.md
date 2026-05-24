@@ -958,6 +958,30 @@ Safety note:
 
 - No IPC, preload API, `main.js` change, backend call, `/chat` call, `/chat` schema change, provider settings change, Ollama routing change, external API, image, file access, Email access, Calendar access, screenshot, microphone, screen-monitoring behavior, or bubble backend wiring was added.
 
+### TASK-128 - Full App -> Show Pet Window Bridge
+
+Status: DONE on 2026-05-24.
+
+Goal:
+
+- Let the Full App show/focus Pet Window after the Pet menu `Hide Pet Window` action hides it.
+
+Implementation summary:
+
+- Added a `Show Pet` button in the Full App header.
+- Added Full App preload `apps/desktop/src/renderer/preload.js`.
+- Full App preload exposes only `window.dragonPet.showPetWindow()`.
+- Main process uses fixed IPC channel `pet:show-window`.
+- If Pet Window already exists, main shows/restores/focuses it.
+- If Pet Window does not exist and `PET_MODE_ENABLED=true`, main creates it and shows/focuses it.
+- If `PET_MODE_ENABLED` is not enabled, main returns a safe disabled status and the Full App shows a local message.
+
+Safety note:
+
+- This is a narrow Full App -> Pet Window bridge only.
+- No arbitrary IPC, fs, shell, process, backend route, backend call, `/chat` call, `/chat` schema change, Ollama call, external API, image, Email access, Calendar access, screenshot, microphone, screen-monitoring behavior, or bubble backend wiring was added.
+- Bubble Chat remains local placeholder UI only.
+
 ---
 
 ## 9. Explicit Non-goals for TASK-114

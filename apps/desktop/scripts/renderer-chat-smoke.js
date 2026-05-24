@@ -376,6 +376,7 @@ async function loadRenderer(options = {}) {
       location: {
         search: "?backend=http%3A%2F%2Flocalhost%3A8000",
       },
+      dragonPet: options.dragonPet || undefined,
       confirm: () => true,
       // TASK-108: idle timer registers window.addEventListener("focus", ...) — stub it
       addEventListener() {},
@@ -593,6 +594,61 @@ async function testSaveProviderSettingsOmitsBlankModelAndKeepsFallbackFalse() {
   assert.equal(body.fallback_to_mock, false);
   assert.equal(state.providerSettings.model, "qwen3:8b");
   assert.equal(state.providerSettings.fallback_to_mock, false);
+}
+
+function testFullAppShowPetWindowEntryExists() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  const renderer = fs.readFileSync(rendererPath, "utf8");
+
+  assert.match(html, /id="show-pet-window-btn"/);
+  assert.match(html, /id="show-pet-window-status"/);
+  assert.match(renderer, /showPetWindowFromFullApp/);
+  assert.match(renderer, /window\.dragonPet/);
+  assert.match(renderer, /showPetWindow/);
+}
+
+async function testShowPetWindowButtonUsesNarrowApi() {
+  let called = false;
+  const { document } = await loadRenderer({
+    dragonPet: {
+      showPetWindow() {
+        called = true;
+        return Promise.resolve({ ok: true });
+      },
+    },
+  });
+
+  document.getElementById("show-pet-window-btn").click();
+  await settle();
+
+  assert.equal(called, true);
+  assert.equal(textOf(document, "show-pet-window-status"), "Pet Window shown.");
+}
+
+async function testShowPetWindowDisabledStatusDoesNotCrash() {
+  const { document } = await loadRenderer({
+    dragonPet: {
+      showPetWindow() {
+        return Promise.resolve({ ok: false, reason: "pet_mode_disabled" });
+      },
+    },
+  });
+
+  document.getElementById("show-pet-window-btn").click();
+  await settle();
+
+  assert.match(textOf(document, "show-pet-window-status"), /PET_MODE_ENABLED=true/);
+  assert.match(document.getElementById("show-pet-window-status").className, /error/);
+}
+
+async function testShowPetWindowMissingApiDoesNotCrash() {
+  const { document } = await loadRenderer();
+
+  document.getElementById("show-pet-window-btn").click();
+  await settle();
+
+  assert.equal(textOf(document, "show-pet-window-status"), "Pet Mode bridge unavailable.");
+  assert.match(document.getElementById("show-pet-window-status").className, /error/);
 }
 
 // ---------------------------------------------------------------------------
@@ -1683,6 +1739,10 @@ async function main() {
   await testMockFallbackStateIsDistinguishable();
   await testProviderSettingsStatusAndTestConnectionSuccess();
   await testSaveProviderSettingsOmitsBlankModelAndKeepsFallbackFalse();
+  testFullAppShowPetWindowEntryExists();
+  await testShowPetWindowButtonUsesNarrowApi();
+  await testShowPetWindowDisabledStatusDoesNotCrash();
+  await testShowPetWindowMissingApiDoesNotCrash();
   testRendererDoesNotContainDirectOllamaUrl();
   // TASK-083: pet expression tests
   await testSuccessfulChatWithFocusedMoodSetsFocusedExpression();
