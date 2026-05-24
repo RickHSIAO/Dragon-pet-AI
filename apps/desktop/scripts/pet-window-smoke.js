@@ -80,10 +80,12 @@ function testNoRendererDirectOllamaAccess() {
   for (const [label, filePath] of [
     ["renderer.js", rendererPath],
     ["pet-renderer.js", petRendererPath],
+    ["pet-preload.js", petPreloadPath],
   ]) {
     const text = readText(filePath);
     assertNotIncludes(text, "localhost:11434", label);
     assertNotIncludes(text, "127.0.0.1:11434", label);
+    assertNotIncludes(text, "11434", label);
   }
 }
 

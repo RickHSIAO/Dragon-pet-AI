@@ -108,6 +108,8 @@ function testPetHtmlReferencesStaticAssets() {
     "../renderer/assets/pet/christina/expressions/christina_neutral.png",
     "pet.html"
   );
+  assertNotIncludes(html, "https://", "pet.html");
+  assertNotIncludes(html, "http://", "pet.html");
 }
 
 function testPetCssUsesStaticPetDimensions() {

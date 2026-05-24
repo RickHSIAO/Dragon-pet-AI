@@ -320,7 +320,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 **Goal:** Move the product from a full management interface toward a small desktop pet plus compact chat bubble, while keeping Full App Mode as the control center.
 
-**Status:** IN PROGRESS - TASK-114 design complete; TASK-115 static renderer skeleton complete; TASK-116 env-gated BrowserWindow prototype complete; TASK-117 CSS drag behavior complete; TASK-118 local-only bubble UI state complete; TASK-119 narrow Pet-to-Full mode switch complete; final Pet Mode smoke checkpoint remains deferred to TASK-120.
+**Status:** CHECKPOINT COMPLETE - TASK-114 design complete; TASK-115 static renderer skeleton complete; TASK-116 env-gated BrowserWindow prototype complete; TASK-117 CSS drag behavior complete; TASK-118 local-only bubble UI state complete; TASK-119 narrow Pet-to-Full mode switch complete; TASK-120 smoke checkpoint passed.
 
 > Design reference: `docs/PET_MODE_UI_DESIGN.md`
 
@@ -332,7 +332,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 | TASK-117 | Pet Mode Drag Behavior | DONE |
 | TASK-118 | Pet Bubble Chat Design | DONE |
 | TASK-119 | Mode Switch Full App <-> Pet Mode | DONE |
-| TASK-120 | Pet Mode Smoke Tests | TODO |
+| TASK-120 | Pet Mode Smoke Tests | DONE |
 
 **Recommended direction:**
 
@@ -350,4 +350,12 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 - No renderer direct Ollama calls.
 - No API key exposure to renderer code.
 - No `/chat` schema change.
+
+**Checkpoint notes:**
+
+- Pet Mode still opens only with `PET_MODE_ENABLED=true`.
+- Full App remains the default startup surface.
+- Bubble Chat remains local UI state only; no backend or `/chat` wiring.
+- Pet-to-Full switch uses only `window.dragonPet.openFullApp()` over fixed IPC channel `pet:open-full-app`.
+- TASK-120 verification passed: pet renderer smoke, pet window/preload smoke, existing renderer smoke, backend pytest 586 passed, direct-Ollama scan clean, and `git diff --check` clean.
                                         

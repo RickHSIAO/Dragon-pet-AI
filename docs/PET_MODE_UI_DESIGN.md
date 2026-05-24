@@ -739,6 +739,8 @@ Completion notes:
 
 ### TASK-120 - Pet Mode Smoke Tests
 
+Status: DONE on 2026-05-24. Pet Mode MVP checkpoint passed.
+
 Goal:
 
 - Add smoke coverage for Pet Mode rendering and safety invariants.
@@ -755,6 +757,15 @@ Acceptance:
 - Existing renderer smoke tests still pass.
 - Pet Mode tests pass.
 - Safety boundaries are validated.
+
+Completion notes:
+
+- `pet-renderer-smoke.js` validates Pet DOM/CSS hooks, local bubble state, no backend calls, no `/chat`, no direct Ollama, no external image URL, Full App hook narrow API usage, and fallback behavior.
+- `pet-window-smoke.js` validates main-process Pet Window options, Full App preservation, `PET_MODE_ENABLED=true` gating, fixed IPC channel `pet:open-full-app`, narrow preload API, and no direct Ollama access from renderer/preload surfaces.
+- Existing Full App renderer smoke still passes.
+- Backend pytest still passes with 586 tests.
+- `/chat` schema remains unchanged.
+- No runtime feature was added in TASK-120.
 
 ---
 

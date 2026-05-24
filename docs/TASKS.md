@@ -6822,7 +6822,8 @@ Verification:
 
 ## TASK-120 - Pet Mode Smoke Tests
 
-**Status:** TODO
+**Status:** DONE
+**Date:** 2026-05-24
 
 Goal:
 
@@ -6834,3 +6835,54 @@ Scope:
 - Safety scan for no direct Ollama URL and no external API.
 - Verify `/chat` schema remains unchanged.
 - Add visual/runtime smoke path when BrowserWindow prototype exists.
+
+Checkpoint summary:
+
+- Pet Mode track TASK-115 through TASK-120 is complete.
+- No product feature was added in TASK-120; this is a smoke/checkpoint pass.
+- Existing `pet-renderer-smoke.js` was strengthened to verify no external image URL in `pet.html`.
+- Existing `pet-window-smoke.js` was strengthened so `pet-preload.js` is included in direct-Ollama safety scanning.
+
+Main process invariants:
+
+- Full App window logic still exists.
+- Pet Window is still gated by `PET_MODE_ENABLED=true`.
+- Pet Window loads `apps/desktop/src/pet/pet.html`.
+- Pet Window remains `220 x 280`, `frame: false`, `transparent: true`, `alwaysOnTop: true`, `resizable: false`.
+- Pet Window keeps `nodeIntegration: false`, `contextIsolation: true`, and `sandbox: true`.
+
+Preload invariants:
+
+- `pet-preload.js` exposes only `window.dragonPet.openFullApp()`.
+- Fixed IPC channel remains `pet:open-full-app`.
+- No arbitrary `ipcRenderer` exposure.
+- No fs, shell, process, sendSync, arbitrary channel send, or openExternal API.
+
+Pet renderer and CSS invariants:
+
+- Bubble collapsed/expanded state transitions pass smoke tests.
+- Full App hook uses the narrow preload API when available.
+- Missing preload API falls back to a local hint and does not crash.
+- Placeholder send is local-only.
+- No backend call, `/chat` call, `fetch(`, direct Ollama URL, or bare `11434`.
+- Drag and no-drag DOM/CSS hooks remain present.
+- Existing Christina expression asset path is used.
+- No external image URL was added.
+
+Verification:
+
+- `node --check apps/desktop/src/main.js`: PASS.
+- `node --check apps/desktop/src/pet/pet-renderer.js`: PASS.
+- `node --check apps/desktop/src/pet/pet-preload.js`: PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js`: PASS.
+- `node --check apps/desktop/scripts/pet-window-smoke.js`: PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: PASS, 9 checks.
+- `node apps/desktop/scripts/pet-window-smoke.js`: PASS, 8 checks.
+- `npm.cmd run test:renderer`: PASS.
+- `python -m pytest`: PASS, 586 passed.
+- Safety scan for direct Ollama access in `main.js`, `renderer.js`, `pet-renderer.js`, and `pet-preload.js`: PASS.
+- `git diff --check`: PASS.
+
+Next Task:
+
+Pet Mode MVP checkpoint complete. Future work can start a new task for real Pet Bubble Chat `/chat` wiring, position persistence, tray/menu behavior, or manual runtime visual smoke.
