@@ -7347,6 +7347,75 @@ Next recommendation:
 
 ---
 
+## TASK-146 - Pet Mode Menu / Controls Consolidation Design
+
+**Status:** DEFINED - READY FOR IMPLEMENTATION
+**Date:** 2026-05-25
+
+Goal:
+
+Define the next Pet Mode improvement before implementation: consolidate Pet Window controls so `Chat`, `Full App`, `Menu`, details/info, and `x` behavior are clear, compact, and consistent with the current display-only product direction.
+
+Product direction:
+
+- Full App remains the primary text input surface.
+- Pet Window remains display/companion-only.
+- Pet Window must not become a mini full chat app.
+- Pet Window remains constrained to `220 x 280`.
+- Christina image, the visible clean reply bubble, and the bottom `Chat / Full App / Menu` controls must remain usable.
+
+Control behavior to implement:
+
+- `Chat`: should not reveal a Pet text input box. It should either focus/open Full App for typing or show a compact local hint that typing belongs in Full App. The preferred implementation is a Full App chat handoff using existing safe behavior if available.
+- `Full App`: should explicitly focus/open the existing Full App window through the existing Pet-to-Full behavior. It should not send chat, modify provider settings, or create a second chat surface.
+- `Menu`: should contain secondary Pet controls such as Open Full App, Toggle Details/Info if moved there, Reset Pet Position, Hide Pet Window, and Close Menu. It should not contain provider settings, backend controls, text input, or external links.
+- Details/info: may remain as the floating `i` if it does not crowd the reply text. It may move into Menu only if details remain discoverable, keyboard/click accessible, metadata-only, and constrained inside the `220 x 280` window.
+- `x`: should hide the Pet Window, matching existing Hide Pet behavior. It must not quit the app or close Full App unless a later explicit task changes that contract.
+
+Accessibility and small-window constraints:
+
+- Controls must remain reachable by click and keyboard where the current DOM supports it.
+- Button labels/tooltips/aria labels should clearly distinguish Chat, Full App, Menu, details/info, and Hide Pet.
+- Floating controls must not overlap or consume the visible reply text layout.
+- Menu/details panels must use constrained height or internal scroll and must not push the bottom controls out of the window.
+- The action order should preserve the current visual hierarchy: Christina image, clean reply bubble, bottom controls.
+
+Expected implementation files:
+
+- `apps/desktop/src/pet/pet.html`
+- `apps/desktop/src/pet/pet.css`
+- `apps/desktop/src/pet/pet-renderer.js`
+- `apps/desktop/scripts/pet-renderer-smoke.js`
+- Documentation updates after validation.
+
+Risk boundaries / non-goals:
+
+- No backend changes.
+- No `/chat` schema changes.
+- No new IPC/preload APIs unless a follow-up implementation explicitly justifies why existing `openFullApp`, `hidePetWindow`, `resetPetPosition`, and speech update surfaces are insufficient.
+- No provider settings changes.
+- No external APIs.
+- No image asset changes.
+- No voice, speech-to-text, microphone, screenshot, screen-monitoring, file, Email, or Calendar behavior.
+- No Pet Window text input box.
+- No mini Full App chat surface inside Pet Window.
+- No automatic Full App opening for long replies.
+
+Validation expected after implementation:
+
+- Pet renderer syntax check.
+- Pet renderer smoke covering Chat handoff/hint, Full App button, Menu items, details/info behavior, `x` hide behavior, and `220 x 280` layout constraints.
+- Pet window smoke to confirm no IPC/preload/API broadening unless explicitly justified.
+- Desktop renderer smoke.
+- Direct Ollama `11434` safety scan for renderer surfaces.
+- `git diff --check`.
+
+Next recommendation:
+
+- Implement TASK-146 as the next Pet Mode task, keeping the change frontend-only unless the existing docs justify otherwise.
+
+---
+
 ## TASK-139 - Manual Windows Pet Bubble Chat Smoke Closure
 
 **Status:** DONE - SUPERSEDED / RESOLVED

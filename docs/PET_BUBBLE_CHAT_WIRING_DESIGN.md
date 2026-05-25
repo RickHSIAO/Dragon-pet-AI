@@ -792,3 +792,39 @@ Validation:
 - `python -m pytest` - PASS, 586 passed.
 - Direct Ollama `11434` safety scan - PASS, no matches.
 - `git diff --check` - PASS.
+
+## 23. TASK-146 Pet Mode Menu / Controls Consolidation Design
+
+Status: DEFINED - READY FOR IMPLEMENTATION on 2026-05-25.
+
+Purpose:
+
+- Clarify the next Pet Mode control behavior before runtime changes.
+- Preserve the display-only speech bubble direction from TASK-141 and TASK-145.
+- Keep Full App as the primary text input and long-reading surface.
+
+Speech bubble implications:
+
+- `Chat` must not resurrect the Pet Bubble input composer.
+- `Chat` should either hand off to Full App or show a compact local hint.
+- Details/info remains metadata-only: source, mood, status/helper text, and long-reply hint.
+- Details/info can stay as floating `i` or move into Menu if the reply text remains clean and discoverability is preserved.
+- The visible reply bubble continues to show Christina's role reply only by default.
+- Long replies remain constrained previews; Full App remains the reading path.
+
+Menu/control implications:
+
+- `Full App` keeps the explicit Pet-to-Full focus/open behavior.
+- `Menu` should hold secondary controls: Open Full App, Toggle Details/Info if moved there, Reset Pet Position, Hide Pet Window, and Close Menu.
+- `x` maps to Hide Pet, not app quit.
+- Bottom controls must remain visible inside the `220 x 280` Pet Window.
+
+Non-goals:
+
+- No backend change.
+- No `/chat` schema change.
+- No provider settings change.
+- No external API.
+- No image or voice feature.
+- No new text input box in Pet Window.
+- No new IPC/preload API unless separately justified during implementation.

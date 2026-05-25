@@ -1212,6 +1212,32 @@ Validation note:
 
 - Pet renderer syntax check, Pet renderer smoke, Pet window smoke, desktop renderer smoke, backend pytest, direct Ollama `11434` safety scan, and `git diff --check` pass for TASK-145.
 
+### TASK-146 - Pet Mode Menu / Controls Consolidation Design
+
+Status: DEFINED - READY FOR IMPLEMENTATION on 2026-05-25.
+
+Goal:
+
+- Consolidate Pet Window control behavior after TASK-145 without changing the display-only product direction.
+- Keep Full App as the primary text input surface.
+- Keep Pet Window as the compact companion display layer.
+- Keep the `220 x 280` Pet Window, Christina image, visible reply bubble, and bottom controls usable.
+
+Control definitions:
+
+- `Chat`: does not open a Pet text box. It should hand off to Full App for typing or show a compact local hint that typing belongs in Full App.
+- `Full App`: explicitly opens/focuses Full App through existing Pet-to-Full behavior.
+- `Menu`: owns secondary actions: Open Full App, Toggle Details/Info if implementation moves it there, Reset Pet Position, Hide Pet Window, and Close Menu.
+- Details/info: remains metadata/debug/helper only. It may stay as floating `i` or move into Menu if discoverability and small-window layout remain sound.
+- `x`: hides Pet Window through existing Hide Pet behavior. It does not quit the app.
+
+Non-goals:
+
+- No backend, `/chat` schema, provider settings, external API, image, voice, speech-to-text, file, Email, Calendar, screenshot, microphone, or screen-monitoring change.
+- No Pet Window text input box.
+- No mini full chat app in Pet Window.
+- No new IPC/preload APIs unless implementation documents why existing narrow APIs are insufficient.
+
 ---
 
 ## 9. Explicit Non-goals for TASK-114
