@@ -610,7 +610,7 @@ Validation:
 
 Next recommendation:
 
-- Re-run TASK-139 Manual Windows Pet Bubble Chat Smoke and verify the input and Send composer are visible and usable in the real Windows Pet Window.
+- TASK-139 is closed as superseded/resolved, not reclassified as PASS. The earlier input-composer path was replaced by the TASK-141 display-only direction, and TASK-145 is the current Windows manual smoke PASS checkpoint for the corrected Pet reply bubble.
 
 ## 19. TASK-141 Display-only Speech Bubble Redesign
 

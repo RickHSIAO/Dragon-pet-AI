@@ -7347,6 +7347,34 @@ Next recommendation:
 
 ---
 
+## TASK-139 - Manual Windows Pet Bubble Chat Smoke Closure
+
+**Status:** DONE - SUPERSEDED / RESOLVED
+**Date:** 2026-05-25
+
+Closure reason:
+
+- TASK-139 originally found an input visibility regression in the earlier Pet Bubble Chat path.
+- The original TASK-139 manual smoke path is not being reclassified as PASS.
+- TASK-140 addressed the immediate layout regression follow-up.
+- TASK-141 changed the Pet Window product direction away from a tiny input chat panel and toward a display-only companion speech bubble.
+- TASK-145 completed the corrected clean reply bubble layout and passed Windows manual smoke.
+
+Current product direction:
+
+- Full App remains the primary text input surface.
+- Pet Window remains display/companion-only.
+- The old Pet Bubble input visibility issue is no longer an active blocker under the current display-only direction.
+- TASK-145 is the current completed visual checkpoint for the Pet reply bubble.
+
+Scope:
+
+- Documentation/status cleanup only.
+- No runtime implementation was changed.
+- No backend, `/chat` schema, IPC/preload API, provider settings, external API, image asset, voice feature, Pet Window runtime behavior, or Full App renderer behavior was changed.
+
+---
+
 ## TASK-141 - Redesign Pet Bubble as Display-only Speech Bubble
 
 **Status:** DONE
@@ -7484,7 +7512,7 @@ Verification:
 
 Next recommendation:
 
-- Re-run TASK-139 Manual Windows Pet Bubble Chat Smoke to confirm the input and Send composer are visible and usable on the real Windows Pet Window.
+- TASK-139 is closed as superseded/resolved. Do not rerun the old Pet Bubble input-composer smoke path; TASK-145 is the current Windows manual smoke PASS checkpoint for the display-only Pet reply bubble.
 
 ---
 

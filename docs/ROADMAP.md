@@ -353,7 +353,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 | TASK-136 | Pet Bubble Mood/Expression Integration | DONE |
 | TASK-137 | Pet Bubble Long Reply Handling | DONE |
 | TASK-138 | Pet Bubble Chat Smoke Tests | DONE |
-| TASK-139 | Manual Windows Pet Bubble Chat Smoke | IN_PROGRESS - INPUT VISIBILITY REGRESSION FOUND |
+| TASK-139 | Manual Windows Pet Bubble Chat Smoke | DONE - SUPERSEDED / RESOLVED |
 | TASK-140 | Fix Pet Bubble Input Visibility | DONE |
 | TASK-141 | Redesign Pet Bubble as Display-only Speech Bubble | DONE |
 | TASK-143 | Mirror Full App Chat Reply to Pet Speech Bubble | DONE |
@@ -403,7 +403,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 - TASK-136 unifies Pet Bubble mood/expression mapping through `normalizePetMood`, `setPetExpression`, and `setPetExpressionForBubbleState`. Response `success` uses backend `mood`; local states map to existing Christina PNG moods only: pending/focused, offline/worried, timeout/sleepy, local-error/worried, mock/proud, empty-input/annoyed, long-reply/focused.
 - TASK-137 defines long reply threshold as `PET_REPLY_LONG_THRESHOLD = 160`, routes long backend replies through `long_reply`, shows `回覆較長，可開 Full App 查看完整內容。`, keeps response text internally scrollable, and reinforces `220 x 280` layout constraints with no new backend, IPC, API, or schema change.
 - TASK-138 strengthens Pet Bubble smoke coverage to 29 checks across success, empty input, source mapping, mood expression, timeout/offline/malformed errors, long replies, pending duplicate guard, retry/next-send behavior, layout hooks, and direct-Ollama safety. Runtime code was not changed.
-- TASK-139 Windows manual smoke found a Pet Bubble layout regression: the bubble expanded and displayed status/response/legacy placeholder text, but input and Send were clipped out of the visible Pet Window.
+- TASK-139 Windows manual smoke found a Pet Bubble layout regression: the bubble expanded and displayed status/response/legacy placeholder text, but input and Send were clipped out of the visible Pet Window. That original manual smoke path is not recorded as PASS; it is closed as superseded/resolved by TASK-140's regression fix, TASK-141's display-only Pet Window direction, and TASK-145's Windows manual smoke PASS.
 - TASK-140 fixes the composer visibility regression by making the bubble a fixed-height grid, hiding the legacy placeholder body from layout, keeping response text in the scrollable middle row, and pinning the input/Send composer as the bottom row. Input and Send stay visible in every non-collapsed state; pending only disables them.
 - TASK-141 changes product direction: the visible Pet Bubble is now a display-only comic-style speech bubble with a CSS tail, compact status, and response text. The Pet form/input/send hooks are hidden dev-only hooks retained for the existing `/chat` client tests and future voice/dispatch reuse. Full App is now the primary text input surface.
 - TASK-143 adds a narrow Full App -> Pet speech bridge. After Full App receives `/chat`, it sends only `{ reply, mood, source }` through `window.dragonPet.updatePetSpeech()` on fixed IPC channel `pet:speech-update`; main sanitizes/truncates and forwards to Pet Window on `pet:speech-received`; Pet preload exposes only `onSpeechUpdate(callback)`; hidden Pet Window is not automatically shown.
