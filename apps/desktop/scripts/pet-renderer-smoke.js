@@ -306,6 +306,12 @@ function testPetCssUsesStaticPetDimensions() {
   assertRegex(css, /\.pet-bubble\[data-details-open="true"\] \.pet-bubble-response[\s\S]*max-height:\s*74px/, "pet.css");
   assertRegex(css, /\.pet-shell:not\(\[data-bubble-state="collapsed"\]\) \.pet-avatar[\s\S]*width:\s*142px/, "pet.css");
   assertRegex(css, /\.pet-shell:not\(\[data-bubble-state="collapsed"\]\) \.pet-avatar[\s\S]*height:\s*142px/, "pet.css");
+  assertRegex(css, /\.pet-avatar[\s\S]*object-fit:\s*contain/, "pet.css");
+  assertNotIncludes(css, "filter:", "pet.css");
+  assertNotIncludes(css, "mix-blend-mode", "pet.css");
+  assertNotIncludes(css, "background-image", "pet.css");
+  assertNotIncludes(css, "mask-image", "pet.css");
+  assertNotIncludes(css, "-webkit-mask", "pet.css");
   assertRegex(css, /\.pet-menu[\s\S]*max-height:\s*144px/, "pet.css");
   assertRegex(css, /\.pet-menu[\s\S]*overflow-y:\s*auto/, "pet.css");
   assertRegex(css, /\.pet-stage,\s*\r?\n\.pet-drag-region[\s\S]*-webkit-app-region:\s*no-drag\b/, "pet.css");
@@ -978,9 +984,12 @@ function testPetRendererRegistersFixedSpeechUpdateListener() {
 function testPetExpressionMappingHelpersUseExistingAssets() {
   const {
     CHRISTINA_EXPRESSION_ASSETS,
+    PET_MOOD_EXPRESSION_MAP,
     PET_BUBBLE_STATE_EXPRESSIONS,
+    expressionAssetForMood,
     expressionForBubbleState,
     normalizePetMood,
+    renderPetSpeechUpdate,
     setPetExpression,
     setPetExpressionForBubbleState,
   } = require(petRendererPath);
@@ -1000,9 +1009,32 @@ function testPetExpressionMappingHelpersUseExistingAssets() {
     assert.match(assetPath, new RegExp(`christina_${mood}\\.png$`));
   }
 
+  assert.equal(PET_MOOD_EXPRESSION_MAP.error, "worried");
+  assert.equal(PET_MOOD_EXPRESSION_MAP.offline, "worried");
+  assert.equal(PET_MOOD_EXPRESSION_MAP.sad, "worried");
+  assert.equal(PET_MOOD_EXPRESSION_MAP.pending, "focused");
+
   assert.equal(normalizePetMood("happy"), "happy");
   assert.equal(normalizePetMood("focused"), "focused");
+  assert.equal(normalizePetMood("FOCUSED"), "focused");
+  assert.equal(normalizePetMood(" proud "), "proud");
+  assert.equal(normalizePetMood("worried"), "worried");
+  assert.equal(normalizePetMood("error"), "worried");
+  assert.equal(normalizePetMood("offline"), "worried");
+  assert.equal(normalizePetMood("sad"), "worried");
   assert.equal(normalizePetMood("not_a_mood"), "neutral");
+  assert.equal(normalizePetMood(""), "neutral");
+  assert.equal(normalizePetMood(null), "neutral");
+  assert.equal(normalizePetMood("__proto__"), "neutral");
+  assert.equal(normalizePetMood("toString"), "neutral");
+  assert.deepEqual(expressionAssetForMood("focused"), {
+    mood: "focused",
+    assetPath: CHRISTINA_EXPRESSION_ASSETS.focused,
+  });
+  assert.deepEqual(expressionAssetForMood("missing"), {
+    mood: "neutral",
+    assetPath: CHRISTINA_EXPRESSION_ASSETS.neutral,
+  });
   assert.equal(expressionForBubbleState("pending"), "focused");
   assert.equal(expressionForBubbleState("thinking"), "focused");
   assert.equal(expressionForBubbleState("backend_offline"), "worried");
@@ -1022,13 +1054,93 @@ function testPetExpressionMappingHelpersUseExistingAssets() {
   assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "focused");
   assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_focused\.png$/);
 
+  setPetExpression(fakeDocument, "proud");
+  assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "proud");
+  assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_proud\.png$/);
+
+  setPetExpression(fakeDocument, "worried");
+  assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "worried");
+  assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_worried\.png$/);
+
   setPetExpression(fakeDocument, "unknown");
+  assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "neutral");
+  assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_neutral\.png$/);
+
+  setPetExpression(fakeDocument, "sleepy");
+  assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "sleepy");
+  assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_sleepy\.png$/);
+  fakeDocument.getElementById("pet-avatar").onerror();
   assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "neutral");
   assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_neutral\.png$/);
 
   setPetExpressionForBubbleState(fakeDocument, "empty_input");
   assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "annoyed");
   assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_annoyed\.png$/);
+
+  const speechDocument = createPetBubbleStateDocument();
+  renderPetSpeechUpdate(speechDocument, {
+    reply: "Mood should not alter this reply.",
+    mood: "toString",
+    source: "llm_local",
+  });
+  assert.equal(
+    speechDocument.getElementById("pet-bubble-response").textContent,
+    "Mood should not alter this reply."
+  );
+  assert.equal(speechDocument.getElementById("pet-avatar-container").dataset.expression, "neutral");
+  assert.doesNotMatch(
+    speechDocument.getElementById("pet-bubble-response").textContent,
+    /mood|source|debug|details|thinking|toString/
+  );
+  assert.equal(speechDocument.getElementById("pet-bubble-details").hidden, true);
+}
+
+function testPetMoodExpressionManualSmokeHookUsesRealSpeechPath() {
+  const {
+    PET_MOOD_SMOKE_API_NAME,
+    PET_MOOD_SMOKE_REPLY,
+    installPetMoodExpressionSmokeHook,
+  } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+  const fakeWindow = {};
+
+  const smokeApi = installPetMoodExpressionSmokeHook(fakeDocument, fakeWindow);
+  assert.equal(fakeWindow[PET_MOOD_SMOKE_API_NAME], smokeApi);
+  assert.deepEqual([...smokeApi.supportedMoods].sort(), [
+    "annoyed",
+    "focused",
+    "happy",
+    "neutral",
+    "proud",
+    "sleepy",
+    "worried",
+  ]);
+
+  const focused = smokeApi.apply("focused");
+  const proud = smokeApi.apply("proud");
+  const worried = smokeApi.apply("worried");
+  const neutral = smokeApi.apply("neutral");
+  const unknown = smokeApi.apply("missing");
+
+  assert.deepEqual(
+    [focused.expression, proud.expression, worried.expression, neutral.expression, unknown.expression],
+    ["focused", "proud", "worried", "neutral", "neutral"]
+  );
+  assert.match(focused.src, /christina_focused\.png$/);
+  assert.match(proud.src, /christina_proud\.png$/);
+  assert.match(worried.src, /christina_worried\.png$/);
+  assert.match(neutral.src, /christina_neutral\.png$/);
+  assert.notEqual(focused.src, proud.src);
+  assert.notEqual(proud.src, worried.src);
+  assert.notEqual(worried.src, neutral.src);
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "speaking");
+  assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, PET_MOOD_SMOKE_REPLY);
+  assert.doesNotMatch(
+    fakeDocument.getElementById("pet-bubble-response").textContent,
+    /focused|proud|worried|neutral|mood|source|debug|details|thinking/
+  );
+  assert.equal(fakeDocument.getElementById("pet-bubble-details").hidden, true);
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.hasDetails, "false");
 }
 
 function testPetLongReplyThresholdHelper() {
@@ -1873,6 +1985,7 @@ async function run() {
     testPetPresenceErrorMessageStaysClean,
     testPetRendererRegistersFixedSpeechUpdateListener,
     testPetExpressionMappingHelpersUseExistingAssets,
+    testPetMoodExpressionManualSmokeHookUsesRealSpeechPath,
     testPetLongReplyThresholdHelper,
     testPetRendererTogglesBubbleState,
     testPetRendererTogglesMenuState,

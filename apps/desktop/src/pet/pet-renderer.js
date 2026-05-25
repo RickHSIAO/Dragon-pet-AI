@@ -12,6 +12,8 @@ const PET_REPLY_PREVIEW_LIMIT = 120;
 const PET_LONG_REPLY_HINT = "\u56de\u8986\u8f03\u9577\uff0c\u53ef\u958b Full App \u67e5\u770b\u5b8c\u6574\u5167\u5bb9\u3002";
 const PET_IDLE_REPLY = "\u543e\u5728\u3002\u8981\u627e\u543e\u5c31\u53bb Full App \u8aaa\u8a71\u3002";
 const PET_HANDOFF_REPLY = "\u53bb Full App \u8aaa\uff0c\u543e\u6703\u807d\u3002";
+const PET_MOOD_SMOKE_REPLY = "\u8868\u60c5\u6620\u5c04\u6e2c\u8a66\u3002";
+const PET_MOOD_SMOKE_API_NAME = "__dragonPetMoodExpressionSmoke";
 const PET_RECENT_REPLY_VISIBLE_MS = 90000;
 const PET_HANDOFF_HINT_MS = 6000;
 const PET_DETAIL_TEXT_LIMIT = 140;
@@ -30,6 +32,32 @@ const CHRISTINA_EXPRESSION_ASSETS = Object.freeze({
   annoyed: "../renderer/assets/pet/christina/expressions/christina_annoyed.png",
   worried: "../renderer/assets/pet/christina/expressions/christina_worried.png",
   sleepy: "../renderer/assets/pet/christina/expressions/christina_sleepy.png",
+});
+
+const PET_MOOD_EXPRESSION_MAP = Object.freeze({
+  neutral: "neutral",
+  default: "neutral",
+  idle: "neutral",
+  calm: "neutral",
+  focused: "focused",
+  thinking: "focused",
+  pending: "focused",
+  listening: "focused",
+  happy: "happy",
+  joy: "happy",
+  proud: "proud",
+  smug: "proud",
+  confident: "proud",
+  annoyed: "annoyed",
+  angry: "annoyed",
+  upset: "annoyed",
+  worried: "worried",
+  error: "worried",
+  offline: "worried",
+  sad: "worried",
+  anxious: "worried",
+  sleepy: "sleepy",
+  tired: "sleepy",
 });
 
 const PET_BUBBLE_STATE_EXPRESSIONS = Object.freeze({
@@ -255,21 +283,53 @@ function getPetBackendUrl(windowRef = typeof window !== "undefined" ? window : n
   return params.get("backend") || PET_BACKEND_DEFAULT_URL;
 }
 
+function hasOwnKey(objectRef, key) {
+  return Object.prototype.hasOwnProperty.call(objectRef, key);
+}
+
+function expressionAssetForMood(mood) {
+  const normalizedMood = typeof mood === "string" ? mood.trim().toLowerCase() : "";
+  const mappedMood = hasOwnKey(PET_MOOD_EXPRESSION_MAP, normalizedMood)
+    ? PET_MOOD_EXPRESSION_MAP[normalizedMood]
+    : normalizedMood;
+  const safeMood = hasOwnKey(CHRISTINA_EXPRESSION_ASSETS, mappedMood)
+    ? mappedMood
+    : PET_MODE_DEFAULTS.expression;
+
+  return {
+    mood: safeMood,
+    assetPath: hasOwnKey(CHRISTINA_EXPRESSION_ASSETS, safeMood)
+      ? CHRISTINA_EXPRESSION_ASSETS[safeMood]
+      : PET_MODE_DEFAULTS.avatarSrc,
+  };
+}
+
 function normalizePetMood(mood) {
-  return CHRISTINA_EXPRESSION_ASSETS[mood] ? mood : PET_MODE_DEFAULTS.expression;
+  return expressionAssetForMood(mood).mood;
 }
 
 function setPetExpression(documentRef, mood) {
-  const normalizedMood = normalizePetMood(mood);
+  const { mood: normalizedMood, assetPath } = expressionAssetForMood(mood);
   const avatarContainer = documentRef.getElementById("pet-avatar-container");
   const avatar = documentRef.getElementById("pet-avatar");
-  const assetPath = CHRISTINA_EXPRESSION_ASSETS[normalizedMood];
 
   if (avatarContainer) {
     avatarContainer.dataset.expression = normalizedMood;
   }
 
   if (avatar) {
+    avatar.onerror = () => {
+      if (
+        normalizedMood !== PET_MODE_DEFAULTS.expression &&
+        avatar.getAttribute("src") === assetPath
+      ) {
+        if (avatarContainer) {
+          avatarContainer.dataset.expression = PET_MODE_DEFAULTS.expression;
+        }
+        avatar.setAttribute("src", PET_MODE_DEFAULTS.avatarSrc);
+        avatar.setAttribute("alt", `Christina ${PET_MODE_DEFAULTS.expression} expression`);
+      }
+    };
     avatar.setAttribute("src", assetPath);
     avatar.setAttribute("alt", `Christina ${normalizedMood} expression`);
   }
@@ -1033,6 +1093,54 @@ function renderPetSpeechUpdate(documentRef = document, payload = {}, options = {
   return renderedState;
 }
 
+function buildPetMoodExpressionSmokeApi(documentRef = document, options = {}) {
+  return Object.freeze({
+    supportedMoods: Object.freeze(Object.keys(CHRISTINA_EXPRESSION_ASSETS)),
+    apply(mood) {
+      const renderedState = renderPetSpeechUpdate(
+        documentRef,
+        {
+          reply: PET_MOOD_SMOKE_REPLY,
+          mood: typeof mood === "string" ? mood : "",
+          source: "unknown",
+        },
+        options
+      );
+      const avatarContainer = documentRef.getElementById("pet-avatar-container");
+      const avatar = documentRef.getElementById("pet-avatar");
+      const expression = avatarContainer
+        ? avatarContainer.dataset.expression || PET_MODE_DEFAULTS.expression
+        : PET_MODE_DEFAULTS.expression;
+
+      return {
+        ok: true,
+        requestedMood: mood,
+        expression,
+        state: renderedState,
+        src: avatar ? avatar.getAttribute("src") : "",
+      };
+    },
+  });
+}
+
+function installPetMoodExpressionSmokeHook(
+  documentRef = document,
+  windowRef = typeof window !== "undefined" ? window : null,
+  options = {}
+) {
+  if (!windowRef || hasOwnKey(windowRef, PET_MOOD_SMOKE_API_NAME)) {
+    return windowRef ? windowRef[PET_MOOD_SMOKE_API_NAME] || null : null;
+  }
+
+  const smokeApi = buildPetMoodExpressionSmokeApi(documentRef, options);
+  Object.defineProperty(windowRef, PET_MOOD_SMOKE_API_NAME, {
+    configurable: true,
+    enumerable: false,
+    value: smokeApi,
+  });
+  return smokeApi;
+}
+
 function initializePetMode(documentRef = document) {
   const root = documentRef.getElementById("pet-mode-root");
   const dragRegion = documentRef.getElementById("pet-drag-region");
@@ -1163,6 +1271,7 @@ function initializePetMode(documentRef = document) {
   if (windowRef && typeof windowRef.addEventListener === "function") {
     windowRef.addEventListener("focus", () => restorePetPresenceAfterShow(documentRef));
   }
+  installPetMoodExpressionSmokeHook(documentRef, windowRef);
 
   const api =
     typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null;
@@ -1192,15 +1301,19 @@ if (typeof module !== "undefined") {
     PET_IDLE_REPLY,
     PET_LONG_REPLY_HINT,
     PET_MODE_DEFAULTS,
+    PET_MOOD_SMOKE_API_NAME,
+    PET_MOOD_SMOKE_REPLY,
     PET_RECENT_REPLY_VISIBLE_MS,
     PET_REPLY_PREVIEW_LIMIT,
     PET_REPLY_LONG_THRESHOLD,
+    PET_MOOD_EXPRESSION_MAP,
     buildChatPayload,
     collapseBubble,
     closeMenu,
     closeMenuOnOutsideClick,
     detailOptionsForSpeechPayload,
     expandBubble,
+    expressionAssetForMood,
     expressionForBubbleState,
     getPetBackendUrl,
     getBubbleStateConfig,
@@ -1213,6 +1326,7 @@ if (typeof module !== "undefined") {
     handlePlaceholderSubmit,
     handleResetPetPosition,
     initializePetMode,
+    installPetMoodExpressionSmokeHook,
     isLongReply,
     isBubbleDetailsOpen,
     isElementOrDescendant,

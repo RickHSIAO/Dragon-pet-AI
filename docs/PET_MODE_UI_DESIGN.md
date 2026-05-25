@@ -1350,7 +1350,7 @@ Implementation notes:
 
 ### TASK-149 - Pet Bubble Reply / Details Separation Polish Design
 
-Status: IMPLEMENTED - NEEDS WINDOWS MANUAL SMOKE on 2026-05-25.
+Status: IN PROGRESS - NEEDS WINDOWS MANUAL SMOKE as of 2026-05-26.
 
 Goal:
 
@@ -1450,7 +1450,48 @@ Recommended technical direction:
 
 ---
 
-## 11. Open Questions
+## 11. TASK-153 Mood Expression Mapping Polish
+
+Status: IMPLEMENTED - NEEDS WINDOWS MANUAL SMOKE on 2026-05-25.
+
+Implemented behavior:
+
+- Mood mapping remains frontend-only in the Pet renderer.
+- Known moods map only to existing Christina expression PNG assets:
+  - `neutral`
+  - `focused`
+  - `happy`
+  - `proud`
+  - `annoyed`
+  - `worried`
+  - `sleepy`
+- Mood strings are trimmed and lowercased before mapping.
+- Small local aliases map to existing assets only:
+  - idle/default/calm -> `neutral`
+  - thinking/pending/listening -> `focused`
+  - joy -> `happy`
+  - smug/confident -> `proud`
+  - angry/upset -> `annoyed`
+  - error/offline/sad/anxious -> `worried`
+  - tired -> `sleepy`
+- Unknown, null, empty, and unsafe inherited-key-like mood values fall back to `neutral`.
+- If a non-neutral expression image fails to load, the avatar falls back to the neutral expression.
+- Mood mapping does not alter the visible Pet Bubble reply text.
+- Mood mapping does not expose source/debug/details/thinking text.
+- Manual Windows prompt testing found that proud/worried-style prompt wording still reaches Pet as `focused`, because mock/local `/chat` derives mood with backend keyword logic instead of LLM expression inference.
+- `window.__dragonPetMoodExpressionSmoke.apply(mood)` is available in the Pet Window DevTools console as a deterministic manual smoke hook. It uses the same Pet renderer speech update path, changes only the expression mapping target, and keeps the visible bubble reply clean.
+
+Manual smoke required:
+
+- Use `window.__dragonPetMoodExpressionSmoke.apply("focused")`, `"proud"`, `"worried"`, `"neutral"`, and `"missing"` in Pet Window DevTools to confirm supported moods display the expected existing Christina expression and unknown moods fall back to neutral.
+- Confirm unknown/null/empty mood values fall back to neutral/default.
+- Confirm a missing/invalid non-neutral expression load does not break the Pet Window.
+- Confirm normal Pet Bubble replies remain clean and character-facing.
+- Confirm TASK-152 details disclosure and TASK-148 position behavior do not regress.
+
+---
+
+## 12. Open Questions
 
 - Should Pet Mode open by default after the feature stabilizes, or should Full App remain the startup default?
 - Should closing Full App keep Pet Mode alive?

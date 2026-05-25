@@ -448,6 +448,38 @@ Next recommendation:
 
 - TASK-137 - Pet Bubble Long Reply Handling.
 
+---
+
+## 15a. TASK-153 Mood Expression Mapping Polish
+
+Status: IN PROGRESS - NEEDS WINDOWS MANUAL SMOKE as of 2026-05-26.
+
+TASK-153 keeps the Full App -> Pet speech mirror contract unchanged while tightening local Pet renderer mood handling.
+
+Wiring implications:
+
+- Full App still mirrors only `{ reply, mood, source }`.
+- `/chat` schema remains `reply / mood / source`.
+- No backend mood schema was added.
+- No IPC/preload API was added.
+- Mood affects only Christina's expression asset selection.
+- Mood must not alter visible reply text.
+- Mood must not expose source/debug/details/thinking content.
+
+Mapping implications:
+
+- Supported canonical moods remain the existing asset-backed set: `neutral`, `focused`, `happy`, `proud`, `annoyed`, `worried`, and `sleepy`.
+- Safe aliases map to existing assets only, such as `error/offline/sad -> worried` and `thinking/pending -> focused`.
+- Unknown, null, empty, or unsafe inherited-key-like mood values fall back to `neutral`.
+- Non-neutral avatar image load failure falls back to `neutral`.
+
+Smoke expectations:
+
+- Pet renderer smoke covers known moods, aliases, unknown/null/empty fallback, asset load fallback, and clean reply preservation.
+- Manual prompt wording is not enough to verify all expressions because current mock/local `/chat` returns only `neutral`, `happy`, or `focused`.
+- Pet Window DevTools exposes `window.__dragonPetMoodExpressionSmoke.apply(mood)` for deterministic manual expression checks without changing IPC, preload, backend schema, or normal Pet Bubble speech.
+- TASK-152 details disclosure behavior must remain unchanged.
+
 ## 16. TASK-137 Long Reply Handling Checkpoint
 
 Status: DONE on 2026-05-24.

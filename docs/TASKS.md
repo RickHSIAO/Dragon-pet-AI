@@ -8126,7 +8126,7 @@ Validation:
 - `node --check apps/desktop/src/pet/pet-renderer.js` - PASS.
 - `node --check apps/desktop/scripts/pet-renderer-smoke.js` - PASS.
 - `node --check apps/desktop/scripts/pet-window-smoke.js` - PASS.
-- `node apps/desktop/scripts/pet-renderer-smoke.js` - PASS, 45 checks.
+- `node apps/desktop/scripts/pet-renderer-smoke.js` - PASS, 46 checks.
 - `node apps/desktop/scripts/pet-window-smoke.js` - PASS, 15 checks.
 - `cd apps/desktop && npm.cmd run test:renderer` - PASS.
 - `python -m pytest --basetemp .\.pytest-tmp -p no:cacheprovider` - PASS, 599 passed.
@@ -8146,6 +8146,189 @@ Validation:
 Next recommendation:
 
 - TASK-152 is fully closed. Define the next Pet Mode task in docs before implementation.
+
+---
+
+## TASK-153 - Pet Mood Expression Mapping Polish Design
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS
+**Date:** 2026-05-25
+
+Goal:
+
+Design a small frontend-only Pet Mode polish task for mood-to-expression mapping so Christina feels more alive while preserving safe fallback behavior and the clean Pet Bubble contract.
+
+Context:
+
+- TASK-148 through TASK-152 are DONE - PASS and form the current stable Pet Mode checkpoint.
+- The Pet Bubble remains clean and character-facing by default.
+- Details/debug/source/helper/status/provider/thinking diagnostics stay out of normal speech.
+- Current mood/expression behavior exists and should be polished without changing backend mood schema or adding assets.
+- Full App remains the primary text input surface.
+- Pet Window remains a `300 x 400` display/companion layer.
+
+Expected behavior to design:
+
+- Known moods:
+  - Map supported mood values to existing Christina expression assets only.
+  - Expected supported moods should include the existing runtime set such as `neutral`, `focused`, `happy`, `proud`, `annoyed`, `worried`, and `sleepy` unless implementation discovers a narrower current set.
+  - Mood-to-expression mapping should be centralized and easy to extend when new expression images are intentionally added in a future task.
+- Unknown or missing moods:
+  - Fall back safely to neutral/default.
+  - Must not crash the Pet Window.
+  - Must not leave a broken image state if an asset is missing.
+- Bubble behavior:
+  - Mood changes must not alter clean visible reply text.
+  - Mood mapping must not expose source/debug/details/thinking content.
+  - TASK-149 clean reply behavior and TASK-152 details disclosure behavior must not regress.
+- Scope:
+  - Mood mapping remains frontend-only.
+  - Backend `/chat` response schema remains unchanged.
+  - No new backend mood schema is introduced unless a future explicit design task requires it.
+
+Acceptance criteria:
+
+- No backend changes.
+- No `/chat` schema changes.
+- No IPC/preload API changes.
+- No provider settings changes.
+- No external APIs.
+- No image asset generation or replacement.
+- No voice features.
+- No animation system.
+- No Pet Window text input.
+- No mini Full App behavior.
+- Pet Window remains `300 x 400`.
+- Known supported moods select existing expression assets when present.
+- Unknown/missing mood values fall back safely to neutral/default.
+- Missing assets do not crash the Pet Window.
+- Main Pet Bubble remains clean and character-facing.
+- Details disclosure remains hidden/collapsed by default and metadata-only.
+- TASK-148 position persistence/reset behavior does not regress.
+
+Likely files for later implementation:
+
+- `apps/desktop/src/pet/pet-renderer.js`
+- `apps/desktop/scripts/pet-renderer-smoke.js`
+- `apps/desktop/scripts/pet-window-smoke.js` only if window-level asset/path safety needs coverage.
+- `docs/TASKS.md`
+- `docs/ROADMAP.md`
+- `docs/PET_MODE_UI_DESIGN.md` only if implementation changes documented mood guidance.
+- `docs/PET_BUBBLE_CHAT_WIRING_DESIGN.md` only if implementation changes mirror/display assumptions.
+
+Manual Windows smoke expectations:
+
+- `focused`, `proud`, `worried`, `neutral`, and other existing supported moods show the expected Christina expression when assets exist.
+- Unknown mood values fall back safely to neutral/default.
+- Missing/invalid expression asset paths do not crash the Pet Window.
+- Pet Bubble reply remains clean and character-facing.
+- Source/status/helper/debug/thinking text does not appear as normal speech because of mood mapping.
+- TASK-152 details disclosure behavior does not regress.
+- TASK-148 position persistence/reset behavior does not regress.
+- Chat / Full App / Menu remain usable.
+
+Non-goals:
+
+- Do not add animation.
+- Do not add voice.
+- Do not add or generate new image assets.
+- Do not change backend or `/chat` mood schema.
+- Do not add provider settings.
+- Do not add external APIs.
+- Do not add Pet Window text input.
+- Do not turn Pet Window into a mini Full App.
+
+Next recommendation:
+
+- TASK-153 is closed. Define the next Pet Mode task in docs before implementation.
+
+Implementation summary:
+
+- Added a centralized `PET_MOOD_EXPRESSION_MAP` in the Pet renderer.
+- Kept runtime expression assets limited to the existing Christina PNG files:
+  - `neutral`
+  - `focused`
+  - `happy`
+  - `proud`
+  - `annoyed`
+  - `worried`
+  - `sleepy`
+- Normalized mood input by trimming and lowercasing string values.
+- Added safe aliases that map to existing assets only:
+  - `default`, `idle`, `calm` -> `neutral`
+  - `thinking`, `pending`, `listening` -> `focused`
+  - `joy` -> `happy`
+  - `smug`, `confident` -> `proud`
+  - `angry`, `upset` -> `annoyed`
+  - `error`, `offline`, `sad`, `anxious` -> `worried`
+  - `tired` -> `sleepy`
+- Unknown, null, empty, inherited-key-like, or missing mood values fall back to `neutral`.
+- Added avatar image error fallback so a non-neutral expression asset load failure restores the neutral expression instead of leaving the Pet Window in a broken image state.
+- Kept mood mapping separate from visible reply rendering; mood never changes or pollutes the main Pet Bubble text.
+- Added a deterministic Pet Window DevTools smoke hook at `window.__dragonPetMoodExpressionSmoke.apply(mood)`.
+  - The hook uses the real Pet renderer `renderPetSpeechUpdate` path with a clean fixed reply and caller-provided mood.
+  - It does not add IPC/preload API, backend schema, assets, normal UI, or Pet text input.
+  - It returns the applied expression and avatar `src` for manual verification.
+- No backend, `/chat` schema, IPC/preload API, provider settings, external API, image asset, voice, animation, Pet input, Full App layout, Pet Window size, or position behavior was changed.
+
+Manual smoke investigation update:
+
+- Real Full App -> Pet payload path remains:
+  - Full App renderer successful `/chat` response -> `window.dragonPet.updatePetSpeech({ reply, mood, source })`.
+  - Full App preload sanitizes to `reply / mood / source`.
+  - Main process sanitizes/truncates and forwards `pet:speech-received`.
+  - Pet preload sanitizes to `reply / mood / source`.
+  - Pet renderer calls `renderPetSpeechUpdate(...)`, which maps `payload.mood` into the avatar image `src`.
+- Runtime mock/local mood source is backend `select_mock_mood(message)`, not LLM expression inference.
+- Direct runtime check showed prompt wording for proud/worried still returns `focused`; mock/local `/chat` naturally produces only `neutral`, `happy`, or `focused`.
+- Therefore manual prompt wording alone is not a reliable way to verify `proud` or `worried` expression mapping.
+- CSS check found `.pet-avatar` uses the active `<img src>` with `object-fit: contain`; no avatar `filter`, `mix-blend-mode`, `background-image`, or mask rule is hiding expression differences.
+
+Deterministic manual verification method:
+
+1. Start the app with Pet Mode enabled and open/show the Pet Window.
+2. Open DevTools for the Pet Window.
+3. In the Pet Window console, run:
+   - `window.__dragonPetMoodExpressionSmoke.apply("focused")`
+   - `window.__dragonPetMoodExpressionSmoke.apply("proud")`
+   - `window.__dragonPetMoodExpressionSmoke.apply("worried")`
+   - `window.__dragonPetMoodExpressionSmoke.apply("neutral")`
+   - `window.__dragonPetMoodExpressionSmoke.apply("missing")`
+4. Confirm each result returns the expected `expression` and a matching `christina_<mood>.png` `src`; `missing` should return `expression: "neutral"`.
+5. Confirm the visible Pet Bubble text remains the fixed clean smoke reply and does not show mood/source/debug/details text.
+
+Windows manual smoke result:
+
+- DONE - PASS on 2026-05-26.
+- Confirmed DevTools was opened on the Pet Window:
+  - `window.location.href` pointed to `apps/desktop/src/pet/pet.html`.
+  - `typeof window.__dragonPetMoodExpressionSmoke` returned `"object"`.
+- `window.__dragonPetMoodExpressionSmoke.apply("neutral")` returned expression `neutral` and `christina_neutral.png`.
+- `window.__dragonPetMoodExpressionSmoke.apply("focused")` returned expression `focused` and `christina_focused.png`.
+- `window.__dragonPetMoodExpressionSmoke.apply("proud")` returned expression `proud` and `christina_proud.png`.
+- `window.__dragonPetMoodExpressionSmoke.apply("worried")` returned expression `worried` and `christina_worried.png`.
+- `missing` / unknown mood fell back to expression `neutral` and `christina_neutral.png`.
+- The avatar `src` changed correctly for supported moods.
+- Missing/unknown mood did not crash the Pet Window.
+- Pet Bubble visible reply text stayed clean and character-facing.
+- Mood/source/debug/details/thinking were not exposed as normal speech.
+- TASK-152 details disclosure behavior did not regress.
+- TASK-148 Pet Window position behavior did not regress.
+- TASK-149/TASK-150/TASK-151 behavior did not regress.
+- Manual smoke verified expression/src/file behavior; it did not claim or require `data-expression` manual verification.
+
+Validation:
+
+- `node --check apps/desktop/src/pet/pet-renderer.js` - PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js` - PASS.
+- `node --check apps/desktop/scripts/pet-window-smoke.js` - PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js` - PASS, 45 checks.
+- `node apps/desktop/scripts/pet-window-smoke.js` - PASS, 15 checks.
+- `cd apps/desktop && npm.cmd run test:renderer` - PASS.
+- `python -m pytest --basetemp .\.pytest-tmp -p no:cacheprovider` - PASS, 599 passed.
+- `git diff --check` - PASS, with LF-to-CRLF warnings only.
+- TASK-153 docs status check with `rg` - PASS.
+- Changed-doc NUL byte check - PASS.
 
 ---
 
