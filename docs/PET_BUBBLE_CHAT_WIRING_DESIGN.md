@@ -968,6 +968,15 @@ Details implications:
 - Details/debug payload UI remains deferred because the runtime bridge intentionally drops diagnostic fields before Pet receives mirrored speech.
 - Long reply hints and error/source helper text remain details metadata, not normal reply text.
 
+TASK-152 details disclosure polish:
+
+- Details remain a local renderer/UI concern; the Full App -> Pet mirror contract is still only `reply / mood / source`.
+- Details are collapsed by default.
+- If there is no meaningful source/helper/status/debug-style metadata, the renderer hides/disables the details disclosure instead of opening an empty/noisy panel.
+- Safe short metadata may appear only after explicit disclosure.
+- Details sanitization filters raw JSON-like text, stack traces, local Ollama endpoint/port text, API-key wording, and thinking/reasoning markers.
+- Thinking/reasoning is not shown as normal Pet Bubble speech and is not shown as normal Pet details.
+
 Non-goals:
 
 - No backend change.

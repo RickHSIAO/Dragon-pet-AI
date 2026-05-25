@@ -298,9 +298,10 @@ function testPetCssUsesStaticPetDimensions() {
   assertRegex(css, /\.pet-bubble-response[\s\S]*overflow-wrap:\s*anywhere/, "pet.css");
   assertRegex(css, /\.pet-bubble-response[\s\S]*white-space:\s*pre-wrap/, "pet.css");
   assertRegex(css, /\.pet-bubble\[data-state="long_reply"\] \.pet-bubble-response[\s\S]*max-height:\s*92px/, "pet.css");
-  assertRegex(css, /\.pet-bubble-details[\s\S]*max-height:\s*50px/, "pet.css");
+  assertRegex(css, /\.pet-bubble-details[\s\S]*max-height:\s*46px/, "pet.css");
   assertRegex(css, /\.pet-bubble-details[\s\S]*overflow-y:\s*auto/, "pet.css");
   assertRegex(css, /\.pet-bubble-details\[hidden\][\s\S]*display:\s*none/, "pet.css");
+  assertRegex(css, /\.pet-bubble\[data-has-details="false"\] \.pet-bubble-details[\s\S]*display:\s*none/, "pet.css");
   assertRegex(css, /\.pet-bubble\[data-details-open="true"\][\s\S]*max-height:\s*158px/, "pet.css");
   assertRegex(css, /\.pet-bubble\[data-details-open="true"\] \.pet-bubble-response[\s\S]*max-height:\s*74px/, "pet.css");
   assertRegex(css, /\.pet-shell:not\(\[data-bubble-state="collapsed"\]\) \.pet-avatar[\s\S]*width:\s*142px/, "pet.css");
@@ -462,7 +463,7 @@ function testPetRendererInitializesBubbleIdleDefault() {
 }
 
 function testPetRendererRendersAllLocalBubbleStates() {
-  const { BUBBLE_STATES, setBubbleState } = require(petRendererPath);
+  const { BUBBLE_STATES, sanitizeBubbleDetailText, setBubbleState } = require(petRendererPath);
   const fakeDocument = new FakeDocument([
     "pet-mode-root",
     "pet-bubble",
@@ -475,6 +476,7 @@ function testPetRendererRendersAllLocalBubbleStates() {
     "pet-bubble-placeholder",
     "pet-chat-input-hook",
     "pet-chat-send-hook",
+    "pet-menu-toggle-details",
   ]);
 
   for (const [state, config] of Object.entries(BUBBLE_STATES)) {
@@ -482,8 +484,14 @@ function testPetRendererRendersAllLocalBubbleStates() {
     assert.equal(renderedState, state);
     assert.equal(fakeDocument.getElementById("pet-mode-root").dataset.bubbleState, state);
     assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, state);
-    assert.equal(fakeDocument.getElementById("pet-bubble-status").textContent, config.statusText);
-    assert.equal(fakeDocument.getElementById("pet-bubble-message").textContent, config.message);
+    assert.equal(
+      fakeDocument.getElementById("pet-bubble-status").textContent,
+      sanitizeBubbleDetailText(config.statusText)
+    );
+    assert.equal(
+      fakeDocument.getElementById("pet-bubble-message").textContent,
+      sanitizeBubbleDetailText(config.message)
+    );
     assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, config.response);
     assert.equal(fakeDocument.getElementById("pet-chat-input-hook").disabled, config.inputDisabled);
     assert.equal(fakeDocument.getElementById("pet-chat-send-hook").disabled, config.sendDisabled);
@@ -526,6 +534,7 @@ function createPetBubbleStateDocument() {
     "pet-chat-form-hook",
     "pet-chat-input-hook",
     "pet-chat-send-hook",
+    "pet-menu-toggle-details",
   ]);
 }
 
@@ -632,10 +641,21 @@ function testPetRendererSpeechUpdateUsesReplyOnlyWhenDiagnosticsExist() {
     /provider_debug_status|diagnostics|latency|localhost|11434|helper|explanation|thinking|reasoning|llm_local|source|mood|raw/i
   );
   assert.equal(fakeDocument.getElementById("pet-bubble-details").hidden, true);
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.hasDetails, "true");
+  assert.equal(fakeDocument.getElementById("pet-menu-toggle-details").hidden, false);
 
   toggleBubbleDetails(fakeDocument);
   assert.equal(fakeDocument.getElementById("pet-bubble-details").hidden, false);
   assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, "Character-facing reply only.");
+  assert.match(fakeDocument.getElementById("pet-bubble-status").textContent, /provider_debug_status|local/);
+  assert.match(
+    fakeDocument.getElementById("pet-bubble-message").textContent,
+    /Open the diagnostics panel|provider_debug_status|latency/
+  );
+  assert.doesNotMatch(
+    `${fakeDocument.getElementById("pet-bubble-status").textContent} ${fakeDocument.getElementById("pet-bubble-message").textContent}`,
+    /THINKING_FIELD|REASONING_TRACE|MESSAGE_THINKING|localhost|11434|<think|done thinking|\{|\}/i
+  );
 }
 
 function testPetRendererSpeechUpdateHandlesLongReply() {
@@ -660,7 +680,29 @@ function testPetRendererSpeechUpdateHandlesLongReply() {
   assert.match(fakeDocument.getElementById("pet-bubble-response").textContent, /\u2026$/);
   assert.equal(fakeDocument.getElementById("pet-bubble-message").textContent, PET_LONG_REPLY_HINT);
   assert.equal(fakeDocument.getElementById("pet-bubble-details").hidden, true);
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.hasDetails, "true");
   assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "focused");
+}
+
+function testPetBubbleDetailsDisclosureHiddenWhenNoMeaningfulDetails() {
+  const { renderPetSpeechUpdate, toggleBubbleDetails, toggleDetailsFromMenu } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+
+  renderPetSpeechUpdate(fakeDocument, {
+    reply: "Only the reply is meaningful.",
+  });
+
+  assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, "Only the reply is meaningful.");
+  assert.equal(fakeDocument.getElementById("pet-bubble-details").hidden, true);
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.hasDetails, "false");
+  assert.equal(fakeDocument.getElementById("pet-mode-root").dataset.bubbleHasDetails, "false");
+  assert.equal(fakeDocument.getElementById("pet-bubble-details-toggle").disabled, true);
+  assert.equal(fakeDocument.getElementById("pet-menu-toggle-details").hidden, true);
+
+  assert.equal(toggleBubbleDetails(fakeDocument), false);
+  assert.equal(fakeDocument.getElementById("pet-bubble-details").hidden, true);
+  assert.equal(toggleDetailsFromMenu(fakeDocument), false);
+  assert.equal(fakeDocument.getElementById("pet-bubble-details").hidden, true);
 }
 
 function testPetBubbleDetailsDisclosureTogglesSourceAndHelperText() {
@@ -676,6 +718,11 @@ function testPetBubbleDetailsDisclosureTogglesSourceAndHelperText() {
   assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, "Clean visible reply.");
   assert.equal(fakeDocument.getElementById("pet-bubble-details").hidden, true);
   assert.equal(fakeDocument.getElementById("pet-bubble-status").textContent, "local");
+  assert.doesNotMatch(
+    fakeDocument.getElementById("pet-bubble-response").textContent,
+    /source|status|helper|mood|local|llm_local|Full App/i
+  );
+  assert.equal(fakeDocument.getElementById("pet-menu-toggle-details").hidden, false);
   assert.equal(fakeDocument.getElementById("pet-bubble-message").textContent, "打字請開 Full App。");
 
   toggleBubbleDetails(fakeDocument);
@@ -687,6 +734,37 @@ function testPetBubbleDetailsDisclosureTogglesSourceAndHelperText() {
   assert.equal(fakeDocument.getElementById("pet-bubble-details").hidden, true);
   assert.equal(fakeDocument.getElementById("pet-bubble").dataset.detailsOpen, "false");
   assert.equal(fakeDocument.getElementById("pet-bubble-details-toggle").getAttribute("aria-expanded"), "false");
+}
+
+function testPetBubbleDetailsSanitizesThinkingAndRawDiagnostics() {
+  const { detailOptionsForSpeechPayload, renderPetSpeechUpdate, toggleBubbleDetails } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+  const payload = {
+    reply: "Clean final answer.",
+    source: "llm_local",
+    status: "Thinking... done thinking.",
+    helper: "<think>hidden reasoning</think>",
+    details: '{"provider":"ollama","thinking":"secret"}',
+    debug: "Traceback stack trace localhost:11434",
+  };
+
+  assert.deepEqual(detailOptionsForSpeechPayload(payload, "speaking", "llm_local"), {
+    statusText: "local",
+    message: "\u6253\u5b57\u8acb\u958b Full App\u3002",
+    detailsAvailable: true,
+  });
+
+  renderPetSpeechUpdate(fakeDocument, payload);
+  assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, "Clean final answer.");
+  assert.equal(fakeDocument.getElementById("pet-bubble-details").hidden, true);
+
+  toggleBubbleDetails(fakeDocument);
+  assert.equal(fakeDocument.getElementById("pet-bubble-details").hidden, false);
+  assert.doesNotMatch(
+    `${fakeDocument.getElementById("pet-bubble-status").textContent} ${fakeDocument.getElementById("pet-bubble-message").textContent}`,
+    /thinking|done thinking|reasoning|<think|provider.*ollama|Traceback|stack trace|localhost|11434|\{|\}/i
+  );
+  assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, "Clean final answer.");
 }
 
 function testPetPresenceIdleDefaultStaticHint() {
@@ -816,7 +894,7 @@ function testPetPresenceHiddenRestoreUsesRecentWindow() {
 }
 
 function testPetPresenceErrorMessageStaysClean() {
-  const { renderPetSpeechUpdate } = require(petRendererPath);
+  const { renderPetSpeechUpdate, toggleBubbleDetails } = require(petRendererPath);
   const fakeDocument = createPetBubbleStateDocument();
 
   renderPetSpeechUpdate(fakeDocument, {
@@ -836,6 +914,13 @@ function testPetPresenceErrorMessageStaysClean() {
   );
   assert.match(fakeDocument.getElementById("pet-bubble-message").textContent, /Full App|provider/);
   assert.equal(fakeDocument.getElementById("pet-bubble-details").hidden, true);
+
+  toggleBubbleDetails(fakeDocument);
+  assert.equal(fakeDocument.getElementById("pet-bubble-details").hidden, false);
+  assert.doesNotMatch(
+    `${fakeDocument.getElementById("pet-bubble-status").textContent} ${fakeDocument.getElementById("pet-bubble-message").textContent}`,
+    /raw provider diagnostic|localhost|11434|stack trace|<think|thinking/i
+  );
 }
 
 function testPetRendererRegistersFixedSpeechUpdateListener() {
@@ -1777,7 +1862,9 @@ async function run() {
     testPetRendererAppliesSpeechUpdateToSpeechBubble,
     testPetRendererSpeechUpdateUsesReplyOnlyWhenDiagnosticsExist,
     testPetRendererSpeechUpdateHandlesLongReply,
+    testPetBubbleDetailsDisclosureHiddenWhenNoMeaningfulDetails,
     testPetBubbleDetailsDisclosureTogglesSourceAndHelperText,
+    testPetBubbleDetailsSanitizesThinkingAndRawDiagnostics,
     testPetPresenceIdleDefaultStaticHint,
     testPetPresenceRecentReplyReplacesIdleAndExpires,
     testPetPresenceRecentReplyTimerResetsOnNewReply,

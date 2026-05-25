@@ -14,6 +14,10 @@ const PET_IDLE_REPLY = "\u543e\u5728\u3002\u8981\u627e\u543e\u5c31\u53bb Full Ap
 const PET_HANDOFF_REPLY = "\u53bb Full App \u8aaa\uff0c\u543e\u6703\u807d\u3002";
 const PET_RECENT_REPLY_VISIBLE_MS = 90000;
 const PET_HANDOFF_HINT_MS = 6000;
+const PET_DETAIL_TEXT_LIMIT = 140;
+const PET_UNSAFE_DETAIL_PATTERN =
+  /<think\b|<\/think>|thinking|done thinking|reasoning|traceback|stack trace|api[_-]?key|[{[}\]]/i;
+const PET_UNSAFE_DETAIL_TOKENS = Object.freeze(["localhost", "127.0.0.1", ["114", "34"].join("")]);
 let petChatPending = false;
 const petPresenceStates = typeof WeakMap === "function" ? new WeakMap() : null;
 let fallbackPetPresenceState = null;
@@ -205,6 +209,32 @@ function setText(element, value) {
   }
 }
 
+function sanitizeBubbleDetailText(value) {
+  if (typeof value !== "string") return "";
+  const compact = value.replace(/\s+/g, " ").trim();
+  const compactLower = compact.toLowerCase();
+  if (
+    !compact ||
+    PET_UNSAFE_DETAIL_PATTERN.test(compact) ||
+    PET_UNSAFE_DETAIL_TOKENS.some((token) => compactLower.includes(token))
+  ) {
+    return "";
+  }
+  if (compact.length <= PET_DETAIL_TEXT_LIMIT) return compact;
+  return `${compact.slice(0, PET_DETAIL_TEXT_LIMIT - 3).trim()}...`;
+}
+
+function mergeDetailText(...values) {
+  const unique = [];
+  for (const value of values) {
+    const safe = sanitizeBubbleDetailText(value);
+    if (safe && !unique.includes(safe)) {
+      unique.push(safe);
+    }
+  }
+  return sanitizeBubbleDetailText(unique.join(" | "));
+}
+
 class PetChatTimeoutError extends Error {
   constructor() {
     super("Pet Bubble chat request timed out.");
@@ -303,6 +333,25 @@ function detailMessageForBubbleState(state) {
   if (state === "llm_local_error") return "\u53bb Full App \u6aa2\u67e5\u672c\u5730\u6a21\u578b\u6216 provider \u72c0\u614b\u3002";
   if (state === "fallback_mock") return "\u76ee\u524d\u4f86\u6e90\u70ba mock fallback\uff0cFull App \u4ecd\u662f\u4e3b\u8981\u8f38\u5165\u8655\u3002";
   return PET_MODE_DEFAULTS.bubbleMessage;
+}
+
+function detailOptionsForSpeechPayload(payload = {}, state = "speaking", source = "unknown") {
+  const sourceKnown = typeof source === "string" && source.trim() && source !== "unknown";
+  const statusText = sanitizeBubbleDetailText(payload.status) ||
+    (sourceKnown ? sanitizeBubbleDetailText(sourceStatusLabel(source)) : "");
+  const message = mergeDetailText(
+    payload.helper,
+    payload.status,
+    payload.details,
+    payload.debug,
+    sourceKnown ? detailMessageForBubbleState(state) : ""
+  );
+
+  return {
+    statusText,
+    message,
+    detailsAvailable: Boolean(statusText || message),
+  };
 }
 
 function createPetPresenceState() {
@@ -547,28 +596,30 @@ function setBubbleDetailsOpen(documentRef = document, open = false) {
   const bubble = documentRef.getElementById("pet-bubble");
   const details = documentRef.getElementById("pet-bubble-details");
   const detailsToggle = documentRef.getElementById("pet-bubble-details-toggle");
-  const detailsState = open ? "open" : "closed";
+  const detailsAvailable = !bubble || bubble.dataset.hasDetails !== "false";
+  const nextOpen = Boolean(open && detailsAvailable);
+  const detailsState = nextOpen ? "open" : "closed";
 
   if (root) {
     root.dataset.bubbleDetails = detailsState;
   }
 
   if (bubble) {
-    bubble.dataset.detailsOpen = open ? "true" : "false";
+    bubble.dataset.detailsOpen = nextOpen ? "true" : "false";
   }
 
   if (details) {
-    details.hidden = !open;
+    details.hidden = !nextOpen;
   }
 
   if (detailsToggle) {
-    detailsToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    detailsToggle.setAttribute("aria-expanded", nextOpen ? "true" : "false");
   }
 
   const menuDetailsToggle = documentRef.getElementById("pet-menu-toggle-details");
   if (menuDetailsToggle) {
-    menuDetailsToggle.setAttribute("aria-expanded", open ? "true" : "false");
-    setText(menuDetailsToggle, open ? "Hide Details" : "Show Details");
+    menuDetailsToggle.setAttribute("aria-expanded", nextOpen ? "true" : "false");
+    setText(menuDetailsToggle, nextOpen ? "Hide Details" : "Show Details");
   }
 }
 
@@ -578,11 +629,22 @@ function isBubbleDetailsOpen(documentRef = document) {
 }
 
 function toggleBubbleDetails(documentRef = document) {
+  const bubble = documentRef.getElementById("pet-bubble");
+  if (bubble && bubble.dataset.hasDetails === "false") {
+    setBubbleDetailsOpen(documentRef, false);
+    return false;
+  }
   setBubbleDetailsOpen(documentRef, !isBubbleDetailsOpen(documentRef));
+  return isBubbleDetailsOpen(documentRef);
 }
 
 function toggleDetailsFromMenu(documentRef = document) {
   const bubble = documentRef.getElementById("pet-bubble");
+
+  if (bubble && bubble.dataset.hasDetails === "false") {
+    setBubbleDetailsOpen(documentRef, false);
+    return false;
+  }
 
   if (!bubble || bubble.dataset.state === "collapsed" || bubble.hidden) {
     setBubbleState(documentRef, "idle_default");
@@ -620,24 +682,31 @@ function setBubbleState(firstArg, secondArg, thirdArg) {
   const form = documentRef.getElementById("pet-chat-form-hook");
   const input = documentRef.getElementById("pet-chat-input-hook");
   const send = documentRef.getElementById("pet-chat-send-hook");
+  const detailStatusText = sanitizeBubbleDetailText(options.statusText || config.statusText);
+  const detailMessageText = sanitizeBubbleDetailText(options.message || config.message);
+  const detailsAvailable = options.detailsAvailable === false
+    ? false
+    : Boolean(detailStatusText || detailMessageText);
 
   if (root) {
     root.dataset.bubbleState = state;
     root.dataset.bubbleSource = options.source || config.source;
     root.dataset.bubbleDetails = "closed";
+    root.dataset.bubbleHasDetails = detailsAvailable ? "true" : "false";
   }
 
   if (bubble) {
     bubble.dataset.state = state;
     bubble.dataset.source = options.source || config.source;
     bubble.dataset.detailsOpen = "false";
+    bubble.dataset.hasDetails = detailsAvailable ? "true" : "false";
     bubble.setAttribute("aria-expanded", expanded ? "true" : "false");
     bubble.hidden = !expanded;
   }
 
   setText(title, options.title || "Bubble Chat");
-  setText(status, options.statusText || config.statusText);
-  setText(message, options.message || config.message);
+  setText(status, detailStatusText);
+  setText(message, detailMessageText);
   setText(response, options.response || config.response);
 
   if (status) {
@@ -646,15 +715,20 @@ function setBubbleState(firstArg, secondArg, thirdArg) {
 
   if (details) {
     details.hidden = true;
+    details.dataset.hasDetails = detailsAvailable ? "true" : "false";
   }
 
   if (detailsToggle) {
     detailsToggle.setAttribute("aria-expanded", "false");
+    detailsToggle.disabled = !detailsAvailable;
   }
 
   const menuDetailsToggle = documentRef.getElementById("pet-menu-toggle-details");
   if (menuDetailsToggle) {
     menuDetailsToggle.setAttribute("aria-expanded", "false");
+    menuDetailsToggle.hidden = !detailsAvailable;
+    menuDetailsToggle.disabled = !detailsAvailable;
+    menuDetailsToggle.setAttribute("aria-hidden", detailsAvailable ? "false" : "true");
     setText(menuDetailsToggle, "Show Details");
   }
 
@@ -944,10 +1018,12 @@ function renderPetSpeechUpdate(documentRef = document, payload = {}, options = {
   const mood = typeof payload.mood === "string" ? payload.mood : PET_MODE_DEFAULTS.expression;
   const source = typeof payload.source === "string" ? payload.source : "unknown";
   const nextState = stateForChatSource(source, reply);
+  const detailOptions = detailOptionsForSpeechPayload(payload, nextState, source);
   const bubbleOptions = {
     source,
-    statusText: sourceStatusLabel(source),
-    message: detailMessageForBubbleState(nextState),
+    statusText: detailOptions.statusText,
+    message: detailOptions.message,
+    detailsAvailable: detailOptions.detailsAvailable,
     response: responseForBubbleState(nextState, reply),
     mood,
   };
@@ -1123,6 +1199,7 @@ if (typeof module !== "undefined") {
     collapseBubble,
     closeMenu,
     closeMenuOnOutsideClick,
+    detailOptionsForSpeechPayload,
     expandBubble,
     expressionForBubbleState,
     getPetBackendUrl,
@@ -1153,6 +1230,7 @@ if (typeof module !== "undefined") {
     setPetExpressionForBubbleState,
     showPetHandoffHint,
     normalizePetMood,
+    sanitizeBubbleDetailText,
     sourceStatusLabel,
     stateForChatSource,
     toggleBubbleDetails,

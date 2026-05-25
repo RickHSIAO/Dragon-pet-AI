@@ -1386,6 +1386,31 @@ Manual smoke required:
 
 ---
 
+### TASK-152 - Pet Bubble Details Disclosure UX Polish Design
+
+Status: IMPLEMENTED - NEEDS WINDOWS MANUAL SMOKE on 2026-05-25.
+
+Implemented UX:
+
+- Normal Pet Bubble speech remains character-facing by default and is not a diagnostics panel.
+- Details remain collapsed by default and are still reached through the existing Menu/details path.
+- If a mirrored/local payload has no meaningful details metadata, the details disclosure is hidden/disabled instead of showing an empty panel.
+- Safe short source/helper/status/debug-style metadata may appear only after explicit disclosure.
+- Details are visually secondary and constrained so they do not compete with the main reply or push Chat / Full App / Menu out of the `300 x 400` Pet Window.
+- Details sanitization filters raw JSON-like text, provider stack traces, local Ollama endpoint/port text, API-key wording, and thinking/reasoning markers.
+- Thinking/reasoning remains hidden from both normal speech and normal details; a future explicit debug-mode task would be required before exposing it anywhere in Pet Window.
+
+Manual smoke required:
+
+- Confirm normal replies show only Christina's character-facing text.
+- Confirm details are hidden by default.
+- Confirm payloads without meaningful metadata do not show a noisy empty details disclosure.
+- Confirm details can open/close from Menu when safe metadata exists.
+- Confirm long replies and error states remain clean and constrained.
+- Confirm TASK-149, TASK-150, and TASK-151 behavior does not regress.
+
+---
+
 ## 9. Explicit Non-goals for TASK-114
 
 This design task does not:

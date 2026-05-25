@@ -8020,6 +8020,135 @@ Validation:
 
 ---
 
+## TASK-152 - Pet Bubble Details Disclosure UX Polish Design
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS
+**Date:** 2026-05-25
+
+Goal:
+
+Design a small Pet Bubble details disclosure UX polish task so optional source/helper/status/debug-style information stays accessible when intentionally opened, but never pollutes normal character-facing Pet speech.
+
+Context:
+
+- TASK-149 is DONE - PASS and established that normal Pet Bubble speech shows only clean character-facing reply text.
+- TASK-150 is DONE - PASS and local Ollama idle wake/retry/keep_alive behavior no longer exposes raw diagnostics to Pet Bubble.
+- TASK-151 is DONE - PASS and local model thinking/reasoning/debug traces are hidden from normal Full App and Pet Bubble replies.
+- Full App remains the richer diagnostic/debug surface.
+- Pet Window remains a `300 x 400` display/companion layer and must not become a mini Full App.
+
+Expected UX behavior:
+
+- Normal Pet Bubble default:
+  - Shows only Christina's character-facing reply text.
+  - Does not show details/debug/source/helper/status/provider/mood/local/llm_local/thinking/reasoning text inline.
+- Details disclosure:
+  - Collapsed by default.
+  - Explicit, small, and non-intrusive.
+  - Available through the existing Menu/details path unless implementation proves a better compact affordance is needed.
+  - Must not visually compete with the main character reply.
+  - Must not crowd the reply text area or push Chat / Full App / Menu controls out of the `300 x 400` Pet Window.
+- Details content:
+  - May include source/helper/status/debug-style metadata only after the user intentionally opens details.
+  - Error states may offer short helpful details, but no raw JSON, provider stack traces, raw provider bodies, prompt text, API keys, filesystem paths, or backend exception dumps.
+  - Long reply hints may appear in details, but the main bubble remains a constrained character-facing preview.
+  - Thinking/reasoning remains hidden and should not be shown as normal details unless a future explicit debug-mode task designs that behavior separately.
+- Full App relationship:
+  - Full App remains the primary input, long-reading, and richer diagnostics surface.
+  - Pet Window remains display/companion-only.
+
+Acceptance criteria:
+
+- No backend changes.
+- No `/chat` schema changes.
+- No IPC/preload API changes unless separately justified in docs before implementation.
+- No provider settings changes.
+- No external APIs.
+- No image asset changes.
+- No voice features.
+- No proactive LLM calls.
+- No Pet Window text input.
+- No mini Full App behavior.
+- No broad diagnostics architecture.
+- Pet Window remains `300 x 400`.
+- Main Pet Bubble remains clean by default.
+- Details are collapsed by default.
+- Details can be opened and closed explicitly if implementation updates the UI.
+- Details layout remains constrained and does not push bottom controls out of the window.
+- TASK-149, TASK-150, and TASK-151 behavior must not regress.
+
+Likely files for implementation:
+
+- `apps/desktop/src/pet/pet-renderer.js`
+- `apps/desktop/src/pet/pet.css`
+- `apps/desktop/src/pet/pet.html` only if a small structural adjustment is required.
+- `apps/desktop/scripts/pet-renderer-smoke.js`
+- `docs/TASKS.md`
+- `docs/ROADMAP.md`
+- `docs/PET_MODE_UI_DESIGN.md` only if implementation changes the documented UI guidance.
+- `docs/PET_BUBBLE_CHAT_WIRING_DESIGN.md` only if implementation changes bubble/details assumptions.
+
+Manual Windows smoke expectations:
+
+- Normal reply bubble stays clean and character-facing by default.
+- Details are hidden by default.
+- Details can be opened and closed if the later implementation changes or confirms the details UI.
+- Details contain only intentional metadata/helper/status/debug-style information, not normal character speech.
+- Long replies do not break details layout or push bottom controls out of the `300 x 400` window.
+- Error states remain clean and character-safe.
+- Thinking/reasoning/debug traces remain hidden from normal Pet Bubble speech.
+- TASK-149 clean reply/details separation does not regress.
+- TASK-150 local Ollama timeout/retry guidance does not leak raw diagnostics to Pet Bubble.
+- TASK-151 thinking/reasoning sanitization does not regress.
+
+Non-goals:
+
+- Do not add a broad diagnostics architecture.
+- Do not expose thinking/reasoning in Pet details by default.
+- Do not add raw JSON/provider trace views to Pet Window.
+- Do not add a Pet Window text input.
+- Do not turn Pet Window into a mini Full App.
+- Do not add backend routes, `/chat` schema changes, provider settings, external APIs, image assets, or voice features.
+
+Implementation summary:
+
+- Kept normal Pet Bubble speech clean: visible reply text still comes from the character-facing `reply` path only.
+- Kept details collapsed by default.
+- Added local detail text sanitization for Pet details so raw JSON-like text, stack traces, local Ollama endpoint/port text, API-key wording, and thinking/reasoning markers are not shown in details.
+- Details disclosure is now treated as meaningful-content-only:
+  - payloads with no source/helper/status/debug-style metadata keep the details disclosure unavailable/hidden.
+  - payloads with safe short metadata keep details available through the existing Menu/details path.
+- Details remain visually secondary with a slightly smaller constrained details region.
+- No backend, `/chat` schema, IPC/preload API, provider settings, external API, image, voice, Pet input, Full App layout, or broad diagnostics architecture change was made.
+
+Validation:
+
+- `node --check apps/desktop/src/pet/pet-renderer.js` - PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js` - PASS.
+- `node --check apps/desktop/scripts/pet-window-smoke.js` - PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js` - PASS, 45 checks.
+- `node apps/desktop/scripts/pet-window-smoke.js` - PASS, 15 checks.
+- `cd apps/desktop && npm.cmd run test:renderer` - PASS.
+- `python -m pytest --basetemp .\.pytest-tmp -p no:cacheprovider` - PASS, 599 passed.
+- `git diff --check` - PASS, with LF-to-CRLF warnings only.
+- TASK-152 docs status check with `rg` - PASS.
+- Changed-doc NUL byte check - PASS.
+- Windows manual smoke - PASS.
+  - Normal Pet Bubble replies remain clean and character-facing.
+  - Details are collapsed by default.
+  - No empty/noisy details disclosure appears when metadata is absent.
+  - Details can open and close from Menu when meaningful metadata exists.
+  - Details are visually secondary and do not compete with the main reply.
+  - Long replies keep details layout constrained.
+  - Error states remain clean and do not show raw JSON, stack traces, local Ollama endpoint/port text, API-key wording, or thinking/reasoning markers.
+  - TASK-149, TASK-150, and TASK-151 behavior did not regress.
+
+Next recommendation:
+
+- TASK-152 is fully closed. Define the next Pet Mode task in docs before implementation.
+
+---
+
 ## TASK-139 - Manual Windows Pet Bubble Chat Smoke Closure
 
 **Status:** DONE - SUPERSEDED / RESOLVED

@@ -284,17 +284,22 @@ body {
 }
 
 .pet-bubble-details {
-  max-height: 50px;
+  max-height: 46px;
   display: grid;
-  gap: 3px;
+  gap: 2px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding-top: 5px;
+  padding-top: 4px;
   border-top: 1px solid rgba(72, 45, 34, 0.12);
+  opacity: 0.82;
   scrollbar-width: thin;
 }
 
 .pet-bubble-details[hidden] {
+  display: none;
+}
+
+.pet-bubble[data-has-details="false"] .pet-bubble-details {
   display: none;
 }
 
