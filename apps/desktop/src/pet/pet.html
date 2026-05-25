@@ -27,6 +27,11 @@
     aria-label="Christina pet mode skeleton"
   >
     <div id="pet-drag-handle" class="pet-drag-handle" aria-label="Drag pet window" title="Drag"></div>
+    <div id="pet-stage-controls" class="pet-stage-controls pet-no-drag" aria-label="Pet speech controls">
+      <span id="pet-bubble-title" class="pet-sr-only">Christina Speech</span>
+      <button id="pet-bubble-details-toggle" class="pet-icon-button pet-no-drag" type="button" data-hook="bubble-details" aria-label="Toggle bubble details" aria-expanded="false">i</button>
+      <button id="pet-bubble-close-hook" class="pet-icon-button pet-no-drag" type="button" data-hook="bubble-close" aria-label="Collapse bubble">x</button>
+    </div>
 
     <section id="pet-drag-region" class="pet-stage pet-no-drag" aria-label="Pet interaction region">
       <div id="pet-avatar-container" class="pet-avatar-container pet-no-drag" data-expression="neutral">
@@ -38,52 +43,50 @@
         />
       </div>
 
-      <p id="pet-hint" class="pet-hint pet-no-drag" aria-live="polite">&#x54FC;&#xFF0C;&#x6C5D;&#x53EB;&#x543E;&#x51FA;&#x4F86;&#x505A;&#x4EC0;&#x9EBC;&#xFF1F;</p>
-    </section>
-
-    <section
-      id="pet-bubble"
-      class="pet-bubble pet-speech-bubble pet-no-drag"
-      data-state="collapsed"
-      aria-label="Christina speech bubble"
-      aria-expanded="false"
-      hidden
-    >
-      <div class="pet-bubble-header">
-        <span id="pet-bubble-title" class="pet-sr-only">Christina Speech</span>
-        <button id="pet-bubble-close-hook" class="pet-icon-button pet-no-drag" type="button" data-hook="bubble-close" aria-label="Collapse bubble">x</button>
-      </div>
-      <div id="pet-bubble-status" class="pet-bubble-status pet-no-drag" data-source="local">
-        local placeholder
-      </div>
-      <div id="pet-bubble-message" class="pet-bubble-message pet-no-drag" aria-live="polite">
-        打字請開 Full App。
-      </div>
-      <div id="pet-bubble-response" class="pet-bubble-response pet-no-drag" aria-live="polite">
-        哼，汝要吾說話，就去 Full App 下令。
-      </div>
-      <div id="pet-bubble-placeholder" class="pet-bubble-body pet-no-drag">
-        <p>Display-only speech bubble. Type in Full App.</p>
-      </div>
-      <form
-        id="pet-chat-form-hook"
-        class="pet-chat-form pet-dev-chat-form pet-no-drag"
-        data-hook="chat-form"
-        data-dev-only="true"
-        aria-hidden="true"
+      <section
+        id="pet-bubble"
+        class="pet-bubble pet-speech-bubble pet-no-drag"
+        data-state="collapsed"
+        aria-label="Christina speech bubble"
+        aria-expanded="false"
         hidden
       >
-        <input
-          id="pet-chat-input-hook"
-          class="pet-no-drag"
-          type="text"
-          placeholder="Dev-only hidden Pet chat input"
-          autocomplete="off"
-          tabindex="-1"
+        <div id="pet-bubble-response" class="pet-bubble-response pet-no-drag" aria-live="polite">
+          &#x9EDE; Full App &#x6253;&#x5B57;&#xFF0C;&#x543E;&#x6703;&#x5728;&#x9019;&#x88E1;&#x56DE;&#x5634;&#x3002;
+        </div>
+        <div id="pet-bubble-details" class="pet-bubble-details pet-no-drag" aria-label="Speech details" hidden>
+          <div id="pet-bubble-status" class="pet-bubble-status pet-no-drag" data-source="local">
+            speech bubble
+          </div>
+          <div id="pet-bubble-message" class="pet-bubble-message pet-no-drag" aria-live="polite">
+            &#x6253;&#x5B57;&#x8ACB;&#x958B; Full App&#x3002;
+          </div>
+        </div>
+        <div id="pet-bubble-placeholder" class="pet-bubble-body pet-no-drag">
+          <p>Display-only speech bubble. Type in Full App.</p>
+        </div>
+        <form
+          id="pet-chat-form-hook"
+          class="pet-chat-form pet-dev-chat-form pet-no-drag"
+          data-hook="chat-form"
+          data-dev-only="true"
+          aria-hidden="true"
           hidden
-        />
-        <button id="pet-chat-send-hook" class="pet-no-drag" type="submit" tabindex="-1" hidden>Send</button>
-      </form>
+        >
+          <input
+            id="pet-chat-input-hook"
+            class="pet-no-drag"
+            type="text"
+            placeholder="Dev-only hidden Pet chat input"
+            autocomplete="off"
+            tabindex="-1"
+            hidden
+          />
+          <button id="pet-chat-send-hook" class="pet-no-drag" type="submit" tabindex="-1" hidden>Send</button>
+        </form>
+      </section>
+
+      <p id="pet-hint" class="pet-hint pet-no-drag" aria-live="polite">&#x54FC;&#xFF0C;&#x6C5D;&#x53EB;&#x543E;&#x51FA;&#x4F86;&#x505A;&#x4EC0;&#x9EBC;&#xFF1F;</p>
     </section>
 
     <nav id="pet-mode-actions" class="pet-mode-actions pet-no-drag" aria-label="Pet mode action hooks">

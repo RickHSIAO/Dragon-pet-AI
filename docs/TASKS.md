@@ -7237,7 +7237,113 @@ Verification:
 
 Next recommendation:
 
-- Run Windows manual smoke with `PET_MODE_ENABLED=true`: send a message in Full App and verify Pet Window speech bubble mirrors the AI reply, source badge, and mood expression without auto-showing a hidden Pet Window.
+- TASK-144 - Manual Windows Full App -> Pet Speech Mirror Smoke.
+
+---
+
+## TASK-144 - Manual Windows Full App -> Pet Speech Mirror Smoke
+
+**Status:** DONE - PASS WITH NOTE
+**Date:** 2026-05-25
+
+Goal:
+
+Verify the TASK-143 Full App -> Pet speech mirror on Windows hardware without changing code.
+
+Manual smoke result:
+
+- Startup: PASS WITH NOTE. User confirmed the mirror path could be tested with Full App and Pet Window visible under `PET_MODE_ENABLED=true`.
+- Full App -> Pet mirror: PASS WITH NOTE. Speech mirror works.
+- Source / mood / expression: PASS WITH NOTE. Pet bubble receives the mirrored speech payload, but source/status/helper text is visible inline with the role reply.
+- Hidden Pet Window behavior: not reclassified as a blocker in this report; TASK-143 hidden-window safe behavior remains unchanged.
+- Safety: PASS WITH NOTE. The observed issue is UX hierarchy, not backend/API/safety expansion.
+
+UX issue found:
+
+- Pet speech bubble displayed helper/status text inline with the role reply.
+- Example hierarchy problem: `local`, role reply, and `打字請開 Full App。` appeared together in the bubble.
+- Expected product behavior: normal Pet speech should look like a clean comic reply; source/status/helper/debug details should be hidden behind click/expand.
+
+Decision:
+
+- TASK-144 is `PASS WITH NOTE`.
+- Follow-up implementation task: TASK-145 - Pet Speech Bubble Clean Reply + Details Disclosure.
+
+---
+
+## TASK-145 - Pet Speech Bubble Clean Reply + Details Disclosure
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS
+**Date:** 2026-05-25
+
+Goal:
+
+Fix the TASK-144 UX note by making the Pet speech bubble show only Christina's reply by default, with source/status/helper/debug information hidden behind a details disclosure.
+
+Files changed:
+
+- `apps/desktop/src/pet/pet.html`
+- `apps/desktop/src/pet/pet.css`
+- `apps/desktop/src/pet/pet-renderer.js`
+- `apps/desktop/scripts/pet-renderer-smoke.js`
+- `docs/TASKS.md`
+- `docs/ROADMAP.md`
+- `docs/PET_BUBBLE_CHAT_WIRING_DESIGN.md`
+- `docs/PET_MODE_UI_DESIGN.md`
+
+Behavior:
+
+- Normal `speaking` / `success` display shows only the role reply in the main bubble body.
+- The reply bubble sits in the Pet stage below Christina's image and above the `Chat / Full App / Menu` action row.
+- The reply bubble auto-expands up to a safe max height and keeps the action row visible inside the `220 x 280` Pet Window.
+- Source/status/helper text is moved into `pet-bubble-details`.
+- Clicking the bubble or the small `i` details affordance toggles details open/closed.
+- Details show source, status/helper text, long-reply hint, and Full App input guidance.
+- `llm_local` no longer displays a default `local` badge in the main bubble.
+- `fallback_mock` shows the mock reply as the main text; source explanation is in details.
+- `backend_offline`, `timeout`, and `llm_local_error` show short character-safe error text in the main bubble and keep diagnostics in details.
+- Long replies render a truncated preview in the main bubble and put `回覆較長，可開 Full App 查看完整內容。` in details.
+- Full App remains the primary text input surface.
+- Pet Window remains a display/companion layer.
+
+Safety boundaries:
+
+- Backend code was not changed.
+- `/chat` schema was not changed.
+- No backend route was added.
+- No IPC or preload API was added.
+- No direct Ollama access was added.
+- No external API, image, voice, speech-to-text, provider settings, file, Email, or Calendar behavior was added.
+
+Validation:
+
+- `node --check apps/desktop/src/pet/pet-renderer.js` - PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js` - PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js` - PASS, 35 checks.
+- `node apps/desktop/scripts/pet-window-smoke.js` - PASS, 10 checks.
+- `cd apps/desktop && npm.cmd run test:renderer` - PASS.
+- `python -m pytest` - PASS, 586 passed.
+- Direct Ollama `11434` safety scan across main, Full App renderer/preload, Pet renderer/preload, and Pet HTML - PASS, no matches.
+- `git diff --check` - PASS.
+
+Windows manual smoke:
+
+- Result: PASS.
+- Christina image is on top.
+- Reply bubble is below the image.
+- Reply is visible by default without opening details.
+- Main reply bubble contains only Christina's visible character reply text.
+- `source`, `status`, helper text, `mood`, `local`, and `llm_local` do not appear in the main reply.
+- Floating `i` and `x` controls no longer crowd the reply text.
+- `Chat / Full App / Menu` buttons remain visible.
+- Medium replies remain readable and do not break layout.
+- Long replies are constrained and do not overflow the `220 x 280` Pet Window.
+- Details toggles open/closed and contains metadata/helper/status/long-reply hint only.
+- Hide Pet / Show Pet still works.
+
+Next recommendation:
+
+- TASK-145 is fully done. Proceed to the next Pet Mode task with Full App remaining the primary text input surface and Pet Window remaining the display/companion layer.
 
 ---
 

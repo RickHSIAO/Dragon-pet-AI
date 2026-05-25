@@ -1166,6 +1166,52 @@ Validation note:
 
 - Renderer chat smoke, Pet renderer smoke, Pet window smoke, desktop renderer smoke, backend pytest, direct Ollama `11434` safety scan, and `git diff --check` pass for the bridge checkpoint.
 
+### TASK-144 - Manual Windows Full App -> Pet Speech Mirror Smoke
+
+Status: DONE - PASS WITH NOTE on 2026-05-25.
+
+Manual Windows observation:
+
+- Full App -> Pet speech mirror works.
+- Pet speech bubble receives the mirrored reply.
+- UX issue: role reply, source/status badge, and helper text were displayed together in the visible bubble.
+- The Pet bubble looked too much like a debug panel instead of a compact comic-style companion reply.
+
+Follow-up:
+
+- TASK-145 should make the normal bubble view clean reply only and move source/status/helper details behind click/expand.
+
+### TASK-145 - Pet Speech Bubble Clean Reply + Details Disclosure
+
+Status: DONE on 2026-05-25.
+
+UI behavior:
+
+- The visible Pet speech bubble now defaults to clean Christina reply text only.
+- The normal reply box appears directly below Christina's image and above the `Chat / Full App / Menu` action row.
+- The reply box auto-expands only up to a safe max height so the fixed `220 x 280` Pet Window and bottom actions stay usable.
+- `source`, `mood`, helper text, long-reply hints, and status/debug explanations are hidden in a details area.
+- Details open/close by clicking the bubble or the small `i` affordance.
+- Details use an internal constrained scroll area and do not resize the `220 x 280` Pet Window.
+- Normal `llm_local` replies do not show a distracting `local` badge in the main reply surface.
+- Full App remains the primary text input surface.
+- Pet Window remains a display/companion layer.
+
+State behavior:
+
+- Normal reply: main bubble shows only the reply.
+- `fallback_mock`: main bubble shows mock reply; details explain the source.
+- `backend_offline` / `timeout` / `llm_local_error`: main bubble shows a short character-safe error; details carry the Full App/provider status hint.
+- Long reply: main bubble shows a truncated preview; details tell the user to read the full content in Full App.
+
+Safety note:
+
+- No backend change, `/chat` schema change, backend route, IPC/preload expansion, direct Ollama access, provider settings change, external API, image, voice, file, Email, or Calendar access was added.
+
+Validation note:
+
+- Pet renderer syntax check, Pet renderer smoke, Pet window smoke, desktop renderer smoke, backend pytest, direct Ollama `11434` safety scan, and `git diff --check` pass for TASK-145.
+
 ---
 
 ## 9. Explicit Non-goals for TASK-114

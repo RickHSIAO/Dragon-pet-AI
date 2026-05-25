@@ -732,4 +732,63 @@ Validation:
 
 Next recommendation:
 
-- Manual Windows smoke for Full App reply mirroring into Pet speech bubble.
+- TASK-144 manual Windows smoke for Full App reply mirroring into Pet speech bubble.
+
+## 21. TASK-144 Manual Windows Full App -> Pet Speech Mirror Smoke
+
+Status: DONE - PASS WITH NOTE on 2026-05-25.
+
+Manual Windows result:
+
+- Full App -> Pet speech mirroring works.
+- Pet receives and displays the latest mirrored reply payload.
+- UX issue found: the visible speech bubble mixed source/status/helper text with Christina's role reply.
+- The observed problem was a presentation hierarchy issue, not a backend, schema, IPC, or safety issue.
+
+Required follow-up:
+
+- Normal Pet speech should be clean reply text only.
+- Source, mood, helper text, long-reply hints, and diagnostics should be hidden behind a click/expand details disclosure.
+
+## 22. TASK-145 Clean Reply + Details Disclosure
+
+Status: DONE on 2026-05-25.
+
+Behavior update:
+
+- The default Pet speech bubble view is now clean reply only.
+- `pet-bubble-response` is the main comic-style reply surface.
+- The reply bubble is in normal Pet stage flow below Christina's image, not an overlay-only panel.
+- The `Chat / Full App / Menu` action row remains visible below the reply bubble.
+- The reply bubble expands with content up to a constrained max height inside the `220 x 280` Pet Window.
+- `pet-bubble-details` holds source/status/helper/debug information and is hidden by default.
+- Clicking the bubble or the small `i` affordance toggles details open/closed.
+- Normal `llm_local` replies do not show a visible `local` badge in the main bubble.
+- `fallback_mock` keeps the mock reply as the main text and moves source explanation into details.
+- `backend_offline`, `timeout`, and `llm_local_error` show short character-safe error text in the main bubble and keep raw/provider context in details.
+- Long replies show a truncated preview in the main bubble; details carry the Full App reading hint.
+
+Safety confirmation:
+
+- Backend code was not changed.
+- `/chat` schema remains `reply`, `mood`, `source`.
+- No backend route, IPC channel, preload API, direct Ollama call, provider settings change, external API, image, voice, file, Email, or Calendar access was added.
+
+Smoke coverage:
+
+- Pet renderer smoke verifies clean reply default view.
+- Pet renderer smoke verifies details toggle open/close.
+- Pet renderer smoke verifies normal replies do not expose `打字請開 Full App。` in the main text.
+- Pet renderer smoke verifies error states do not expose raw diagnostics in the main text.
+- Pet renderer smoke verifies long replies stay compact and put the Full App hint in details.
+
+Validation:
+
+- `node --check apps/desktop/src/pet/pet-renderer.js` - PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js` - PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js` - PASS, 35 checks.
+- `node apps/desktop/scripts/pet-window-smoke.js` - PASS, 10 checks.
+- `cd apps/desktop && npm.cmd run test:renderer` - PASS.
+- `python -m pytest` - PASS, 586 passed.
+- Direct Ollama `11434` safety scan - PASS, no matches.
+- `git diff --check` - PASS.

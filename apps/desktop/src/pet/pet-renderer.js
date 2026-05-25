@@ -8,6 +8,7 @@ const PET_MODE_DEFAULTS = Object.freeze({
 const PET_BACKEND_DEFAULT_URL = "http://localhost:8000";
 const PET_CHAT_TIMEOUT_MS = 100000;
 const PET_REPLY_LONG_THRESHOLD = 160;
+const PET_REPLY_PREVIEW_LIMIT = 120;
 const PET_LONG_REPLY_HINT = "\u56de\u8986\u8f03\u9577\uff0c\u53ef\u958b Full App \u67e5\u770b\u5b8c\u6574\u5167\u5bb9\u3002";
 let petChatPending = false;
 
@@ -122,8 +123,8 @@ const BUBBLE_STATES = Object.freeze({
     expanded: true,
     source: "backend_offline",
     statusText: "backend offline",
-    message: PET_MODE_DEFAULTS.bubbleMessage,
-    response: "\u5f8c\u7aef\u4f3c\u4e4e\u4e0d\u5728\uff0c\u6c5d\u5148\u53bb Full App \u628a\u5b83\u53eb\u9192\u3002",
+    message: "\u5f8c\u7aef\u4f3c\u4e4e\u4e0d\u5728\uff0c\u6c5d\u5148\u53bb Full App \u628a\u5b83\u53eb\u9192\u3002",
+    response: "\u543e\u7684\u9b54\u529b\u66ab\u6642\u5361\u4f4f\u4e86\u3002",
     inputDisabled: false,
     sendDisabled: false,
     inputPlaceholder: "Dev-only hidden Pet chat input",
@@ -132,8 +133,8 @@ const BUBBLE_STATES = Object.freeze({
     expanded: true,
     source: "timeout",
     statusText: "local timeout",
-    message: PET_MODE_DEFAULTS.bubbleMessage,
-    response: "\u672c\u5730\u6a21\u578b\u53ef\u80fd\u9084\u5728\u9192\u4f86\u3002\u53bb Full App \u770b\u770b\u72c0\u614b\u5427\u3002",
+    message: "\u53bb Full App \u67e5\u770b\u672c\u5730\u6a21\u578b\u6216 provider \u72c0\u614b\u3002",
+    response: "\u672c\u5730\u6a21\u578b\u53ef\u80fd\u9084\u5728\u9192\u4f86\u3002",
     inputDisabled: false,
     sendDisabled: false,
     inputPlaceholder: "Dev-only hidden Pet chat input",
@@ -142,8 +143,8 @@ const BUBBLE_STATES = Object.freeze({
     expanded: true,
     source: "llm_local_error",
     statusText: "local model error",
-    message: PET_MODE_DEFAULTS.bubbleMessage,
-    response: "\u543e\u7684\u9b54\u529b\u66ab\u6642\u5361\u4f4f\u4e86\u3002\u53bb Full App \u6aa2\u67e5\u72c0\u614b\u3002",
+    message: "\u53bb Full App \u6aa2\u67e5\u672c\u5730\u6a21\u578b\u6216 provider \u72c0\u614b\u3002",
+    response: "\u543e\u7684\u9b54\u529b\u66ab\u6642\u5361\u4f4f\u4e86\u3002",
     inputDisabled: false,
     sendDisabled: false,
     inputPlaceholder: "Dev-only hidden Pet chat input",
@@ -152,7 +153,7 @@ const BUBBLE_STATES = Object.freeze({
     expanded: true,
     source: "mock",
     statusText: "mock fallback",
-    message: PET_MODE_DEFAULTS.bubbleMessage,
+    message: "\u76ee\u524d\u4f86\u6e90\u70ba mock fallback\uff0cFull App \u4ecd\u662f\u4e3b\u8981\u8f38\u5165\u8655\u3002",
     response: "\u9019\u662f\u66ab\u6642\u56de\u61c9\uff0c\u5225\u592a\u5f97\u610f\u3002",
     inputDisabled: false,
     sendDisabled: false,
@@ -162,9 +163,8 @@ const BUBBLE_STATES = Object.freeze({
     expanded: true,
     source: "local",
     statusText: "long reply",
-    message: PET_MODE_DEFAULTS.bubbleMessage,
-    response:
-      PET_LONG_REPLY_HINT,
+    message: PET_LONG_REPLY_HINT,
+    response: "\u543e\u8aaa\u592a\u591a\u4e86\uff0c\u6c5d\u53bb Full App \u770b\u5b8c\u6574\u5167\u5bb9\u3002",
     inputDisabled: false,
     sendDisabled: false,
     inputPlaceholder: "Dev-only hidden Pet chat input",
@@ -244,12 +244,35 @@ function isLongReply(reply) {
   return typeof reply === "string" && reply.length > PET_REPLY_LONG_THRESHOLD;
 }
 
+function truncatePetReply(reply, limit = PET_REPLY_PREVIEW_LIMIT) {
+  if (typeof reply !== "string") return "";
+  const normalized = reply.trim();
+  if (normalized.length <= limit) return normalized;
+  return `${normalized.slice(0, limit).trimEnd()}\u2026`;
+}
+
 function stateForChatSource(source, reply) {
   if (source === "llm_local_error") return "llm_local_error";
   if (source === "mock") return "fallback_mock";
   if (isLongReply(reply)) return "long_reply";
   return "speaking";
 }
+
+function responseForBubbleState(state, reply) {
+  if (state === "long_reply") return truncatePetReply(reply);
+  if (state === "llm_local_error") return BUBBLE_STATES.llm_local_error.response;
+  return typeof reply === "string" && reply ? reply : getBubbleStateConfig(state).response;
+}
+
+function detailMessageForBubbleState(state) {
+  if (state === "long_reply") return PET_LONG_REPLY_HINT;
+  if (state === "backend_offline") return "\u5f8c\u7aef\u4f3c\u4e4e\u4e0d\u5728\uff0c\u6c5d\u5148\u53bb Full App \u628a\u5b83\u53eb\u9192\u3002";
+  if (state === "timeout") return "\u53bb Full App \u67e5\u770b\u672c\u5730\u6a21\u578b\u6216 provider \u72c0\u614b\u3002";
+  if (state === "llm_local_error") return "\u53bb Full App \u6aa2\u67e5\u672c\u5730\u6a21\u578b\u6216 provider \u72c0\u614b\u3002";
+  if (state === "fallback_mock") return "\u76ee\u524d\u4f86\u6e90\u70ba mock fallback\uff0cFull App \u4ecd\u662f\u4e3b\u8981\u8f38\u5165\u8655\u3002";
+  return PET_MODE_DEFAULTS.bubbleMessage;
+}
+
 
 function isFetchNetworkError(error) {
   return (
@@ -342,6 +365,39 @@ function normalizeBubbleStateArgs(firstArg, secondArg, thirdArg) {
   };
 }
 
+function setBubbleDetailsOpen(documentRef = document, open = false) {
+  const root = documentRef.getElementById("pet-mode-root");
+  const bubble = documentRef.getElementById("pet-bubble");
+  const details = documentRef.getElementById("pet-bubble-details");
+  const detailsToggle = documentRef.getElementById("pet-bubble-details-toggle");
+  const detailsState = open ? "open" : "closed";
+
+  if (root) {
+    root.dataset.bubbleDetails = detailsState;
+  }
+
+  if (bubble) {
+    bubble.dataset.detailsOpen = open ? "true" : "false";
+  }
+
+  if (details) {
+    details.hidden = !open;
+  }
+
+  if (detailsToggle) {
+    detailsToggle.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+}
+
+function isBubbleDetailsOpen(documentRef = document) {
+  const bubble = documentRef.getElementById("pet-bubble");
+  return Boolean(bubble && bubble.dataset.detailsOpen === "true");
+}
+
+function toggleBubbleDetails(documentRef = document) {
+  setBubbleDetailsOpen(documentRef, !isBubbleDetailsOpen(documentRef));
+}
+
 function setBubbleState(firstArg, secondArg, thirdArg) {
   const { documentRef, state: requestedState, options } = normalizeBubbleStateArgs(
     firstArg,
@@ -362,6 +418,8 @@ function setBubbleState(firstArg, secondArg, thirdArg) {
   const status = documentRef.getElementById("pet-bubble-status");
   const message = documentRef.getElementById("pet-bubble-message");
   const response = documentRef.getElementById("pet-bubble-response");
+  const details = documentRef.getElementById("pet-bubble-details");
+  const detailsToggle = documentRef.getElementById("pet-bubble-details-toggle");
   const placeholder = documentRef.getElementById("pet-bubble-placeholder");
   const form = documentRef.getElementById("pet-chat-form-hook");
   const input = documentRef.getElementById("pet-chat-input-hook");
@@ -370,11 +428,13 @@ function setBubbleState(firstArg, secondArg, thirdArg) {
   if (root) {
     root.dataset.bubbleState = state;
     root.dataset.bubbleSource = options.source || config.source;
+    root.dataset.bubbleDetails = "closed";
   }
 
   if (bubble) {
     bubble.dataset.state = state;
     bubble.dataset.source = options.source || config.source;
+    bubble.dataset.detailsOpen = "false";
     bubble.setAttribute("aria-expanded", expanded ? "true" : "false");
     bubble.hidden = !expanded;
   }
@@ -386,6 +446,14 @@ function setBubbleState(firstArg, secondArg, thirdArg) {
 
   if (status) {
     status.dataset.source = options.source || config.source;
+  }
+
+  if (details) {
+    details.hidden = true;
+  }
+
+  if (detailsToggle) {
+    detailsToggle.setAttribute("aria-expanded", "false");
   }
 
   if (placeholder) {
@@ -527,19 +595,12 @@ async function handleChatSubmit(event, documentRef = document, options = {}) {
     const data = await sendPetChatMessage(value, options);
     const nextState = stateForChatSource(data.source, data.reply);
     const statusText = sourceStatusLabel(data.source);
-    const isLongReply = nextState === "long_reply";
-    const stateMessage =
-      nextState === "fallback_mock" || nextState === "llm_local_error"
-        ? BUBBLE_STATES[nextState].message
-        : isLongReply
-          ? BUBBLE_STATES.long_reply.message
-          : PET_MODE_DEFAULTS.bubbleMessage;
 
     setBubbleState(documentRef, nextState, {
       source: data.source,
       statusText,
-      message: stateMessage,
-      response: isLongReply ? PET_LONG_REPLY_HINT : data.reply,
+      message: detailMessageForBubbleState(nextState),
+      response: responseForBubbleState(nextState, data.reply),
       mood: data.mood,
     });
 
@@ -631,13 +692,12 @@ function renderPetSpeechUpdate(documentRef = document, payload = {}) {
   const mood = typeof payload.mood === "string" ? payload.mood : PET_MODE_DEFAULTS.expression;
   const source = typeof payload.source === "string" ? payload.source : "unknown";
   const nextState = stateForChatSource(source, reply);
-  const isReplyLong = nextState === "long_reply";
 
   return setBubbleState(documentRef, nextState, {
     source,
     statusText: sourceStatusLabel(source),
-    message: isReplyLong ? BUBBLE_STATES.long_reply.message : PET_MODE_DEFAULTS.bubbleMessage,
-    response: isReplyLong ? PET_LONG_REPLY_HINT : reply,
+    message: detailMessageForBubbleState(nextState),
+    response: responseForBubbleState(nextState, reply),
     mood,
   });
 }
@@ -651,6 +711,7 @@ function initializePetMode(documentRef = document) {
   const bubble = documentRef.getElementById("pet-bubble");
   const bubbleOpenHook = documentRef.getElementById("pet-bubble-open-hook");
   const bubbleCloseHook = documentRef.getElementById("pet-bubble-close-hook");
+  const bubbleDetailsToggle = documentRef.getElementById("pet-bubble-details-toggle");
   const bubbleMessage = documentRef.getElementById("pet-bubble-message");
   const bubblePlaceholder = documentRef.getElementById("pet-bubble-placeholder");
   const chatInput = documentRef.getElementById("pet-chat-input-hook");
@@ -696,8 +757,31 @@ function initializePetMode(documentRef = document) {
     bubbleOpenHook.addEventListener("click", () => expandBubble(documentRef));
   }
 
+  if (bubble && typeof bubble.addEventListener === "function") {
+    bubble.addEventListener("click", (event) => {
+      if (event && typeof event.stopPropagation === "function") {
+        event.stopPropagation();
+      }
+      toggleBubbleDetails(documentRef);
+    });
+  }
+
+  if (bubbleDetailsToggle && typeof bubbleDetailsToggle.addEventListener === "function") {
+    bubbleDetailsToggle.addEventListener("click", (event) => {
+      if (event && typeof event.stopPropagation === "function") {
+        event.stopPropagation();
+      }
+      toggleBubbleDetails(documentRef);
+    });
+  }
+
   if (bubbleCloseHook && typeof bubbleCloseHook.addEventListener === "function") {
-    bubbleCloseHook.addEventListener("click", () => collapseBubble(documentRef));
+    bubbleCloseHook.addEventListener("click", (event) => {
+      if (event && typeof event.stopPropagation === "function") {
+        event.stopPropagation();
+      }
+      collapseBubble(documentRef);
+    });
   }
 
   if (chatInput && typeof chatInput.addEventListener === "function") {
@@ -785,6 +869,7 @@ if (typeof module !== "undefined") {
     PET_BUBBLE_STATE_EXPRESSIONS,
     PET_LONG_REPLY_HINT,
     PET_MODE_DEFAULTS,
+    PET_REPLY_PREVIEW_LIMIT,
     PET_REPLY_LONG_THRESHOLD,
     buildChatPayload,
     collapseBubble,
@@ -801,19 +886,23 @@ if (typeof module !== "undefined") {
     handleResetPetPosition,
     initializePetMode,
     isLongReply,
+    isBubbleDetailsOpen,
     isMenuOpen,
     openMenu,
     parseChatResponse,
     renderPetSpeechUpdate,
     sendPetChatMessage,
     setBubbleState,
+    setBubbleDetailsOpen,
     setMenuState,
     setPetExpression,
     setPetExpressionForBubbleState,
     normalizePetMood,
     sourceStatusLabel,
     stateForChatSource,
+    toggleBubbleDetails,
     toggleBubble,
     toggleMenu,
+    truncatePetReply,
   };
 }
