@@ -10,6 +10,7 @@ const PET_CHAT_TIMEOUT_MS = 100000;
 const PET_REPLY_LONG_THRESHOLD = 160;
 const PET_REPLY_PREVIEW_LIMIT = 120;
 const PET_LONG_REPLY_HINT = "\u56de\u8986\u8f03\u9577\uff0c\u53ef\u958b Full App \u67e5\u770b\u5b8c\u6574\u5167\u5bb9\u3002";
+const PET_CHAT_HANDOFF_REPLY = "\u8981\u804a\u5929\u5c31\u53bb Full App \u4e0b\u4ee4\uff0c\u543E\u6703\u5728\u9019\u88E1\u770B\u8457\u3002";
 let petChatPending = false;
 
 const CHRISTINA_EXPRESSION_ASSETS = Object.freeze({
@@ -42,7 +43,7 @@ const BUBBLE_STATES = Object.freeze({
   collapsed: {
     expanded: false,
     source: "local",
-    statusText: "speech bubble",
+    statusText: "local",
     message: PET_MODE_DEFAULTS.bubbleMessage,
     response: "\u9ede Full App \u6253\u5b57\uff0c\u543e\u6703\u5728\u9019\u88e1\u56de\u5634\u3002",
     inputDisabled: false,
@@ -52,7 +53,7 @@ const BUBBLE_STATES = Object.freeze({
   expanded: {
     expanded: true,
     source: "local",
-    statusText: "speech bubble",
+    statusText: "local",
     message: PET_MODE_DEFAULTS.bubbleMessage,
     response: "\u54fc\uff0c\u6c5d\u8981\u543e\u8aaa\u8a71\uff0c\u5c31\u53bb Full App \u4e0b\u4ee4\u3002",
     inputDisabled: false,
@@ -387,6 +388,12 @@ function setBubbleDetailsOpen(documentRef = document, open = false) {
   if (detailsToggle) {
     detailsToggle.setAttribute("aria-expanded", open ? "true" : "false");
   }
+
+  const menuDetailsToggle = documentRef.getElementById("pet-menu-toggle-details");
+  if (menuDetailsToggle) {
+    menuDetailsToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    setText(menuDetailsToggle, open ? "Hide Details" : "Show Details");
+  }
 }
 
 function isBubbleDetailsOpen(documentRef = document) {
@@ -396,6 +403,23 @@ function isBubbleDetailsOpen(documentRef = document) {
 
 function toggleBubbleDetails(documentRef = document) {
   setBubbleDetailsOpen(documentRef, !isBubbleDetailsOpen(documentRef));
+}
+
+function toggleDetailsFromMenu(documentRef = document) {
+  const bubble = documentRef.getElementById("pet-bubble");
+
+  if (!bubble || bubble.dataset.state === "collapsed" || bubble.hidden) {
+    setBubbleState(documentRef, "expanded", {
+      response: PET_CHAT_HANDOFF_REPLY,
+      statusText: "details",
+      message: PET_MODE_DEFAULTS.bubbleMessage,
+    });
+    setBubbleDetailsOpen(documentRef, true);
+    return true;
+  }
+
+  toggleBubbleDetails(documentRef);
+  return isBubbleDetailsOpen(documentRef);
 }
 
 function setBubbleState(firstArg, secondArg, thirdArg) {
@@ -454,6 +478,12 @@ function setBubbleState(firstArg, secondArg, thirdArg) {
 
   if (detailsToggle) {
     detailsToggle.setAttribute("aria-expanded", "false");
+  }
+
+  const menuDetailsToggle = documentRef.getElementById("pet-menu-toggle-details");
+  if (menuDetailsToggle) {
+    menuDetailsToggle.setAttribute("aria-expanded", "false");
+    setText(menuDetailsToggle, "Show Details");
   }
 
   if (placeholder) {
@@ -516,6 +546,47 @@ function isMenuOpen(documentRef = document) {
 
 function toggleMenu(documentRef = document) {
   setMenuState(documentRef, !isMenuOpen(documentRef));
+}
+
+function isElementOrDescendant(container, target) {
+  if (!container || !target) {
+    return false;
+  }
+
+  if (container === target) {
+    return true;
+  }
+
+  if (typeof container.contains === "function") {
+    return container.contains(target);
+  }
+
+  let node = target.parentElement || target.parentNode || null;
+  while (node) {
+    if (node === container) {
+      return true;
+    }
+    node = node.parentElement || node.parentNode || null;
+  }
+
+  return false;
+}
+
+function closeMenuOnOutsideClick(event, documentRef = document) {
+  if (!isMenuOpen(documentRef)) {
+    return false;
+  }
+
+  const menu = documentRef.getElementById("pet-menu");
+  const menuHook = documentRef.getElementById("pet-context-menu-hook");
+  const target = event && event.target ? event.target : null;
+
+  if (isElementOrDescendant(menu, target) || isElementOrDescendant(menuHook, target)) {
+    return false;
+  }
+
+  closeMenu(documentRef);
+  return true;
 }
 
 function expandBubble(documentRef = document) {
@@ -648,6 +719,16 @@ function handleOpenFullApp(documentRef = document, dragonPetApi = null) {
   return result;
 }
 
+function handleChatHandoff(documentRef = document, dragonPetApi = null) {
+  setBubbleState(documentRef, "expanded", {
+    response: PET_CHAT_HANDOFF_REPLY,
+    statusText: "chat handoff",
+    message: PET_MODE_DEFAULTS.bubbleMessage,
+  });
+
+  return handleOpenFullApp(documentRef, dragonPetApi);
+}
+
 function callPetApiAction(documentRef, methodName, pendingMessage, fallbackMessage) {
   const message = documentRef.getElementById("pet-bubble-message");
   const api = typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null;
@@ -711,17 +792,15 @@ function initializePetMode(documentRef = document) {
   const bubble = documentRef.getElementById("pet-bubble");
   const bubbleOpenHook = documentRef.getElementById("pet-bubble-open-hook");
   const bubbleCloseHook = documentRef.getElementById("pet-bubble-close-hook");
-  const bubbleDetailsToggle = documentRef.getElementById("pet-bubble-details-toggle");
   const bubbleMessage = documentRef.getElementById("pet-bubble-message");
   const bubblePlaceholder = documentRef.getElementById("pet-bubble-placeholder");
   const chatInput = documentRef.getElementById("pet-chat-input-hook");
   const chatForm = documentRef.getElementById("pet-chat-form-hook");
   const openFullAppHook = documentRef.getElementById("pet-open-full-app-hook");
   const contextMenuHook = documentRef.getElementById("pet-context-menu-hook");
-  const menuOpenFullApp = documentRef.getElementById("pet-menu-open-full-app");
+  const menuToggleDetails = documentRef.getElementById("pet-menu-toggle-details");
   const menuResetPosition = documentRef.getElementById("pet-menu-reset-position");
   const menuHideWindow = documentRef.getElementById("pet-menu-hide-window");
-  const menuClose = documentRef.getElementById("pet-menu-close");
 
   if (root) {
     root.dataset.initialized = "true";
@@ -754,25 +833,7 @@ function initializePetMode(documentRef = document) {
   }
 
   if (bubbleOpenHook && typeof bubbleOpenHook.addEventListener === "function") {
-    bubbleOpenHook.addEventListener("click", () => expandBubble(documentRef));
-  }
-
-  if (bubble && typeof bubble.addEventListener === "function") {
-    bubble.addEventListener("click", (event) => {
-      if (event && typeof event.stopPropagation === "function") {
-        event.stopPropagation();
-      }
-      toggleBubbleDetails(documentRef);
-    });
-  }
-
-  if (bubbleDetailsToggle && typeof bubbleDetailsToggle.addEventListener === "function") {
-    bubbleDetailsToggle.addEventListener("click", (event) => {
-      if (event && typeof event.stopPropagation === "function") {
-        event.stopPropagation();
-      }
-      toggleBubbleDetails(documentRef);
-    });
+    bubbleOpenHook.addEventListener("click", () => handleChatHandoff(documentRef));
   }
 
   if (bubbleCloseHook && typeof bubbleCloseHook.addEventListener === "function") {
@@ -780,7 +841,7 @@ function initializePetMode(documentRef = document) {
       if (event && typeof event.stopPropagation === "function") {
         event.stopPropagation();
       }
-      collapseBubble(documentRef);
+      handleHidePetWindow(documentRef);
     });
   }
 
@@ -811,9 +872,9 @@ function initializePetMode(documentRef = document) {
     contextMenuHook.addEventListener("click", () => toggleMenu(documentRef));
   }
 
-  if (menuOpenFullApp && typeof menuOpenFullApp.addEventListener === "function") {
-    menuOpenFullApp.addEventListener("click", () => {
-      handleOpenFullApp(documentRef);
+  if (menuToggleDetails && typeof menuToggleDetails.addEventListener === "function") {
+    menuToggleDetails.addEventListener("click", () => {
+      toggleDetailsFromMenu(documentRef);
       closeMenu(documentRef);
     });
   }
@@ -832,11 +893,8 @@ function initializePetMode(documentRef = document) {
     });
   }
 
-  if (menuClose && typeof menuClose.addEventListener === "function") {
-    menuClose.addEventListener("click", () => closeMenu(documentRef));
-  }
-
   if (typeof documentRef.addEventListener === "function") {
+    documentRef.addEventListener("click", (event) => closeMenuOnOutsideClick(event, documentRef));
     documentRef.addEventListener("keydown", (event) => {
       if (event && event.key === "Escape") {
         closeMenu(documentRef);
@@ -874,6 +932,7 @@ if (typeof module !== "undefined") {
     buildChatPayload,
     collapseBubble,
     closeMenu,
+    closeMenuOnOutsideClick,
     expandBubble,
     expressionForBubbleState,
     getPetBackendUrl,
@@ -881,12 +940,14 @@ if (typeof module !== "undefined") {
     handleBubbleInput,
     handleChatSubmit,
     handleOpenFullApp,
+    handleChatHandoff,
     handleHidePetWindow,
     handlePlaceholderSubmit,
     handleResetPetPosition,
     initializePetMode,
     isLongReply,
     isBubbleDetailsOpen,
+    isElementOrDescendant,
     isMenuOpen,
     openMenu,
     parseChatResponse,
@@ -901,6 +962,7 @@ if (typeof module !== "undefined") {
     sourceStatusLabel,
     stateForChatSource,
     toggleBubbleDetails,
+    toggleDetailsFromMenu,
     toggleBubble,
     toggleMenu,
     truncatePetReply,

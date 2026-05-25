@@ -29,8 +29,7 @@
     <div id="pet-drag-handle" class="pet-drag-handle" aria-label="Drag pet window" title="Drag"></div>
     <div id="pet-stage-controls" class="pet-stage-controls pet-no-drag" aria-label="Pet speech controls">
       <span id="pet-bubble-title" class="pet-sr-only">Christina Speech</span>
-      <button id="pet-bubble-details-toggle" class="pet-icon-button pet-no-drag" type="button" data-hook="bubble-details" aria-label="Toggle bubble details" aria-expanded="false">i</button>
-      <button id="pet-bubble-close-hook" class="pet-icon-button pet-no-drag" type="button" data-hook="bubble-close" aria-label="Collapse bubble">x</button>
+      <button id="pet-bubble-close-hook" class="pet-icon-button pet-no-drag" type="button" data-hook="bubble-close" aria-label="Hide Pet Window" title="Hide Pet">x</button>
     </div>
 
     <section id="pet-drag-region" class="pet-stage pet-no-drag" aria-label="Pet interaction region">
@@ -56,7 +55,7 @@
         </div>
         <div id="pet-bubble-details" class="pet-bubble-details pet-no-drag" aria-label="Speech details" hidden>
           <div id="pet-bubble-status" class="pet-bubble-status pet-no-drag" data-source="local">
-            speech bubble
+            local
           </div>
           <div id="pet-bubble-message" class="pet-bubble-message pet-no-drag" aria-live="polite">
             &#x6253;&#x5B57;&#x8ACB;&#x958B; Full App&#x3002;
@@ -90,9 +89,9 @@
     </section>
 
     <nav id="pet-mode-actions" class="pet-mode-actions pet-no-drag" aria-label="Pet mode action hooks">
-      <button id="pet-bubble-open-hook" class="pet-no-drag" type="button" data-hook="bubble-open">Chat</button>
-      <button id="pet-open-full-app-hook" class="pet-no-drag" type="button" data-hook="open-full-app">Full App</button>
-      <button id="pet-context-menu-hook" class="pet-no-drag" type="button" data-hook="context-menu">Menu</button>
+      <button id="pet-bubble-open-hook" class="pet-no-drag" type="button" data-hook="bubble-open" aria-label="Open Full App for chat" title="Open Full App for chat">Chat</button>
+      <button id="pet-open-full-app-hook" class="pet-no-drag" type="button" data-hook="open-full-app" aria-label="Open Full App" title="Open Full App">Full App</button>
+      <button id="pet-context-menu-hook" class="pet-no-drag" type="button" data-hook="context-menu" aria-label="Open Pet menu" title="Menu">Menu</button>
     </nav>
 
     <section
@@ -103,10 +102,9 @@
       aria-hidden="true"
       hidden
     >
-      <button id="pet-menu-open-full-app" class="pet-menu-item pet-no-drag" type="button" data-menu-action="open-full-app">Open Full App</button>
+      <button id="pet-menu-toggle-details" class="pet-menu-item pet-no-drag" type="button" data-menu-action="toggle-details" aria-expanded="false">Toggle Details</button>
       <button id="pet-menu-reset-position" class="pet-menu-item pet-no-drag" type="button" data-menu-action="reset-position">Reset Pet Position</button>
       <button id="pet-menu-hide-window" class="pet-menu-item pet-no-drag" type="button" data-menu-action="hide-window">Hide Pet Window</button>
-      <button id="pet-menu-close" class="pet-menu-item pet-no-drag" type="button" data-menu-action="close-menu">Close Menu</button>
     </section>
   </main>
 

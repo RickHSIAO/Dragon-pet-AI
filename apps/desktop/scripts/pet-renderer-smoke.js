@@ -107,7 +107,6 @@ function testPetHtmlReferencesStaticAssets() {
   assertIncludes(html, 'id="pet-bubble-status"', "pet.html");
   assertIncludes(html, 'id="pet-bubble-response"', "pet.html");
   assertIncludes(html, 'id="pet-bubble-details"', "pet.html");
-  assertIncludes(html, 'id="pet-bubble-details-toggle"', "pet.html");
   assertIncludes(html, 'id="pet-bubble-open-hook"', "pet.html");
   assertIncludes(html, 'id="pet-bubble-close-hook"', "pet.html");
   assertIncludes(html, 'id="pet-bubble-placeholder"', "pet.html");
@@ -120,10 +119,11 @@ function testPetHtmlReferencesStaticAssets() {
     'data-supported-bubble-states="collapsed expanded speaking thinking composing empty_input pending success backend_offline timeout llm_local_error fallback_mock long_reply"',
     "pet.html"
   );
-  assertIncludes(html, 'id="pet-menu-open-full-app"', "pet.html");
+  assertIncludes(html, 'id="pet-menu-toggle-details"', "pet.html");
   assertIncludes(html, 'id="pet-menu-reset-position"', "pet.html");
   assertIncludes(html, 'id="pet-menu-hide-window"', "pet.html");
-  assertIncludes(html, 'id="pet-menu-close"', "pet.html");
+  assertRegex(html, /id="pet-bubble-open-hook"(?:(?!>).)*aria-label="Open Full App for chat"/, "pet.html");
+  assertRegex(html, /id="pet-bubble-close-hook"(?:(?!>).)*aria-label="Hide Pet Window"/, "pet.html");
   assertRegex(html, /id="pet-open-full-app-hook"(?:(?!>).)*data-hook="open-full-app"/, "pet.html");
   assert.equal(/id="pet-open-full-app-hook"(?:(?!>).)*disabled/.test(html), false);
   assert.equal(/id="pet-context-menu-hook"(?:(?!>).)*disabled/.test(html), false);
@@ -144,7 +144,6 @@ function testPetHtmlReferencesStaticAssets() {
   assertRegex(html, /id="pet-bubble-status"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-bubble-response"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-bubble-details"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
-  assertRegex(html, /id="pet-bubble-details-toggle"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-bubble-placeholder"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-chat-form-hook"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-chat-form-hook"[^>]*class="[^"]*\bpet-dev-chat-form\b/, "pet.html");
@@ -161,18 +160,18 @@ function testPetHtmlReferencesStaticAssets() {
   assertRegex(html, /id="pet-bubble-close-hook"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-context-menu-hook"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-open-full-app-hook"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
-  assertRegex(html, /id="pet-menu-open-full-app"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
+  assertRegex(html, /id="pet-menu-toggle-details"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
+  assertRegex(html, /id="pet-menu-toggle-details"(?:(?!>).)*data-menu-action="toggle-details"/, "pet.html");
   assertRegex(html, /id="pet-menu-reset-position"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
   assertRegex(html, /id="pet-menu-hide-window"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
-  assertRegex(html, /id="pet-menu-close"[^>]*class="[^"]*\bpet-no-drag\b/, "pet.html");
-  assert.ok(
-    html.indexOf('id="pet-bubble-details-toggle"') < html.indexOf('id="pet-drag-region"'),
-    "details toggle should be outside the reply bubble flow"
-  );
   assert.ok(
     html.indexOf('id="pet-bubble-close-hook"') < html.indexOf('id="pet-drag-region"'),
     "close control should be outside the reply bubble flow"
   );
+  assertNotIncludes(html, 'id="pet-bubble-details-toggle"', "pet.html");
+  assertNotIncludes(html, 'id="pet-menu-open-full-app"', "pet.html");
+  assertNotIncludes(html, 'id="pet-menu-close"', "pet.html");
+  assertNotIncludes(html, ">speech bubble<", "pet.html");
   assert.equal(html.includes("pet-bubble-header"), false, "pet.html should not keep inline bubble controls");
   assertIncludes(html, "&#x54FC;&#xFF0C;", "pet.html");
   assertIncludes(html, "Display-only speech bubble. Type in Full App.", "pet.html");
@@ -191,8 +190,8 @@ function testPetHtmlReferencesStaticAssets() {
 
 function testPetCssUsesStaticPetDimensions() {
   const css = readText(petCssPath);
-  assertIncludes(css, "width: 220px", "pet.css");
-  assertIncludes(css, "min-height: 280px", "pet.css");
+  assertIncludes(css, "width: 300px", "pet.css");
+  assertIncludes(css, "min-height: 400px", "pet.css");
   assertIncludes(css, "background: transparent", "pet.css");
   assertIncludes(css, "-webkit-app-region: drag", "pet.css");
   assertIncludes(css, "-webkit-app-region: no-drag", "pet.css");
@@ -225,8 +224,8 @@ function testPetCssUsesStaticPetDimensions() {
   assertRegex(css, /\.pet-stage-controls[\s\S]*top:\s*28px/, "pet.css");
   assertRegex(css, /\.pet-stage-controls[\s\S]*right:\s*10px/, "pet.css");
   assertRegex(css, /\.pet-stage-controls[\s\S]*z-index:\s*9/, "pet.css");
-  assertRegex(css, /\.pet-shell[\s\S]*height:\s*280px/, "pet.css");
-  assertRegex(css, /\.pet-shell[\s\S]*max-height:\s*280px/, "pet.css");
+  assertRegex(css, /\.pet-shell[\s\S]*height:\s*400px/, "pet.css");
+  assertRegex(css, /\.pet-shell[\s\S]*max-height:\s*400px/, "pet.css");
   assertRegex(css, /\.pet-shell[\s\S]*overflow:\s*hidden/, "pet.css");
   assertRegex(css, /\.pet-shell[\s\S]*grid-template-rows:\s*minmax\(0,\s*1fr\) auto/, "pet.css");
   assertRegex(css, /\.pet-stage,\s*\r?\n\.pet-drag-region[\s\S]*overflow:\s*hidden/, "pet.css");
@@ -240,25 +239,31 @@ function testPetCssUsesStaticPetDimensions() {
     /\.pet-bubble[\s\S]*grid-template-rows:\s*minmax\(0,\s*1fr\) auto/,
     "pet.css"
   );
-  assertRegex(css, /\.pet-bubble[\s\S]*gap:\s*5px/, "pet.css");
-  assertRegex(css, /\.pet-bubble\[data-state="expanded"\][\s\S]*max-height:\s*76px/, "pet.css");
-  assertRegex(css, /\.pet-bubble\[data-state="expanded"\][\s\S]*padding:\s*8px 10px/, "pet.css");
+  assertRegex(css, /\.pet-bubble[\s\S]*gap:\s*6px/, "pet.css");
+  assertRegex(css, /\.pet-bubble\[data-state="expanded"\][\s\S]*max-height:\s*122px/, "pet.css");
+  assertRegex(css, /\.pet-bubble\[data-state="expanded"\][\s\S]*padding:\s*10px 12px/, "pet.css");
   assertRegex(css, /\.pet-bubble-body[\s\S]*display:\s*none/, "pet.css");
   assert.equal(css.includes(".pet-bubble-header"), false, "pet.css should not reserve inline bubble controls");
   assertRegex(css, /\.pet-dev-chat-form,\s*\r?\n\.pet-dev-chat-form\[hidden\][\s\S]*display:\s*none/, "pet.css");
   assertRegex(css, /\.pet-bubble-message[\s\S]*max-height:\s*16px/, "pet.css");
   assertRegex(css, /\.pet-bubble-message[\s\S]*overflow:\s*hidden/, "pet.css");
-  assertRegex(css, /\.pet-bubble-response[\s\S]*max-height:\s*54px/, "pet.css");
+  assertRegex(css, /\.pet-bubble-response[\s\S]*max-height:\s*92px/, "pet.css");
   assertRegex(css, /\.pet-bubble-response[\s\S]*min-height:\s*0/, "pet.css");
   assertRegex(css, /\.pet-bubble-response[\s\S]*overflow-y:\s*auto/, "pet.css");
+  assertRegex(css, /\.pet-bubble-response[\s\S]*font-size:\s*13px/, "pet.css");
+  assertRegex(css, /\.pet-bubble-response[\s\S]*line-height:\s*1\.42/, "pet.css");
   assertRegex(css, /\.pet-bubble-response[\s\S]*overflow-wrap:\s*anywhere/, "pet.css");
   assertRegex(css, /\.pet-bubble-response[\s\S]*white-space:\s*pre-wrap/, "pet.css");
-  assertRegex(css, /\.pet-bubble\[data-state="long_reply"\] \.pet-bubble-response[\s\S]*max-height:\s*54px/, "pet.css");
-  assertRegex(css, /\.pet-bubble-details[\s\S]*max-height:\s*42px/, "pet.css");
+  assertRegex(css, /\.pet-bubble\[data-state="long_reply"\] \.pet-bubble-response[\s\S]*max-height:\s*92px/, "pet.css");
+  assertRegex(css, /\.pet-bubble-details[\s\S]*max-height:\s*50px/, "pet.css");
   assertRegex(css, /\.pet-bubble-details[\s\S]*overflow-y:\s*auto/, "pet.css");
   assertRegex(css, /\.pet-bubble-details\[hidden\][\s\S]*display:\s*none/, "pet.css");
-  assertRegex(css, /\.pet-bubble\[data-details-open="true"\][\s\S]*max-height:\s*96px/, "pet.css");
-  assertRegex(css, /\.pet-bubble\[data-details-open="true"\] \.pet-bubble-response[\s\S]*max-height:\s*38px/, "pet.css");
+  assertRegex(css, /\.pet-bubble\[data-details-open="true"\][\s\S]*max-height:\s*158px/, "pet.css");
+  assertRegex(css, /\.pet-bubble\[data-details-open="true"\] \.pet-bubble-response[\s\S]*max-height:\s*74px/, "pet.css");
+  assertRegex(css, /\.pet-shell:not\(\[data-bubble-state="collapsed"\]\) \.pet-avatar[\s\S]*width:\s*142px/, "pet.css");
+  assertRegex(css, /\.pet-shell:not\(\[data-bubble-state="collapsed"\]\) \.pet-avatar[\s\S]*height:\s*142px/, "pet.css");
+  assertRegex(css, /\.pet-menu[\s\S]*max-height:\s*144px/, "pet.css");
+  assertRegex(css, /\.pet-menu[\s\S]*overflow-y:\s*auto/, "pet.css");
   assertRegex(css, /\.pet-stage,\s*\r?\n\.pet-drag-region[\s\S]*-webkit-app-region:\s*no-drag\b/, "pet.css");
   assertRegex(css, /\.pet-avatar[\s\S]*-webkit-app-region:\s*no-drag\b/, "pet.css");
   assertRegex(css, /button,\s*\r?\ninput[\s\S]*-webkit-app-region:\s*no-drag/, "pet.css");
@@ -275,6 +280,9 @@ function testPetRendererUsesBackendChatWithoutDirectOllama() {
   assertIncludes(renderer, "function isLongReply", "pet-renderer.js");
   assertIncludes(renderer, "function truncatePetReply", "pet-renderer.js");
   assertIncludes(renderer, "function toggleBubbleDetails", "pet-renderer.js");
+  assertIncludes(renderer, "function toggleDetailsFromMenu", "pet-renderer.js");
+  assertIncludes(renderer, "function handleChatHandoff", "pet-renderer.js");
+  assertIncludes(renderer, "PET_CHAT_HANDOFF_REPLY", "pet-renderer.js");
   assertIncludes(renderer, "const PET_BUBBLE_STATE_EXPRESSIONS = Object.freeze", "pet-renderer.js");
   assertIncludes(renderer, "function normalizePetMood", "pet-renderer.js");
   assertIncludes(renderer, "function setPetExpressionForBubbleState", "pet-renderer.js");
@@ -373,6 +381,7 @@ function testPetRendererInitializesBubbleCollapsed() {
     "pet-chat-send-hook",
     "pet-chat-form-hook",
     "pet-menu",
+    "pet-menu-toggle-details",
   ]);
 
   initializePetMode(fakeDocument);
@@ -390,7 +399,7 @@ function testPetRendererInitializesBubbleCollapsed() {
   assert.equal(fakeDocument.getElementById("pet-menu").getAttribute("aria-hidden"), "true");
   assert.equal(fakeDocument.getElementById("pet-menu").hidden, true);
   assert.equal(fakeDocument.getElementById("pet-bubble-message").textContent, PET_MODE_DEFAULTS.bubbleMessage);
-  assert.equal(fakeDocument.getElementById("pet-bubble-status").textContent, "speech bubble");
+  assert.equal(fakeDocument.getElementById("pet-bubble-status").textContent, "local");
   assert.match(fakeDocument.getElementById("pet-bubble-placeholder").textContent, /Display-only speech bubble/);
 }
 
@@ -769,21 +778,37 @@ function testPetRendererClickAndSubmitHandlersAreLocalOnly() {
     "pet-open-full-app-hook",
     "pet-context-menu-hook",
     "pet-menu",
-    "pet-menu-open-full-app",
+    "pet-menu-toggle-details",
     "pet-menu-reset-position",
     "pet-menu-hide-window",
-    "pet-menu-close",
   ]);
+  const originalWindow = global.window;
+  const calls = [];
+
+  global.window = {
+    dragonPet: {
+      openFullApp() {
+        calls.push("open");
+        return Promise.resolve({ ok: true });
+      },
+      hidePetWindow() {
+        calls.push("hide");
+        return Promise.resolve({ ok: true });
+      },
+    },
+  };
 
   initializePetMode(fakeDocument);
   fakeDocument.getElementById("pet-drag-region").dispatchEvent({ type: "click" });
   assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "expanded");
 
   fakeDocument.getElementById("pet-bubble-close-hook").dispatchEvent({ type: "click" });
-  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "collapsed");
+  assert.deepEqual(calls, ["hide"]);
 
   fakeDocument.getElementById("pet-bubble-open-hook").dispatchEvent({ type: "click" });
+  assert.deepEqual(calls, ["hide", "open"]);
   assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "expanded");
+  assert.doesNotMatch(fakeDocument.getElementById("pet-bubble-response").textContent, /source|status|mood|llm_local|local/);
 
   const input = fakeDocument.getElementById("pet-chat-input-hook");
   input.value = "hello";
@@ -802,6 +827,7 @@ function testPetRendererClickAndSubmitHandlersAreLocalOnly() {
   assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "empty_input");
   assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "annoyed");
   assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_annoyed\.png$/);
+  global.window = originalWindow;
 }
 
 function createPetChatDocument() {
@@ -1276,10 +1302,13 @@ function testPetRendererMenuHooksAreLocalAndNarrow() {
     "pet-open-full-app-hook",
     "pet-context-menu-hook",
     "pet-menu",
-    "pet-menu-open-full-app",
+    "pet-menu-toggle-details",
+    "pet-bubble-details",
+    "pet-bubble-details-toggle",
+    "pet-bubble-status",
+    "pet-bubble-response",
     "pet-menu-reset-position",
     "pet-menu-hide-window",
-    "pet-menu-close",
   ]);
 
   initializePetMode(fakeDocument);
@@ -1293,7 +1322,22 @@ function testPetRendererMenuHooksAreLocalAndNarrow() {
   fakeDocument.getElementById("pet-context-menu-hook").dispatchEvent({ type: "click" });
   assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "open");
 
-  fakeDocument.getElementById("pet-menu-close").dispatchEvent({ type: "click" });
+  fakeDocument.dispatchEvent({
+    type: "click",
+    target: fakeDocument.getElementById("pet-menu"),
+  });
+  assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "open");
+
+  fakeDocument.dispatchEvent({
+    type: "click",
+    target: fakeDocument.getElementById("pet-context-menu-hook"),
+  });
+  assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "open");
+
+  fakeDocument.dispatchEvent({
+    type: "click",
+    target: new FakeElement("outside"),
+  });
   assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "closed");
 
   let contextPrevented = false;
@@ -1321,8 +1365,16 @@ function testPetRendererMenuHooksAreLocalAndNarrow() {
   fakeDocument.getElementById("pet-context-menu-hook").dispatchEvent({ type: "click" });
   assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "open");
 
-  fakeDocument.getElementById("pet-menu-close").dispatchEvent({ type: "click" });
+  fakeDocument.getElementById("pet-context-menu-hook").dispatchEvent({ type: "click" });
   assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "closed");
+
+  fakeDocument.getElementById("pet-context-menu-hook").dispatchEvent({ type: "click" });
+  assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "open");
+  fakeDocument.getElementById("pet-menu-toggle-details").dispatchEvent({ type: "click" });
+  assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "closed");
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.detailsOpen, "true");
+  assert.equal(fakeDocument.getElementById("pet-bubble-details").hidden, false);
+  assert.equal(fakeDocument.getElementById("pet-menu-toggle-details").getAttribute("aria-expanded"), "true");
 }
 
 function testPetRendererOpenFullAppUsesNarrowApi() {
@@ -1339,6 +1391,42 @@ function testPetRendererOpenFullAppUsesNarrowApi() {
 
   assert.equal(called, true);
   assert.equal(typeof result.then, "function");
+  assert.equal(fakeDocument.getElementById("pet-bubble-message").textContent, "Opening Full App...");
+}
+
+function testPetRendererChatHandoffUsesFullAppWithoutPetInput() {
+  const { handleChatHandoff } = require(petRendererPath);
+  const fakeDocument = new FakeDocument([
+    "pet-mode-root",
+    "pet-bubble",
+    "pet-bubble-title",
+    "pet-bubble-details",
+    "pet-bubble-details-toggle",
+    "pet-menu-toggle-details",
+    "pet-bubble-status",
+    "pet-bubble-message",
+    "pet-bubble-response",
+    "pet-bubble-placeholder",
+    "pet-chat-form-hook",
+    "pet-chat-input-hook",
+    "pet-chat-send-hook",
+  ]);
+  let called = false;
+
+  const result = handleChatHandoff(fakeDocument, {
+    openFullApp() {
+      called = true;
+      return Promise.resolve({ ok: true });
+    },
+  });
+
+  assert.equal(called, true);
+  assert.equal(typeof result.then, "function");
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "expanded");
+  assert.equal(fakeDocument.getElementById("pet-chat-form-hook").hidden, true);
+  assert.equal(fakeDocument.getElementById("pet-chat-input-hook").hidden, true);
+  assert.equal(fakeDocument.getElementById("pet-chat-input-hook").getAttribute("tabindex"), "-1");
+  assert.doesNotMatch(fakeDocument.getElementById("pet-bubble-response").textContent, /source|status|mood|llm_local|local/);
   assert.equal(fakeDocument.getElementById("pet-bubble-message").textContent, "Opening Full App...");
 }
 
@@ -1458,6 +1546,7 @@ async function run() {
     testPetChatLongReplyUsesLongReplyState,
     testPetRendererMenuHooksAreLocalAndNarrow,
     testPetRendererOpenFullAppUsesNarrowApi,
+    testPetRendererChatHandoffUsesFullAppWithoutPetInput,
     testPetRendererMenuActionsUseNarrowApis,
     testPetRendererMenuActionFallbacksDoNotCrash,
     testPetRendererOpenFullAppFallbackDoesNotCrash,

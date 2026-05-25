@@ -7349,7 +7349,7 @@ Next recommendation:
 
 ## TASK-146 - Pet Mode Menu / Controls Consolidation Design
 
-**Status:** DEFINED - READY FOR IMPLEMENTATION
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS
 **Date:** 2026-05-25
 
 Goal:
@@ -7361,7 +7361,7 @@ Product direction:
 - Full App remains the primary text input surface.
 - Pet Window remains display/companion-only.
 - Pet Window must not become a mini full chat app.
-- Pet Window remains constrained to `220 x 280`.
+- Pet Window remains compact. TASK-146 readability UX fix updates the default Pet Window size to `300 x 400` after Windows visual testing found `260 x 340` still cramped and hard to read.
 - Christina image, the visible clean reply bubble, and the bottom `Chat / Full App / Menu` controls must remain usable.
 
 Control behavior to implement:
@@ -7369,7 +7369,7 @@ Control behavior to implement:
 - `Chat`: should not reveal a Pet text input box. It should either focus/open Full App for typing or show a compact local hint that typing belongs in Full App. The preferred implementation is a Full App chat handoff using existing safe behavior if available.
 - `Full App`: should explicitly focus/open the existing Full App window through the existing Pet-to-Full behavior. It should not send chat, modify provider settings, or create a second chat surface.
 - `Menu`: should contain secondary Pet controls such as Open Full App, Toggle Details/Info if moved there, Reset Pet Position, Hide Pet Window, and Close Menu. It should not contain provider settings, backend controls, text input, or external links.
-- Details/info: may remain as the floating `i` if it does not crowd the reply text. It may move into Menu only if details remain discoverable, keyboard/click accessible, metadata-only, and constrained inside the `220 x 280` window.
+- Details/info: lives in Menu only after the TASK-146 UX fix. It remains discoverable, keyboard/click accessible, metadata-only, and constrained inside the compact Pet Window.
 - `x`: should hide the Pet Window, matching existing Hide Pet behavior. It must not quit the app or close Full App unless a later explicit task changes that contract.
 
 Accessibility and small-window constraints:
@@ -7404,15 +7404,64 @@ Risk boundaries / non-goals:
 Validation expected after implementation:
 
 - Pet renderer syntax check.
-- Pet renderer smoke covering Chat handoff/hint, Full App button, Menu items, details/info behavior, `x` hide behavior, and `220 x 280` layout constraints.
+- Pet renderer smoke covering Chat handoff/hint, Full App button, Menu items, details/info behavior, `x` hide behavior, outside-click/Escape menu close, and `300 x 400` layout/readability constraints.
 - Pet window smoke to confirm no IPC/preload/API broadening unless explicitly justified.
 - Desktop renderer smoke.
 - Direct Ollama `11434` safety scan for renderer surfaces.
 - `git diff --check`.
 
+Implementation:
+
+- `Chat` now performs a Full App handoff through the existing Pet-to-Full path and keeps the Pet Window display-only.
+- `Full App` continues to focus/open Full App through the existing Pet-to-Full behavior.
+- `Menu` now includes Toggle Details, Reset Pet Position, and Hide Pet Window.
+- Redundant Open Full App and Close Menu menu items were removed; the bottom Full App button and outside-click/Menu-toggle close behavior cover those actions.
+- The floating `i` details control was removed; details/info is now toggled from Menu only.
+- The floating `x` control now means Hide Pet Window through existing Hide Pet behavior, not app quit and not Full App close.
+- The visible reply bubble remains clean reply text only; metadata/helper/status/mood/source details remain hidden until details are opened.
+- Menu closes on Menu re-click, left-click outside, Escape, and menu actions that intentionally close it.
+- Clicking inside the open menu does not close it unless the clicked menu action performs a close.
+- The visible `speech bubble` status label was removed; details default to metadata/source-style labels instead.
+- Pet Window default size is now `300 x 400`.
+- Christina's visible image is larger in speaking mode, targeting roughly 142px while staying centered.
+- Main reply text is larger at 13px with a more comfortable line height.
+- Reply bubble can grow taller for medium replies while long replies stay constrained through max-height/internal scroll and existing preview behavior.
+- Menu still has constrained height and internal scroll so secondary controls cannot push the bottom controls out of the compact Pet Window.
+
+Windows manual smoke result:
+
+- PASS after the `300 x 400` readability/size UX fix.
+- Pet Window is visually comfortable and still feels like a desktop pet.
+- Christina image is larger and centered.
+- Main reply text is readable.
+- Reply bubble grows naturally for short/medium replies and keeps long replies constrained.
+- `Chat / Full App / Menu` remain visible.
+- Menu opens/closes correctly, including outside click and Escape.
+- Menu contains Toggle Details, Reset Pet Position, and Hide Pet Window.
+- Details are toggled from Menu only.
+- Top-right only shows `x`; `x` hides Pet Window and does not quit the app.
+- Chat and Full App open/focus the Full App.
+- No Pet Window text input box is created.
+- Main reply bubble contains only character reply text.
+- No source/status/helper/mood/local/llm_local appears in the main reply.
+- No visible `speech bubble` label appears.
+
+Validation:
+
+- `node --check apps/desktop/src/main.js` - PASS.
+- `node --check apps/desktop/src/pet/pet-renderer.js` - PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js` - PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js` - PASS, 36 checks.
+- `node apps/desktop/scripts/pet-window-smoke.js` - PASS, 10 checks.
+- `cd apps/desktop && npm.cmd run test:renderer` - PASS.
+- `python -m pytest` - PASS, 586 passed.
+- Direct Ollama `11434` safety scan across main, Full App renderer/preload, Pet renderer/preload, and Pet HTML - PASS.
+- `git diff --check` - PASS, with LF-to-CRLF warnings only.
+- Changed docs NUL byte check - PASS.
+
 Next recommendation:
 
-- Implement TASK-146 as the next Pet Mode task, keeping the change frontend-only unless the existing docs justify otherwise.
+- TASK-146 is fully closed. Define the next Pet Mode task in docs before implementation.
 
 ---
 

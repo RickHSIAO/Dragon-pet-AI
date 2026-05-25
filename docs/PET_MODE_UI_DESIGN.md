@@ -133,13 +133,14 @@ Bubble Chat Mode can be implemented either inside the same Pet Window or as a se
 
 Recommended MVP default:
 
-- `220 x 280` px
+- `300 x 400` px after TASK-146 readability UX fix.
 
 Rationale:
 
 - Large enough for the existing Christina expression assets to remain readable.
-- Small enough to sit near a screen edge.
+- Small enough to sit near a screen edge as a desktop pet.
 - Gives room for a short hint below the pet.
+- Gives the current clean reply bubble, larger Christina image, and bottom controls enough space without becoming a mini chat app.
 
 Alternative compact size:
 
@@ -645,7 +646,7 @@ Completion notes:
 - Added `createPetWindow()` and `petWindow` in `apps/desktop/src/main.js`.
 - Pet Window is gated by `PET_MODE_ENABLED=true`; default startup remains Full App only.
 - Pet Window loads `apps/desktop/src/pet/pet.html`.
-- Pet Window uses `220 x 280`, `frame: false`, `transparent: true`, `alwaysOnTop: true`, `resizable: false`, `show: false`, and `ready-to-show` display.
+- Pet Window originally used `220 x 280`; TASK-146 updates the current default to `300 x 400` after `260 x 340` remained too cramped in Windows visual testing. It remains `frame: false`, `transparent: true`, `alwaysOnTop: true`, `resizable: false`, `show: false`, and `ready-to-show` display.
 - Pet Window uses `nodeIntegration: false`, `contextIsolation: true`, and `sandbox: true`.
 - No preload API, backend call, `/chat` call, drag behavior, context menu behavior, bubble chat behavior, or mode switch behavior was added.
 
@@ -800,7 +801,7 @@ Implementation summary:
 
 - Pet Window position is saved by Electron main process only.
 - State path is Electron `app.getPath("userData")` plus `pet-window-state.json`.
-- Stored values are `x`, `y`, `width`, and `height`; Pet Window size remains fixed at `220 x 280`.
+- Stored values are `x`, `y`, `width`, and `height`; Pet Window size now follows the fixed current default `300 x 400`.
 - Position saves after Pet Window `move` with a small debounce and again on `close`.
 - Pet Window loads saved `x/y` when `PET_MODE_ENABLED=true` creates the Pet Window.
 
@@ -1214,21 +1215,21 @@ Validation note:
 
 ### TASK-146 - Pet Mode Menu / Controls Consolidation Design
 
-Status: DEFINED - READY FOR IMPLEMENTATION on 2026-05-25.
+Status: UX FIX IMPLEMENTED - NEEDS WINDOWS RETRY on 2026-05-25.
 
 Goal:
 
 - Consolidate Pet Window control behavior after TASK-145 without changing the display-only product direction.
 - Keep Full App as the primary text input surface.
 - Keep Pet Window as the compact companion display layer.
-- Keep the `220 x 280` Pet Window, Christina image, visible reply bubble, and bottom controls usable.
+- Keep the compact Pet Window, Christina image, visible reply bubble, and bottom controls usable. TASK-146 readability UX fix uses `300 x 400` after Windows visual testing found `260 x 340` still cramped.
 
 Control definitions:
 
 - `Chat`: does not open a Pet text box. It should hand off to Full App for typing or show a compact local hint that typing belongs in Full App.
 - `Full App`: explicitly opens/focuses Full App through existing Pet-to-Full behavior.
-- `Menu`: owns secondary actions: Open Full App, Toggle Details/Info if implementation moves it there, Reset Pet Position, Hide Pet Window, and Close Menu.
-- Details/info: remains metadata/debug/helper only. It may stay as floating `i` or move into Menu if discoverability and small-window layout remain sound.
+- `Menu`: owns secondary actions: Toggle Details/Info, Reset Pet Position, and Hide Pet Window.
+- Details/info: remains metadata/debug/helper only and is toggled from Menu only.
 - `x`: hides Pet Window through existing Hide Pet behavior. It does not quit the app.
 
 Non-goals:
@@ -1237,6 +1238,22 @@ Non-goals:
 - No Pet Window text input box.
 - No mini full chat app in Pet Window.
 - No new IPC/preload APIs unless implementation documents why existing narrow APIs are insufficient.
+
+Implementation note:
+
+- `Chat` opens/focuses Full App through the existing Pet-to-Full behavior and does not add a Pet text input.
+- `Full App` keeps the existing explicit Full App open/focus behavior.
+- `Menu` includes Toggle Details, Reset Pet Position, and Hide Pet Window.
+- Menu closes from Menu re-click, left outside-click, Escape, and menu actions that intentionally close it.
+- Floating `i` was removed because details/info now lives in Menu.
+- Floating `x` maps to Hide Pet Window.
+- The visible `speech bubble` status label was removed from the UI.
+- Pet Window default size is now `300 x 400`.
+- Christina image is larger in speaking mode, targeting roughly 142px.
+- Main reply text is 13px with a more comfortable line height.
+- Reply bubble grows taller for medium replies while long replies remain constrained.
+- Menu height is constrained with internal scroll.
+- Existing automated validation passes; Windows manual smoke retry remains required before marking the visual checkpoint PASS/DONE.
 
 ---
 

@@ -19,7 +19,7 @@ Goals:
 - Render the AI `reply` inside the bubble.
 - Use backend `mood` to update Christina's Pet Mode expression.
 - Show a compact source/status signal.
-- Preserve the `220 x 280` Pet Window constraints.
+- Preserve compact Pet Window constraints. TASK-146 updates the current default size to `300 x 400`.
 - Keep Full App as the troubleshooting and full-history surface.
 
 Non-goals for the wiring MVP:
@@ -163,7 +163,7 @@ Implementation guidance:
 
 ## 7. Long Reply Handling
 
-The Pet Window is fixed at `220 x 280`, so the bubble must be constrained.
+The Pet Window is compact, so the bubble must be constrained. TASK-146 updates the current default size to `300 x 400`.
 
 Recommended layout:
 
@@ -795,7 +795,7 @@ Validation:
 
 ## 23. TASK-146 Pet Mode Menu / Controls Consolidation Design
 
-Status: DEFINED - READY FOR IMPLEMENTATION on 2026-05-25.
+Status: UX FIX IMPLEMENTED - NEEDS WINDOWS RETRY on 2026-05-25.
 
 Purpose:
 
@@ -808,16 +808,16 @@ Speech bubble implications:
 - `Chat` must not resurrect the Pet Bubble input composer.
 - `Chat` should either hand off to Full App or show a compact local hint.
 - Details/info remains metadata-only: source, mood, status/helper text, and long-reply hint.
-- Details/info can stay as floating `i` or move into Menu if the reply text remains clean and discoverability is preserved.
+- Details/info moves into Menu after the TASK-146 UX fix so the reply text remains clean and uncrowded.
 - The visible reply bubble continues to show Christina's role reply only by default.
 - Long replies remain constrained previews; Full App remains the reading path.
 
 Menu/control implications:
 
 - `Full App` keeps the explicit Pet-to-Full focus/open behavior.
-- `Menu` should hold secondary controls: Open Full App, Toggle Details/Info if moved there, Reset Pet Position, Hide Pet Window, and Close Menu.
+- `Menu` should hold secondary controls: Toggle Details/Info, Reset Pet Position, and Hide Pet Window.
 - `x` maps to Hide Pet, not app quit.
-- Bottom controls must remain visible inside the `220 x 280` Pet Window.
+- Bottom controls must remain visible inside the compact Pet Window. TASK-146 readability UX fix uses `300 x 400`.
 
 Non-goals:
 
@@ -828,3 +828,15 @@ Non-goals:
 - No image or voice feature.
 - No new text input box in Pet Window.
 - No new IPC/preload API unless separately justified during implementation.
+
+Implementation result:
+
+- `Chat` hands off to Full App and does not resurrect the hidden Pet input composer.
+- Details/info remains metadata-only and is toggled from Menu only.
+- The main reply bubble remains clean reply text only.
+- Long replies keep constrained previews and Full App reading hint in details.
+- `x` hides Pet Window instead of quitting the app.
+- The visible floating `i` was removed.
+- The visible `speech bubble` label was removed.
+- Menu closes on Menu re-click, left outside-click, Escape, and menu actions that intentionally close it.
+- Christina is larger in speaking mode, reply text is 13px, and the bubble can grow taller for medium replies while long replies remain constrained.

@@ -40,8 +40,8 @@ function testMainHasPetWindowPrototype() {
 
 function testPetWindowOptionsAreSafeAndPetSpecific() {
   const main = readText(mainPath);
-  assertIncludes(main, "PET_WINDOW_WIDTH = 220", "main.js");
-  assertIncludes(main, "PET_WINDOW_HEIGHT = 280", "main.js");
+  assertIncludes(main, "PET_WINDOW_WIDTH = 300", "main.js");
+  assertIncludes(main, "PET_WINDOW_HEIGHT = 400", "main.js");
   assertRegex(main, /width:\s*PET_WINDOW_WIDTH/, "main.js");
   assertRegex(main, /height:\s*PET_WINDOW_HEIGHT/, "main.js");
   assertRegex(main, /frame:\s*false/, "main.js");
