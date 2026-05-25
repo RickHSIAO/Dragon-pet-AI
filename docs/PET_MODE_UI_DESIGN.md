@@ -1215,7 +1215,7 @@ Validation note:
 
 ### TASK-146 - Pet Mode Menu / Controls Consolidation Design
 
-Status: UX FIX IMPLEMENTED - NEEDS WINDOWS RETRY on 2026-05-25.
+Status: DONE - WINDOWS MANUAL SMOKE PASS on 2026-05-25.
 
 Goal:
 
@@ -1253,7 +1253,48 @@ Implementation note:
 - Main reply text is 13px with a more comfortable line height.
 - Reply bubble grows taller for medium replies while long replies remain constrained.
 - Menu height is constrained with internal scroll.
-- Existing automated validation passes; Windows manual smoke retry remains required before marking the visual checkpoint PASS/DONE.
+- Existing automated validation passes.
+- Windows manual smoke passed after the `300 x 400` readability/size UX fix.
+
+### TASK-147 - Pet Idle / Presence State Polish Design
+
+Status: IMPLEMENTED - NEEDS WINDOWS MANUAL SMOKE on 2026-05-25.
+
+Goal:
+
+- Define narrow frontend-only idle/presence polish for the Pet Window.
+- Keep Full App as the primary text input surface.
+- Keep Pet Window as display/companion-only.
+- Keep Pet Window default size at `300 x 400`.
+- Avoid proactive/idle LLM calls.
+
+State definitions:
+
+- `idle_default`: no recent mirrored reply is active. Christina remains visible and centered. The reply bubble shows the static local hint `吾在。要找吾就去 Full App 說話。` without calling `/chat` or any provider.
+- `recent_reply`: latest mirrored Full App reply remains visible for `90` seconds. A newer mirrored reply resets the timer; expiry returns to `idle_default`.
+- `handoff`: after Chat or Full App is clicked, Pet shows the local hint `去 Full App 說，吾會聽。` for about `6` seconds while opening/focusing Full App. It does not create Pet input. Handoff expiry restores the active recent reply if still inside its `90` second window, otherwise `idle_default`.
+- `long_reply`: keep constrained preview and Full App reading hint in details/menu metadata. Do not auto-open Full App.
+- `error`: visible main reply shows only a short readable character-safe message. Source/status/helper/provider/debug details stay in details.
+- `hidden_restore`: Hide Pet must not be overridden by idle/presence updates. Show/focus restores the last clean reply if still inside the `90` second window, otherwise `idle_default`, without any LLM call.
+- `details_metadata`: details remains Menu-only and can show source, mood, helper/status, and long-reply hint. The main reply remains clean.
+
+Implementation notes:
+
+- New visible bubble states: `idle_default` and `handoff`.
+- Recent reply presence is timer-only and local to the Pet renderer.
+- Long reply preview, clean main reply, Menu-only details, `300 x 400` layout, larger centered Christina image, readable reply text, and TASK-146 Menu/Hide behavior are preserved.
+- Automated validation passed: Pet renderer syntax check, Pet renderer smoke with 42 checks, Pet window smoke with 10 checks, desktop renderer smoke, backend pytest with 586 tests, and direct Ollama `11434` runtime scan.
+- Windows manual smoke is still required before marking TASK-147 PASS/DONE.
+
+Acceptance criteria:
+
+- No backend, `/chat` schema, provider settings, external API, image asset, voice, screenshot, microphone, screen monitoring, file, Email, Calendar, or Pet input behavior.
+- No new IPC/preload API unless separately justified in docs before implementation.
+- No proactive LLM calls for startup, idle, return-from-away, or hide/show.
+- `300 x 400` layout remains stable.
+- Christina image, clean reply bubble, and `Chat / Full App / Menu` remain usable.
+- Details remains Menu-only.
+- Main reply never exposes source/status/helper/mood/local/llm_local/debug text.
 
 ---
 

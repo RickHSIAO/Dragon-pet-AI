@@ -45,6 +45,8 @@ class FakeDocument {
   constructor(ids) {
     this.elements = new Map(ids.map((id) => [id, new FakeElement(id)]));
     this.listeners = {};
+    this.hidden = false;
+    this.defaultView = null;
   }
 
   getElementById(id) {
@@ -61,6 +63,47 @@ class FakeDocument {
     for (const listener of listeners) {
       listener(event);
     }
+  }
+}
+
+class FakeTimerApi {
+  constructor() {
+    this.now = 0;
+    this.nextId = 1;
+    this.timers = new Map();
+  }
+
+  setTimeout(callback, delayMs) {
+    const id = this.nextId;
+    this.nextId += 1;
+    this.timers.set(id, {
+      callback,
+      runAt: this.now + delayMs,
+    });
+    return id;
+  }
+
+  clearTimeout(id) {
+    this.timers.delete(id);
+  }
+
+  advance(delayMs) {
+    const target = this.now + delayMs;
+
+    while (true) {
+      const nextTimer = [...this.timers.entries()]
+        .filter(([, timer]) => timer.runAt <= target)
+        .sort((a, b) => a[1].runAt - b[1].runAt)[0];
+
+      if (!nextTimer) break;
+
+      const [id, timer] = nextTimer;
+      this.timers.delete(id);
+      this.now = timer.runAt;
+      timer.callback();
+    }
+
+    this.now = target;
   }
 }
 
@@ -116,7 +159,7 @@ function testPetHtmlReferencesStaticAssets() {
   assertIncludes(html, 'data-menu-state="closed"', "pet.html");
   assertIncludes(
     html,
-    'data-supported-bubble-states="collapsed expanded speaking thinking composing empty_input pending success backend_offline timeout llm_local_error fallback_mock long_reply"',
+    'data-supported-bubble-states="collapsed idle_default expanded handoff speaking thinking composing empty_input pending success backend_offline timeout llm_local_error fallback_mock long_reply"',
     "pet.html"
   );
   assertIncludes(html, 'id="pet-menu-toggle-details"', "pet.html");
@@ -282,7 +325,7 @@ function testPetRendererUsesBackendChatWithoutDirectOllama() {
   assertIncludes(renderer, "function toggleBubbleDetails", "pet-renderer.js");
   assertIncludes(renderer, "function toggleDetailsFromMenu", "pet-renderer.js");
   assertIncludes(renderer, "function handleChatHandoff", "pet-renderer.js");
-  assertIncludes(renderer, "PET_CHAT_HANDOFF_REPLY", "pet-renderer.js");
+  assertIncludes(renderer, "PET_HANDOFF_REPLY", "pet-renderer.js");
   assertIncludes(renderer, "const PET_BUBBLE_STATE_EXPRESSIONS = Object.freeze", "pet-renderer.js");
   assertIncludes(renderer, "function normalizePetMood", "pet-renderer.js");
   assertIncludes(renderer, "function setPetExpressionForBubbleState", "pet-renderer.js");
@@ -316,7 +359,9 @@ function testPetRendererDefinesBubbleStates() {
 
   for (const state of [
     "collapsed",
+    "idle_default",
     "expanded",
+    "handoff",
     "speaking",
     "thinking",
     "composing",
@@ -358,10 +403,22 @@ function testPetRendererDefinesBubbleStates() {
     "\\u56de\\u8986\\u8f03\\u9577\\uff0c\\u53ef\\u958b Full App \\u67e5\\u770b\\u5b8c\\u6574\\u5167\\u5bb9\\u3002",
     "pet-renderer.js"
   );
+  assertIncludes(renderer, "const PET_RECENT_REPLY_VISIBLE_MS = 90000", "pet-renderer.js");
+  assertIncludes(renderer, "const PET_HANDOFF_HINT_MS = 6000", "pet-renderer.js");
+  assertIncludes(
+    renderer,
+    "\\u543e\\u5728\\u3002\\u8981\\u627e\\u543e\\u5c31\\u53bb Full App \\u8aaa\\u8a71\\u3002",
+    "pet-renderer.js"
+  );
+  assertIncludes(
+    renderer,
+    "\\u53bb Full App \\u8aaa\\uff0c\\u543e\\u6703\\u807d\\u3002",
+    "pet-renderer.js"
+  );
 }
 
-function testPetRendererInitializesBubbleCollapsed() {
-  const { initializePetMode, PET_MODE_DEFAULTS } = require(petRendererPath);
+function testPetRendererInitializesBubbleIdleDefault() {
+  const { initializePetMode, PET_IDLE_REPLY, PET_MODE_DEFAULTS } = require(petRendererPath);
   const fakeDocument = new FakeDocument([
     "pet-mode-root",
     "pet-drag-region",
@@ -388,18 +445,19 @@ function testPetRendererInitializesBubbleCollapsed() {
 
   assert.equal(fakeDocument.getElementById("pet-mode-root").dataset.initialized, "true");
   assert.equal(fakeDocument.getElementById("pet-mode-root").dataset.mode, "pet");
-  assert.equal(fakeDocument.getElementById("pet-mode-root").dataset.bubbleState, "collapsed");
+  assert.equal(fakeDocument.getElementById("pet-mode-root").dataset.bubbleState, "idle_default");
   assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "neutral");
   assert.equal(fakeDocument.getElementById("pet-hint").textContent, PET_MODE_DEFAULTS.hint);
-  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "collapsed");
-  assert.equal(fakeDocument.getElementById("pet-bubble").getAttribute("aria-expanded"), "false");
-  assert.equal(fakeDocument.getElementById("pet-bubble").hidden, true);
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "idle_default");
+  assert.equal(fakeDocument.getElementById("pet-bubble").getAttribute("aria-expanded"), "true");
+  assert.equal(fakeDocument.getElementById("pet-bubble").hidden, false);
   assert.equal(fakeDocument.getElementById("pet-mode-root").dataset.menuState, "closed");
   assert.equal(fakeDocument.getElementById("pet-menu").dataset.state, "closed");
   assert.equal(fakeDocument.getElementById("pet-menu").getAttribute("aria-hidden"), "true");
   assert.equal(fakeDocument.getElementById("pet-menu").hidden, true);
   assert.equal(fakeDocument.getElementById("pet-bubble-message").textContent, PET_MODE_DEFAULTS.bubbleMessage);
-  assert.equal(fakeDocument.getElementById("pet-bubble-status").textContent, "local");
+  assert.equal(fakeDocument.getElementById("pet-bubble-status").textContent, "idle");
+  assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, PET_IDLE_REPLY);
   assert.match(fakeDocument.getElementById("pet-bubble-placeholder").textContent, /Display-only speech bubble/);
 }
 
@@ -475,7 +533,9 @@ function testPetSpeechBubbleKeepsDevComposerHiddenAcrossDisplayStates() {
   const { setBubbleState } = require(petRendererPath);
   const fakeDocument = createPetBubbleStateDocument();
   const enabledStates = [
+    "idle_default",
     "expanded",
+    "handoff",
     "speaking",
     "composing",
     "empty_input",
@@ -591,6 +651,155 @@ function testPetBubbleDetailsDisclosureTogglesSourceAndHelperText() {
   assert.equal(fakeDocument.getElementById("pet-bubble-details-toggle").getAttribute("aria-expanded"), "false");
 }
 
+function testPetPresenceIdleDefaultStaticHint() {
+  const { PET_IDLE_REPLY, setPetIdleDefault } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+
+  const renderedState = setPetIdleDefault(fakeDocument, { timerApi: new FakeTimerApi() });
+
+  assert.equal(renderedState, "idle_default");
+  assert.equal(fakeDocument.getElementById("pet-bubble").hidden, false);
+  assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, PET_IDLE_REPLY);
+  assert.equal(fakeDocument.getElementById("pet-bubble-status").textContent, "idle");
+  assert.doesNotMatch(fakeDocument.getElementById("pet-bubble-response").textContent, /source|status|mood|llm_local|local/);
+  assertDevComposerHidden(fakeDocument, false);
+}
+
+function testPetPresenceRecentReplyReplacesIdleAndExpires() {
+  const {
+    PET_IDLE_REPLY,
+    PET_RECENT_REPLY_VISIBLE_MS,
+    renderPetSpeechUpdate,
+    setPetIdleDefault,
+  } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetIdleDefault(fakeDocument, { timerApi });
+  renderPetSpeechUpdate(
+    fakeDocument,
+    {
+      reply: "Recent clean reply.",
+      mood: "happy",
+      source: "llm_local",
+    },
+    { timerApi }
+  );
+
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "speaking");
+  assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, "Recent clean reply.");
+
+  timerApi.advance(PET_RECENT_REPLY_VISIBLE_MS - 1);
+  assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, "Recent clean reply.");
+
+  timerApi.advance(1);
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "idle_default");
+  assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, PET_IDLE_REPLY);
+}
+
+function testPetPresenceRecentReplyTimerResetsOnNewReply() {
+  const { PET_IDLE_REPLY, PET_RECENT_REPLY_VISIBLE_MS, renderPetSpeechUpdate } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  renderPetSpeechUpdate(fakeDocument, { reply: "First reply.", source: "llm_local" }, { timerApi });
+  timerApi.advance(50000);
+  renderPetSpeechUpdate(fakeDocument, { reply: "Second reply.", source: "llm_local" }, { timerApi });
+
+  timerApi.advance(PET_RECENT_REPLY_VISIBLE_MS - 1);
+  assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, "Second reply.");
+
+  timerApi.advance(1);
+  assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, PET_IDLE_REPLY);
+}
+
+function testPetPresenceHandoffHintRestoresRecentReplyOrIdle() {
+  const {
+    PET_HANDOFF_HINT_MS,
+    PET_HANDOFF_REPLY,
+    PET_IDLE_REPLY,
+    handleChatHandoff,
+    renderPetSpeechUpdate,
+    showPetHandoffHint,
+  } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+  let opened = false;
+
+  renderPetSpeechUpdate(fakeDocument, { reply: "Still recent.", source: "llm_local" }, { timerApi });
+  const result = handleChatHandoff(
+    fakeDocument,
+    {
+      openFullApp() {
+        opened = true;
+        return Promise.resolve({ ok: true });
+      },
+    },
+    { timerApi }
+  );
+
+  assert.equal(opened, true);
+  assert.equal(typeof result.then, "function");
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "handoff");
+  assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, PET_HANDOFF_REPLY);
+  assertDevComposerHidden(fakeDocument, false);
+
+  timerApi.advance(PET_HANDOFF_HINT_MS);
+  assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, "Still recent.");
+
+  showPetHandoffHint(fakeDocument, { timerApi });
+  timerApi.advance(PET_HANDOFF_HINT_MS);
+  assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, "Still recent.");
+
+  timerApi.advance(90000);
+  showPetHandoffHint(fakeDocument, { timerApi });
+  timerApi.advance(PET_HANDOFF_HINT_MS);
+  assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, PET_IDLE_REPLY);
+}
+
+function testPetPresenceHiddenRestoreUsesRecentWindow() {
+  const {
+    PET_IDLE_REPLY,
+    PET_RECENT_REPLY_VISIBLE_MS,
+    renderPetSpeechUpdate,
+    restorePetPresenceAfterShow,
+  } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  renderPetSpeechUpdate(fakeDocument, { reply: "Restore me.", source: "llm_local" }, { timerApi });
+  fakeDocument.getElementById("pet-bubble-response").textContent = "Hidden stale text.";
+  restorePetPresenceAfterShow(fakeDocument, { timerApi });
+  assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, "Restore me.");
+
+  timerApi.advance(PET_RECENT_REPLY_VISIBLE_MS);
+  restorePetPresenceAfterShow(fakeDocument, { timerApi });
+  assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, PET_IDLE_REPLY);
+}
+
+function testPetPresenceErrorMessageStaysClean() {
+  const { renderPetSpeechUpdate } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+
+  renderPetSpeechUpdate(fakeDocument, {
+    reply: "raw provider diagnostic: localhost:11434 failed",
+    mood: "worried",
+    source: "llm_local_error",
+  });
+
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "llm_local_error");
+  assert.equal(
+    fakeDocument.getElementById("pet-bubble-response").textContent,
+    "\u543e\u7684\u9b54\u529b\u66ab\u6642\u5361\u4f4f\u4e86\u3002"
+  );
+  assert.doesNotMatch(
+    fakeDocument.getElementById("pet-bubble-response").textContent,
+    /provider|diagnostic|localhost|11434|llm_local_error/
+  );
+  assert.match(fakeDocument.getElementById("pet-bubble-message").textContent, /Full App|provider/);
+  assert.equal(fakeDocument.getElementById("pet-bubble-details").hidden, true);
+}
+
 function testPetRendererRegistersFixedSpeechUpdateListener() {
   const { initializePetMode } = require(petRendererPath);
   const fakeDocument = new FakeDocument([
@@ -679,6 +888,8 @@ function testPetExpressionMappingHelpersUseExistingAssets() {
   assert.equal(expressionForBubbleState("fallback_mock"), "proud");
   assert.equal(expressionForBubbleState("empty_input"), "annoyed");
   assert.equal(expressionForBubbleState("long_reply"), "focused");
+  assert.equal(expressionForBubbleState("idle_default"), "neutral");
+  assert.equal(expressionForBubbleState("handoff"), "neutral");
   assert.equal(expressionForBubbleState("speaking", "happy"), "happy");
   assert.equal(expressionForBubbleState("success", "happy"), "happy");
   assert.equal(expressionForBubbleState("success", "unknown"), "neutral");
@@ -800,14 +1011,14 @@ function testPetRendererClickAndSubmitHandlersAreLocalOnly() {
 
   initializePetMode(fakeDocument);
   fakeDocument.getElementById("pet-drag-region").dispatchEvent({ type: "click" });
-  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "expanded");
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "idle_default");
 
   fakeDocument.getElementById("pet-bubble-close-hook").dispatchEvent({ type: "click" });
   assert.deepEqual(calls, ["hide"]);
 
   fakeDocument.getElementById("pet-bubble-open-hook").dispatchEvent({ type: "click" });
   assert.deepEqual(calls, ["hide", "open"]);
-  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "expanded");
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "handoff");
   assert.doesNotMatch(fakeDocument.getElementById("pet-bubble-response").textContent, /source|status|mood|llm_local|local/);
 
   const input = fakeDocument.getElementById("pet-chat-input-hook");
@@ -1395,7 +1606,7 @@ function testPetRendererOpenFullAppUsesNarrowApi() {
 }
 
 function testPetRendererChatHandoffUsesFullAppWithoutPetInput() {
-  const { handleChatHandoff } = require(petRendererPath);
+  const { PET_HANDOFF_REPLY, handleChatHandoff } = require(petRendererPath);
   const fakeDocument = new FakeDocument([
     "pet-mode-root",
     "pet-bubble",
@@ -1412,20 +1623,22 @@ function testPetRendererChatHandoffUsesFullAppWithoutPetInput() {
     "pet-chat-send-hook",
   ]);
   let called = false;
+  const timerApi = new FakeTimerApi();
 
   const result = handleChatHandoff(fakeDocument, {
     openFullApp() {
       called = true;
       return Promise.resolve({ ok: true });
     },
-  });
+  }, { timerApi });
 
   assert.equal(called, true);
   assert.equal(typeof result.then, "function");
-  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "expanded");
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "handoff");
   assert.equal(fakeDocument.getElementById("pet-chat-form-hook").hidden, true);
   assert.equal(fakeDocument.getElementById("pet-chat-input-hook").hidden, true);
   assert.equal(fakeDocument.getElementById("pet-chat-input-hook").getAttribute("tabindex"), "-1");
+  assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, PET_HANDOFF_REPLY);
   assert.doesNotMatch(fakeDocument.getElementById("pet-bubble-response").textContent, /source|status|mood|llm_local|local/);
   assert.equal(fakeDocument.getElementById("pet-bubble-message").textContent, "Opening Full App...");
 }
@@ -1519,13 +1732,19 @@ async function run() {
     testPetCssUsesStaticPetDimensions,
     testPetRendererUsesBackendChatWithoutDirectOllama,
     testPetRendererDefinesBubbleStates,
-    testPetRendererInitializesBubbleCollapsed,
+    testPetRendererInitializesBubbleIdleDefault,
     testPetRendererRendersAllLocalBubbleStates,
     testPetSpeechBubbleKeepsDevComposerHiddenAcrossDisplayStates,
     testFullAppStatusDoesNotRemoveComposer,
     testPetRendererAppliesSpeechUpdateToSpeechBubble,
     testPetRendererSpeechUpdateHandlesLongReply,
     testPetBubbleDetailsDisclosureTogglesSourceAndHelperText,
+    testPetPresenceIdleDefaultStaticHint,
+    testPetPresenceRecentReplyReplacesIdleAndExpires,
+    testPetPresenceRecentReplyTimerResetsOnNewReply,
+    testPetPresenceHandoffHintRestoresRecentReplyOrIdle,
+    testPetPresenceHiddenRestoreUsesRecentWindow,
+    testPetPresenceErrorMessageStaysClean,
     testPetRendererRegistersFixedSpeechUpdateListener,
     testPetExpressionMappingHelpersUseExistingAssets,
     testPetLongReplyThresholdHelper,

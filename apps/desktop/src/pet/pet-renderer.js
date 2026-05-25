@@ -10,8 +10,13 @@ const PET_CHAT_TIMEOUT_MS = 100000;
 const PET_REPLY_LONG_THRESHOLD = 160;
 const PET_REPLY_PREVIEW_LIMIT = 120;
 const PET_LONG_REPLY_HINT = "\u56de\u8986\u8f03\u9577\uff0c\u53ef\u958b Full App \u67e5\u770b\u5b8c\u6574\u5167\u5bb9\u3002";
-const PET_CHAT_HANDOFF_REPLY = "\u8981\u804a\u5929\u5c31\u53bb Full App \u4e0b\u4ee4\uff0c\u543E\u6703\u5728\u9019\u88E1\u770B\u8457\u3002";
+const PET_IDLE_REPLY = "\u543e\u5728\u3002\u8981\u627e\u543e\u5c31\u53bb Full App \u8aaa\u8a71\u3002";
+const PET_HANDOFF_REPLY = "\u53bb Full App \u8aaa\uff0c\u543e\u6703\u807d\u3002";
+const PET_RECENT_REPLY_VISIBLE_MS = 90000;
+const PET_HANDOFF_HINT_MS = 6000;
 let petChatPending = false;
+const petPresenceStates = typeof WeakMap === "function" ? new WeakMap() : null;
+let fallbackPetPresenceState = null;
 
 const CHRISTINA_EXPRESSION_ASSETS = Object.freeze({
   neutral: "../renderer/assets/pet/christina/expressions/christina_neutral.png",
@@ -25,7 +30,9 @@ const CHRISTINA_EXPRESSION_ASSETS = Object.freeze({
 
 const PET_BUBBLE_STATE_EXPRESSIONS = Object.freeze({
   collapsed: "neutral",
+  idle_default: "neutral",
   expanded: "neutral",
+  handoff: "neutral",
   speaking: "neutral",
   thinking: "focused",
   composing: "neutral",
@@ -50,12 +57,32 @@ const BUBBLE_STATES = Object.freeze({
     sendDisabled: false,
     inputPlaceholder: "Dev-only hidden Pet chat input",
   },
+  idle_default: {
+    expanded: true,
+    source: "local",
+    statusText: "idle",
+    message: PET_MODE_DEFAULTS.bubbleMessage,
+    response: PET_IDLE_REPLY,
+    inputDisabled: false,
+    sendDisabled: false,
+    inputPlaceholder: "Dev-only hidden Pet chat input",
+  },
   expanded: {
     expanded: true,
     source: "local",
     statusText: "local",
     message: PET_MODE_DEFAULTS.bubbleMessage,
     response: "\u54fc\uff0c\u6c5d\u8981\u543e\u8aaa\u8a71\uff0c\u5c31\u53bb Full App \u4e0b\u4ee4\u3002",
+    inputDisabled: false,
+    sendDisabled: false,
+    inputPlaceholder: "Dev-only hidden Pet chat input",
+  },
+  handoff: {
+    expanded: true,
+    source: "local",
+    statusText: "full app handoff",
+    message: PET_MODE_DEFAULTS.bubbleMessage,
+    response: PET_HANDOFF_REPLY,
     inputDisabled: false,
     sendDisabled: false,
     inputPlaceholder: "Dev-only hidden Pet chat input",
@@ -274,6 +301,151 @@ function detailMessageForBubbleState(state) {
   return PET_MODE_DEFAULTS.bubbleMessage;
 }
 
+function createPetPresenceState() {
+  return {
+    recentReply: null,
+    recentTimer: null,
+    handoffActive: false,
+    handoffTimer: null,
+    timerApi: null,
+  };
+}
+
+function getPetPresenceState(documentRef) {
+  if (!documentRef) return createPetPresenceState();
+
+  if (petPresenceStates) {
+    let state = petPresenceStates.get(documentRef);
+    if (!state) {
+      state = createPetPresenceState();
+      petPresenceStates.set(documentRef, state);
+    }
+    return state;
+  }
+
+  if (!fallbackPetPresenceState || fallbackPetPresenceState.documentRef !== documentRef) {
+    fallbackPetPresenceState = {
+      documentRef,
+      state: createPetPresenceState(),
+    };
+  }
+  return fallbackPetPresenceState.state;
+}
+
+function getPresenceTimerApi(options = {}, presenceState = null) {
+  if (options && options.timerApi) return options.timerApi;
+  if (presenceState && presenceState.timerApi) return presenceState.timerApi;
+  return globalThis;
+}
+
+function getPresenceNow(timerApi = globalThis) {
+  if (timerApi && typeof timerApi.now === "number") return timerApi.now;
+  return Date.now();
+}
+
+function clearPresenceTimer(presenceState, timerName, timerApi = globalThis) {
+  const timer = presenceState[timerName];
+  if (timer && timerApi && typeof timerApi.clearTimeout === "function") {
+    timerApi.clearTimeout(timer);
+  }
+  presenceState[timerName] = null;
+}
+
+function schedulePresenceTimer(timerApi, callback, delayMs) {
+  const timer = timerApi.setTimeout(callback, delayMs);
+  if (timer && typeof timer.unref === "function") {
+    timer.unref();
+  }
+  return timer;
+}
+
+function setPetIdleDefault(documentRef = document, options = {}) {
+  const presenceState = getPetPresenceState(documentRef);
+  const timerApi = getPresenceTimerApi(options, presenceState);
+  presenceState.timerApi = timerApi;
+
+  clearPresenceTimer(presenceState, "recentTimer", timerApi);
+  clearPresenceTimer(presenceState, "handoffTimer", timerApi);
+  presenceState.recentReply = null;
+  presenceState.handoffActive = false;
+
+  return setBubbleState(documentRef, "idle_default");
+}
+
+function expireRecentPetReply(documentRef, presenceState, timerApi) {
+  presenceState.recentTimer = null;
+  presenceState.recentReply = null;
+
+  if (!presenceState.handoffActive) {
+    setBubbleState(documentRef, "idle_default");
+  }
+
+  presenceState.timerApi = timerApi;
+}
+
+function rememberRecentPetReply(documentRef, state, bubbleOptions, options = {}) {
+  const presenceState = getPetPresenceState(documentRef);
+  const timerApi = getPresenceTimerApi(options, presenceState);
+  const now = getPresenceNow(timerApi);
+  presenceState.timerApi = timerApi;
+
+  clearPresenceTimer(presenceState, "recentTimer", timerApi);
+  clearPresenceTimer(presenceState, "handoffTimer", timerApi);
+  presenceState.handoffActive = false;
+  presenceState.recentReply = {
+    state,
+    options: { ...bubbleOptions },
+    expiresAt: now + PET_RECENT_REPLY_VISIBLE_MS,
+  };
+  presenceState.recentTimer = schedulePresenceTimer(
+    timerApi,
+    () => expireRecentPetReply(documentRef, presenceState, timerApi),
+    PET_RECENT_REPLY_VISIBLE_MS
+  );
+}
+
+function restorePetPresence(documentRef = document, options = {}) {
+  const presenceState = getPetPresenceState(documentRef);
+  const timerApi = getPresenceTimerApi(options, presenceState);
+  const now = getPresenceNow(timerApi);
+  const recentReply = presenceState.recentReply;
+  presenceState.timerApi = timerApi;
+
+  if (recentReply && recentReply.expiresAt > now) {
+    return setBubbleState(documentRef, recentReply.state, recentReply.options);
+  }
+
+  clearPresenceTimer(presenceState, "recentTimer", timerApi);
+  presenceState.recentReply = null;
+  return setBubbleState(documentRef, "idle_default");
+}
+
+function showPetHandoffHint(documentRef = document, options = {}) {
+  const presenceState = getPetPresenceState(documentRef);
+  const timerApi = getPresenceTimerApi(options, presenceState);
+  presenceState.timerApi = timerApi;
+
+  clearPresenceTimer(presenceState, "handoffTimer", timerApi);
+  presenceState.handoffActive = true;
+
+  const state = setBubbleState(documentRef, "handoff");
+  presenceState.handoffTimer = schedulePresenceTimer(
+    timerApi,
+    () => {
+      presenceState.handoffTimer = null;
+      presenceState.handoffActive = false;
+      restorePetPresence(documentRef, { timerApi });
+    },
+    PET_HANDOFF_HINT_MS
+  );
+
+  return state;
+}
+
+function restorePetPresenceAfterShow(documentRef = document, options = {}) {
+  return restorePetPresence(documentRef, options);
+}
+
 
 function isFetchNetworkError(error) {
   return (
@@ -409,11 +581,7 @@ function toggleDetailsFromMenu(documentRef = document) {
   const bubble = documentRef.getElementById("pet-bubble");
 
   if (!bubble || bubble.dataset.state === "collapsed" || bubble.hidden) {
-    setBubbleState(documentRef, "expanded", {
-      response: PET_CHAT_HANDOFF_REPLY,
-      statusText: "details",
-      message: PET_MODE_DEFAULTS.bubbleMessage,
-    });
+    setBubbleState(documentRef, "idle_default");
     setBubbleDetailsOpen(documentRef, true);
     return true;
   }
@@ -719,14 +887,13 @@ function handleOpenFullApp(documentRef = document, dragonPetApi = null) {
   return result;
 }
 
-function handleChatHandoff(documentRef = document, dragonPetApi = null) {
-  setBubbleState(documentRef, "expanded", {
-    response: PET_CHAT_HANDOFF_REPLY,
-    statusText: "chat handoff",
-    message: PET_MODE_DEFAULTS.bubbleMessage,
-  });
-
+function handleFullAppHandoff(documentRef = document, dragonPetApi = null, options = {}) {
+  showPetHandoffHint(documentRef, options);
   return handleOpenFullApp(documentRef, dragonPetApi);
+}
+
+function handleChatHandoff(documentRef = document, dragonPetApi = null, options = {}) {
+  return handleFullAppHandoff(documentRef, dragonPetApi, options);
 }
 
 function callPetApiAction(documentRef, methodName, pendingMessage, fallbackMessage) {
@@ -768,19 +935,22 @@ function handleHidePetWindow(documentRef = document) {
   );
 }
 
-function renderPetSpeechUpdate(documentRef = document, payload = {}) {
+function renderPetSpeechUpdate(documentRef = document, payload = {}, options = {}) {
   const reply = typeof payload.reply === "string" ? payload.reply : "";
   const mood = typeof payload.mood === "string" ? payload.mood : PET_MODE_DEFAULTS.expression;
   const source = typeof payload.source === "string" ? payload.source : "unknown";
   const nextState = stateForChatSource(source, reply);
-
-  return setBubbleState(documentRef, nextState, {
+  const bubbleOptions = {
     source,
     statusText: sourceStatusLabel(source),
     message: detailMessageForBubbleState(nextState),
     response: responseForBubbleState(nextState, reply),
     mood,
-  });
+  };
+
+  const renderedState = setBubbleState(documentRef, nextState, bubbleOptions);
+  rememberRecentPetReply(documentRef, nextState, bubbleOptions, options);
+  return renderedState;
 }
 
 function initializePetMode(documentRef = document) {
@@ -818,7 +988,7 @@ function initializePetMode(documentRef = document) {
   setText(hint, PET_MODE_DEFAULTS.hint);
   setText(bubbleMessage, PET_MODE_DEFAULTS.bubbleMessage);
 
-  setBubbleState(documentRef, "collapsed");
+  setPetIdleDefault(documentRef);
   closeMenu(documentRef);
 
   if (bubblePlaceholder && !bubblePlaceholder.textContent.trim()) {
@@ -829,7 +999,7 @@ function initializePetMode(documentRef = document) {
   }
 
   if (dragRegion && typeof dragRegion.addEventListener === "function") {
-    dragRegion.addEventListener("click", () => expandBubble(documentRef));
+    dragRegion.addEventListener("click", () => restorePetPresence(documentRef));
   }
 
   if (bubbleOpenHook && typeof bubbleOpenHook.addEventListener === "function") {
@@ -856,7 +1026,7 @@ function initializePetMode(documentRef = document) {
   }
 
   if (openFullAppHook && typeof openFullAppHook.addEventListener === "function") {
-    openFullAppHook.addEventListener("click", () => handleOpenFullApp(documentRef));
+    openFullAppHook.addEventListener("click", () => handleFullAppHandoff(documentRef));
   }
 
   if (root && typeof root.addEventListener === "function") {
@@ -900,6 +1070,18 @@ function initializePetMode(documentRef = document) {
         closeMenu(documentRef);
       }
     });
+    documentRef.addEventListener("visibilitychange", () => {
+      if (!documentRef.hidden) {
+        restorePetPresenceAfterShow(documentRef);
+      }
+    });
+  }
+
+  const windowRef =
+    documentRef.defaultView ||
+    (typeof window !== "undefined" ? window : null);
+  if (windowRef && typeof windowRef.addEventListener === "function") {
+    windowRef.addEventListener("focus", () => restorePetPresenceAfterShow(documentRef));
   }
 
   const api =
@@ -925,8 +1107,12 @@ if (typeof module !== "undefined") {
     CHRISTINA_EXPRESSION_ASSETS,
     PET_BACKEND_DEFAULT_URL,
     PET_BUBBLE_STATE_EXPRESSIONS,
+    PET_HANDOFF_HINT_MS,
+    PET_HANDOFF_REPLY,
+    PET_IDLE_REPLY,
     PET_LONG_REPLY_HINT,
     PET_MODE_DEFAULTS,
+    PET_RECENT_REPLY_VISIBLE_MS,
     PET_REPLY_PREVIEW_LIMIT,
     PET_REPLY_LONG_THRESHOLD,
     buildChatPayload,
@@ -939,6 +1125,7 @@ if (typeof module !== "undefined") {
     getBubbleStateConfig,
     handleBubbleInput,
     handleChatSubmit,
+    handleFullAppHandoff,
     handleOpenFullApp,
     handleChatHandoff,
     handleHidePetWindow,
@@ -952,12 +1139,15 @@ if (typeof module !== "undefined") {
     openMenu,
     parseChatResponse,
     renderPetSpeechUpdate,
+    restorePetPresenceAfterShow,
     sendPetChatMessage,
     setBubbleState,
     setBubbleDetailsOpen,
     setMenuState,
+    setPetIdleDefault,
     setPetExpression,
     setPetExpressionForBubbleState,
+    showPetHandoffHint,
     normalizePetMood,
     sourceStatusLabel,
     stateForChatSource,

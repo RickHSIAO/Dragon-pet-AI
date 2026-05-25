@@ -179,7 +179,9 @@ body {
   display: none;
 }
 
+.pet-bubble[data-state="idle_default"],
 .pet-bubble[data-state="expanded"],
+.pet-bubble[data-state="handoff"],
 .pet-bubble[data-state="speaking"],
 .pet-bubble[data-state="thinking"],
 .pet-bubble[data-state="composing"],

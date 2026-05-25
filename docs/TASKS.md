@@ -7368,7 +7368,7 @@ Control behavior to implement:
 
 - `Chat`: should not reveal a Pet text input box. It should either focus/open Full App for typing or show a compact local hint that typing belongs in Full App. The preferred implementation is a Full App chat handoff using existing safe behavior if available.
 - `Full App`: should explicitly focus/open the existing Full App window through the existing Pet-to-Full behavior. It should not send chat, modify provider settings, or create a second chat surface.
-- `Menu`: should contain secondary Pet controls such as Open Full App, Toggle Details/Info if moved there, Reset Pet Position, Hide Pet Window, and Close Menu. It should not contain provider settings, backend controls, text input, or external links.
+- `Menu`: should contain secondary Pet controls such as Open Full App, Show/Hide Details or Info if moved there, Reset Pet Position, Hide Pet Window, and Close Menu. It should not contain provider settings, backend controls, text input, or external links.
 - Details/info: lives in Menu only after the TASK-146 UX fix. It remains discoverable, keyboard/click accessible, metadata-only, and constrained inside the compact Pet Window.
 - `x`: should hide the Pet Window, matching existing Hide Pet behavior. It must not quit the app or close Full App unless a later explicit task changes that contract.
 
@@ -7414,7 +7414,7 @@ Implementation:
 
 - `Chat` now performs a Full App handoff through the existing Pet-to-Full path and keeps the Pet Window display-only.
 - `Full App` continues to focus/open Full App through the existing Pet-to-Full behavior.
-- `Menu` now includes Toggle Details, Reset Pet Position, and Hide Pet Window.
+- `Menu` now includes Show/Hide Details, Reset Pet Position, and Hide Pet Window.
 - Redundant Open Full App and Close Menu menu items were removed; the bottom Full App button and outside-click/Menu-toggle close behavior cover those actions.
 - The floating `i` details control was removed; details/info is now toggled from Menu only.
 - The floating `x` control now means Hide Pet Window through existing Hide Pet behavior, not app quit and not Full App close.
@@ -7437,7 +7437,7 @@ Windows manual smoke result:
 - Reply bubble grows naturally for short/medium replies and keeps long replies constrained.
 - `Chat / Full App / Menu` remain visible.
 - Menu opens/closes correctly, including outside click and Escape.
-- Menu contains Toggle Details, Reset Pet Position, and Hide Pet Window.
+- Menu contains Show/Hide Details, Reset Pet Position, and Hide Pet Window.
 - Details are toggled from Menu only.
 - Top-right only shows `x`; `x` hides Pet Window and does not quit the app.
 - Chat and Full App open/focus the Full App.
@@ -7462,6 +7462,96 @@ Validation:
 Next recommendation:
 
 - TASK-146 is fully closed. Define the next Pet Mode task in docs before implementation.
+
+---
+
+## TASK-147 - Pet Idle / Presence State Polish Design
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS
+**Date:** 2026-05-25
+
+Goal:
+
+Define a narrow frontend-only Pet Window idle/presence polish task so Christina feels like a companion when no new Full App reply is arriving, while keeping the Pet Window display-only and avoiding proactive LLM calls.
+
+Current product direction:
+
+- Full App remains the primary text input surface.
+- Pet Window remains display/companion-only.
+- Pet Window default size remains `300 x 400`.
+- Pet Window must not become a mini Full App.
+- No Pet Window text input.
+- No proactive, startup, idle, or return-from-away LLM calls.
+
+Implemented state behavior:
+
+- `idle_default`: no recent mirrored reply is active. Christina image remains visible and centered. The main reply bubble shows the static local hint `吾在。要找吾就去 Full App 說話。`. This hint is local-only and does not call `/chat`, a provider, Ollama, or any LLM.
+- `recent_reply`: a mirrored Full App reply replaces the idle hint and remains visible for `90` seconds. A newer mirrored reply resets the `90` second timer. When the timer expires, Pet returns to `idle_default`.
+- `handoff`: after `Chat` or `Full App` is clicked, Pet keeps the existing Full App open/focus behavior and shows the local handoff hint `去 Full App 說，吾會聽。` for about `6` seconds. It does not create a Pet input box. When the handoff hint expires, Pet restores the active recent reply if it is still inside the `90` second window; otherwise it returns to `idle_default`.
+- `long_reply`: keep the existing preview/constrained behavior and Full App reading hint in details/menu metadata. Do not auto-open Full App.
+- `error`: show a short readable character-safe main message. Source/status/helper/provider/debug text stays out of the visible main reply and belongs only in details.
+- `hidden_restore`: hiding Pet preserves user intent. Showing or focusing Pet restores the recent clean reply if it is still inside the `90` second window; otherwise it shows `idle_default`. This restore path is local-only and does not trigger an LLM call.
+- `details_metadata`: details remains Menu-only and may show source, mood, helper/status, and long-reply hint. The main reply remains clean.
+
+Acceptance criteria:
+
+- No backend changes.
+- No `/chat` schema changes.
+- No IPC/preload API changes unless separately justified in docs before implementation.
+- No provider settings changes.
+- No external APIs.
+- No image asset changes.
+- No voice features.
+- No proactive LLM calls.
+- No Pet input box.
+- `300 x 400` layout remains stable.
+- Christina image, clean reply bubble, and `Chat / Full App / Menu` remain usable.
+- Main reply bubble never shows source/status/helper/mood/local/llm_local/debug text.
+- Details remains Menu-only.
+- Hide/Show Pet remains stable.
+
+Likely files for implementation:
+
+- `apps/desktop/src/pet/pet-renderer.js`
+- `apps/desktop/src/pet/pet.css`
+- `apps/desktop/src/pet/pet.html` only if a small structural hook is required.
+- `apps/desktop/scripts/pet-renderer-smoke.js`
+- `apps/desktop/scripts/pet-window-smoke.js` only if window-state expectations change.
+
+Non-goals:
+
+- Do not modify backend.
+- Do not modify `/chat` schema.
+- Do not add provider settings behavior.
+- Do not add external APIs.
+- Do not add image assets.
+- Do not add voice, speech-to-text, screenshot, microphone, screen monitoring, file, Email, or Calendar behavior.
+- Do not add a Pet Window text input box.
+- Do not turn Pet Window into a mini Full App.
+
+Implementation summary:
+
+- Added local Pet presence state in `apps/desktop/src/pet/pet-renderer.js` for `idle_default`, `recent_reply`, `handoff`, timeout restore, and show/focus restore.
+- Updated the Pet bubble supported state list and CSS visibility selectors for the new `idle_default` and `handoff` states.
+- Extended Pet renderer smoke coverage for idle hint, recent reply replacement, `90` second expiry, timer reset, `6` second handoff restore, hidden/show restore, clean error message, long reply constraints, and metadata isolation.
+- Preserved TASK-146 controls: `300 x 400` Pet Window, Menu-only details, top-right `x` as Hide Pet, no floating `i`, and Chat/Full App as Full App handoff actions.
+- No backend, `/chat` schema, IPC/preload API, provider settings, external API, image asset, voice, Full App renderer behavior, or Pet input behavior was changed.
+
+Validation:
+
+- `node --check apps/desktop/src/pet/pet-renderer.js` - PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js` - PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js` - PASS, 42 checks.
+- `node apps/desktop/scripts/pet-window-smoke.js` - PASS, 10 checks.
+- `cd apps/desktop && npm.cmd run test:renderer` - PASS.
+- `python -m pytest` - PASS, 586 passed.
+- Direct Ollama `11434` safety scan across Electron runtime code - PASS.
+- `git diff --check` - PASS, with LF-to-CRLF warnings only.
+- Windows manual smoke - PASS.
+
+Next recommendation:
+
+- TASK-147 is fully closed. Define the next Pet Mode task in docs before implementation.
 
 ---
 

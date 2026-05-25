@@ -795,7 +795,7 @@ Validation:
 
 ## 23. TASK-146 Pet Mode Menu / Controls Consolidation Design
 
-Status: UX FIX IMPLEMENTED - NEEDS WINDOWS RETRY on 2026-05-25.
+Status: DONE - WINDOWS MANUAL SMOKE PASS on 2026-05-25.
 
 Purpose:
 
@@ -840,3 +840,53 @@ Implementation result:
 - The visible `speech bubble` label was removed.
 - Menu closes on Menu re-click, left outside-click, Escape, and menu actions that intentionally close it.
 - Christina is larger in speaking mode, reply text is 13px, and the bubble can grow taller for medium replies while long replies remain constrained.
+
+## 24. TASK-147 Pet Idle / Presence State Polish Design
+
+Status: IMPLEMENTED - NEEDS WINDOWS MANUAL SMOKE on 2026-05-25.
+
+Purpose:
+
+- Define the Pet Window idle/presence behavior before runtime changes.
+- Preserve the display-only speech bubble direction from TASK-141, TASK-145, and TASK-146.
+- Keep Full App as the primary text input and long-reading surface.
+- Avoid proactive LLM calls.
+
+Speech bubble implications:
+
+- Idle/default state does not call `/chat` or any provider. It shows the static local hint `吾在。要找吾就去 Full App 說話。`.
+- Recent mirrored Full App replies remain visible for `90` seconds. A newer mirrored reply resets the `90` second local timer, and expiry returns to `idle_default`.
+- Handoff copy after Chat/Full App points the user to Full App with `去 Full App 說，吾會聽。` for about `6` seconds and must not create Pet input.
+- Long replies keep constrained preview behavior and Full App reading hint in details/menu metadata.
+- Error states show short character-safe main text only.
+- Source, mood, status/helper text, provider details, and long-reply hints remain details/menu metadata only.
+- Main reply remains clean.
+
+Hide/Show implications:
+
+- Hidden Pet Window must not auto-show due to idle/presence updates.
+- Showing/focusing Pet again restores the last clean reply if still inside the `90` second recent-reply window; otherwise it restores `idle_default`.
+
+Non-goals:
+
+- No backend change.
+- No `/chat` schema change.
+- No provider settings change.
+- No external API.
+- No image or voice feature.
+- No new text input box in Pet Window.
+- No proactive LLM calls.
+- No new IPC/preload API unless separately justified before implementation.
+
+Implementation boundary:
+
+- Expected implementation should be frontend-only in Pet renderer/CSS/HTML and smoke tests.
+- Pet Window remains `300 x 400`.
+- Full App remains the primary input surface.
+
+Implementation notes:
+
+- Implemented in the Pet renderer with local timers only; no backend, `/chat`, IPC/preload, provider, external API, image, voice, proactive LLM, Full App renderer, or Pet input change was made.
+- Details remains Menu-only and may carry source/mood/status/helper/long-reply metadata; the main reply remains clean.
+- Existing long reply preview and Full App reading hint are preserved.
+- Automated validation passed; Windows manual smoke is required before closing TASK-147.
