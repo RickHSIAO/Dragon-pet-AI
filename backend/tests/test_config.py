@@ -15,6 +15,7 @@ from app.core.config import (  # noqa: E402
     get_llm_fallback_to_mock,
     get_llm_chat_enabled,
     get_local_chat_timeout_seconds,
+    get_ollama_keep_alive,
     get_llm_provider_enabled,
     get_llm_provider_name,
     get_llm_timeout_seconds,
@@ -146,6 +147,14 @@ class TestLLMProviderConfig:
     def test_local_chat_timeout_clamps_safely(self, monkeypatch):
         monkeypatch.setenv("LLM_LOCAL_CHAT_TIMEOUT_SECONDS", "999")
         assert get_local_chat_timeout_seconds() == 300
+
+    def test_ollama_keep_alive_default_30m(self, monkeypatch):
+        monkeypatch.delenv("OLLAMA_KEEP_ALIVE", raising=False)
+        assert get_ollama_keep_alive() == "30m"
+
+    def test_ollama_keep_alive_env_override(self, monkeypatch):
+        monkeypatch.setenv("OLLAMA_KEEP_ALIVE", "45m")
+        assert get_ollama_keep_alive() == "45m"
 
     def test_llm_fallback_to_mock_default_true(self, monkeypatch):
         monkeypatch.delenv("LLM_FALLBACK_TO_MOCK", raising=False)

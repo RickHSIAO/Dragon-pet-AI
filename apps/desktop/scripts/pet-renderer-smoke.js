@@ -600,6 +600,44 @@ function testPetRendererAppliesSpeechUpdateToSpeechBubble() {
   assert.match(fakeDocument.getElementById("pet-avatar").getAttribute("src"), /christina_happy\.png$/);
 }
 
+function testPetRendererSpeechUpdateUsesReplyOnlyWhenDiagnosticsExist() {
+  const { renderPetSpeechUpdate, toggleBubbleDetails, visibleReplyForSpeechPayload } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+  const payload = {
+    reply: "Character-facing reply only.",
+    mood: "happy",
+    source: "llm_local",
+    status: "provider_debug_status",
+    helper: "Open the diagnostics panel.",
+    details: "raw provider latency=123ms",
+    thinking: "THINKING_FIELD_SHOULD_NOT_RENDER",
+    reasoning: "REASONING_TRACE_SHOULD_NOT_RENDER",
+    diagnostics: {
+      provider: "ollama",
+      raw: "localhost:11434 returned debug JSON",
+      thinking: "MESSAGE_THINKING_SHOULD_NOT_RENDER",
+    },
+    explanation: "This should never be visible in the main Pet bubble.",
+  };
+
+  assert.equal(visibleReplyForSpeechPayload(payload), "Character-facing reply only.");
+
+  const renderedState = renderPetSpeechUpdate(fakeDocument, payload);
+  const visibleText = fakeDocument.getElementById("pet-bubble-response").textContent;
+
+  assert.equal(renderedState, "speaking");
+  assert.equal(visibleText, "Character-facing reply only.");
+  assert.doesNotMatch(
+    visibleText,
+    /provider_debug_status|diagnostics|latency|localhost|11434|helper|explanation|thinking|reasoning|llm_local|source|mood|raw/i
+  );
+  assert.equal(fakeDocument.getElementById("pet-bubble-details").hidden, true);
+
+  toggleBubbleDetails(fakeDocument);
+  assert.equal(fakeDocument.getElementById("pet-bubble-details").hidden, false);
+  assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, "Character-facing reply only.");
+}
+
 function testPetRendererSpeechUpdateHandlesLongReply() {
   const {
     PET_LONG_REPLY_HINT,
@@ -1737,6 +1775,7 @@ async function run() {
     testPetSpeechBubbleKeepsDevComposerHiddenAcrossDisplayStates,
     testFullAppStatusDoesNotRemoveComposer,
     testPetRendererAppliesSpeechUpdateToSpeechBubble,
+    testPetRendererSpeechUpdateUsesReplyOnlyWhenDiagnosticsExist,
     testPetRendererSpeechUpdateHandlesLongReply,
     testPetBubbleDetailsDisclosureTogglesSourceAndHelperText,
     testPetPresenceIdleDefaultStaticHint,

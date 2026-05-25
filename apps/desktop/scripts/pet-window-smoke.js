@@ -62,13 +62,17 @@ function testPetWindowPositionPersistenceIsLocalAndGuarded() {
   assertIncludes(main, "function getPetWindowStatePath()", "main.js");
   assertIncludes(main, "function getDefaultPetWindowBounds()", "main.js");
   assertIncludes(main, "function isPetWindowBoundsVisible(bounds)", "main.js");
+  assertIncludes(main, "function ensurePetWindowVisibleBounds(win = petWindow", "main.js");
+  assertIncludes(main, "function validatePetWindowBoundsOnDisplayChange()", "main.js");
   assertIncludes(main, "function loadPetWindowBounds()", "main.js");
   assertIncludes(main, "function savePetWindowBounds(win = petWindow)", "main.js");
   assertIncludes(main, "function schedulePetWindowBoundsSave()", "main.js");
   assertIncludes(main, "screen.getAllDisplays()", "main.js");
   assertIncludes(main, "screen.getPrimaryDisplay().workArea", "main.js");
-  assertIncludes(main, "const centerX = normalizedBounds.x + normalizedBounds.width / 2", "main.js");
-  assertIncludes(main, "const centerY = normalizedBounds.y + normalizedBounds.height / 2", "main.js");
+  assertIncludes(main, "normalizedBounds.x >= displayLeft", "main.js");
+  assertIncludes(main, "normalizedBounds.x + normalizedBounds.width <= displayRight", "main.js");
+  assertIncludes(main, "normalizedBounds.y >= displayTop", "main.js");
+  assertIncludes(main, "normalizedBounds.y + normalizedBounds.height <= displayBottom", "main.js");
   assertIncludes(main, "fs.readFileSync(getPetWindowStatePath()", "main.js");
   assertIncludes(main, "fs.writeFileSync(getPetWindowStatePath()", "main.js");
   assertIncludes(main, "const petBounds = loadPetWindowBounds();", "main.js");
@@ -78,6 +82,65 @@ function testPetWindowPositionPersistenceIsLocalAndGuarded() {
   assertIncludes(main, 'petWindow.on("close"', "main.js");
   assertIncludes(main, "schedulePetWindowBoundsSave();", "main.js");
   assertIncludes(main, "savePetWindowBounds();", "main.js");
+  assertIncludes(main, 'screen.on("display-added", validatePetWindowBoundsOnDisplayChange)', "main.js");
+  assertIncludes(main, 'screen.on("display-removed", validatePetWindowBoundsOnDisplayChange)', "main.js");
+  assertIncludes(main, 'screen.on("display-metrics-changed", validatePetWindowBoundsOnDisplayChange)', "main.js");
+}
+
+function testPetWindowPositionRestoreAndFallbackRules() {
+  const main = readText(mainPath);
+  assertRegex(
+    main,
+    /if \(isPetWindowBoundsVisible\(savedBounds\)\) \{\s*return savedBounds;\s*\}/,
+    "main.js"
+  );
+  assertRegex(
+    main,
+    /return getDefaultPetWindowBounds\(\);/,
+    "main.js"
+  );
+  assertRegex(
+    main,
+    /width:\s*PET_WINDOW_WIDTH,\s*\r?\n\s*height:\s*PET_WINDOW_HEIGHT/,
+    "main.js"
+  );
+  assertIncludes(main, "PET_WINDOW_EDGE_MARGIN = 24", "main.js");
+}
+
+function testPetWindowResetPersistsSafeDefault() {
+  const main = readText(mainPath);
+  assertRegex(
+    main,
+    /function resetPetWindowPosition\(\)[\s\S]*const bounds = getDefaultPetWindowBounds\(\);[\s\S]*petWindow\.setBounds\(bounds\);[\s\S]*savePetWindowBounds\(petWindow\);[\s\S]*return \{ ok: true \};/,
+    "main.js"
+  );
+}
+
+function testPetWindowHideShowPreservesAndValidatesPosition() {
+  const main = readText(mainPath);
+  assertRegex(
+    main,
+    /function hidePetWindow\(\)[\s\S]*savePetWindowBounds\(petWindow\);[\s\S]*petWindow\.hide\(\);/,
+    "main.js"
+  );
+  assertRegex(
+    main,
+    /function showPetWindow\(\)[\s\S]*const win = petWindow && !petWindow\.isDestroyed\(\) \? petWindow : createPetWindow\(\);[\s\S]*ensurePetWindowVisibleBounds\(win, \{ persist: true \}\);[\s\S]*win\.show\(\);[\s\S]*win\.focus\(\);/,
+    "main.js"
+  );
+}
+
+function testPetWindowSizeRemainsFixedAt300By400() {
+  const main = readText(mainPath);
+  assertIncludes(main, "PET_WINDOW_WIDTH = 300", "main.js");
+  assertIncludes(main, "PET_WINDOW_HEIGHT = 400", "main.js");
+  assertNotIncludes(main, "PET_WINDOW_WIDTH = 260", "main.js");
+  assertNotIncludes(main, "PET_WINDOW_HEIGHT = 340", "main.js");
+  assertRegex(
+    main,
+    /width:\s*PET_WINDOW_WIDTH[\s\S]*height:\s*PET_WINDOW_HEIGHT[\s\S]*resizable:\s*false[\s\S]*title:\s*"Dragon Pet AI - Pet Mode"/,
+    "main.js"
+  );
 }
 
 function testFullAppWindowStillExists() {
@@ -122,6 +185,35 @@ function testPetOpenFullAppIpcIsFixedAndNarrow() {
   assertIncludes(main, "win.show();", "main.js");
   assertIncludes(main, "win.focus();", "main.js");
   assertNotIncludes(main, "ipcMain.on(", "main.js");
+}
+
+function testPetSpeechPayloadSanitizersDropDiagnostics() {
+  const main = readText(mainPath);
+  const rendererPreload = readText(rendererPreloadPath);
+  const petPreload = readText(petPreloadPath);
+
+  assertIncludes(main, "function sanitizePetSpeechPayload(payload = {})", "main.js");
+  assertIncludes(main, "return { reply, mood, source };", "main.js");
+
+  for (const [label, text] of [
+    ["renderer/preload.js", rendererPreload],
+    ["pet-preload.js", petPreload],
+  ]) {
+    assertIncludes(text, "function sanitizePetSpeechPayload(payload = {})", label);
+    assertRegex(
+      text,
+      /return \{\s*reply:[\s\S]*mood:[\s\S]*source:[\s\S]*\};/,
+      label
+    );
+    assertNotIncludes(text, "diagnostics:", label);
+    assertNotIncludes(text, "details:", label);
+    assertNotIncludes(text, "debug:", label);
+    assertNotIncludes(text, "provider:", label);
+  }
+
+  for (const field of ["diagnostics:", "details:", "debug:", "provider:"]) {
+    assertNotIncludes(main, field, "main.js");
+  }
 }
 
 function testPetWindowDoesNotReplaceFullAppByDefault() {
@@ -212,8 +304,13 @@ function run() {
     testMainHasPetWindowPrototype,
     testPetWindowOptionsAreSafeAndPetSpecific,
     testPetWindowPositionPersistenceIsLocalAndGuarded,
+    testPetWindowPositionRestoreAndFallbackRules,
+    testPetWindowResetPersistsSafeDefault,
+    testPetWindowHideShowPreservesAndValidatesPosition,
+    testPetWindowSizeRemainsFixedAt300By400,
     testFullAppWindowStillExists,
     testPetOpenFullAppIpcIsFixedAndNarrow,
+    testPetSpeechPayloadSanitizersDropDiagnostics,
     testPetWindowDoesNotReplaceFullAppByDefault,
     testNoRendererDirectOllamaAccess,
     testFullAppShowPetEntryAndPreloadAreNarrow,

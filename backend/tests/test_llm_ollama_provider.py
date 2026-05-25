@@ -132,6 +132,42 @@ class RaisingHTTPClient:
         raise self._exc
 
 
+class SequenceHTTPClient:
+    """Injectable HTTP client that returns/raises scripted actions in order."""
+
+    def __init__(self, *actions: ProviderHTTPResponse | Exception) -> None:
+        self._actions = list(actions)
+        self.calls: list[dict[str, Any]] = []
+
+    @property
+    def call_count(self) -> int:
+        return len(self.calls)
+
+    def request_json(
+        self,
+        method: str,
+        url: str,
+        headers: dict[str, str],
+        payload: dict[str, Any],
+        timeout_seconds: int,
+    ) -> ProviderHTTPResponse:
+        self.calls.append(
+            {
+                "method": method,
+                "url": url,
+                "headers": headers,
+                "payload": payload,
+                "timeout_seconds": timeout_seconds,
+            }
+        )
+        if not self._actions:
+            raise AssertionError("no scripted HTTP action remains")
+        action = self._actions.pop(0)
+        if isinstance(action, Exception):
+            raise action
+        return action
+
+
 class MalformedJSONResponse(ProviderHTTPResponse):
     """ProviderHTTPResponse whose json() method raises to simulate bad JSON."""
 
@@ -146,11 +182,12 @@ def make_provider(
     http_client: Any = None,
     model: str = "qwen3:8b",
     base_url: str = "http://localhost:11434",
+    keep_alive: str = "30m",
 ) -> OllamaLocalProvider:
     return OllamaLocalProvider(
         model=model,
         base_url=base_url,
-        keep_alive="10m",
+        keep_alive=keep_alive,
         timeout_seconds=30,
         http_client=http_client,
     )
@@ -482,7 +519,7 @@ def test_contract_full_request_schema_excludes_secrets_tools_and_context() -> No
     assert payload["model"] == "qwen3:8b"
     assert payload["stream"] is False
     assert payload["think"] is False
-    assert payload["keep_alive"] == "10m"
+    assert payload["keep_alive"] == "30m"
     assert payload["options"]["temperature"] == pytest.approx(0.7)
     assert payload["options"]["num_predict"] == 256
     assert payload["messages"] == [
@@ -620,6 +657,66 @@ def test_contract_usage_maps_token_counts_and_durations_without_raw_body() -> No
     assert "RAW_PROVIDER_BODY_SHOULD_NOT_LEAK" not in repr(result.usage)
 
 
+def test_contract_chat_response_ignores_explicit_thinking_fields() -> None:
+    body = make_ollama_response(content="Final character reply.")
+    body["thinking"] = "THINKING_FIELD_SHOULD_NOT_LEAK"
+    body["message"]["thinking"] = "MESSAGE_THINKING_SHOULD_NOT_LEAK"
+    client = FakeHTTPClient(ProviderHTTPResponse(status_code=200, json_data=body))
+    provider = make_provider(http_client=client)
+
+    result = provider.generate(SAMPLE_REQUEST)
+
+    assert result.error is None
+    assert result.text == "Final character reply."
+    assert "THINKING_FIELD_SHOULD_NOT_LEAK" not in result.text
+    assert "MESSAGE_THINKING_SHOULD_NOT_LEAK" not in result.text
+
+
+def test_contract_generate_style_response_uses_response_and_ignores_thinking() -> None:
+    body = {
+        "model": "qwen3:8b",
+        "response": "Generate final reply.",
+        "thinking": "GENERATE_THINKING_SHOULD_NOT_LEAK",
+        "done": True,
+    }
+    client = FakeHTTPClient(ProviderHTTPResponse(status_code=200, json_data=body))
+    provider = make_provider(http_client=client)
+
+    result = provider.generate(SAMPLE_REQUEST)
+
+    assert result.error is None
+    assert result.text == "Generate final reply."
+    assert "GENERATE_THINKING_SHOULD_NOT_LEAK" not in result.text
+
+
+@pytest.mark.parametrize(
+    ("raw_content", "expected_text"),
+    [
+        ("<think>private chain of thought</think>\n吾已經好了。", "吾已經好了。"),
+        ("Thinking...\n吾只回覆最後答案。", "吾只回覆最後答案。"),
+        ("Thinking...\nprivate notes\n...done thinking.\nOK", "OK"),
+        ("Reasoning: private notes\nFinal answer.", "Final answer."),
+        ("Analysis: private notes\n吾的回答在此。", "吾的回答在此。"),
+        ("Debug: provider trace\nClean reply.", "Clean reply."),
+    ],
+)
+def test_contract_strips_visible_reasoning_wrappers(
+    raw_content: str,
+    expected_text: str,
+) -> None:
+    body = make_ollama_response(content=raw_content)
+    client = FakeHTTPClient(ProviderHTTPResponse(status_code=200, json_data=body))
+    provider = make_provider(http_client=client)
+
+    result = provider.generate(SAMPLE_REQUEST)
+
+    assert result.error is None
+    assert result.text == expected_text
+    assert "<think>" not in result.text
+    assert "done thinking" not in result.text.lower()
+    assert not result.text.lower().startswith(("thinking", "reasoning:", "analysis:", "debug:"))
+
+
 @pytest.mark.parametrize(
     ("response", "expected_error"),
     [
@@ -701,7 +798,7 @@ def test_contract_raw_provider_body_is_opaque_in_error_response() -> None:
         assert sentinel not in rendered
 
 
-def test_contract_no_retries_on_success_and_failure() -> None:
+def test_contract_no_retries_on_success_and_non_timeout_failure() -> None:
     success_client = FakeHTTPClient(
         ProviderHTTPResponse(status_code=200, json_data=make_ollama_response())
     )
@@ -711,12 +808,58 @@ def test_contract_no_retries_on_success_and_failure() -> None:
 
     assert success_client.call_count == 1
 
-    failure_client = RaisingHTTPClient(httpx.TimeoutException("timed out"))
+    failure_client = RaisingHTTPClient(ConnectionRefusedError("refused"))
     failure_provider = make_provider(http_client=failure_client)
 
     failure_provider.generate(SAMPLE_REQUEST)
 
     assert failure_client.call_count == 1
+
+
+def test_timeout_retries_once_when_ollama_server_is_reachable() -> None:
+    client = SequenceHTTPClient(
+        httpx.TimeoutException("cold start timed out"),
+        ProviderHTTPResponse(status_code=200, json_data=_tags_body("qwen3:8b")),
+        ProviderHTTPResponse(
+            status_code=200,
+            json_data=make_ollama_response(content="Awake now."),
+        ),
+    )
+    provider = make_provider(http_client=client)
+
+    result = provider.generate(SAMPLE_REQUEST)
+
+    assert result.error is None
+    assert result.text == "Awake now."
+    assert [call["method"] for call in client.calls] == ["POST", "GET", "POST"]
+    assert client.calls[1]["url"] == "http://localhost:11434/api/tags"
+
+
+def test_timeout_does_not_retry_chat_when_ollama_server_is_unreachable() -> None:
+    client = SequenceHTTPClient(
+        httpx.TimeoutException("cold start timed out"),
+        httpx.ConnectError("tags unavailable"),
+    )
+    provider = make_provider(http_client=client)
+
+    result = provider.generate(SAMPLE_REQUEST)
+
+    assert result.error == "provider_timeout"
+    assert [call["method"] for call in client.calls] == ["POST", "GET"]
+
+
+def test_timeout_retry_stops_after_one_retry() -> None:
+    client = SequenceHTTPClient(
+        httpx.TimeoutException("first timeout"),
+        ProviderHTTPResponse(status_code=200, json_data=_tags_body("qwen3:8b")),
+        TimeoutError("second timeout"),
+    )
+    provider = make_provider(http_client=client)
+
+    result = provider.generate(SAMPLE_REQUEST)
+
+    assert result.error == "provider_timeout"
+    assert [call["method"] for call in client.calls] == ["POST", "GET", "POST"]
 
 
 def test_contract_chat_response_schema_remains_reply_mood_source_only() -> None:

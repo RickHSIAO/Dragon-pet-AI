@@ -7555,6 +7555,471 @@ Next recommendation:
 
 ---
 
+## TASK-148 - Pet Position Persistence / Reset Polish Design
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS
+**Date:** 2026-05-25
+
+Goal:
+
+Define a narrow frontend/Electron-shell Pet Window position polish task so position persistence, reset behavior, hide/show restoration, and display-change safety are explicit before implementation. Pet remains a compact `300 x 400` display/companion window, and Full App remains the primary text input surface.
+
+Current product direction:
+
+- Full App remains the primary text input surface.
+- Pet Window remains display/companion-only.
+- Pet Window default size remains `300 x 400`.
+- Pet Window must not become a mini Full App.
+- No Pet Window text input.
+- No proactive, startup, idle, hide/show, or display-change LLM calls.
+
+Scope to define for implementation:
+
+- Position persistence across app restarts:
+  - Confirm the persisted position file/location currently used by the Electron shell.
+  - Define when position is saved: drag/move, close, hide, or app shutdown.
+  - Define whether saved bounds include only position or also size; TASK-148 should keep size fixed at `300 x 400` unless a future explicit size task changes it.
+- Reset Pet Position behavior:
+  - Define the safe default target, expected to be primary-display bottom-right with visible margins unless existing implementation uses a better documented constant.
+  - Define whether reset also persists the reset position immediately.
+  - Define reset behavior while Pet is hidden.
+- Safe-screen/off-screen restore behavior:
+  - If the saved Pet Window center or bounds would be off-screen, restore to the safe default target.
+  - Keep the full `300 x 400` Pet Window reachable and visible after restore.
+- Monitor/display change behavior:
+  - Define behavior when monitors are added, removed, resized, scaled, or have work-area changes.
+  - Define whether validation happens at launch only or also on display change events.
+- Hide/Show position behavior:
+  - Hide Pet should preserve the last valid position.
+  - Show Pet should restore the last valid on-screen position or safe default if invalid.
+  - Hide/Show should not alter speech state, trigger LLM calls, or reopen Full App.
+- Manual smoke expectations:
+  - Move Pet, restart app, and confirm position restore.
+  - Reset Pet Position and confirm safe default.
+  - Hide/Show Pet and confirm position remains stable.
+  - Simulate or manually verify off-screen/display-change fallback if practical on Windows.
+
+Acceptance criteria:
+
+- No backend changes.
+- No `/chat` schema changes.
+- No IPC/preload API changes unless implementation proves an existing API is insufficient and docs are updated first.
+- No provider settings changes.
+- No external APIs.
+- No image asset changes.
+- No voice features.
+- No proactive LLM calls.
+- No Pet Window text input.
+- No mini Full App behavior.
+- Pet Window remains `300 x 400`.
+- Full App remains the primary text input surface.
+- Pet Window remains display/companion-only.
+
+Likely files for implementation:
+
+- `apps/desktop/src/main.js`
+- `apps/desktop/scripts/pet-window-smoke.js`
+- `docs/TASKS.md`
+- `docs/ROADMAP.md`
+- `docs/PET_MODE_UI_DESIGN.md`
+- `docs/PET_BUBBLE_CHAT_WIRING_DESIGN.md` only if implementation affects bubble/chat assumptions.
+
+Non-goals:
+
+- Do not change backend behavior.
+- Do not modify `/chat` schema.
+- Do not add provider settings behavior.
+- Do not add external APIs.
+- Do not add image assets.
+- Do not add voice, speech-to-text, screenshot, microphone, screen monitoring, file, Email, or Calendar behavior.
+- Do not add a Pet Window text input box.
+- Do not turn Pet Window into a mini Full App.
+- Do not change the `300 x 400` Pet Window size.
+- Do not change speech bubble reply, details, menu labels, or idle/recent/handoff behavior unless required by a real position bug.
+
+Implementation summary:
+
+- Reused the existing Electron `userData/pet-window-state.json` storage path and did not add a new storage system.
+- Kept debounced save-on-move behavior and best-effort save-on-close/hide behavior.
+- Tightened saved-position validation so the full `300 x 400` Pet Window must fit inside a current display work area, not just have its center visible.
+- Added show-time validation so Show Pet restores the saved valid position or falls back to the safe default if the saved/current bounds are invalid.
+- Added Electron display-change validation for display added, display removed, and display metrics changed events.
+- Kept Reset Pet Position on the existing `pet:reset-position` IPC/preload path; reset moves Pet to the safe default and persists that position immediately.
+- Did not modify Pet renderer, preload APIs, backend, `/chat`, provider settings, external APIs, image assets, voice features, Full App renderer behavior, speech state, idle/recent/handoff behavior, or Pet Window size.
+
+Validation:
+
+- `node --check apps/desktop/src/main.js` - PASS.
+- `node --check apps/desktop/scripts/pet-window-smoke.js` - PASS.
+- `node apps/desktop/scripts/pet-window-smoke.js` - PASS, 14 checks.
+- `node apps/desktop/scripts/pet-renderer-smoke.js` - PASS, 42 checks.
+- `cd apps/desktop && npm.cmd run test:renderer` - PASS.
+- `python -m pytest` - PASS, 586 passed.
+- Direct Ollama `11434` safety scan across Electron runtime code - PASS.
+- `git diff --check` - PASS, with LF-to-CRLF warnings only.
+- Windows manual smoke - PASS.
+
+Next recommendation:
+
+- TASK-148 is fully closed. Define the next Pet Mode task in docs before implementation.
+
+---
+
+## TASK-149 - Pet Bubble Reply / Details Separation Polish Design
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS
+**Date:** 2026-05-25
+
+Goal:
+
+Define a narrow Pet Bubble UI polish task that keeps normal Pet Window speech focused on Christina's character-facing reply, while explanation, debug, metadata, helper text, and diagnostics remain hidden by default behind an explicit details affordance or in Full App.
+
+Context:
+
+- TASK-145 made the visible Pet Bubble a clean reply-first surface and passed Windows manual smoke.
+- TASK-146 consolidated Pet controls and moved details/info behavior into Menu, with Windows manual smoke PASS.
+- TASK-147 added idle/recent/handoff presence behavior without polluting the main reply, with Windows manual smoke PASS.
+- TASK-148 completed Pet position persistence/reset polish and is DONE - PASS.
+- TASK-149 builds on the existing Full App -> Pet mirror/chat behavior and should not change backend or `/chat` contracts.
+
+Expected Pet Bubble behavior:
+
+- Normal mirrored replies:
+  - Main Pet Bubble shows only the character-facing reply text.
+  - Main Pet Bubble does not show explanation, debug, source, status, helper text, mood, provider labels, `local`, `llm_local`, raw diagnostics, or long technical notes.
+- Details/debug/explanation content:
+  - Hidden by default.
+  - Available only through an explicit expand/click/debug affordance, expected to stay Menu/details based unless implementation documents a better compact affordance.
+  - Must use constrained height or internal scroll so it does not push the bottom controls out of the `300 x 400` window.
+- Full App relationship:
+  - Full App may show richer diagnostic, provider, status, or debug information.
+  - Pet Window remains a clean display/companion layer and does not become a mini Full App.
+  - Full App remains the primary text input and long-reading surface.
+- Long replies:
+  - Main bubble keeps constrained preview behavior.
+  - Full App reading hint belongs in details/metadata, not in the main character reply.
+  - Pet Window must not auto-open Full App.
+- Error states:
+  - Main bubble shows a short character-safe message.
+  - Raw diagnostics and provider/debug detail stay out of the main reply and belong in details or Full App.
+
+Acceptance criteria:
+
+- No backend changes.
+- No `/chat` schema changes.
+- No IPC/preload API changes unless separately justified in docs before implementation.
+- No provider settings changes.
+- No external APIs.
+- No image asset changes.
+- No voice features.
+- No proactive LLM calls.
+- No Pet Window text input.
+- No mini Full App behavior.
+- Pet Window remains `300 x 400`.
+- Full App remains the primary text input surface.
+- Pet Window remains display/companion-only.
+- Main Pet Bubble never shows source/status/helper/mood/local/llm_local/debug/provider/raw diagnostic text during normal replies.
+- Details/debug/explanation content is hidden by default and only visible after explicit user action.
+
+Likely files for implementation:
+
+- `apps/desktop/src/pet/pet-renderer.js`
+- `apps/desktop/src/pet/pet.css`
+- `apps/desktop/src/pet/pet.html` only if the existing details affordance needs a small structural adjustment.
+- `apps/desktop/scripts/pet-renderer-smoke.js`
+- `docs/TASKS.md`
+- `docs/ROADMAP.md`
+- `docs/PET_MODE_UI_DESIGN.md`
+- `docs/PET_BUBBLE_CHAT_WIRING_DESIGN.md`
+
+Manual smoke expectations:
+
+- Send a normal short Full App reply and confirm the Pet Bubble visually contains only Christina's reply text.
+- Send a medium reply and confirm no explanation/debug/source/status/helper/mood/local/llm_local text appears in the main bubble.
+- Open details through the explicit affordance and confirm metadata/debug/helper/explanation content appears only there.
+- Close details and confirm the main bubble returns to clean reply-only presentation.
+- Trigger or simulate long reply behavior and confirm the main preview remains constrained while Full App/long-reply hints stay in details.
+- Trigger or simulate an error/source fallback and confirm the main bubble shows only a short character-safe message.
+- Confirm Chat / Full App / Menu controls remain visible and usable inside the `300 x 400` Pet Window.
+- Confirm TASK-148 position persistence/reset behavior remains unchanged.
+
+Implementation summary:
+
+- Confirmed the Full App -> Pet speech bridge remains narrow: Full App sends only `{ reply, mood, source }`; Full App preload, main process, and Pet preload sanitize mirrored speech payloads down to those fields.
+- Added `visibleReplyForSpeechPayload(payload)` in the Pet renderer so normal visible Pet Bubble text is explicitly derived from `payload.reply` only.
+- Added smoke coverage for a mirrored payload that includes extra diagnostic/details/helper/status/provider-like fields; the visible Pet Bubble still renders only the character-facing `reply`.
+- Added smoke coverage that main/preload speech payload sanitizers do not include `diagnostics`, `details`, `debug`, or `provider` fields.
+- Kept details/debug payload UI deferred because the runtime bridge intentionally drops diagnostic fields before Pet receives mirrored speech updates. Full App remains the richer diagnostic/debug surface.
+- No backend, `/chat` schema, IPC/preload API, provider settings, external API, image asset, voice feature, Pet input, Full App renderer behavior, Pet Window size, or TASK-148 position behavior was changed.
+
+Validation:
+
+- `node --check apps/desktop/src/pet/pet-renderer.js` - PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js` - PASS.
+- `node --check apps/desktop/scripts/pet-window-smoke.js` - PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js` - PASS, 43 checks.
+- `node apps/desktop/scripts/pet-window-smoke.js` - PASS, 15 checks.
+- `cd apps/desktop && npm.cmd run test:renderer` - PASS.
+- `python -m pytest` - PASS, 586 passed.
+- Direct Ollama `11434` safety scan across Electron runtime code - PASS.
+- `git diff --check` - PASS, with LF-to-CRLF warnings only.
+- Windows manual smoke - PASS.
+  - Pet Bubble shows only clean character-facing reply text.
+  - Details/debug/source/status/helper/provider/mood diagnostics are not rendered as normal bubble text.
+  - Long replies and error states keep the main bubble clean.
+
+Next recommendation:
+
+- TASK-149 is fully closed. Continue with the local Ollama reliability closeout and next documented task planning.
+
+---
+
+## TASK-150 - Local Ollama Idle Wake Timeout / Retry Polish Design
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS
+**Date:** 2026-05-25
+
+Goal:
+
+Define a narrow local Ollama provider reliability task for the case where the Ollama server is reachable but the configured model is unloaded, sleeping, cold-starting, or slow to wake after idle.
+
+Context:
+
+- Windows testing showed Ollama can respond to `/api/tags` while `ollama ps` is empty.
+- The first Desktop App chat request after idle may timeout while `qwen3:8b` loads.
+- Running `ollama run qwen3:8b "只回覆 OK"` loads the model, and `ollama ps` then shows the model resident only for a short window.
+- TASK-148 is already DONE - PASS and Pet Window position/reset behavior must not regress.
+- TASK-149 builds on the Pet Window mirror/chat behavior by keeping normal Pet Bubble replies clean and character-facing.
+- TASK-150 should improve local provider reliability without changing the visible Pet Bubble into a diagnostic surface.
+
+Expected behavior to design:
+
+- Detect or infer the state where the Ollama server is reachable but the configured model is unloaded or cold-starting.
+- Add or plan `keep_alive` for local Ollama requests so the configured model remains resident long enough for normal desktop chat use.
+- Consider a longer cold-start timeout than the normal chat timeout.
+- Consider one safe retry after a local timeout when the server is reachable and the timeout likely represents model wake/loading rather than a hard failure.
+- Consider a lightweight warmup before the first Desktop App chat request, without causing proactive LLM conversation or changing `/chat` schema.
+- Keep user-facing Full App error/guidance clean and actionable when the model is waking or cold-starting.
+- Pet Bubble must not show raw diagnostics, provider traces, timeout internals, `ollama ps` detail, or backend debug text.
+- Full App may show richer local provider diagnostics, troubleshooting guidance, and status detail.
+
+Acceptance criteria:
+
+- No `/chat` schema change unless separately justified in docs before implementation.
+- No external API calls.
+- No provider key or provider settings contract change unless separately justified.
+- No Pet Window text input.
+- No mini Full App behavior in Pet Window.
+- No Pet Window size, position, reset, hide/show, menu, or speech layout change.
+- No proactive idle LLM calls.
+- Renderer code must not call Ollama directly; local provider/Ollama access remains backend/provider-owned.
+- Automated tests should use mocked/fake transport for Ollama behavior and must not require a live Ollama server by default.
+- Preserve existing `LLM_LOCAL_CHAT_TIMEOUT_SECONDS` compatibility or document any replacement before implementation.
+- Preserve TASK-149 behavior: normal Pet Bubble shows only clean character-facing reply text, and diagnostics stay hidden from the main bubble.
+
+Likely files for implementation:
+
+- Backend local provider/Ollama adapter files.
+- Backend provider settings or timeout configuration files only if required for cold-start timeout/retry behavior.
+- Full App renderer/status copy only if needed for clean user-facing guidance.
+- Existing provider/Ollama test files and smoke scripts.
+- `docs/TASKS.md`
+- `docs/ROADMAP.md`
+- Pet renderer files only if a regression is found; Pet Bubble should not become a diagnostics panel.
+
+Manual smoke expectations:
+
+- Start with `ollama ps` empty while Ollama server remains reachable through `/api/tags`.
+- Send the first Desktop App chat request after idle.
+- The first request should either succeed after warmup/retry or fail with clean cold-start/wake guidance instead of a raw diagnostic dump.
+- Send a second Desktop App chat request after the model wakes; it should work normally.
+- `ollama ps` should show the configured model loaded after the request.
+- Pet Bubble remains clean and character-facing; it must not show raw diagnostics, source/status/helper/provider detail, or timeout internals in the main reply.
+- TASK-149 clean reply/details separation behavior does not regress.
+
+Non-goals:
+
+- Do not modify Pet Window input behavior.
+- Do not turn Pet Window into a mini Full App.
+- Do not add external APIs.
+- Do not add image assets.
+- Do not add voice features.
+- Do not add proactive idle LLM calls.
+- Do not change TASK-148 Pet Window position persistence/reset behavior.
+- Do not change TASK-149 normal reply/details separation behavior.
+
+Closeout:
+
+- Windows manual smoke - PASS.
+  - With `ollama ps` empty, first Desktop App chat after idle either succeeds after cold-start handling or shows clean guidance.
+  - Second request after wake works.
+  - After request, `ollama ps` shows the configured model loaded.
+  - `keep_alive` behavior retains the configured model longer, expected around 30 minutes when supported.
+  - Timeout/retry behavior does not expose raw diagnostics to Pet Bubble.
+
+Implementation summary:
+
+- Changed the default local Ollama keep-alive from `10m` to `30m` while preserving the `OLLAMA_KEEP_ALIVE` override.
+- Kept local chat timeout on the existing `LLM_LOCAL_CHAT_TIMEOUT_SECONDS` / `OLLAMA_TIMEOUT_SECONDS` path, which already defaults to `90` seconds for cold-start tolerance.
+- Added one safe local timeout retry: if the first `/api/chat` request times out, the provider probes `/api/tags`; when Ollama is still reachable, it retries the chat request once.
+- Kept non-timeout failures single-shot and mapped to existing safe categories.
+- Kept Test Connection on `/api/tags`; it still does not load the model.
+- Kept Pet Bubble clean because `/chat` schema and mirrored Pet payload shape remain unchanged.
+- Added mocked provider coverage for reachable-server retry, unreachable-server no-retry, second-timeout stop, default `30m` keep-alive, and keep-alive override.
+
+Validation:
+
+- Automated validation was run after implementation; see TASK-151 validation block for the combined TASK-150/TASK-151 command results.
+
+---
+
+## TASK-151 - Local Model Thinking / Reasoning Output Sanitization Design
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS
+**Date:** 2026-05-25
+
+Goal:
+
+Define a narrow local provider output-sanitization task so local model thinking, reasoning, debug, or trace output is hidden by default and never appears as normal user-facing Christina reply text in either Full App or Pet Bubble.
+
+Context:
+
+- Windows Ollama API testing with `qwen3:8b` showed `/api/generate` can return a separate `thinking` field in addition to `response`.
+- Local Ollama chat-style responses may also provide final content separately from model thinking/reasoning fields.
+- Desktop App and Pet Bubble must prefer final answer text only.
+- Pet Bubble must remain clean, character-facing, and consistent with TASK-149 reply/details separation.
+- Full App may be the richer diagnostic surface, but thinking/reasoning must still require an explicit debug/details affordance and must not render by default.
+- TASK-151 follows TASK-150 in the Local Ollama reliability track and should not change Pet Window layout, position, or input behavior.
+
+Expected behavior to design:
+
+- Local provider final-answer selection:
+  - For `/api/generate`, use `response` as the normal reply and ignore `thinking`.
+  - For `/api/chat`, use `message.content` as the normal reply and ignore `message.thinking`.
+  - If both final-answer and thinking/reasoning fields are present, only the final-answer field may enter the normal `/chat` reply path.
+- Local Ollama request options:
+  - Send `think: false` for local Ollama requests if supported by the active Ollama/model API.
+  - Keep `stream: false` unless a future task explicitly designs streaming.
+- Defensive final-reply cleanup:
+  - Strip visible reasoning wrappers from final reply text if they appear despite `think: false`.
+  - At minimum, handle:
+    - `<think>...</think>`
+    - `Thinking...`
+    - `...done thinking.`
+    - Obvious reasoning/debug preambles before the character-facing answer.
+  - Keep cleanup conservative so valid Christina character prose is not over-trimmed.
+- Pet Bubble behavior:
+  - Pet Bubble renders only clean character-facing reply text.
+  - Pet Bubble never shows `thinking`, reasoning traces, debug preambles, provider raw fields, raw JSON, or diagnostic text in the main reply.
+  - Existing details/menu behavior may expose only safe metadata if explicitly designed; normal speech remains clean.
+- Full App behavior:
+  - Full App normal chat reply renders only final user-facing answer text.
+  - Full App may expose model thinking only behind an explicit debug/details affordance if a future implementation chooses to preserve it.
+  - Thinking/reasoning must not be shown by default in the main assistant message.
+- Test behavior:
+  - Add smoke/contract coverage for local provider payloads containing both final response and thinking/reasoning fields.
+  - Add coverage for visible reasoning wrapper stripping.
+  - Add coverage that Pet Bubble receives or renders clean final reply text only.
+  - Keep automated tests mocked; do not require live Ollama by default.
+
+Acceptance criteria:
+
+- No backend route change.
+- No `/chat` schema change unless separately justified in docs before implementation.
+- No external API calls.
+- No provider key behavior change.
+- No Pet Window text input.
+- No mini Full App behavior in Pet Window.
+- No Pet Window size, position, reset, hide/show, menu, or layout change.
+- No proactive LLM calls.
+- Renderer code must not call Ollama directly.
+- Local provider normal reply path must prefer final answer fields and ignore explicit thinking/reasoning fields.
+- `think: false` is sent for local Ollama requests if supported, or the implementation documents why it cannot be sent safely.
+- Normal Full App reply must not show thinking/reasoning/debug traces by default.
+- Normal Pet Bubble reply must never show thinking/reasoning/debug traces.
+- TASK-149 reply/details separation behavior must not regress.
+- Chinese prompts and responses must remain UTF-8 safe.
+
+Likely files for implementation:
+
+- Backend local provider/Ollama adapter files.
+- Backend provider contract tests or local provider test files.
+- Full App renderer/status tests only if normal visible reply handling needs a small guard.
+- Pet renderer smoke tests only to confirm thinking/reasoning content cannot appear in normal bubble text.
+- `docs/TASKS.md`
+- `docs/ROADMAP.md`
+
+Manual smoke expectations:
+
+- Use `qwen3:8b` through Desktop App local Ollama mode.
+- Send Chinese prompts through the normal Desktop App chat path and confirm the request/response remains UTF-8 safe.
+- Confirm normal Full App assistant replies do not show `<think>`, `Thinking...`, `done thinking`, reasoning traces, raw JSON, or debug preambles.
+- Confirm Pet Bubble never shows thinking/reasoning text in the main reply.
+- If a debug/details affordance exists, confirm thinking is hidden by default and only visible through explicit user action if implementation intentionally preserves it.
+- Confirm TASK-149 clean reply/details separation does not regress.
+- Confirm no Pet Window layout, input, position, or TASK-148 reset behavior changed.
+
+Non-goals:
+
+- Do not expose thinking/reasoning by default.
+- Do not add a Pet Bubble diagnostics panel.
+- Do not add Pet Window text input.
+- Do not turn Pet Window into a mini Full App.
+- Do not add external APIs.
+- Do not add image assets.
+- Do not add voice features.
+- Do not add proactive idle LLM calls.
+- Do not change TASK-148 Pet Window position persistence/reset behavior.
+- Do not change TASK-149 normal reply/details separation behavior except to strengthen sanitization.
+- Do not implement streaming output.
+
+Closeout:
+
+- Windows manual smoke - PASS.
+  - `qwen3:8b` normal replies do not expose `thinking`.
+  - Full App normal reply does not show `Thinking...`, `done thinking`, `<think>...</think>`, or reasoning/debug preambles.
+  - Pet Bubble never shows thinking/reasoning/debug traces.
+  - UTF-8 Chinese prompt path works correctly.
+
+Implementation summary:
+
+- Local Ollama requests continue to send `think: false` and `stream: false`.
+- Normal local-provider reply extraction now prefers final answer fields only:
+  - `/api/chat`: `message.content`
+  - `/api/generate`-style payloads: `response`
+- Explicit `thinking` and `message.thinking` fields are ignored and never enter `LLMResponse.text`.
+- Added defensive cleanup for visible reasoning wrappers in final answer text:
+  - `<think>...</think>`
+  - `Thinking...`
+  - `...done thinking.`
+  - leading `Reasoning:`, `Analysis:`, and `Debug:` preamble lines.
+- Added mocked provider coverage for final-answer-plus-thinking payloads and visible reasoning wrapper cleanup.
+- Added Full App renderer smoke coverage showing extra thinking/debug fields in a backend response are not rendered as normal chat text.
+- Added Pet renderer smoke coverage showing thinking/reasoning diagnostic fields do not appear in the main Pet Bubble.
+- No backend route, `/chat` schema, IPC/preload API, provider key behavior, external API, Pet Window input, Pet Window size/position/menu/layout behavior, image asset, voice feature, or proactive LLM behavior was changed.
+
+Validation:
+
+- `python -m py_compile backend/app/llm/ollama_provider.py backend/app/core/config.py` - PASS.
+- `python -m pytest backend/tests/test_llm_ollama_provider.py backend/tests/test_config.py` - PASS, 128 passed.
+- `node --check apps/desktop/src/main.js` - PASS.
+- `node --check apps/desktop/src/pet/pet-renderer.js` - PASS.
+- `node --check apps/desktop/scripts/renderer-chat-smoke.js` - PASS.
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js` - PASS.
+- `node --check apps/desktop/scripts/pet-window-smoke.js` - PASS.
+- `node apps/desktop/scripts/renderer-chat-smoke.js` - PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js` - PASS, 43 checks.
+- `node apps/desktop/scripts/pet-window-smoke.js` - PASS, 15 checks.
+- `cd apps/desktop && npm.cmd run test:renderer` - PASS.
+- `python -m pytest` - PASS, 599 passed.
+- Direct Ollama `11434` scan across Electron runtime source (`apps/desktop/src`) - PASS.
+- `git diff --check` - PASS, with LF-to-CRLF warnings only.
+- `rg` status check confirmed TASK-150 and TASK-151 are listed in `docs/TASKS.md` and `docs/ROADMAP.md`.
+- Changed-doc NUL byte check - PASS.
+- Windows manual smoke - PASS for TASK-150 and TASK-151.
+
+---
+
 ## TASK-139 - Manual Windows Pet Bubble Chat Smoke Closure
 
 **Status:** DONE - SUPERSEDED / RESOLVED

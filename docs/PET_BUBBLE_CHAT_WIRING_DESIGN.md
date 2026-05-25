@@ -815,7 +815,7 @@ Speech bubble implications:
 Menu/control implications:
 
 - `Full App` keeps the explicit Pet-to-Full focus/open behavior.
-- `Menu` should hold secondary controls: Toggle Details/Info, Reset Pet Position, and Hide Pet Window.
+- `Menu` should hold secondary controls: Show/Hide Details or Info, Reset Pet Position, and Hide Pet Window.
 - `x` maps to Hide Pet, not app quit.
 - Bottom controls must remain visible inside the compact Pet Window. TASK-146 readability UX fix uses `300 x 400`.
 
@@ -843,7 +843,7 @@ Implementation result:
 
 ## 24. TASK-147 Pet Idle / Presence State Polish Design
 
-Status: IMPLEMENTED - NEEDS WINDOWS MANUAL SMOKE on 2026-05-25.
+Status: DONE - WINDOWS MANUAL SMOKE PASS on 2026-05-25.
 
 Purpose:
 
@@ -889,4 +889,101 @@ Implementation notes:
 - Implemented in the Pet renderer with local timers only; no backend, `/chat`, IPC/preload, provider, external API, image, voice, proactive LLM, Full App renderer, or Pet input change was made.
 - Details remains Menu-only and may carry source/mood/status/helper/long-reply metadata; the main reply remains clean.
 - Existing long reply preview and Full App reading hint are preserved.
-- Automated validation passed; Windows manual smoke is required before closing TASK-147.
+- Automated validation passed; Windows manual smoke passed. TASK-147 is closed.
+
+## 25. TASK-148 Pet Position Persistence / Reset Polish Design
+
+Status: DONE - WINDOWS MANUAL SMOKE PASS on 2026-05-25.
+
+Purpose:
+
+- Define Pet Window position persistence and reset behavior before runtime changes.
+- Preserve the display-only speech bubble direction from TASK-141, TASK-145, TASK-146, and TASK-147.
+- Keep Full App as the primary text input and long-reading surface.
+- Keep Pet Window at `300 x 400`.
+- Avoid proactive LLM calls.
+
+Bubble/chat implications:
+
+- TASK-148 should not change `/chat`, Full App to Pet speech mirror payloads, reply truncation, details metadata, long-reply preview, or clean main reply behavior.
+- Hide/Show position restoration must not auto-open Full App, auto-show hidden Pet due to speech updates, or trigger backend/LLM/Ollama calls.
+- Reset Pet Position should affect window placement only, not speech state, recent-reply timers, details state, or Menu contents unless a real runtime bug requires a minimal fix.
+
+Position implications:
+
+- Persist the last valid Pet Window position across app restarts.
+- Reset Pet Position should restore a documented safe default, expected to be primary-display bottom-right with visible margins unless existing implementation defines a better constant.
+- Saved off-screen positions should fall back to the safe default.
+- Monitor/display changes should not leave the Pet Window unreachable.
+- Hide Pet should preserve the last valid position; Show Pet should restore that valid position or safe default.
+
+Non-goals:
+
+- No backend change.
+- No `/chat` schema change.
+- No provider settings change.
+- No external API.
+- No image or voice feature.
+- No new text input box in Pet Window.
+- No proactive LLM calls.
+- No mini Full App behavior.
+- No Pet Window size change.
+
+Implementation boundary:
+
+- Expected implementation should be Electron-shell focused, likely in `apps/desktop/src/main.js` and `apps/desktop/scripts/pet-window-smoke.js`.
+- Renderer changes should be avoided unless position/menu integration requires a small fix.
+
+Implementation notes:
+
+- Implemented in Electron main process only, plus Pet window smoke coverage.
+- Position persistence still uses `userData/pet-window-state.json`.
+- Saved bounds restore only when the full `300 x 400` Pet Window is visible inside a current display work area.
+- Reset Pet Position and invalid/off-screen restore use the primary-display lower-right safe default.
+- Show Pet and Electron display-change events revalidate bounds without changing speech state or triggering LLM/backend calls.
+- No bubble/chat contract, `/chat` schema, speech mirror payload, renderer, preload API, provider, external API, image, voice, Pet input, or Pet size behavior changed.
+- Automated validation passed; Windows manual smoke passed. TASK-148 is closed.
+
+## 26. TASK-149 Pet Bubble Reply / Details Separation Polish Design
+
+Status: IMPLEMENTED - NEEDS WINDOWS MANUAL SMOKE on 2026-05-25.
+
+Purpose:
+
+- Keep the Pet Bubble mirror path character-facing and clean by default.
+- Preserve Full App as the place for richer diagnostic/debug/provider information.
+- Avoid widening the Full App -> Pet speech mirror contract.
+
+Mirror contract implications:
+
+- Full App still mirrors only `{ reply, mood, source }`.
+- Full App preload, main process, and Pet preload sanitize mirrored speech payloads down to `reply / mood / source`.
+- Pet renderer visible speech derives from `payload.reply` only.
+- Diagnostic-like fields such as `diagnostics`, `details`, `debug`, `provider`, `status`, `helper`, and `explanation` must not render in the normal Pet Bubble.
+
+Details implications:
+
+- Existing details UI remains explicit and hidden by default.
+- No new diagnostics/details IPC or preload channel was added.
+- Details/debug payload UI remains deferred because the runtime bridge intentionally drops diagnostic fields before Pet receives mirrored speech.
+- Long reply hints and error/source helper text remain details metadata, not normal reply text.
+
+Non-goals:
+
+- No backend change.
+- No `/chat` schema change.
+- No IPC/preload API change.
+- No provider settings change.
+- No external API.
+- No image or voice feature.
+- No Pet Window text input.
+- No mini Full App behavior.
+- No proactive LLM calls.
+- No Pet Window size or position behavior change.
+
+Implementation notes:
+
+- Added explicit Pet renderer helper for visible reply extraction from `payload.reply`.
+- Added Pet renderer smoke coverage for diagnostic-heavy payloads.
+- Added Pet window smoke coverage that mirrored speech sanitizers drop diagnostic fields.
+- Automated validation passed; Windows manual smoke is required before closing TASK-149.

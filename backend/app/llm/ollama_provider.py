@@ -8,11 +8,12 @@ Safety boundaries (mirrors HTTPRealLLMProvider):
 - Renderer never calls Ollama directly — this class is backend-only.
 - Raw prompt text is never logged.
 - Raw Ollama response body is never forwarded to the frontend.
-- No automatic retries — exactly one request per generate() call.
+- One safe timeout retry is allowed after /api/tags confirms the local server is reachable.
 - stream: false enforced — streaming is out of scope for Phase 4.
 - No tool execution, no file access.
 """
 
+import re
 from typing import Any
 
 import httpx
@@ -32,6 +33,22 @@ DEFAULT_OLLAMA_MODEL = "qwen3:8b"
 DEFAULT_OLLAMA_TEMPERATURE = 0.7
 DEFAULT_OLLAMA_NUM_PREDICT = 256
 DEFAULT_LOCAL_TEST_TIMEOUT_SECONDS = 10
+DEFAULT_OLLAMA_KEEP_ALIVE = "30m"
+MAX_TIMEOUT_RETRIES = 1
+
+_THINK_TAG_RE = re.compile(r"<think\b[^>]*>.*?</think>", re.IGNORECASE | re.DOTALL)
+_THINKING_BLOCK_RE = re.compile(
+    r"^\s*Thinking(?:\.\.\.|:)?[\s\S]*?(?:\.\.\.)?\s*done thinking\.?\s*",
+    re.IGNORECASE,
+)
+_THINKING_PREFIX_LINE_RE = re.compile(
+    r"^\s*(?:Thinking(?:\.\.\.|:)?|Reasoning:|Analysis:|Debug:)[^\n]*(?:\n+|$)",
+    re.IGNORECASE,
+)
+_DONE_THINKING_LINE_RE = re.compile(
+    r"^\s*(?:\.\.\.)?\s*done thinking\.?\s*(?:\n+|$)",
+    re.IGNORECASE,
+)
 
 
 class OllamaLocalProvider:
@@ -50,7 +67,7 @@ class OllamaLocalProvider:
         *,
         model: str = DEFAULT_OLLAMA_MODEL,
         base_url: str = "http://localhost:11434",
-        keep_alive: str = "10m",
+        keep_alive: str = DEFAULT_OLLAMA_KEEP_ALIVE,
         timeout_seconds: int = 30,
         test_timeout_seconds: int = DEFAULT_LOCAL_TEST_TIMEOUT_SECONDS,
         http_client: HTTPJSONClient | None = None,
@@ -186,33 +203,55 @@ class OllamaLocalProvider:
         """
         Send a chat completion request to the local Ollama server.
 
-        Exactly one HTTP request is made per call — no retries.
+        At most one chat retry is made after a timeout if /api/tags is reachable.
         On any failure, returns a safe fallback response with an error category.
         Raw Ollama response bodies are never forwarded to the caller as-is.
         """
         endpoint = self._base_url + OLLAMA_CHAT_PATH
         payload = self._build_payload(request)
 
-        try:
-            http_response = self._http_client.request_json(
-                "POST",
-                endpoint,
-                headers={"Content-Type": "application/json; charset=utf-8"},
-                payload=payload,
-                timeout_seconds=self._timeout_seconds,
-            )
-        except httpx.TimeoutException:
-            return self._safe_response("provider_timeout")
-        except (httpx.ConnectError, ConnectionRefusedError, OSError):
-            return self._safe_response("ollama_unavailable")
-        except Exception:
-            return self._safe_response("ollama_unavailable")
+        timeout_retries_remaining = MAX_TIMEOUT_RETRIES
+        while True:
+            try:
+                http_response = self._post_chat(endpoint, payload)
+            except (TimeoutError, httpx.TimeoutException):
+                if timeout_retries_remaining > 0 and self._ollama_server_reachable():
+                    timeout_retries_remaining -= 1
+                    continue
+                return self._safe_response("provider_timeout")
+            except (httpx.ConnectError, ConnectionRefusedError, OSError):
+                return self._safe_response("ollama_unavailable")
+            except Exception:
+                return self._safe_response("ollama_unavailable")
 
-        return self._handle_http_response(http_response)
+            return self._handle_http_response(http_response)
 
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    def _post_chat(self, endpoint: str, payload: dict[str, Any]) -> ProviderHTTPResponse:
+        return self._http_client.request_json(
+            "POST",
+            endpoint,
+            headers={"Content-Type": "application/json; charset=utf-8"},
+            payload=payload,
+            timeout_seconds=self._timeout_seconds,
+        )
+
+    def _ollama_server_reachable(self) -> bool:
+        endpoint = self._base_url + OLLAMA_TAGS_PATH
+        try:
+            http_response = self._http_client.request_json(
+                "GET",
+                endpoint,
+                headers={},
+                payload={},
+                timeout_seconds=self._test_timeout_seconds,
+            )
+        except Exception:
+            return False
+        return 200 <= http_response.status_code < 300
 
     def _build_payload(self, request: LLMRequest) -> dict[str, Any]:
         return {
@@ -248,12 +287,8 @@ class OllamaLocalProvider:
         if not isinstance(data, dict):
             return self._safe_response("invalid_response")
 
-        message = data.get("message")
-        if not isinstance(message, dict):
-            return self._safe_response("invalid_response")
-
-        content = message.get("content")
-        if not isinstance(content, str) or not content.strip():
+        content = _final_answer_text(data)
+        if not content:
             return self._safe_response("invalid_response")
 
         # Token counts and durations. Ollama returns these as integers when
@@ -279,7 +314,7 @@ class OllamaLocalProvider:
             confirmed_model = raw_model.strip()
 
         return LLMResponse(
-            text=content.strip(),
+            text=content,
             provider="ollama",
             model=confirmed_model or self._model,
             usage=usage,
@@ -294,6 +329,40 @@ class OllamaLocalProvider:
             usage=None,
             error=error,
         )
+
+
+def _final_answer_text(data: dict[str, Any]) -> str:
+    """Return only the final user-facing Ollama answer text.
+
+    Ollama chat responses use ``message.content``.  Some model/API paths can
+    also return explicit thinking fields; those are intentionally ignored.
+    The ``response`` fallback keeps the extraction safe for generate-style
+    mocked payloads and future adapter reuse.
+    """
+    message = data.get("message")
+    if isinstance(message, dict):
+        content = message.get("content")
+        if isinstance(content, str):
+            return _strip_visible_reasoning(content)
+
+    response = data.get("response")
+    if isinstance(response, str):
+        return _strip_visible_reasoning(response)
+
+    return ""
+
+
+def _strip_visible_reasoning(text: str) -> str:
+    """Remove common visible thinking wrappers from final answer text."""
+    cleaned = _THINK_TAG_RE.sub("", text).strip()
+    for _ in range(4):
+        previous = cleaned
+        cleaned = _THINKING_BLOCK_RE.sub("", cleaned).strip()
+        cleaned = _THINKING_PREFIX_LINE_RE.sub("", cleaned).strip()
+        cleaned = _DONE_THINKING_LINE_RE.sub("", cleaned).strip()
+        if cleaned == previous:
+            break
+    return cleaned
 
 
 def _model_in_installed(target: str, installed: list[str]) -> bool:

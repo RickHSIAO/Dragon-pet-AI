@@ -292,6 +292,10 @@ function responseForBubbleState(state, reply) {
   return typeof reply === "string" && reply ? reply : getBubbleStateConfig(state).response;
 }
 
+function visibleReplyForSpeechPayload(payload = {}) {
+  return typeof payload.reply === "string" ? payload.reply : "";
+}
+
 function detailMessageForBubbleState(state) {
   if (state === "long_reply") return PET_LONG_REPLY_HINT;
   if (state === "backend_offline") return "\u5f8c\u7aef\u4f3c\u4e4e\u4e0d\u5728\uff0c\u6c5d\u5148\u53bb Full App \u628a\u5b83\u53eb\u9192\u3002";
@@ -936,7 +940,7 @@ function handleHidePetWindow(documentRef = document) {
 }
 
 function renderPetSpeechUpdate(documentRef = document, payload = {}, options = {}) {
-  const reply = typeof payload.reply === "string" ? payload.reply : "";
+  const reply = visibleReplyForSpeechPayload(payload);
   const mood = typeof payload.mood === "string" ? payload.mood : PET_MODE_DEFAULTS.expression;
   const source = typeof payload.source === "string" ? payload.source : "unknown";
   const nextState = stateForChatSource(source, reply);
@@ -1156,5 +1160,6 @@ if (typeof module !== "undefined") {
     toggleBubble,
     toggleMenu,
     truncatePetReply,
+    visibleReplyForSpeechPayload,
   };
 }

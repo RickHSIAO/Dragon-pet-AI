@@ -195,7 +195,7 @@ See `docs/PHASE4_PLAN.md`, `docs/LLM_ADAPTER_DESIGN.md`, `docs/LLM_PROVIDER_CONT
 
 **Goal:** Add a local LLM provider option via Ollama. No API key, no external network, no per-token cost. Runs on user's hardware.
 
-**Status:** LOCAL OLLAMA MVP CHECKPOINT COMPLETE - OllamaLocalProvider implemented (TASK-073), mocked contract tests pass (TASK-074), runtime smoke PASS (TASK-075), Provider Settings UI Ollama option complete (TASK-076), README local LLM instructions complete (TASK-077), Electron end-to-end local chat smoke PASS (TASK-080), source/loading/error UX stabilized (TASK-081), release readiness review PASS (TASK-082), mood to pet expression mapping (TASK-083), Christina visual asset pipeline through normalized candidates complete (TASK-084 to TASK-093), persisted settings runtime smoke PASS WITH NOTES (TASK-101), partial persist guard and local cold-start UX fix complete (TASK-102)
+**Status:** LOCAL OLLAMA MVP CHECKPOINT COMPLETE - OllamaLocalProvider implemented (TASK-073), mocked contract tests pass (TASK-074), runtime smoke PASS (TASK-075), Provider Settings UI Ollama option complete (TASK-076), README local LLM instructions complete (TASK-077), Electron end-to-end local chat smoke PASS (TASK-080), source/loading/error UX stabilized (TASK-081), release readiness review PASS (TASK-082), mood to pet expression mapping (TASK-083), Christina visual asset pipeline through normalized candidates complete (TASK-084 to TASK-093), persisted settings runtime smoke PASS WITH NOTES (TASK-101), partial persist guard and local cold-start UX fix complete (TASK-102), TASK-150 local Ollama idle wake timeout/retry polish complete and Windows manual smoke PASS, TASK-151 local model thinking/reasoning output sanitization complete and Windows manual smoke PASS
 
 **Local model candidates:**
 
@@ -237,6 +237,8 @@ See `docs/PHASE4_PLAN.md`, `docs/LLM_ADAPTER_DESIGN.md`, `docs/LLM_PROVIDER_CONT
 | TASK-104 | Manual Windows Script Smoke | DONE |
 | TASK-105 | Cold-start Warmup UX for dev-smoke | DONE |
 | TASK-106 | Manual Cold-start Warmup UX Smoke | DONE |
+| TASK-150 | Local Ollama Idle Wake Timeout / Retry Polish Design | DONE - PASS |
+| TASK-151 | Local Model Thinking / Reasoning Output Sanitization Design | DONE - PASS |
 | TASK-089 | Create Christina Focused Expression PNG | DONE |
 | TASK-090 | Christina Real Expression Asset Plan | DONE |
 | TASK-091 | Integrate Existing Christina Expression PNG Assets | DONE |
@@ -247,7 +249,7 @@ See `docs/PHASE4_PLAN.md`, `docs/LLM_ADAPTER_DESIGN.md`, `docs/LLM_PROVIDER_CONT
 - `OllamaLocalProvider` implements the same `ProviderInterface` as `AnthropicProvider` ??no service layer changes required
 - `source=llm_local` in `/chat` response ??schema unchanged
 - No API key; no `explicit_cost_ack` required ??local resource warning instead
-- `keep_alive=10m` to avoid cold-start latency on repeated calls
+- `keep_alive=30m` by default to reduce idle-unload/cold-start churn on repeated calls
 - `think=false`, `stream=false` ??concise, deterministic responses
 - Renderer never calls Ollama directly ??backend-only architecture boundary preserved
 - New key status value: `not_required` for providers that need no key
@@ -266,6 +268,12 @@ See `docs/PHASE4_PLAN.md`, `docs/LLM_ADAPTER_DESIGN.md`, `docs/LLM_PROVIDER_CONT
 - TASK-106 manual Windows cold-start UX smoke PASSED: `dev-smoke.ps1` executed successfully after `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`; `/health` PASS, `/provider/settings` PASS (provider=ollama, model=qwen3:8b, fallback_to_mock=false), `/provider/settings/test` PASS (source=llm_local), `/chat` PASS (HTTP 200, source=llm_local, mood=happy), schema guard PASS (reply/mood/source), `ALL CHECKS PASSED`.
 - TASK-104 manual Windows smoke confirms `source=llm_local` with real `qwen3:8b` generation; documents ExecutionPolicy bypass (`-Scope Process`) and cold-start warm-up (`ollama run qwen3:8b`) as one-time steps. No code changes.
 - TASK-103 adds one-command PowerShell startup scripts (`dev-start-backend.ps1`, `dev-start-desktop.ps1`, `dev-smoke.ps1`) and `docs/LOCAL_DEV_RUNBOOK.md`; addresses port-8000 check, venv activation, `npm.cmd` vs `npm.ps1` execution-policy issue, `ELECTRON_RUN_AS_NODE` clear, cold-start timeout guidance, and settings persistence troubleshooting. No product features changed.
+- TASK-150 implements the local Ollama idle/unloaded-model polish. Default `OLLAMA_KEEP_ALIVE` is now `30m`, local chat still uses the longer local timeout path, and `/api/chat` gets one safe timeout retry only when `/api/tags` confirms the local server is reachable. Non-timeout failures remain single-shot and safe. Windows manual smoke passed: empty-`ollama ps` cold-start behavior is clean, second request after wake works, the configured model appears loaded after request, and raw diagnostics do not leak to Pet Bubble.
+- TASK-151 implements local model thinking/reasoning output sanitization. Local provider normal replies prefer `/api/chat` `message.content` and support `/api/generate` `response`, ignore explicit `thinking`/`message.thinking` fields, send `think: false`, defensively strip visible reasoning wrappers, keep Full App normal replies clean by default, and prevent Pet Bubble from showing thinking/reasoning/debug traces as normal speech. Windows manual smoke passed with `qwen3:8b`, including UTF-8 Chinese prompt handling.
+
+**Next local provider reliability task:**
+
+- TASK-150 and TASK-151 are fully closed. Define the next local provider reliability task in docs before implementation.
 
 See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
@@ -320,7 +328,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 **Goal:** Move the product from a full management interface toward a small desktop pet plus compact chat bubble, while keeping Full App Mode as the control center.
 
-**Status:** RELEASE CHECKPOINT COMPLETE - TASK-114 design complete; TASK-115 static renderer skeleton complete; TASK-116 env-gated BrowserWindow prototype complete; TASK-117 CSS drag behavior complete; TASK-118 local-only bubble UI state complete; TASK-119 narrow Pet-to-Full mode switch complete; TASK-120 smoke checkpoint passed; TASK-121 manual Windows visual smoke passed with menu placeholder note; TASK-122 Pet Window position persistence complete; TASK-123 Pet menu/right-click menu complete; TASK-124 manual menu smoke passed with right-click drag-region note; TASK-125 right-click menu hotspot fix complete; TASK-126 menu UX regression fixed; TASK-127 explicit drag handle complete; TASK-128 Full App -> Show Pet bridge complete; TASK-129 drag regression fix complete; TASK-130 manual Windows drag/menu smoke passed; TASK-131 Pet Mode release checkpoint complete; TASK-132 Bubble Chat wiring design complete; TASK-133 static bubble state refinement complete; TASK-134 Pet Bubble `/chat` client wiring complete; TASK-135 Pet Bubble loading/error UX complete; TASK-136 Pet Bubble mood/expression integration complete; TASK-137 Pet Bubble long reply handling complete; TASK-138 Pet Bubble chat smoke checkpoint complete; TASK-140 Pet Bubble input visibility regression fixed; TASK-141 display-only speech bubble redesign complete; TASK-143 Full App reply mirror bridge complete; TASK-144 manual Windows speech mirror smoke PASS WITH NOTE; TASK-145 clean reply/details disclosure complete and Windows manual smoke PASS; TASK-146 controls consolidation complete and Windows manual smoke PASS; TASK-147 idle/presence polish complete and Windows manual smoke PASS.
+**Status:** RELEASE CHECKPOINT COMPLETE - TASK-114 design complete; TASK-115 static renderer skeleton complete; TASK-116 env-gated BrowserWindow prototype complete; TASK-117 CSS drag behavior complete; TASK-118 local-only bubble UI state complete; TASK-119 narrow Pet-to-Full mode switch complete; TASK-120 smoke checkpoint passed; TASK-121 manual Windows visual smoke passed with menu placeholder note; TASK-122 Pet Window position persistence complete; TASK-123 Pet menu/right-click menu complete; TASK-124 manual menu smoke passed with right-click drag-region note; TASK-125 right-click menu hotspot fix complete; TASK-126 menu UX regression fixed; TASK-127 explicit drag handle complete; TASK-128 Full App -> Show Pet bridge complete; TASK-129 drag regression fix complete; TASK-130 manual Windows drag/menu smoke passed; TASK-131 Pet Mode release checkpoint complete; TASK-132 Bubble Chat wiring design complete; TASK-133 static bubble state refinement complete; TASK-134 Pet Bubble `/chat` client wiring complete; TASK-135 Pet Bubble loading/error UX complete; TASK-136 Pet Bubble mood/expression integration complete; TASK-137 Pet Bubble long reply handling complete; TASK-138 Pet Bubble chat smoke checkpoint complete; TASK-140 Pet Bubble input visibility regression fixed; TASK-141 display-only speech bubble redesign complete; TASK-143 Full App reply mirror bridge complete; TASK-144 manual Windows speech mirror smoke PASS WITH NOTE; TASK-145 clean reply/details disclosure complete and Windows manual smoke PASS; TASK-146 controls consolidation complete and Windows manual smoke PASS; TASK-147 idle/presence polish complete and Windows manual smoke PASS; TASK-148 position persistence/reset polish complete and Windows manual smoke PASS; TASK-149 reply/details separation polish complete and Windows manual smoke PASS.
 
 > Design reference: `docs/PET_MODE_UI_DESIGN.md`
 > Release checkpoint: `docs/PET_MODE_RELEASE_CHECKPOINT.md`
@@ -361,6 +369,8 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 | TASK-145 | Pet Speech Bubble Clean Reply + Details Disclosure | DONE - PASS |
 | TASK-146 | Pet Mode Menu / Controls Consolidation Design | DONE - PASS |
 | TASK-147 | Pet Idle / Presence State Polish Design | DONE - PASS |
+| TASK-148 | Pet Position Persistence / Reset Polish Design | DONE - PASS |
+| TASK-149 | Pet Bubble Reply / Details Separation Polish Design | DONE - PASS |
 
 **Recommended direction:**
 
@@ -417,7 +427,9 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 - TASK-146 Windows visual checks found the `220 x 280` and `260 x 340` windows cramped, with Christina and reply text too small at the latter size. The UX fix now uses `300 x 400`, keeps Menu outside-click/Escape behavior, keeps Open Full App/Close Menu removed from Menu, keeps the floating `i` removed, keeps the visible `speech bubble` label removed, enlarges Christina in speaking mode, and increases reply text readability.
 - TASK-146 Windows manual smoke passed after the `300 x 400` readability/size UX fix: Pet Window is comfortable and still pet-like, Christina is larger and centered, reply text is readable, short/medium/long replies remain constrained appropriately, Menu/Details/Chat/Full App/Hide behaviors work, no Pet input box appears, and the main reply bubble remains clean with no source/status/helper/mood/local/llm_local or visible `speech bubble` label.
 - TASK-147 implements frontend-only Pet idle/presence polish. Pet starts in `idle_default` with the static local hint `吾在。要找吾就去 Full App 說話。`, mirrored Full App replies remain visible for `90` seconds, Chat/Full App clicks show the local handoff hint `去 Full App 說，吾會聽。` for about `6` seconds, show/focus restores a still-recent reply or idle, and details metadata remains Menu-only. Windows manual smoke passed: idle does not trigger backend/LLM/Ollama/chat requests, clean mirrored replies render correctly, recent replies return to idle, handoff/menu/details/hide behavior works, and the `300 x 400` layout remains stable. No backend, `/chat`, IPC/preload, provider, external API, image, voice, proactive LLM, Full App renderer, or Pet input change was made.
+- TASK-148 implements Pet Window position persistence/reset polish in the Electron shell. It reuses `userData/pet-window-state.json`, keeps the Pet Window fixed at `300 x 400`, requires the full window to fit inside a current display work area before restoring saved bounds, falls back to the primary-display lower-right safe default when invalid, validates bounds on Show Pet and Electron display changes, and persists Reset Pet Position immediately. Windows manual smoke passed: move/restart/reset/hide/show/off-screen fallback behavior works, TASK-146 controls remain intact, TASK-147 idle/recent/handoff behavior remains intact, and no backend, `/chat`, IPC/preload, provider, external API, image, voice, proactive LLM, Full App renderer, Pet input, speech state, or Pet size change was made.
+- TASK-149 implements Pet Bubble reply/details separation polish. Pet renderer visible speech now explicitly derives from `payload.reply` only, smoke coverage confirms diagnostic/details/helper/status/provider-like fields do not render in the main bubble, and main/preload speech payload sanitizers remain limited to `reply / mood / source`. Windows manual smoke passed: Pet Bubble shows only clean character-facing reply text, diagnostics are not rendered as normal bubble text, and long replies/error states keep the main bubble clean. Full App remains the richer diagnostic surface. No backend, `/chat`, IPC/preload API, provider, external API, image, voice, proactive LLM, Pet input, mini Full App, Full App renderer, TASK-148 position behavior, or Pet size change was made.
 
 **Next recommended task:**
 
-- TASK-147 is fully closed. Define the next Pet Mode task in docs before implementation.
+- TASK-149 is fully closed. Define the next Pet Mode task in docs before implementation.

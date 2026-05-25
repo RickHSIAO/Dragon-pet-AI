@@ -125,12 +125,12 @@ def get_ollama_base_url() -> str:
 
 
 def get_ollama_keep_alive() -> str:
-    """Return the Ollama keep-alive duration string (e.g. ``10m``).
+    """Return the Ollama keep-alive duration string (e.g. ``30m``).
 
-    Default: ``10m`` — keeps the model loaded in memory for 10 minutes after
+    Default: ``30m`` keeps the model loaded in memory for 30 minutes after
     the last request, avoiding cold-start latency on repeated calls.
     """
-    return read_str_env("OLLAMA_KEEP_ALIVE", default="10m")
+    return read_str_env("OLLAMA_KEEP_ALIVE", default="30m")
 
 
 def get_local_chat_timeout_seconds() -> int:

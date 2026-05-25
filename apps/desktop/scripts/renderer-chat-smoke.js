@@ -318,6 +318,24 @@ function createFetchStub(state) {
         });
       }
 
+      if (state.chatMode === "thinking_fields") {
+        state.providerSettings = {
+          ...state.providerSettings,
+          usage_summary: usageFor("llm_local"),
+        };
+        return new FakeResponse(200, {
+          reply: "Clean final reply.",
+          mood: "focused",
+          source: "llm_local",
+          thinking: "THINKING_FIELD_SHOULD_NOT_RENDER",
+          message: {
+            thinking: "MESSAGE_THINKING_SHOULD_NOT_RENDER",
+            content: "RAW_MESSAGE_CONTENT_SHOULD_NOT_RENDER",
+          },
+          debug: "DEBUG_TRACE_SHOULD_NOT_RENDER",
+        });
+      }
+
       state.providerSettings = {
         ...state.providerSettings,
         usage_summary: usageFor("llm_local"),
@@ -475,6 +493,19 @@ async function testSuccessfulChatDoesNotRequirePetSpeechApi() {
   const rendered = messageTexts(document.getElementById("chat-area")).join("\n");
   assert.match(rendered, /Hmph, local dragon reply/);
   assert.equal(textOf(document, "chat-source-status"), "source: llm_local");
+}
+
+async function testFullAppNormalReplyDoesNotRenderThinkingFields() {
+  const { document } = await loadRenderer({ chatMode: "thinking_fields" });
+
+  await sendChat(document, "thinking field smoke");
+
+  const rendered = messageTexts(document.getElementById("chat-area")).join("\n");
+  assert.match(rendered, /Clean final reply/);
+  assert.doesNotMatch(
+    rendered,
+    /THINKING_FIELD_SHOULD_NOT_RENDER|MESSAGE_THINKING_SHOULD_NOT_RENDER|RAW_MESSAGE_CONTENT_SHOULD_NOT_RENDER|DEBUG_TRACE_SHOULD_NOT_RENDER/
+  );
 }
 
 async function testSuccessfulLocalChatUpdatesMoodAndSourceStatus() {
@@ -1767,6 +1798,7 @@ async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
   await testSuccessfulChatDoesNotRequirePetSpeechApi();
+  await testFullAppNormalReplyDoesNotRenderThinkingFields();
   await testSuccessfulLocalChatUpdatesMoodAndSourceStatus();
   await testLoadingColdStartStatusIsVisible();
   await testEnterKeySendsChat();

@@ -88,7 +88,7 @@ Content-Type: application/json; charset=utf-8
   "model": "qwen3:8b",
   "stream": false,
   "think": false,
-  "keep_alive": "10m",
+  "keep_alive": "30m",
   "options": {
     "temperature": 0.7,
     "num_predict": 256
@@ -109,7 +109,7 @@ Content-Type: application/json; charset=utf-8
 **Field notes:**
 - `stream: false` — required; streaming is explicitly out of scope for Phase 4
 - `think: false` — disables chain-of-thought reasoning tokens (qwen3 feature); keeps response compact
-- `keep_alive: "10m"` — keeps model loaded in memory for 10 minutes after last request; avoids cold-start latency on subsequent messages
+- `keep_alive: "30m"` keeps model loaded in memory for 30 minutes after last request; avoids cold-start latency on subsequent messages
 - `options.temperature` — controls response randomness; 0.7 is a reasonable companion default
 - `options.num_predict` — max output tokens; 256 is sufficient for short companion responses
 
@@ -203,7 +203,7 @@ All new env vars follow the existing pattern: startup-time only, never runtime-p
 | `LLM_PROVIDER_ENABLED` | `false` | Must be `true` to use any real provider |
 | `LLM_CHAT_ENABLED` | `false` | Must be `true` to route `/chat` through LLM adapter |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server endpoint |
-| `OLLAMA_KEEP_ALIVE` | `10m` | Keep model loaded in memory after last request |
+| `OLLAMA_KEEP_ALIVE` | `30m` | Keep model loaded in memory after last request |
 | `LLM_LOCAL_CHAT_TIMEOUT_SECONDS` | `90` | Local `/chat` generation timeout; Ollama can be slow on first load |
 | `OLLAMA_TIMEOUT_SECONDS` | `90` | Backward-compatible local chat timeout fallback when `LLM_LOCAL_CHAT_TIMEOUT_SECONDS` is unset |
 | `LLM_LOCAL_TEST_TIMEOUT_SECONDS` | `10` | Lightweight Test Connection timeout for `/api/tags`; does not perform generation |
@@ -215,7 +215,7 @@ All new env vars follow the existing pattern: startup-time only, never runtime-p
 # LLM_PROVIDER_NAME=ollama
 # LLM_MODEL=qwen3:8b
 # OLLAMA_BASE_URL=http://localhost:11434
-# OLLAMA_KEEP_ALIVE=10m
+# OLLAMA_KEEP_ALIVE=30m
 # LLM_LOCAL_CHAT_TIMEOUT_SECONDS=90
 # LLM_LOCAL_TEST_TIMEOUT_SECONDS=10
 ```
@@ -267,7 +267,8 @@ This preserves the intentional-click safety pattern without implying monetary co
 }
 ```
 
-- Exactly one request — no retries
+- Test Connection makes exactly one request and does not retry or load the model.
+- Chat generation may retry once after a timeout only when `/api/tags` confirms the local Ollama server is still reachable.
 - No memory, no chat history, no tools, no streaming
 - 16 output tokens max
 - `think: false` — no reasoning tokens
@@ -354,7 +355,7 @@ These boundaries must hold exactly as they do for the Anthropic provider.
 | Prompt logging | Raw prompt text is never logged at any level |
 | Response body forwarding | Raw Ollama response body is never forwarded to the frontend |
 | Automatic background calls | No periodic polling, no auto-test, no background keep-alive pings |
-| Retries | No automatic retries — exactly one request per user action |
+| Retries | Test Connection has no retries; chat generation may retry once after timeout only when `/api/tags` confirms the local server is reachable |
 | Streaming | Not implemented; `stream: false` enforced |
 | Tool use | Not implemented in Phase 4 |
 | Memory in Test Connection | Memory context never included in the test request |

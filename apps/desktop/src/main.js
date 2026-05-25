@@ -67,20 +67,50 @@ function isPetWindowBoundsVisible(bounds) {
   };
 
   return screen.getAllDisplays().some(({ workArea }) => {
-    const centerX = normalizedBounds.x + normalizedBounds.width / 2;
-    const centerY = normalizedBounds.y + normalizedBounds.height / 2;
     const displayLeft = workArea.x;
     const displayRight = workArea.x + workArea.width;
     const displayTop = workArea.y;
     const displayBottom = workArea.y + workArea.height;
 
     return (
-      centerX >= displayLeft &&
-      centerX <= displayRight &&
-      centerY >= displayTop &&
-      centerY <= displayBottom
+      normalizedBounds.x >= displayLeft &&
+      normalizedBounds.x + normalizedBounds.width <= displayRight &&
+      normalizedBounds.y >= displayTop &&
+      normalizedBounds.y + normalizedBounds.height <= displayBottom
     );
   });
+}
+
+function ensurePetWindowVisibleBounds(win = petWindow, { persist = true } = {}) {
+  if (!win || win.isDestroyed()) {
+    return null;
+  }
+
+  const currentBounds = win.getBounds();
+  const bounds = isPetWindowBoundsVisible(currentBounds)
+    ? {
+        x: Math.round(currentBounds.x),
+        y: Math.round(currentBounds.y),
+        width: PET_WINDOW_WIDTH,
+        height: PET_WINDOW_HEIGHT,
+      }
+    : getDefaultPetWindowBounds();
+
+  win.setBounds(bounds);
+
+  if (persist) {
+    savePetWindowBounds(win);
+  }
+
+  return bounds;
+}
+
+function validatePetWindowBoundsOnDisplayChange() {
+  if (!petWindow || petWindow.isDestroyed()) {
+    return;
+  }
+
+  ensurePetWindowVisibleBounds(petWindow, { persist: true });
 }
 
 function loadPetWindowBounds() {
@@ -189,6 +219,7 @@ function showFullAppWindow() {
 
 function createPetWindow() {
   if (petWindow && !petWindow.isDestroyed()) {
+    ensurePetWindowVisibleBounds(petWindow, { persist: true });
     petWindow.focus();
     return petWindow;
   }
@@ -268,6 +299,8 @@ function showPetWindow() {
 
   const win = petWindow && !petWindow.isDestroyed() ? petWindow : createPetWindow();
 
+  ensurePetWindowVisibleBounds(win, { persist: true });
+
   if (win.isMinimized()) {
     win.restore();
   }
@@ -322,6 +355,10 @@ app.whenReady().then(() => {
   if (PET_MODE_ENABLED) {
     createPetWindow();
   }
+
+  screen.on("display-added", validatePetWindowBoundsOnDisplayChange);
+  screen.on("display-removed", validatePetWindowBoundsOnDisplayChange);
+  screen.on("display-metrics-changed", validatePetWindowBoundsOnDisplayChange);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
