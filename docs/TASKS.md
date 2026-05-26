@@ -8332,6 +8332,150 @@ Validation:
 
 ---
 
+## TASK-154 - Chat Mood Selector Richness Polish Design
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-26
+
+Goal:
+
+Polish chat mood selection so `/chat` responses can produce more useful mood values for Pet expression changes, without breaking existing clean bubble behavior.
+
+Context:
+
+- TASK-153 is DONE - PASS and verified Pet mood-to-expression mapping works:
+  - `neutral` -> `christina_neutral.png`
+  - `focused` -> `christina_focused.png`
+  - `proud` -> `christina_proud.png`
+  - `worried` -> `christina_worried.png`
+  - unknown/missing -> neutral fallback
+- TASK-153 Windows manual smoke found that real mock/local `/chat` mood selection does not reliably produce varied moods.
+- Proud/worried-style prompts often returned `focused`, `neutral`, or `happy`.
+- Pet expression mapping works, but real chat mood selection is not expressive enough.
+- TASK-149 through TASK-153 keep normal Pet Bubble speech clean and character-facing.
+- TASK-151 thinking/reasoning sanitization and TASK-152 details disclosure must not regress.
+
+Root cause:
+
+- The real `/chat` mock/local success path derived `mood` from `select_mock_mood(message)`.
+- `select_mock_mood` only returned `neutral`, `happy`, or `focused`.
+- Proud, worried, annoyed, and sleepy prompts therefore could not deterministically produce those mood values even though TASK-153 Pet expression mapping already supported them.
+
+Implementation:
+
+- Expanded `select_mock_mood(message)` into a deterministic, current-message-only selector.
+- Added ordered keyword/phrase categories for:
+  - `sleepy`
+  - `worried`
+  - `annoyed`
+  - `proud`
+  - `happy`
+  - `neutral`
+  - `focused`
+- Kept normal task/project/debug wording on `focused`.
+- Kept empty messages on `neutral`.
+- Added clean mock reply fallbacks for `proud`, `worried`, `annoyed`, and `sleepy`.
+- Kept `/chat` response schema as `reply / mood / source`.
+- Kept mood out of normal reply text.
+- Did not change Pet Window renderer, Pet expression mapping, IPC/preload API, assets, layout, animation, voice, or provider architecture.
+
+Implemented behavior:
+
+- Chat responses should more reliably choose mood values that match user intent and assistant tone.
+- Supported target moods align with existing Pet expression mapping:
+  - `neutral`
+  - `focused`
+  - `happy`
+  - `proud`
+  - `annoyed`
+  - `worried`
+  - `sleepy`
+- Proud, confident, self-satisfied, smug, victory, or triumph wording can produce `proud`.
+- Concern, safety, comforting, user distress, failure, risk, uncertainty, or offline wording can produce `worried`.
+- Irritated, scolding, nagging, angry, or annoyed wording can produce `annoyed`.
+- Sleep, tired, rest, nap, or exhausted wording can produce `sleepy`.
+- Normal factual/status wording can produce `neutral`.
+- Project, debug, code, task, implementation, review, and planning wording can produce `focused`.
+- Greetings and positive lightweight wording can produce `happy`.
+- Unknown mood values remain safe because TASK-153 fallback remains in the Pet renderer.
+- Mood must never appear as normal Pet Bubble speech text.
+- Mood selection must not expose source/debug/details/thinking content.
+
+Acceptance criteria:
+
+- PASS - `/chat` response schema remains `reply / mood / source`.
+- PASS - No new backend response fields were added.
+- PASS - No Pet Bubble visible text contract changes were made.
+- PASS - No mood/source/debug/details/thinking text appears as normal Pet Bubble speech.
+- PASS - Target mood values remain compatible with existing TASK-153 Pet renderer mapping.
+- PASS - Unknown or future mood values remain safe through TASK-153 neutral fallback.
+- PASS - Deterministic backend tests cover `proud`, `worried`, `annoyed`, `focused`, `neutral`, `happy`, and `sleepy`.
+- PASS - Local provider success mapping uses the same richer mood selector without polluting `reply`.
+- PASS - TASK-151 thinking/reasoning sanitization remains intact.
+- PASS - TASK-152 details disclosure remains intact.
+- PASS - TASK-153 expression mapping smoke remains intact.
+
+Smoke expectations:
+
+- Backend/mock/local mood selector can deterministically produce `proud`, `worried`, `annoyed`, `focused`, `neutral`, `happy`, and `sleepy` where appropriate.
+- Pet Bubble visible reply remains clean and character-facing.
+- Mood is present only as the `/chat` `mood` field and never rendered as normal speech.
+- TASK-153 expression mapping does not regress.
+- TASK-152 details disclosure does not regress.
+- TASK-151 thinking sanitization does not regress.
+- Existing Full App -> Pet speech mirror remains `reply / mood / source` only.
+
+Non-goals:
+
+- No new images.
+- No animation.
+- No voice.
+- No Pet Window layout changes.
+- No broad emotion system.
+- No provider architecture rewrite.
+- No `/chat` schema change.
+- No IPC/preload API change.
+- No Pet Window text input.
+
+Changed files:
+
+- `backend/app/services/character_service.py`
+- `backend/tests/test_chat_service.py`
+- `docs/TASKS.md`
+- `docs/ROADMAP.md`
+
+Validation:
+
+- `python -m py_compile backend/app/services/character_service.py backend/app/services/chat_service.py` - PASS.
+- `python -m pytest backend/tests/test_chat_service.py --basetemp ./.pytest-tmp-run154-unit -p no:cacheprovider` - PASS, 34 passed.
+- `python -m pytest --basetemp ./.pytest-tmp-run154 -p no:cacheprovider` - PASS, 611 passed.
+- `cd apps/desktop && npm.cmd run test:renderer` - PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js` - PASS, 46 checks.
+- `node apps/desktop/scripts/pet-window-smoke.js` - PASS, 15 checks.
+- `node --check` for changed JS files - not run; no JS files changed.
+- `git diff --check` - PASS, no whitespace errors.
+- `rg TASK-154 docs status` - PASS.
+
+Windows manual smoke results (2026-05-26):
+
+- Proud-style prompt produced proud mood and Pet expression changed through existing TASK-153 mapping. ✓
+- Worried/failure/unsafe prompt produced worried mood and Pet expression changed through existing TASK-153 mapping. ✓
+- Annoyed/tsundere/scolding prompt produced annoyed mood or its documented safe mapped/fallback expression. ✓
+- Planning/task prompt produced focused mood. ✓
+- Neutral factual prompt produced neutral mood. ✓
+- Positive thanks/good-work prompt produced happy mood. ✓
+- Tired/sleep prompt produced sleepy mood or documented safe mapped/fallback expression. ✓
+- Pet Bubble visible reply remained clean and character-facing. ✓
+- Mood/source/debug/details/thinking were not exposed as normal speech. ✓
+- /chat schema remained reply / mood / source. ✓
+- TASK-153 expression mapping did not regress. ✓
+- TASK-152 details disclosure did not regress. ✓
+- TASK-151 thinking sanitization did not regress. ✓
+
+Final status: **DONE - WINDOWS MANUAL SMOKE PASS**
+
+---
+
 ## TASK-139 - Manual Windows Pet Bubble Chat Smoke Closure
 
 **Status:** DONE - SUPERSEDED / RESOLVED

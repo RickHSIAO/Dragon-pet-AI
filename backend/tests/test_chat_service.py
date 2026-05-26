@@ -1,3 +1,5 @@
+import pytest
+
 from app.llm.mock_provider import MockLLMProvider
 from app.llm.types import LLMResponse
 from app.services.chat_service import (
@@ -5,6 +7,7 @@ from app.services.chat_service import (
     generate_chat_reply,
     generate_mock_chat_reply,
 )
+from app.services.character_service import format_mock_reply, select_mock_mood
 
 
 def test_empty_message_returns_fallback():
@@ -38,6 +41,35 @@ def test_hello_returns_valid_mood_and_reply():
     assert response["reply"]
     assert response["mood"] == "happy"
     assert response["source"] == "mock"
+
+
+@pytest.mark.parametrize(
+    ("message", "expected_mood"),
+    [
+        ("I am proud and victorious; praise me.", "proud"),
+        ("I am worried this failed and may be unsafe.", "worried"),
+        ("Stop it. Scold me like an annoyed tsundere.", "annoyed"),
+        ("Can you help me plan this task?", "focused"),
+        ("Neutral factual status summary only.", "neutral"),
+        ("hello, thank you for the good work", "happy"),
+        ("I am tired and need to sleep after this.", "sleepy"),
+    ],
+)
+def test_select_mock_mood_deterministically_covers_supported_targets(
+    message,
+    expected_mood,
+):
+    assert select_mock_mood(message) == expected_mood
+
+
+@pytest.mark.parametrize("mood", ["proud", "worried", "annoyed", "sleepy"])
+def test_format_mock_reply_has_clean_replies_for_richer_moods(mood):
+    reply = format_mock_reply("test message", mood, mode="debug")
+
+    assert reply
+    assert "mood:" not in reply.lower()
+    assert "source:" not in reply.lower()
+    assert "thinking" not in reply.lower()
 
 
 def test_debug_mode_returns_mock_source():
@@ -296,6 +328,38 @@ def test_ollama_provider_success_returns_llm_local(monkeypatch):
     assert response["source"] == "llm_local"
     assert response["reply"] == "local ollama reply"
     assert set(response.keys()) == {"reply", "mood", "source"}
+
+
+def test_ollama_provider_success_uses_rich_message_mood_without_reply_pollution(
+    monkeypatch,
+):
+    class FakeOllamaProvider:
+        provider_name = "ollama"
+
+        def generate(self, request):  # noqa: ARG002
+            return LLMResponse(
+                text="local provider character reply",
+                provider="ollama",
+                model="qwen3:8b",
+                error=None,
+            )
+
+    monkeypatch.setenv("LLM_CHAT_ENABLED", "true")
+    monkeypatch.setattr(
+        "app.services.chat_service.get_llm_provider",
+        lambda: FakeOllamaProvider(),
+    )
+
+    response = generate_chat_reply(
+        "I am worried this safety check failed.",
+        mode="support",
+    )
+
+    assert response == {
+        "reply": "local provider character reply",
+        "mood": "worried",
+        "source": "llm_local",
+    }
 
 
 def test_ollama_provider_error_returns_llm_local_error_when_fallback_disabled(monkeypatch):
