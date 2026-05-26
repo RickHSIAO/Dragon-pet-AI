@@ -38,6 +38,7 @@ import pytest
 from app.llm.ollama_provider import (
     DEFAULT_OLLAMA_MODEL,
     OllamaLocalProvider,
+    _try_unwrap_json_reply,
 )
 from app.llm.real_provider import (
     CANONICAL_SAFE_FALLBACK_TEXT,
@@ -1043,3 +1044,77 @@ def test_test_connection_raw_tags_body_not_leaked_on_error() -> None:
 
     assert result.error == "provider_error"
     assert sentinel not in rendered
+
+
+# ---------------------------------------------------------------------------
+# _try_unwrap_json_reply — TASK-156 JSON unwrapping for qwen3-style output
+# ---------------------------------------------------------------------------
+
+def test_try_unwrap_json_reply_plain_text_passthrough() -> None:
+    """Plain text that is not JSON must be returned unchanged."""
+    text = "吾在。汝有何事？"
+    assert _try_unwrap_json_reply(text) == text
+
+
+def test_try_unwrap_json_reply_extracts_reply_from_json_object() -> None:
+    """JSON object with a 'reply' key returns only the reply string."""
+    import json
+    payload = json.dumps({"reply": "吾在。汝有何事？", "mood": "focused", "source": "llm_local"})
+    result = _try_unwrap_json_reply(payload)
+    assert result == "吾在。汝有何事？"
+
+
+def test_try_unwrap_json_reply_no_reply_key_returns_original() -> None:
+    """JSON object WITHOUT a 'reply' key must be returned unchanged."""
+    import json
+    payload = json.dumps({"answer": "something", "mood": "focused"})
+    result = _try_unwrap_json_reply(payload)
+    assert result == payload
+
+
+def test_try_unwrap_json_reply_malformed_json_returns_original() -> None:
+    """Malformed JSON-like text must be returned unchanged (no exception)."""
+    text = '{"reply": "unclosed'
+    result = _try_unwrap_json_reply(text)
+    assert result == text
+
+
+def test_try_unwrap_json_reply_empty_reply_value_returns_original() -> None:
+    """JSON object with an empty reply string must return the original text."""
+    import json
+    payload = json.dumps({"reply": "   ", "mood": "neutral"})
+    result = _try_unwrap_json_reply(payload)
+    assert result == payload
+
+
+def test_try_unwrap_json_reply_non_string_reply_value_returns_original() -> None:
+    """JSON object where 'reply' is not a string must return the original text."""
+    import json
+    payload = json.dumps({"reply": 42, "mood": "neutral"})
+    result = _try_unwrap_json_reply(payload)
+    assert result == payload
+
+
+def test_try_unwrap_json_reply_strips_whitespace_from_extracted_reply() -> None:
+    """Whitespace around the extracted reply value is stripped."""
+    import json
+    payload = json.dumps({"reply": "  吾在。  ", "mood": "neutral"})
+    result = _try_unwrap_json_reply(payload)
+    assert result == "吾在。"
+
+
+def test_extract_llm_response_unwraps_json_model_output() -> None:
+    """End-to-end: _extract_llm_response unwraps JSON-formatted model output."""
+    import json
+    inner_reply = "吾在。汝有何事？"
+    raw_content = json.dumps({"reply": inner_reply, "mood": "focused", "source": "llm_local"})
+    body = {"message": {"content": raw_content}}
+    client = FakeHTTPClient(ProviderHTTPResponse(status_code=200, json_data=body))
+    provider = make_provider(http_client=client)
+
+    result = provider.generate(
+        LLMRequest(system_prompt="sys", user_message="hi", mode="casual")
+    )
+
+    assert result.error is None
+    assert result.text == inner_reply

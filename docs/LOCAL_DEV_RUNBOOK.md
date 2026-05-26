@@ -3,6 +3,10 @@
 This runbook covers starting the full local stack (Ollama + backend + Electron) for
 development and smoke testing. No external provider call is needed. No real API key is used.
 
+> **Pet Mode manual smoke:** For Pet Window launch, DevTools, mood expression smoke hook,
+> Ollama idle-wake verification, and Windows `.pytest-tmp` workarounds, see
+> `docs/PET_MODE_MANUAL_SMOKE_RUNBOOK.md`.
+
 ---
 
 ## Prerequisites

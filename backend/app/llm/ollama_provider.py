@@ -13,6 +13,7 @@ Safety boundaries (mirrors HTTPRealLLMProvider):
 - No tool execution, no file access.
 """
 
+import json
 import re
 from typing import Any
 
@@ -290,6 +291,7 @@ class OllamaLocalProvider:
         content = _final_answer_text(data)
         if not content:
             return self._safe_response("invalid_response")
+        content = _try_unwrap_json_reply(content)
 
         # Token counts and durations. Ollama returns these as integers when
         # available; keep them as safe aggregate metadata only.
@@ -329,6 +331,36 @@ class OllamaLocalProvider:
             usage=None,
             error=error,
         )
+
+
+
+def _try_unwrap_json_reply(text: str) -> str:
+    """Extract the reply string if the model returned a JSON-formatted response.
+
+    Some instruction-tuned Ollama models (e.g. qwen3:8b) occasionally output
+    their answer as a JSON object even when not asked to, e.g.::
+
+        {"reply": "吾在。", "mood": "focused", "source": "llm_local"}
+
+    This helper detects that case and returns only the ``reply`` value so the
+    Pet Bubble and Full App chat receive clean character-facing text.
+
+    Only unwraps if the text (after stripping whitespace) starts with ``{`` and
+    ends with ``}``, and the parsed object has a non-empty ``"reply"`` string
+    key.  All other cases return the original text unchanged.
+    """
+    stripped = text.strip()
+    if not (stripped.startswith("{") and stripped.endswith("}")):
+        return text
+    try:
+        parsed = json.loads(stripped)
+        if isinstance(parsed, dict):
+            reply = parsed.get("reply")
+            if isinstance(reply, str) and reply.strip():
+                return reply.strip()
+    except (json.JSONDecodeError, ValueError, TypeError):
+        pass
+    return text
 
 
 def _final_answer_text(data: dict[str, Any]) -> str:
