@@ -19,6 +19,26 @@ const PET_MOOD_SMOKE_API_NAME = "__dragonPetMoodExpressionSmoke";
 const PET_THINKING_SOURCE = "pet_thinking";
 const PET_RECENT_REPLY_VISIBLE_MS = 90000;
 const PET_HANDOFF_HINT_MS = 6000;
+// TASK-158: interval between idle presence line rotations
+const PET_IDLE_ROTATION_MS = 60000;
+// TASK-158: short in-character idle presence lines (static local set)
+const PET_IDLE_LINES = Object.freeze([
+  // neutral
+  "\u2026\u2026\u543e\u5728\u9019\u88e1\u3002",
+  "\u6709\u4ec0\u9ebc\u4e8b\u55ce\uff1f",
+  // tsundere / proud
+  "\u54fc\uff0c\u6c5d\u53c8\u5728\u505a\u4ec0\u9ebc\uff1f",
+  "\u543e\u624d\u6c92\u6709\u5728\u7b49\u6c5d\u5462\u3002",
+  // sleepy
+  "\u2026\u2026\u547c\uff0c\u7a0d\u5fae\u6709\u9ede\u77aa\u3002",
+  "\u9019\u9ebc\u5b89\u975c\uff0c\u543e\u90fd\u5feb\u7761\u8457\u4e86\u3002",
+  // focused
+  "\u543e\u5728\u601d\u8003\u4e00\u4e9b\u91cd\u8981\u7684\u4e8b\u3002",
+  "\u5225\u6253\u64fe\u543e\uff0c\u543e\u5728\u60f3\u6771\u897f\u3002",
+  // companion / protective
+  "\u6c5d\u9084\u597d\u55ce\uff1f",
+  "\u6709\u9700\u8981\u7684\u8a71\uff0c\u543e\u5728\u9019\u88e1\u3002",
+]);
 const PET_DETAIL_TEXT_LIMIT = 140;
 const PET_UNSAFE_DETAIL_PATTERN =
   /<think\b|<\/think>|thinking|done thinking|reasoning|traceback|stack trace|api[_-]?key|[{[}\]]/i;
@@ -433,6 +453,8 @@ function createPetPresenceState() {
     handoffActive: false,
     handoffTimer: null,
     timerApi: null,
+    idleRotationTimer: null,  // TASK-158
+    lastIdleLineIdx: -1,       // TASK-158
   };
 }
 
@@ -484,6 +506,57 @@ function schedulePresenceTimer(timerApi, callback, delayMs) {
   return timer;
 }
 
+// TASK-158: pick the next idle line in sequence (cycles, no back-to-back repeat)
+function pickNextIdleLine(presenceState) {
+  const lines = PET_IDLE_LINES;
+  const len = lines.length;
+  if (len === 0) return PET_IDLE_REPLY;
+  const last = typeof presenceState.lastIdleLineIdx === "number"
+    ? presenceState.lastIdleLineIdx
+    : -1;
+  const next = (last + 1) % len;
+  presenceState.lastIdleLineIdx = next;
+  return lines[next];
+}
+
+// TASK-158: true when idle rotation may show a line without overwriting active state
+function isIdleRotationEligible(documentRef, presenceState) {
+  if (presenceState.recentReply) return false;
+  if (presenceState.handoffActive) return false;
+  if (petChatPending) return false;
+  const bubble = documentRef ? documentRef.getElementById("pet-bubble") : null;
+  if (bubble) {
+    const blockedStates = ["llm_local_error", "backend_offline", "timeout",
+                           "thinking", "pending", "handoff"];
+    if (blockedStates.indexOf(bubble.dataset.state) !== -1) return false;
+  }
+  return true;
+}
+
+// TASK-158: cancel any pending idle rotation timer
+function stopIdleRotation(presenceState, timerApi) {
+  clearPresenceTimer(presenceState, "idleRotationTimer", timerApi || globalThis);
+}
+
+// TASK-158: schedule the next idle line rotation tick
+function startIdleRotation(documentRef, presenceState, timerApi) {
+  const api = timerApi || globalThis;
+  stopIdleRotation(presenceState, api);
+  presenceState.idleRotationTimer = schedulePresenceTimer(
+    api,
+    function fireIdleRotation() {
+      presenceState.idleRotationTimer = null;
+      if (!isIdleRotationEligible(documentRef, presenceState)) {
+        return;
+      }
+      const line = pickNextIdleLine(presenceState);
+      setBubbleState(documentRef, "idle_default", { response: line });
+      startIdleRotation(documentRef, presenceState, api);
+    },
+    PET_IDLE_ROTATION_MS
+  );
+}
+
 function setPetIdleDefault(documentRef = document, options = {}) {
   const presenceState = getPetPresenceState(documentRef);
   const timerApi = getPresenceTimerApi(options, presenceState);
@@ -494,7 +567,9 @@ function setPetIdleDefault(documentRef = document, options = {}) {
   presenceState.recentReply = null;
   presenceState.handoffActive = false;
 
-  return setBubbleState(documentRef, "idle_default");
+  const state = setBubbleState(documentRef, "idle_default");
+  startIdleRotation(documentRef, presenceState, timerApi);  // TASK-158
+  return state;
 }
 
 function expireRecentPetReply(documentRef, presenceState, timerApi) {
@@ -503,6 +578,7 @@ function expireRecentPetReply(documentRef, presenceState, timerApi) {
 
   if (!presenceState.handoffActive) {
     setBubbleState(documentRef, "idle_default");
+    startIdleRotation(documentRef, presenceState, timerApi);  // TASK-158
   }
 
   presenceState.timerApi = timerApi;
@@ -516,6 +592,7 @@ function rememberRecentPetReply(documentRef, state, bubbleOptions, options = {})
 
   clearPresenceTimer(presenceState, "recentTimer", timerApi);
   clearPresenceTimer(presenceState, "handoffTimer", timerApi);
+  stopIdleRotation(presenceState, timerApi);  // TASK-158: real reply, pause idle rotation
   presenceState.handoffActive = false;
   presenceState.recentReply = {
     state,
@@ -1363,7 +1440,13 @@ if (typeof module !== "undefined") {
     normalizePetMood,
     sanitizeBubbleDetailText,
     sourceStatusLabel,
+    PET_IDLE_LINES,
+    PET_IDLE_ROTATION_MS,
     PET_THINKING_SOURCE,
+    isIdleRotationEligible,
+    pickNextIdleLine,
+    startIdleRotation,
+    stopIdleRotation,
     stateForChatSource,
     toggleBubbleDetails,
     toggleDetailsFromMenu,

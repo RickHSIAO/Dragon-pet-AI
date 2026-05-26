@@ -2008,6 +2008,241 @@ async function testPetThinkingSourceConstantIsExported() {
 }
 
 
+// ---------------------------------------------------------------------------
+// TASK-158 — Pet Idle Presence Line Rotation
+// ---------------------------------------------------------------------------
+
+function testPetIdleLineConstantsAreExported() {
+  const { PET_IDLE_LINES, PET_IDLE_ROTATION_MS, PET_IDLE_REPLY } = require(petRendererPath);
+  assert.ok(Array.isArray(PET_IDLE_LINES) || (PET_IDLE_LINES && typeof PET_IDLE_LINES[Symbol.iterator] === "function"),
+    "PET_IDLE_LINES must be iterable");
+  const lines = [...PET_IDLE_LINES];
+  assert.ok(lines.length >= 2, "PET_IDLE_LINES must have at least 2 lines");
+  for (const line of lines) {
+    assert.equal(typeof line, "string");
+    assert.ok(line.length > 0, "idle line must be non-empty");
+    assert.doesNotMatch(line, /source:|mood:|\{|\}|llm_local|pet_thinking|debug|provider/i,
+      `idle line must not contain debug tokens: "${line}"`);
+    assert.notEqual(line, PET_IDLE_REPLY,
+      "idle rotation line should differ from PET_IDLE_REPLY");
+  }
+  assert.ok(typeof PET_IDLE_ROTATION_MS === "number" && PET_IDLE_ROTATION_MS >= 30000,
+    "PET_IDLE_ROTATION_MS must be >= 30000 ms");
+}
+
+function testPickNextIdleLineCyclesDeterministically() {
+  const { PET_IDLE_LINES, pickNextIdleLine } = require(petRendererPath);
+  const lines = [...PET_IDLE_LINES];
+  const len = lines.length;
+  const fakeState = { lastIdleLineIdx: -1 };
+  const seen = [];
+  // cycle through more than one full rotation to verify wrap
+  for (let i = 0; i < len * 2; i++) {
+    seen.push(pickNextIdleLine(fakeState));
+  }
+  // first pass should equal the array in order
+  assert.deepEqual(seen.slice(0, len), lines);
+  // second pass should repeat the same order
+  assert.deepEqual(seen.slice(len), lines);
+}
+
+function testIdleRotationFiresAfterInterval() {
+  const { PET_IDLE_LINES, PET_IDLE_ROTATION_MS, PET_IDLE_REPLY, setPetIdleDefault } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetIdleDefault(doc, { timerApi });
+  // Before rotation fires
+  assert.equal(doc.getElementById("pet-bubble-response").textContent, PET_IDLE_REPLY);
+
+  // Fire the rotation
+  timerApi.advance(PET_IDLE_ROTATION_MS);
+  const afterRotation = doc.getElementById("pet-bubble-response").textContent;
+  const idleLines = [...PET_IDLE_LINES];
+  assert.ok(idleLines.includes(afterRotation),
+    `After one rotation, response should be an idle line, got: "${afterRotation}"`);
+  assert.notEqual(afterRotation, PET_IDLE_REPLY,
+    "Rotated idle line should differ from PET_IDLE_REPLY");
+
+  // Second rotation should advance to next line
+  timerApi.advance(PET_IDLE_ROTATION_MS);
+  const afterSecond = doc.getElementById("pet-bubble-response").textContent;
+  assert.ok(idleLines.includes(afterSecond),
+    `After second rotation, response should be an idle line, got: "${afterSecond}"`);
+  assert.notEqual(afterSecond, afterRotation, "consecutive idle lines should differ");
+}
+
+function testIdleRotationSuppressedDuringRecentReply() {
+  const {
+    PET_IDLE_ROTATION_MS,
+    PET_RECENT_REPLY_VISIBLE_MS,
+    PET_IDLE_LINES,
+    PET_IDLE_REPLY,
+    setPetIdleDefault,
+    renderPetSpeechUpdate,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetIdleDefault(doc, { timerApi });
+  renderPetSpeechUpdate(doc, { reply: "Real reply.", source: "llm_local" }, { timerApi });
+
+  // Advance past rotation interval — should NOT show idle line
+  timerApi.advance(PET_IDLE_ROTATION_MS + 1);
+  assert.equal(doc.getElementById("pet-bubble-response").textContent, "Real reply.",
+    "Idle rotation must not overwrite an active recent reply");
+
+  // Advance past recent reply expiry — now idle_default
+  timerApi.advance(PET_RECENT_REPLY_VISIBLE_MS);
+  assert.equal(doc.getElementById("pet-bubble").dataset.state, "idle_default");
+  // After another full rotation interval, idle line should appear
+  timerApi.advance(PET_IDLE_ROTATION_MS);
+  const idleLines = [...PET_IDLE_LINES];
+  const text = doc.getElementById("pet-bubble-response").textContent;
+  assert.ok(idleLines.includes(text),
+    `After recent reply expires, idle rotation should resume; got: "${text}"`);
+}
+
+function testIdleRotationSuppressedDuringThinking() {
+  const {
+    PET_IDLE_ROTATION_MS,
+    PET_IDLE_REPLY,
+    PET_THINKING_SOURCE,
+    setPetIdleDefault,
+    renderPetSpeechUpdate,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetIdleDefault(doc, { timerApi });
+
+  // Mirror thinking state (as Full App does before fetch)
+  renderPetSpeechUpdate(doc,
+    { reply: "\u543e\u3001\u543e\u624d\u4e0d\u662f\u5728\u8a8d\u771f\u601d\u8003\u5462\u2026\u2026", mood: "focused", source: PET_THINKING_SOURCE },
+    { timerApi }
+  );
+  assert.equal(doc.getElementById("pet-bubble").dataset.state, "thinking");
+
+  // Advance past rotation interval — must NOT overwrite thinking bubble
+  timerApi.advance(PET_IDLE_ROTATION_MS + 1);
+  assert.equal(doc.getElementById("pet-bubble").dataset.state, "thinking",
+    "Idle rotation must not overwrite thinking state");
+}
+
+function testIdleRotationSuppressedDuringErrorState() {
+  const {
+    PET_IDLE_ROTATION_MS,
+    setPetIdleDefault,
+    renderPetSpeechUpdate,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetIdleDefault(doc, { timerApi });
+  renderPetSpeechUpdate(doc,
+    { reply: "", mood: "worried", source: "llm_local_error" },
+    { timerApi }
+  );
+  assert.equal(doc.getElementById("pet-bubble").dataset.state, "llm_local_error");
+
+  // Advance past rotation interval — must NOT overwrite error state
+  timerApi.advance(PET_IDLE_ROTATION_MS + 1);
+  assert.equal(doc.getElementById("pet-bubble").dataset.state, "llm_local_error",
+    "Idle rotation must not overwrite an active error state");
+}
+
+function testIdleLineNotRecordedAsRecentReply() {
+  const {
+    PET_IDLE_LINES,
+    PET_IDLE_ROTATION_MS,
+    PET_IDLE_REPLY,
+    setPetIdleDefault,
+    restorePetPresenceAfterShow,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetIdleDefault(doc, { timerApi });
+
+  // Trigger an idle rotation
+  timerApi.advance(PET_IDLE_ROTATION_MS);
+  const idleLines = [...PET_IDLE_LINES];
+  const rotatedText = doc.getElementById("pet-bubble-response").textContent;
+  assert.ok(idleLines.includes(rotatedText),
+    `Expected an idle line after rotation, got: "${rotatedText}"`);
+
+  // Simulate hide/show — restorePetPresenceAfterShow must NOT restore the idle line
+  doc.getElementById("pet-bubble-response").textContent = "stale display text";
+  restorePetPresenceAfterShow(doc, { timerApi });
+  const restoredText = doc.getElementById("pet-bubble-response").textContent;
+  assert.notEqual(restoredText, rotatedText,
+    "restorePetPresenceAfterShow must not restore a stale idle rotation line");
+  assert.equal(restoredText, PET_IDLE_REPLY,
+    `restore must fall back to PET_IDLE_REPLY, got: "${restoredText}"`);
+}
+
+function testIdleRotationBubbleIsClean() {
+  const {
+    PET_IDLE_LINES,
+    PET_IDLE_ROTATION_MS,
+    setPetIdleDefault,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetIdleDefault(doc, { timerApi });
+  timerApi.advance(PET_IDLE_ROTATION_MS);
+
+  const text = doc.getElementById("pet-bubble-response").textContent;
+  assert.doesNotMatch(text, /source:|mood:|\{|\}|llm_local|pet_thinking|debug|provider/i,
+    `Idle rotation bubble must not contain debug tokens: "${text}"`);
+  // state must still be idle_default
+  assert.equal(doc.getElementById("pet-bubble").dataset.state, "idle_default",
+    "Bubble state must stay idle_default during rotation");
+  // details must stay hidden (no spurious details)
+  assert.equal(doc.getElementById("pet-bubble-details").hidden, true,
+    "Details must stay hidden during idle rotation");
+}
+
+function testIdleRotationDoesNotAffectDetailsDisclosure() {
+  const {
+    PET_IDLE_LINES,
+    PET_IDLE_ROTATION_MS,
+    setPetIdleDefault,
+    renderPetSpeechUpdate,
+    toggleBubbleDetails,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  renderPetSpeechUpdate(doc, {
+    reply: "Test reply.",
+    mood: "happy",
+    source: "llm_local",
+    status: "provider_status",
+    helper: "some helper text",
+  }, { timerApi });
+
+  toggleBubbleDetails(doc);
+  assert.equal(doc.getElementById("pet-bubble-details").hidden, false,
+    "Details should be open after toggle");
+
+  // Simulate recent reply expiry returning to idle, then rotation
+  // (details must not be affected by idle rotation because idle state shows no details)
+  // Start fresh idle state
+  setPetIdleDefault(doc, { timerApi });
+  timerApi.advance(PET_IDLE_ROTATION_MS);
+
+  const idleLines = [...PET_IDLE_LINES];
+  const text = doc.getElementById("pet-bubble-response").textContent;
+  assert.ok(idleLines.includes(text), `Expected idle line after rotation, got "${text}"`);
+  assert.equal(doc.getElementById("pet-bubble-details").hidden, true,
+    "Details panel must be hidden during idle rotation");
+  assert.equal(doc.getElementById("pet-bubble").dataset.detailsOpen, "false",
+    "Details must not be open during idle rotation");
+}
+
+
 async function run() {
   const tests = [
     testPetFilesExist,
@@ -2060,6 +2295,16 @@ async function run() {
     testPetThinkingRenderShowsReplyInBubble,
     testPetThinkingRenderBubbleIsClean,
     testPetThinkingSourceConstantIsExported,
+    // TASK-158
+    testPetIdleLineConstantsAreExported,
+    testPickNextIdleLineCyclesDeterministically,
+    testIdleRotationFiresAfterInterval,
+    testIdleRotationSuppressedDuringRecentReply,
+    testIdleRotationSuppressedDuringThinking,
+    testIdleRotationSuppressedDuringErrorState,
+    testIdleLineNotRecordedAsRecentReply,
+    testIdleRotationBubbleIsClean,
+    testIdleRotationDoesNotAffectDetailsDisclosure,
   ];
 
   for (const test of tests) {

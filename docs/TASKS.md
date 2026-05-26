@@ -8332,6 +8332,173 @@ Validation:
 
 ---
 
+## TASK-158 - Pet Idle Presence Line Rotation Polish Design
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-26
+**Type:** Frontend — pet-renderer.js + pet-renderer-smoke.js
+
+Goal:
+
+Design a small frontend-only Pet idle presence polish that rotates short
+character-facing idle lines when the Pet is not actively chatting. The Pet
+should feel more alive during quiet periods without becoming noisy or
+interfering with chat, thinking, or error states.
+
+Context:
+
+- TASK-148 through TASK-157 are DONE - PASS.
+- Pet Window supports position persistence, clean bubble speech, details
+  disclosure, mood expression mapping, richer chat mood selection, and a
+  transient thinking bubble before backend replies.
+- The existing `idle_default` state shows a single static line. Rotating
+  short idle presence lines is the next small polish step.
+
+Expected behavior:
+
+1. When the Pet is in `idle_default` state (no recent reply, no thinking
+   state, no pending chat, no active error state), it may periodically show
+   a short idle presence line chosen from a static local set.
+2. Idle lines are character-facing and clean — never contain source, mood,
+   debug output, details, thinking markers, raw JSON, provider text, or
+   stack traces.
+3. Idle rotation does not overwrite an active chat reply (i.e. if a recent
+   reply is still within the `PET_RECENT_REPLY_VISIBLE_MS` window, idle
+   rotation is suppressed).
+4. Idle rotation does not overwrite a thinking bubble (`"thinking"` bubble
+   state must be respected).
+5. Idle rotation does not overwrite an active error state
+   (`"llm_local_error"`, `"backend_offline"`, `"timeout"`).
+6. An idle line must not be recorded as a recent reply. If it were, stale
+   idle text could be incorrectly restored after the Pet Window is hidden
+   and shown again.
+7. Rotation is slow and non-annoying (suggested interval: 45–90 seconds).
+8. Rotation pauses while a chat request is in flight.
+9. Unknown or edge states fall back safely to the existing `PET_IDLE_REPLY`
+   default.
+10. Implementation is frontend-only; idle lines are a static local array.
+
+Suggested idle line categories (Christina / tsundere tone):
+
+- neutral idle:    "……吾在這裡。"
+                   "有什麼事嗎？"
+- proud/tsundere:  "哼，汝又在做什麼？"
+                   "吾才沒有在等汝呢。"
+- sleepy idle:     "……呼，稍微有點睏。"
+                   "這麼安靜，吾都快睡著了。"
+- focused idle:    "吾在思考一些重要的事。"
+                   "別打擾吾，吾在想東西。"
+- companion:       "汝還好嗎？"
+                   "有需要的話，吾在這裡。"
+
+Acceptance criteria:
+
+- [x] Pet starts with safe idle default (`PET_IDLE_REPLY`) on init.
+- [x] After idle rotation interval, a new idle line from the set is shown.
+- [x] Idle line chosen does not duplicate the immediately preceding line.
+- [x] Sending a chat message immediately replaces idle with thinking bubble.
+- [x] Successful reply replaces thinking; idle rotation suppressed until
+      recent reply window expires.
+- [x] Error state (`llm_local_error`, `backend_offline`, `timeout`) is not
+      overwritten by idle rotation.
+- [x] Hide / show Pet Window does not restore an old idle rotation line
+      (idle lines are not persisted as recent reply).
+- [x] TASK-157 thinking state behavior does not regress.
+- [x] TASK-153 mood expression mapping does not regress.
+- [x] TASK-152 details disclosure does not regress.
+- [x] All existing smoke tests (50 pet-renderer + renderer-chat + pet-window)
+      continue to pass.
+- [x] New smoke tests added for: rotation triggers idle line, rotation
+      suppressed during recent reply, rotation suppressed during error state,
+      idle line not persisted as recent reply.
+
+Manual Windows smoke expectations:
+
+1. Pet starts with safe idle default — no rotation-line text on cold open.
+2. After idle interval (can be shortened in dev), a clean idle line appears
+   in Pet Bubble; text is in-character only.
+3. Sending a chat message immediately replaces idle with thinking bubble.
+4. Successful reply replaces thinking; idle does not fire again until recent
+   reply expires.
+5. Error state (e.g. kill backend mid-request) is not overwritten by an idle
+   line.
+6. Hide Pet Window, wait for idle to have fired, show Pet Window again —
+   idle rotation text does not restore; Pet returns to idle_default or most
+   recent real reply.
+7. TASK-157 thinking bubble still appears on send and is replaced by reply.
+8. TASK-153 expression mapping still tracks mood correctly.
+9. TASK-152 details disclosure still opens/closes correctly.
+
+Non-goals:
+
+- No backend calls or LLM-generated idle text.
+- No notification system.
+- No voice or animation.
+- No new image assets.
+- No provider or schema changes.
+- No Pet Window layout redesign.
+- No IPC changes.
+
+Files expected to change during implementation:
+
+- `apps/desktop/src/pet/pet-renderer.js`
+- `apps/desktop/scripts/pet-renderer-smoke.js`
+- `docs/TASKS.md`
+- `docs/ROADMAP.md`
+- `docs/PET_MODE_MANUAL_SMOKE_RUNBOOK.md` (if new manual step needed)
+
+Implementation record:
+
+New constants: `PET_IDLE_ROTATION_MS = 60000` and `PET_IDLE_LINES` (10 in-character
+lines: neutral, tsundere/proud, sleepy, focused, companion categories).
+
+New helpers: `pickNextIdleLine(presenceState)` — deterministic sequential cycle;
+`isIdleRotationEligible(documentRef, presenceState)` — returns false if recent reply,
+handoff, petChatPending, or bubble is in a blocked state (error/thinking/etc.);
+`startIdleRotation` — cancels existing timer, schedules next tick;
+`stopIdleRotation` — cancels timer.
+
+State additions to `createPetPresenceState()`: `idleRotationTimer: null`,
+`lastIdleLineIdx: -1`.
+
+Call sites: `setPetIdleDefault` starts rotation after setting idle bubble;
+`expireRecentPetReply` starts rotation when recent reply expires;
+`rememberRecentPetReply` stops rotation when a real reply arrives.
+
+Smoke tests added: 9 new tests in `pet-renderer-smoke.js` (total: 59 checks):
+constants exported, sequential cycling, rotation fires after interval, suppressed
+during recent reply / thinking / error, idle line not recorded as recent reply,
+bubble stays clean, details disclosure unaffected.
+
+Changed files:
+- `apps/desktop/src/pet/pet-renderer.js`
+- `apps/desktop/scripts/pet-renderer-smoke.js`
+- `docs/TASKS.md`
+- `docs/ROADMAP.md`
+
+Windows manual smoke results (2026-05-26):
+
+- Pet starts with safe idle default — PASS
+- After idle interval, clean character-facing idle line appears — PASS
+- Next rotation shows a different line (sequential cycling) — PASS
+- Idle rotation only happens in eligible idle_default state — PASS
+- Idle rotation suppressed during active chat / thinking state — PASS
+- Idle rotation suppressed during recent reply window — PASS
+- Idle rotation suppressed during error state — PASS
+- Sending chat message immediately replaces idle with TASK-157 thinking bubble — PASS
+- Successful reply replaces thinking; idle suppressed until recent reply expires — PASS
+- Hide/Show Pet does not restore stale idle rotation text — PASS
+- Idle lines are not remembered as recent reply — PASS
+- Pet Bubble never shows source, mood, debug, details, thinking markers, raw JSON,
+  provider text, stack traces, or diagnostics — PASS
+- TASK-157 thinking behavior did not regress — PASS
+- TASK-153 mood expression mapping did not regress — PASS
+- TASK-152 details disclosure did not regress — PASS
+
+Verdict: DONE - WINDOWS MANUAL SMOKE PASS
+
+---
+
 ## TASK-157 - Pet Bubble Thinking / Typing State
 
 **Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
