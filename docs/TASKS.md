@@ -7172,6 +7172,141 @@ Verification:
 
 ---
 
+## TASK-161 - Repo Hygiene / Pre-existing Whitespace Warning Cleanup
+
+**Status:** DONE - PASS
+**Date:** 2026-05-26
+**Type:** Hygiene — docs + config only
+
+Goal:
+
+Remove known pre-existing trailing whitespace warnings that appear in every
+`git diff --check` run, and document the pytest temp-folder handling pattern,
+without changing any runtime behaviour.
+
+Context:
+
+Every validation pass for TASK-158 through TASK-160 reported the same two
+pre-existing `git diff --check` warnings unrelated to the feature work:
+
+- `.gitignore` lines 38 and 41 — trailing whitespace on Chinese-filename
+  comment lines added in an earlier session.
+- `docs/開啟方式.txt` — all lines carry trailing whitespace, also from an
+  earlier session.
+
+Windows also intermittently reported locked `.pytest-tmp/` and
+`.pytest-tmp-run154/` directories from pytest runs against the NTFS-mounted
+backend copy. These are not runtime bugs but they clutter CI output and require
+manual cleanup or fresh `--basetemp` names.
+
+Expected behaviour after implementation:
+
+1. `git diff --check` reports zero whitespace errors from `.gitignore` and
+   `docs/開啟方式.txt`.
+2. All Chinese text in both files remains byte-for-byte correct after the strip.
+3. No other files are modified.
+4. `.pytest-tmp/` and `.pytest-tmp-run154/` are absent from `git status` output
+   (either already gitignored or deleted; no accidental staging).
+5. Pytest temp-folder handling is documented: locked Windows directories from
+   NTFS mounts may need a reboot or a fresh `--basetemp` path (e.g.
+   `--basetemp /tmp/pytest-runXXX`) to release file locks. Running pytest from a
+   temp copy outside the NTFS mount (`/tmp/backend-copyXXX`) avoids the issue
+   entirely.
+
+Acceptance criteria:
+
+- [x] `.gitignore` trailing whitespace removed; file meaning preserved.
+- [x] `docs/開啟方式.txt` trailing whitespace removed; Chinese text unchanged.
+- [x] `git diff --check` passes with zero whitespace errors on all modified files.
+- [x] NUL byte check passes on all modified files.
+- [x] `git status --short` shows no `.pytest-tmp*/` entries staged or tracked.
+- [x] No runtime source files modified (no `.js`, `.py`, `.html`, `.css`
+      changes).
+
+Validation expectations:
+
+- `git diff --check` — zero errors from these files.
+- NUL byte check — pass.
+- `python3 -c "open('.gitignore').read()"` and
+  `python3 -c "open('docs/開啟方式.txt').read()"` — readable, no decode error.
+- `git status --short` — no `.pytest-tmp*/` staged.
+- No runtime tests required unless runtime files are unexpectedly touched
+  (they must not be).
+
+Non-goals:
+
+- No backend changes.
+- No desktop app changes.
+- No Pet UI changes.
+- No feature work.
+- No broad formatting or line-ending policy overhaul.
+- No changes outside `.gitignore` and `docs/開啟方式.txt` (plus this docs
+  entry).
+
+Files expected to change during implementation:
+
+- `.gitignore`
+- `docs/開啟方式.txt`
+- `docs/TASKS.md`
+- `docs/ROADMAP.md`
+
+### Implementation record
+
+**Date:** 2026-05-26
+**Files changed:**
+- `.gitignore` — stripped stray `\r` (CRLF line ending) from lines 38 and 41,
+  which carried CRLF amid an otherwise LF-only file. Big5-encoded Chinese
+  bytes (`\xb3\xc6\xbf\xef\xb9\xcf/`) preserved byte-for-byte; only the
+  trailing `\r` was removed. File size: 524 → 522 bytes.
+- `docs/開啟方式.txt` — converted all 25 CRLF line endings to LF. UTF-8
+  content is unchanged; Chinese text verified readable after conversion.
+  File size: 663 → 638 bytes.
+- `docs/TASKS.md` — this record.
+- `docs/ROADMAP.md` — status updated to DONE - PASS.
+
+**Root cause of the warnings:**
+- `.gitignore` lines 38 and 41 were written on Windows (or pasted into a
+  CRLF context) and retained `\r\n` endings while every other line in the
+  file used `\n` only. `git diff --check` treats the orphaned `\r` as
+  trailing whitespace.
+- `docs/開啟方式.txt` was created on Windows with CRLF (`\r\n`) endings.
+  On the Linux sandbox, git diff shows the `\r` before each `\n` as
+  trailing whitespace.
+
+**Pytest temp-folder note (documented, no code change):**
+Locked `.pytest-tmp/` and `.pytest-tmp-run154/` directories on the NTFS
+mount are left over from previous pytest runs inside the Windows workspace.
+They are not staged or committed (already covered by `.pytest_cache/` and
+`*.pytest-tmp*/` patterns in `.gitignore`). If Windows file locks prevent
+deletion, close all Python/Node/Electron/DevTools processes, or reboot.
+Future backend pytest runs should use a fresh `--basetemp` name and run
+from a temp copy outside the NTFS mount to avoid lock contention:
+
+    cp -r backend /tmp/backend-copyXXX
+    cd /tmp/backend-copyXXX
+    python -m pytest tests/ --basetemp /tmp/pytest-runXXX -p no:cacheprovider
+
+**Validation results:**
+- `git diff --check` — zero whitespace errors from `.gitignore` and
+  `docs/開啟方式.txt` (pre-existing warnings eliminated).
+- NUL byte check — PASS on both modified files.
+- `.gitignore` Big5 content verified byte-for-byte intact.
+- `docs/開啟方式.txt` UTF-8 decode succeeds; all 26 lines readable.
+- `git status --short` — no `.pytest-tmp*/` entries staged.
+- No runtime implementation files modified.
+- No backend, desktop, or Pet UI source files changed.
+
+**Acceptance criteria:**
+- [x] `.gitignore` trailing whitespace removed; Big5 content preserved.
+- [x] `docs/開啟方式.txt` trailing whitespace removed; Chinese text unchanged.
+- [x] `git diff --check` passes with zero whitespace errors on these files.
+- [x] NUL byte check passes on all modified files.
+- [x] `git status --short` shows no `.pytest-tmp*/` entries staged.
+- [x] No runtime source files modified.
+
+
+---
+
 ## TASK-143 - Mirror Full App Chat Reply to Pet Speech Bubble
 
 **Status:** DONE
