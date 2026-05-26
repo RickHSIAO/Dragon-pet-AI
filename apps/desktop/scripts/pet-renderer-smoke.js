@@ -2438,6 +2438,299 @@ function testIdleConsecutiveRotationsNeverRepeatLine() {
 }
 
 
+// ── TASK-160: Quiet Mode / Idle Presence Toggle ──────────────────────────────
+
+function testQuietModeApiIsExported() {
+  const { getPetQuietMode, setPetQuietMode, PET_IDLE_COOLDOWN_MS } = require(petRendererPath);
+  assert.equal(typeof getPetQuietMode, "function", "getPetQuietMode must be exported");
+  assert.equal(typeof setPetQuietMode, "function", "setPetQuietMode must be exported");
+  assert.ok(
+    typeof PET_IDLE_COOLDOWN_MS === "number" && PET_IDLE_COOLDOWN_MS >= 30000,
+    "PET_IDLE_COOLDOWN_MS must be exported and ≥ 30000"
+  );
+}
+
+function testQuietModeDefaultsOff() {
+  const { getPetQuietMode, setPetIdleDefault } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+  setPetIdleDefault(doc, { timerApi });
+  assert.equal(getPetQuietMode(doc), false, "Quiet Mode must default to OFF after setPetIdleDefault");
+}
+
+function testQuietModeOnSuppressesIdleRotation() {
+  const {
+    PET_IDLE_LAUNCH_QUIET_MS,
+    PET_IDLE_ROTATION_MS,
+    PET_IDLE_REPLY,
+    getPetQuietMode,
+    setPetQuietMode,
+    setPetIdleDefault,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetIdleDefault(doc, { timerApi });
+  setPetQuietMode(doc, true, timerApi);
+  assert.equal(getPetQuietMode(doc), true, "Quiet Mode must be ON after setPetQuietMode(true)");
+
+  // Advance well past launch quiet + several rotation intervals
+  timerApi.advance(PET_IDLE_LAUNCH_QUIET_MS + PET_IDLE_ROTATION_MS * 5);
+
+  const bubble = doc.getElementById("pet-bubble");
+  assert.equal(bubble.dataset.state, "collapsed", "Bubble must be collapsed while Quiet Mode is ON");  // TASK-160 fix
+  assert.equal(bubble.hidden, true, "Bubble must be hidden while Quiet Mode is ON");  // TASK-160 fix
+}
+
+function testQuietModeOnCancelsExistingTimer() {
+  const {
+    PET_IDLE_LAUNCH_QUIET_MS,
+    PET_IDLE_ROTATION_MS,
+    PET_IDLE_REPLY,
+    setPetQuietMode,
+    setPetIdleDefault,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetIdleDefault(doc, { timerApi });
+  // Advance to just before the first tick fires (timer is pending)
+  timerApi.advance(PET_IDLE_LAUNCH_QUIET_MS - 1);
+  assert.equal(
+    doc.getElementById("pet-bubble-response").textContent,
+    PET_IDLE_REPLY,
+    "No idle line yet (timer still pending)"
+  );
+
+  // Turn Quiet Mode ON — should cancel the pending timer
+  setPetQuietMode(doc, true, timerApi);
+
+  // Advance far past where the tick would have fired
+  timerApi.advance(PET_IDLE_ROTATION_MS * 10);
+  const bubble2 = doc.getElementById("pet-bubble");
+  assert.equal(bubble2.dataset.state, "collapsed", "Bubble must be collapsed after Quiet Mode ON cancels timer");  // TASK-160 fix
+  assert.equal(bubble2.hidden, true, "Bubble must be hidden after Quiet Mode ON cancels timer");  // TASK-160 fix
+}
+
+function testQuietModeOffResumesRotationAfterCooldown() {
+  const {
+    PET_IDLE_LAUNCH_QUIET_MS,
+    PET_IDLE_COOLDOWN_MS,
+    PET_IDLE_ROTATION_MS,
+    PET_IDLE_LINES,
+    PET_IDLE_REPLY,
+    getPetQuietMode,
+    setPetQuietMode,
+    setPetIdleDefault,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetIdleDefault(doc, { timerApi });
+  // Let first idle line fire
+  timerApi.advance(PET_IDLE_LAUNCH_QUIET_MS);
+  const firstLine = doc.getElementById("pet-bubble-response").textContent;
+  assert.ok([...PET_IDLE_LINES].includes(firstLine), "First idle line must be from PET_IDLE_LINES");
+
+  // Turn Quiet Mode ON — stops next timer and collapses idle bubble (TASK-160 fix)
+  setPetQuietMode(doc, true, timerApi);
+  timerApi.advance(PET_IDLE_ROTATION_MS * 5);
+  const bubbleR = doc.getElementById("pet-bubble");
+  assert.equal(bubbleR.dataset.state, "collapsed", "Bubble must be collapsed while Quiet Mode is ON");  // TASK-160 fix
+  assert.equal(bubbleR.hidden, true, "Bubble must be hidden while Quiet Mode is ON");  // TASK-160 fix
+
+  // Turn Quiet Mode OFF — restores idle_default and restarts rotation with cooldown delay (TASK-160 fix)
+  setPetQuietMode(doc, false, timerApi);
+  assert.equal(getPetQuietMode(doc), false, "Quiet Mode must be OFF after setPetQuietMode(false)");
+  assert.equal(
+    doc.getElementById("pet-bubble-response").textContent,
+    PET_IDLE_REPLY,
+    "Quiet Mode OFF must restore idle_default static text"  // TASK-160 fix
+  );
+
+  // Just before cooldown expires — no rotation yet, still showing idle_default
+  timerApi.advance(PET_IDLE_COOLDOWN_MS - 1);
+  assert.equal(
+    doc.getElementById("pet-bubble-response").textContent,
+    PET_IDLE_REPLY,
+    "Rotation must not fire before cooldown expires after Quiet Mode OFF"  // TASK-160 fix
+  );
+
+  // Exactly at cooldown expiry — rotation fires
+  timerApi.advance(1);
+  const newLine = doc.getElementById("pet-bubble-response").textContent;
+  assert.ok(
+    [...PET_IDLE_LINES].includes(newLine),
+    `Rotation must resume after cooldown, got: "${newLine}"`
+  );
+  assert.notEqual(newLine, firstLine, "Rotation must advance to a new idle line");
+}
+
+function testQuietModeOnDoesNotSuppressThinkingBubble() {
+  const {
+    PET_THINKING_SOURCE,
+    getPetQuietMode,
+    setPetQuietMode,
+    setPetIdleDefault,
+    renderPetSpeechUpdate,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetIdleDefault(doc, { timerApi });
+  setPetQuietMode(doc, true, timerApi);
+  assert.equal(getPetQuietMode(doc), true, "Quiet Mode must be ON");
+
+  renderPetSpeechUpdate(
+    doc,
+    { reply: "思考中…", mood: "focused", source: PET_THINKING_SOURCE },
+    { timerApi }
+  );
+
+  const bubble = doc.getElementById("pet-bubble");
+  assert.equal(
+    bubble.dataset.state,
+    "thinking",
+    "Thinking bubble must still appear with Quiet Mode ON"
+  );
+}
+
+function testQuietModeOnDoesNotSuppressFinalReply() {
+  const {
+    getPetQuietMode,
+    setPetQuietMode,
+    setPetIdleDefault,
+    renderPetSpeechUpdate,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetIdleDefault(doc, { timerApi });
+  setPetQuietMode(doc, true, timerApi);
+  assert.equal(getPetQuietMode(doc), true, "Quiet Mode must be ON");
+
+  const replyText = "好，我知道了。";
+  renderPetSpeechUpdate(
+    doc,
+    { reply: replyText, mood: "neutral", source: "llm_local" },
+    { timerApi }
+  );
+
+  const bubble = doc.getElementById("pet-bubble");
+  const responseEl = doc.getElementById("pet-bubble-response");
+  assert.ok(
+    bubble.dataset.state === "speaking" || bubble.dataset.state === "success",
+    `Final reply must still show while Quiet Mode is ON, got state: "${bubble.dataset.state}"`
+  );
+  assert.equal(
+    responseEl.textContent,
+    replyText,
+    "Final reply text must appear in bubble with Quiet Mode ON"
+  );
+}
+
+function testQuietModeOnDoesNotSuppressErrorFallback() {
+  const {
+    getPetQuietMode,
+    setPetQuietMode,
+    setPetIdleDefault,
+    setBubbleState,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetIdleDefault(doc, { timerApi });
+  setPetQuietMode(doc, true, timerApi);
+  assert.equal(getPetQuietMode(doc), true, "Quiet Mode must be ON");
+
+  setBubbleState(doc, "llm_local_error");
+
+  const bubble = doc.getElementById("pet-bubble");
+  assert.equal(
+    bubble.dataset.state,
+    "llm_local_error",
+    "Error fallback must still appear with Quiet Mode ON"
+  );
+}
+
+function testQuietModeUnknownValueFallsBackToOff() {
+  const { getPetQuietMode, setPetQuietMode, setPetIdleDefault } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+  setPetIdleDefault(doc, { timerApi });
+
+  for (const badValue of [null, undefined, 0, 1, "yes", "true", [], {}]) {
+    setPetQuietMode(doc, badValue, timerApi);
+    assert.equal(
+      getPetQuietMode(doc),
+      false,
+      `Quiet Mode must fall back to OFF for non-true value: ${JSON.stringify(badValue)}`
+    );
+  }
+}
+
+function testQuietModeOnCollapsesIdleBubble() {
+  // TASK-160 fix: Quiet Mode ON must collapse the idle bubble, not show fixed idle text
+  const { getPetQuietMode, setPetQuietMode, setPetIdleDefault, PET_IDLE_REPLY } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetIdleDefault(doc, { timerApi });
+  const bubble = doc.getElementById("pet-bubble");
+  assert.equal(bubble.dataset.state, "idle_default", "Starts in idle_default");
+  assert.equal(bubble.hidden, false, "Bubble visible in idle_default");
+  assert.equal(
+    doc.getElementById("pet-bubble-response").textContent,
+    PET_IDLE_REPLY,
+    "idle_default shows PET_IDLE_REPLY text"
+  );
+
+  // Turn Quiet Mode ON — must collapse the bubble
+  setPetQuietMode(doc, true, timerApi);
+  assert.equal(getPetQuietMode(doc), true, "Quiet Mode is ON");
+  assert.equal(bubble.dataset.state, "collapsed", "Quiet Mode ON must collapse idle bubble");
+  assert.equal(bubble.hidden, true, "Bubble must be hidden with Quiet Mode ON");
+
+  // Turn Quiet Mode OFF — must restore idle_default
+  setPetQuietMode(doc, false, timerApi);
+  assert.equal(getPetQuietMode(doc), false, "Quiet Mode is OFF");
+  assert.equal(bubble.dataset.state, "idle_default", "Quiet Mode OFF must restore idle_default");
+  assert.equal(bubble.hidden, false, "Bubble must be visible again with Quiet Mode OFF");
+  assert.equal(
+    doc.getElementById("pet-bubble-response").textContent,
+    PET_IDLE_REPLY,
+    "Quiet Mode OFF must restore PET_IDLE_REPLY text"
+  );
+}
+
+function testQuietModeHideShowWithQuietOnNoRotation() {
+  const {
+    PET_IDLE_LAUNCH_QUIET_MS,
+    PET_IDLE_COOLDOWN_MS,
+    getPetQuietMode,
+    setPetQuietMode,
+    setPetIdleDefault,
+    restorePetPresenceAfterShow,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetIdleDefault(doc, { timerApi });
+  setPetQuietMode(doc, true, timerApi);
+  assert.equal(getPetQuietMode(doc), true, "Quiet Mode must be ON");
+
+  // Simulate hide/show: restorePetPresenceAfterShow must keep bubble collapsed when quiet ON
+  restorePetPresenceAfterShow(doc, { timerApi });
+
+  // Advance far past cooldown and rotation intervals
+  timerApi.advance(PET_IDLE_LAUNCH_QUIET_MS + PET_IDLE_COOLDOWN_MS + 1);
+
+  const bubble = doc.getElementById("pet-bubble");
+  assert.equal(bubble.dataset.state, "collapsed", "Bubble must stay collapsed after show/restore with Quiet Mode ON");  // TASK-160 fix
+  assert.equal(bubble.hidden, true, "Bubble must stay hidden after show/restore with Quiet Mode ON");  // TASK-160 fix
+}
+
+
 async function run() {
   const tests = [
     testPetFilesExist,
@@ -2508,6 +2801,18 @@ async function run() {
     testIdleCooldownAllowsRotationAfterExpiry,
     testIdleRotationResumesAfterRestoreWithCooldown,
     testIdleConsecutiveRotationsNeverRepeatLine,
+    // TASK-160
+    testQuietModeApiIsExported,
+    testQuietModeDefaultsOff,
+    testQuietModeOnSuppressesIdleRotation,
+    testQuietModeOnCancelsExistingTimer,
+    testQuietModeOffResumesRotationAfterCooldown,
+    testQuietModeOnDoesNotSuppressThinkingBubble,
+    testQuietModeOnDoesNotSuppressFinalReply,
+    testQuietModeOnDoesNotSuppressErrorFallback,
+    testQuietModeUnknownValueFallsBackToOff,
+    testQuietModeOnCollapsesIdleBubble,
+    testQuietModeHideShowWithQuietOnNoRotation,
   ];
 
   for (const test of tests) {

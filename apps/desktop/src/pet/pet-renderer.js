@@ -460,6 +460,7 @@ function createPetPresenceState() {
     idleRotationTimer: null,  // TASK-158
     lastIdleLineIdx: -1,       // TASK-158
     idleCooldownUntil: 0,      // TASK-159
+    quietMode: false,           // TASK-160
   };
 }
 
@@ -517,6 +518,62 @@ function setIdleCooldown(presenceState, timerApi, durationMs) {
   presenceState.idleCooldownUntil = now + durationMs;
 }
 
+// TASK-160: read quiet mode flag safely (unknown/invalid → false)
+function getQuietMode(presenceState) {
+  return presenceState.quietMode === true;
+}
+
+// TASK-160: set quiet mode — true suppresses idle rotation, false resumes it.
+// Any non-true value normalises to false (fail-quiet/safe on unknown input).
+function setQuietMode(documentRef, presenceState, value, timerApi) {
+  const api = timerApi || globalThis;
+  const nextMode = value === true;  // TASK-160: normalise — non-true → false
+  presenceState.quietMode = nextMode;
+  const bubble = documentRef ? documentRef.getElementById("pet-bubble") : null;
+  const currentState = bubble ? bubble.dataset.state : null;
+  if (nextMode) {
+    // turning ON: cancel rotation and collapse idle bubble (TASK-160 fix)
+    stopIdleRotation(presenceState, api);
+    if (currentState === "idle_default") {
+      setBubbleState(documentRef, "collapsed");
+    }
+  } else {
+    // turning OFF: restore idle and restart rotation with cooldown (TASK-160 fix)
+    if (currentState === "collapsed" || currentState === "idle_default") {
+      setBubbleState(documentRef, "idle_default");
+      setIdleCooldown(presenceState, api, PET_IDLE_COOLDOWN_MS);
+      startIdleRotation(documentRef, presenceState, api);
+    }
+    // non-idle states (speaking/thinking/error): rotation resumes naturally on state clear
+  }
+  // update menu button label/state if present
+  const menuBtn = documentRef ? documentRef.getElementById("pet-menu-quiet-mode") : null;
+  if (menuBtn) {
+    menuBtn.setAttribute("aria-pressed", nextMode ? "true" : "false");
+    setText(menuBtn, nextMode ? "Quiet Mode: On" : "Quiet Mode: Off");
+  }
+}
+
+// TASK-160: document-level quiet mode reader (for tests and menu rendering)
+function getPetQuietMode(documentRef) {
+  return getQuietMode(getPetPresenceState(documentRef));
+}
+
+// TASK-160: document-level quiet mode setter
+function setPetQuietMode(documentRef, value, timerApi) {
+  const presenceState = getPetPresenceState(documentRef);
+  const api = timerApi || getPresenceTimerApi({}, presenceState);
+  setQuietMode(documentRef, presenceState, value, api);
+}
+
+// TASK-160 fix: when quiet mode ON, collapse bubble instead of showing idle text
+function setIdleQuietBubble(documentRef, presenceState) {
+  if (presenceState.quietMode === true) {
+    return setBubbleState(documentRef, "collapsed");
+  }
+  return setBubbleState(documentRef, "idle_default");
+}
+
 // TASK-158: pick the next idle line in sequence (cycles, no back-to-back repeat)
 function pickNextIdleLine(presenceState) {
   const lines = PET_IDLE_LINES;
@@ -554,6 +611,7 @@ function stopIdleRotation(presenceState, timerApi) {
 function startIdleRotation(documentRef, presenceState, timerApi) {
   const api = timerApi || globalThis;
   stopIdleRotation(presenceState, api);
+  if (presenceState.quietMode === true) return;  // TASK-160: quiet mode suppresses rotation
   const now = getPresenceNow(api);
   const cooldownUntil = typeof presenceState.idleCooldownUntil === "number"
     ? presenceState.idleCooldownUntil : 0;
@@ -585,7 +643,7 @@ function setPetIdleDefault(documentRef = document, options = {}) {
   presenceState.handoffActive = false;
 
   setIdleCooldown(presenceState, timerApi, PET_IDLE_LAUNCH_QUIET_MS);  // TASK-159: launch quiet period
-  const state = setBubbleState(documentRef, "idle_default");
+  const state = setIdleQuietBubble(documentRef, presenceState);  // TASK-160 fix
   startIdleRotation(documentRef, presenceState, timerApi);  // TASK-158
   return state;
 }
@@ -595,7 +653,7 @@ function expireRecentPetReply(documentRef, presenceState, timerApi) {
   presenceState.recentReply = null;
 
   if (!presenceState.handoffActive) {
-    setBubbleState(documentRef, "idle_default");
+    setIdleQuietBubble(documentRef, presenceState);  // TASK-160 fix
     setIdleCooldown(presenceState, timerApi, PET_IDLE_COOLDOWN_MS);  // TASK-159: post-activity cooldown
     startIdleRotation(documentRef, presenceState, timerApi);  // TASK-158
   }
@@ -638,7 +696,7 @@ function restorePetPresence(documentRef = document, options = {}) {
 
   clearPresenceTimer(presenceState, "recentTimer", timerApi);
   presenceState.recentReply = null;
-  const idleResult = setBubbleState(documentRef, "idle_default");
+  const idleResult = setIdleQuietBubble(documentRef, presenceState);  // TASK-160 fix
   setIdleCooldown(presenceState, timerApi, PET_IDLE_COOLDOWN_MS);  // TASK-159: cooldown after show/restore
   startIdleRotation(documentRef, presenceState, timerApi);  // TASK-159
   return idleResult;
@@ -1275,6 +1333,7 @@ function initializePetMode(documentRef = document) {
   const menuToggleDetails = documentRef.getElementById("pet-menu-toggle-details");
   const menuResetPosition = documentRef.getElementById("pet-menu-reset-position");
   const menuHideWindow = documentRef.getElementById("pet-menu-hide-window");
+  const menuQuietMode = documentRef.getElementById("pet-menu-quiet-mode");  // TASK-160
 
   if (root) {
     root.dataset.initialized = "true";
@@ -1363,6 +1422,14 @@ function initializePetMode(documentRef = document) {
   if (menuHideWindow && typeof menuHideWindow.addEventListener === "function") {
     menuHideWindow.addEventListener("click", () => {
       handleHidePetWindow(documentRef);
+      closeMenu(documentRef);
+    });
+  }
+
+  // TASK-160: quiet mode toggle
+  if (menuQuietMode && typeof menuQuietMode.addEventListener === "function") {
+    menuQuietMode.addEventListener("click", () => {
+      setPetQuietMode(documentRef, !getPetQuietMode(documentRef));
       closeMenu(documentRef);
     });
   }
@@ -1472,6 +1539,8 @@ if (typeof module !== "undefined") {
     startIdleRotation,
     setIdleCooldown,
     stopIdleRotation,
+    getPetQuietMode,
+    setPetQuietMode,
     stateForChatSource,
     toggleBubbleDetails,
     toggleDetailsFromMenu,

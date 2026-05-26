@@ -8332,6 +8332,289 @@ Validation:
 
 ---
 
+## TASK-160 - Pet Quiet Mode / Idle Presence Toggle Design
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-26
+**Type:** Frontend — pet-renderer.js + pet-renderer-smoke.js
+
+Goal:
+
+Design a small frontend-only Pet Quiet Mode / Idle Presence toggle so idle
+rotation lines can be disabled without affecting normal chat replies, thinking
+bubbles, error fallbacks, or any other Pet controls.
+
+Context:
+
+- TASK-158 is DONE - PASS. Pet idle presence line rotation fires every 60 s
+  in `idle_default` from a static set of 10 in-character lines.
+- TASK-159 is DONE - PASS. A launch quiet period (2 min) and a post-activity
+  cooldown (90 s) prevent idle lines from appearing too soon or too often.
+- Users may still want a manual way to mute idle chatter without disabling
+  the Pet entirely or losing normal chat functionality.
+
+Expected behavior:
+
+1. The Pet UI exposes a small, non-intrusive toggle control (e.g. a checkbox,
+   button, or menu item) that switches Quiet Mode on or off.
+2. While Quiet Mode is ON:
+   - Idle presence line rotation is completely suppressed; no idle lines
+     appear in the bubble.
+   - `idle_default` state is entered normally (neutral appearance) but
+     `startIdleRotation` does not schedule any tick while the flag is set.
+   - Normal chat replies, thinking bubble (TASK-157), error fallbacks
+     (`llm_local_error`, `backend_offline`, `timeout`), handoff hints, and
+     details disclosure all continue to work exactly as before.
+   - Mood expression mapping (TASK-153) is unaffected.
+3. While Quiet Mode is OFF (default):
+   - Idle presence rotation behaves exactly as designed by TASK-158 and
+     TASK-159 (launch quiet, post-activity cooldown, sequential cycling).
+4. Toggling Quiet Mode OFF while the Pet is in `idle_default` should restart
+   idle rotation with the normal `PET_IDLE_COOLDOWN_MS` cooldown so the first
+   post-toggle idle line is not immediate.
+5. Toggling Quiet Mode ON while a rotation tick is pending should cancel the
+   scheduled tick immediately (call `stopIdleRotation`).
+6. Quiet Mode state is stored as a simple boolean in `presenceState` (or a
+   module-level flag if more appropriate). It is local to the Pet UI session
+   and does not persist across app restarts unless persistence is explicitly
+   designed in a future task.
+7. If persistence is considered in this task, it must reuse an existing safe
+   storage path (e.g. the same mechanism used by `petWindowPosition` in
+   `pet-main.js`) and must not add new IPC channels or preload surface.
+   If no safe path is available without new IPC, persistence is deferred.
+8. Unknown or invalid Quiet Mode state (null, undefined, non-boolean) falls
+   back to OFF (not quiet) without crashing or logging noise.
+9. Pet Bubble must remain clean at all times. No source, mood, debug, details,
+   thinking markers, raw JSON, provider text, stack traces, or diagnostics
+   may appear as bubble content.
+
+Suggested implementation approach:
+
+- Add a `quietMode` boolean field to `createPetPresenceState()` (default
+  `false`) or store as a module-level variable if `presenceState` WeakMap
+  ownership is cleaner.
+- Update `startIdleRotation` to return early (no-op) when `quietMode` is
+  `true`.
+- Add `setQuietMode(documentRef, presenceState, value, timerApi)` helper:
+  - Normalises `value` to boolean (unknown → false).
+  - Sets `presenceState.quietMode = normalisedValue`.
+  - If turning ON: calls `stopIdleRotation(presenceState, timerApi)`.
+  - If turning OFF and Pet is currently in `idle_default`: calls
+    `setIdleCooldown(presenceState, timerApi, PET_IDLE_COOLDOWN_MS)` then
+    `startIdleRotation(documentRef, presenceState, timerApi)`.
+- Wire the toggle control in Pet Window HTML/JS to call `setQuietMode`.
+- Control should be accessible without opening Full App (Pet-local UI).
+- Control rendering: a small labelled toggle/checkbox in an existing Pet
+  menu or overlay — do not add a new persistent panel or toolbar.
+  Exact placement deferred to implementation; design just requires it be
+  reachable from the Pet Window without a Full App roundtrip.
+
+Acceptance criteria:
+
+- [x] A toggle control exists in Pet Window UI that is reachable without
+      opening Full App.
+- [x] Activating Quiet Mode stops any in-progress idle rotation tick and
+      prevents new ticks from being scheduled.
+- [x] While Quiet Mode is ON, normal chat reply flow (send → thinking →
+      reply → expiry → idle_default) completes correctly with no idle lines.
+- [x] Error fallback states (`llm_local_error`, `backend_offline`, `timeout`)
+      still appear and display correctly while Quiet Mode is ON.
+- [x] Details disclosure still functions while Quiet Mode is ON.
+- [x] Mood expression mapping still fires on chat reply while Quiet Mode is ON.
+- [x] Deactivating Quiet Mode while in `idle_default` restarts idle rotation
+      with `PET_IDLE_COOLDOWN_MS` delay (no immediate idle line).
+- [x] Unknown/invalid Quiet Mode value falls back to OFF safely.
+- [x] Pet Bubble is clean — no source, mood, debug, thinking markers, raw
+      JSON, provider text, stack traces, or diagnostics at any point.
+- [x] All existing smoke tests (66 pet-renderer-smoke.js + renderer-chat +
+      pet-window) continue to pass.
+- [x] New smoke tests added for: quietMode suppresses rotation, toggle OFF
+      restarts rotation with cooldown, normal chat unaffected by quietMode,
+      error state unaffected by quietMode, unknown state falls back to OFF.
+- [x] TASK-159 idle timing behavior (launch quiet, cooldown) does not regress.
+- [x] TASK-158 idle rotation cycling behavior does not regress.
+- [x] TASK-157 thinking bubble behavior does not regress.
+
+Manual Windows smoke expectations:
+
+1. Idle rotation works normally when Quiet Mode is OFF (default state).
+2. Turning Quiet Mode ON immediately stops any pending idle rotation tick;
+   no idle lines appear.
+3. While Quiet Mode is ON, sending a chat message shows TASK-157 thinking
+   bubble and final reply as normal.
+4. While Quiet Mode is ON, error fallback state appears correctly.
+5. Turning Quiet Mode OFF resumes idle rotation; first idle line appears
+   only after normal cooldown delay, not immediately.
+6. Quiet Mode toggle is visually accessible from Pet Window without opening
+   Full App.
+7. Hide/Show Pet does not unexpectedly reset Quiet Mode state. If session-
+   local-only, behavior on hide/show is explicitly confirmed and documented.
+8. TASK-158 and TASK-159 idle timing behavior does not regress when Quiet
+   Mode is OFF.
+9. TASK-157 thinking bubble behavior does not regress.
+
+Non-goals:
+
+- No backend changes.
+- No LLM-generated idle text.
+- No provider or schema changes.
+- No new IPC channels or preload API surface unless unavoidable for
+  persistence (and explicitly justified in implementation record).
+- No new image assets.
+- No animation.
+- No voice.
+- No notification system.
+- No broad settings architecture; this is a single local Pet UI flag.
+- No per-user cloud sync of Quiet Mode preference.
+
+Files expected to change during implementation:
+
+- `apps/desktop/src/pet/pet-renderer.js`
+- `apps/desktop/src/pet/pet.html` (toggle control markup)
+- `apps/desktop/scripts/pet-renderer-smoke.js`
+- `docs/TASKS.md`
+- `docs/ROADMAP.md`
+
+### Implementation record
+
+**Date:** 2026-05-26
+**Files changed:**
+- `apps/desktop/src/pet/pet-renderer.js` — added `quietMode: false` field to
+  `createPetPresenceState()`; added `getQuietMode(presenceState)` and
+  `setQuietMode(documentRef, presenceState, value, timerApi)` internal helpers;
+  added `getPetQuietMode(documentRef)` and `setPetQuietMode(documentRef, value,
+  timerApi)` public-surface functions; updated `startIdleRotation` to early-
+  return when `presenceState.quietMode === true`; wired `pet-menu-quiet-mode`
+  button in `initializePetMode`; exported `getPetQuietMode`, `setPetQuietMode`.
+- `apps/desktop/src/pet/pet.html` — added `<button id="pet-menu-quiet-mode">`
+  to the `pet-menu` section with `aria-pressed="false"` and label
+  "Quiet Mode: Off".
+- `apps/desktop/scripts/pet-renderer-smoke.js` — added 10 new TASK-160 tests:
+  `testQuietModeApiIsExported`, `testQuietModeDefaultsOff`,
+  `testQuietModeOnSuppressesIdleRotation`, `testQuietModeOnCancelsExistingTimer`,
+  `testQuietModeOffResumesRotationAfterCooldown`,
+  `testQuietModeOnDoesNotSuppressThinkingBubble`,
+  `testQuietModeOnDoesNotSuppressFinalReply`,
+  `testQuietModeOnDoesNotSuppressErrorFallback`,
+  `testQuietModeUnknownValueFallsBackToOff`,
+  `testQuietModeHideShowWithQuietOnNoRotation`. Total: 76 tests.
+
+**Smoke results (initial, 2026-05-26):**
+- `node --check apps/desktop/src/pet/pet-renderer.js` — OK
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js` — OK
+- `node apps/desktop/scripts/pet-renderer-smoke.js` — 76/76 PASS
+- `node apps/desktop/scripts/pet-window-smoke.js` — 15/15 PASS
+- `npm run test:renderer` — renderer chat smoke: PASS
+- `pytest backend/tests/` — 619 passed
+- `git diff --check` (TASK-160 files only) — clean
+
+**Behavior summary (initial):**
+- `quietMode` boolean lives in `presenceState` (default `false`).
+- `startIdleRotation` early-returns when `quietMode === true`; no timer is
+  scheduled, no line is shown.
+- `setQuietMode` ON: cancels any pending rotation timer immediately.
+- `setQuietMode` OFF while in `idle_default`: applies `PET_IDLE_COOLDOWN_MS`
+  cooldown then restarts rotation — first post-toggle idle line is NOT immediate.
+- `setQuietMode` OFF in any other state: no-op for rotation; normal reply-expiry
+  and restore paths will call `startIdleRotation` and it will proceed since
+  `quietMode` is now `false`.
+- Any non-`true` value passed to `setQuietMode`/`setPetQuietMode` normalises to
+  `false` (fail-quiet/safe).
+- Menu button label toggles "Quiet Mode: Off" ↔ "Quiet Mode: On"; `aria-pressed`
+  updated accordingly.
+- Hide/Show (restorePetPresenceAfterShow) with quiet ON: returns to `idle_default`
+  visual but `startIdleRotation` is suppressed — no idle lines appear.
+- All existing TASK-158/159 cycling and timing behaviour unchanged when quiet OFF.
+- No backend, IPC, preload, or schema files changed.
+
+
+### Bug fix record (2026-05-26)
+
+**Issue:** Windows manual smoke revealed that Quiet Mode ON still displayed the
+static idle `idle_default` bubble text ("吾在。要找吾就去 Full App 對話。"). The
+initial implementation only blocked `startIdleRotation` ticks but all three
+call sites (`setPetIdleDefault`, `expireRecentPetReply`, `restorePetPresence`)
+still called `setBubbleState(documentRef, "idle_default")` unconditionally.
+
+**Fix:**
+- Added `setIdleQuietBubble(documentRef, presenceState)` helper: returns
+  `setBubbleState(documentRef, "collapsed")` when `quietMode === true`,
+  `setBubbleState(documentRef, "idle_default")` otherwise.
+- Replaced `setBubbleState(documentRef, "idle_default")` with
+  `setIdleQuietBubble(...)` in `setPetIdleDefault`, `expireRecentPetReply`,
+  and `restorePetPresence`.
+- Extended `setQuietMode` ON branch: if current bubble state is `idle_default`,
+  collapse it to `collapsed` immediately.
+- Extended `setQuietMode` OFF branch: if current bubble state is `collapsed` or
+  `idle_default`, restore to `idle_default` (shows static text), apply
+  `PET_IDLE_COOLDOWN_MS`, and restart rotation.
+
+**Files changed:**
+- `apps/desktop/src/pet/pet-renderer.js` — 5 targeted patches (all functions
+  above).
+- `apps/desktop/scripts/pet-renderer-smoke.js` — updated 4 existing TASK-160
+  tests to assert `bubble.dataset.state === "collapsed"` / `bubble.hidden ===
+  true` (replacing old `text === PET_IDLE_REPLY` assertions); added 1 new test
+  `testQuietModeOnCollapsesIdleBubble`. Total: 77 tests.
+
+**Smoke results (bug fix, 2026-05-26):**
+- `node --check apps/desktop/src/pet/pet-renderer.js` — OK
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js` — OK
+- `node apps/desktop/scripts/pet-renderer-smoke.js` — 77/77 PASS
+- `node apps/desktop/scripts/pet-window-smoke.js` — 15/15 PASS
+- `npm run test:renderer` — renderer chat smoke: PASS
+- `pytest backend/tests/` — 619 passed
+- `git diff --check` — clean (pre-existing whitespace in unrelated files only)
+
+**Updated behavior summary:**
+- `quietMode` boolean lives in `presenceState` (default `false`).
+- When `quietMode === true`, ALL idle speech is suppressed: bubble collapses to
+  `collapsed` state (hidden), static `idle_default` text is NOT shown.
+- When `quietMode === false` (default): idle bubble shows `idle_default` static
+  text, then rotation lines after cooldown — unchanged from TASK-158/159.
+- `setQuietMode` ON: cancels any pending rotation timer; collapses bubble if in
+  `idle_default` state.
+- `setQuietMode` OFF from collapsed/idle_default: restores `idle_default` static
+  text, applies `PET_IDLE_COOLDOWN_MS` cooldown, restarts rotation.
+- `setQuietMode` OFF from non-idle state (speaking/thinking/error): no-op for
+  bubble; rotation resumes naturally when those states clear.
+- `startIdleRotation` still early-returns when `quietMode === true` (belt-and-
+  suspenders guard unchanged from initial implementation).
+- Normal chat reply flow (thinking → speaking/success), error fallbacks, and
+  details disclosure are all unaffected by `quietMode`.
+- Any non-`true` value normalises to `false` (fail-quiet/safe).
+- Menu button label toggles "Quiet Mode: Off" ↔ "Quiet Mode: On"; `aria-pressed`
+  updated accordingly.
+- No backend, IPC, preload, or schema files changed.
+
+
+### Windows manual smoke record
+
+**Date:** 2026-05-26
+**Result:** PASS
+
+- [x] Quiet Mode starts OFF by default; `idle_default` text visible.
+- [x] Pet Menu shows a `Quiet Mode: Off` toggle.
+- [x] When Quiet Mode is OFF, idle rotation still works after TASK-159 timing.
+- [x] Turning Quiet Mode ON changes label to `Quiet Mode: On`.
+- [x] Quiet Mode ON: bubble collapses and hides — no idle text visible at all.
+- [x] Quiet Mode ON: avatar and all menu/controls remain accessible.
+- [x] Quiet Mode ON does not suppress normal chat replies.
+- [x] Quiet Mode ON does not suppress TASK-157 thinking bubble.
+- [x] Quiet Mode ON does not suppress error fallback messages.
+- [x] Quiet Mode ON does not break details disclosure or mood expression mapping.
+- [x] Turning Quiet Mode OFF does not immediately fire an idle line; rotation
+      resumes only after normal cooldown.
+- [x] Hide/Show Pet with Quiet Mode ON keeps bubble collapsed, no idle text shown.
+- [x] Pet Bubble never shows source, mood, debug, thinking markers, raw JSON,
+      provider text, stack traces, or diagnostics.
+- [x] TASK-158 idle rotation behavior did not regress.
+- [x] TASK-159 timing/noise-control behavior did not regress.
+- [x] TASK-157 thinking bubble behavior did not regress.
+
+
+---
+
 ## TASK-159 - Pet Idle Presence Timing / Noise Control Polish Design
 
 **Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
