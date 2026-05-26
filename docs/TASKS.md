@@ -8332,6 +8332,206 @@ Validation:
 
 ---
 
+## TASK-159 - Pet Idle Presence Timing / Noise Control Polish Design
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-26
+**Type:** Frontend — pet-renderer.js + pet-renderer-smoke.js
+
+Goal:
+
+Design a small frontend-only timing and noise-control polish for Pet idle
+presence rotation. TASK-158 introduced idle line rotation at a fixed 60-second
+interval. The next step is to ensure idle presence feels unobtrusive — lines
+should not appear too soon after launch or after any user-facing activity, and
+the rotation cadence should feel natural rather than mechanical.
+
+Context:
+
+- TASK-158 is DONE - PASS.
+- Pet idle presence line rotation fires every 60 seconds in `idle_default`.
+- Current implementation does not enforce a quiet/cooldown period after
+  launch, after a real reply, after a thinking state, after an error, or
+  after Pet Window show/hide.
+- No deduplication guard beyond sequential cycling currently prevents the
+  same line from reappearing after a longer quiet period.
+
+Expected behavior:
+
+1. Idle lines do not appear immediately after app launch. A launch quiet
+   period (e.g. 2–5 minutes) suppresses the first rotation tick.
+2. Idle lines do not appear too soon after any of the following events:
+   - User sends a chat message
+   - Thinking state begins or ends
+   - Final reply arrives (recent reply window is active)
+   - Recent reply window expires and Pet returns to idle
+   - Error state (`llm_local_error`, `backend_offline`, `timeout`) clears
+   - Handoff hint triggers
+   - Pet Window is hidden and then shown again
+3. A cooldown / quiet period is enforced each time idle rotation restarts
+   after any of the above events. The cooldown is separate from the
+   rotation interval; the first idle line after any activity appears only
+   after the cooldown elapses.
+4. The same idle line should not repeat on consecutive rotation ticks.
+   Sequential cycling (TASK-158) already prevents back-to-back repeats
+   for adjacent ticks; this requirement holds that constraint.
+5. Rotation remains deterministic enough for smoke tests: given a known
+   `lastIdleLineIdx` and known timer sequence, the next line shown is
+   predictable without randomness.
+6. User-facing idle lines remain clean and character-facing at all times.
+   No source, mood, debug, details, thinking markers, raw JSON, provider
+   text, stack traces, or diagnostics may appear as idle bubble text.
+7. Unknown or invalid timing state falls back safely to quiet idle default
+   (`PET_IDLE_REPLY`) without crashing or logging noise.
+8. Implementation is frontend-only; no backend calls, no LLM-generated
+   idle text, no new image assets, no IPC changes, no preload API changes.
+
+Suggested constants (values subject to implementation review):
+
+- `PET_IDLE_LAUNCH_QUIET_MS` — quiet period after app init before first
+  idle rotation tick (e.g. 120000 ms / 2 minutes).
+- `PET_IDLE_COOLDOWN_MS` — quiet period after any activity before idle
+  rotation restarts (e.g. 90000 ms / 90 seconds, or could reuse
+  `PET_RECENT_REPLY_VISIBLE_MS` if that already covers the window).
+
+Suggested implementation approach:
+
+- Add a `idleLastActivityTime` field to `presenceState` (timestamp of most
+  recent suppressing event) or a `idleCooldownUntil` deadline timestamp.
+- `startIdleRotation` sets or checks the cooldown before scheduling the
+  first tick; if inside cooldown, delays the first tick accordingly.
+- The rotation callback checks both `isIdleRotationEligible` (existing)
+  and the cooldown deadline before showing a line.
+- On launch, `setPetIdleDefault` records the launch time so the first
+  rotation tick is delayed by `PET_IDLE_LAUNCH_QUIET_MS`.
+- All new timing fields follow the existing `presenceState` WeakMap pattern
+  and are managed via `timerApi` for test determinism.
+
+Acceptance criteria:
+
+- [x] Pet does not show any idle rotation line during
+      `PET_IDLE_LAUNCH_QUIET_MS` after init.
+- [x] After any suppressing event (message sent / thinking / reply /
+      error / handoff / hide+show), idle rotation does not fire until
+      `PET_IDLE_COOLDOWN_MS` has elapsed.
+- [x] Once cooldown elapses and Pet is in eligible idle state, idle
+      rotation resumes and a new line appears.
+- [x] The same idle line does not appear on two consecutive rotation ticks
+      (sequential cycling invariant preserved).
+- [x] Idle line text is clean and character-facing — no source, mood,
+      debug, thinking markers, raw JSON, provider text, or diagnostics.
+- [x] Unknown or invalid timing state falls back safely to quiet idle
+      default.
+- [x] All existing smoke tests (59 pet-renderer-smoke.js + renderer-chat +
+      pet-window) continue to pass.
+- [x] New smoke tests added for: launch quiet period suppresses first tick,
+      cooldown suppresses rotation restart after activity, rotation resumes
+      after cooldown, consecutive-line dedup invariant.
+- [x] TASK-158 idle rotation behavior does not regress.
+- [x] TASK-157 thinking bubble behavior does not regress.
+
+Manual Windows smoke expectations:
+
+1. Pet launches — no idle rotation line appears for at least 2 minutes
+   (launch quiet period).
+2. After quiet period elapses, a clean idle line eventually appears.
+3. Sending a chat message: idle rotation resets; no idle line appears
+   until cooldown elapses after the reply window closes.
+4. Thinking state active: idle rotation suppressed (TASK-157 unchanged).
+5. Recent reply window active: idle rotation suppressed (TASK-158 unchanged).
+6. Error state active: idle rotation suppressed (TASK-158 unchanged).
+7. Hide Pet Window, wait for cooldown, show Pet Window — no immediate idle
+   line; rotation only resumes after cooldown from show event.
+8. After cooldown, idle line appears clean and character-facing.
+9. TASK-158 idle line cycling behavior does not regress.
+10. TASK-157 thinking bubble still appears on send and is replaced by reply.
+
+Non-goals:
+
+- No backend calls or LLM-generated idle text.
+- No notification system.
+- No voice or animation.
+- No new image assets.
+- No provider or schema changes.
+- No IPC or preload API changes.
+- No Pet Window layout redesign.
+- No per-user configurable timing UI (constants are code-level only).
+
+Files expected to change during implementation:
+
+- `apps/desktop/src/pet/pet-renderer.js`
+- `apps/desktop/scripts/pet-renderer-smoke.js`
+- `docs/TASKS.md`
+- `docs/ROADMAP.md`
+
+### Implementation record
+
+**Date:** 2026-05-26
+**Files changed:**
+- `apps/desktop/src/pet/pet-renderer.js` — added `PET_IDLE_LAUNCH_QUIET_MS`
+  (120000 ms), `PET_IDLE_COOLDOWN_MS` (90000 ms), `idleCooldownUntil` field
+  in `createPetPresenceState`, `setIdleCooldown` helper, updated
+  `startIdleRotation` to delay first tick by
+  `max(cooldownRemaining, PET_IDLE_ROTATION_MS)`, updated `setPetIdleDefault`
+  to set launch quiet on init, updated `expireRecentPetReply` to set post-
+  activity cooldown, updated `restorePetPresence` idle path to set cooldown
+  and start rotation. Exported new constants and helper.
+- `apps/desktop/scripts/pet-renderer-smoke.js` — updated 5 TASK-158 timing-
+  sensitive tests to use `PET_IDLE_LAUNCH_QUIET_MS` / `PET_IDLE_COOLDOWN_MS`;
+  added 7 new TASK-159 tests: `testIdleTimingConstantsAreExported`,
+  `testIdleLaunchQuietPeriodSuppressesFirstTick`,
+  `testIdleFirstTickFiresAfterLaunchQuiet`,
+  `testIdleCooldownSuppressesRotationAfterActivity`,
+  `testIdleCooldownAllowsRotationAfterExpiry`,
+  `testIdleRotationResumesAfterRestoreWithCooldown`,
+  `testIdleConsecutiveRotationsNeverRepeatLine`. Total: 66 tests.
+
+**Smoke results (2026-05-26):**
+- `node --check apps/desktop/src/pet/pet-renderer.js` — OK
+- `node --check apps/desktop/scripts/pet-renderer-smoke.js` — OK
+- `node apps/desktop/scripts/pet-renderer-smoke.js` — 66/66 PASS
+- `node apps/desktop/scripts/pet-window-smoke.js` — 15/15 PASS
+- `npm run test:renderer` — renderer chat smoke: PASS
+- `pytest backend/tests/` — 619 passed
+- `git diff --check` (TASK-159 files only) — clean
+
+**Behavior summary:**
+- Launch quiet: first idle rotation tick suppressed for 2 minutes after init.
+- Post-activity cooldown: idle rotation delayed 90 s after reply expiry,
+  after chat send, and after Pet Window show/restore.
+- `delay = max(cooldownRemaining, PET_IDLE_ROTATION_MS)` ensures the standard
+  60 s cadence is always respected even when cooldown is shorter.
+- All TASK-158 cycling and TASK-157 thinking behaviors preserved.
+- No backend, IPC, preload, or schema files changed.
+
+
+### Windows manual smoke record
+
+**Date:** 2026-05-26
+**Result:** PASS
+
+- [x] Pet does not immediately show idle rotation lines after launch.
+- [x] Launch quiet period suppresses idle line for about 2 minutes.
+- [x] After quiet period, clean character-facing idle line eventually appears.
+- [x] Idle rotation remains slow and non-annoying.
+- [x] Sequential cycling still avoids immediate repeated idle lines.
+- [x] Sending a chat message immediately replaces idle with TASK-157 thinking bubble.
+- [x] Thinking state suppresses idle rotation.
+- [x] Final reply replaces thinking and suppresses idle during recent reply window.
+- [x] After final reply expires, post-activity cooldown suppresses idle for about 90 seconds.
+- [x] Error state suppresses idle rotation and is not overwritten.
+- [x] Hide/Show Pet does not immediately restore or show stale idle rotation text.
+- [x] Idle lines are not remembered as recent reply.
+- [x] Pet Bubble never shows source, mood, debug, details, thinking markers, raw JSON,
+      provider text, stack traces, or diagnostics.
+- [x] TASK-158 idle line behavior did not regress.
+- [x] TASK-157 thinking bubble behavior did not regress.
+- [x] TASK-153 mood expression mapping did not regress.
+- [x] TASK-152 details disclosure did not regress.
+
+
+---
+
 ## TASK-158 - Pet Idle Presence Line Rotation Polish Design
 
 **Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS

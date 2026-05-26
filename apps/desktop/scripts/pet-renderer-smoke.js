@@ -2047,7 +2047,7 @@ function testPickNextIdleLineCyclesDeterministically() {
 }
 
 function testIdleRotationFiresAfterInterval() {
-  const { PET_IDLE_LINES, PET_IDLE_ROTATION_MS, PET_IDLE_REPLY, setPetIdleDefault } = require(petRendererPath);
+  const { PET_IDLE_LINES, PET_IDLE_LAUNCH_QUIET_MS, PET_IDLE_ROTATION_MS, PET_IDLE_REPLY, setPetIdleDefault } = require(petRendererPath);
   const doc = createPetBubbleStateDocument();
   const timerApi = new FakeTimerApi();
 
@@ -2055,8 +2055,8 @@ function testIdleRotationFiresAfterInterval() {
   // Before rotation fires
   assert.equal(doc.getElementById("pet-bubble-response").textContent, PET_IDLE_REPLY);
 
-  // Fire the rotation
-  timerApi.advance(PET_IDLE_ROTATION_MS);
+  // Fire the rotation — must wait for launch quiet period (TASK-159)
+  timerApi.advance(PET_IDLE_LAUNCH_QUIET_MS);
   const afterRotation = doc.getElementById("pet-bubble-response").textContent;
   const idleLines = [...PET_IDLE_LINES];
   assert.ok(idleLines.includes(afterRotation),
@@ -2074,6 +2074,7 @@ function testIdleRotationFiresAfterInterval() {
 
 function testIdleRotationSuppressedDuringRecentReply() {
   const {
+    PET_IDLE_COOLDOWN_MS,
     PET_IDLE_ROTATION_MS,
     PET_RECENT_REPLY_VISIBLE_MS,
     PET_IDLE_LINES,
@@ -2095,12 +2096,12 @@ function testIdleRotationSuppressedDuringRecentReply() {
   // Advance past recent reply expiry — now idle_default
   timerApi.advance(PET_RECENT_REPLY_VISIBLE_MS);
   assert.equal(doc.getElementById("pet-bubble").dataset.state, "idle_default");
-  // After another full rotation interval, idle line should appear
-  timerApi.advance(PET_IDLE_ROTATION_MS);
+  // After cooldown expires, idle line should appear (TASK-159: cooldown after activity)
+  timerApi.advance(PET_IDLE_COOLDOWN_MS);
   const idleLines = [...PET_IDLE_LINES];
   const text = doc.getElementById("pet-bubble-response").textContent;
   assert.ok(idleLines.includes(text),
-    `After recent reply expires, idle rotation should resume; got: "${text}"`);
+    `After recent reply expires and cooldown passes, idle rotation should resume; got: "${text}"`);
 }
 
 function testIdleRotationSuppressedDuringThinking() {
@@ -2154,6 +2155,7 @@ function testIdleRotationSuppressedDuringErrorState() {
 function testIdleLineNotRecordedAsRecentReply() {
   const {
     PET_IDLE_LINES,
+    PET_IDLE_LAUNCH_QUIET_MS,
     PET_IDLE_ROTATION_MS,
     PET_IDLE_REPLY,
     setPetIdleDefault,
@@ -2164,12 +2166,12 @@ function testIdleLineNotRecordedAsRecentReply() {
 
   setPetIdleDefault(doc, { timerApi });
 
-  // Trigger an idle rotation
-  timerApi.advance(PET_IDLE_ROTATION_MS);
+  // Trigger an idle rotation — must wait for launch quiet period (TASK-159)
+  timerApi.advance(PET_IDLE_LAUNCH_QUIET_MS);
   const idleLines = [...PET_IDLE_LINES];
   const rotatedText = doc.getElementById("pet-bubble-response").textContent;
   assert.ok(idleLines.includes(rotatedText),
-    `Expected an idle line after rotation, got: "${rotatedText}"`);
+    `Expected an idle line after launch quiet + rotation, got: "${rotatedText}"`);
 
   // Simulate hide/show — restorePetPresenceAfterShow must NOT restore the idle line
   doc.getElementById("pet-bubble-response").textContent = "stale display text";
@@ -2184,6 +2186,7 @@ function testIdleLineNotRecordedAsRecentReply() {
 function testIdleRotationBubbleIsClean() {
   const {
     PET_IDLE_LINES,
+    PET_IDLE_LAUNCH_QUIET_MS,
     PET_IDLE_ROTATION_MS,
     setPetIdleDefault,
   } = require(petRendererPath);
@@ -2191,7 +2194,7 @@ function testIdleRotationBubbleIsClean() {
   const timerApi = new FakeTimerApi();
 
   setPetIdleDefault(doc, { timerApi });
-  timerApi.advance(PET_IDLE_ROTATION_MS);
+  timerApi.advance(PET_IDLE_LAUNCH_QUIET_MS);  // TASK-159: must wait for launch quiet
 
   const text = doc.getElementById("pet-bubble-response").textContent;
   assert.doesNotMatch(text, /source:|mood:|\{|\}|llm_local|pet_thinking|debug|provider/i,
@@ -2207,6 +2210,7 @@ function testIdleRotationBubbleIsClean() {
 function testIdleRotationDoesNotAffectDetailsDisclosure() {
   const {
     PET_IDLE_LINES,
+    PET_IDLE_LAUNCH_QUIET_MS,
     PET_IDLE_ROTATION_MS,
     setPetIdleDefault,
     renderPetSpeechUpdate,
@@ -2231,15 +2235,206 @@ function testIdleRotationDoesNotAffectDetailsDisclosure() {
   // (details must not be affected by idle rotation because idle state shows no details)
   // Start fresh idle state
   setPetIdleDefault(doc, { timerApi });
-  timerApi.advance(PET_IDLE_ROTATION_MS);
+  timerApi.advance(PET_IDLE_LAUNCH_QUIET_MS);  // TASK-159: wait for launch quiet period
 
   const idleLines = [...PET_IDLE_LINES];
   const text = doc.getElementById("pet-bubble-response").textContent;
-  assert.ok(idleLines.includes(text), `Expected idle line after rotation, got "${text}"`);
+  assert.ok(idleLines.includes(text), `Expected idle line after launch quiet + rotation, got "${text}"`);
   assert.equal(doc.getElementById("pet-bubble-details").hidden, true,
     "Details panel must be hidden during idle rotation");
   assert.equal(doc.getElementById("pet-bubble").dataset.detailsOpen, "false",
     "Details must not be open during idle rotation");
+}
+
+
+// ---------------------------------------------------------------------------
+// TASK-159 — Pet Idle Presence Timing / Noise Control
+// ---------------------------------------------------------------------------
+
+function testIdleTimingConstantsAreExported() {
+  const {
+    PET_IDLE_LAUNCH_QUIET_MS,
+    PET_IDLE_COOLDOWN_MS,
+    setIdleCooldown,
+  } = require(petRendererPath);
+  assert.ok(
+    typeof PET_IDLE_LAUNCH_QUIET_MS === "number" && PET_IDLE_LAUNCH_QUIET_MS >= 60000,
+    "PET_IDLE_LAUNCH_QUIET_MS must be a number >= 60000"
+  );
+  assert.ok(
+    typeof PET_IDLE_COOLDOWN_MS === "number" && PET_IDLE_COOLDOWN_MS >= 30000,
+    "PET_IDLE_COOLDOWN_MS must be a number >= 30000"
+  );
+  assert.equal(typeof setIdleCooldown, "function", "setIdleCooldown must be exported");
+}
+
+function testIdleLaunchQuietPeriodSuppressesFirstTick() {
+  const {
+    PET_IDLE_LAUNCH_QUIET_MS,
+    PET_IDLE_REPLY,
+    setPetIdleDefault,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetIdleDefault(doc, { timerApi });
+  assert.equal(
+    doc.getElementById("pet-bubble-response").textContent,
+    PET_IDLE_REPLY,
+    "Immediately after init, response must be PET_IDLE_REPLY"
+  );
+
+  // Advance just under the launch quiet period — no idle line should appear
+  timerApi.advance(PET_IDLE_LAUNCH_QUIET_MS - 1);
+  assert.equal(
+    doc.getElementById("pet-bubble-response").textContent,
+    PET_IDLE_REPLY,
+    `Idle rotation must not fire before launch quiet period (${PET_IDLE_LAUNCH_QUIET_MS}ms)`
+  );
+  assert.equal(doc.getElementById("pet-bubble").dataset.state, "idle_default");
+}
+
+function testIdleFirstTickFiresAfterLaunchQuiet() {
+  const {
+    PET_IDLE_LAUNCH_QUIET_MS,
+    PET_IDLE_LINES,
+    PET_IDLE_REPLY,
+    setPetIdleDefault,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetIdleDefault(doc, { timerApi });
+  timerApi.advance(PET_IDLE_LAUNCH_QUIET_MS);
+
+  const text = doc.getElementById("pet-bubble-response").textContent;
+  const idleLines = [...PET_IDLE_LINES];
+  assert.ok(
+    idleLines.includes(text),
+    `First idle line must appear after launch quiet period, got: "${text}"`
+  );
+  assert.notEqual(text, PET_IDLE_REPLY, "Rotated line must differ from PET_IDLE_REPLY");
+}
+
+function testIdleCooldownSuppressesRotationAfterActivity() {
+  const {
+    PET_IDLE_COOLDOWN_MS,
+    PET_IDLE_REPLY,
+    PET_RECENT_REPLY_VISIBLE_MS,
+    setPetIdleDefault,
+    renderPetSpeechUpdate,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetIdleDefault(doc, { timerApi });
+  renderPetSpeechUpdate(doc, { reply: "Activity reply.", source: "llm_local" }, { timerApi });
+
+  // Let recent reply expire — returns to idle with post-activity cooldown
+  timerApi.advance(PET_RECENT_REPLY_VISIBLE_MS);
+  assert.equal(doc.getElementById("pet-bubble").dataset.state, "idle_default");
+
+  // Advance just under cooldown — no idle rotation line should appear yet
+  timerApi.advance(PET_IDLE_COOLDOWN_MS - 1);
+  assert.equal(
+    doc.getElementById("pet-bubble-response").textContent,
+    PET_IDLE_REPLY,
+    "Idle rotation must not fire before post-activity cooldown expires"
+  );
+}
+
+function testIdleCooldownAllowsRotationAfterExpiry() {
+  const {
+    PET_IDLE_COOLDOWN_MS,
+    PET_IDLE_LINES,
+    PET_IDLE_REPLY,
+    PET_RECENT_REPLY_VISIBLE_MS,
+    setPetIdleDefault,
+    renderPetSpeechUpdate,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetIdleDefault(doc, { timerApi });
+  renderPetSpeechUpdate(doc, { reply: "Activity reply.", source: "llm_local" }, { timerApi });
+
+  // Let recent reply expire — idle with cooldown
+  timerApi.advance(PET_RECENT_REPLY_VISIBLE_MS);
+  assert.equal(doc.getElementById("pet-bubble").dataset.state, "idle_default");
+
+  // Advance exactly to cooldown expiry — rotation fires
+  timerApi.advance(PET_IDLE_COOLDOWN_MS);
+  const text = doc.getElementById("pet-bubble-response").textContent;
+  const idleLines = [...PET_IDLE_LINES];
+  assert.ok(
+    idleLines.includes(text),
+    `Idle rotation must fire once post-activity cooldown expires, got: "${text}"`
+  );
+  assert.notEqual(text, PET_IDLE_REPLY);
+}
+
+function testIdleRotationResumesAfterRestoreWithCooldown() {
+  const {
+    PET_IDLE_COOLDOWN_MS,
+    PET_IDLE_LINES,
+    PET_IDLE_REPLY,
+    setPetIdleDefault,
+    restorePetPresenceAfterShow,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  // Start idle, let launch quiet and some rotation pass, then simulate show from idle
+  setPetIdleDefault(doc, { timerApi });
+  timerApi.advance(PET_IDLE_COOLDOWN_MS * 3);  // expire launch quiet + some rotations
+
+  // Simulate hide/show — restore returns to idle with a fresh cooldown
+  restorePetPresenceAfterShow(doc, { timerApi });
+  assert.equal(
+    doc.getElementById("pet-bubble-response").textContent,
+    PET_IDLE_REPLY,
+    "After restore-to-idle, response must be PET_IDLE_REPLY immediately"
+  );
+
+  // Advance just under cooldown — no rotation yet
+  timerApi.advance(PET_IDLE_COOLDOWN_MS - 1);
+  assert.equal(
+    doc.getElementById("pet-bubble-response").textContent,
+    PET_IDLE_REPLY,
+    "Idle rotation must not fire immediately after show/restore"
+  );
+
+  // Advance exactly to cooldown expiry — rotation fires
+  timerApi.advance(1);
+  const text = doc.getElementById("pet-bubble-response").textContent;
+  const idleLines = [...PET_IDLE_LINES];
+  assert.ok(
+    idleLines.includes(text),
+    `Idle rotation must resume after show cooldown expires, got: "${text}"`
+  );
+}
+
+function testIdleConsecutiveRotationsNeverRepeatLine() {
+  const {
+    PET_IDLE_LAUNCH_QUIET_MS,
+    PET_IDLE_ROTATION_MS,
+    setPetIdleDefault,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetIdleDefault(doc, { timerApi });
+  timerApi.advance(PET_IDLE_LAUNCH_QUIET_MS);
+  const first = doc.getElementById("pet-bubble-response").textContent;
+
+  timerApi.advance(PET_IDLE_ROTATION_MS);
+  const second = doc.getElementById("pet-bubble-response").textContent;
+
+  timerApi.advance(PET_IDLE_ROTATION_MS);
+  const third = doc.getElementById("pet-bubble-response").textContent;
+
+  assert.notEqual(first, second, "Consecutive idle rotations must not repeat the same line (1→2)");
+  assert.notEqual(second, third, "Consecutive idle rotations must not repeat the same line (2→3)");
 }
 
 
@@ -2305,6 +2500,14 @@ async function run() {
     testIdleLineNotRecordedAsRecentReply,
     testIdleRotationBubbleIsClean,
     testIdleRotationDoesNotAffectDetailsDisclosure,
+    // TASK-159
+    testIdleTimingConstantsAreExported,
+    testIdleLaunchQuietPeriodSuppressesFirstTick,
+    testIdleFirstTickFiresAfterLaunchQuiet,
+    testIdleCooldownSuppressesRotationAfterActivity,
+    testIdleCooldownAllowsRotationAfterExpiry,
+    testIdleRotationResumesAfterRestoreWithCooldown,
+    testIdleConsecutiveRotationsNeverRepeatLine,
   ];
 
   for (const test of tests) {

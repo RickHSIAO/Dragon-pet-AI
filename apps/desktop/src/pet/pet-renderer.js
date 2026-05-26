@@ -19,6 +19,10 @@ const PET_MOOD_SMOKE_API_NAME = "__dragonPetMoodExpressionSmoke";
 const PET_THINKING_SOURCE = "pet_thinking";
 const PET_RECENT_REPLY_VISIBLE_MS = 90000;
 const PET_HANDOFF_HINT_MS = 6000;
+// TASK-159: quiet period after app launch before first idle rotation tick
+const PET_IDLE_LAUNCH_QUIET_MS = 120000;
+// TASK-159: cooldown after any user-facing activity before idle rotation resumes
+const PET_IDLE_COOLDOWN_MS = 90000;
 // TASK-158: interval between idle presence line rotations
 const PET_IDLE_ROTATION_MS = 60000;
 // TASK-158: short in-character idle presence lines (static local set)
@@ -455,6 +459,7 @@ function createPetPresenceState() {
     timerApi: null,
     idleRotationTimer: null,  // TASK-158
     lastIdleLineIdx: -1,       // TASK-158
+    idleCooldownUntil: 0,      // TASK-159
   };
 }
 
@@ -506,6 +511,12 @@ function schedulePresenceTimer(timerApi, callback, delayMs) {
   return timer;
 }
 
+// TASK-159: record a cooldown deadline — idle rotation will not fire before this time
+function setIdleCooldown(presenceState, timerApi, durationMs) {
+  const now = getPresenceNow(timerApi || globalThis);
+  presenceState.idleCooldownUntil = now + durationMs;
+}
+
 // TASK-158: pick the next idle line in sequence (cycles, no back-to-back repeat)
 function pickNextIdleLine(presenceState) {
   const lines = PET_IDLE_LINES;
@@ -539,9 +550,15 @@ function stopIdleRotation(presenceState, timerApi) {
 }
 
 // TASK-158: schedule the next idle line rotation tick
+// TASK-159: first tick delayed by max(cooldownRemaining, PET_IDLE_ROTATION_MS)
 function startIdleRotation(documentRef, presenceState, timerApi) {
   const api = timerApi || globalThis;
   stopIdleRotation(presenceState, api);
+  const now = getPresenceNow(api);
+  const cooldownUntil = typeof presenceState.idleCooldownUntil === "number"
+    ? presenceState.idleCooldownUntil : 0;
+  const cooldownRemaining = Math.max(0, cooldownUntil - now);  // TASK-159
+  const delay = Math.max(cooldownRemaining, PET_IDLE_ROTATION_MS);  // TASK-159
   presenceState.idleRotationTimer = schedulePresenceTimer(
     api,
     function fireIdleRotation() {
@@ -553,7 +570,7 @@ function startIdleRotation(documentRef, presenceState, timerApi) {
       setBubbleState(documentRef, "idle_default", { response: line });
       startIdleRotation(documentRef, presenceState, api);
     },
-    PET_IDLE_ROTATION_MS
+    delay
   );
 }
 
@@ -567,6 +584,7 @@ function setPetIdleDefault(documentRef = document, options = {}) {
   presenceState.recentReply = null;
   presenceState.handoffActive = false;
 
+  setIdleCooldown(presenceState, timerApi, PET_IDLE_LAUNCH_QUIET_MS);  // TASK-159: launch quiet period
   const state = setBubbleState(documentRef, "idle_default");
   startIdleRotation(documentRef, presenceState, timerApi);  // TASK-158
   return state;
@@ -578,6 +596,7 @@ function expireRecentPetReply(documentRef, presenceState, timerApi) {
 
   if (!presenceState.handoffActive) {
     setBubbleState(documentRef, "idle_default");
+    setIdleCooldown(presenceState, timerApi, PET_IDLE_COOLDOWN_MS);  // TASK-159: post-activity cooldown
     startIdleRotation(documentRef, presenceState, timerApi);  // TASK-158
   }
 
@@ -619,7 +638,10 @@ function restorePetPresence(documentRef = document, options = {}) {
 
   clearPresenceTimer(presenceState, "recentTimer", timerApi);
   presenceState.recentReply = null;
-  return setBubbleState(documentRef, "idle_default");
+  const idleResult = setBubbleState(documentRef, "idle_default");
+  setIdleCooldown(presenceState, timerApi, PET_IDLE_COOLDOWN_MS);  // TASK-159: cooldown after show/restore
+  startIdleRotation(documentRef, presenceState, timerApi);  // TASK-159
+  return idleResult;
 }
 
 function showPetHandoffHint(documentRef = document, options = {}) {
@@ -1441,11 +1463,14 @@ if (typeof module !== "undefined") {
     sanitizeBubbleDetailText,
     sourceStatusLabel,
     PET_IDLE_LINES,
+    PET_IDLE_LAUNCH_QUIET_MS,
+    PET_IDLE_COOLDOWN_MS,
     PET_IDLE_ROTATION_MS,
     PET_THINKING_SOURCE,
     isIdleRotationEligible,
     pickNextIdleLine,
     startIdleRotation,
+    setIdleCooldown,
     stopIdleRotation,
     stateForChatSource,
     toggleBubbleDetails,
