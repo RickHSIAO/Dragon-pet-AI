@@ -476,9 +476,18 @@ async function testSuccessfulChatMirrorsReplyToPetSpeech() {
 
   await sendChat(document, "mirror to pet");
 
-  assert.equal(speechUpdates.length, 1);
-  assert.deepEqual(Object.keys(speechUpdates[0]).sort(), ["mood", "reply", "source"]);
-  assert.deepEqual(JSON.parse(JSON.stringify(speechUpdates[0])), {
+  // TASK-157: two calls — thinking first, then reply
+  assert.equal(speechUpdates.length, 2);
+
+  // first call: thinking state mirror
+  assert.equal(speechUpdates[0].source, "pet_thinking",
+    `First updatePetSpeech call should be pet_thinking, got "${speechUpdates[0].source}"`);
+  assert.equal(typeof speechUpdates[0].reply, "string");
+  assert.ok(speechUpdates[0].reply.length > 0, "thinking reply text must not be empty");
+
+  // second call: real reply
+  assert.deepEqual(Object.keys(speechUpdates[1]).sort(), ["mood", "reply", "source"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(speechUpdates[1])), {
     reply: "Hmph, local dragon reply.",
     mood: "focused",
     source: "llm_local",
@@ -1794,6 +1803,64 @@ async function testPhase5FullCompanionIntegrationFlow() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// TASK-157 — Pet Bubble Thinking / Typing State
+// ---------------------------------------------------------------------------
+
+async function testUpdatePetThinkingStateFunctionExists() {
+  // updatePetThinkingState is a `function` declaration — accessible on sandbox
+  const { sandbox } = await loadRenderer();
+  assert.equal(
+    typeof sandbox.updatePetThinkingState,
+    "function",
+    "updatePetThinkingState must be defined in renderer.js"
+  );
+}
+
+async function testUpdatePetThinkingStateCallsUpdatePetSpeechWithPetThinkingSource() {
+  let capturedPayload = null;
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      updatePetSpeech(payload) {
+        capturedPayload = payload;
+        return Promise.resolve({ ok: true });
+      },
+      showPetWindow() { return Promise.resolve({ ok: true }); },
+    },
+  });
+
+  sandbox.updatePetThinkingState();
+
+  assert.ok(capturedPayload !== null,
+    "updatePetThinkingState must call window.dragonPet.updatePetSpeech");
+  assert.equal(capturedPayload.source, "pet_thinking",
+    `source must be "pet_thinking", got "${capturedPayload.source}"`);
+  assert.ok(
+    typeof capturedPayload.reply === "string" && capturedPayload.reply.length > 0,
+    "updatePetThinkingState payload must have a non-empty reply string"
+  );
+  assert.equal(capturedPayload.mood, "focused",
+    `mood must be "focused", got "${capturedPayload.mood}"`);
+  assert.doesNotMatch(capturedPayload.reply, /source:|mood:|\{|\}|llm_local|pet_thinking/,
+    "Thinking reply text must not contain debug tokens");
+}
+
+async function testUpdatePetThinkingStateHandlesNoPetBridge() {
+  // Load without dragonPet so window.dragonPet is undefined
+  const { sandbox } = await loadRenderer();
+  // Ensure window has no dragonPet bridge
+  sandbox.window.dragonPet = undefined;
+  let threw = false;
+  try {
+    sandbox.updatePetThinkingState();
+  } catch (_e) {
+    threw = true;
+  }
+  assert.equal(threw, false,
+    "updatePetThinkingState must not crash when dragonPet bridge is absent");
+}
+
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -1861,6 +1928,10 @@ async function main() {
   await testProviderErrorOverridesGreetingLock();
   await testSourceRuntimeStatusNotClearedByStartupGreeting();
   await testPhase5FullCompanionIntegrationFlow();
+  // TASK-157: Pet Bubble Thinking / Typing State
+  await testUpdatePetThinkingStateFunctionExists();
+  await testUpdatePetThinkingStateCallsUpdatePetSpeechWithPetThinkingSource();
+  await testUpdatePetThinkingStateHandlesNoPetBridge();
   console.log("renderer chat smoke: PASS");
 }
 

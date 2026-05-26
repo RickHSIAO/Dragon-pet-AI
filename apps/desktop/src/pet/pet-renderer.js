@@ -14,6 +14,9 @@ const PET_IDLE_REPLY = "\u543e\u5728\u3002\u8981\u627e\u543e\u5c31\u53bb Full Ap
 const PET_HANDOFF_REPLY = "\u53bb Full App \u8aaa\uff0c\u543e\u6703\u807d\u3002";
 const PET_MOOD_SMOKE_REPLY = "\u8868\u60c5\u6620\u5c04\u6e2c\u8a66\u3002";
 const PET_MOOD_SMOKE_API_NAME = "__dragonPetMoodExpressionSmoke";
+// TASK-157: source token that signals Full App is waiting for a /chat reply.
+// Pet renderer routes this to the "thinking" bubble state.
+const PET_THINKING_SOURCE = "pet_thinking";
 const PET_RECENT_REPLY_VISIBLE_MS = 90000;
 const PET_HANDOFF_HINT_MS = 6000;
 const PET_DETAIL_TEXT_LIMIT = 140;
@@ -312,9 +315,16 @@ function setPetExpression(documentRef, mood) {
   const { mood: normalizedMood, assetPath } = expressionAssetForMood(mood);
   const avatarContainer = documentRef.getElementById("pet-avatar-container");
   const avatar = documentRef.getElementById("pet-avatar");
+  // TASK-156: also stamp root so DevTools can verify expression without
+  // hunting inside the avatar container.
+  const root = documentRef.getElementById("pet-mode-root");
 
   if (avatarContainer) {
     avatarContainer.dataset.expression = normalizedMood;
+  }
+
+  if (root) {
+    root.dataset.expression = normalizedMood;
   }
 
   if (avatar) {
@@ -370,6 +380,8 @@ function truncatePetReply(reply, limit = PET_REPLY_PREVIEW_LIMIT) {
 }
 
 function stateForChatSource(source, reply) {
+  // TASK-157: thinking signal from Full App pre-fetch phase
+  if (source === PET_THINKING_SOURCE) return "thinking";
   if (source === "llm_local_error") return "llm_local_error";
   if (source === "mock") return "fallback_mock";
   if (isLongReply(reply)) return "long_reply";
@@ -1089,7 +1101,12 @@ function renderPetSpeechUpdate(documentRef = document, payload = {}, options = {
   };
 
   const renderedState = setBubbleState(documentRef, nextState, bubbleOptions);
-  rememberRecentPetReply(documentRef, nextState, bubbleOptions, options);
+  // TASK-157: thinking is transient — do not persist it as a recent reply.
+  // When the window is shown/focused, it should restore the last real reply
+  // or idle, not re-show the thinking bubble.
+  if (renderedState !== "thinking") {
+    rememberRecentPetReply(documentRef, nextState, bubbleOptions, options);
+  }
   return renderedState;
 }
 
@@ -1346,6 +1363,7 @@ if (typeof module !== "undefined") {
     normalizePetMood,
     sanitizeBubbleDetailText,
     sourceStatusLabel,
+    PET_THINKING_SOURCE,
     stateForChatSource,
     toggleBubbleDetails,
     toggleDetailsFromMenu,

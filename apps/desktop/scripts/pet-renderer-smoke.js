@@ -1960,6 +1960,54 @@ function testPetRendererOpenFullAppFallbackDoesNotCrash() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// TASK-157 — Pet Bubble Thinking / Typing State
+// ---------------------------------------------------------------------------
+
+async function testPetThinkingSourceMapsToThinkingState() {
+  const { stateForChatSource, PET_THINKING_SOURCE } = require(petRendererPath);
+  const state = stateForChatSource(PET_THINKING_SOURCE, "any reply text");
+  assert.equal(state, "thinking",
+    `Expected stateForChatSource("${PET_THINKING_SOURCE}", ...) to return "thinking", got "${state}"`);
+}
+
+async function testPetThinkingRenderShowsReplyInBubble() {
+  const { renderPetSpeechUpdate, PET_THINKING_SOURCE } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const reply = "\u543e\u3001\u543e\u624d\u4e0d\u662f\u5728\u8a8d\u771f\u601d\u8003\u5462\u2026\u2026\u7b49\u4e00\u4e0b\uff01";
+  const state = renderPetSpeechUpdate(doc, { reply, mood: "focused", source: PET_THINKING_SOURCE });
+  assert.equal(state, "thinking",
+    `Expected renderPetSpeechUpdate with pet_thinking source to return "thinking", got "${state}"`);
+  const responseEl = doc.getElementById("pet-bubble-response");
+  assert.ok(responseEl && responseEl.textContent === reply,
+    `Expected bubble response to show thinking text, got "${responseEl && responseEl.textContent}"`);
+}
+
+async function testPetThinkingRenderBubbleIsClean() {
+  const { renderPetSpeechUpdate, PET_THINKING_SOURCE } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  renderPetSpeechUpdate(doc, {
+    reply: "\u543e\u6b63\u5728\u60f3\u3002",
+    mood: "focused",
+    source: PET_THINKING_SOURCE,
+  });
+  const responseEl = doc.getElementById("pet-bubble-response");
+  const text = responseEl ? responseEl.textContent : "";
+  assert.doesNotMatch(text, /pet_thinking|source:|mood:|\{|\}/,
+    `Thinking bubble must not contain debug tokens, got: "${text}"`);
+}
+
+async function testPetThinkingSourceConstantIsExported() {
+  const { PET_THINKING_SOURCE } = require(petRendererPath);
+  assert.equal(typeof PET_THINKING_SOURCE, "string",
+    `PET_THINKING_SOURCE must be a string, got ${typeof PET_THINKING_SOURCE}`);
+  assert.ok(PET_THINKING_SOURCE.length > 0,
+    `PET_THINKING_SOURCE must be a non-empty string`);
+  assert.equal(PET_THINKING_SOURCE, "pet_thinking",
+    `PET_THINKING_SOURCE must equal "pet_thinking", got "${PET_THINKING_SOURCE}"`);
+}
+
+
 async function run() {
   const tests = [
     testPetFilesExist,
@@ -2008,6 +2056,10 @@ async function run() {
     testPetRendererMenuActionsUseNarrowApis,
     testPetRendererMenuActionFallbacksDoNotCrash,
     testPetRendererOpenFullAppFallbackDoesNotCrash,
+    testPetThinkingSourceMapsToThinkingState,
+    testPetThinkingRenderShowsReplyInBubble,
+    testPetThinkingRenderBubbleIsClean,
+    testPetThinkingSourceConstantIsExported,
   ];
 
   for (const test of tests) {

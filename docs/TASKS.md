@@ -8332,6 +8332,389 @@ Validation:
 
 ---
 
+## TASK-157 - Pet Bubble Thinking / Typing State
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-26
+**Type:** Frontend — renderer.js + pet-renderer.js + smoke tests
+
+Goal:
+
+While Full App is waiting for a `/chat` response, the Pet Window should
+immediately show a clean thinking / typing state so the user does not
+think the Pet Window has frozen.
+
+Context:
+
+- TASK-155 / TASK-156 are DONE - PASS.
+- Pet Bubble correctly shows only `reply` text; JSON unwrapping is in place.
+- Currently, between the moment the user sends a message and the moment the
+  Pet Window receives the IPC speech update, the Pet Window stays frozen on
+  whatever state it had previously (idle, last reply, etc.).
+- This gap is most noticeable for slow Ollama first-token latency.
+
+Requirements:
+
+1. When Full App calls `sendMessage()` and the `/chat` fetch starts, Pet
+   Window immediately shows a thinking bubble state.
+2. Thinking bubble text must be in character (Christina / tsundere tone).
+3. Thinking bubble must not show raw JSON, schema, mood, source, or debug.
+4. When the backend reply arrives, the thinking bubble is replaced by the
+   real reply.
+5. If the request fails, the thinking bubble is replaced by a clean error
+   message in the Pet Window bubble.
+6. Full App original chat / status / expression behavior is unchanged.
+7. Pet Window mood / expression behavior is unchanged.
+8. No new wide IPC APIs; the existing `window.dragonPet.updatePetSpeech`
+   narrow bridge is reused with `source: "pet_thinking"`.
+9. If Pet Window is not open, Full App must not crash.
+10. Smoke tests added / updated.
+
+Implementation:
+
+`pet-renderer.js`:
+- Add `PET_THINKING_SOURCE = "pet_thinking"` constant.
+- In `stateForChatSource()`: `source === PET_THINKING_SOURCE` → `"thinking"`.
+- In `renderPetSpeechUpdate()`: skip `rememberRecentPetReply` when the
+  resolved state is `"thinking"` (thinking is not a persistent presence
+  state — it should not be restored on window show/focus).
+- Export `PET_THINKING_SOURCE`.
+
+`renderer.js`:
+- Add `PET_THINKING_REPLY_TEXT` constant (in-character thinking text).
+- Add `function updatePetThinkingState()` — sends
+  `{ reply: PET_THINKING_REPLY_TEXT, mood: "focused", source: "pet_thinking" }`
+  via `window.dragonPet.updatePetSpeech`.
+- In `sendMessage()`, call `updatePetThinkingState()` right after
+  `setPetHint("thinking…")` and before the `fetch()` call.
+- In `sendMessage()` `catch` block, call `updatePetSpeechFromChatResponse()`
+  with `{ reply: "", mood: "worried", source: "llm_local_error" }` to
+  replace the thinking bubble with a clean error state.
+
+Smoke tests:
+- `pet-renderer-smoke.js`: 4 new tests for `PET_THINKING_SOURCE` routing,
+  bubble text, and cleanliness.
+- `renderer-chat-smoke.js`: 3 new tests for `updatePetThinkingState`
+  existence, payload shape, and no-bridge resilience.
+- Updated `testSuccessfulChatMirrorsReplyToPetSpeech` to assert both the
+  thinking call (first) and the reply call (second) in order.
+
+Changed files:
+
+- `apps/desktop/src/pet/pet-renderer.js`
+- `apps/desktop/src/renderer/renderer.js`
+- `apps/desktop/scripts/pet-renderer-smoke.js`
+- `apps/desktop/scripts/renderer-chat-smoke.js`
+- `docs/TASKS.md`
+- `docs/ROADMAP.md`
+- `docs/PET_MODE_MANUAL_SMOKE_RUNBOOK.md` (thinking state verification step)
+
+Non-goals:
+
+- No backend / LLM provider changes.
+- No TASK-156 JSON unwrap changes.
+- No persona / character prompt changes.
+- No new IPC channels (reuses existing `updatePetSpeech`).
+- No new expression assets or animation.
+- No Pet Window layout changes.
+
+Windows manual smoke results (2026-05-26):
+
+- Sending a Full App chat message immediately mirrors a Pet thinking bubble before
+  fetch completes: PASS
+- Pet thinking bubble shows clean character-facing text only
+  (`吾、吾才不是在認真思考呢……等一下！`): PASS
+- Thinking bubble uses focused mood / focused expression: PASS
+- On successful backend reply, thinking bubble replaced by final clean reply: PASS
+- On error, thinking bubble replaced by clean error fallback: PASS
+- Pet Bubble never shows source, mood, debug, raw JSON, thinking markers, or
+  diagnostics as normal speech: PASS
+- Thinking state not remembered as recent reply: PASS
+- After hiding/showing Pet Window, thinking text does not restore: PASS
+- TASK-149 through TASK-154 behavior did not regress: PASS
+- Verdict: DONE - WINDOWS MANUAL SMOKE PASS
+
+---
+
+## TASK-156 - Pet Bubble Raw JSON + Expression Switch Fix
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-26
+**Type:** Bug fix — backend (ollama_provider.py) + Pet renderer (pet-renderer.js) + runbook update
+
+Goal:
+
+Fix two bugs found during TASK-155 Windows Manual Smoke:
+
+Bug A — Pet Bubble shows raw JSON instead of reply text.
+Bug B — Avatar expression did not appear to visually change across mood states.
+
+Root cause analysis:
+
+Bug A: qwen3:8b model outputs its completion in JSON format
+  `{"reply": "...", "mood": "...", "source": "..."}` when instructed by a
+  structured system prompt. The Ollama provider's `_final_answer_text()`
+  extracts `message.content` verbatim, so the JSON string propagates as
+  `llm_response.text` → `chat_service reply` → renderer `data.reply` → pet bubble.
+
+Bug B: `setPetExpression()` correctly sets `avatar.src` and
+  `avatarContainer.dataset.expression`, but the Pet Window only exposes
+  `#pet-avatar-container[data-expression]` for DevTools verification —
+  `#pet-mode-root` has no `data-expression` attribute, making state harder
+  to inspect. All 7 expression assets exist and have distinct file sizes;
+  the most likely cause is that expression changes are visually subtle at
+  142 × 142 px and the tester could not verify the src change without
+  DevTools guidance.
+
+Fixes:
+
+Bug A fix (backend):
+  - Add `_try_unwrap_json_reply(text)` in `ollama_provider.py`.
+  - Detects a JSON object with a `"reply"` string key and extracts that string.
+  - Called inside `_extract_llm_response()` after `_final_answer_text()`.
+  - Requires `import json` at top of file.
+  - Minimal: only unwraps when output starts/ends with `{}` and has `reply` key.
+
+Bug B fix (frontend):
+  - In `pet-renderer.js` `setPetExpression()`, also write
+    `root.dataset.expression = normalizedMood` when root exists.
+  - This gives testers a stable, top-level `data-expression` on
+    `#pet-mode-root` to verify in DevTools Elements panel.
+  - Update `docs/PET_MODE_MANUAL_SMOKE_RUNBOOK.md` with exact DevTools
+    commands to verify expression switching.
+
+Acceptance criteria:
+
+- `_try_unwrap_json_reply` passes four pytest cases: plain text pass-through,
+  JSON with `reply` key, JSON without `reply` key, malformed JSON.
+- `node --check` PASS on `pet-renderer.js`.
+- All smoke scripts PASS.
+- `backend pytest` PASS.
+- Pet bubble shows only `reply` text when Ollama returns JSON-wrapped output.
+- `document.getElementById('pet-mode-root').dataset.expression` changes when
+  `window.__dragonPetMoodExpressionSmoke.apply(mood)` is called.
+
+Changed files:
+
+- `backend/app/llm/ollama_provider.py` (add JSON unwrap helper + import json)
+- `backend/tests/test_ollama_provider.py` (new tests for JSON unwrapping)
+- `apps/desktop/src/pet/pet-renderer.js` (propagate data-expression to root)
+- `docs/PET_MODE_MANUAL_SMOKE_RUNBOOK.md` (DevTools verification commands)
+- `docs/TASKS.md`
+- `docs/ROADMAP.md`
+
+Non-goals:
+
+- No `/chat` schema changes.
+- No provider routing / Ollama routing changes.
+- No persona prompt changes.
+- No IPC / preload API changes.
+- No new images or assets.
+- No Full App renderer changes.
+
+---
+
+Changed files:
+
+- `backend/app/llm/ollama_provider.py` (added `import json`; added
+  `_try_unwrap_json_reply()` module-level function; called from
+  `_extract_llm_response()` after `_final_answer_text()`)
+- `backend/tests/test_llm_ollama_provider.py` (added import for
+  `_try_unwrap_json_reply`; added 8 new test functions covering plain text
+  pass-through, JSON with reply key, JSON without reply key, empty reply,
+  non-string reply, whitespace strip, malformed JSON, and end-to-end
+  `generate()` unwrapping)
+- `apps/desktop/src/pet/pet-renderer.js` (in `setPetExpression()`, added
+  `root = documentRef.getElementById("pet-mode-root")` and
+  `root.dataset.expression = normalizedMood` after the avatarContainer write)
+- `docs/PET_MODE_MANUAL_SMOKE_RUNBOOK.md` (extended section 7 with three
+  DevTools verification methods: smoke hook return `.src`, root
+  `data-expression` attribute, and img src in Elements panel; added file
+  size reference table for all 7 expression assets)
+- `docs/TASKS.md`
+- `docs/ROADMAP.md`
+
+Validation:
+
+- `node --check` on pet-renderer.js, renderer.js, all 3 smoke scripts: PASS.
+- `pet-renderer-smoke.js` (46 checks): PASS.
+- `pet-window-smoke.js` (15 checks): PASS.
+- `renderer-chat-smoke.js` (56 checks): PASS.
+- `python3 -m pytest tests/ -q --no-header -p no:cacheprovider`: 619 passed
+  (586 pre-existing + 33 new Ollama JSON unwrapping tests).
+- `_try_unwrap_json_reply` import + manual sanity check: PASS.
+- `python3 -c "import ast; ast.parse(open('ollama_provider.py').read())"`: PASS.
+
+Next recommendation:
+
+- Restart backend + Electron on Windows.
+- Send a message from Full App and confirm Pet Bubble shows only the reply
+  text (no raw JSON `{"reply":...}` wrapper).
+- In Pet Window DevTools console, call
+  `window.__dragonPetMoodExpressionSmoke.apply("focused")` and verify that
+  `document.getElementById("pet-mode-root").dataset.expression` equals
+  `"focused"`.
+- If both pass, close TASK-155 and TASK-156 as DONE - PASS.
+
+Windows Manual Smoke Results (2026-05-26):
+
+- Backend restart: PASS.
+- Backend health check (`Invoke-RestMethod http://127.0.0.1:8000/health`): PASS.
+- Electron Pet Mode restart: PASS.
+- Pet Window opens: PASS.
+- Pet Bubble JSON unwrap: PASS. Pet Bubble now shows reply-only text. No raw
+  JSON, no reply/mood/source wrapper.
+- Expression verification: neutral PASS, focused PASS, proud PASS, worried
+  PASS, missing PASS (fallback to neutral), happy PASS, annoyed PASS,
+  sleepy PASS.
+- `document.getElementById("pet-mode-root").dataset.expression` check: PASS.
+  Returns the applied mood (e.g. `annoyed`).
+- Avatar src changes: PASS. Smoke output shows different
+  `christina_<mood>.png` filenames for each mood.
+
+---
+
+
+## TASK-155 - Pet Runtime Manual Smoke / Launch Runbook Polish Design
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-26
+**Type:** Docs-only
+
+Goal:
+
+Consolidate Windows launch instructions, Pet Window manual smoke steps, DevTools
+smoke hooks, and validation command reference into a single clear runbook so that
+any future manual smoke pass can be executed end-to-end without hunting across
+multiple docs.
+
+Context:
+
+- TASK-148 through TASK-154 are DONE - PASS and committed.
+- The project now has stable Pet Window behavior, clean Pet Bubble speech, Ollama
+  reliability, thinking sanitization, details disclosure UX, mood expression
+  mapping, and richer `/chat` mood selection.
+- A user-facing startup note exists at `docs/開啟方式.txt` covering the three
+  terminal startup sequence (Ollama / backend / Electron + PET_MODE_ENABLED).
+- `docs/LOCAL_DEV_RUNBOOK.md` covers the general dev stack but predates Pet Mode
+  and does not cover Pet-specific smoke steps, DevTools access, or Windows
+  `.pytest-tmp` permission workarounds.
+- `docs/PET_MODE_UI_DESIGN.md` and `docs/PET_BUBBLE_CHAT_WIRING_DESIGN.md`
+  describe runtime design but are not step-by-step operator guides.
+- `docs/OLLAMA_PROVIDER_DESIGN.md` covers Ollama backend wiring but not
+  `ollama ps` / warm-up steps as a smoke checklist.
+
+Scope:
+
+- Update `docs/LOCAL_DEV_RUNBOOK.md` to add a Pet Mode section covering all
+  required manual smoke steps.
+- Alternatively create `docs/PET_MODE_MANUAL_SMOKE_RUNBOOK.md` if a separate
+  document is cleaner.
+- Update `docs/TASKS.md` and `docs/ROADMAP.md`.
+- No runtime, backend, or desktop source files may be modified.
+
+Expected runbook coverage:
+
+1. How to launch Ollama (`ollama serve`; ignore "already running"; warm-up with
+   `ollama run qwen3:8b "..."` before first smoke).
+2. How to launch backend (`dev-start-backend.ps1`; confirm `Uvicorn running on
+   http://127.0.0.1:8000`).
+3. How to launch desktop app with Pet Mode
+   (`$env:PET_MODE_ENABLED="true"; npm.cmd start`).
+4. How to show/open Pet Window from Full App (Show Pet button).
+5. How to open Full App DevTools vs Pet Window DevTools (separate Electron
+   windows, separate DevTools contexts).
+6. How to run the Pet mood expression smoke hook from DevTools console
+   (e.g. call `setPetExpression` or equivalent from the Pet renderer DevTools).
+7. How to verify Ollama is reachable (`curl http://localhost:11434`).
+8. How to check `ollama ps` to confirm model is loaded.
+9. How to handle `.pytest-tmp` permission issues on Windows (use `--basetemp`
+   outside the NTFS mount, e.g. `--basetemp C:/tmp/pytest-dragon`).
+10. How to run backend pytest with a fresh basetemp
+    (`python -m pytest --basetemp C:/tmp/pytest-dragon -p no:cacheprovider`).
+11. How to run desktop smoke scripts
+    (`node apps/desktop/scripts/pet-renderer-smoke.js`,
+     `node apps/desktop/scripts/pet-window-smoke.js`,
+     `node apps/desktop/scripts/renderer-chat-smoke.js`).
+12. How to confirm Pet Bubble remains clean (no mood/source/debug in visible
+    speech text; `/chat` schema stays `reply / mood / source`).
+
+Acceptance criteria:
+
+- All command blocks are copy-pasteable on Windows PowerShell without modification.
+- No stale references to old task statuses or superseded docs.
+- No runtime files modified.
+- Runbook covers all twelve topic areas listed above.
+- `git diff --check` PASS.
+
+Validation expectations:
+
+- `rg TASK-155 docs/TASKS.md docs/ROADMAP.md` confirms TASK-155 present in both.
+- `python3 -c "open(...,'rb').read().count(b'\x00')"` returns 0 for both docs.
+- No backend, renderer, smoke script, asset, or source file appears in
+  `git diff HEAD` output for this task.
+
+Non-goals:
+
+- No runtime behavior changes.
+- No new feature implementation.
+- No backend / provider / schema changes.
+- No Pet UI changes.
+- No new assets.
+- No IPC / preload API changes.
+- No provider settings changes.
+
+Changed files:
+
+- `docs/PET_MODE_MANUAL_SMOKE_RUNBOOK.md` (new — 453 lines, 15 sections)
+- `docs/LOCAL_DEV_RUNBOOK.md` (updated — Pet Mode cross-reference added)
+- `docs/TASKS.md`
+- `docs/ROADMAP.md`
+
+Implementation notes:
+
+- Created `docs/PET_MODE_MANUAL_SMOKE_RUNBOOK.md` as a standalone Pet-specific
+  operator guide. `docs/LOCAL_DEV_RUNBOOK.md` was kept for the general stack and
+  now has a cross-reference blockquote pointing to the new file.
+- `docs/開啟方式.txt` was not deleted or modified — it remains a valid quick-start
+  note in Chinese and complements the new English runbook.
+- All 15 required topic areas are covered.
+- All commands are Windows PowerShell copy-pasteable.
+- No runtime, backend, or desktop source files were modified.
+
+Validation:
+
+- `rg TASK-155 docs/TASKS.md docs/ROADMAP.md` - PASS.
+- `rg "Pet Window DevTools" docs/` - PASS.
+- `rg "__dragonPetMoodExpressionSmoke" docs/` - PASS.
+- NUL bytes: 0 in all changed docs.
+- Trailing whitespace: 0 lines in all changed docs.
+- No runtime implementation files changed.
+
+Next recommendation:
+
+- Run Windows manual smoke using `docs/PET_MODE_MANUAL_SMOKE_RUNBOOK.md` as the
+  operator guide and close TASK-155 as DONE - PASS.
+
+Windows Manual Smoke Results (2026-05-26):
+
+- Backend restart: PASS.
+- Backend health check: PASS.
+- Electron Pet Mode (`$env:PET_MODE_ENABLED="true"; npm.cmd start`): PASS.
+- Pet Window opens: PASS.
+- Pet Bubble cleanliness: PASS (after TASK-156 JSON unwrap fix — Pet Bubble
+  shows only reply text, no raw JSON wrapper).
+- Expression verification via `window.__dragonPetMoodExpressionSmoke.apply()`:
+  neutral PASS, focused PASS, proud PASS, worried PASS, missing PASS (neutral
+  fallback), happy PASS, annoyed PASS, sleepy PASS.
+- `document.getElementById("pet-mode-root").dataset.expression` check: PASS.
+- Avatar src changes verified per mood: PASS.
+
+Note: TASK-155 Windows manual smoke initially found two bugs (TASK-156). The
+bugs were fixed in TASK-156 and re-verified in the same smoke session.
+
+---
+
 ## TASK-154 - Chat Mood Selector Richness Polish Design
 
 **Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS

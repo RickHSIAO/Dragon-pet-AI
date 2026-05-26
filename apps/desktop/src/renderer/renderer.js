@@ -157,6 +157,23 @@ function updatePetSpeechFromChatResponse(data) {
   return result || null;
 }
 
+// TASK-157: in-character thinking text shown in Pet Window while waiting for /chat.
+const PET_THINKING_REPLY_TEXT =
+  "吾、吾才不是在認真思考呢……等一下！";
+
+function updatePetThinkingState() {
+  const api =
+    typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null;
+  if (!api || typeof api.updatePetSpeech !== "function") return null;
+  const result = api.updatePetSpeech({
+    reply: PET_THINKING_REPLY_TEXT,
+    mood: "focused",
+    source: "pet_thinking",
+  });
+  if (result && typeof result.catch === "function") result.catch(() => {});
+  return result || null;
+}
+
 // ---------------------------------------------------------------------------
 // Idle State (TASK-108) — Companion Behavior Loop
 // Safety: idle logic is UI-only. No /chat calls, no network, no file access.
@@ -1519,6 +1536,7 @@ async function sendMessage(text) {
   // TASK-083: show thinking expression while waiting for reply
   setPetExpression("pending");
   setPetHint("thinking…");
+  updatePetThinkingState(); // TASK-157: mirror thinking state to Pet Window
   msgInput.value = "";
   msgInput.style.height = "auto";
 
@@ -1584,6 +1602,8 @@ async function sendMessage(text) {
       isNetworkError ? sourceStatusMessage("backend_offline") : err.message,
       "error"
     );
+    // TASK-157: replace thinking bubble with clean error state in Pet Window
+    updatePetSpeechFromChatResponse({ reply: "", mood: "worried", source: "llm_local_error" });
     appendMessage("error", errText);
     maybeScrollChatToBottom(); // TASK-113: scroll to error only if user was near bottom
   } finally {
