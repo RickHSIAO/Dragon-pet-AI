@@ -307,7 +307,14 @@ function testPetCssUsesStaticPetDimensions() {
   assertRegex(css, /\.pet-shell:not\(\[data-bubble-state="collapsed"\]\) \.pet-avatar[\s\S]*width:\s*142px/, "pet.css");
   assertRegex(css, /\.pet-shell:not\(\[data-bubble-state="collapsed"\]\) \.pet-avatar[\s\S]*height:\s*142px/, "pet.css");
   assertRegex(css, /\.pet-avatar[\s\S]*object-fit:\s*contain/, "pet.css");
-  assertNotIncludes(css, "filter:", "pet.css");
+  // TASK-166A: drop-shadow is allowed on .pet-avatar for wallpaper contrast;
+  // destructive filter types (blur, brightness, invert, etc.) remain prohibited
+  assertRegex(css, /\.pet-avatar[\s\S]*filter:\s*drop-shadow/, "pet.css");
+  assertNotIncludes(css, "filter: blur", "pet.css");
+  assertNotIncludes(css, "filter: brightness", "pet.css");
+  assertNotIncludes(css, "filter: invert", "pet.css");
+  assertNotIncludes(css, "filter: grayscale", "pet.css");
+  assertNotIncludes(css, "filter: opacity", "pet.css");
   assertNotIncludes(css, "mix-blend-mode", "pet.css");
   assertNotIncludes(css, "background-image", "pet.css");
   assertNotIncludes(css, "mask-image", "pet.css");

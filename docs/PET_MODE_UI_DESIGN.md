@@ -1499,3 +1499,67 @@ Manual smoke required:
 - Should click-through be a power-user option?
 - Should Bubble Chat show only current session messages or reuse recent persisted history?
 - Position persistence now lives in Electron user data as of TASK-122.
+
+---
+
+## 13. TASK-166A — Transparent Shell Polish (2026-05-27)
+
+### What changed
+
+**`apps/desktop/src/main.js` — `createPetWindow()` BrowserWindow options:**
+
+```js
+backgroundColor: "#00000000",  // TASK-166A: explicit transparent for GPU driver compat
+skipTaskbar: true,             // TASK-166A: companion overlay should not appear in taskbar
+```
+
+- `backgroundColor: "#00000000"` ensures GPU drivers that ignore `transparent: true`
+  alone still render the window without a white or black backing. Both `transparent:
+  true` and `backgroundColor: "#00000000"` are required for reliable cross-driver
+  transparency on Windows.
+- `skipTaskbar: true` removes the Pet Window from the Windows taskbar. A desktop
+  companion overlay is ambient — it should not compete with real app windows for
+  taskbar space. Note: the earlier TASK-114 design document suggested deferring this
+  until tray support exists; TASK-166A reverses that decision because the companion
+  UX benefit is clear and no tray dependency actually exists.
+
+**`apps/desktop/src/pet/pet.css` — `.pet-avatar`:**
+
+```css
+filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.18));
+/* TASK-166A: subtle drop-shadow keeps character readable on varied wallpapers */
+```
+
+- `drop-shadow` is a safe filter type: it adds a soft outline around the character's
+  transparent PNG alpha channel rather than distorting the image itself.
+- Destructive filter types (blur, brightness, contrast, invert, grayscale, opacity,
+  saturate) remain prohibited and are now enforced by `pet-renderer-smoke.js`.
+
+**`apps/desktop/src/pet/pet.css` — `.pet-avatar-container`:**
+
+```css
+background: transparent;  /* TASK-166A: character sits against shell frosted bg */
+```
+
+- Pre-TASK-166A value was `rgba(255, 255, 255, 0.36)` — a faint white backing that
+  created a visible pale rectangle behind the character on dark wallpapers.
+- The frosted shell (`.pet-shell`) already provides the visual background; the
+  avatar container does not need a second backing.
+
+### What was NOT changed
+
+- `transparent: true` and `frame: false` were already set before TASK-166A; no change.
+- The `.pet-shell` frosted glass CSS (`background: rgba(255,250,244,0.72)`,
+  `box-shadow`, `border-radius: 18px`, `border`) was not touched.
+- No new IPC channels.
+- No click-through (deferred to TASK-166D).
+- No scale presets (deferred to TASK-166C).
+- No always-on-top recovery (deferred to TASK-166B).
+
+### Open question resolved
+
+> "Should Pet Mode be hidden from taskbar only after tray support exists?"
+
+Resolved: NO. `skipTaskbar: true` is applied immediately. The companion overlay
+UX is cleaner without a taskbar entry whether or not a tray icon exists. Tray
+support (if added later) is independent.

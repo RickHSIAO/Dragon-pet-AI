@@ -99,7 +99,7 @@ body {
   display: grid;
   place-items: center;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.36);
+  background: transparent;  /* TASK-166A: character sits against shell frosted bg; no double backing */
   -webkit-app-region: no-drag;
 }
 
@@ -115,6 +115,8 @@ body {
   user-select: none;
   -webkit-user-drag: none;
   -webkit-app-region: no-drag;
+  /* TASK-166A: subtle drop-shadow keeps character readable on varied wallpapers */
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.18));
 }
 
 .pet-shell:not([data-bubble-state="collapsed"]) .pet-avatar {

@@ -352,6 +352,22 @@ function testQuietModePersistenceRendererCallsPersistOnToggle() {
   assertIncludes(renderer, 'typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null', "pet-renderer.js");
 }
 
+function testPetOverlayShellSkipsTaskbar() {
+  // TASK-166A: companion overlay must not appear as a normal app in the taskbar
+  const main = readText(mainPath);
+  assertRegex(main, /skipTaskbar:\s*true/, "main.js");
+}
+
+function testPetOverlayShellTransparentBackground() {
+  // TASK-166A: explicit #00000000 backgroundColor ensures GPU-driver transparency compat
+  const main = readText(mainPath);
+  assertIncludes(main, 'backgroundColor: "#00000000"', "main.js");
+  // Sanity: transparent and frame:false must still be present
+  assertRegex(main, /transparent:\s*true/, "main.js");
+  assertRegex(main, /frame:\s*false/, "main.js");
+}
+
+
 function run() {
   const tests = [
     testMainHasPetWindowPrototype,
@@ -375,6 +391,9 @@ function run() {
     testQuietModePersistenceStartupUrlParam,
     testQuietModePersistencePreloadExposesSetter,
     testQuietModePersistenceRendererCallsPersistOnToggle,
+    // TASK-166A
+    testPetOverlayShellSkipsTaskbar,
+    testPetOverlayShellTransparentBackground,
   ];
 
   for (const test of tests) {

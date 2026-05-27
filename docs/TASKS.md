@@ -7307,9 +7307,100 @@ from a temp copy outside the NTFS mount to avoid lock contention:
 
 ---
 
+## TASK-166A - Pet Overlay Transparent Shell Polish
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-27
+**Type:** Implementation — v0.2 Desktop Companion Shell (slice 1 of 5)
+
+Goal:
+
+Make the Pet Window feel more like a desktop companion overlay. Focus only on
+the transparent/frameless/visual shell layer — no click-through, no scale
+presets, no resize, no direct Pet text input, no voice, no screen capture, no
+backend changes.
+
+Scope:
+
+- `apps/desktop/src/main.js` — `backgroundColor: "#00000000"` and
+  `skipTaskbar: true` added to `createPetWindow()` BrowserWindow options.
+- `apps/desktop/src/pet/pet.css` — `.pet-avatar` gets
+  `filter: drop-shadow(0 2px 8px rgba(0,0,0,0.18))` for wallpaper contrast;
+  `.pet-avatar-container` background changed from `rgba(255,255,255,0.36)` to
+  `transparent`.
+- `apps/desktop/scripts/pet-window-smoke.js` — 2 new tests (20→22 checks):
+  `testPetOverlayShellSkipsTaskbar` and `testPetOverlayShellTransparentBackground`.
+- `apps/desktop/scripts/pet-renderer-smoke.js` — broad `filter:` prohibition
+  replaced with targeted destructive-filter prohibitions + positive `drop-shadow`
+  assertion (83 checks unchanged).
+
+Changes NOT made (all deferred):
+
+- Click-through toggle.
+- Scale presets (Small/Medium/Large).
+- Pet direct text input.
+- Always-on-top edge-case recovery.
+- Natural bubble placement.
+- Any new IPC channels.
+- Any backend changes.
+
+Preserved behaviors (all TASK-148–163 behaviors intact):
+
+- Clean bubble reply-only display.
+- Thinking bubble transition.
+- Idle presence rotation + cooldown.
+- Quiet Mode ON/OFF + persistence.
+- Position persistence + off-screen fallback.
+- 83 pet-renderer-smoke checks pass.
+- 22 pet-window-smoke checks pass.
+- Chat smoke pass.
+- 619 pytest pass.
+- `git diff --check` clean.
+
+Automated validation (2026-05-27):
+
+| Command | Result |
+|---|---|
+| `node apps/desktop/scripts/pet-renderer-smoke.js` | PASS — 83 checks |
+| `node apps/desktop/scripts/pet-window-smoke.js` | PASS — 22 checks |
+| `cd apps/desktop && npm.cmd run test:renderer` | PASS |
+| `python -m pytest --basetemp /tmp/pytest-run166a -p no:cacheprovider -q` | PASS — 619 passed |
+| `git diff --check` | CLEAN |
+
+Windows manual smoke (2026-05-27) — PASS:
+
+- [x] Pet Window does not appear in the Windows taskbar.
+- [x] Pet Window is visually transparent on varied desktop wallpapers — no white/gray
+      background behind the shell or character.
+- [x] Character has a subtle drop shadow visible against both light and dark wallpapers.
+- [x] Bubble remains readable on light/dark/complex backgrounds.
+- [x] Chat / Full App / Menu controls remain reachable.
+- [x] Quiet Mode ON/OFF and collapsed bubble behavior did not regress.
+- [x] TASK-148 position persistence and reset did not regress.
+- [x] TASK-149 clean reply-only bubble did not regress.
+- [x] TASK-152 details disclosure did not regress.
+- [x] TASK-153 mood expression mapping did not regress.
+- [x] TASK-157 thinking bubble transition did not regress.
+- [x] TASK-158/TASK-159 idle rotation and timing behavior did not regress.
+- [x] TASK-162 Quiet Mode persistence did not regress.
+- [x] No click-through, scale, voice, screen capture, Live2D, backend, provider, or
+      schema features were added.
+
+Non-goals (TASK-166A):
+
+- No click-through (TASK-166D).
+- No scale presets (TASK-166C).
+- No always-on-top recovery (TASK-166B).
+- No natural bubble placement (TASK-166E).
+- No backend, provider, schema, or voice changes.
+- No new IPC channels.
+
+
+---
+
 ## TASK-166 - Pet Overlay Shell Polish Design
 
-**Status:** DEFINED
+**Status:** IN PROGRESS — TASK-166A DONE; TASK-166B through TASK-166E pending
 **Date:** 2026-05-27
 **Type:** Design — v0.2 Desktop Companion Shell
 

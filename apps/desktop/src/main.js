@@ -273,7 +273,9 @@ function createPetWindow() {
     height: PET_WINDOW_HEIGHT,
     frame: false,
     transparent: true,
+    backgroundColor: "#00000000",  // TASK-166A: explicit transparent for GPU driver compat
     alwaysOnTop: true,
+    skipTaskbar: true,             // TASK-166A: companion overlay should not appear in taskbar
     resizable: false,
     show: false,
     title: "Dragon Pet AI - Pet Mode",
