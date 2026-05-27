@@ -7307,6 +7307,179 @@ from a temp copy outside the NTFS mount to avoid lock contention:
 
 ---
 
+## TASK-163 - Pet Mode Release Checkpoint / Regression Smoke Design
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-27
+**Type:** Design — checkpoint / regression smoke
+
+Goal:
+
+Consolidate the current Pet Mode feature set into one regression smoke checklist
+before starting the next feature line. TASK-148 through TASK-162 are DONE - PASS.
+Pet Mode now has: stable position persistence, clean bubble speech, Ollama
+reliability, thinking sanitization, details disclosure, mood expression mapping,
+richer mood selection, thinking bubble transition, idle presence rotation, idle
+timing/noise control, Quiet Mode, Quiet Mode persistence, and repo hygiene cleanup.
+This checkpoint confirms all of those behaviors hold together end-to-end on Windows
+before any new feature work begins.
+
+Context:
+
+No new runtime behavior is introduced by this task. The checkpoint is a structured
+regression pass that exercises every Pet Mode subsystem in order, records the result,
+and produces a single DONE gate that downstream tasks can reference.
+
+Expected checkpoint coverage:
+
+1.  Pet Window launch / show / hide (basic window lifecycle).
+2.  Pet Window position persistence — position survives hide/show and app restart.
+3.  Pet Window position reset — reset IPC restores safe default.
+4.  Clean Pet Bubble reply-only behavior — bubble shows only the reply text.
+5.  Details disclosure collapsed by default; expands on explicit click.
+6.  Ollama idle wake / keep_alive / retry behavior (TASK-148 / TASK-150 range).
+7.  Thinking / reasoning sanitization — `<think>` and reasoning tokens stripped
+    before display.
+8.  TASK-157 thinking bubble transition — thinking source shows thinking state;
+    chat reply replaces it.
+9.  Success reply replacement — final reply replaces thinking bubble cleanly.
+10. Error fallback replacement — backend error shows error state; not raw text.
+11. Mood selector richness — full mood option set available in Full App.
+12. Mood expression mapping — selected mood maps to correct Pet expression asset.
+13. Idle presence rotation — idle lines rotate after `PET_IDLE_ROTATION_MS`.
+14. Idle timing / noise-control cooldown — `PET_IDLE_COOLDOWN_MS` blocks rotation
+    after chat reply; `PET_IDLE_LAUNCH_QUIET_MS` delays first rotation on launch.
+15. Quiet Mode ON/OFF behavior — toggle collapses/restores idle bubble and
+    suppresses/restores idle rotation.
+16. Quiet Mode persistence across restart — preference survives app restart.
+17. Corrupt / missing stored quietMode fallback — Pet starts with Quiet Mode OFF;
+    no crash.
+18. No raw JSON / source / debug / details / thinking leakage in normal bubble.
+19. Renderer smoke scripts — all tests pass with current source.
+20. Backend pytest with fresh basetemp — 619 tests pass, no stale cache.
+21. `git diff --check` — no trailing whitespace or CRLF regressions.
+
+Acceptance criteria:
+
+- [ ] All 21 checkpoint items above pass on Windows with current main branch.
+- [ ] No runtime behavior changes introduced by this task (docs-only definition).
+- [ ] Renderer smoke: `node apps/desktop/scripts/pet-renderer-smoke.js` → 83 PASS.
+- [ ] Window smoke: `node apps/desktop/scripts/pet-window-smoke.js` → 20 PASS.
+- [ ] Renderer chat smoke: `cd apps/desktop && npm.cmd run test:renderer` → PASS.
+- [ ] Backend pytest: 619 passed, 0 failed.
+- [ ] `git diff --check` → CLEAN.
+
+Windows manual smoke expectations:
+
+1.  Launch app — Pet Window appears at last-saved position; idle bubble shows after
+    launch quiet delay; idle rotation starts after `PET_IDLE_LAUNCH_QUIET_MS`.
+2.  Hide / Show Pet Window — position and Quiet Mode state are preserved.
+3.  Drag Pet Window — position is saved; survives restart.
+4.  Right-click reset — Pet Window returns to safe default position.
+5.  Send a chat message — Full App sends; thinking bubble appears in Pet Window;
+    final reply replaces thinking; bubble shows reply text only.
+6.  Send a chat message — `<think>` tokens and reasoning text are not visible in
+    Pet Window bubble.
+7.  Backend error scenario — Pet Window shows error fallback state, not raw JSON
+    or stack trace.
+8.  Open Details in Full App — collapsed by default; expands on explicit click;
+    raw JSON, source, mood, debug not visible in Pet Bubble.
+9.  Switch mood in Full App — Pet expression asset updates to match selected mood.
+10. Idle for `PET_IDLE_ROTATION_MS` — idle line rotates; consecutive lines do not
+    repeat.
+11. Send chat reply — idle rotation pauses for `PET_IDLE_COOLDOWN_MS` after reply.
+12. Toggle Quiet Mode ON — idle bubble collapses; idle rotation stops.
+13. Toggle Quiet Mode OFF — idle bubble restores; idle rotation resumes after
+    cooldown.
+14. Restart app with Quiet Mode ON — Quiet Mode is still ON after restart.
+15. Restart app with Quiet Mode OFF — Quiet Mode is still OFF after restart.
+16. Delete `quietMode` key from pet-window-state.json — Pet starts cleanly with
+    Quiet Mode OFF; no crash.
+17. Pet Bubble never shows: source, mood string, debug prefix, thinking markers,
+    raw JSON, provider text, stack traces, or diagnostics at any point.
+
+Recommended validation commands:
+
+```
+python -m pytest --basetemp .\.pytest-tmp-run163 -p no:cacheprovider
+cd apps/desktop && npm.cmd run test:renderer
+node apps/desktop/scripts/pet-renderer-smoke.js
+node apps/desktop/scripts/pet-window-smoke.js
+git diff --check
+```
+
+Non-goals:
+
+- No new runtime behavior.
+- No backend / provider / schema changes.
+- No Pet UI layout changes.
+- No new assets, animation, or voice.
+- No settings architecture expansion.
+- No new IPC channels.
+
+### Implementation Record
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-27
+
+Actions taken:
+
+- Inspected `docs/PET_MODE_RELEASE_CHECKPOINT.md`,
+  `docs/PET_MODE_MANUAL_SMOKE_RUNBOOK.md`, and `docs/LOCAL_DEV_RUNBOOK.md`.
+- Appended a full TASK-163 checkpoint section to
+  `docs/PET_MODE_RELEASE_CHECKPOINT.md` covering:
+  - Stable behavior summary for TASK-148 through TASK-162.
+  - Automated validation results table.
+  - 21-item Windows manual smoke checklist.
+  - Known non-blocking Windows notes (locked `.pytest-tmp*`, Big5 `.gitignore`).
+  - Checkpoint decision and deferred items.
+- No runtime implementation files modified.
+
+Automated validation results (2026-05-27):
+
+- `node apps/desktop/scripts/pet-renderer-smoke.js` → 83 PASS / 0 FAIL
+- `node apps/desktop/scripts/pet-window-smoke.js` → 20 PASS / 0 FAIL
+- `cd apps/desktop && npm run test:renderer` → PASS
+- `python -m pytest --basetemp /tmp/pytest-run163 -p no:cacheprovider` → 619 passed
+- `git diff --check` → CLEAN
+
+Acceptance criteria:
+
+- [x] `docs/PET_MODE_RELEASE_CHECKPOINT.md` updated with TASK-163 section.
+- [x] Checkpoint covers all 21 specified behaviors.
+- [x] Automated gate: 83 + 20 + chat smoke + 619 pytest + git diff PASS.
+- [x] Windows manual smoke 21-item checklist — PASS (2026-05-27).
+- [x] No runtime behavior changes introduced.
+- [x] No backend / provider / schema changes.
+- [x] No desktop source files modified.
+
+Windows manual smoke record (2026-05-27):
+
+- [x] Pet Window launch / show / hide passed.
+- [x] Pet Window position persistence and reset passed.
+- [x] Clean Pet Bubble reply-only behavior passed.
+- [x] Details disclosure collapsed by default and explicit.
+- [x] Ollama idle wake / keep_alive / retry behavior passed.
+- [x] Thinking / reasoning sanitization passed.
+- [x] TASK-157 thinking bubble transition passed.
+- [x] Success reply replaced thinking bubble correctly.
+- [x] Error fallback replaced thinking bubble correctly.
+- [x] Mood selector richness passed.
+- [x] Mood expression mapping passed.
+- [x] Idle presence rotation passed.
+- [x] Idle timing / noise-control cooldown passed.
+- [x] Quiet Mode ON/OFF behavior passed.
+- [x] Quiet Mode persistence across restart passed.
+- [x] Corrupt / missing stored quietMode fallback passed.
+- [x] No raw JSON / source / debug / details / thinking leakage in normal Pet Bubble.
+- [x] Renderer smoke scripts passed.
+- [x] Backend pytest passed with fresh basetemp.
+- [x] git diff --check passed.
+- [x] TASK-148 through TASK-162 accepted as the current stable Pet Mode release checkpoint.
+
+
+---
+
 ## TASK-162 - Pet Quiet Mode Persistence Polish Design
 
 **Status:** DEFINED
