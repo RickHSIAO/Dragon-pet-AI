@@ -7307,6 +7307,172 @@ from a temp copy outside the NTFS mount to avoid lock contention:
 
 ---
 
+## TASK-166D - Pet Click-through Toggle Design
+
+**Status:** DEFINED
+**Date:** 2026-05-27
+**Type:** Design — v0.2 Desktop Companion Shell (slice 4 of 5)
+
+Goal:
+
+Design a safe Pet click-through mode with an explicit recovery path, so the user
+can allow mouse clicks to pass through the Pet Window to apps behind it while the
+Pet remains visible — and can always recover control without being trapped.
+
+Context:
+
+TASK-166A established the transparent frameless shell. TASK-166B added S/M/L scale
+presets. TASK-166C polished the speech-bubble tail and fixed Quiet Mode hint leakage.
+TASK-166D is the next v0.2 slice, focused entirely on click-through safety design.
+
+### 1. Click-through Mode Behavior
+
+- User can toggle click-through from an explicit Pet Menu control.
+- When ON, mouse clicks pass through the Pet Window to applications behind it.
+- Pet remains fully visible; no visual change to speech bubble, tail, or avatar.
+- Pet should not steal focus when click-through is ON.
+- Pet speech, idle presence, and Quiet Mode behavior are unchanged.
+
+### 2. Recovery Path
+
+The user must always have a reliable way to turn click-through OFF. Since click-through
+blocks mouse interaction with the Pet Window, relying on clicking the Pet alone is unsafe.
+
+Preferred recovery options (at least one must be present in any implementation):
+
+- **Hover/recovery strip**: A narrow `pet-no-drag` strip remains interactive even when
+  click-through is ON. When the user hovers over this strip, click-through is temporarily
+  suspended so they can click and toggle it back off. Preferred option.
+- **Full App control**: The Full App can send an IPC command to disable click-through.
+  Requires the Full App window to be open and usable.
+- **Tray / menu command**: If a system tray or OS-level menu is already available, it
+  can expose a "Disable Click-through" command as a fallback. Do not add tray solely for
+  this feature.
+
+Do not add global keyboard hotkeys in this task. Do not allow a state where the user
+cannot recover.
+
+### 3. Safety — Forced-OFF Cases
+
+Click-through must be forced OFF and kept OFF whenever any of the following are true:
+
+| Condition | Reason |
+|---|---|
+| Pet Menu is open | User is interacting with menu controls |
+| Details disclosure is open | User is reading/scrolling details panel |
+| Chat / Full App / Menu controls need interaction | Any clickable Pet control is in use |
+| Window is being dragged or repositioned | Drag logic relies on mouse events |
+| Reset Position is triggered | Position change needs mouse event routing |
+| Hide/Show Pet transition in progress | Visibility change must complete cleanly |
+
+Click-through must NOT:
+
+- Break Show Pet / Hide Pet.
+- Break position persistence or reset.
+- Affect Quiet Mode or Quiet Mode persistence.
+- Affect scale preset persistence.
+
+### 4. Persistence
+
+- Default: OFF.
+- v0.2 preference: session-local only (lost on Pet Window close/relaunch).
+- Rationale: click-through is a transient convenience, not a sticky preference.
+  Persisting it risks the user launching with click-through ON and finding the Pet
+  unresponsive without a visible recovery path.
+- If persistence is added later, it must be explicitly justified, document the
+  recovery path clearly, and gate on the recovery strip being implemented first.
+- Unknown / corrupt stored value: fail safe to OFF.
+
+### 5. IPC / Main Process Design
+
+If click-through is implemented, the Electron main process sets:
+
+```
+BrowserWindow.setIgnoreMouseEvents(true, { forward: true })  // click-through ON
+BrowserWindow.setIgnoreMouseEvents(false)                     // click-through OFF
+```
+
+The `{ forward: true }` option is required on Windows so the renderer can still
+receive pointer events (mouseover, mousemove) for the hover/recovery strip.
+
+IPC channel: `pet:set-click-through` — narrow, Pet-specific only.
+Payload: `{ enabled: boolean }`
+
+Do not expose broad window-control APIs. Do not expose filesystem or settings APIs.
+Do not modify backend, provider, or schema files.
+
+### 6. UI Control
+
+- Add a "Click-through: On/Off" toggle item to the Pet Menu (similar pattern to
+  "Quiet Mode: On/Off" added in TASK-160).
+- Active state must be visibly indicated (`aria-pressed` attribute).
+- The control must be reachable by right-click before click-through is enabled.
+- Recovery UI (hover strip or Full App control) must be implemented at the same time
+  as the toggle — never ship the toggle without the recovery path.
+- No broad settings panel or new modal dialogs.
+
+### 7. Preserved Behaviors
+
+All of the following must remain intact after TASK-166D implementation:
+
+| Task | Behavior |
+|---|---|
+| TASK-166A | Transparent frameless shell |
+| TASK-166B | S / M / L scale presets and persistence |
+| TASK-166C | Speech-bubble tail, placement, Quiet Mode hint suppression |
+| TASK-148 | Position persistence and reset |
+| TASK-149 | Clean reply-only bubble |
+| TASK-152 | Details disclosure |
+| TASK-153 | Mood expression mapping |
+| TASK-157 | Thinking bubble |
+| TASK-158 | Idle rotation |
+| TASK-159 | Timing / noise-control |
+| TASK-160 | Quiet Mode ON/OFF |
+| TASK-162 | Quiet Mode persistence |
+
+### Scope Limits (TASK-166D)
+
+- No direct Pet text input.
+- No voice.
+- No screen capture.
+- No Live2D.
+- No new image assets.
+- No backend, provider, or schema changes.
+- No broad settings architecture.
+- No global hotkeys unless a later task explicitly approves them.
+- TASK-166D is a design-only task. Implementation should be a separate task:
+  TASK-166D is DEFINED only until implementation begins.
+
+### Acceptance Criteria
+
+- [ ] Click-through behavior is documented clearly.
+- [ ] Recovery path is explicitly documented with at least one reliable option.
+- [ ] Safety forced-OFF cases are documented.
+- [ ] Persistence default (OFF, session-local) is documented.
+- [ ] IPC channel and Electron API are documented.
+- [ ] UI control placement (Pet Menu) is documented.
+- [ ] Manual Windows smoke expectations are documented.
+- [ ] No runtime implementation files modified by TASK-166D.
+
+### Manual Windows Smoke Expectations (for future implementation)
+
+- [ ] Click-through starts OFF by default at launch.
+- [ ] Toggle is visible and labeled in Pet Menu.
+- [ ] Turning Click-through ON allows clicking through the Pet Window to apps behind it.
+- [ ] Pet remains visible with correct speech bubble and avatar while click-through is ON.
+- [ ] User can reliably turn Click-through OFF via the hover strip (or Full App control).
+- [ ] Pet Menu / details / chat controls are not permanently inaccessible.
+- [ ] Show/Hide Pet still works while click-through is ON.
+- [ ] Reset Position still works; click-through is forced OFF during drag.
+- [ ] Position persistence does not regress.
+- [ ] S/M/L scale presets do not regress.
+- [ ] Quiet Mode and Quiet Mode persistence do not regress.
+- [ ] Thinking / final / error bubbles still display correctly.
+- [ ] No backend / provider / schema behavior changes.
+
+
+---
+
 ## TASK-166C - Pet Bubble Placement / Tail Polish Design
 
 **Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
