@@ -7307,6 +7307,137 @@ from a temp copy outside the NTFS mount to avoid lock contention:
 
 ---
 
+## TASK-164 - Pet Mode v0.1 Demo / Portfolio Packaging Design
+
+**Status:** DONE - PASS
+**Date:** 2026-05-27
+**Type:** Design — demo / portfolio packaging
+
+Goal:
+
+Package the current Pet Mode work (TASK-148 through TASK-163) into a clear demo
+and portfolio presentation plan before adding more runtime features. TASK-163
+established Pet Mode v0.1 as a stable release checkpoint; this task defines the
+artifacts needed to present that work for demo and interview use.
+
+Context:
+
+Pet Mode v0.1 is feature-complete for its first public presentation. All
+automated smoke scripts and Windows manual smoke pass. The next logical step
+before adding runtime features is to nail down the demo narrative, screenshot
+list, video checklist, and portfolio talking points so they can be referenced
+during any update to README or interview prep.
+
+This task is docs-only. No runtime behavior is added or changed.
+
+Expected demo / portfolio coverage:
+
+1.  **One-paragraph project summary** — what dragon-pet-ai is and why it exists.
+2.  **Problem statement** — what problem the desktop AI companion solves.
+3.  **Pet Mode v0.1 feature list** — enumerated stable behaviors from TASK-148
+    through TASK-163.
+4.  **Demo flow script** — step-by-step walkthrough from Electron launch to
+    chat interaction, covering:
+    - Launching with `PET_MODE_ENABLED=true`.
+    - Pet Window appearing at saved position.
+    - Idle bubble and rotation.
+    - Sending a chat message from Full App.
+    - Thinking bubble transition in Pet Window.
+    - Final reply appearing in Pet Window.
+    - Quiet Mode toggle.
+    - Position drag and reset.
+5.  **Screenshots to capture** — list of specific moments to screenshot:
+    - Pet Window idle state.
+    - Pet Window thinking state.
+    - Pet Window reply state.
+    - Quiet Mode ON (collapsed bubble).
+    - Full App mood selector.
+    - Full App Details disclosure expanded.
+6.  **Short video recording checklist** — ordered actions to record for a
+    30–60 second demo clip.
+7.  **Technical architecture summary** — brief prose covering:
+    - Electron desktop app (Full App + Pet Window).
+    - FastAPI backend (Python, local only).
+    - Local Ollama provider (qwen3:8b or equivalent).
+    - Pet Window (frameless, always-on-top, 300 × 400).
+    - IPC bridge (narrow fixed channels, contextBridge).
+    - Local state persistence (`userData/pet-window-state.json`).
+8.  **Safety / reliability highlights** — bullets for:
+    - Clean bubble reply-only behavior (no source / mood / JSON leakage).
+    - Thinking / reasoning sanitization (`<think>` stripped).
+    - Ollama keep_alive / retry on idle cold-start.
+    - Quiet Mode persistence (survives restart; corrupt value falls back to OFF).
+    - No debug / stack trace / raw JSON in Pet Bubble under any circumstance.
+9.  **Testing / validation highlights** — what the automated gate covers:
+    - Backend pytest (619 tests).
+    - Renderer smoke.
+    - Pet renderer smoke (83 checks).
+    - Pet window smoke (20 checks).
+    - Windows manual smoke (TASK-163 21-item checklist).
+10. **Suggested README / demo section updates** — specific sections to add or
+    update in `README.md` or a new `DEMO.md`.
+11. **Suggested portfolio talking points** — interview-ready bullets covering
+    architecture decisions, trade-offs made, and problems solved.
+
+Acceptance criteria:
+
+- [ ] A demo / portfolio packaging document exists at `docs/PET_MODE_DEMO.md`
+      (or equivalent) covering all 11 sections above.
+- [ ] Document is clear and suitable for future README / demo updates.
+- [ ] All command snippets in the document are copy-pasteable on Windows.
+- [ ] No runtime implementation files modified.
+- [ ] No backend / provider / schema changes.
+- [ ] `git diff --check` remains clean after implementation.
+
+Non-goals:
+
+- No runtime changes or new Pet features.
+- No backend / provider / schema changes.
+- No new assets, animation, or voice.
+- No actual screenshot capture (planned; not executed here).
+- No actual video recording (planned; not executed here).
+- No resume rewrite.
+- No deployment / installer work.
+- No settings architecture expansion.
+
+### Implementation Record
+
+**Status:** DONE - PASS
+**Date:** 2026-05-27
+
+Actions taken:
+
+- Inspected `docs/PORTFOLIO_DEMO_SCRIPT.md`, `docs/PORTFOLIO_SCREENSHOT_CHECKLIST.md`,
+  `docs/PET_MODE_RELEASE_CHECKPOINT.md`, `docs/PET_MODE_MANUAL_SMOKE_RUNBOOK.md`,
+  and `README.md` to understand existing portfolio coverage and avoid duplication.
+- Created `docs/PET_MODE_DEMO.md` covering all 11 required sections:
+  1. One-paragraph project summary.
+  2. Problem statement.
+  3. Pet Mode v0.1 feature list (16 features, TASK-148 through TASK-163).
+  4. Demo flow script with copy-pasteable PowerShell setup commands and
+     8-step walkthrough from launch to position reset.
+  5. Screenshot capture list (9 items, `pet_NN_name.png` convention).
+  6. 30–60 s video recording checklist (8 ordered actions, ~45 s target).
+  7. Technical architecture summary with ASCII diagram and 5 key design choices.
+  8. Safety / reliability highlights table (8 properties).
+  9. Testing / validation highlights table (6 suites + explanation of
+     what pet-renderer-smoke and pet-window-smoke actually cover).
+  10. Suggested README / demo section updates (5 items).
+  11. Interview-ready talking points (5 topics) + "what not to claim" table.
+- No runtime implementation files modified.
+
+Acceptance criteria:
+
+- [x] `docs/PET_MODE_DEMO.md` created covering all 11 sections.
+- [x] Document is clear and suitable for future README / demo updates.
+- [x] All command snippets are copy-pasteable on Windows.
+- [x] No runtime implementation files modified.
+- [x] No backend / provider / schema changes.
+- [x] `git diff --check` clean.
+
+
+---
+
 ## TASK-163 - Pet Mode Release Checkpoint / Regression Smoke Design
 
 **Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
