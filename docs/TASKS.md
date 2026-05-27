@@ -7307,6 +7307,314 @@ from a temp copy outside the NTFS mount to avoid lock contention:
 
 ---
 
+## TASK-166 - Pet Overlay Shell Polish Design
+
+**Status:** DEFINED
+**Date:** 2026-05-27
+**Type:** Design — v0.2 Desktop Companion Shell
+
+Goal:
+
+Design the v0.2 Desktop Companion Shell improvements that make the Pet Window
+feel like a proper desktop overlay rather than a normal app window. TASK-165
+established the v0.2 roadmap; this task defines the concrete design before any
+runtime code is written. All voice, screen capture, Live2D, and proactive
+companion work is explicitly out of scope.
+
+Context:
+
+Pet Mode v0.1 (TASK-148–163) established a stable frameless always-on-top window,
+position persistence, clean bubble speech, thinking bubble, idle rotation, and
+Quiet Mode persistence. The window is functional but its desktop presence is
+minimal. Future capabilities — voice interaction (v0.3), screen context (v0.4),
+proactive companion (v0.5), Live2D (v0.6) — all require a reliable, correctly
+positioned, non-focus-stealing overlay shell as their physical container. The
+design work in TASK-166 is the prerequisite for all of those.
+
+---
+
+### 1. Overlay Presentation
+
+**Goal:** Pet Window should feel like a desktop companion overlay, not a normal
+application window.
+
+**Design decisions:**
+
+- Current window dimensions (300 × 400) are preserved unless a specific resize
+  design is approved below.
+- Background: the window's non-content area (outside the character and bubble)
+  should be fully transparent, not a colored or semi-transparent rectangle.
+  - Requires `backgroundColor: '#00000000'` in BrowserWindow options and
+    matching CSS (`body { background: transparent; }`). Verify this is already
+    the case; patch if not.
+- Shadow: a subtle drop shadow on the character and bubble elements (CSS only)
+  gives depth without requiring a window-level background.
+- No title bar, no resize handle chrome, no taskbar entry — all already true
+  in v0.1. Confirm no regression.
+- Character and bubble must remain readable on both dark and light desktop
+  wallpapers. Use CSS `filter: drop-shadow(...)` or a light outline on the
+  character image to ensure contrast.
+
+**Risk:** Full transparency can interact poorly with Electron's rendering on
+some Windows GPU drivers. Fallback: use a very-low-opacity dark background
+(`rgba(0,0,0,0.05)`) rather than full transparent if artifacts appear.
+
+---
+
+### 2. Always-on-Top Behavior
+
+**Goal:** Pet stays visible when the user expects it, does not steal focus,
+does not block normal desktop use.
+
+**Known edge cases to audit:**
+
+| Scenario | Expected behavior | v0.1 status |
+|---|---|---|
+| Opening a full-screen exclusive game | Pet may legitimately disappear; no fix needed | Unknown |
+| Opening a full-screen borderless game | Pet should stay visible | Unknown |
+| OS UAC prompt appears | Pet should drop behind; re-assert after UAC closes | Unknown |
+| System dialog (file open, print) comes forward | Pet stays behind dialog; returns after dialog closes | Unknown |
+| Second monitor switch / display change | Pet stays on its current monitor | Unknown |
+| Another window calls `SetWindowPos(HWND_TOPMOST)` | Pet may be displaced; optional re-assert | Unknown |
+
+**Design approach:**
+
+- `setAlwaysOnTop(true, 'floating')` is the current level. Consider whether
+  `'screen-saver'` or `'torn-off-menu'` is more appropriate for companion use
+  on Windows (higher levels can displace other always-on-top windows including
+  system notifications).
+- Add a `focus` event listener on the main-process Pet Window object: if the
+  window loses always-on-top unexpectedly (detectable via `isAlwaysOnTop()`),
+  re-assert. Rate-limit re-assertion to avoid looping.
+- Do NOT use `alwaysOnTop: true` with a level that defeats system dialogs or UAC
+  prompts — that would be both annoying and a security risk (UAC prompts should
+  never be obscured).
+- Implementation: narrow IPC channel `pet:recheck-always-on-top` (or handled
+  entirely in main process without IPC if feasible).
+
+**Focus stealing:** `focusable: false` on the BrowserWindow prevents the Pet
+Window from receiving keyboard focus when clicked, which means it never steals
+focus from the user's active application. Verify this is already set; patch if
+not. Implication: keyboard events in the Pet Window require explicit focus
+management for the text input component (see §5).
+
+---
+
+### 3. Drag and Position Behavior
+
+**Goal:** Preserve TASK-148 position persistence. Dragging remains reliable.
+Reset position still works.
+
+**No behavior changes planned.** v0.1 drag is implemented via CSS
+`-webkit-app-region: drag` on the drag handle. This is kept as-is.
+
+**Design audit items:**
+
+- Confirm that dragging near screen edges correctly clamps or allows partial
+  off-screen placement (current behavior: clamp in `savePetWindowBounds` via
+  the existing screen-bounds check).
+- Confirm that reset position IPC (`pet:reset-position`) still targets the
+  correct safe default after any window size changes introduced by §4.
+- No new IPC channels needed for drag; merge-write pattern from TASK-162 is
+  already in place.
+
+---
+
+### 4. Resize and Scale Behavior
+
+**Goal:** Define what v0.2 supports for window sizing. Avoid breaking current
+300 × 400 assumptions unless explicitly planned.
+
+**Proposed v0.2 approach: scale presets, not free resize.**
+
+Rationale: Free manual resize requires re-layouting the character asset,
+bubble, and controls — significant CSS work with risk of breaking the
+expression mapping and bubble placement. Scale presets (Small / Medium / Large)
+are simpler and more intentional.
+
+**Preset definitions (proposed):**
+
+| Preset | Window size | CSS scale | Use case |
+|---|---|---|---|
+| Small | 225 × 300 | 0.75 | Multi-monitor / tight screen space |
+| Medium | 300 × 400 | 1.0 | Default (current) |
+| Large | 375 × 500 | 1.25 | Single large monitor / demo |
+
+**Implementation design:**
+
+- Scale preference stored as `"scale": "medium"` in `pet-window-state.json`
+  (merge-write, same pattern as `quietMode`).
+- On launch, `loadPetWindowScale()` reads and validates the stored value;
+  invalid or missing value falls back to `"medium"`.
+- Scale is applied via `petWindow.setSize(w, h)` in main process and a
+  `?scale=medium` URL param (same URL-param delivery pattern as TASK-162
+  `quietMode`), so the renderer can apply a CSS `transform: scale(...)` to
+  the root element before first render.
+- Scale change at runtime: narrow IPC channel `pet:set-scale` (value is one
+  of `"small" | "medium" | "large"`); main process calls `setSize`, saves to
+  JSON, sends `?scale=` to renderer via `executeJavaScript` or webContents
+  message.
+- Scale preset selector: 3-button row in the Pet menu (S / M / L).
+- Fallback: if `setSize` fails (e.g., display constraints), keep current size
+  and show no error (silent fallback to previous scale).
+
+**Risk:** CSS `transform: scale(...)` on the root element may affect
+click-through hit-testing and drag region calculations. Test on actual Windows
+hardware before shipping.
+
+---
+
+### 5. Click-Through Toggle
+
+**Goal:** When in ambient display mode (Pet idle, no bubble open), allow mouse
+clicks to pass through the Pet Window so the user can interact with content
+behind it.
+
+**Behavior definition:**
+
+| State | Click-through | Rationale |
+|---|---|---|
+| Idle (bubble collapsed or idle_default) | User-toggleable | Pet is ambient; clicking through is desired |
+| Bubble open (reply, thinking, error) | OFF (forced) | User needs to interact with the bubble |
+| Quiet Mode ON (collapsed) | User-toggleable | Same as idle ambient |
+| Menu open | OFF (forced) | User is interacting with the menu |
+
+**Recovery guarantee:** Click-through can never be the default state on first
+launch. If the Pet Window becomes fully click-through and the user cannot reach
+the menu to disable it, they must be able to recover via:
+1. A system tray icon (deferred to a later task — not in scope for TASK-166).
+2. A keyboard shortcut that toggles click-through regardless of mouse state
+   (e.g., a global hotkey registered in main process).
+3. Restarting the app resets click-through to OFF (state is not persisted
+   across restarts).
+
+**Implementation design:**
+
+- Electron API: `petWindow.setIgnoreMouseEvents(true, { forward: true })`
+  enables click-through while forwarding mouse-move events (so hover still
+  works for re-enabling via a hover target).
+- `setIgnoreMouseEvents(false)` restores normal interaction.
+- A thin hover-sensitive strip at the bottom of the Pet Window (the menu button
+  area) can detect `mouseover` via forwarded events and temporarily disable
+  click-through so the user can reach the menu. This avoids needing a global
+  hotkey for v0.2.
+- Narrow IPC channel `pet:set-click-through` (value: boolean). Exposed via
+  `pet-preload.js` `setClickThrough` function.
+- Click-through state is stored in `presenceState` (in-memory only; resets on
+  restart by design). Not persisted — the user should consciously re-enable it
+  each session.
+- Bubble open / menu open automatically disable click-through via
+  `setBubbleState` and `openMenu` call sites (same pattern as TASK-160
+  Quiet Mode guards).
+
+---
+
+### 6. Bubble Placement
+
+**Goal:** Bubble should look visually attached to the Pet character, not like
+a generic panel.
+
+**Current state:** The bubble sits in a fixed position within the Pet Window
+layout (likely a `flex` column). It reads as a separate UI element rather than
+a speech bubble emanating from the character.
+
+**Design approach for v0.2:**
+
+- Add a CSS `::before` pseudo-element tail on the bubble container pointing
+  toward the character's head/mouth region. This gives the visual illusion of
+  a speech bubble without changing the DOM structure.
+- Bubble position within the window: keep in the upper portion of the window
+  (above the character body) or to the side, depending on asset layout. Do not
+  move it below the character — that reads as a caption, not a speech bubble.
+- Quiet Mode collapsed bubble: when `bubble.dataset.state === "collapsed"`,
+  the bubble is hidden (`hidden` attribute). No placement change needed.
+- The bubble tail must not overlap the menu button or drag handle.
+
+**Risk:** CSS pseudo-element tails are finicky with `overflow: hidden` on
+parent containers. Test that the tail renders correctly after the scale preset
+changes from §4.
+
+---
+
+### 7. Control Accessibility
+
+**Goal:** Chat / Full App / Menu / Quiet Mode remain reachable in all shell
+configurations.
+
+**Constraints:**
+
+- All existing IPC channels and preload APIs are preserved unchanged.
+- The Pet menu (right-click or menu button) must remain reachable even when
+  click-through is ON (addressed by the hover strip in §5).
+- Scale changes (§4) must not push controls off-screen or make them
+  unclickable due to clipping.
+- Quiet Mode toggle must remain in the menu and must not be removed or
+  relocated — it is a safety feature for the idle rotation behavior.
+- No new broad settings UI is added. The scale preset buttons and
+  click-through toggle live in the existing Pet menu.
+
+---
+
+### Preserved Behaviors (Must Not Regress)
+
+| Task | Behavior |
+|---|---|
+| TASK-148 | Position persistence and off-screen fallback |
+| TASK-149 | Clean reply-only bubble — no source / JSON / debug leakage |
+| TASK-152 | Details disclosure collapsed by default |
+| TASK-153 | Mood expression mapping |
+| TASK-157 | Thinking bubble transition (thinking → reply / error) |
+| TASK-158 | Idle presence rotation |
+| TASK-159 | Idle timing / noise-control cooldown |
+| TASK-160 | Quiet Mode ON/OFF |
+| TASK-162 | Quiet Mode persistence |
+
+Smoke suite must remain passing after any implementation derived from this design:
+83 pet-renderer checks, 20 pet-window checks, 619 pytest, `git diff --check`.
+
+---
+
+### Implementation Split Recommendation
+
+This design is intentionally broad. If implemented, it should be split into
+small, individually testable tasks:
+
+1. **TASK-166a** — Transparency / overlay polish (CSS only; no IPC).
+2. **TASK-166b** — Always-on-top audit + recovery (main.js only; narrow IPC if
+   needed).
+3. **TASK-166c** — Scale presets (main.js + pet-renderer.js + menu; new IPC
+   channel `pet:set-scale`).
+4. **TASK-166d** — Click-through toggle (main.js + pet-preload.js + menu; new
+   IPC channel `pet:set-click-through`).
+5. **TASK-166e** — Bubble placement polish (CSS only; no IPC).
+
+Each sub-task should have its own smoke test additions and Windows manual smoke
+record before being marked DONE.
+
+---
+
+Acceptance criteria:
+
+- [ ] This design document is reviewed and implementation can begin on any
+      sub-task without further design work.
+- [ ] Risks and fallbacks are documented for each major area.
+- [ ] No runtime implementation files modified by TASK-166.
+- [ ] `git diff --check` clean.
+
+Non-goals:
+
+- No voice, microphone, or audio.
+- No screen capture, OCR, or vision analysis.
+- No proactive nudges.
+- No Live2D or animation.
+- No new assets.
+- No backend / provider / schema changes.
+- No broad settings architecture.
+- No installer / deployment work.
+
+
+---
+
 ## TASK-165 - Pet Mode v0.2 Companion Roadmap / Capability Reset Design
 
 **Status:** DONE - PASS
