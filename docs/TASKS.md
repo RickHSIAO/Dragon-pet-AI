@@ -7307,6 +7307,287 @@ from a temp copy outside the NTFS mount to avoid lock contention:
 
 ---
 
+## TASK-166B - Pet Overlay Scale Presets Design
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-27
+**Type:** Design — v0.2 Desktop Companion Shell (slice 2 of 5)
+
+Goal:
+
+Design the scale preset system that lets the user choose a small, medium, or
+large Pet Window size without breaking position persistence, reset behavior,
+bubble readability, controls, or any existing Pet Mode behavior established in
+TASK-148 through TASK-166A.
+
+Context:
+
+TASK-166A (transparent overlay polish) is DONE - WINDOWS MANUAL SMOKE PASS.
+The Pet Window is frameless, transparent, skips the taskbar, has a readable
+character avatar with drop-shadow, and has a frosted shell background. The
+next v0.2 shell slice is scale presets so the user can match the Pet Window
+size to their monitor and workflow.
+
+---
+
+### Scale Presets
+
+Three discrete sizes — no free resize handle:
+
+| Label | Width × Height | Notes |
+|---|---|---|
+| Small (S) | 225 × 300 | 0.75× of Medium |
+| Medium (M) | 300 × 400 | Current default; unchanged from TASK-148 |
+| Large (L) | 375 × 500 | 1.25× of Medium |
+
+- Medium is the default if no scale is stored.
+- Unknown, missing, null, or invalid stored scale falls back silently to Medium.
+  The fallback must not crash the Pet Window.
+
+---
+
+### Persistence
+
+- Scale preference should survive Pet Window hide/show and app restart.
+- Preferred mechanism: extend the existing `userData/pet-window-state.json`
+  merge-write pattern from TASK-148 / TASK-162.
+  - Add a `scale` key: `"small"`, `"medium"`, or `"large"`.
+  - Merge-write: every write reads the file first; the `scale` write must not
+    overwrite `position` or `quietMode`, and vice versa.
+  - Corrupt or missing `scale` key falls back to `"medium"` — no crash, no
+    visible error.
+- URL param delivery (same pattern as `quietMode` from TASK-162):
+  - Main process reads `scale` from `pet-window-state.json` at launch.
+  - Passes it as `?scale=small|medium|large` in `loadURL`.
+  - Renderer applies it synchronously before first render — no flash, no async
+    round-trip.
+
+---
+
+### UI Control
+
+- Add S / M / L buttons inside the Pet menu (right-click menu or the existing
+  bottom menu — whichever keeps the controls accessible at all three sizes).
+- The active scale is visually distinguished (e.g., underline, bold, or a CSS
+  class `active-scale`).
+- Controls must remain reachable at Small (225 × 300) — lay out the control
+  area to fit the narrowest size first.
+- No broad settings architecture. No new settings page. No new IPC channels
+  beyond what this feature strictly requires.
+
+---
+
+### IPC Surface (narrow)
+
+One new IPC channel is expected:
+
+- `pet:set-scale` — renderer → main — payload: `"small" | "medium" | "large"`.
+  Main resizes the window, clamps position, saves to JSON, and replies.
+- No other new channels. All existing channels remain unchanged.
+
+---
+
+### Position Behavior
+
+- TASK-148 position persistence and Reset Position remain intact.
+- When scale changes, the window must remain inside the current display work area:
+  - After resize, check `x + newWidth > workAreaRight` → clamp `x`.
+  - After resize, check `y + newHeight > workAreaBottom` → clamp `y`.
+  - After resize, check `x < workAreaLeft` → clamp `x` to `workAreaLeft`.
+  - After resize, check `y < workAreaTop` → clamp `y` to `workAreaTop`.
+  - Clamped position is saved to `pet-window-state.json` immediately.
+- Reset Position uses the current scale's `width × height` to calculate the
+  safe default near the bottom-right of the primary display. The reset formula
+  from TASK-148 should read `PET_WINDOW_WIDTH` / `PET_WINDOW_HEIGHT` from the
+  active scale, not a hardcoded constant.
+
+---
+
+### Bubble and Character Layout
+
+- The Pet Window shell and its children (character, bubble, menu, controls)
+  must scale cleanly across all three sizes without manual pixel adjustments.
+- Preferred approach: CSS custom properties (`--pet-scale-factor`) set at the
+  root of `pet-renderer.html` via a `?scale=` URL param, with all layout
+  dimensions expressed in terms of that property.
+- Bubble readability at Small:
+  - Bubble text must not overflow or be clipped.
+  - Font size and bubble padding should be verified at 225 × 300.
+- Controls at Large:
+  - Menu, S/M/L buttons, and all other controls must fit within 375 × 500 without
+    clipping or scroll.
+- Quiet Mode collapsed bubble behavior must remain intact at all sizes.
+- The `collapsed` bubble state (TASK-160) must not reappear with unwanted chrome
+  at any scale.
+
+---
+
+### Preserved Behaviors
+
+All of the following must remain intact after TASK-166B implementation:
+
+| Feature | Task |
+|---|---|
+| Transparent overlay shell | TASK-166A |
+| Explicit transparent backing | TASK-166A |
+| Skip taskbar | TASK-166A |
+| Avatar drop-shadow | TASK-166A |
+| Position persistence and reset | TASK-148 |
+| Clean reply-only bubble | TASK-149 |
+| Details disclosure | TASK-152 |
+| Mood expression mapping | TASK-153 |
+| Thinking bubble transition | TASK-157 |
+| Idle rotation | TASK-158 |
+| Idle timing / noise-control cooldown | TASK-159 |
+| Quiet Mode ON/OFF | TASK-160 |
+| Quiet Mode persistence | TASK-162 |
+
+---
+
+### Risks and Fallbacks
+
+| Risk | Fallback |
+|---|---|
+| Corrupt `scale` in `pet-window-state.json` | Fall back to `"medium"`; log to console; no crash |
+| Position off-screen after scale-up | Clamp to work area bounds; save clamped position |
+| Reset Position uses wrong size | Read active scale dimensions at reset time; never hardcode |
+| S/M/L buttons unreachable at Small | Design control layout to fit 225 × 300 first |
+| Bubble text clipped at Small | Verify bubble CSS at 225 × 300; reduce padding or font-size as needed |
+| Scale change causes visible re-layout flash | Apply scale from URL param before first render (same pattern as `quietMode`) |
+| Merge-write corrupts existing JSON fields | Read before every write; merge scale into existing object |
+
+---
+
+### Scope Limits (TASK-166B)
+
+- No click-through (TASK-166D).
+- No always-on-top recovery (TASK-166B scope is scale presets only; always-on-top
+  audit is TASK-166C — see TASK-166 design for slice ordering).
+- No direct Pet text input.
+- No voice, microphone, or audio.
+- No screen capture, OCR, or vision.
+- No Live2D or animation.
+- No new assets.
+- No backend, provider, or schema changes.
+- No broad settings architecture.
+- No installer or deployment work.
+
+---
+
+### Implementation Split Recommendation
+
+TASK-166B is a design-only task. Implementation should be a separate task:
+
+- **TASK-167** (suggested) — Pet Overlay Scale Presets Implementation.
+  Implements the `pet:set-scale` IPC channel, window resize + clamp logic in
+  `main.js`, CSS custom property layout in `pet-renderer.html` / `pet.css`,
+  S/M/L UI in the Pet menu, URL param delivery and persistence in
+  `pet-window-state.json`, and smoke tests for all new behavior.
+
+---
+
+Acceptance criteria:
+
+- [ ] Scale preset dimensions (S/M/L) are defined and justified.
+- [ ] Persistence and fallback behavior are documented.
+- [ ] URL param delivery pattern is specified.
+- [ ] IPC surface is defined (one channel: `pet:set-scale`).
+- [ ] Position clamping logic is specified.
+- [ ] Reset Position scale-awareness is documented.
+- [ ] Bubble / layout risks at Small and Large are documented.
+- [ ] Preserved-behavior table is complete.
+- [ ] No runtime implementation files modified by TASK-166B.
+- [ ] `git diff --check` clean.
+
+Non-goals:
+
+- No voice, microphone, or audio.
+- No screen capture, OCR, or vision analysis.
+- No proactive nudges.
+- No Live2D or animation.
+- No new assets.
+- No backend / provider / schema changes.
+- No broad settings architecture.
+- No installer / deployment work.
+
+
+---
+
+## TASK-166B Implementation Record
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-27
+**Type:** Implementation — v0.2 Desktop Companion Shell (slice 2 of 5)
+
+Goal:
+
+Add Small (225×300) / Medium (300×400) / Large (375×500) scale presets to the
+Pet Window. Medium is the default. Unknown / missing / invalid scale falls back
+silently to Medium. All TASK-148–166A behaviors preserved.
+
+Files changed:
+
+- `apps/desktop/src/main.js` — Scale preset constants (`PET_SCALE_SMALL/MEDIUM/LARGE`),
+  `getScaleDimensions()`, `loadPetScale()`, `savePetScale()`, updated
+  `getDefaultPetWindowBounds(dims)`, updated `loadPetWindowBounds()` /
+  `savePetWindowBounds()` / `createPetWindow()` / `resetPetWindowPosition()`,
+  new `ipcMain.handle("pet:set-scale", ...)` with position clamping.
+- `apps/desktop/src/pet/pet-preload.js` — Exposed `setScale` via contextBridge
+  on the `pet:set-scale` channel.
+- `apps/desktop/src/pet/pet.html` — Added S / M / L scale buttons inside
+  `#pet-menu` with `aria-pressed` attributes and `data-scale` hooks.
+- `apps/desktop/src/pet/pet.css` — Made layout fluid (`width: 100%; height: 100%`
+  replacing hardcoded 300×400); added `[data-scale="small"]` and
+  `[data-scale="large"]` CSS rules for avatar sizing; added `.pet-menu-scale-group`
+  and `.pet-menu-scale-btn` styles.
+- `apps/desktop/src/pet/pet-renderer.js` — `PET_VALID_SCALES`, `normalizeScale()`,
+  `setActiveScaleButton()`, `applyScalePreset()`; reads `?scale=` URL param in
+  `initializePetMode` and wires S/M/L button click handlers.
+- `apps/desktop/scripts/pet-window-smoke.js` — Updated 4 existing tests for
+  scale-aware bounds; added 8 new scale tests (22→30 checks).
+- `apps/desktop/scripts/pet-renderer-smoke.js` — Updated CSS fluid-layout
+  assertions; added 6 new scale tests (83→89 checks).
+
+Automated validation (2026-05-27):
+
+| Command | Result |
+|---|---|
+| `node apps/desktop/scripts/pet-renderer-smoke.js` | PASS — 89 checks |
+| `node apps/desktop/scripts/pet-window-smoke.js` | PASS — 30 checks |
+| `node --check` on all modified .js files | PASS |
+| `python -m pytest -p no:cacheprovider -q` | PASS — 619 passed |
+| `git diff --check` | CLEAN |
+
+Windows manual smoke (2026-05-27) — PASS:
+
+- [x] Pet Window starts at Medium 300×400 by default when no valid scale is stored.
+- [x] S / M / L controls are visible and usable in the Pet menu.
+- [x] Clicking S resizes the Pet Window to 225×300.
+- [x] Clicking M resizes the Pet Window to 300×400.
+- [x] Clicking L resizes the Pet Window to 375×500.
+- [x] Active scale visual indicator updates correctly.
+- [x] Scale changes keep the Pet Window inside the current display work area.
+- [x] Reset Position uses the active scale dimensions safely.
+- [x] Scale persists across app restart.
+- [x] Corrupt / missing / unknown stored scale falls back safely to Medium without crash.
+- [x] Scale persistence does not corrupt position or quietMode state.
+- [x] Bubble remains readable at Small.
+- [x] Bubble and controls are not clipped at Large.
+- [x] TASK-166A transparent shell behavior did not regress.
+- [x] TASK-148 position persistence and reset did not regress.
+- [x] TASK-149 clean reply-only bubble did not regress.
+- [x] TASK-152 details disclosure did not regress.
+- [x] TASK-153 mood expression mapping did not regress.
+- [x] TASK-157 thinking bubble transition did not regress.
+- [x] TASK-158/TASK-159 idle rotation and timing behavior did not regress.
+- [x] TASK-160 Quiet Mode did not regress.
+- [x] TASK-162 Quiet Mode persistence did not regress.
+- [x] No click-through, direct text input, voice, screen capture, Live2D, backend,
+      provider, or schema features were added.
+
+
+---
+
 ## TASK-166A - Pet Overlay Transparent Shell Polish
 
 **Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
@@ -7400,7 +7681,7 @@ Non-goals (TASK-166A):
 
 ## TASK-166 - Pet Overlay Shell Polish Design
 
-**Status:** IN PROGRESS — TASK-166A DONE; TASK-166B through TASK-166E pending
+**Status:** IN PROGRESS — TASK-166A DONE; TASK-166B DONE - WINDOWS MANUAL SMOKE PASS; TASK-166C through TASK-166E pending
 **Date:** 2026-05-27
 **Type:** Design — v0.2 Desktop Companion Shell
 

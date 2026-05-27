@@ -1315,6 +1315,49 @@ function installPetMoodExpressionSmokeHook(
   return smokeApi;
 }
 
+
+// ── TASK-166B: Scale preset helpers ──────────────────────────────────────────
+
+const PET_VALID_SCALES = Object.freeze(["small", "medium", "large"]);
+
+function normalizeScale(value) {
+  // Falls back to "medium" for any unknown/missing/invalid value
+  if (value === "small" || value === "large") return value;
+  return "medium";
+}
+
+// Set data-scale on the root element and update the S/M/L button pressed states
+function setActiveScaleButton(documentRef, scale) {
+  const normalizedScale = normalizeScale(scale);
+  const root = documentRef ? documentRef.getElementById("pet-mode-root") : null;
+  if (root) {
+    root.dataset.scale = normalizedScale;
+  }
+  for (const s of PET_VALID_SCALES) {
+    const btn = documentRef ? documentRef.getElementById(`pet-menu-scale-${s}`) : null;
+    if (btn) {
+      btn.setAttribute("aria-pressed", s === normalizedScale ? "true" : "false");
+    }
+  }
+}
+
+// Apply a scale change: update UI and invoke IPC
+function applyScalePreset(documentRef, scale, dragonPetApi) {
+  const normalizedScale = normalizeScale(scale);
+  setActiveScaleButton(documentRef, normalizedScale);
+  const api =
+    dragonPetApi ||
+    (typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null);
+  if (api && typeof api.setScale === "function") {
+    const result = api.setScale(normalizedScale);
+    if (result && typeof result.catch === "function") {
+      result.catch(function () {
+        // IPC failure is non-fatal; UI state already updated
+      });
+    }
+  }
+}
+
 function initializePetMode(documentRef = document) {
   const root = documentRef.getElementById("pet-mode-root");
   const dragRegion = documentRef.getElementById("pet-drag-region");
@@ -1359,8 +1402,11 @@ function initializePetMode(documentRef = document) {
       if (urlParams.get("quietMode") === "true") {
         setPetQuietMode(documentRef, true);
       }
+      // TASK-166B: apply persisted scale from URL param before first render
+      var initialScale = normalizeScale(urlParams.get("scale"));
+      setActiveScaleButton(documentRef, initialScale);
     } catch (_e) {
-      // Fail safe: ignore corrupt URL params, keep default OFF
+      // Fail safe: ignore corrupt URL params, keep defaults
     }
   }
 
@@ -1452,6 +1498,19 @@ function initializePetMode(documentRef = document) {
       }
       closeMenu(documentRef);
     });
+  }
+
+  // TASK-166B: S/M/L scale preset buttons
+  for (var _scaleKey of PET_VALID_SCALES) {
+    (function (scaleKey) {
+      var scaleBtn = documentRef.getElementById("pet-menu-scale-" + scaleKey);
+      if (scaleBtn && typeof scaleBtn.addEventListener === "function") {
+        scaleBtn.addEventListener("click", function () {
+          applyScalePreset(documentRef, scaleKey, null);
+          closeMenu(documentRef);
+        });
+      }
+    }(_scaleKey));
   }
 
   if (typeof documentRef.addEventListener === "function") {
@@ -1568,5 +1627,10 @@ if (typeof module !== "undefined") {
     toggleMenu,
     truncatePetReply,
     visibleReplyForSpeechPayload,
+    // TASK-166B
+    PET_VALID_SCALES,
+    normalizeScale,
+    setActiveScaleButton,
+    applyScalePreset,
   };
 }

@@ -10,9 +10,11 @@
 
 html,
 body {
-  width: 300px;
-  min-width: 300px;
-  min-height: 400px;
+  /* TASK-166B: fill whatever Electron window size the active scale sets */
+  width: 100%;
+  height: 100%;
+  min-width: 225px;   /* Small preset minimum */
+  min-height: 300px;  /* Small preset minimum */
   margin: 0;
   overflow: hidden;
   background: transparent;
@@ -25,11 +27,12 @@ body {
 }
 
 .pet-shell {
+  /* TASK-166B: fluid — fills Electron window at current scale preset */
   position: relative;
-  width: 300px;
-  height: 400px;
-  max-height: 400px;
-  min-height: 400px;
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  min-height: 100%;
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   gap: 8px;
@@ -405,4 +408,69 @@ button,
 input,
 textarea {
   -webkit-app-region: no-drag;
+}
+
+/* ── TASK-166B: Scale preset overrides ─────────────────────────────────── */
+
+/* Small (225 × 300) — avatar 75% of Medium */
+[data-scale="small"] .pet-avatar-container {
+  width: 143px;
+  height: 143px;
+}
+[data-scale="small"] .pet-avatar {
+  width: 137px;
+  height: 137px;
+}
+[data-scale="small"]:not([data-bubble-state="collapsed"]) .pet-avatar-container {
+  width: 112px;
+  height: 112px;
+}
+[data-scale="small"]:not([data-bubble-state="collapsed"]) .pet-avatar {
+  width: 106px;
+  height: 106px;
+}
+[data-scale="small"] .pet-bubble[data-state]:not([data-state="collapsed"]) {
+  font-size: 11px;
+}
+
+/* Large (375 × 500) — avatar 125% of Medium */
+[data-scale="large"] .pet-avatar-container {
+  width: 238px;
+  height: 238px;
+}
+[data-scale="large"] .pet-avatar {
+  width: 228px;
+  height: 228px;
+}
+[data-scale="large"]:not([data-bubble-state="collapsed"]) .pet-avatar-container {
+  width: 188px;
+  height: 188px;
+}
+[data-scale="large"]:not([data-bubble-state="collapsed"]) .pet-avatar {
+  width: 178px;
+  height: 178px;
+}
+
+/* Scale button group in Pet menu */
+.pet-menu-scale-group {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  padding-top: 4px;
+  border-top: 1px solid rgba(72, 45, 34, 0.12);
+  margin-top: 2px;
+}
+
+.pet-menu-scale-btn {
+  flex: 1;
+  min-height: 26px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* Active scale button — indicated with pressed state */
+.pet-menu-scale-btn[aria-pressed="true"] {
+  background: rgba(72, 45, 34, 0.18);
+  color: #2b1c16;
+  border-color: rgba(72, 45, 34, 0.5);
 }

@@ -232,9 +232,12 @@ function testPetHtmlReferencesStaticAssets() {
 }
 
 function testPetCssUsesStaticPetDimensions() {
+  // TASK-166B: shell is now fluid (100% of Electron window); fixed 300/400 removed from shell
   const css = readText(petCssPath);
-  assertIncludes(css, "width: 300px", "pet.css");
-  assertIncludes(css, "min-height: 400px", "pet.css");
+  assertIncludes(css, "width: 100%", "pet.css");     // fluid shell width
+  assertIncludes(css, "height: 100%", "pet.css");    // fluid shell height
+  assertIncludes(css, "min-width: 225px", "pet.css");   // Small preset minimum
+  assertIncludes(css, "min-height: 300px", "pet.css");  // Small preset minimum
   assertIncludes(css, "background: transparent", "pet.css");
   assertIncludes(css, "-webkit-app-region: drag", "pet.css");
   assertIncludes(css, "-webkit-app-region: no-drag", "pet.css");
@@ -267,8 +270,8 @@ function testPetCssUsesStaticPetDimensions() {
   assertRegex(css, /\.pet-stage-controls[\s\S]*top:\s*28px/, "pet.css");
   assertRegex(css, /\.pet-stage-controls[\s\S]*right:\s*10px/, "pet.css");
   assertRegex(css, /\.pet-stage-controls[\s\S]*z-index:\s*9/, "pet.css");
-  assertRegex(css, /\.pet-shell[\s\S]*height:\s*400px/, "pet.css");
-  assertRegex(css, /\.pet-shell[\s\S]*max-height:\s*400px/, "pet.css");
+  assertRegex(css, /\.pet-shell[\s\S]*height:\s*100%/, "pet.css");  // TASK-166B: fluid
+  assertRegex(css, /\.pet-shell[\s\S]*max-height:\s*100%/, "pet.css");  // TASK-166B: fluid
   assertRegex(css, /\.pet-shell[\s\S]*overflow:\s*hidden/, "pet.css");
   assertRegex(css, /\.pet-shell[\s\S]*grid-template-rows:\s*minmax\(0,\s*1fr\) auto/, "pet.css");
   assertRegex(css, /\.pet-stage,\s*\r?\n\.pet-drag-region[\s\S]*overflow:\s*hidden/, "pet.css");
@@ -2885,6 +2888,135 @@ function testQuietModePersistPreAppliedTrueDoesNotSuppressThinking() {
 }
 
 
+// ── TASK-166B: Scale preset renderer tests ──────────────────────────────────
+
+async function testScaleNormalizeFallsBackToMedium() {
+  const { normalizeScale } = require(petRendererPath);
+  assert.equal(normalizeScale("small"),   "small");
+  assert.equal(normalizeScale("medium"),  "medium");
+  assert.equal(normalizeScale("large"),   "large");
+  assert.equal(normalizeScale(undefined), "medium");
+  assert.equal(normalizeScale(null),      "medium");
+  assert.equal(normalizeScale(""),        "medium");
+  assert.equal(normalizeScale("XL"),      "medium");
+  assert.equal(normalizeScale(42),        "medium");
+}
+
+async function testSetActiveScaleButtonUpdatesDataset() {
+  const { setActiveScaleButton } = require(petRendererPath);
+
+  // Build plain-object DOM stubs — no makeDocument(), no createElement()
+  const nodes = { "pet-mode-root": { dataset: {} } };
+  for (const s of ["small", "medium", "large"]) {
+    nodes["pet-menu-scale-" + s] = {
+      _ariaPressed: s === "medium" ? "true" : "false",
+      setAttribute(attr, val) { if (attr === "aria-pressed") this._ariaPressed = val; },
+      getAttribute(attr) { return attr === "aria-pressed" ? this._ariaPressed : null; },
+    };
+  }
+  const patchedDoc = { getElementById: (id) => nodes[id] || null };
+
+  setActiveScaleButton(patchedDoc, "small");
+  assert.equal(nodes["pet-mode-root"].dataset.scale, "small", "data-scale should be small");
+  assert.equal(nodes["pet-menu-scale-small"]._ariaPressed,  "true",  "small btn aria-pressed");
+  assert.equal(nodes["pet-menu-scale-medium"]._ariaPressed, "false", "medium btn aria-pressed");
+  assert.equal(nodes["pet-menu-scale-large"]._ariaPressed,  "false", "large btn aria-pressed");
+
+  setActiveScaleButton(patchedDoc, "large");
+  assert.equal(nodes["pet-mode-root"].dataset.scale, "large");
+  assert.equal(nodes["pet-menu-scale-large"]._ariaPressed,  "true");
+  assert.equal(nodes["pet-menu-scale-small"]._ariaPressed,  "false");
+}
+
+async function testSetActiveScaleButtonUnknownFallsBackToMedium() {
+  const { setActiveScaleButton } = require(petRendererPath);
+  const nodes = { "pet-mode-root": { dataset: {} } };
+  for (const s of ["small", "medium", "large"]) {
+    nodes["pet-menu-scale-" + s] = {
+      _ap: "false",
+      setAttribute(a, v) { if (a === "aria-pressed") this._ap = v; },
+    };
+  }
+  const doc = { getElementById: (id) => nodes[id] || null };
+  setActiveScaleButton(doc, "INVALID");
+  assert.equal(nodes["pet-mode-root"].dataset.scale, "medium");
+  assert.equal(nodes["pet-menu-scale-medium"]._ap, "true");
+  assert.equal(nodes["pet-menu-scale-small"]._ap,  "false");
+}
+
+async function testApplyScalePresetCallsApiSetScale() {
+  const { applyScalePreset } = require(petRendererPath);
+  let calledWith = null;
+  const fakeApi = { setScale: (v) => { calledWith = v; return Promise.resolve({ ok: true }); } };
+  const doc = {
+    getElementById: () => ({ dataset: {}, setAttribute() {} }),
+  };
+  applyScalePreset(doc, "large", fakeApi);
+  assert.equal(calledWith, "large", "setScale should be called with 'large'");
+  applyScalePreset(doc, "UNKNOWN", fakeApi);
+  assert.equal(calledWith, "medium", "setScale should fall back to 'medium'");
+}
+
+async function testScaleUrlParamAppliedOnInit() {
+  const { initializePetMode } = require(petRendererPath);
+
+  // Full FakeDocument matching the element set initializePetMode touches
+  const dom = new FakeDocument([
+    "pet-mode-root",
+    "pet-drag-region",
+    "pet-avatar-container",
+    "pet-avatar",
+    "pet-hint",
+    "pet-bubble",
+    "pet-bubble-title",
+    "pet-bubble-details",
+    "pet-bubble-details-toggle",
+    "pet-bubble-status",
+    "pet-bubble-message",
+    "pet-bubble-response",
+    "pet-bubble-placeholder",
+    "pet-chat-form-hook",
+    "pet-chat-input-hook",
+    "pet-chat-send-hook",
+    "pet-bubble-open-hook",
+    "pet-bubble-close-hook",
+    "pet-open-full-app-hook",
+    "pet-context-menu-hook",
+    "pet-menu",
+    "pet-menu-scale-small",
+    "pet-menu-scale-medium",
+    "pet-menu-scale-large",
+  ]);
+  const root = dom.getElementById("pet-mode-root");
+
+  // Simulate ?scale=small URL param
+  const origWindow = global.window;
+  global.window = {
+    location: { search: "?quietMode=false&scale=small" },
+    dragonPet: null,
+  };
+  global.URLSearchParams = URLSearchParams;
+
+  initializePetMode(dom);
+
+  global.window = origWindow;
+
+  // data-scale should be set to "small" on root
+  assert.equal(root.dataset.scale, "small", "data-scale should be 'small' from URL param");
+}
+
+async function testScaleExportsPresent() {
+  const mod = require(petRendererPath);
+  assert.ok(Array.isArray(mod.PET_VALID_SCALES), "PET_VALID_SCALES should be exported");
+  assert.ok(mod.PET_VALID_SCALES.includes("small"),  "PET_VALID_SCALES includes small");
+  assert.ok(mod.PET_VALID_SCALES.includes("medium"), "PET_VALID_SCALES includes medium");
+  assert.ok(mod.PET_VALID_SCALES.includes("large"),  "PET_VALID_SCALES includes large");
+  assert.equal(typeof mod.normalizeScale,       "function");
+  assert.equal(typeof mod.setActiveScaleButton, "function");
+  assert.equal(typeof mod.applyScalePreset,     "function");
+}
+
+
 async function run() {
   const tests = [
     testPetFilesExist,
@@ -2974,6 +3106,13 @@ async function run() {
     testQuietModePersistPreAppliedTrueNoRotationAfterCooldown,
     testQuietModePersistPreAppliedTrueDoesNotSuppressChatReply,
     testQuietModePersistPreAppliedTrueDoesNotSuppressThinking,
+    // TASK-166B
+    testScaleNormalizeFallsBackToMedium,
+    testSetActiveScaleButtonUpdatesDataset,
+    testSetActiveScaleButtonUnknownFallsBackToMedium,
+    testApplyScalePresetCallsApiSetScale,
+    testScaleUrlParamAppliedOnInit,
+    testScaleExportsPresent,
   ];
 
   for (const test of tests) {

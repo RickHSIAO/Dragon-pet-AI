@@ -42,8 +42,9 @@ function testPetWindowOptionsAreSafeAndPetSpecific() {
   const main = readText(mainPath);
   assertIncludes(main, "PET_WINDOW_WIDTH = 300", "main.js");
   assertIncludes(main, "PET_WINDOW_HEIGHT = 400", "main.js");
-  assertRegex(main, /width:\s*PET_WINDOW_WIDTH/, "main.js");
-  assertRegex(main, /height:\s*PET_WINDOW_HEIGHT/, "main.js");
+  // TASK-166B: window dimensions are now resolved from active scale
+  assertRegex(main, /width:\s*petBounds\.width/, "main.js");
+  assertRegex(main, /height:\s*petBounds\.height/, "main.js");
   assertRegex(main, /frame:\s*false/, "main.js");
   assertRegex(main, /transparent:\s*true/, "main.js");
   assertRegex(main, /alwaysOnTop:\s*true/, "main.js");
@@ -60,7 +61,7 @@ function testPetWindowPositionPersistenceIsLocalAndGuarded() {
   assertIncludes(main, 'PET_WINDOW_STATE_FILE = "pet-window-state.json"', "main.js");
   assertIncludes(main, 'app.getPath("userData")', "main.js");
   assertIncludes(main, "function getPetWindowStatePath()", "main.js");
-  assertIncludes(main, "function getDefaultPetWindowBounds()", "main.js");
+  assertIncludes(main, "function getDefaultPetWindowBounds(", "main.js");  // TASK-166B: accepts dims param
   assertIncludes(main, "function isPetWindowBoundsVisible(bounds)", "main.js");
   assertIncludes(main, "function ensurePetWindowVisibleBounds(win = petWindow", "main.js");
   assertIncludes(main, "function validatePetWindowBoundsOnDisplayChange()", "main.js");
@@ -101,7 +102,13 @@ function testPetWindowPositionRestoreAndFallbackRules() {
   );
   assertRegex(
     main,
-    /width:\s*PET_WINDOW_WIDTH,\s*\r?\n\s*height:\s*PET_WINDOW_HEIGHT/,
+    // TASK-166B: loadPetWindowBounds uses scale-resolved dims
+    /width:\s*dims\.width/,
+    "main.js"
+  );
+  assertRegex(
+    main,
+    /height:\s*dims\.height/,
     "main.js"
   );
   assertIncludes(main, "PET_WINDOW_EDGE_MARGIN = 24", "main.js");
@@ -109,9 +116,10 @@ function testPetWindowPositionRestoreAndFallbackRules() {
 
 function testPetWindowResetPersistsSafeDefault() {
   const main = readText(mainPath);
+  // TASK-166B: reset now resolves active scale and passes dims to getDefaultPetWindowBounds
   assertRegex(
     main,
-    /function resetPetWindowPosition\(\)[\s\S]*const bounds = getDefaultPetWindowBounds\(\);[\s\S]*petWindow\.setBounds\(bounds\);[\s\S]*savePetWindowBounds\(petWindow\);[\s\S]*return \{ ok: true \};/,
+    /function resetPetWindowPosition\(\)[\s\S]*const dims = getScaleDimensions\(loadPetScale\(\)\);[\s\S]*const bounds = getDefaultPetWindowBounds\(dims\);[\s\S]*petWindow\.setBounds\(bounds\);[\s\S]*savePetWindowBounds\(petWindow\);[\s\S]*return \{ ok: true \};/,
     "main.js"
   );
 }
@@ -130,15 +138,21 @@ function testPetWindowHideShowPreservesAndValidatesPosition() {
   );
 }
 
-function testPetWindowSizeRemainsFixedAt300By400() {
+function testPetWindowScalePresetsAndMediumDefault() {
+  // TASK-166B: replaces testPetWindowSizeRemainsFixedAt300By400
   const main = readText(mainPath);
   assertIncludes(main, "PET_WINDOW_WIDTH = 300", "main.js");
   assertIncludes(main, "PET_WINDOW_HEIGHT = 400", "main.js");
   assertNotIncludes(main, "PET_WINDOW_WIDTH = 260", "main.js");
   assertNotIncludes(main, "PET_WINDOW_HEIGHT = 340", "main.js");
+  // Scale preset constants
+  assertIncludes(main, 'PET_SCALE_SMALL  = Object.freeze({ name: "small",  width: 225, height: 300 })', "main.js");
+  assertIncludes(main, 'PET_SCALE_MEDIUM = Object.freeze({ name: "medium", width: 300, height: 400 })', "main.js");
+  assertIncludes(main, 'PET_SCALE_LARGE  = Object.freeze({ name: "large",  width: 375, height: 500 })', "main.js");
+  // BrowserWindow uses petBounds (scale-resolved)
   assertRegex(
     main,
-    /width:\s*PET_WINDOW_WIDTH[\s\S]*height:\s*PET_WINDOW_HEIGHT[\s\S]*resizable:\s*false[\s\S]*title:\s*"Dragon Pet AI - Pet Mode"/,
+    /width:\s*petBounds\.width[\s\S]*height:\s*petBounds\.height[\s\S]*resizable:\s*false[\s\S]*title:\s*"Dragon Pet AI - Pet Mode"/,
     "main.js"
   );
 }
@@ -368,6 +382,70 @@ function testPetOverlayShellTransparentBackground() {
 }
 
 
+
+function testPetScalePresetsConstants() {
+  // TASK-166B: verify scale preset constants exist with correct dimensions
+  const main = readText(mainPath);
+  assertIncludes(main, 'PET_SCALE_SET_CHANNEL = "pet:set-scale"', "main.js");
+  assertIncludes(main, "function getScaleDimensions(scaleName)", "main.js");
+  assertIncludes(main, "function loadPetScale()", "main.js");
+  assertIncludes(main, "function savePetScale(scaleName)", "main.js");
+  assertIncludes(main, "width: 225", "main.js");
+  assertIncludes(main, "height: 300", "main.js");
+  assertIncludes(main, "width: 375", "main.js");
+  assertIncludes(main, "height: 500", "main.js");
+}
+
+function testPetScaleLoadFallsBackToMedium() {
+  // TASK-166B: loadPetScale must fall back to "medium" for unknown values
+  const main = readText(mainPath);
+  assertIncludes(main, 'if (s === "small" || s === "large") return s;', "main.js");
+  assertIncludes(main, 'return "medium";', "main.js");
+}
+
+function testPetScalePersistsMergesExistingState() {
+  // TASK-166B: savePetScale uses merge-write like quietMode and position
+  const main = readText(mainPath);
+  assertIncludes(main, "function savePetScale(scaleName)", "main.js");
+  assertIncludes(main, "const state = { ...existing, scale };", "main.js");
+}
+
+function testPetScaleIpcHandlerExists() {
+  // TASK-166B: set-scale IPC handler must clamp position and resize window
+  const main = readText(mainPath);
+  assertIncludes(main, "ipcMain.handle(PET_SCALE_SET_CHANNEL", "main.js");
+  assertIncludes(main, "petWindow.setBounds({ x, y, width: dims.width, height: dims.height })", "main.js");
+  assertIncludes(main, "screen.getDisplayNearestPoint", "main.js");
+}
+
+function testPetScalePreloadExposesSetter() {
+  // TASK-166B: pet-preload.js must expose setScale via narrow IPC channel
+  const preload = readText(petPreloadPath);
+  assertIncludes(preload, 'PET_SCALE_SET_CHANNEL = "pet:set-scale"', "pet-preload.js");
+  assertIncludes(preload, "setScale: (value) => ipcRenderer.invoke(PET_SCALE_SET_CHANNEL, value)", "pet-preload.js");
+  assertNotIncludes(preload, 'require("fs")', "pet-preload.js");
+}
+
+function testPetScaleStartupUrlParam() {
+  // TASK-166B: main.js must pass ?scale= URL param when loading pet.html
+  const main = readText(mainPath);
+  assertIncludes(main, "const initialScale = loadPetScale();", "main.js");
+  assertIncludes(main, "&scale=${initialScale}", "main.js");
+}
+
+function testPetScaleResetPositionUsesActiveDims() {
+  // TASK-166B: reset uses active scale dims, not hardcoded 300x400
+  const main = readText(mainPath);
+  assertIncludes(main, "const dims = getScaleDimensions(loadPetScale());", "main.js");
+  assertIncludes(main, "const bounds = getDefaultPetWindowBounds(dims);", "main.js");
+}
+
+function testPetScaleDefaultBoundsAcceptsDimsParam() {
+  // TASK-166B: getDefaultPetWindowBounds accepts dims parameter
+  const main = readText(mainPath);
+  assertRegex(main, /function getDefaultPetWindowBounds\(dims = PET_SCALE_MEDIUM\)/, "main.js");
+}
+
 function run() {
   const tests = [
     testMainHasPetWindowPrototype,
@@ -376,7 +454,7 @@ function run() {
     testPetWindowPositionRestoreAndFallbackRules,
     testPetWindowResetPersistsSafeDefault,
     testPetWindowHideShowPreservesAndValidatesPosition,
-    testPetWindowSizeRemainsFixedAt300By400,
+    testPetWindowScalePresetsAndMediumDefault,
     testFullAppWindowStillExists,
     testPetOpenFullAppIpcIsFixedAndNarrow,
     testPetSpeechPayloadSanitizersDropDiagnostics,
@@ -394,6 +472,15 @@ function run() {
     // TASK-166A
     testPetOverlayShellSkipsTaskbar,
     testPetOverlayShellTransparentBackground,
+    // TASK-166B
+    testPetScalePresetsConstants,
+    testPetScaleLoadFallsBackToMedium,
+    testPetScalePersistsMergesExistingState,
+    testPetScaleIpcHandlerExists,
+    testPetScalePreloadExposesSetter,
+    testPetScaleStartupUrlParam,
+    testPetScaleResetPositionUsesActiveDims,
+    testPetScaleDefaultBoundsAcceptsDimsParam,
   ];
 
   for (const test of tests) {

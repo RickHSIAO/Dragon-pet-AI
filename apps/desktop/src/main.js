@@ -21,8 +21,13 @@ const PET_HIDE_WINDOW_CHANNEL = "pet:hide-window";
 const PET_SPEECH_UPDATE_CHANNEL = "pet:speech-update";
 const PET_SPEECH_RECEIVED_CHANNEL = "pet:speech-received";
 const PET_QUIET_MODE_SET_CHANNEL = "pet:set-quiet-mode";  // TASK-162
-const PET_WINDOW_WIDTH = 300;
-const PET_WINDOW_HEIGHT = 400;
+const PET_SCALE_SET_CHANNEL = "pet:set-scale";            // TASK-166B
+const PET_WINDOW_WIDTH = 300;   // Medium default — used as fallback constant
+const PET_WINDOW_HEIGHT = 400;  // Medium default — used as fallback constant
+// TASK-166B: scale preset dimensions
+const PET_SCALE_SMALL  = Object.freeze({ name: "small",  width: 225, height: 300 });
+const PET_SCALE_MEDIUM = Object.freeze({ name: "medium", width: 300, height: 400 });
+const PET_SCALE_LARGE  = Object.freeze({ name: "large",  width: 375, height: 500 });
 const PET_WINDOW_STATE_FILE = "pet-window-state.json";
 const PET_WINDOW_EDGE_MARGIN = 24;
 const PET_WINDOW_SAVE_DEBOUNCE_MS = 300;
@@ -32,26 +37,34 @@ let fullAppWindow = null;
 let petWindow = null;
 let petWindowSaveTimer = null;
 
+// TASK-166B: resolve scale name to dimension object; unknown/missing falls back to Medium
+function getScaleDimensions(scaleName) {
+  if (scaleName === "small") return PET_SCALE_SMALL;
+  if (scaleName === "large") return PET_SCALE_LARGE;
+  return PET_SCALE_MEDIUM;
+}
+
 function getPetWindowStatePath() {
   return path.join(app.getPath("userData"), PET_WINDOW_STATE_FILE);
 }
 
-function getDefaultPetWindowBounds() {
+// TASK-166B: accepts dims so reset and scale-change can use active scale dimensions
+function getDefaultPetWindowBounds(dims = PET_SCALE_MEDIUM) {
   const workArea = screen.getPrimaryDisplay().workArea;
   const x = Math.max(
     workArea.x,
-    workArea.x + workArea.width - PET_WINDOW_WIDTH - PET_WINDOW_EDGE_MARGIN
+    workArea.x + workArea.width - dims.width - PET_WINDOW_EDGE_MARGIN
   );
   const y = Math.max(
     workArea.y,
-    workArea.y + workArea.height - PET_WINDOW_HEIGHT - PET_WINDOW_EDGE_MARGIN
+    workArea.y + workArea.height - dims.height - PET_WINDOW_EDGE_MARGIN
   );
 
   return {
     x,
     y,
-    width: PET_WINDOW_WIDTH,
-    height: PET_WINDOW_HEIGHT,
+    width: dims.width,
+    height: dims.height,
   };
 }
 
@@ -60,11 +73,12 @@ function isPetWindowBoundsVisible(bounds) {
     return false;
   }
 
+  // TASK-166B: use bounds.width/height when present so scale-aware bounds are validated correctly
   const normalizedBounds = {
     x: Math.round(bounds.x),
     y: Math.round(bounds.y),
-    width: PET_WINDOW_WIDTH,
-    height: PET_WINDOW_HEIGHT,
+    width: (bounds.width && Number.isFinite(bounds.width)) ? bounds.width : PET_WINDOW_WIDTH,
+    height: (bounds.height && Number.isFinite(bounds.height)) ? bounds.height : PET_WINDOW_HEIGHT,
   };
 
   return screen.getAllDisplays().some(({ workArea }) => {
@@ -88,14 +102,19 @@ function ensurePetWindowVisibleBounds(win = petWindow, { persist = true } = {}) 
   }
 
   const currentBounds = win.getBounds();
+  // TASK-166B: preserve actual window size (respects active scale)
+  const activeDims = {
+    width:  (currentBounds.width  && Number.isFinite(currentBounds.width))  ? currentBounds.width  : PET_WINDOW_WIDTH,
+    height: (currentBounds.height && Number.isFinite(currentBounds.height)) ? currentBounds.height : PET_WINDOW_HEIGHT,
+  };
   const bounds = isPetWindowBoundsVisible(currentBounds)
     ? {
         x: Math.round(currentBounds.x),
         y: Math.round(currentBounds.y),
-        width: PET_WINDOW_WIDTH,
-        height: PET_WINDOW_HEIGHT,
+        width: activeDims.width,
+        height: activeDims.height,
       }
-    : getDefaultPetWindowBounds();
+    : getDefaultPetWindowBounds(activeDims);
 
   win.setBounds(bounds);
 
@@ -118,11 +137,13 @@ function loadPetWindowBounds() {
   try {
     const raw = fs.readFileSync(getPetWindowStatePath(), "utf8");
     const parsed = JSON.parse(raw);
+    // TASK-166B: use stored scale to determine correct saved dimensions
+    const dims = getScaleDimensions(parsed.scale);
     const savedBounds = {
       x: Number(parsed.x),
       y: Number(parsed.y),
-      width: PET_WINDOW_WIDTH,
-      height: PET_WINDOW_HEIGHT,
+      width: dims.width,
+      height: dims.height,
     };
 
     if (isPetWindowBoundsVisible(savedBounds)) {
@@ -151,12 +172,13 @@ function savePetWindowBounds(win = petWindow) {
     // ignore; start from empty if file is missing or corrupt
   }
 
+  // TASK-166B: save actual window dimensions so scale is encoded in position state
   const state = {
     ...existing,
     x: bounds.x,
     y: bounds.y,
-    width: PET_WINDOW_WIDTH,
-    height: PET_WINDOW_HEIGHT,
+    width: bounds.width,
+    height: bounds.height,
   };
 
   try {
@@ -200,6 +222,38 @@ function savePetQuietMode(value) {  // TASK-162
   const state = { ...existing, quietMode };
   try {
     fs.writeFileSync(getPetWindowStatePath(), `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  } catch (_error) {
+    // Best-effort persistence; do not affect runtime use.
+  }
+}
+
+function loadPetScale() {  // TASK-166B
+  try {
+    const raw = fs.readFileSync(getPetWindowStatePath(), "utf8");
+    const parsed = JSON.parse(raw);
+    const s = parsed.scale;
+    if (s === "small" || s === "large") return s;
+    return "medium";
+  } catch (_error) {
+    // Missing or corrupt state falls back to Medium.
+    return "medium";
+  }
+}
+
+function savePetScale(scaleName) {  // TASK-166B
+  const scale =
+    scaleName === "small" || scaleName === "large" ? scaleName : "medium";
+  let existing = {};
+  try {
+    const raw = fs.readFileSync(getPetWindowStatePath(), "utf8");
+    existing = JSON.parse(raw);
+  } catch (_e) {
+    // Start from empty state if file is missing or corrupt.
+  }
+  const state = { ...existing, scale };
+  try {
+    fs.writeFileSync(getPetWindowStatePath(), `${JSON.stringify(state, null, 2)}
+`, "utf8");
   } catch (_error) {
     // Best-effort persistence; do not affect runtime use.
   }
@@ -264,13 +318,13 @@ function createPetWindow() {
     return petWindow;
   }
 
-  const petBounds = loadPetWindowBounds();
+  const petBounds = loadPetWindowBounds();  // TASK-166B: already scale-aware
 
   petWindow = new BrowserWindow({
     x: petBounds.x,
     y: petBounds.y,
-    width: PET_WINDOW_WIDTH,
-    height: PET_WINDOW_HEIGHT,
+    width: petBounds.width,    // TASK-166B: use scale-resolved dimensions
+    height: petBounds.height,  // TASK-166B: use scale-resolved dimensions
     frame: false,
     transparent: true,
     backgroundColor: "#00000000",  // TASK-166A: explicit transparent for GPU driver compat
@@ -310,8 +364,9 @@ function createPetWindow() {
   });
 
   const initialQuietMode = loadPetQuietMode();  // TASK-162
+  const initialScale = loadPetScale();           // TASK-166B
   petWindow.loadURL(
-    `file://${path.join(__dirname, "pet", "pet.html")}?quietMode=${initialQuietMode}`
+    `file://${path.join(__dirname, "pet", "pet.html")}?quietMode=${initialQuietMode}&scale=${initialScale}`
   );
   return petWindow;
 }
@@ -321,7 +376,9 @@ function resetPetWindowPosition() {
     return { ok: false };
   }
 
-  const bounds = getDefaultPetWindowBounds();
+  // TASK-166B: reset uses active scale so window snaps to correct size at safe position
+  const dims = getScaleDimensions(loadPetScale());
+  const bounds = getDefaultPetWindowBounds(dims);
   petWindow.setBounds(bounds);
   savePetWindowBounds(petWindow);
   return { ok: true };
@@ -398,6 +455,28 @@ ipcMain.handle(PET_SPEECH_UPDATE_CHANNEL, (_event, payload) => forwardPetSpeechU
 ipcMain.handle(PET_QUIET_MODE_SET_CHANNEL, (_event, value) => {  // TASK-162
   savePetQuietMode(value);
   return { ok: true };
+});
+
+ipcMain.handle(PET_SCALE_SET_CHANNEL, (_event, scaleName) => {  // TASK-166B
+  const scale =
+    scaleName === "small" || scaleName === "large" ? scaleName : "medium";
+  const dims = getScaleDimensions(scale);
+  savePetScale(scale);
+
+  if (!petWindow || petWindow.isDestroyed()) {
+    return { ok: false, reason: "no_pet_window" };
+  }
+
+  const cur = petWindow.getBounds();
+  // Clamp position so the resized window stays inside the nearest display work area
+  const display = screen.getDisplayNearestPoint({ x: cur.x, y: cur.y });
+  const wa = display.workArea;
+  const x = Math.min(Math.max(cur.x, wa.x), wa.x + wa.width  - dims.width);
+  const y = Math.min(Math.max(cur.y, wa.y), wa.y + wa.height - dims.height);
+
+  petWindow.setBounds({ x, y, width: dims.width, height: dims.height });
+  savePetWindowBounds(petWindow);
+  return { ok: true, scale };
 });
 
 app.whenReady().then(() => {

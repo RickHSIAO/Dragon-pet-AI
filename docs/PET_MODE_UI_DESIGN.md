@@ -1553,8 +1553,8 @@ background: transparent;  /* TASK-166A: character sits against shell frosted bg 
   `box-shadow`, `border-radius: 18px`, `border`) was not touched.
 - No new IPC channels.
 - No click-through (deferred to TASK-166D).
-- No scale presets (deferred to TASK-166C).
-- No always-on-top recovery (deferred to TASK-166B).
+- No scale presets — implemented in TASK-166B (see §14 below).
+- No always-on-top recovery (deferred to TASK-166C).
 
 ### Open question resolved
 
@@ -1563,3 +1563,96 @@ background: transparent;  /* TASK-166A: character sits against shell frosted bg 
 Resolved: NO. `skipTaskbar: true` is applied immediately. The companion overlay
 UX is cleaner without a taskbar entry whether or not a tray icon exists. Tray
 support (if added later) is independent.
+
+
+## 14. TASK-166B — Scale Presets (2026-05-27)
+
+**Status:** IMPLEMENTED — NEEDS WINDOWS MANUAL SMOKE
+
+### Scale dimensions
+
+| Label | Width × Height | CSS `data-scale` |
+|---|---|---|
+| Small (S) | 225 × 300 | `small` |
+| Medium (M) | 300 × 400 | `medium` (default) |
+| Large (L) | 375 × 500 | `large` |
+
+Unknown / missing / null scale falls back to `"medium"` — no crash, no visible error.
+
+### Implementation overview
+
+**`main.js`**
+
+- `PET_SCALE_SMALL/MEDIUM/LARGE` frozen objects with `name`, `width`, `height`.
+- `getScaleDimensions(scaleName)` → returns the matching preset or `PET_SCALE_MEDIUM`.
+- `loadPetScale()` / `savePetScale(name)` — merge-read/merge-write `scale` key in
+  `userData/pet-window-state.json` (same pattern as TASK-162 `quietMode`).
+- `getDefaultPetWindowBounds(dims)` — now accepts a dims parameter instead of
+  using hardcoded 300×400 constants.
+- `createPetWindow()` — passes `&scale=${initialScale}` in `loadURL`.
+- `ipcMain.handle("pet:set-scale", ...)` — resizes window, clamps position to
+  display work area via `screen.getDisplayNearestPoint`, saves state.
+
+**`pet-preload.js`**
+
+- `setScale(value)` exposed via contextBridge on the `pet:set-scale` channel.
+
+**`pet.html`**
+
+- S / M / L buttons inside `#pet-menu`:
+  ```html
+  <div id="pet-menu-scale-group" role="group" aria-label="Window size">
+    <button id="pet-menu-scale-small"  data-scale="small"  aria-pressed="false">S</button>
+    <button id="pet-menu-scale-medium" data-scale="medium" aria-pressed="true">M</button>
+    <button id="pet-menu-scale-large"  data-scale="large"  aria-pressed="false">L</button>
+  </div>
+  ```
+
+**`pet.css`**
+
+- Layout made fluid: `html, body, .pet-shell` changed from `width: 300px /
+  min-height: 400px` to `width: 100%; height: 100%` with
+  `min-width: 225px; min-height: 300px`.
+- `[data-scale="small"]` selector: avatar-container 143 px, avatar 137 px.
+- `[data-scale="large"]` selector: avatar-container 238 px, avatar 228 px.
+- `.pet-menu-scale-btn[aria-pressed="true"]` active state.
+
+**`pet-renderer.js`**
+
+- `PET_VALID_SCALES = Object.freeze(["small", "medium", "large"])`.
+- `normalizeScale(value)` → falls back to `"medium"` for any invalid input.
+- `setActiveScaleButton(documentRef, scale)` → sets `data-scale` on
+  `#pet-mode-root` and toggles `aria-pressed` on S/M/L buttons.
+- `applyScalePreset(documentRef, scale, api)` → normalizes, calls
+  `setActiveScaleButton`, then `api.setScale(scale)`.
+- `initializePetMode` reads `?scale=` URL param and calls `setActiveScaleButton`
+  before first render; wires S/M/L button click handlers.
+
+### Position clamping on scale change
+
+When the IPC handler resizes the window:
+
+```
+display  = screen.getDisplayNearestPoint({ x: cur.x, y: cur.y })
+wa       = display.workArea
+x        = clamp(cur.x, wa.x, wa.x + wa.width  - newWidth)
+y        = clamp(cur.y, wa.y, wa.y + wa.height - newHeight)
+petWindow.setBounds({ x, y, width: newWidth, height: newHeight })
+savePetWindowBounds(petWindow)
+```
+
+### Smoke coverage
+
+| File | Before | After | New tests |
+|---|---|---|---|
+| `pet-window-smoke.js` | 22 | 30 | 8 |
+| `pet-renderer-smoke.js` | 83 | 89 | 6 |
+
+### What was NOT changed
+
+- `transparent: true`, `frame: false`, `skipTaskbar: true` from TASK-166A — untouched.
+- Frosted `.pet-shell` CSS — untouched.
+- All TASK-148–166A runtime behaviors — verified by smoke suite.
+- No click-through (deferred to TASK-166D).
+- No always-on-top recovery (deferred to TASK-166C).
+- No new backend, provider, or schema changes.
