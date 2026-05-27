@@ -7307,6 +7307,244 @@ from a temp copy outside the NTFS mount to avoid lock contention:
 
 ---
 
+## TASK-165 - Pet Mode v0.2 Companion Roadmap / Capability Reset Design
+
+**Status:** DONE - PASS
+**Date:** 2026-05-27
+**Type:** Design — roadmap reset / capability planning
+
+Goal:
+
+Produce a clear roadmap reset that separates what Pet Mode v0.1 already provides
+from what the true desktop AI companion vision still requires, and defines the
+target scope for v0.2 through v0.6. TASK-164 packaged v0.1 for portfolio use.
+This task defines what comes next and why, before any new runtime work begins.
+
+Context:
+
+Pet Mode v0.1 (TASK-148 through TASK-163) is a stable foundation: position
+persistence, clean bubble speech, thinking bubble, error fallback, mood expression
+mapping, idle presence rotation, Quiet Mode with persistence, local Ollama
+reliability, and a full regression checkpoint. However, the product vision is
+broader — a character that feels alive near the edge of the screen, can hear the
+user, can see what is on the screen with permission, and can offer proactive
+feedback. v0.1 does not yet deliver that vision. This roadmap reset makes the gap
+explicit and plans the next five incremental stages.
+
+---
+
+### v0.1 — Stable Pet Bubble / Pet Window Foundation (DONE)
+
+Completed through TASK-148–163. Confirmed stable by TASK-163 regression checkpoint.
+
+- Frameless, always-on-top Pet Window (300 × 400).
+- Position persistence and off-screen fallback.
+- Clean bubble reply-only display (no source / JSON / debug leakage).
+- Details disclosure collapsed by default.
+- Ollama keep_alive / retry on idle cold-start.
+- JSON reply unwrapping and thinking / reasoning sanitization.
+- TASK-157 thinking bubble transition (thinking → reply / error).
+- Mood selector richness and mood expression mapping.
+- Idle presence rotation with launch quiet delay.
+- Idle timing / noise-control cooldown after chat reply.
+- Quiet Mode ON/OFF with collapse and rotation suppression.
+- Quiet Mode persistence across restart; corrupt value falls back to OFF.
+- Full automated suite: 83 pet-renderer smoke + 20 pet-window smoke + 619 pytest.
+- TASK-163 21-item Windows manual smoke PASS.
+
+---
+
+### v0.2 — Desktop Companion Shell (Next)
+
+Goal: make the Pet Window feel like a proper always-visible desktop overlay —
+polished enough to stay on screen during normal work sessions without feeling
+clunky or obtrusive.
+
+Planned scope:
+
+- Transparent / frameless overlay visual polish — refine shadow, border, and
+  background so the Pet sits naturally on varied desktop backgrounds.
+- Better always-on-top behavior — handle edge cases where the window falls behind
+  after full-screen app switches or system dialog focus changes.
+- Drag / resize / scale controls — allow the user to resize the Pet Window or
+  change the character scale without restarting.
+- Click-through toggle — when in purely ambient / display mode, allow mouse
+  events to pass through the Pet Window so it does not block clicks on content
+  behind it.
+- Pet direct text input — add a minimal input field directly in the Pet Window
+  so the user can send a message without switching to the Full App.
+- More natural bubble placement — bubble origin should feel attached to the
+  character rather than floating independently.
+- Screenshot and demo-ready desktop presence — the window should look polished
+  enough to appear in portfolio screenshots without visual artifacts.
+
+Why v0.2 before voice and Live2D: the overlay shell is the physical container
+everything else lives in. Voice interaction (v0.3) and Live2D (v0.6) both require
+a stable, correctly sized, correctly positioned window that handles always-on-top
+and resize reliably. Fixing the shell first avoids rework.
+
+---
+
+### v0.3 — Voice Interaction
+
+Goal: let the user speak to the Pet rather than type.
+
+Planned scope:
+
+- Push-to-talk first — no wake word; explicit button or hotkey to start recording.
+- Microphone capture — browser `getUserMedia` or Electron native API.
+- STT integration — local Whisper or OS speech recognition; no cloud by default.
+- Send voice transcript to existing `/chat` pipeline — no new backend routes needed.
+- Optional TTS reply — OS TTS or a local TTS model reads the reply aloud.
+- Wake word deferred — can be added later as an opt-in feature with explicit
+  privacy disclosure.
+
+Privacy constraints: microphone is never active without a visible recording
+indicator; no audio is stored beyond the current transcription; no audio is sent
+to any external service by default.
+
+---
+
+### v0.4 — Screen Context
+
+Goal: let the Pet see what the user is working on, with strict user control.
+
+Planned scope:
+
+- User-triggered screenshot capture only — no background surveillance; the user
+  initiates every capture explicitly.
+- OCR or vision analysis — local OCR (Tesseract) or vision model; no cloud.
+- Summarize current screen context — provide a brief text summary to the chat
+  pipeline as optional context.
+- Strict privacy and redaction boundaries — sensitive content patterns
+  (passwords, keys, financial data) should be detected and excluded before
+  analysis.
+- Explicit user approval for each capture session — no automatic screen watching.
+
+Privacy constraints: no background screen recording; no persistent screen data
+storage; user can disable screen context entirely with a single toggle.
+
+---
+
+### v0.5 — Proactive Companion
+
+Goal: let the Pet offer unsolicited but appropriate suggestions based on user
+work state — without becoming annoying.
+
+Planned scope:
+
+- User-approved context watching — the Pet monitors activity signals (idle time,
+  app in focus, recent chat history) only after explicit opt-in.
+- Cooldown-based proactive nudges — suggestions are rate-limited; no nudge is
+  sent within a configurable cooldown window after the last interaction.
+- Work-state aware suggestions — distinguish between active work, idle, and
+  break states; adjust nudge frequency and content accordingly.
+- Quiet Mode and focus mode integration — Quiet Mode always suppresses proactive
+  nudges; a separate Focus Mode can do the same without collapsing the bubble.
+- No noisy interruptions — proactive content always respects the same
+  `setIdleQuietBubble` / bubble state machine used for idle rotation.
+
+---
+
+### v0.6 — Live2D / Rich Character Presentation
+
+Goal: replace the static expression assets with a Live2D animated model.
+
+Planned scope:
+
+- Live2D Cubism SDK integration (Electron renderer).
+- Motion clips for idle, thinking, happy, worried, sleepy, and talking states.
+- Expression parameter mapping from the existing mood / state system.
+- Optional mouth movement synchronized with TTS output (v0.3 dependency).
+- Only after the interaction loop (v0.2–v0.5) is stable and the character's
+  behavioral patterns are well-established.
+
+Rationale for deferring Live2D: the character's behavioral model (what it says,
+when it speaks, how it responds to Quiet Mode and mood) should be complete and
+stable before the visual layer is upgraded. Upgrading visuals first creates
+rework risk when behavior changes.
+
+---
+
+### Recommended Next Implementation Task
+
+**TASK-166 | Pet Overlay Shell Polish Design**
+
+Define the v0.2 overlay shell improvements as a separate design task before
+implementation. Specifically:
+
+- Audit current always-on-top behavior across window focus edge cases.
+- Design the click-through toggle IPC and UI surface.
+- Design the Pet direct text input component.
+- Design drag / scale controls within the existing narrow IPC model.
+- Define what "overlay polish" means in terms of measurable acceptance criteria
+  (no visual artifacts, always-on-top survives N common focus-change scenarios,
+  click-through toggled with a single action).
+
+Why design first: the overlay shell touches the IPC bridge, the preload, and the
+window management in `main.js`. A design doc first avoids ad-hoc IPC channel
+proliferation and keeps the safety review lightweight.
+
+---
+
+Acceptance criteria:
+
+- [ ] A roadmap reset document exists at `docs/PET_MODE_V02_ROADMAP.md`
+      (or equivalent) covering v0.1 through v0.6 stages.
+- [ ] Document clearly separates what is done (v0.1) from what is planned.
+- [ ] Document recommends TASK-166 as the next implementation task and
+      explains why overlay shell comes before voice and Live2D.
+- [ ] No runtime implementation files modified.
+- [ ] `git diff --check` clean after implementation.
+
+Non-goals:
+
+- No runtime changes or new Pet features.
+- No backend / provider / schema changes.
+- No voice implementation.
+- No screen capture implementation.
+- No Live2D implementation.
+- No installer / deployment work.
+- No new assets, animation, or voice output.
+- No settings architecture expansion.
+
+### Implementation Record
+
+**Status:** DONE - PASS
+**Date:** 2026-05-27
+
+Actions taken:
+
+- Inspected `docs/PET_MODE_UI_DESIGN.md`, `docs/PET_BUBBLE_CHAT_WIRING_DESIGN.md`,
+  `docs/PHASE5_COMPANION_BEHAVIOR_PLAN.md`, `docs/PET_MODE_DEMO.md`, and
+  `docs/PET_MODE_RELEASE_CHECKPOINT.md` for context before writing.
+- Created `docs/PET_MODE_COMPANION_ROADMAP.md` covering:
+  - Vision statement for the full desktop AI companion product goal.
+  - v0.1 completed foundation — 16-item capability table with task references.
+  - What v0.1 does not yet deliver (6 explicit gaps).
+  - v0.2 Desktop Companion Shell — 6 planned areas with rationale for ordering.
+  - v0.3 Voice Interaction — push-to-talk, STT, TTS, privacy constraints.
+  - v0.4 Screen Context — user-triggered capture, OCR/vision, redaction, privacy.
+  - v0.5 Proactive Companion — cooldown nudges, work-state awareness, Focus Mode.
+  - v0.6 Live2D — Cubism SDK, motion clips, expression mapping, TTS mouth sync,
+    rationale for why Live2D waits until behavior is stable.
+  - TASK-166 recommendation with detailed scope for the design task.
+  - "What not to do next" table (7 explicitly sequenced constraints).
+  - Summary table mapping v0.1–v0.6 to themes and dependencies.
+- No runtime implementation files modified.
+
+Acceptance criteria:
+
+- [x] `docs/PET_MODE_COMPANION_ROADMAP.md` created covering v0.1 through v0.6.
+- [x] Document clearly separates completed v0.1 from planned v0.2–v0.6.
+- [x] TASK-166 recommended as next task with rationale.
+- [x] "What not to do next" section included.
+- [x] No runtime implementation files modified.
+- [x] `git diff --check` clean.
+
+
+---
+
 ## TASK-164 - Pet Mode v0.1 Demo / Portfolio Packaging Design
 
 **Status:** DONE - PASS
