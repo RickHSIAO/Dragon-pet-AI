@@ -551,8 +551,10 @@ function createPetBubbleStateDocument() {
     "pet-chat-input-hook",
     "pet-chat-send-hook",
     "pet-menu-toggle-details",
-    "pet-hint",          // TASK-166C: needed for quiet-mode hint suppression tests
-    "pet-menu-quiet-mode",  // TASK-166C: needed for quiet-mode data-attribute tests
+    "pet-hint",              // TASK-166C: needed for quiet-mode hint suppression tests
+    "pet-menu-quiet-mode",    // TASK-166C: needed for quiet-mode data-attribute tests
+    "pet-menu-click-through", // TASK-166D: needed for click-through toggle tests
+    "pet-drag-handle",        // TASK-166D: needed for recovery strip tests
   ]);
 }
 
@@ -3288,6 +3290,156 @@ function testBubbleTailVisibleOverflowFix() {
   );
 }
 
+
+// ── TASK-166D: Click-through Toggle ─────────────────────────────────────────
+
+function testClickThroughApiIsExported() {
+  const mod = require(petRendererPath);
+  assert.equal(typeof mod.getPetClickThrough, "function", "getPetClickThrough must be exported");
+  assert.equal(typeof mod.setPetClickThrough, "function", "setPetClickThrough must be exported");
+  assert.equal(typeof mod.forceClickThroughOff, "function", "forceClickThroughOff must be exported");
+}
+
+function testClickThroughDefaultsOff() {
+  const { getPetClickThrough, setPetIdleDefault } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+  setPetIdleDefault(doc, { timerApi });
+  assert.equal(getPetClickThrough(doc), false, "Click-through must default to OFF");
+}
+
+function testClickThroughOnSetsRootDataAttribute() {
+  const { getPetClickThrough, setPetClickThrough } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  setPetClickThrough(doc, true);
+  const root = doc.getElementById("pet-mode-root");
+  assert.equal(root.dataset.clickThrough, "true", "root.dataset.clickThrough must be 'true' when ON");
+  assert.equal(getPetClickThrough(doc), true, "getPetClickThrough must return true");
+
+  const menuBtn = doc.getElementById("pet-menu-click-through");
+  assert.equal(menuBtn.getAttribute("aria-pressed"), "true", "menu button aria-pressed must be true");
+  assert.equal(menuBtn.textContent, "Click-through: On", "menu button label must say On");
+}
+
+function testClickThroughOffClearsRootDataAttribute() {
+  const { getPetClickThrough, setPetClickThrough } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  setPetClickThrough(doc, true);
+  setPetClickThrough(doc, false);
+  const root = doc.getElementById("pet-mode-root");
+  assert.equal(root.dataset.clickThrough, "false", "root.dataset.clickThrough must be 'false' when OFF");
+  assert.equal(getPetClickThrough(doc), false, "getPetClickThrough must return false");
+  const menuBtn = doc.getElementById("pet-menu-click-through");
+  assert.equal(menuBtn.textContent, "Click-through: Off", "menu button label must say Off");
+}
+
+function testClickThroughUnknownValueFallsBackToOff() {
+  const { getPetClickThrough, setPetClickThrough } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  for (const bad of [null, undefined, 0, 1, "yes", "true", [], {}]) {
+    setPetClickThrough(doc, bad);
+    assert.equal(
+      getPetClickThrough(doc),
+      false,
+      "Click-through must normalise to OFF for non-true: " + JSON.stringify(bad)
+    );
+  }
+}
+
+function testForceClickThroughOffIsNoOpWhenAlreadyOff() {
+  const { getPetClickThrough, forceClickThroughOff } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  let apiCalled = false;
+  const origWindow = global.window;
+  global.window = {
+    dragonPet: {
+      setClickThrough() { apiCalled = true; },
+    },
+  };
+  forceClickThroughOff(doc);  // already OFF — should not call api
+  global.window = origWindow;
+  assert.equal(apiCalled, false, "forceClickThroughOff must not call IPC when already OFF");
+  assert.equal(getPetClickThrough(doc), false, "clickThrough must remain false");
+}
+
+function testForceClickThroughOffCallsIpcWhenOn() {
+  const { getPetClickThrough, setPetClickThrough, forceClickThroughOff } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  let ipcValue = null;
+  const origWindow = global.window;
+  global.window = {
+    dragonPet: {
+      setClickThrough(v) { ipcValue = v; },
+    },
+  };
+  setPetClickThrough(doc, true);
+  assert.equal(getPetClickThrough(doc), true, "pre-condition: clickThrough ON");
+  forceClickThroughOff(doc);
+  global.window = origWindow;
+  assert.equal(ipcValue, false, "forceClickThroughOff must call IPC with false");
+  assert.equal(getPetClickThrough(doc), false, "clickThrough must be OFF after forceClickThroughOff");
+}
+
+function testOpenMenuForcesClickThroughOff() {
+  const { openMenu, getPetClickThrough, setPetClickThrough } = require(petRendererPath);
+  const doc = new FakeDocument(["pet-mode-root", "pet-menu", "pet-menu-click-through"]);
+  let ipcValue = null;
+  const origWindow = global.window;
+  global.window = {
+    dragonPet: { setClickThrough(v) { ipcValue = v; } },
+  };
+  setPetClickThrough(doc, true);
+  assert.equal(getPetClickThrough(doc), true, "pre-condition: click-through ON");
+  openMenu(doc);
+  global.window = origWindow;
+  assert.equal(ipcValue, false, "openMenu must force click-through OFF via IPC");
+  assert.equal(getPetClickThrough(doc), false, "click-through must be OFF after openMenu");
+  assert.equal(doc.getElementById("pet-menu").dataset.state, "open", "menu must still open");
+}
+
+function testDragHandlePointerenterForcesClickThroughOff() {
+  const { initializePetMode, getPetClickThrough, setPetClickThrough } = require(petRendererPath);
+  const doc = new FakeDocument([
+    "pet-mode-root",
+    "pet-drag-region",
+    "pet-drag-handle",
+    "pet-avatar-container",
+    "pet-avatar",
+    "pet-hint",
+    "pet-bubble",
+    "pet-bubble-open-hook",
+    "pet-bubble-close-hook",
+    "pet-bubble-details",
+    "pet-bubble-details-toggle",
+    "pet-bubble-status",
+    "pet-bubble-message",
+    "pet-bubble-response",
+    "pet-bubble-placeholder",
+    "pet-chat-form-hook",
+    "pet-chat-input-hook",
+    "pet-chat-send-hook",
+    "pet-open-full-app-hook",
+    "pet-context-menu-hook",
+    "pet-menu",
+    "pet-menu-toggle-details",
+    "pet-menu-click-through",
+  ]);
+  let ipcValue = null;
+  const origWindow = global.window;
+  global.window = {
+    dragonPet: { setClickThrough(v) { ipcValue = v; }, onSpeechUpdate() { return () => {}; } },
+  };
+  initializePetMode(doc);
+  setPetClickThrough(doc, true);
+  assert.equal(getPetClickThrough(doc), true, "pre-condition: click-through ON");
+  // Simulate pointerenter on drag handle
+  doc.getElementById("pet-drag-handle").dispatchEvent({ type: "pointerenter" });
+  global.window = origWindow;
+  assert.equal(ipcValue, false, "pointerenter on drag handle must force IPC setClickThrough(false)");
+  assert.equal(getPetClickThrough(doc), false, "click-through must be OFF after drag handle pointerenter");
+}
+
+
 async function run() {
   const tests = [
     testPetFilesExist,
@@ -3402,6 +3554,16 @@ async function run() {
     testBubbleTailScaleLarge,
     testBubbleMaxHeightScalePresets,
     testBubbleTailVisibleOverflowFix,
+    // TASK-166D
+    testClickThroughApiIsExported,
+    testClickThroughDefaultsOff,
+    testClickThroughOnSetsRootDataAttribute,
+    testClickThroughOffClearsRootDataAttribute,
+    testClickThroughUnknownValueFallsBackToOff,
+    testForceClickThroughOffIsNoOpWhenAlreadyOff,
+    testForceClickThroughOffCallsIpcWhenOn,
+    testOpenMenuForcesClickThroughOff,
+    testDragHandlePointerenterForcesClickThroughOff,
   ];
 
   for (const test of tests) {

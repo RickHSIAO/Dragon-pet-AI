@@ -461,6 +461,7 @@ function createPetPresenceState() {
     lastIdleLineIdx: -1,       // TASK-158
     idleCooldownUntil: 0,      // TASK-159
     quietMode: false,           // TASK-160
+    clickThrough: false,        // TASK-166D
   };
 }
 
@@ -577,6 +578,50 @@ function setIdleQuietBubble(documentRef, presenceState) {
     return setBubbleState(documentRef, "collapsed");
   }
   return setBubbleState(documentRef, "idle_default");
+}
+
+// TASK-166D: read click-through flag safely
+function getClickThrough(presenceState) {
+  return presenceState.clickThrough === true;
+}
+
+// TASK-166D: set click-through — true passes clicks through, false restores normal.
+// Any non-true value normalises to false (fail-safe on unknown input).
+// Session-local only — NOT persisted; default OFF so user is never stuck.
+function setClickThrough(documentRef, presenceState, value) {
+  const next = value === true;
+  presenceState.clickThrough = next;
+  const root = documentRef ? documentRef.getElementById("pet-mode-root") : null;
+  if (root) {
+    root.dataset.clickThrough = next ? "true" : "false";
+  }
+  const menuBtn = documentRef ? documentRef.getElementById("pet-menu-click-through") : null;
+  if (menuBtn) {
+    menuBtn.setAttribute("aria-pressed", next ? "true" : "false");
+    setText(menuBtn, next ? "Click-through: On" : "Click-through: Off");
+  }
+}
+
+// TASK-166D: document-level click-through reader
+function getPetClickThrough(documentRef) {
+  return getClickThrough(getPetPresenceState(documentRef));
+}
+
+// TASK-166D: document-level click-through setter
+function setPetClickThrough(documentRef, value) {
+  const presenceState = getPetPresenceState(documentRef);
+  setClickThrough(documentRef, presenceState, value);
+}
+
+// TASK-166D: force click-through OFF — called on menu open, details open, reset/hide.
+// Calls the narrow IPC bridge so main process reflects the state.
+function forceClickThroughOff(documentRef) {
+  if (!getPetClickThrough(documentRef)) return;  // already OFF, no-op
+  setPetClickThrough(documentRef, false);
+  var api = typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null;
+  if (api && typeof api.setClickThrough === "function") {
+    api.setClickThrough(false);
+  }
 }
 
 // TASK-158: pick the next idle line in sequence (cycles, no back-to-back repeat)
@@ -828,6 +873,7 @@ function normalizeBubbleStateArgs(firstArg, secondArg, thirdArg) {
 }
 
 function setBubbleDetailsOpen(documentRef = document, open = false) {
+  if (open) forceClickThroughOff(documentRef);  // TASK-166D: showing details must disable click-through
   const root = documentRef.getElementById("pet-mode-root");
   const bubble = documentRef.getElementById("pet-bubble");
   const details = documentRef.getElementById("pet-bubble-details");
@@ -1019,6 +1065,7 @@ function setMenuState(documentRef, open) {
 }
 
 function openMenu(documentRef = document) {
+  forceClickThroughOff(documentRef);  // TASK-166D: menu interaction must disable click-through
   setMenuState(documentRef, true);
 }
 
@@ -1237,6 +1284,7 @@ function callPetApiAction(documentRef, methodName, pendingMessage, fallbackMessa
 }
 
 function handleResetPetPosition(documentRef = document) {
+  forceClickThroughOff(documentRef);  // TASK-166D: position reset must disable click-through first
   return callPetApiAction(
     documentRef,
     "resetPetPosition",
@@ -1246,6 +1294,7 @@ function handleResetPetPosition(documentRef = document) {
 }
 
 function handleHidePetWindow(documentRef = document) {
+  forceClickThroughOff(documentRef);  // TASK-166D: hide window must disable click-through first
   return callPetApiAction(
     documentRef,
     "hidePetWindow",
@@ -1389,6 +1438,7 @@ function initializePetMode(documentRef = document) {
   const menuResetPosition = documentRef.getElementById("pet-menu-reset-position");
   const menuHideWindow = documentRef.getElementById("pet-menu-hide-window");
   const menuQuietMode = documentRef.getElementById("pet-menu-quiet-mode");  // TASK-160
+  const menuClickThrough = documentRef.getElementById("pet-menu-click-through");  // TASK-166D
 
   if (root) {
     root.dataset.initialized = "true";
@@ -1512,6 +1562,27 @@ function initializePetMode(documentRef = document) {
     });
   }
 
+  // TASK-166D: click-through toggle
+  if (menuClickThrough && typeof menuClickThrough.addEventListener === "function") {
+    menuClickThrough.addEventListener("click", function () {
+      var newClickThrough = !getPetClickThrough(documentRef);
+      setPetClickThrough(documentRef, newClickThrough);
+      var _ctApi = typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null;
+      if (_ctApi && typeof _ctApi.setClickThrough === "function") {
+        _ctApi.setClickThrough(newClickThrough);
+      }
+      closeMenu(documentRef);
+    });
+  }
+
+  // TASK-166D: recovery strip — pointerenter on drag handle forces click-through OFF
+  var dragHandle = documentRef.getElementById("pet-drag-handle");
+  if (dragHandle && typeof dragHandle.addEventListener === "function") {
+    dragHandle.addEventListener("pointerenter", function () {
+      forceClickThroughOff(documentRef);
+    });
+  }
+
   // TASK-166B: S/M/L scale preset buttons
   for (var _scaleKey of PET_VALID_SCALES) {
     (function (scaleKey) {
@@ -1630,6 +1701,9 @@ if (typeof module !== "undefined") {
     startIdleRotation,
     setIdleCooldown,
     stopIdleRotation,
+    getPetClickThrough,
+    setPetClickThrough,
+    forceClickThroughOff,
     getPetQuietMode,
     setPetQuietMode,
     stateForChatSource,

@@ -7309,7 +7309,7 @@ from a temp copy outside the NTFS mount to avoid lock contention:
 
 ## TASK-166D - Pet Click-through Toggle Design
 
-**Status:** DEFINED
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
 **Date:** 2026-05-27
 **Type:** Design — v0.2 Desktop Companion Shell (slice 4 of 5)
 
@@ -8316,7 +8316,7 @@ Non-goals (TASK-166A):
 
 ## TASK-166 - Pet Overlay Shell Polish Design
 
-**Status:** IN PROGRESS — TASK-166A DONE; TASK-166B DONE; TASK-166C DONE - WINDOWS MANUAL SMOKE PASS (incl. Quiet Mode regression fix 2); TASK-166D through TASK-166E pending
+**Status:** IN PROGRESS — TASK-166A DONE; TASK-166B DONE; TASK-166C DONE - WINDOWS MANUAL SMOKE PASS (incl. Quiet Mode regression fix 2); TASK-166D DONE - WINDOWS MANUAL SMOKE PASS; TASK-166E pending
 **Date:** 2026-05-27
 **Type:** Design — v0.2 Desktop Companion Shell
 

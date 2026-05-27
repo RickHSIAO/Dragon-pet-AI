@@ -22,6 +22,7 @@ const PET_SPEECH_UPDATE_CHANNEL = "pet:speech-update";
 const PET_SPEECH_RECEIVED_CHANNEL = "pet:speech-received";
 const PET_QUIET_MODE_SET_CHANNEL = "pet:set-quiet-mode";  // TASK-162
 const PET_SCALE_SET_CHANNEL = "pet:set-scale";            // TASK-166B
+const PET_CLICK_THROUGH_SET_CHANNEL = "pet:set-click-through";  // TASK-166D
 const PET_WINDOW_WIDTH = 300;   // Medium default — used as fallback constant
 const PET_WINDOW_HEIGHT = 400;  // Medium default — used as fallback constant
 // TASK-166B: scale preset dimensions
@@ -477,6 +478,19 @@ ipcMain.handle(PET_SCALE_SET_CHANNEL, (_event, scaleName) => {  // TASK-166B
   petWindow.setBounds({ x, y, width: dims.width, height: dims.height });
   savePetWindowBounds(petWindow);
   return { ok: true, scale };
+});
+
+ipcMain.handle(PET_CLICK_THROUGH_SET_CHANNEL, (_event, value) => {  // TASK-166D
+  if (!petWindow || petWindow.isDestroyed()) {
+    return { ok: false, reason: "no_pet_window" };
+  }
+  const enabled = value === true;  // TASK-166D: non-true fails safe to OFF
+  if (enabled) {
+    petWindow.setIgnoreMouseEvents(true, { forward: true });
+  } else {
+    petWindow.setIgnoreMouseEvents(false);
+  }
+  return { ok: true, clickThrough: enabled };
 });
 
 app.whenReady().then(() => {

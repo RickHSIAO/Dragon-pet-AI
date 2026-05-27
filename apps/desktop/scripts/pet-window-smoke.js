@@ -446,6 +446,44 @@ function testPetScaleDefaultBoundsAcceptsDimsParam() {
   assertRegex(main, /function getDefaultPetWindowBounds\(dims = PET_SCALE_MEDIUM\)/, "main.js");
 }
 
+function testClickThroughIpcChannelInMain() {
+  // TASK-166D: verify click-through IPC channel constant and handler exist in main.js
+  const main = readText(mainPath);
+  assertIncludes(main, 'PET_CLICK_THROUGH_SET_CHANNEL = "pet:set-click-through"', "main.js");
+  assertIncludes(main, "ipcMain.handle(PET_CLICK_THROUGH_SET_CHANNEL", "main.js");
+  assertIncludes(main, "setIgnoreMouseEvents(true, { forward: true })", "main.js");
+  assertIncludes(main, "setIgnoreMouseEvents(false)", "main.js");
+  assertIncludes(main, "const enabled = value === true;", "main.js");
+}
+
+function testClickThroughPreloadExposesSetter() {
+  // TASK-166D: pet-preload.js must expose setClickThrough via narrow IPC channel
+  const preload = readText(petPreloadPath);
+  assertIncludes(preload, 'PET_CLICK_THROUGH_SET_CHANNEL = "pet:set-click-through"', "pet-preload.js");
+  assertIncludes(preload, "setClickThrough: (enabled) => ipcRenderer.invoke(PET_CLICK_THROUGH_SET_CHANNEL", "pet-preload.js");
+  assertIncludes(preload, "enabled === true", "pet-preload.js");
+  assertNotIncludes(preload, 'require("fs")', "pet-preload.js");
+}
+
+function testClickThroughRendererHasFunctions() {
+  // TASK-166D: pet-renderer.js must export click-through helpers
+  const renderer = readText(petRendererPath);
+  assertIncludes(renderer, "function getPetClickThrough", "pet-renderer.js");
+  assertIncludes(renderer, "function setPetClickThrough", "pet-renderer.js");
+  assertIncludes(renderer, "function forceClickThroughOff", "pet-renderer.js");
+  assertIncludes(renderer, "clickThrough: false", "pet-renderer.js");
+  // recovery strip
+  assertIncludes(renderer, 'addEventListener("pointerenter"', "pet-renderer.js");
+  assertIncludes(renderer, "forceClickThroughOff(documentRef)", "pet-renderer.js");
+}
+
+function testClickThroughForwardFlagIsPresent() {
+  // TASK-166D: { forward: true } must be present so renderer still receives mousemove while click-through is ON
+  const main = readText(mainPath);
+  assertIncludes(main, "{ forward: true }", "main.js");
+}
+
+
 function run() {
   const tests = [
     testMainHasPetWindowPrototype,
@@ -481,6 +519,11 @@ function run() {
     testPetScaleStartupUrlParam,
     testPetScaleResetPositionUsesActiveDims,
     testPetScaleDefaultBoundsAcceptsDimsParam,
+    // TASK-166D
+    testClickThroughIpcChannelInMain,
+    testClickThroughPreloadExposesSetter,
+    testClickThroughRendererHasFunctions,
+    testClickThroughForwardFlagIsPresent,
   ];
 
   for (const test of tests) {

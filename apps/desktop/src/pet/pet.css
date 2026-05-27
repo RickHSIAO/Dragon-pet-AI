@@ -524,3 +524,9 @@ textarea {
 [data-scale="large"] .pet-bubble[data-details-open="true"] .pet-bubble-response {
   max-height: 96px;
 }
+
+/* ── TASK-166D: Click-through visual indicator ─────────────────────────── */
+/* When click-through is ON, avatar gets a subtle opacity indicator */
+.pet-shell[data-click-through="true"] .pet-avatar {
+  opacity: 0.65;
+}
