@@ -7304,6 +7304,156 @@ from a temp copy outside the NTFS mount to avoid lock contention:
 - [x] `git status --short` shows no `.pytest-tmp*/` entries staged.
 - [x] No runtime source files modified.
 
+---
+
+## TASK-166E - Pet Direct Text Input Design
+
+**Status:** DEFINED
+**Date:** 2026-05-28
+**Type:** Design — v0.2 Desktop Companion Shell (slice 5 of 5)
+
+Goal: Design a small Pet-side text input flow that lets the user send a message from the Pet
+Window into the existing chat pipeline, while preserving the clean Pet Bubble behavior,
+thinking bubble, click-through safety, Quiet Mode, and Full App as the richer diagnostic
+surface.
+
+### Background
+
+TASK-166A improved the transparent overlay shell. TASK-166B added S/M/L scale presets with
+persistence. TASK-166C polished the speech-bubble tail and placement, and fixed Quiet Mode hint
+leakage (regression fix 1 and 2). TASK-166D added a safe click-through toggle with recovery
+path. TASK-166E is the final v0.2 slice, focused entirely on Pet direct text input design.
+
+### 1. Pet-Side Input
+
+- User can open a small Pet chat input from the Pet Menu or a dedicated Chat control in the
+  Pet navigation bar.
+- Input must be visually compact — the Pet Window must not become a full chat app.
+- Enter key sends the message.
+- Esc key or a close/dismiss button closes the input without sending.
+- Empty or whitespace-only messages must not send.
+- Long messages should be bounded by a max length or visual scroll; they must not break layout.
+- Input open/closed state is session-local only. State is not persisted across app restarts.
+- Draft text is not persisted.
+
+### 2. Chat Pipeline Reuse
+
+- Pet direct input must reuse the existing backend `/chat` route and HTTP fetch flow.
+- No new backend schema, route, or endpoint is introduced.
+- The state sequence must match TASK-157 behavior:
+  1. Thinking bubble shown immediately on send.
+  2. Final reply replaces thinking bubble on success.
+  3. Clean `llm_local_error` or `backend_offline` fallback on failure.
+- `reply / mood / source` semantics are preserved.
+- No diagnostics, raw JSON, provider text, stack traces, or source/mood labels appear in the
+  Pet Bubble as normal speech.
+
+### 3. Full App Relationship
+
+- Full App remains the richer diagnostic, history, and settings surface.
+- Pet input can be minimal — no full chat history panel inside Pet Window.
+- If practical, Full App may mirror or receive the Pet-sent message (so the conversation
+  history is coherent), but this must be designed carefully and is not required for v0.2.
+
+### 4. Click-through Interaction
+
+- Opening Pet input must force click-through OFF (same forced-OFF pattern as TASK-166D).
+- Typing must not be possible while click-through is ON.
+- Recovery behavior from TASK-166D (drag-handle pointerenter, menu open, etc.) must remain
+  intact and must not be blocked by Pet input.
+
+### 5. Quiet Mode Interaction
+
+- Quiet Mode suppresses idle presence only.
+- Quiet Mode must NOT suppress Pet direct input or replies.
+- Sending from Pet while Quiet Mode is ON must still show thinking bubble and final reply.
+- After the final reply expires, Quiet Mode ON returns the bubble to collapsed/no-hint state
+  (same as after any other reply).
+
+### 6. Scale / Layout
+
+- Pet input must remain usable at Small (225×300), Medium (300×400), and Large (375×500).
+- Small prioritizes a compact single-line input with minimal chrome.
+- Large may allow slightly more comfortable input but must not become a full chat panel.
+- Controls must not be clipped at any scale.
+- Bubble tail / placement from TASK-166C must not regress.
+
+### 7. Safety and Sanitization
+
+- Pet Bubble must remain clean — no raw JSON, no source/mood labels, no debug text.
+- Failed sends show clean error fallback (same as `llm_local_error` / `backend_offline` paths).
+- Backend offline must not break or crash the Pet Window.
+- No diagnostics or stack traces exposed.
+
+### 8. Persistence
+
+- Input open/closed state: session-local only.
+- Draft text: not persisted. Clear on close.
+- No new `userData` keys added unless explicitly justified in implementation.
+- No broad settings architecture added.
+
+### 9. Preserved Behaviors
+
+All of the following must remain intact after TASK-166E implementation:
+
+| Task | Behavior |
+|---|---|
+| TASK-148 | Pet position persistence and reset |
+| TASK-149 | Clean reply-only Pet Bubble |
+| TASK-152 | Details disclosure |
+| TASK-153 | Mood expression mapping |
+| TASK-157 | Thinking bubble state |
+| TASK-158 | Return-from-away greeting |
+| TASK-159 | Idle rotation cooldown |
+| TASK-160 | Quiet Mode ON/OFF toggle |
+| TASK-162 | Quiet Mode persistence |
+| TASK-166A | Transparent frameless shell |
+| TASK-166B | S/M/L scale presets and persistence |
+| TASK-166C | Bubble tail / placement, Quiet Mode hint suppression |
+| TASK-166D | Click-through toggle and recovery strip |
+
+### Scope Limits (TASK-166E)
+
+- No voice.
+- No microphone.
+- No screen capture or OCR/vision.
+- No Live2D.
+- No new image assets.
+- No backend, provider, or schema changes.
+- No broad settings architecture.
+- No full Pet chat history panel.
+
+### Acceptance Criteria
+
+- [ ] Pet direct input behavior is documented clearly.
+- [ ] Interaction with click-through (forced-OFF on open) is documented.
+- [ ] Interaction with Quiet Mode (input/reply not suppressed) is documented.
+- [ ] Layout expectations for Small / Medium / Large are documented.
+- [ ] Error and offline behavior are documented.
+- [ ] Manual Windows smoke expectations are documented.
+- [ ] No runtime implementation files modified by TASK-166E docs-only step.
+
+### Manual Windows Smoke Expectations (for future implementation)
+
+- Pet input opens from the Pet Window (Pet Menu or Chat control).
+- Opening input forces Click-through OFF.
+- Empty/whitespace messages do not send.
+- Enter sends message to existing `/chat` path.
+- Sending shows TASK-157 thinking bubble immediately.
+- Final reply appears cleanly in Pet Bubble.
+- Backend offline shows clean `backend_offline` error fallback.
+- Pet Bubble does not show diagnostics, raw JSON, or source/mood labels.
+- Input closes safely with Esc or close button without sending.
+- Input is usable at Small / Medium / Large scales without clipping.
+- Quiet Mode ON still allows Pet input and shows thinking + final reply.
+- After reply expiry under Quiet Mode ON, bubble returns to collapsed/no-hint state.
+- TASK-166D click-through recovery (drag-handle) does not regress.
+- TASK-166C bubble tail placement does not regress.
+- TASK-166B scale presets and persistence do not regress.
+- TASK-166A transparent shell does not regress.
+
+
+
 
 ---
 
@@ -8316,7 +8466,7 @@ Non-goals (TASK-166A):
 
 ## TASK-166 - Pet Overlay Shell Polish Design
 
-**Status:** IN PROGRESS — TASK-166A DONE; TASK-166B DONE; TASK-166C DONE - WINDOWS MANUAL SMOKE PASS (incl. Quiet Mode regression fix 2); TASK-166D DONE - WINDOWS MANUAL SMOKE PASS; TASK-166E pending
+**Status:** IN PROGRESS — TASK-166A DONE; TASK-166B DONE; TASK-166C DONE - WINDOWS MANUAL SMOKE PASS (incl. Quiet Mode regression fix 2); TASK-166D DONE - WINDOWS MANUAL SMOKE PASS; TASK-166E DEFINED
 **Date:** 2026-05-27
 **Type:** Design — v0.2 Desktop Companion Shell
 
