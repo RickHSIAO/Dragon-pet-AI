@@ -6,6 +6,7 @@ const PET_OPEN_FULL_APP_CHANNEL = "pet:open-full-app";
 const PET_RESET_POSITION_CHANNEL = "pet:reset-position";
 const PET_HIDE_WINDOW_CHANNEL = "pet:hide-window";
 const PET_SPEECH_RECEIVED_CHANNEL = "pet:speech-received";
+const PET_QUIET_MODE_SET_CHANNEL = "pet:set-quiet-mode";  // TASK-162
 
 function sanitizePetSpeechPayload(payload = {}) {
   return {
@@ -37,5 +38,6 @@ contextBridge.exposeInMainWorld(
     resetPetPosition: () => ipcRenderer.invoke(PET_RESET_POSITION_CHANNEL),
     hidePetWindow: () => ipcRenderer.invoke(PET_HIDE_WINDOW_CHANNEL),
     onSpeechUpdate,
+    setQuietMode: (value) => ipcRenderer.invoke(PET_QUIET_MODE_SET_CHANNEL, value === true),  // TASK-162
   })
 );

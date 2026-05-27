@@ -7307,6 +7307,172 @@ from a temp copy outside the NTFS mount to avoid lock contention:
 
 ---
 
+## TASK-162 - Pet Quiet Mode Persistence Polish Design
+
+**Status:** DEFINED
+**Date:** 2026-05-26
+**Type:** Design — frontend Pet persistence polish
+
+Goal:
+
+Design a small persistence polish task so the user's Quiet Mode preference can
+optionally survive Pet Window hide/show and app restart, without introducing
+broad settings architecture or backend changes.
+
+Context:
+
+TASK-160 (DONE - PASS) added a frontend-only Pet Quiet Mode toggle. The current
+implementation stores `quietMode` as a field on the in-memory `presenceState`
+WeakMap entry for each document. This means:
+
+- Quiet Mode resets to OFF on every Pet Window reload or app restart.
+- Hide/Show Pet (without reload) already preserves in-memory state correctly.
+
+For most users the session-local default is acceptable. However, a user who
+consistently keeps Quiet Mode ON is forced to re-toggle it every session. A
+lightweight persistence option — using an existing safe local path — would
+round out the TASK-160 feature without requiring new infrastructure.
+
+Expected behavior after implementation:
+
+1. Quiet Mode preference (ON or OFF) persists across Pet Window hide/show and
+   app restart.
+2. Persistence uses an existing safe local storage path:
+   - Preferred candidate: `userData/pet-window-state.json` (already used by
+     TASK-148 for window position) — add a `quietMode: false` key alongside
+     existing position data.
+   - Alternative: a dedicated `userData/pet-quiet-mode.json` (simpler
+     isolation, one key).
+   - Decision to be made during implementation; either is acceptable as long as
+     it does not introduce broad settings architecture.
+3. Persistence is written through the existing narrow IPC bridge or Electron
+   `app.getPath("userData")` path only. No new broad IPC channels.
+4. On load, stored value is read and applied before idle rotation starts.
+5. Unknown, missing, null, or corrupt stored value falls back silently to
+   `false` (Quiet Mode OFF) — no crash, no error bubble.
+6. Stored preference does not affect normal chat replies, TASK-157 thinking
+   bubble, error fallback, details disclosure, or mood mapping.
+7. If the decision is made to keep Quiet Mode session-local (i.e., not persist),
+   that decision must be explicitly documented as intentional with a rationale.
+
+Acceptance criteria:
+
+- [ ] Quiet Mode ON persists after Pet Window reload / app restart
+      (or session-local behavior is explicitly documented as intentional).
+- [ ] Corrupted / missing stored value does not crash Pet Window; falls back to
+      OFF silently.
+- [ ] No new broad settings architecture introduced.
+- [ ] No backend, IPC schema, provider, or external API changes.
+- [ ] No new assets, animation, or voice.
+- [ ] All TASK-160 Quiet Mode behaviors (collapse, restore, rotation guard,
+      toggle label) remain intact.
+- [ ] All TASK-159 timing/noise-control behaviors remain intact.
+- [ ] All TASK-157 thinking bubble behaviors remain intact.
+
+Windows manual smoke expectations:
+
+1. Turn Quiet Mode ON.
+2. Hide Pet Window; Show Pet Window — Quiet Mode state is consistent.
+3. Restart app — Quiet Mode preference is preserved (or resets per
+   documented session-local decision).
+4. Quiet Mode ON still collapses idle bubble and suppresses idle rotation only.
+5. Sending a chat message still shows TASK-157 thinking bubble and final reply.
+6. Error fallback still appears correctly with Quiet Mode ON.
+7. Corrupt / missing stored value (e.g., manually delete the JSON key) does not
+   crash Pet Window; Pet starts with Quiet Mode OFF.
+8. TASK-160 Quiet Mode toggle label and `aria-pressed` update correctly.
+9. TASK-159 idle timing / cooldown behavior does not regress.
+10. TASK-158 idle rotation behavior does not regress.
+11. Pet Bubble never shows source, mood, debug, stack traces, raw JSON, or
+    diagnostics.
+
+Non-goals:
+
+- No backend changes.
+- No provider / schema changes.
+- No broad settings UI or architecture.
+- No account / user-profile sync or cloud storage.
+- No new database table.
+- No animation, voice, or new assets.
+- No Pet Window layout redesign.
+- No new broad IPC channels; narrow bridge only.
+
+Files expected to change during implementation:
+
+- `apps/desktop/src/pet/pet-renderer.js`
+- `apps/desktop/main.js` (narrow IPC read/write for persistence, if needed)
+- `apps/desktop/scripts/pet-renderer-smoke.js` (updated/new smoke tests)
+- `docs/TASKS.md`
+- `docs/ROADMAP.md`
+
+### Implementation Record
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-27
+
+Files changed:
+
+- `apps/desktop/src/main.js` — added `loadPetQuietMode()`, `savePetQuietMode()`,
+  merge-write in `savePetWindowBounds`, `loadURL` with `?quietMode=` URL param,
+  and `ipcMain.handle("pet:set-quiet-mode", ...)` handler.
+- `apps/desktop/src/pet/pet-preload.js` — added `PET_QUIET_MODE_SET_CHANNEL`
+  constant and exposed `setQuietMode` on the contextBridge.
+- `apps/desktop/src/pet/pet-renderer.js` — `initializePetMode` reads
+  `?quietMode=true` URL param before `setPetIdleDefault`; `menuQuietMode` click
+  handler calls `dragonPetApi.setQuietMode(newQuietMode)` to persist.
+- `apps/desktop/scripts/pet-renderer-smoke.js` — 6 new TASK-162 tests added
+  (77 → 83 total).
+- `apps/desktop/scripts/pet-window-smoke.js` — 5 new static-analysis tests added
+  (15 → 20 total).
+
+Key design decisions:
+
+- Persistence path: `userData/pet-window-state.json` reused; `quietMode` field
+  merged alongside existing position data via spread-write to avoid clobbering.
+- Startup delivery: URL query param `?quietMode=true` injected by main.js so
+  renderer reads it synchronously before first `setPetIdleDefault` — no flash.
+- Fallback: any missing/null/corrupt stored value returns `false` (OFF).
+- IPC: single narrow channel `pet:set-quiet-mode`, value normalised to boolean.
+
+Smoke results (2026-05-27):
+
+- `node apps/desktop/scripts/pet-renderer-smoke.js` → 83 PASS / 0 FAIL
+- `node apps/desktop/scripts/pet-window-smoke.js` → 20 PASS / 0 FAIL
+- `cd apps/desktop && npm run test:renderer` → PASS
+- `python -m pytest backend/` → 619 passed
+- `git diff --check` → CLEAN
+
+Acceptance criteria:
+
+- [x] Quiet Mode ON persists after Pet Window reload / app restart.
+- [x] Corrupted / missing stored value falls back to OFF; no crash.
+- [x] No new broad settings architecture introduced.
+- [x] No backend, IPC schema, provider, or external API changes.
+- [x] No new assets, animation, or voice.
+- [x] All TASK-160 Quiet Mode behaviors remain intact (83-test suite confirms).
+- [x] All TASK-159 timing/noise-control behaviors remain intact.
+- [x] All TASK-157 thinking bubble behaviors remain intact.
+
+Windows manual smoke record (2026-05-27):
+
+- [x] Quiet Mode ON persists across Pet Window / app restart.
+- [x] Quiet Mode OFF persists across Pet Window / app restart.
+- [x] Persisted Quiet Mode uses the existing local pet-window-state path.
+- [x] Quiet Mode ON after restart suppresses idle rotation and collapses idle_default bubble.
+- [x] Quiet Mode OFF after restart restores normal idle behavior after TASK-159 cooldown.
+- [x] Chat while restored Quiet Mode ON shows TASK-157 thinking bubble and final reply.
+- [x] Error fallback appears correctly while restored Quiet Mode ON.
+- [x] Details disclosure and mood expression mapping unaffected.
+- [x] Missing/corrupt/invalid quietMode stored value does not crash Pet Window; falls back to OFF.
+- [x] Pet Bubble never shows Quiet Mode state, source, mood, debug, details, thinking markers,
+      raw JSON, provider text, stack traces, or diagnostics.
+- [x] TASK-160 Quiet Mode behavior did not regress.
+- [x] TASK-159 idle timing/noise-control behavior did not regress.
+- [x] TASK-157 thinking bubble behavior did not regress.
+
+
+---
+
 ## TASK-143 - Mirror Full App Chat Reply to Pet Speech Bubble
 
 **Status:** DONE

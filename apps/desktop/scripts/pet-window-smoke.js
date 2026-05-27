@@ -299,6 +299,59 @@ function testPetPreloadExposesOnlyFixedPetActions() {
   assertNotIncludes(preload, "process", "pet-preload.js");
 }
 
+
+function testQuietModePersistenceIpcAndStorageInMain() {
+  // TASK-162: verify quiet mode persistence functions + IPC handler exist in main.js
+  const main = readText(mainPath);
+  assertIncludes(main, 'PET_QUIET_MODE_SET_CHANNEL = "pet:set-quiet-mode"', "main.js");
+  assertIncludes(main, "function loadPetQuietMode()", "main.js");
+  assertIncludes(main, "function savePetQuietMode(value)", "main.js");
+  assertIncludes(main, "return parsed.quietMode === true;", "main.js");
+  assertIncludes(main, "const quietMode = value === true;", "main.js");
+  assertIncludes(main, "ipcMain.handle(PET_QUIET_MODE_SET_CHANNEL", "main.js");
+  assertIncludes(main, "savePetQuietMode(value);", "main.js");
+}
+
+function testQuietModePersistenceSaveMergesExistingState() {
+  // TASK-162: savePetWindowBounds must merge-write to preserve quietMode alongside position
+  const main = readText(mainPath);
+  // Verify merge pattern: read existing then spread before writing
+  assertIncludes(main, "let existing = {};", "main.js");
+  assertIncludes(main, "existing = JSON.parse(raw);", "main.js");
+  assertIncludes(main, "const state = { ...existing,", "main.js");
+}
+
+function testQuietModePersistenceStartupUrlParam() {
+  // TASK-162: main.js must pass ?quietMode= URL param when loading pet.html
+  const main = readText(mainPath);
+  assertIncludes(main, "const initialQuietMode = loadPetQuietMode();", "main.js");
+  assertIncludes(main, "?quietMode=${initialQuietMode}", "main.js");
+  assertIncludes(main, "petWindow.loadURL(", "main.js");
+}
+
+function testQuietModePersistencePreloadExposesSetter() {
+  // TASK-162: pet-preload.js must expose setQuietMode via the narrow IPC channel
+  const preload = readText(petPreloadPath);
+  assertIncludes(preload, 'PET_QUIET_MODE_SET_CHANNEL = "pet:set-quiet-mode"', "pet-preload.js");
+  assertIncludes(preload, "setQuietMode: (value) => ipcRenderer.invoke(PET_QUIET_MODE_SET_CHANNEL", "pet-preload.js");
+  assertIncludes(preload, "value === true", "pet-preload.js");
+  // Must not expose filesystem or broad APIs
+  assertNotIncludes(preload, 'require("fs")', "pet-preload.js");
+  assertNotIncludes(preload, 'require("node:fs")', "pet-preload.js");
+}
+
+function testQuietModePersistenceRendererCallsPersistOnToggle() {
+  // TASK-162: pet-renderer.js must call dragonPet.setQuietMode on menu toggle
+  const renderer = readText(petRendererPath);
+  assertIncludes(renderer, "dragonPetApi.setQuietMode(newQuietMode)", "pet-renderer.js");
+  assertIncludes(renderer, "typeof dragonPetApi.setQuietMode === \"function\"", "pet-renderer.js");
+  // Must read URL param for startup restore
+  assertIncludes(renderer, "new URLSearchParams(window.location.search)", "pet-renderer.js");
+  assertIncludes(renderer, 'urlParams.get("quietMode") === "true"', "pet-renderer.js");
+  // Must guard against missing window/dragonPet (Node test env safety)
+  assertIncludes(renderer, 'typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null', "pet-renderer.js");
+}
+
 function run() {
   const tests = [
     testMainHasPetWindowPrototype,
@@ -316,6 +369,12 @@ function run() {
     testFullAppShowPetEntryAndPreloadAreNarrow,
     testPetRendererUsesOnlyBackendChatPath,
     testPetPreloadExposesOnlyFixedPetActions,
+    // TASK-162
+    testQuietModePersistenceIpcAndStorageInMain,
+    testQuietModePersistenceSaveMergesExistingState,
+    testQuietModePersistenceStartupUrlParam,
+    testQuietModePersistencePreloadExposesSetter,
+    testQuietModePersistenceRendererCallsPersistOnToggle,
   ];
 
   for (const test of tests) {

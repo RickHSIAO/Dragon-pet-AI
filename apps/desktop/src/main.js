@@ -20,6 +20,7 @@ const PET_RESET_POSITION_CHANNEL = "pet:reset-position";
 const PET_HIDE_WINDOW_CHANNEL = "pet:hide-window";
 const PET_SPEECH_UPDATE_CHANNEL = "pet:speech-update";
 const PET_SPEECH_RECEIVED_CHANNEL = "pet:speech-received";
+const PET_QUIET_MODE_SET_CHANNEL = "pet:set-quiet-mode";  // TASK-162
 const PET_WINDOW_WIDTH = 300;
 const PET_WINDOW_HEIGHT = 400;
 const PET_WINDOW_STATE_FILE = "pet-window-state.json";
@@ -140,7 +141,18 @@ function savePetWindowBounds(win = petWindow) {
   }
 
   const bounds = win.getBounds();
+
+  // TASK-162: merge-write so quietMode field is preserved alongside position
+  let existing = {};
+  try {
+    const raw = fs.readFileSync(getPetWindowStatePath(), "utf8");
+    existing = JSON.parse(raw);
+  } catch (_e) {
+    // ignore; start from empty if file is missing or corrupt
+  }
+
   const state = {
+    ...existing,
     x: bounds.x,
     y: bounds.y,
     width: PET_WINDOW_WIDTH,
@@ -163,6 +175,34 @@ function schedulePetWindowBoundsSave() {
     petWindowSaveTimer = null;
     savePetWindowBounds();
   }, PET_WINDOW_SAVE_DEBOUNCE_MS);
+}
+
+function loadPetQuietMode() {  // TASK-162
+  try {
+    const raw = fs.readFileSync(getPetWindowStatePath(), "utf8");
+    const parsed = JSON.parse(raw);
+    return parsed.quietMode === true;
+  } catch (_error) {
+    // Missing or corrupt state falls back to default OFF.
+    return false;
+  }
+}
+
+function savePetQuietMode(value) {  // TASK-162
+  const quietMode = value === true;
+  let existing = {};
+  try {
+    const raw = fs.readFileSync(getPetWindowStatePath(), "utf8");
+    existing = JSON.parse(raw);
+  } catch (_error) {
+    // Start from empty state if file is missing or corrupt.
+  }
+  const state = { ...existing, quietMode };
+  try {
+    fs.writeFileSync(getPetWindowStatePath(), `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  } catch (_error) {
+    // Best-effort persistence; do not affect runtime use.
+  }
 }
 
 function createWindow() {
@@ -267,7 +307,10 @@ function createPetWindow() {
     petWindow = null;
   });
 
-  petWindow.loadFile(path.join(__dirname, "pet", "pet.html"));
+  const initialQuietMode = loadPetQuietMode();  // TASK-162
+  petWindow.loadURL(
+    `file://${path.join(__dirname, "pet", "pet.html")}?quietMode=${initialQuietMode}`
+  );
   return petWindow;
 }
 
@@ -349,6 +392,11 @@ ipcMain.handle(PET_RESET_POSITION_CHANNEL, () => resetPetWindowPosition());
 ipcMain.handle(PET_HIDE_WINDOW_CHANNEL, () => hidePetWindow());
 
 ipcMain.handle(PET_SPEECH_UPDATE_CHANNEL, (_event, payload) => forwardPetSpeechUpdate(payload));
+
+ipcMain.handle(PET_QUIET_MODE_SET_CHANNEL, (_event, value) => {  // TASK-162
+  savePetQuietMode(value);
+  return { ok: true };
+});
 
 app.whenReady().then(() => {
   createWindow();

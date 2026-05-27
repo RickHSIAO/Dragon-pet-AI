@@ -2731,6 +2731,153 @@ function testQuietModeHideShowWithQuietOnNoRotation() {
 }
 
 
+// ── TASK-162: Quiet Mode Persistence ──────────────────────────────────────────
+
+function testQuietModePersistPreAppliedTrueCollapsesBubble() {
+  // Simulates: main.js passes ?quietMode=true, renderer applies it before idle init
+  const { getPetQuietMode, setPetQuietMode, setPetIdleDefault } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  // Apply persisted quiet=true BEFORE first idle render (mirrors URL-param startup path)
+  setPetQuietMode(doc, true, timerApi);
+  assert.equal(getPetQuietMode(doc), true, "quietMode must be ON after pre-apply");
+
+  setPetIdleDefault(doc, { timerApi });
+
+  const bubble = doc.getElementById("pet-bubble");
+  assert.equal(bubble.dataset.state, "collapsed", "Pre-applied quietMode=true must keep bubble collapsed on startup");
+  assert.equal(bubble.hidden, true, "Bubble must be hidden when quietMode pre-applied as true");
+}
+
+function testQuietModePersistPreAppliedFalseShowsIdleDefault() {
+  // Simulates: no stored preference / stored false → idle_default on startup
+  const { getPetQuietMode, setPetIdleDefault, PET_IDLE_REPLY } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  // No pre-apply — quietMode stays at default false
+  assert.equal(getPetQuietMode(doc), false, "quietMode must default to OFF");
+
+  setPetIdleDefault(doc, { timerApi });
+
+  const bubble = doc.getElementById("pet-bubble");
+  assert.equal(bubble.dataset.state, "idle_default", "No stored pref must show idle_default");
+  assert.equal(bubble.hidden, false, "Bubble must be visible with no stored pref");
+  assert.equal(
+    doc.getElementById("pet-bubble-response").textContent,
+    PET_IDLE_REPLY,
+    "idle_default must show PET_IDLE_REPLY with no stored pref"
+  );
+}
+
+function testQuietModePersistCorruptValueFallsBackToOff() {
+  // Simulates: corrupt stored value → fail safe to OFF
+  const { getPetQuietMode, setPetQuietMode, setPetIdleDefault } = require(petRendererPath);
+
+  for (const badValue of [null, undefined, "true", 1, "yes", {}, []]) {
+    const doc = createPetBubbleStateDocument();
+    const timerApi = new FakeTimerApi();
+
+    setPetQuietMode(doc, badValue, timerApi);
+    assert.equal(
+      getPetQuietMode(doc),
+      false,
+      "Corrupt stored value must fall back to OFF: " + JSON.stringify(badValue)
+    );
+
+    // Must show idle_default, not crash
+    setPetIdleDefault(doc, { timerApi });
+    const bubble = doc.getElementById("pet-bubble");
+    assert.equal(
+      bubble.dataset.state,
+      "idle_default",
+      "Corrupt value must leave bubble at idle_default: " + JSON.stringify(badValue)
+    );
+  }
+}
+
+function testQuietModePersistPreAppliedTrueNoRotationAfterCooldown() {
+  // Simulates: restored quietMode=true → idle rotation stays suppressed (TASK-159 non-regression)
+  const {
+    getPetQuietMode, setPetQuietMode, setPetIdleDefault,
+    PET_IDLE_LAUNCH_QUIET_MS, PET_IDLE_COOLDOWN_MS, PET_IDLE_ROTATION_MS,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetQuietMode(doc, true, timerApi);
+  setPetIdleDefault(doc, { timerApi });
+
+  assert.equal(getPetQuietMode(doc), true, "quietMode must stay ON");
+
+  // Advance far past all cooldown + rotation windows
+  timerApi.advance(PET_IDLE_LAUNCH_QUIET_MS + PET_IDLE_COOLDOWN_MS + PET_IDLE_ROTATION_MS * 5);
+
+  const bubble = doc.getElementById("pet-bubble");
+  assert.equal(
+    bubble.dataset.state,
+    "collapsed",
+    "Bubble must stay collapsed with persisted quietMode=true after cooldown + rotation intervals"
+  );
+}
+
+function testQuietModePersistPreAppliedTrueDoesNotSuppressChatReply() {
+  // Simulates: restored quietMode=true → chat reply still appears
+  const {
+    getPetQuietMode, setPetQuietMode, setPetIdleDefault, renderPetSpeechUpdate,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetQuietMode(doc, true, timerApi);
+  setPetIdleDefault(doc, { timerApi });
+  assert.equal(getPetQuietMode(doc), true, "quietMode ON");
+
+  const replyText = "好的，這是回覆。";
+  renderPetSpeechUpdate(
+    doc,
+    { reply: replyText, mood: "neutral", source: "llm_local" },
+    { timerApi }
+  );
+
+  const bubble = doc.getElementById("pet-bubble");
+  const responseEl = doc.getElementById("pet-bubble-response");
+  assert.ok(
+    bubble.dataset.state === "speaking" || bubble.dataset.state === "success",
+    "Chat reply must show despite persisted quietMode=true, got: " + bubble.dataset.state
+  );
+  assert.equal(responseEl.textContent, replyText, "Reply text must appear with persisted quietMode=true");
+}
+
+function testQuietModePersistPreAppliedTrueDoesNotSuppressThinking() {
+  // Simulates: restored quietMode=true → TASK-157 thinking bubble still shows
+  const {
+    PET_THINKING_SOURCE, getPetQuietMode, setPetQuietMode, setPetIdleDefault,
+    renderPetSpeechUpdate,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetQuietMode(doc, true, timerApi);
+  setPetIdleDefault(doc, { timerApi });
+  assert.equal(getPetQuietMode(doc), true, "quietMode ON");
+
+  renderPetSpeechUpdate(
+    doc,
+    { reply: "思考中…", mood: "focused", source: PET_THINKING_SOURCE },
+    { timerApi }
+  );
+
+  const bubble = doc.getElementById("pet-bubble");
+  assert.equal(
+    bubble.dataset.state,
+    "thinking",
+    "TASK-157 thinking bubble must still appear with persisted quietMode=true"
+  );
+}
+
+
 async function run() {
   const tests = [
     testPetFilesExist,
@@ -2813,6 +2960,13 @@ async function run() {
     testQuietModeUnknownValueFallsBackToOff,
     testQuietModeOnCollapsesIdleBubble,
     testQuietModeHideShowWithQuietOnNoRotation,
+    // TASK-162
+    testQuietModePersistPreAppliedTrueCollapsesBubble,
+    testQuietModePersistPreAppliedFalseShowsIdleDefault,
+    testQuietModePersistCorruptValueFallsBackToOff,
+    testQuietModePersistPreAppliedTrueNoRotationAfterCooldown,
+    testQuietModePersistPreAppliedTrueDoesNotSuppressChatReply,
+    testQuietModePersistPreAppliedTrueDoesNotSuppressThinking,
   ];
 
   for (const test of tests) {

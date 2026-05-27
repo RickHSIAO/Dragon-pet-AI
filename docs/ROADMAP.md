@@ -444,6 +444,8 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 **Next planned task:**
 
+- TASK-162 DONE - WINDOWS MANUAL SMOKE PASS: Pet Quiet Mode Persistence Polish. Preference stored in `userData/pet-window-state.json` (merged alongside position data). Startup value delivered via `?quietMode=` URL param — no flash. Narrow IPC `pet:set-quiet-mode` only. Fallback to OFF on any corrupt/missing value. 83 pet-renderer smoke tests PASS; 20 pet-window smoke tests PASS; 619 pytest PASS; Windows manual smoke 13/13 PASS.
+
 - TASK-161 DONE - PASS: Repo Hygiene / Pre-existing Whitespace Warning Cleanup. Strip trailing whitespace from `.gitignore` (lines 38, 41) and `docs/開啟方式.txt` (all lines) — the only two files that have produced `git diff --check` noise since TASK-158. Preserve all Chinese text byte-for-byte. Document pytest locked-temp-folder pattern (NTFS mount; use `--basetemp /tmp/pytest-runXXX` or run from `/tmp/backend-copyXXX`). No runtime source files touched; no feature work. Acceptance: `git diff --check` zero errors from these files, NUL byte check pass, Chinese text readable, no `.pytest-tmp*/` staged.
 
 **Previously completed:**

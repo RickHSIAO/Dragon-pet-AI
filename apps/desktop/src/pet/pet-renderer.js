@@ -1351,6 +1351,19 @@ function initializePetMode(documentRef = document) {
   setText(hint, PET_MODE_DEFAULTS.hint);
   setText(bubbleMessage, PET_MODE_DEFAULTS.bubbleMessage);
 
+  // TASK-162: apply persisted quiet mode from URL param before first idle render
+  if (typeof window !== "undefined" && window.location &&
+      typeof URLSearchParams !== "undefined") {
+    try {
+      var urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("quietMode") === "true") {
+        setPetQuietMode(documentRef, true);
+      }
+    } catch (_e) {
+      // Fail safe: ignore corrupt URL params, keep default OFF
+    }
+  }
+
   setPetIdleDefault(documentRef);
   closeMenu(documentRef);
 
@@ -1429,7 +1442,14 @@ function initializePetMode(documentRef = document) {
   // TASK-160: quiet mode toggle
   if (menuQuietMode && typeof menuQuietMode.addEventListener === "function") {
     menuQuietMode.addEventListener("click", () => {
-      setPetQuietMode(documentRef, !getPetQuietMode(documentRef));
+      var newQuietMode = !getPetQuietMode(documentRef);
+      setPetQuietMode(documentRef, newQuietMode);
+      // TASK-162: persist the new preference through the narrow IPC bridge
+      var dragonPetApi =
+        typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null;
+      if (dragonPetApi && typeof dragonPetApi.setQuietMode === "function") {
+        dragonPetApi.setQuietMode(newQuietMode);
+      }
       closeMenu(documentRef);
     });
   }
