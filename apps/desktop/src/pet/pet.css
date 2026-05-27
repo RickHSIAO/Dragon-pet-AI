@@ -144,6 +144,11 @@ body {
   display: none;
 }
 
+/* TASK-166C: Quiet Mode ON — hide hint even when bubble is collapsed */
+.pet-shell[data-quiet-mode="true"] .pet-hint {
+  display: none;
+}
+
 .pet-bubble {
   position: relative;
   width: 100%;

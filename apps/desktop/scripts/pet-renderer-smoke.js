@@ -551,6 +551,8 @@ function createPetBubbleStateDocument() {
     "pet-chat-input-hook",
     "pet-chat-send-hook",
     "pet-menu-toggle-details",
+    "pet-hint",          // TASK-166C: needed for quiet-mode hint suppression tests
+    "pet-menu-quiet-mode",  // TASK-166C: needed for quiet-mode data-attribute tests
   ]);
 }
 
@@ -2888,6 +2890,202 @@ function testQuietModePersistPreAppliedTrueDoesNotSuppressThinking() {
 }
 
 
+// ── TASK-166C Quiet Mode regression tests ────────────────────────────────────
+
+// Regression: isIdleRotationEligible must return false when quietMode ON
+function testQuietModeEligibilityReturnsFalseWhenQuiet() {
+  const {
+    isIdleRotationEligible,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const presenceState = { quietMode: true, recentReply: null, handoffActive: false };
+  // quietMode ON → not eligible regardless of other fields
+  assert.equal(
+    isIdleRotationEligible(doc, presenceState),
+    false,
+    "isIdleRotationEligible must return false when quietMode=true"
+  );
+}
+
+// Regression: idle timer firing while quietMode ON must not change bubble from collapsed
+function testQuietModeIdleTimerFiresButBubbleStaysCollapsed() {
+  const {
+    getPetQuietMode, setPetQuietMode, setPetIdleDefault,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetQuietMode(doc, true, timerApi);
+  setPetIdleDefault(doc, { timerApi });
+
+  const bubbleAfterInit = doc.getElementById("pet-bubble");
+  assert.equal(bubbleAfterInit.dataset.state, "collapsed", "bubble collapsed at init with quietMode ON");
+
+  // Fast-forward well past both launch quiet period and rotation interval
+  timerApi.advance(3 * 60 * 1000);  // 3 minutes
+
+  const bubbleAfterTimer = doc.getElementById("pet-bubble");
+  assert.equal(
+    bubbleAfterTimer.dataset.state,
+    "collapsed",
+    "bubble must remain collapsed after idle timers fire with quietMode ON"
+  );
+  assert.equal(getPetQuietMode(doc), true, "quietMode must still be ON");
+}
+
+// Regression: after recentReply expires with quietMode ON, bubble must stay collapsed
+function testQuietModeRecentReplyExpiryKeepsBubbleCollapsed() {
+  const {
+    getPetQuietMode, setPetQuietMode, setPetIdleDefault, renderPetSpeechUpdate,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetQuietMode(doc, true, timerApi);
+  setPetIdleDefault(doc, { timerApi });
+
+  // Simulate a real reply arriving (quietMode ON should not suppress replies)
+  renderPetSpeechUpdate(doc, { reply: "測試回覆", mood: "neutral" }, { timerApi });
+  const bubbleAfterReply = doc.getElementById("pet-bubble");
+  assert.ok(
+    bubbleAfterReply.dataset.state !== "collapsed",
+    "chat reply must show even with quietMode ON"
+  );
+
+  // Advance past PET_RECENT_REPLY_VISIBLE_MS (90 s) to expire recent reply
+  timerApi.advance(95 * 1000);
+
+  const bubbleAfterExpiry = doc.getElementById("pet-bubble");
+  assert.equal(
+    bubbleAfterExpiry.dataset.state,
+    "collapsed",
+    "bubble must collapse back after recentReply expires when quietMode ON"
+  );
+  assert.equal(getPetQuietMode(doc), true, "quietMode still ON after expiry");
+}
+
+// Regression: restorePetPresence with quietMode ON must keep bubble collapsed
+function testQuietModeRestoreKeepsBubbleCollapsed() {
+  const {
+    getPetQuietMode, setPetQuietMode, setPetIdleDefault, restorePetPresenceAfterShow,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetQuietMode(doc, true, timerApi);
+  setPetIdleDefault(doc, { timerApi });
+
+  // Simulate a window show/restore event while quietMode ON
+  restorePetPresenceAfterShow(doc, { timerApi });
+
+  const bubble = doc.getElementById("pet-bubble");
+  assert.equal(
+    bubble.dataset.state,
+    "collapsed",
+    "restorePetPresence must keep bubble collapsed when quietMode ON"
+  );
+  assert.equal(getPetQuietMode(doc), true, "quietMode still ON after restore");
+}
+
+
+// ── TASK-166C Quiet Mode regression fix 2: data-quiet-mode attribute + hint ─────
+
+// setQuietMode ON must set root.dataset.quietMode = "true"
+function testQuietModeOnSetsRootDataAttribute() {
+  const { setPetQuietMode, getPetQuietMode, setPetIdleDefault } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetIdleDefault(doc, { timerApi });
+  setPetQuietMode(doc, true, timerApi);
+
+  const root = doc.getElementById("pet-mode-root");
+  assert.equal(
+    root.dataset.quietMode,
+    "true",
+    "root.dataset.quietMode must be 'true' when Quiet Mode is ON"
+  );
+  assert.equal(getPetQuietMode(doc), true, "getPetQuietMode must return true");
+}
+
+// setQuietMode OFF must set root.dataset.quietMode = "false"
+function testQuietModeOffClearsRootDataAttribute() {
+  const { setPetQuietMode, setPetIdleDefault } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetIdleDefault(doc, { timerApi });
+  setPetQuietMode(doc, true, timerApi);
+  setPetQuietMode(doc, false, timerApi);
+
+  const root = doc.getElementById("pet-mode-root");
+  assert.equal(
+    root.dataset.quietMode,
+    "false",
+    "root.dataset.quietMode must be 'false' when Quiet Mode is OFF"
+  );
+}
+
+// startup with URL-persisted quietMode=true must set data-quiet-mode attribute
+function testQuietModeStartupAttributeSetByPreApply() {
+  const { setPetQuietMode, setPetIdleDefault } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  // Simulate initializePetMode ordering: quietMode applied, THEN idle init
+  setPetQuietMode(doc, true, timerApi);
+  setPetIdleDefault(doc, { timerApi });
+
+  const root = doc.getElementById("pet-mode-root");
+  const bubble = doc.getElementById("pet-bubble");
+  assert.equal(root.dataset.quietMode, "true", "data-quiet-mode must be 'true' after startup with pre-applied quiet");
+  assert.equal(bubble.dataset.state, "collapsed", "bubble must be collapsed after startup with quietMode=true");
+}
+
+// toggleDetailsFromMenu must not show idle_default while Quiet Mode is ON
+function testQuietModeToggleDetailsMenuGuardWhenQuiet() {
+  const { setPetQuietMode, setPetIdleDefault, toggleDetailsFromMenu } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  setPetQuietMode(doc, true, timerApi);
+  setPetIdleDefault(doc, { timerApi });
+
+  const bubble = doc.getElementById("pet-bubble");
+  assert.equal(bubble.dataset.state, "collapsed", "pre-condition: bubble collapsed with quiet ON");
+
+  const result = toggleDetailsFromMenu(doc);
+  assert.equal(result, false, "toggleDetailsFromMenu must return false (no-op) while Quiet Mode ON");
+  assert.equal(
+    bubble.dataset.state,
+    "collapsed",
+    "bubble must remain collapsed after toggleDetailsFromMenu with Quiet Mode ON"
+  );
+}
+
+// setQuietMode ON while bubble is already collapsed (hint visible) → data attribute hides it
+function testQuietModeOnWhileCollapsedSetsAttribute() {
+  const { setPetQuietMode, setPetIdleDefault, setBubbleState } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+
+  // Start with bubble explicitly collapsed (as happens after hide window / after reply fades)
+  setPetIdleDefault(doc, { timerApi });
+  setBubbleState(doc, "collapsed");
+
+  const root = doc.getElementById("pet-mode-root");
+  const bubble = doc.getElementById("pet-bubble");
+  assert.equal(bubble.dataset.state, "collapsed", "pre-condition: bubble is collapsed");
+  // quiet mode was NOT on — data attribute should not be "true" yet
+  assert.notEqual(root.dataset.quietMode, "true", "pre-condition: quiet mode not yet on");
+
+  // NOW turn quiet mode on
+  setPetQuietMode(doc, true, timerApi);
+  assert.equal(root.dataset.quietMode, "true", "data-quiet-mode must become 'true' after turning Quiet Mode ON");
+  assert.equal(bubble.dataset.state, "collapsed", "bubble must stay collapsed");
+}
+
+
 // ── TASK-166B: Scale preset renderer tests ──────────────────────────────────
 
 async function testScaleNormalizeFallsBackToMedium() {
@@ -3179,6 +3377,17 @@ async function run() {
     testQuietModePersistPreAppliedTrueNoRotationAfterCooldown,
     testQuietModePersistPreAppliedTrueDoesNotSuppressChatReply,
     testQuietModePersistPreAppliedTrueDoesNotSuppressThinking,
+    // TASK-166C quiet mode regression fix 2: data-quiet-mode attribute
+    testQuietModeOnSetsRootDataAttribute,
+    testQuietModeOffClearsRootDataAttribute,
+    testQuietModeStartupAttributeSetByPreApply,
+    testQuietModeToggleDetailsMenuGuardWhenQuiet,
+    testQuietModeOnWhileCollapsedSetsAttribute,
+    // TASK-166C quiet mode regression fix 1: eligibility + timer guards
+    testQuietModeEligibilityReturnsFalseWhenQuiet,
+    testQuietModeIdleTimerFiresButBubbleStaysCollapsed,
+    testQuietModeRecentReplyExpiryKeepsBubbleCollapsed,
+    testQuietModeRestoreKeepsBubbleCollapsed,
     // TASK-166B
     testScaleNormalizeFallsBackToMedium,
     testSetActiveScaleButtonUpdatesDataset,

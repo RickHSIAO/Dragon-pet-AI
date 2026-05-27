@@ -7508,6 +7508,177 @@ Manual Windows smoke expectations for future implementation:
 
 ---
 
+
+## TASK-166C Quiet Mode Regression Fix 2
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-27
+**Type:** Regression Fix — Quiet Mode hint suppression + data attribute + details guard
+
+Regression reported (second round):
+
+After the first regression fix (isIdleRotationEligible + fireIdleRotation guards),
+Quiet Mode ON still showed idle text "哼，汝叫吾來做什麼？". Root cause was that
+the `#pet-hint` paragraph element is NOT part of the bubble state machine. CSS shows
+it precisely when `data-bubble-state="collapsed"` — so Quiet Mode ON (which collapses
+the bubble) made the hint VISIBLE. The bubble state system never touched it.
+
+Three compound issues identified and fixed:
+
+**Issue A — `setQuietMode` never wrote `data-quiet-mode` attribute:**
+The CSS rule `.pet-shell[data-quiet-mode="true"] .pet-hint { display: none }` was
+already added in a prior partial fix, but the JS in `setQuietMode` never actually
+wrote `root.dataset.quietMode`, so the CSS selector never fired.
+
+**Issue B — `toggleDetailsFromMenu` could show `idle_default` while quiet:**
+When the bubble is collapsed and the user clicks "Show Details" from the menu,
+`toggleDetailsFromMenu` called `setBubbleState(documentRef, "idle_default")`
+unconditionally, bypassing quiet mode entirely.
+
+**Issue C — `setQuietMode` didn't collapse the bubble when already `"collapsed"`:**
+The ON branch only collapsed if `currentState === "idle_default"`, missing the
+case where bubble was already `"collapsed"` (so hint was showing) — harmless with
+Fix A, but corrected for completeness.
+
+Files changed:
+
+- `apps/desktop/src/pet/pet-renderer.js`
+  - `setQuietMode()`: writes `root.dataset.quietMode = nextMode ? "true" : "false"`
+    immediately after setting `presenceState.quietMode`. This triggers the CSS rule
+    that hides `#pet-hint` throughout the Quiet Mode session.
+  - `setQuietMode()`: ON branch now also collapses if `currentState === "collapsed"`
+    (belt-and-suspenders; ensures full consistency on toggle).
+  - `toggleDetailsFromMenu()`: when bubble is collapsed/hidden, checks
+    `getPetPresenceState(documentRef).quietMode` before showing `idle_default` — if
+    quiet mode is ON, returns `false` (no-op) instead.
+
+- `apps/desktop/src/pet/pet.css` (already patched in prior partial fix):
+  - `.pet-shell[data-quiet-mode="true"] .pet-hint { display: none }` — this rule
+    is now activated by the JS attribute write above.
+
+- `apps/desktop/scripts/pet-renderer-smoke.js` — Added 5 new tests
+  (99→104 checks):
+  - `testQuietModeOnSetsRootDataAttribute` — `root.dataset.quietMode === "true"` after ON.
+  - `testQuietModeOffClearsRootDataAttribute` — `root.dataset.quietMode === "false"` after OFF.
+  - `testQuietModeStartupAttributeSetByPreApply` — startup with pre-applied `quietMode=true`
+    sets attribute AND collapses bubble.
+  - `testQuietModeToggleDetailsMenuGuardWhenQuiet` — `toggleDetailsFromMenu` returns `false`
+    and leaves bubble collapsed when Quiet Mode ON.
+  - `testQuietModeOnWhileCollapsedSetsAttribute` — turning Quiet Mode ON while bubble is
+    already collapsed sets `data-quiet-mode="true"`.
+  - `createPetBubbleStateDocument` now includes `"pet-hint"` and `"pet-menu-quiet-mode"`.
+
+Updated Quiet Mode state model (complete):
+
+| When Quiet Mode ON | Behaviour |
+|---|---|
+| `#pet-hint` paragraph | Hidden via `[data-quiet-mode="true"] .pet-hint { display: none }` |
+| Bubble in `idle_default` state | Immediately collapsed by `setQuietMode` |
+| Bubble already `collapsed` | Hint hidden by CSS attribute; bubble stays collapsed |
+| Idle rotation timer fires | `isIdleRotationEligible` returns false; `fireIdleRotation` has defense guard |
+| `expireRecentPetReply` callback | Calls `setIdleQuietBubble` → collapses instead of `idle_default` |
+| `restorePetPresence/AfterShow` | Calls `setIdleQuietBubble` → collapses |
+| `toggleDetailsFromMenu` on collapsed | Returns false (no-op) |
+| Thinking bubble (TASK-157) | Not suppressed — shows normally |
+| Final chat reply | Not suppressed — shows normally |
+| Error fallback | Not suppressed — shows normally |
+
+Automated validation (2026-05-27):
+
+| Command | Result |
+|---|---|
+| `node apps/desktop/scripts/pet-renderer-smoke.js` | PASS — 104 checks |
+| `node apps/desktop/scripts/pet-window-smoke.js` | PASS — 30 checks |
+| `node --check` on all modified .js files | PASS |
+| `python -m pytest -q` | PASS — 619 passed |
+| `git diff --check` | CLEAN |
+| Backend/provider/schema files changed | NONE |
+| Click-through/voice/Live2D/screen-capture added | NONE |
+
+Windows manual re-smoke (2026-05-27) — PASS:
+
+- [x] Quiet Mode OFF shows the normal pet hint ("哼，汝叫吾來做什麼？") below avatar.
+- [x] Turning Quiet Mode ON hides the pet hint immediately — no idle text visible.
+- [x] Quiet Mode ON keeps the bubble collapsed after waiting through idle/cooldown timers.
+- [x] No idle_default bubble appears while Quiet Mode ON.
+- [x] No idle rotation line appears while Quiet Mode ON.
+- [x] Show Details while Quiet Mode ON is a no-op — bubble stays collapsed.
+- [x] Recent reply expiry returns to collapsed state while Quiet Mode ON.
+- [x] Hide/Show Pet preserves collapsed idle behavior while Quiet Mode ON.
+- [x] Thinking bubble still appears while Quiet Mode ON (TASK-157 preserved).
+- [x] Final chat reply still appears while Quiet Mode ON.
+- [x] Error fallback still appears while Quiet Mode ON.
+- [x] Tail is hidden for collapsed state; visible for thinking/final/error bubbles.
+- [x] TASK-166A transparent shell did not regress.
+- [x] TASK-166B scale presets (S/M/L) did not regress.
+
+
+---
+
+## TASK-166C Quiet Mode Regression Fix
+
+**Status:** DONE - PASS
+**Date:** 2026-05-27
+**Type:** Regression Fix — Quiet Mode idle suppression
+
+Regression reported:
+
+After TASK-166C was pushed, Quiet Mode ON initially collapses the idle bubble,
+but after a delay the idle bubble "哼，汝叫吾來做什麼？" reappears — violating
+TASK-160/162 behavior.
+
+Root cause:
+
+`isIdleRotationEligible()` in `pet-renderer.js` did not check
+`presenceState.quietMode`. The inner `fireIdleRotation` callback
+(inside `startIdleRotation`) calls `isIdleRotationEligible`, then
+calls `setBubbleState(documentRef, "idle_default", ...)` regardless
+of quiet mode. While `startIdleRotation` guards at entry with
+`if (presenceState.quietMode === true) return`, that guard only prevents
+NEW timers from being scheduled — it does not protect already-scheduled
+timer callbacks that fire after a race condition.
+
+Fix applied (2026-05-27):
+
+- `apps/desktop/src/pet/pet-renderer.js`
+  - `isIdleRotationEligible()`: added `if (presenceState.quietMode === true) return false;`
+    as the FIRST check — the primary gate that stops the idle rotation path completely.
+  - `fireIdleRotation` (inner callback): added `if (presenceState.quietMode === true) return;`
+    immediately before `setBubbleState(...)` as a defense-in-depth guard.
+
+- `apps/desktop/scripts/pet-renderer-smoke.js` — Added 4 new regression tests
+  (95→99 checks):
+  - `testQuietModeEligibilityReturnsFalseWhenQuiet` — `isIdleRotationEligible`
+    returns false when `quietMode=true`, regardless of other state.
+  - `testQuietModeIdleTimerFiresButBubbleStaysCollapsed` — even after 3 minutes
+    of timer ticks with `quietMode=true`, bubble stays `collapsed`.
+  - `testQuietModeRecentReplyExpiryKeepsBubbleCollapsed` — after a chat reply
+    expires (90s), bubble returns to `collapsed` with `quietMode=true`.
+  - `testQuietModeRestoreKeepsBubbleCollapsed` — `restorePetPresenceAfterShow`
+    respects `quietMode=true` and leaves bubble `collapsed`.
+
+Automated validation (2026-05-27):
+
+| Command | Result |
+|---|---|
+| `node apps/desktop/scripts/pet-renderer-smoke.js` | PASS — 99 checks |
+| `node apps/desktop/scripts/pet-window-smoke.js` | PASS — 30 checks |
+| `node --check` on all modified .js files | PASS |
+| `python -m pytest -q` | PASS — 619 passed |
+| `git diff --check` | CLEAN |
+
+Behaviors confirmed unchanged:
+
+- Thinking bubble still shows with Quiet Mode ON (TASK-157).
+- Final chat reply still shows with Quiet Mode ON.
+- Error fallback still shows with Quiet Mode ON.
+- Turning Quiet Mode OFF resumes idle rotation normally.
+- Scale presets (TASK-166B) unaffected.
+- Bubble tail (TASK-166C tail-fix) unaffected.
+
+
+---
+
 ## TASK-166C Implementation Record
 
 **Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
@@ -7979,7 +8150,7 @@ Non-goals (TASK-166A):
 
 ## TASK-166 - Pet Overlay Shell Polish Design
 
-**Status:** IN PROGRESS — TASK-166A DONE; TASK-166B DONE; TASK-166C DONE - WINDOWS MANUAL SMOKE PASS; TASK-166D through TASK-166E pending
+**Status:** IN PROGRESS — TASK-166A DONE; TASK-166B DONE; TASK-166C DONE - WINDOWS MANUAL SMOKE PASS (incl. Quiet Mode regression fix 2); TASK-166D through TASK-166E pending
 **Date:** 2026-05-27
 **Type:** Design — v0.2 Desktop Companion Shell
 

@@ -529,12 +529,17 @@ function setQuietMode(documentRef, presenceState, value, timerApi) {
   const api = timerApi || globalThis;
   const nextMode = value === true;  // TASK-160: normalise — non-true → false
   presenceState.quietMode = nextMode;
+  // TASK-166C: write data-quiet-mode on root so CSS can suppress #pet-hint when quiet
+  const root = documentRef ? documentRef.getElementById("pet-mode-root") : null;
+  if (root) {
+    root.dataset.quietMode = nextMode ? "true" : "false";
+  }
   const bubble = documentRef ? documentRef.getElementById("pet-bubble") : null;
   const currentState = bubble ? bubble.dataset.state : null;
   if (nextMode) {
     // turning ON: cancel rotation and collapse idle bubble (TASK-160 fix)
     stopIdleRotation(presenceState, api);
-    if (currentState === "idle_default") {
+    if (currentState === "idle_default" || currentState === "collapsed") {
       setBubbleState(documentRef, "collapsed");
     }
   } else {
@@ -589,6 +594,7 @@ function pickNextIdleLine(presenceState) {
 
 // TASK-158: true when idle rotation may show a line without overwriting active state
 function isIdleRotationEligible(documentRef, presenceState) {
+  if (presenceState.quietMode === true) return false;  // TASK-166C regression: quiet mode must suppress idle
   if (presenceState.recentReply) return false;
   if (presenceState.handoffActive) return false;
   if (petChatPending) return false;
@@ -624,6 +630,7 @@ function startIdleRotation(documentRef, presenceState, timerApi) {
       if (!isIdleRotationEligible(documentRef, presenceState)) {
         return;
       }
+      if (presenceState.quietMode === true) return;  // TASK-166C: defense-in-depth quiet guard
       const line = pickNextIdleLine(presenceState);
       setBubbleState(documentRef, "idle_default", { response: line });
       startIdleRotation(documentRef, presenceState, api);
@@ -876,6 +883,11 @@ function toggleDetailsFromMenu(documentRef = document) {
   }
 
   if (!bubble || bubble.dataset.state === "collapsed" || bubble.hidden) {
+    // TASK-166C: don't expose idle_default via Details menu while Quiet Mode ON
+    const _quietPresenceState = getPetPresenceState(documentRef);
+    if (_quietPresenceState && _quietPresenceState.quietMode === true) {
+      return false;
+    }
     setBubbleState(documentRef, "idle_default");
     setBubbleDetailsOpen(documentRef, true);
     return true;
