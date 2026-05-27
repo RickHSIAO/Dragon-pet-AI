@@ -3017,6 +3017,79 @@ async function testScaleExportsPresent() {
 }
 
 
+// ── TASK-166C: Bubble placement / tail polish ─────────────────────────────
+
+function testBubbleTailCssOnlyNoAssets() {
+  const css = readText(petCssPath);
+  // Tail exists as CSS pseudo-element; no image assets
+  assertIncludes(css, ".pet-speech-bubble::after", "pet.css");
+  assertRegex(css, /\.pet-speech-bubble::after[\s\S]*content:\s*""/, "pet.css");
+  assertNotIncludes(css, "background-image", "pet.css");
+  assertNotIncludes(css, "url(", "pet.css");
+}
+
+function testBubbleTailHiddenWhenCollapsed() {
+  const css = readText(petCssPath);
+  // Collapsed data-state: tail hidden via explicit rule
+  assertRegex(css, /\.pet-bubble\[data-state="collapsed"\]::after[\s\S]*display:\s*none/, "pet.css");
+  // Hidden attribute: tail hidden via existing rule
+  assertRegex(css, /\.pet-bubble\[hidden\]::after[\s\S]*display:\s*none/, "pet.css");
+}
+
+function testBubbleTailScaleSmall() {
+  const css = readText(petCssPath);
+  // Small preset: 10×10 tail with -5px top offset
+  assertRegex(css, /\[data-scale="small"\] \.pet-speech-bubble::after[\s\S]*width:\s*10px/, "pet.css");
+  assertRegex(css, /\[data-scale="small"\] \.pet-speech-bubble::after[\s\S]*height:\s*10px/, "pet.css");
+  assertRegex(css, /\[data-scale="small"\] \.pet-speech-bubble::after[\s\S]*top:\s*-5px/, "pet.css");
+}
+
+function testBubbleTailScaleLarge() {
+  const css = readText(petCssPath);
+  // Large preset: 18×18 tail with -9px top offset
+  assertRegex(css, /\[data-scale="large"\] \.pet-speech-bubble::after[\s\S]*width:\s*18px/, "pet.css");
+  assertRegex(css, /\[data-scale="large"\] \.pet-speech-bubble::after[\s\S]*height:\s*18px/, "pet.css");
+  assertRegex(css, /\[data-scale="large"\] \.pet-speech-bubble::after[\s\S]*top:\s*-9px/, "pet.css");
+}
+
+function testBubbleMaxHeightScalePresets() {
+  const css = readText(petCssPath);
+  // Small: 96px bubble max-height (fits 300px window)
+  assertRegex(
+    css,
+    /\[data-scale="small"\] \.pet-bubble\[data-state\]:not\(\[data-state="collapsed"\]\)[\s\S]*max-height:\s*96px/,
+    "pet.css"
+  );
+  // Large: 148px bubble max-height (uses 500px window depth)
+  assertRegex(
+    css,
+    /\[data-scale="large"\] \.pet-bubble\[data-state\]:not\(\[data-state="collapsed"\]\)[\s\S]*max-height:\s*148px/,
+    "pet.css"
+  );
+}
+
+function testBubbleTailVisibleOverflowFix() {
+  const css = readText(petCssPath);
+  // Root-cause fix: .pet-bubble base rule must use overflow: visible so the
+  // ::after tail at top:-8px is not clipped by the bubble's own overflow box.
+  assertRegex(
+    css,
+    /\.pet-bubble\s*\{[^}]*overflow:\s*visible/,
+    "pet.css — .pet-bubble base rule must have overflow: visible (TASK-166C tail-fix)"
+  );
+  // Inner content elements must still self-constrain their overflow
+  assertRegex(css, /\.pet-bubble-response[\s\S]*overflow-y:\s*auto/, "pet.css");
+  assertRegex(css, /\.pet-bubble-details[\s\S]*overflow-y:\s*auto/, "pet.css");
+  // Tail has box-shadow for contrast on light/dark/complex wallpapers
+  assertRegex(css, /\.pet-speech-bubble::after[\s\S]*box-shadow:/, "pet.css");
+  // Tail border is visible (opacity >= 0.2)
+  assertRegex(
+    css,
+    /\.pet-speech-bubble::after[\s\S]*border-left:\s*1px solid rgba\(72,\s*45,\s*34,\s*0\.2/,
+    "pet.css — tail border should be at least 0.2 opacity"
+  );
+}
+
 async function run() {
   const tests = [
     testPetFilesExist,
@@ -3113,6 +3186,13 @@ async function run() {
     testApplyScalePresetCallsApiSetScale,
     testScaleUrlParamAppliedOnInit,
     testScaleExportsPresent,
+    // TASK-166C
+    testBubbleTailCssOnlyNoAssets,
+    testBubbleTailHiddenWhenCollapsed,
+    testBubbleTailScaleSmall,
+    testBubbleTailScaleLarge,
+    testBubbleMaxHeightScalePresets,
+    testBubbleTailVisibleOverflowFix,
   ];
 
   for (const test of tests) {

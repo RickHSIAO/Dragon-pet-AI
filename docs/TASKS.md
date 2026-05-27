@@ -7307,6 +7307,304 @@ from a temp copy outside the NTFS mount to avoid lock contention:
 
 ---
 
+## TASK-166C - Pet Bubble Placement / Tail Polish Design
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-27
+**Type:** Design — v0.2 Desktop Companion Shell (slice 3 of 5)
+
+Goal:
+
+Design bubble placement polish and a CSS speech-bubble tail so the Pet bubble
+feels visually connected to the character rather than like a floating app card,
+without implementing click-through, direct input, voice, screen capture,
+Live2D, or broad settings architecture.
+
+Context:
+
+TASK-166A gave the Pet Window a transparent, frameless overlay shell with
+character drop-shadow. TASK-166B added Small / Medium / Large scale presets
+with persistent state and safe position handling. The bubble currently sits
+above the character as a plain panel with no visual relationship to the avatar.
+The next natural polish step is a small speech-bubble tail and intentional
+placement so the bubble reads as character speech.
+
+---
+
+### Bubble Visual Relationship
+
+- Bubble should look visually connected to the Pet character.
+- A small CSS speech-bubble tail pointing toward the character head / upper body
+  is the primary design goal.
+- Tail should be CSS-only (e.g., `::before` or `::after` pseudo-element border
+  trick) — no new image assets required.
+- Bubble should feel like character speech, not an app card.
+- Tail direction: pointing downward toward the character if bubble sits above the
+  avatar; or inward if bubble sits beside it.
+
+---
+
+### Bubble Placement
+
+- Bubble should stay in a readable area of the Pet Window.
+- Bubble should not cover the character face excessively.
+- Bubble should not overlap Chat / Full App / Menu controls badly.
+- Bubble must remain fully usable at Small (225×300), Medium (300×400), and
+  Large (375×500) scales.
+- Quiet Mode collapsed bubble must remain intact — placement must not interfere
+  with the collapsed state introduced in TASK-160.
+
+---
+
+### Readability
+
+- Bubble must remain readable on light, dark, and complex wallpapers.
+- Sufficient contrast and shadow for transparent overlay use.
+- Details disclosure (TASK-152) must remain visible only when explicitly opened.
+- Long replies must remain constrained and must not overflow out of the Pet Window.
+- The tail itself should not reduce readability or clip against the frosted shell.
+
+---
+
+### State Behavior
+
+Bubble placement and tail must work correctly for all existing bubble states:
+
+| State | Expected |
+|---|---|
+| `idle_default` | Tail visible; bubble readable |
+| Idle rotation line | Tail visible; text fits |
+| Thinking bubble (TASK-157) | Tail visible; thinking indicator fits |
+| Final reply | Tail visible; reply text constrained |
+| Error fallback | Tail visible; error text fits |
+| Quiet Mode collapsed | Bubble collapsed cleanly; tail not shown or hidden |
+| Details disclosure open | Extra content area visible; tail still present |
+| Details disclosure closed | Bubble compact; tail present |
+
+- Quiet Mode ON must still collapse idle bubble cleanly.
+- Thinking / final reply / error fallback must still appear even when Quiet Mode
+  is ON.
+
+---
+
+### Scale Behavior
+
+| Scale | Width × Height | Placement expectation |
+|---|---|---|
+| Small | 225 × 300 | Bubble fits without clipping; tail present |
+| Medium | 300 × 400 | Current baseline; tail added here |
+| Large | 375 × 500 | Bubble does not feel detached; tail proportional |
+
+- Small should prioritize readability and avoid clipping the tail or bubble text.
+- Large should not make the bubble feel detached from the character.
+- CSS should prefer scalable values (`%`, `em`, `clamp()`) or `[data-scale]`
+  overrides instead of brittle pixel patches.
+
+---
+
+### Preserved Behaviors
+
+All of the following must remain intact after TASK-166C implementation:
+
+| Feature | Task |
+|---|---|
+| Transparent overlay shell | TASK-166A |
+| Explicit transparent backing | TASK-166A |
+| Skip taskbar | TASK-166A |
+| Avatar drop-shadow | TASK-166A |
+| Scale presets (S/M/L) and persistence | TASK-166B |
+| Position persistence and reset | TASK-148 |
+| Clean reply-only bubble | TASK-149 |
+| Details disclosure | TASK-152 |
+| Mood expression mapping | TASK-153 |
+| Thinking bubble transition | TASK-157 |
+| Idle rotation | TASK-158 |
+| Idle timing / noise-control cooldown | TASK-159 |
+| Quiet Mode ON/OFF | TASK-160 |
+| Quiet Mode persistence | TASK-162 |
+
+---
+
+### Risks and Fallbacks
+
+| Risk | Fallback |
+|---|---|
+| Tail clips against frosted `.pet-shell` border-radius | Adjust `::before` offset; hide tail at Small if necessary |
+| Bubble drifts off-screen at Small | Verify at 225×300; use `max-height` + `overflow: hidden` |
+| Tail looks detached at Large | Use `[data-scale="large"]` override to scale tail proportionally |
+| Quiet Mode collapsed state shows partial tail | Hide tail via `[data-bubble-state="collapsed"]` selector |
+| Long reply causes bubble to grow outside Pet Window | Enforce `max-height` / `overflow-y: auto` on bubble content |
+| Details disclosure pushes tail off visible area | Tail should be anchored to bubble frame, not content height |
+
+---
+
+### Scope Limits (TASK-166C)
+
+- No click-through (TASK-166D).
+- No always-on-top recovery (deferred).
+- No direct Pet text input.
+- No voice, microphone, or audio.
+- No screen capture, OCR, or vision.
+- No Live2D or animation.
+- No new image assets.
+- No backend, provider, or schema changes.
+- No broad settings architecture.
+- No installer or deployment work.
+
+---
+
+### Implementation Split Recommendation
+
+TASK-166C is a design-only task. Implementation should be a separate task:
+
+- **TASK-167** (suggested) — Pet Bubble Placement / Tail Polish Implementation.
+  Implements the CSS tail pseudo-element on `.pet-bubble`, adjusts bubble
+  positioning relative to the avatar, adds `[data-scale]` overrides for tail
+  sizing, verifies all existing bubble states, and adds smoke coverage for the
+  new layout behavior.
+
+---
+
+Acceptance criteria:
+
+- [ ] Bubble placement and tail design are documented clearly.
+- [ ] Small / Medium / Large layout expectations are documented per-scale.
+- [ ] Details disclosure and Quiet Mode interactions are documented.
+- [ ] State behavior table covers all existing bubble states.
+- [ ] Risks and fallbacks are documented.
+- [ ] Manual Windows smoke expectations for future implementation are listed.
+- [ ] No runtime implementation files modified by TASK-166C.
+- [ ] `git diff --check` clean.
+
+Non-goals:
+
+- No click-through.
+- No direct Pet text input.
+- No voice, microphone, or audio.
+- No screen capture, OCR, or vision analysis.
+- No Live2D or animation.
+- No new assets.
+- No backend / provider / schema changes.
+- No broad settings architecture.
+- No installer / deployment work.
+
+Manual Windows smoke expectations for future implementation:
+
+- [ ] Bubble visually feels connected to the Pet character.
+- [ ] Bubble tail points toward the character and does not cover the face badly.
+- [ ] Bubble remains readable on light / dark / complex wallpapers.
+- [ ] Bubble does not cover Chat / Full App / Menu controls.
+- [ ] Bubble and tail work at Small (225×300), Medium (300×400), and Large (375×500).
+- [ ] Long reply stays constrained and readable without overflowing the Pet Window.
+- [ ] Thinking bubble (TASK-157) appears correctly with tail present.
+- [ ] Final reply appears correctly with tail present.
+- [ ] Error fallback appears correctly with tail present.
+- [ ] Details disclosure (TASK-152) still opens / closes correctly.
+- [ ] Quiet Mode collapsed bubble behavior does not regress (TASK-160 / TASK-162).
+- [ ] TASK-166A transparent shell does not regress.
+- [ ] TASK-166B scale presets do not regress.
+- [ ] No runtime implementation files modified by TASK-166C.
+
+
+---
+
+## TASK-166C Implementation Record
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-27
+**Type:** Implementation — v0.2 Desktop Companion Shell (slice 3 of 5)
+
+Goal:
+
+Polish the Pet bubble's visual relationship to the character by refining the
+CSS speech-bubble tail and making bubble max-heights scale-aware, so the bubble
+reads as character speech at all three sizes.
+
+Context:
+
+The `.pet-speech-bubble::after` tail already existed (pointing upward toward
+the avatar), and `[hidden]::after { display: none }` already hid it when the
+bubble had the `hidden` attribute. TASK-166C adds explicit safety guards and
+per-scale refinements — no new image assets, no new IPC, no backend changes.
+
+Files changed:
+
+- `apps/desktop/src/pet/pet.css` — Added TASK-166C section:
+  - `.pet-bubble[data-state="collapsed"]::after { display: none }` — explicit
+    safety guard (complements the existing `[hidden]::after` rule).
+  - `[data-scale="small"] .pet-speech-bubble::after` — 10×10 tail, top: -5px
+    (proportional to the 225px window width).
+  - `[data-scale="small"]` bubble max-height rules: 96px active, 132px
+    details-open, 56px response within details-open — fits the 300px window.
+  - `[data-scale="large"] .pet-speech-bubble::after` — 18×18 tail, top: -9px
+    (proportional to the 375px window width).
+  - `[data-scale="large"]` bubble max-height rules: 148px active, 200px
+    details-open, 96px response within details-open — uses the 500px depth.
+- `apps/desktop/scripts/pet-renderer-smoke.js` — Added 5 new TASK-166C tests
+  (89→94 checks):
+  - `testBubbleTailCssOnlyNoAssets` — tail uses no image assets or `url()`.
+  - `testBubbleTailHiddenWhenCollapsed` — both `[data-state="collapsed"]::after`
+    and `[hidden]::after` have `display: none`.
+  - `testBubbleTailScaleSmall` — Small tail is 10×10, top: -5px.
+  - `testBubbleTailScaleLarge` — Large tail is 18×18, top: -9px.
+  - `testBubbleMaxHeightScalePresets` — Small max-height 96px, Large 148px.
+
+What was NOT changed:
+
+- Tail base position (`left: 50%`, centered, pointing up toward avatar) — untouched.
+- Tail shape/color (rotate 45deg diamond, matching bubble background/border) — untouched.
+- Medium bubble max-heights (122px active, 158px details-open) — untouched.
+- `pet-preload.js`, `main.js`, `pet.html`, `pet-renderer.js` — untouched.
+- All TASK-148–166B runtime behaviors — verified by smoke suite.
+- No click-through, direct text input, voice, screen capture, Live2D, backend,
+  provider, or schema changes.
+
+Automated validation (2026-05-27):
+
+| Command | Result |
+|---|---|
+| `node apps/desktop/scripts/pet-renderer-smoke.js` | PASS — 94 checks |
+| `node apps/desktop/scripts/pet-window-smoke.js` | PASS — 30 checks |
+| `node --check` on all modified .js files | PASS |
+| `python -m pytest -p no:cacheprovider -q` | PASS — 619 passed |
+| `git diff --check` | CLEAN |
+
+Windows manual smoke (2026-05-27) — PASS:
+
+Note: initial smoke found the tail invisible. Root cause was `.pet-bubble { overflow: hidden }`
+clipping the `::after` at `top: -8px`. Fix changed bubble to `overflow: visible` and improved
+tail contrast (16×16, border 0.28, box-shadow). Re-smoke passed.
+
+- [x] Bubble tail is now visibly rendered in the real Windows Pet Window.
+- [x] Tail is no longer clipped by `.pet-bubble`.
+- [x] Tail is visible and proportional at Small (225×300), Medium (300×400), and Large (375×500).
+- [x] Tail points toward the Pet character upper body and makes the bubble feel attached.
+- [x] Tail does not cover the character face badly.
+- [x] Tail does not overlap Chat / Full App / Menu controls badly.
+- [x] Tail is hidden when the bubble is collapsed, including Quiet Mode idle collapse.
+- [x] Bubble remains readable at Small (225×300) without overflow.
+- [x] Bubble uses additional space appropriately at Large (375×500).
+- [x] Long replies remain constrained and readable.
+- [x] Details disclosure opens / closes correctly at all scales.
+- [x] Thinking bubble (TASK-157) appears correctly with tail present.
+- [x] Final reply appears correctly with tail present.
+- [x] Error fallback appears correctly with tail present.
+- [x] TASK-166A transparent shell behavior did not regress.
+- [x] TASK-166B scale presets and persistence did not regress.
+- [x] TASK-148 position persistence and reset did not regress.
+- [x] TASK-149 clean reply-only bubble did not regress.
+- [x] TASK-152 details disclosure did not regress.
+- [x] TASK-153 mood expression mapping did not regress.
+- [x] TASK-157 thinking bubble did not regress.
+- [x] TASK-158/TASK-159 idle rotation and timing behavior did not regress.
+- [x] TASK-160 Quiet Mode did not regress.
+- [x] TASK-162 Quiet Mode persistence did not regress.
+- [x] No click-through, direct text input, voice, screen capture, Live2D, backend,
+      provider, or schema features were added.
+
+
+---
+
 ## TASK-166B - Pet Overlay Scale Presets Design
 
 **Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
@@ -7681,7 +7979,7 @@ Non-goals (TASK-166A):
 
 ## TASK-166 - Pet Overlay Shell Polish Design
 
-**Status:** IN PROGRESS — TASK-166A DONE; TASK-166B DONE - WINDOWS MANUAL SMOKE PASS; TASK-166C through TASK-166E pending
+**Status:** IN PROGRESS — TASK-166A DONE; TASK-166B DONE; TASK-166C DONE - WINDOWS MANUAL SMOKE PASS; TASK-166D through TASK-166E pending
 **Date:** 2026-05-27
 **Type:** Design — v0.2 Desktop Companion Shell
 

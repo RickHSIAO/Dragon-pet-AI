@@ -1656,3 +1656,59 @@ savePetWindowBounds(petWindow)
 - No click-through (deferred to TASK-166D).
 - No always-on-top recovery (deferred to TASK-166C).
 - No new backend, provider, or schema changes.
+
+
+## 15. TASK-166C — Bubble Placement / Tail Polish (2026-05-27)
+
+**Status:** IMPLEMENTED — NEEDS WINDOWS MANUAL SMOKE
+
+### What the tail already was (before TASK-166C)
+
+`.pet-speech-bubble::after` was a 14×14 CSS diamond (`::after` pseudo-element,
+`rotate(45deg)`, `top: -7px`, `left: 50%`) matching the bubble's background and
+border, pointing upward toward the avatar that sits above it. `[hidden]::after`
+already had `display: none`.
+
+### What TASK-166C added
+
+All changes are CSS-only in `pet.css`. No new image assets. No IPC. No renderer changes.
+
+**Collapsed-state safety guard:**
+```css
+.pet-bubble[data-state="collapsed"]::after {
+  display: none;
+}
+```
+Explicit hide for `data-state="collapsed"` (complements the existing `[hidden]::after` rule).
+
+**Scale-proportional tail sizing:**
+
+| Scale | Tail size | top offset |
+|---|---|---|
+| Small (225×300) | 10×10 px | -5 px |
+| Medium (300×400) | 14×14 px (unchanged) | -7 px (unchanged) |
+| Large (375×500) | 18×18 px | -9 px |
+
+**Scale-aware bubble max-heights:**
+
+| Scale | Active max-height | Details-open max-height | Response in details-open |
+|---|---|---|---|
+| Small | 96 px | 132 px | 56 px |
+| Medium | 122 px (unchanged) | 158 px (unchanged) | 74 px (unchanged) |
+| Large | 148 px | 200 px | 96 px |
+
+### Smoke coverage added (89 → 94 checks)
+
+- `testBubbleTailCssOnlyNoAssets` — no `background-image`, no `url()`.
+- `testBubbleTailHiddenWhenCollapsed` — both `collapsed` and `[hidden]` rules present.
+- `testBubbleTailScaleSmall` — 10×10, top: -5px.
+- `testBubbleTailScaleLarge` — 18×18, top: -9px.
+- `testBubbleMaxHeightScalePresets` — 96px (Small) and 148px (Large).
+
+### What was NOT changed
+
+- Tail base: `left: 50%`, upward direction, rotate-45 diamond, matching bubble colors — untouched.
+- Medium bubble max-heights — untouched.
+- `pet-preload.js`, `main.js`, `pet.html`, `pet-renderer.js` — untouched.
+- No click-through, scale presets, voice, screen capture, Live2D, backend, or
+  provider changes.

@@ -152,7 +152,7 @@ body {
   gap: 6px;
   max-height: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible; /* TASK-166C: allow ::after tail to protrude above bubble */
   opacity: 0;
   pointer-events: none;
   border: 1px solid rgba(72, 45, 34, 0.16);
@@ -166,14 +166,16 @@ body {
 .pet-speech-bubble::after {
   content: "";
   position: absolute;
-  top: -7px;
+  top: -8px;
   left: 50%;
-  width: 14px;
-  height: 14px;
-  border-left: 1px solid rgba(72, 45, 34, 0.16);
-  border-top: 1px solid rgba(72, 45, 34, 0.16);
+  width: 16px;
+  height: 16px;
+  border-left: 1px solid rgba(72, 45, 34, 0.28);
+  border-top: 1px solid rgba(72, 45, 34, 0.28);
   background: rgba(255, 255, 255, 0.94);
   transform: translateX(-50%) rotate(45deg);
+  box-shadow: -2px -2px 4px rgba(33, 24, 20, 0.1); /* contrast on light/dark wallpapers */
+  z-index: 3;
 }
 
 .pet-bubble[hidden]::after {
@@ -473,4 +475,47 @@ textarea {
   background: rgba(72, 45, 34, 0.18);
   color: #2b1c16;
   border-color: rgba(72, 45, 34, 0.5);
+}
+
+/* ── TASK-166C: Bubble placement / tail polish ─────────────────────────── */
+
+/* Collapsed data-state: hide tail (safety guard alongside .pet-bubble[hidden]::after) */
+.pet-bubble[data-state="collapsed"]::after {
+  display: none;
+}
+
+/* Small (225×300): proportionally smaller tail */
+[data-scale="small"] .pet-speech-bubble::after {
+  width: 10px;
+  height: 10px;
+  top: -5px;
+}
+
+/* Small: tighter bubble max-height to stay inside 300px window */
+[data-scale="small"] .pet-bubble[data-state]:not([data-state="collapsed"]) {
+  max-height: 96px;
+}
+[data-scale="small"] .pet-bubble[data-details-open="true"] {
+  max-height: 132px;
+}
+[data-scale="small"] .pet-bubble[data-details-open="true"] .pet-bubble-response {
+  max-height: 56px;
+}
+
+/* Large (375×500): proportionally larger tail */
+[data-scale="large"] .pet-speech-bubble::after {
+  width: 18px;
+  height: 18px;
+  top: -9px;
+}
+
+/* Large: more generous bubble max-height to use 500px window depth */
+[data-scale="large"] .pet-bubble[data-state]:not([data-state="collapsed"]) {
+  max-height: 148px;
+}
+[data-scale="large"] .pet-bubble[data-details-open="true"] {
+  max-height: 200px;
+}
+[data-scale="large"] .pet-bubble[data-details-open="true"] .pet-bubble-response {
+  max-height: 96px;
 }
