@@ -13466,3 +13466,160 @@ No raw stack traces, URLs, provider details, JSON, or debug text in any Pet Bubb
 **Smoke test updated:** `testStopVoiceRecordingEntersTranscribingState` in `pet-renderer-smoke.js` updated to assert `_petSttTranscribeChunks` (not `transcribeAudioBlob` directly) in the function body.
 
 **Automated validation after fix:** PASS (180 renderer-smoke checks / 45 window-smoke checks / 633 pytest / git diff --check clean).
+
+
+## TASK-167C - Voice Transcript to Chat Handoff Design
+
+**Status:** DEFINED
+**Date:** 2026-05-28
+**Type:** Design — v0.3 Voice Interaction (slice 1C: transcript → /chat handoff)
+
+Goal: Wire a valid, non-empty voice transcript produced by TASK-167B into the existing `/chat` pipeline, reusing the TASK-157 thinking/reply/error state sequence. After this slice, a user can speak to the Pet, have speech transcribed, and receive a reply — all through the same Pet Bubble flow used by Pet direct text input (TASK-166E). TTS, wake word, always-listening, screen capture, and backend `/chat` schema changes remain out of scope.
+
+### 1. Voice-to-Chat Flow
+
+Full end-to-end sequence after TASK-167C:
+
+1. User clicks mic button (TASK-167A) — recording indicator appears (pulsing red dot).
+2. User speaks, then clicks mic again to stop.
+3. TASK-167B transcribes audio — transcribing indicator appears (indigo spinner).
+4. If transcript is valid and non-empty: TASK-167C sends it through `/chat`.
+5. Pet enters TASK-157 thinking bubble state immediately on send.
+6. Final reply (or clean error) replaces thinking bubble.
+7. Mood expression, source, and reply semantics are preserved.
+
+No step produces raw JSON, provider details, debug fields, stack traces, or backend URLs in the Pet Bubble.
+
+### 2. Transcript Validation Before Send
+
+A transcript must pass all checks before being forwarded to `/chat`:
+
+- Trim whitespace before checking length and before sending.
+- Empty string after trimming → do not send; show clean "no speech" fallback message (same as TASK-167B empty status).
+- Silent-audio transcript (empty string from STT) → do not send; already handled by TASK-167B.
+- Very long transcript (> 2000 characters after trim) → do not send; show a clean length-error message; do not truncate silently.
+- STT status `"unavailable"` or `"error"` → do not send; clean fallback already surfaced by TASK-167B.
+- Raw STT metadata (confidence scores, segment timings, language tags) must not appear in the Pet Bubble or be forwarded to `/chat`.
+
+### 3. Chat Pipeline Reuse
+
+- Reuse the same `/chat` call path used by Pet direct text input (TASK-166E `sendPetDirectMessage` or equivalent).
+- Source identifier: `"pet_voice"` — consistent with TASK-157 source taxonomy.
+- Do not add a voice-specific `/chat` endpoint or schema field.
+- Do not modify existing `/chat` request/response schema.
+- Do not duplicate the thinking/reply/error state machine — call the existing helper.
+- `reply / mood / source` semantics from TASK-157 are preserved.
+
+### 4. Confirmation Behavior
+
+**First implementation: auto-send.**
+
+- Valid, non-empty transcript is sent to `/chat` automatically after successful STT — no extra confirmation step required.
+- This matches the push-to-talk model: record → transcribe → reply, fast.
+- Rationale: a confirmation step (e.g. "Did you say: X? Confirm?") adds friction and requires a second user action. Auto-send is simpler and testable in this slice; a confirmation/edit step can be added in a later slice if needed.
+- Empty, silent, or invalid transcripts do not send and are not presented as confirmation prompts — they show clean status messages only.
+
+If a future slice adds a confirmation step, that slice must document the new interaction clearly and must not change the auto-send behavior of this slice without explicit user-facing rationale.
+
+### 5. Error Handling
+
+All error states must produce clean, short, Chinese-language Pet Bubble messages. No stack traces, provider names, URLs, raw JSON, or debug fields.
+
+| Condition | Chat sends? | Pet shows |
+|---|---|---|
+| STT unavailable (no faster-whisper) | No | "語音辨識目前不可用。" (from TASK-167B) |
+| STT timeout (30 s exceeded) | No | "語音辨識超時，請再試一次。" (from TASK-167B) |
+| Empty / silent transcript | No | "沒有偵測到語音，請再試一次。" (from TASK-167B) |
+| Transcript too long (> 2000 chars) | No | "語音太長，請縮短後再試。" |
+| Backend offline after transcript | No (chat fails) | Existing chat offline fallback message |
+| Provider / LLM error | No (chat fails) | Existing chat error fallback message |
+| Successful transcript + chat | Yes | Thinking → final reply |
+
+### 6. Quiet Mode Interaction
+
+- Quiet Mode suppresses idle rotation and idle hints only — it must not suppress user-initiated voice chat.
+- Voice recording, transcribing spinner, thinking bubble, final reply, and clean error fallbacks all appear regardless of Quiet Mode setting.
+- After the final reply expires under Quiet Mode ON, Pet returns to the collapsed / no-hint state (same as existing chat reply expiry under Quiet Mode).
+
+### 7. Click-Through Interaction
+
+- Voice recording already forces Click-through OFF (TASK-167A).
+- Transcribing state keeps Click-through OFF (TASK-167B).
+- TASK-167C chat handoff keeps Click-through OFF while the `/chat` request is in flight.
+- After the thinking/reply cycle completes, Click-through reverts to user's last setting.
+- The CT recovery strip from TASK-166D must not regress.
+- The user must never be trapped with an unresponsive Pet window during recording, transcription, or chat handoff.
+
+### 8. Pet Direct Text Input Interaction
+
+- Voice chat and Pet text input (TASK-166E) are mutually exclusive.
+- Starting voice recording closes or disables the text input panel (already enforced in TASK-167A).
+- Opening the text input during transcription or voice chat send must cancel or block cleanly (no double-send).
+- Do not build a full chat history panel in the Pet Window.
+- Pet Bubble shows only the most recent state: recording → transcribing → thinking → reply/error.
+
+### 9. Privacy and Persistence
+
+- No always-listening. No wake word. No hidden microphone capture.
+- No raw audio written to disk at any layer.
+- Transcript is passed in-memory to `/chat` only; it is not written to disk and not stored in `presenceState` beyond the current chat cycle.
+- `presenceState.voiceTranscript` (set by TASK-167B) is cleared after use or on new recording start.
+- Do not persist raw STT metadata (confidence, timing, language tags).
+- Transcript persistence follows existing chat history behavior only; no new persistence layer is introduced.
+
+### 10. Scope Limits
+
+The following are explicitly **out of scope** for TASK-167C:
+
+- TTS (text-to-speech)
+- Wake word
+- Always-listening / background microphone
+- Screen capture / OCR / vision
+- Live2D animation
+- Broad settings architecture
+- Backend `/chat` schema changes
+- Voice-specific `/chat` endpoint or schema field
+- Global hotkeys
+- Confirmation/edit step before send (deferred to a future slice if needed)
+- Multi-turn voice conversation history
+
+### 11. Preserved Behavior
+
+All of the following must continue to work after TASK-167C implementation:
+
+| Feature | Owner task |
+|---|---|
+| Pet mic recording lifecycle | TASK-167A |
+| STT transcription + transcribing state | TASK-167B |
+| Pet direct text input (open, send, close) | TASK-166E |
+| CT recovery strip / forced-OFF cases | TASK-166D |
+| Bubble tail + Quiet Mode hint suppression | TASK-166C |
+| Scale presets S/M/L | TASK-166B |
+| Transparent shell / no taskbar | TASK-166A |
+| Quiet Mode suppresses idle only | TASK-160/162 |
+| Thinking bubble on chat send | TASK-157 |
+| Clean bubble behavior / mood expression | TASK-149/156 |
+
+### 12. Manual Windows Smoke Expectations
+
+When TASK-167C is implemented, the following must pass on Windows before the task is closed:
+
+1. Voice recording starts only after explicit mic button click.
+2. Transcribing spinner appears after recording stops.
+3. Valid non-empty transcript is sent to `/chat` automatically.
+4. Pet enters thinking bubble state immediately after transcript send.
+5. Final reply appears in Pet Bubble with correct mood expression.
+6. Mood mapping (`mood` field) still drives `data-expression` on `#pet-mode-root`.
+7. Empty / silent transcript shows clean "no speech" message — does not send.
+8. STT failure (unavailable / timeout / error) shows clean fallback — does not send.
+9. Transcript longer than 2000 chars shows clean length-error message — does not send.
+10. Backend `/chat` offline after transcript shows existing chat offline fallback.
+11. Provider / LLM error shows existing chat error fallback.
+12. Quiet Mode ON: voice chat and reply still appear; after reply expiry, Pet returns to collapsed/no-hint.
+13. Click-through is forced OFF for the full recording → transcribing → chat handoff cycle.
+14. CT recovery strip still functions after voice chat completes.
+15. Pet text input does not conflict with voice chat (mutual exclusion preserved).
+16. `presenceState.voiceTranscript` is cleared after use.
+17. No TTS, wake word, always-listening, screen capture, OCR/vision, Live2D, backend `/chat` schema change, or global hotkey exists.
+18. No raw JSON, provider details, stack traces, URLs, or debug/source fields appear in Pet Bubble.
+19. All TASK-167A, TASK-167B, and TASK-166A–E behaviors are preserved.
