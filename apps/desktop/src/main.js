@@ -364,6 +364,18 @@ function createPetWindow() {
     petWindow = null;
   });
 
+  // TASK-167A: narrow permission handler — allow microphone for voice push-to-talk only.
+  // Deny all other permission requests so we don't accidentally open broad access.
+  petWindow.webContents.session.setPermissionRequestHandler(
+    (webContents, permission, callback) => {
+      if (permission === "media") {
+        callback(true);   // allow audio capture (microphone) for voice push-to-talk
+      } else {
+        callback(false);  // deny camera, notifications, etc.
+      }
+    }
+  );
+
   const initialQuietMode = loadPetQuietMode();  // TASK-162
   const initialScale = loadPetScale();           // TASK-166B
   petWindow.loadURL(

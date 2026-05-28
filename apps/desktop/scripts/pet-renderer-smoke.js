@@ -570,6 +570,10 @@ function createPetBubbleStateDocument() {
     "pet-direct-input-send",   // TASK-166E: direct input send button
     "pet-direct-input-close",  // TASK-166E: direct input close button
     "pet-ct-recovery-strip",   // TASK-166E click-fix2: CT recovery strip
+    "pet-mic-hook",            // TASK-167A: voice mic button
+    "pet-recording-indicator", // TASK-167A: recording status indicator
+    "pet-recording-cancel",    // TASK-167A: recording cancel button
+    "pet-recording-dot",       // TASK-167A: pulsing recording dot
   ]);
 }
 
@@ -3965,13 +3969,239 @@ function testCtOffClearsRootAttributeAndHidesStrip() {
 }
 
 function testPetDirectInputNoVoiceScreenCaptureOrLive2D() {
+  // TASK-166E original scope: no screen capture, no Live2D (voice added in TASK-167A)
   const renderer = readText(petRendererPath);
   const html = readText(petHtmlPath);
-  assertNotIncludes(renderer, "getUserMedia", "pet-renderer.js");
-  assertNotIncludes(renderer, "MediaRecorder", "pet-renderer.js");
+  // TASK-167A adds getUserMedia + MediaRecorder intentionally — do NOT assert absence here.
+  // Screen capture, Live2D, and type=file uploads remain out of scope.
   assertNotIncludes(renderer, "getDisplayMedia", "pet-renderer.js");
-  assertNotIncludes(html, "getUserMedia", "pet.html");
   assertNotIncludes(html, 'type="file"', "pet.html");
+}
+
+// ── TASK-167A: Pet Voice / Mic push-to-talk smoke tests ──────────────────────
+
+function testMicButtonHtmlExists() {
+  // #pet-mic-hook must be present in #pet-mode-actions nav bar
+  const html = readText(petHtmlPath);
+  assertIncludes(html, 'id="pet-mic-hook"', "pet.html");
+  assertIncludes(html, 'data-hook="mic"', "pet.html");
+  assertRegex(html, /id="pet-mic-hook"[^>]*aria-label="Start voice recording"/, "pet.html — mic button aria-label");
+  assertRegex(html, /id="pet-mic-hook"[^>]*aria-pressed="false"/, "pet.html — mic button initial aria-pressed");
+  // Must be inside pet-mode-actions
+  assertRegex(
+    html,
+    /id="pet-mode-actions"[\s\S]*id="pet-mic-hook"[\s\S]*<\/nav>/,
+    "pet.html — mic button inside pet-mode-actions nav"
+  );
+}
+
+function testRecordingIndicatorHtmlExists() {
+  // #pet-recording-indicator, #pet-recording-cancel and #pet-recording-dot must exist
+  const html = readText(petHtmlPath);
+  assertIncludes(html, 'id="pet-recording-indicator"', "pet.html");
+  assertIncludes(html, 'id="pet-recording-cancel"', "pet.html");
+  assertIncludes(html, 'id="pet-recording-dot"', "pet.html");
+  assertRegex(html, /id="pet-recording-indicator"[^>]*aria-live="assertive"/, "pet.html — recording indicator aria-live");
+  assertRegex(html, /id="pet-recording-indicator"[^>]*hidden/, "pet.html — recording indicator starts hidden");
+  // Must be inside pet-drag-region, between pet-direct-input-panel and pet-hint
+  assertRegex(
+    html,
+    /id="pet-direct-input-panel"[\s\S]*id="pet-recording-indicator"[\s\S]*id="pet-hint"/,
+    "pet.html — recording indicator ordering"
+  );
+}
+
+function testVoiceFunctionsExported() {
+  const {
+    isPetRecordingActive,
+    setRecordingState,
+    openPetVoiceRecording,
+    cancelPetVoiceRecording,
+    stopPetVoiceRecording,
+    transcribeAudioBlob,
+    PET_RECORDING_MAX_MS,
+    PET_VOICE_MIC_DENIED_MSG,
+    PET_VOICE_NO_MIC_MSG,
+    PET_VOICE_UNSUPPORTED_MSG,
+    PET_VOICE_RECORDING_STATUS,
+  } = require(petRendererPath);
+  assert.ok(typeof isPetRecordingActive === "function", "isPetRecordingActive must be exported");
+  assert.ok(typeof setRecordingState === "function", "setRecordingState must be exported");
+  assert.ok(typeof openPetVoiceRecording === "function", "openPetVoiceRecording must be exported");
+  assert.ok(typeof cancelPetVoiceRecording === "function", "cancelPetVoiceRecording must be exported");
+  assert.ok(typeof stopPetVoiceRecording === "function", "stopPetVoiceRecording must be exported");
+  assert.ok(typeof transcribeAudioBlob === "function", "transcribeAudioBlob must be exported");
+  assert.ok(typeof PET_RECORDING_MAX_MS === "number", "PET_RECORDING_MAX_MS must be a number");
+  assert.ok(PET_RECORDING_MAX_MS >= 10000, "PET_RECORDING_MAX_MS must be at least 10s");
+  assert.ok(typeof PET_VOICE_MIC_DENIED_MSG === "string", "PET_VOICE_MIC_DENIED_MSG must be a string");
+  assert.ok(typeof PET_VOICE_NO_MIC_MSG === "string", "PET_VOICE_NO_MIC_MSG must be a string");
+  assert.ok(typeof PET_VOICE_UNSUPPORTED_MSG === "string", "PET_VOICE_UNSUPPORTED_MSG must be a string");
+  assert.ok(typeof PET_VOICE_RECORDING_STATUS === "string", "PET_VOICE_RECORDING_STATUS must be a string");
+  // Error messages must not contain stack traces, JSON, or device paths
+  for (const msg of [PET_VOICE_MIC_DENIED_MSG, PET_VOICE_NO_MIC_MSG, PET_VOICE_UNSUPPORTED_MSG]) {
+    assert.ok(!msg.includes("{"), `${msg} must not contain JSON`);
+    assert.ok(!msg.includes("Error:"), `${msg} must not contain raw Error:`);
+  }
+}
+
+function testIsPetRecordingActiveDefaultsFalse() {
+  const { isPetRecordingActive } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  // By default no recording has been started — must return false
+  assert.equal(isPetRecordingActive(doc), false, "isPetRecordingActive must default to false");
+}
+
+function testSetRecordingStateActiveSetsDataAttr() {
+  const { setRecordingState } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const presenceState = {};
+  setRecordingState(doc, presenceState, true);
+  const root = doc.getElementById("pet-mode-root");
+  assert.equal(root.dataset.recording, "true", "data-recording must be 'true' when recording starts");
+  const micBtn = doc.getElementById("pet-mic-hook");
+  assert.equal(micBtn.getAttribute("aria-pressed"), "true", "mic button must have aria-pressed='true' while recording");
+  const indicator = doc.getElementById("pet-recording-indicator");
+  assert.equal(indicator.hidden, false, "recording indicator must be visible (not hidden) while recording");
+}
+
+function testSetRecordingStateClearsDataAttr() {
+  const { setRecordingState } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const presenceState = {};
+  setRecordingState(doc, presenceState, true);
+  setRecordingState(doc, presenceState, false);
+  const root = doc.getElementById("pet-mode-root");
+  assert.equal(root.dataset.recording, "false", "data-recording must be 'false' after recording stops");
+  const micBtn = doc.getElementById("pet-mic-hook");
+  assert.equal(micBtn.getAttribute("aria-pressed"), "false", "mic button must have aria-pressed='false' after recording stops");
+  const indicator = doc.getElementById("pet-recording-indicator");
+  assert.equal(indicator.hidden, true, "recording indicator must be hidden after recording stops");
+}
+
+function testCancelRecordingClearsState() {
+  const { setRecordingState, cancelPetVoiceRecording, isPetRecordingActive } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const presenceState = {};
+  // Simulate recording already active via setRecordingState
+  setRecordingState(doc, presenceState, true);
+  assert.equal(isPetRecordingActive(doc), true, "pre-condition: recording must be active");
+  cancelPetVoiceRecording(doc);
+  assert.equal(isPetRecordingActive(doc), false, "cancelPetVoiceRecording must clear data-recording");
+}
+
+function testCancelRecordingIsNoOpWhenNotRecording() {
+  const { cancelPetVoiceRecording, isPetRecordingActive } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  // Not recording — cancel should be a safe no-op
+  assert.doesNotThrow(() => cancelPetVoiceRecording(doc), "cancelPetVoiceRecording must not throw when not recording");
+  assert.equal(isPetRecordingActive(doc), false, "recording must remain inactive after no-op cancel");
+}
+
+async function testOpenTextInputCancelsVoiceRecording() {
+  // TASK-167A mutual exclusion: opening text input panel must cancel active voice recording.
+  const { setRecordingState, openPetDirectInput, isPetRecordingActive } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const presenceState = {};
+  // Simulate active recording
+  setRecordingState(doc, presenceState, true);
+  assert.equal(isPetRecordingActive(doc), true, "pre-condition: recording must be active");
+  await openPetDirectInput(doc);
+  assert.equal(isPetRecordingActive(doc), false, "openPetDirectInput must cancel active voice recording");
+}
+
+function testCtOnCancelsVoiceRecording() {
+  // TASK-167A: setting CT ON while recording must cancel the recording
+  const { setRecordingState, setPetClickThrough, isPetRecordingActive } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const presenceState = {};
+  setRecordingState(doc, presenceState, true);
+  assert.equal(isPetRecordingActive(doc), true, "pre-condition: recording must be active");
+  // Turning CT ON must trigger cancelPetVoiceRecording
+  setPetClickThrough(doc, true);
+  assert.equal(isPetRecordingActive(doc), false, "setPetClickThrough(true) must cancel active recording");
+}
+
+function testQuietModeDoesNotSuppressVoiceRecording() {
+  // TASK-167A: Quiet Mode suppresses idle only; does NOT suppress user-initiated voice.
+  // Verify that setRecordingState + isPetRecordingActive work correctly even when quiet mode is ON.
+  const { setRecordingState, setPetQuietMode, isPetRecordingActive } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const presenceState = {};
+  setPetQuietMode(doc, true);
+  setRecordingState(doc, presenceState, true);
+  assert.equal(isPetRecordingActive(doc), true, "quiet mode must not suppress user-initiated voice recording");
+  setRecordingState(doc, presenceState, false);
+  assert.equal(isPetRecordingActive(doc), false, "recording can still stop normally with quiet mode ON");
+}
+
+async function testTranscribeAudioBlobIsStub() {
+  // TASK-167A: transcribeAudioBlob must be a stub that returns null (no STT yet)
+  const { transcribeAudioBlob } = require(petRendererPath);
+  const result = await transcribeAudioBlob(new Uint8Array([1, 2, 3]));
+  assert.equal(result, null, "transcribeAudioBlob stub must return null (TASK-167B will implement STT)");
+}
+
+function testNoChatCallInTask167A() {
+  // TASK-167A: transcribeAudioBlob must not call /chat or sendPetChatMessage
+  const renderer = readText(petRendererPath);
+  // Extract just the transcribeAudioBlob function body (between its definition and the next function)
+  const transcribeMatch = renderer.match(/function transcribeAudioBlob[\s\S]*?(?=\n\/\/|\nfunction|\nasync function)/);
+  assert.ok(transcribeMatch, "transcribeAudioBlob function must be present in renderer");
+  const funcBody = transcribeMatch[0];
+  assertNotIncludes(funcBody, "/chat", "transcribeAudioBlob must not reference /chat");
+  assertNotIncludes(funcBody, "sendPetChatMessage", "transcribeAudioBlob must not call sendPetChatMessage");
+  assertNotIncludes(funcBody, "fetch(", "transcribeAudioBlob must not call fetch");
+}
+
+function testNoScreenCaptureOrBackendChangesInTask167A() {
+  // TASK-167A scope check: no screen capture, no wake-word, no backend/STT/TTS added
+  const renderer = readText(petRendererPath);
+  assertNotIncludes(renderer, "getDisplayMedia", "pet-renderer.js -- no screen capture");
+  assertNotIncludes(renderer, "wakeWord", "pet-renderer.js -- no wake-word");
+  assertNotIncludes(renderer, "alwaysListening", "pet-renderer.js -- no always-listening");
+  assertNotIncludes(renderer, "tts(", "pet-renderer.js -- no TTS");
+  assertNotIncludes(renderer, "speechSynthesis", "pet-renderer.js -- no speechSynthesis");
+  // No new backend calls -- all /chat references must be the existing sendPetChatMessage only
+  const chatCount = (renderer.match(/["']\/chat["']/g) || []).length;
+  assert.ok(chatCount <= 1, "pet-renderer.js must not add new /chat call sites (found " + chatCount + ")");
+}
+
+function testVoiceMicCssExists() {
+  // TASK-167A: CSS for mic button, recording indicator and pulse animation must exist
+  const css = readText(petCssPath);
+  assertIncludes(css, "#pet-mic-hook", "pet.css");
+  assertIncludes(css, ".pet-recording-indicator", "pet.css");
+  assertIncludes(css, ".pet-recording-dot", "pet.css");
+  assertIncludes(css, ".pet-recording-cancel", "pet.css");
+  assertIncludes(css, "pet-recording-pulse", "pet.css");
+  assertRegex(css, /@keyframes pet-recording-pulse/, "pet.css -- pulse animation keyframes must exist");
+  // data-recording="true" selector must show the indicator
+  assertRegex(css, /\[data-recording="true"\]\s*\.pet-recording-indicator/, "pet.css -- recording indicator must show when data-recording=true");
+}
+
+function testMicButtonActiveStyleExists() {
+  // #pet-mic-hook[aria-pressed="true"] must have a distinct visual state
+  const css = readText(petCssPath);
+  assertRegex(css, /#pet-mic-hook\[aria-pressed="true"\]/, "pet.css -- mic button active style must exist");
+}
+
+function testRecordingIndicatorCssHiddenByDefault() {
+  // .pet-recording-indicator must have display:none by default (shown only via data-recording)
+  const css = readText(petCssPath);
+  assertRegex(css, /\.pet-recording-indicator\s*\{[^}]*display:\s*none/, "pet.css -- indicator must be display:none by default");
+}
+
+function testRecordingIndicatorHiddenAttributeOverride() {
+  // .pet-recording-indicator[hidden] must be display:none!important to prevent CSS conflicts
+  const css = readText(petCssPath);
+  assertRegex(css, /\.pet-recording-indicator\[hidden\]\s*\{[^}]*display:\s*none/, "pet.css -- indicator[hidden] must override to display:none");
+}
+
+function testVoiceRendererHasGetUserMediaAndMediaRecorder() {
+  // TASK-167A: these APIs are intentionally present in the renderer for voice capture
+  const renderer = readText(petRendererPath);
+  assertIncludes(renderer, "getUserMedia", "pet-renderer.js -- getUserMedia must be present for TASK-167A");
+  assertIncludes(renderer, "MediaRecorder", "pet-renderer.js -- MediaRecorder must be present for TASK-167A");
 }
 
 async function run() {
@@ -4134,6 +4364,26 @@ async function run() {
     testClickThroughOnWithClosedInputIsNoOp,
     testCtOnStampsRootAttributeAndShowsStrip,
     testCtOffClearsRootAttributeAndHidesStrip,
+    // TASK-167A
+    testMicButtonHtmlExists,
+    testRecordingIndicatorHtmlExists,
+    testVoiceFunctionsExported,
+    testIsPetRecordingActiveDefaultsFalse,
+    testSetRecordingStateActiveSetsDataAttr,
+    testSetRecordingStateClearsDataAttr,
+    testCancelRecordingClearsState,
+    testCancelRecordingIsNoOpWhenNotRecording,
+    testOpenTextInputCancelsVoiceRecording,
+    testCtOnCancelsVoiceRecording,
+    testQuietModeDoesNotSuppressVoiceRecording,
+    testTranscribeAudioBlobIsStub,
+    testNoChatCallInTask167A,
+    testNoScreenCaptureOrBackendChangesInTask167A,
+    testVoiceMicCssExists,
+    testMicButtonActiveStyleExists,
+    testRecordingIndicatorCssHiddenByDefault,
+    testRecordingIndicatorHiddenAttributeOverride,
+    testVoiceRendererHasGetUserMediaAndMediaRecorder,
   ];
 
   for (const test of tests) {

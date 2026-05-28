@@ -25,6 +25,12 @@ const PET_IDLE_LAUNCH_QUIET_MS = 120000;
 const PET_IDLE_COOLDOWN_MS = 90000;
 // TASK-158: interval between idle presence line rotations
 const PET_IDLE_ROTATION_MS = 60000;
+// TASK-167A: voice push-to-talk
+const PET_RECORDING_MAX_MS = 30000;  // 30-second hard cap on a single recording
+const PET_VOICE_MIC_DENIED_MSG = "麥克風權限被拒絕。請在系統設定中開啟麥克風權限。";
+const PET_VOICE_NO_MIC_MSG = "找不到麥克風裝置。請確認麥克風已連接。";
+const PET_VOICE_UNSUPPORTED_MSG = "此環境不支援語音錄音。";
+const PET_VOICE_RECORDING_STATUS = "錄音中…";
 // TASK-158: short in-character idle presence lines (static local set)
 const PET_IDLE_LINES = Object.freeze([
   // neutral
@@ -608,6 +614,10 @@ function setClickThrough(documentRef, presenceState, value) {
   if (next && isPetDirectInputOpen(documentRef)) {
     closePetDirectInput(documentRef);
   }
+  // TASK-167A: if CT is turning ON and voice recording is active, cancel it.
+  if (next && isPetRecordingActive(documentRef)) {
+    cancelPetVoiceRecording(documentRef);
+  }
   const menuBtn = documentRef ? documentRef.getElementById("pet-menu-click-through") : null;
   if (menuBtn) {
     menuBtn.setAttribute("aria-pressed", next ? "true" : "false");
@@ -656,6 +666,10 @@ function isPetDirectInputOpen(documentRef) {
 // unreachable — the window is still in click-through mode and has lost OS
 // focus because the triggering click was forwarded through to the app behind.
 async function openPetDirectInput(documentRef) {
+  // TASK-167A: mutual exclusion — opening text input cancels any active voice recording.
+  if (isPetRecordingActive(documentRef)) {
+    cancelPetVoiceRecording(documentRef);
+  }
   // Step 1: force CT OFF and await the IPC so main process processes it first.
   var ctPromise = forceClickThroughOff(documentRef);  // TASK-166D: must be OFF before input appears
   if (ctPromise && typeof ctPromise.then === "function") {
@@ -686,6 +700,231 @@ function closePetDirectInput(documentRef) {
   var field = documentRef ? documentRef.getElementById("pet-direct-input-field") : null;
   if (field) {
     field.value = "";
+  }
+}
+
+// ── TASK-167A: Pet Voice / Mic Push-to-talk ────────────────────────────────────
+
+// TASK-167A: true when data-recording="true" is set on #pet-mode-root
+function isPetRecordingActive(documentRef) {
+  var root = documentRef ? documentRef.getElementById("pet-mode-root") : null;
+  return Boolean(root && root.dataset.recording === "true");
+}
+
+// TASK-167A: manage data-recording attribute, indicator visibility, mic aria-pressed.
+// presenceState.voiceRecordingTimer holds the active timeout ID (or null).
+function setRecordingState(documentRef, presenceState, active) {
+  var root = documentRef ? documentRef.getElementById("pet-mode-root") : null;
+  if (root) {
+    root.dataset.recording = active ? "true" : "false";
+  }
+  var indicator = documentRef ? documentRef.getElementById("pet-recording-indicator") : null;
+  if (indicator) {
+    indicator.hidden = !active;
+  }
+  var micBtn = documentRef ? documentRef.getElementById("pet-mic-hook") : null;
+  if (micBtn) {
+    micBtn.setAttribute("aria-pressed", active ? "true" : "false");
+  }
+  if (!active) {
+    // Clear timeout when recording is being stopped or cancelled
+    if (presenceState && presenceState.voiceRecordingTimer != null) {
+      clearTimeout(presenceState.voiceRecordingTimer);
+      presenceState.voiceRecordingTimer = null;
+    }
+    // Clear the MediaRecorder reference
+    if (presenceState) {
+      presenceState.voiceMediaRecorder = null;
+    }
+  }
+}
+
+// TASK-167A: stub boundary for TASK-167B (STT integration).
+// Returns null to indicate transcription is not yet implemented.
+// Do NOT call /chat, do NOT fake a transcript.
+function transcribeAudioBlob(blob) {  // eslint-disable-line no-unused-vars
+  // TASK-167B will replace this stub with real STT (e.g. Whisper API).
+  return Promise.resolve(null);
+}
+
+// TASK-167A: stop recording and hand the audio Blob to the transcription stub.
+// chunks: Array<BlobPart> accumulated by MediaRecorder ondataavailable.
+function stopPetVoiceRecording(documentRef, chunks) {
+  var presenceState = getPetPresenceState(documentRef);
+  var recorder = presenceState ? presenceState.voiceMediaRecorder : null;
+  // Stop the recorder if it is still running
+  if (recorder && recorder.state !== "inactive") {
+    try { recorder.stop(); } catch (_e) { /* ignore */ }
+  }
+  setRecordingState(documentRef, presenceState, false);
+
+  // Build Blob from accumulated chunks
+  var mimeType = (recorder && recorder.mimeType) ? recorder.mimeType : "audio/webm";
+  var audioBlob = null;
+  try {
+    audioBlob = new Blob(chunks || [], { type: mimeType });
+  } catch (_e) {
+    // Blob construction failure — treat as empty recording, nothing to transcribe
+    return;
+  }
+
+  // Hand off to STT stub (TASK-167B will implement the real call)
+  transcribeAudioBlob(audioBlob).then(function (transcript) {
+    // TASK-167B: transcript will be a string; for now it is null — nothing to do.
+    if (transcript) {
+      // Future: send transcript to chat pipeline
+    }
+  }).catch(function (_err) {
+    // TASK-167B error path — swallow silently for now
+  });
+}
+
+// TASK-167A: cancel an in-progress recording, discarding the audio Blob.
+// Safe to call when no recording is active (no-op).
+function cancelPetVoiceRecording(documentRef) {
+  var presenceState = getPetPresenceState(documentRef);
+  var recorder = presenceState ? presenceState.voiceMediaRecorder : null;
+  if (recorder && recorder.state !== "inactive") {
+    try { recorder.stop(); } catch (_e) { /* ignore */ }
+  }
+  setRecordingState(documentRef, presenceState, false);
+  // Release microphone track if stream is still held
+  if (presenceState && presenceState.voiceMicStream) {
+    try {
+      presenceState.voiceMicStream.getTracks().forEach(function (t) { t.stop(); });
+    } catch (_e) { /* ignore */ }
+    presenceState.voiceMicStream = null;
+  }
+}
+
+// TASK-167A: open voice recording.
+// Toggle-to-record: calling while already recording → cancel (stop, discard).
+// 1. If already recording → cancel and return.
+// 2. Force CT OFF (same async pattern as openPetDirectInput / TASK-166E).
+// 3. Close text input if open (mutual exclusion).
+// 4. getUserMedia({ audio: true }) → show recording state.
+// 5. MediaRecorder collects chunks; on stop → stopPetVoiceRecording.
+// 6. Hard timeout: PET_RECORDING_MAX_MS → auto-stop.
+// 7. Clean pet bubble fallbacks for all error cases — no stack traces.
+async function openPetVoiceRecording(documentRef) {
+  // Toggle: if already recording, cancel
+  if (isPetRecordingActive(documentRef)) {
+    cancelPetVoiceRecording(documentRef);
+    return;
+  }
+
+  // Force CT OFF before recording starts (same pattern as TASK-166E)
+  var ctPromise = forceClickThroughOff(documentRef);
+  if (ctPromise && typeof ctPromise.then === "function") {
+    try { await ctPromise; } catch (_e) { /* IPC failure — renderer state already OFF */ }
+  }
+
+  // Mutual exclusion: close text input if open
+  if (isPetDirectInputOpen(documentRef)) {
+    closePetDirectInput(documentRef);
+  }
+
+  // Check MediaRecorder availability (not available in all environments)
+  if (typeof MediaRecorder === "undefined") {
+    setBubbleState(documentRef, "backend_offline");
+    var petBubbleResp = documentRef ? documentRef.getElementById("pet-bubble-response") : null;
+    if (petBubbleResp) setText(petBubbleResp, PET_VOICE_UNSUPPORTED_MSG);
+    return;
+  }
+
+  // Request microphone access
+  var stream;
+  try {
+    var navObj = typeof navigator !== "undefined" ? navigator : null;
+    if (!navObj || !navObj.mediaDevices || typeof navObj.mediaDevices.getUserMedia !== "function") {
+      throw new Error("no_mic");
+    }
+    stream = await navObj.mediaDevices.getUserMedia({ audio: true });
+  } catch (err) {
+    var errName = err && err.name ? err.name : "";
+    var errMsg  = err && err.message ? err.message : "";
+    var friendlyMsg;
+    if (errName === "NotAllowedError" || errName === "PermissionDeniedError") {
+      friendlyMsg = PET_VOICE_MIC_DENIED_MSG;
+    } else if (
+      errName === "NotFoundError" ||
+      errName === "DevicesNotFoundError" ||
+      errMsg === "no_mic"
+    ) {
+      friendlyMsg = PET_VOICE_NO_MIC_MSG;
+    } else {
+      friendlyMsg = PET_VOICE_UNSUPPORTED_MSG;
+    }
+    setBubbleState(documentRef, "backend_offline");
+    var bubbleEl = documentRef ? documentRef.getElementById("pet-bubble-response") : null;
+    if (bubbleEl) setText(bubbleEl, friendlyMsg);
+    return;
+  }
+
+  // Build MediaRecorder — prefer webm/opus for future Whisper compatibility (TASK-167B)
+  var mimeType = "audio/webm;codecs=opus";
+  if (typeof MediaRecorder.isTypeSupported === "function" && !MediaRecorder.isTypeSupported(mimeType)) {
+    mimeType = "audio/webm";
+    if (typeof MediaRecorder.isTypeSupported === "function" && !MediaRecorder.isTypeSupported(mimeType)) {
+      mimeType = "";  // let the browser pick
+    }
+  }
+  var recorder;
+  try {
+    recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+  } catch (_e) {
+    // Stop stream tracks before bailing
+    try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (_e2) { /* ignore */ }
+    setBubbleState(documentRef, "backend_offline");
+    var bubbleEl2 = documentRef ? documentRef.getElementById("pet-bubble-response") : null;
+    if (bubbleEl2) setText(bubbleEl2, PET_VOICE_UNSUPPORTED_MSG);
+    return;
+  }
+
+  // Store stream + recorder in presence state for cancel/stop
+  var presenceState = getPetPresenceState(documentRef);
+  if (presenceState) {
+    presenceState.voiceMicStream  = stream;
+    presenceState.voiceMediaRecorder = recorder;
+  }
+
+  var chunks = [];
+  recorder.addEventListener("dataavailable", function (event) {
+    if (event.data && event.data.size > 0) {
+      chunks.push(event.data);
+    }
+  });
+
+  recorder.addEventListener("stop", function () {
+    // Release mic tracks when recorder stops
+    try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (_e) { /* ignore */ }
+    if (presenceState) presenceState.voiceMicStream = null;
+    // stopPetVoiceRecording already called; nothing else to do here.
+  });
+
+  // Show recording state BEFORE starting recorder
+  setRecordingState(documentRef, presenceState, true);
+
+  try {
+    recorder.start();
+  } catch (_e) {
+    // Recorder failed to start — cancel cleanly
+    try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (_e2) { /* ignore */ }
+    setRecordingState(documentRef, presenceState, false);
+    setBubbleState(documentRef, "backend_offline");
+    var bubbleEl3 = documentRef ? documentRef.getElementById("pet-bubble-response") : null;
+    if (bubbleEl3) setText(bubbleEl3, PET_VOICE_UNSUPPORTED_MSG);
+    return;
+  }
+
+  // Hard timeout — auto-stop after PET_RECORDING_MAX_MS
+  var timeoutId = setTimeout(function () {
+    if (isPetRecordingActive(documentRef)) {
+      stopPetVoiceRecording(documentRef, chunks);
+    }
+  }, PET_RECORDING_MAX_MS);
+  if (presenceState) {
+    presenceState.voiceRecordingTimer = timeoutId;
   }
 }
 
@@ -1561,6 +1800,8 @@ function initializePetMode(documentRef = document) {
   const directInputForm  = documentRef.getElementById("pet-direct-input-form");   // TASK-166E
   const directInputField = documentRef.getElementById("pet-direct-input-field");  // TASK-166E
   const directInputClose = documentRef.getElementById("pet-direct-input-close");  // TASK-166E
+  const micHook          = documentRef.getElementById("pet-mic-hook");            // TASK-167A
+  const recordingCancel  = documentRef.getElementById("pet-recording-cancel");    // TASK-167A
 
   if (root) {
     root.dataset.initialized = "true";
@@ -1757,6 +1998,20 @@ function initializePetMode(documentRef = document) {
     });
   }
 
+  // TASK-167A: mic / voice button — toggle-to-record
+  if (micHook && typeof micHook.addEventListener === "function") {
+    micHook.addEventListener("click", function () {
+      openPetVoiceRecording(documentRef);
+    });
+  }
+
+  // TASK-167A: recording cancel button
+  if (recordingCancel && typeof recordingCancel.addEventListener === "function") {
+    recordingCancel.addEventListener("click", function () {
+      cancelPetVoiceRecording(documentRef);
+    });
+  }
+
   // TASK-166B: S/M/L scale preset buttons
   for (var _scaleKey of PET_VALID_SCALES) {
     (function (scaleKey) {
@@ -1774,7 +2029,9 @@ function initializePetMode(documentRef = document) {
     documentRef.addEventListener("click", (event) => closeMenuOnOutsideClick(event, documentRef));
     documentRef.addEventListener("keydown", (event) => {
       if (event && event.key === "Escape") {
-        if (isPetDirectInputOpen(documentRef)) {
+        if (isPetRecordingActive(documentRef)) {
+          cancelPetVoiceRecording(documentRef);  // TASK-167A: Esc cancels voice recording first
+        } else if (isPetDirectInputOpen(documentRef)) {
           closePetDirectInput(documentRef);  // TASK-166E: Esc closes direct input
         } else {
           closeMenu(documentRef);
@@ -1901,5 +2158,17 @@ if (typeof module !== "undefined") {
     openPetDirectInput,
     closePetDirectInput,
     handlePetDirectSend,
+    // TASK-167A
+    PET_RECORDING_MAX_MS,
+    PET_VOICE_MIC_DENIED_MSG,
+    PET_VOICE_NO_MIC_MSG,
+    PET_VOICE_UNSUPPORTED_MSG,
+    PET_VOICE_RECORDING_STATUS,
+    isPetRecordingActive,
+    setRecordingState,
+    openPetVoiceRecording,
+    cancelPetVoiceRecording,
+    stopPetVoiceRecording,
+    transcribeAudioBlob,
   };
 }

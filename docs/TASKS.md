@@ -13033,8 +13033,10 @@ When implementation begins, consider splitting into:
 
 ## TASK-167A - Pet Voice Push-to-talk UI / Mic Capture Design
 
-**Status:** DEFINED
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
 **Date:** 2026-05-28
+**Implemented:** 2026-05-28
+**Windows manual smoke:** 2026-05-28
 **Type:** Design — v0.3 Voice Interaction (slice 1A: UI + mic capture lifecycle)
 
 Goal: Design the first v0.3 voice implementation slice — the Pet-side push-to-talk UI control and microphone capture lifecycle. This slice covers only the recording entry point, recording state, permission handling, captured audio boundary, and error fallbacks. STT, TTS, wake word, and backend changes are out of scope.
@@ -13182,3 +13184,41 @@ No raw stack traces, browser API error names, device identifiers, JSON, URLs, or
 - No STT, TTS, wake word, or background listening exists in this slice.
 - No raw audio bytes appear in DevTools network requests.
 - No stack traces, JSON, device paths, or diagnostics appear in Pet Bubble.
+tab.
+
+### TASK-167A Implementation Record
+
+**Automated validation result:** PASS (2026-05-28)
+- `node --check` — pet-renderer.js, main.js, pet-renderer-smoke.js, pet-window-smoke.js: OK
+- `node apps/desktop/scripts/pet-renderer-smoke.js` — 165/165 PASS
+- `node apps/desktop/scripts/pet-window-smoke.js` — 41/41 PASS
+- `node apps/desktop/scripts/renderer-chat-smoke.js` — PASS
+- `python3 -m pytest` — 619 passed
+- `git diff --check` — clean
+
+**Files changed:**
+- `apps/desktop/src/pet/pet.html` — added `#pet-mic-hook` button to `#pet-mode-actions`; added `#pet-recording-indicator` (with dot, status, cancel button) to `#pet-drag-region`
+- `apps/desktop/src/pet/pet.css` — added TASK-167A styles: `#pet-mic-hook` base + active, recording indicator, pulsing dot animation, scale variants, CSS mutual exclusion (`[data-recording="true"] .pet-direct-input-panel { display: none }`)
+- `apps/desktop/src/pet/pet-renderer.js` — added `PET_RECORDING_MAX_MS`, voice error message constants, `isPetRecordingActive`, `setRecordingState`, `transcribeAudioBlob` (TASK-167B stub), `stopPetVoiceRecording`, `cancelPetVoiceRecording`, `openPetVoiceRecording`; wired mic button and cancel button in `initializePetMode`; Esc handler cancels recording; CT-ON cancels recording; `openPetDirectInput` cancels recording; all new symbols exported
+- `apps/desktop/src/main.js` — added `session.setPermissionRequestHandler` for `media` permission on `petWindow` only
+- `apps/desktop/scripts/pet-renderer-smoke.js` — 19 new TASK-167A tests (HTML elements, CSS, function exports, recording state machine, mutual exclusion, quiet mode, scope guards)
+- `apps/desktop/scripts/pet-window-smoke.js` — 3 new TASK-167A tests (renderer exports, no new IPC channels, permission handler)
+
+**Scope preserved:** No STT, TTS, wake word, getDisplayMedia, backend change, or /chat call introduced. `transcribeAudioBlob` is a `Promise.resolve(null)` stub defining the TASK-167B boundary only.
+
+
+**Windows manual smoke:** PASS (2026-05-28)
+- Mic / Voice control appears in the Pet Window at S / M / L scales.
+- Recording starts only after explicit user action (no wake word / always-listening).
+- Recording indicator is visible and distinct from thinking bubble; pulsing red dot shows during capture.
+- Stopped/cancelled by second click, Esc, and cancel control -- all confirmed.
+- Recording timeout is clean (no crash, no stale indicator).
+- Mic permission request occurs only after user action.
+- Mic permission denied shows clean Pet Bubble fallback (no stack trace / JSON / device path).
+- No microphone / unsupported recording path shows clean fallback.
+- Captured audio kept in memory only -- no disk write, no /chat send confirmed via DevTools.
+- STT not implemented; TTS not implemented; no wake word or always-listening behavior.
+- Click-through forced OFF before recording; recovery strip behavior did not regress.
+- Pet direct text input and voice recording are mutually exclusive.
+- Quiet Mode ON allows user-initiated recording; returns to collapsed/no-hint state after recording/cancel.
+- TASK-166A/B/C/D/E behavior did not regress.

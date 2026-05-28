@@ -546,6 +546,53 @@ function testDirectInputClickFixFocusRestoredInMain() {
   assertRegex(renderer, /directInputField[\s\S]{0,200}"focus"[\s\S]{0,200}forceClickThroughOff/, "pet-renderer.js");
 }
 
+// ── TASK-167A: Pet Voice / Mic push-to-talk window-level smoke tests ─────────
+
+function testVoiceRecordingFunctionsExportedFromRenderer() {
+  // TASK-167A: all voice functions + constants must be in module.exports
+  const renderer = readText(petRendererPath);
+  const exportedNames = [
+    "isPetRecordingActive",
+    "setRecordingState",
+    "openPetVoiceRecording",
+    "cancelPetVoiceRecording",
+    "stopPetVoiceRecording",
+    "transcribeAudioBlob",
+    "PET_RECORDING_MAX_MS",
+    "PET_VOICE_MIC_DENIED_MSG",
+    "PET_VOICE_NO_MIC_MSG",
+    "PET_VOICE_UNSUPPORTED_MSG",
+    "PET_VOICE_RECORDING_STATUS",
+  ];
+  for (const name of exportedNames) {
+    assertRegex(renderer, new RegExp(`\\b${name}\\b`), `pet-renderer.js — ${name} must be exported`);
+  }
+}
+
+function testNoNewIpcChannelsForMic() {
+  // TASK-167A: getUserMedia is a browser API — no new IPC channels should exist for mic capture.
+  // The preload must NOT expose mic-specific bridges (getUserMedia works directly in renderer).
+  const preload = readText(petPreloadPath);
+  assertNotIncludes(preload, "mic", "pet-preload.js — no mic IPC channel expected");
+  assertNotIncludes(preload, "getUserMedia", "pet-preload.js — getUserMedia must not be bridged via IPC");
+  assertNotIncludes(preload, "MediaRecorder", "pet-preload.js — MediaRecorder must not be bridged via IPC");
+  // Main must also have no new IPC channel registered for mic
+  const main = readText(mainPath);
+  assertNotIncludes(main, "pet:mic", "main.js — no pet:mic IPC channel expected");
+  assertNotIncludes(main, "getUserMedia", "main.js — getUserMedia is renderer-side, not in main");
+}
+
+function testMicPermissionHandlerInMain() {
+  // TASK-167A: main.js must have a narrow setPermissionRequestHandler for Pet window
+  // that allows 'media' and denies everything else.
+  const main = readText(mainPath);
+  assertIncludes(main, "setPermissionRequestHandler", "main.js — mic permission handler must be present");
+  // Handler must allow 'media'
+  assertRegex(main, /permission\s*===\s*["']media["']/, "main.js — handler must check for 'media' permission");
+  // Handler must be scoped to petWindow (not the main renderer session)
+  assertRegex(main, /petWindow[\s\S]{0,200}setPermissionRequestHandler/, "main.js — handler must be on petWindow");
+}
+
 function run() {
   const tests = [
     testMainHasPetWindowPrototype,
@@ -592,6 +639,10 @@ function run() {
     testDirectInputHtmlElements,
     // TASK-166E click-fix
     testDirectInputClickFixFocusRestoredInMain,
+    // TASK-167A
+    testVoiceRecordingFunctionsExportedFromRenderer,
+    testNoNewIpcChannelsForMic,
+    testMicPermissionHandlerInMain,
   ];
 
   for (const test of tests) {
