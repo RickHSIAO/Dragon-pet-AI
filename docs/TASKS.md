@@ -13700,3 +13700,198 @@ All checklist items passed on Windows:
 
 This is a docs-only closeout — no runtime implementation files were modified.
 Parent TASK-167 remains IN PROGRESS: TTS, wake word, and further voice polish are not yet implemented.
+
+## TASK-168A - Pet TTS Playback Design
+
+**Status:** DEFINED
+**Date:** 2026-05-29
+**Type:** Design — v0.3 Voice Interaction (slice 2A: TTS playback)
+
+Goal: Design a safe first TTS playback slice for Pet Mode: take Christina's final text reply and play it aloud after the clean Pet Bubble reply appears. This is the docs-only design step. No runtime files are modified here.
+
+### 1. Context and Prerequisites
+
+Completed voice slices:
+
+- **TASK-167A** DONE: Pet mic UI / push-to-talk recording lifecycle.
+- **TASK-167B** DONE: STT transcription via `POST /stt/transcribe` + Whisper.
+- **TASK-167C** DONE: Valid transcript → `/chat` → thinking bubble → final reply.
+
+Current voice flow: user records → STT transcribes → transcript sent to `/chat` → Pet shows thinking bubble → Christina replies in text. TASK-168A adds the next layer: Christina's text reply is spoken aloud.
+
+### 2. TTS Trigger Rules
+
+Only speak final assistant replies. Specifically:
+
+- **Speak:** clean final reply text that appears in the Pet Bubble reply element after `/chat` completes successfully.
+- **Do not speak:** thinking text (`PET_THINKING_REPLY_TEXT` / "…"), raw debug or source labels, STT metadata, backend URLs, JSON fragments, stack traces, or provider details.
+- **Do not speak:** error state bubble content (e.g., "後端離線", "辨識逾時") unless a separate future task explicitly designs short spoken error phrases.
+- **Do not speak:** user messages.
+- **Do not speak:** idle hint text.
+- **TTS is OFF by default.** The user must enable it explicitly. This avoids surprise audio in open offices or shared environments.
+
+### 3. TTS Provider / Source Strategy
+
+First implementation priorities (in order):
+
+1. **Web Speech API `SpeechSynthesis`** — available in Chromium (Electron's renderer context). Zero dependencies, no network, no cost. Language should follow reply locale (default: `zh-TW` for Chinese replies, `en-US` fallback). Voice selection uses the first available system voice for the target locale.
+2. **OS system TTS via IPC** — fallback if `SpeechSynthesis` is unavailable in the Electron renderer context. Main process spawns `say` (macOS), `espeak` / `espeak-ng` (Linux), or PowerShell `Speak` (Windows). No additional npm packages required.
+3. **Local TTS server** (e.g., Coqui, Piper) — deferred to a future task. Not designed here.
+4. **Paid cloud TTS** (e.g., ElevenLabs, Google Cloud TTS, Azure Cognitive) — explicitly out of scope for this slice. No user text may be sent to external services without explicit user consent and disclosure.
+
+Privacy rule: user reply text must not leave the local machine in this slice. `SpeechSynthesis` is purely local. OS TTS fallback is also local.
+
+### 4. Playback Controls
+
+**Toggle:** A speaker icon button or Pet Menu item labeled "語音播放" (Voice Playback) / "🔇 靜音" (Mute). State is stored in `presenceState` (in-memory; not persisted across restarts in this slice). Default: OFF.
+
+**Stop current speech:** A dedicated stop-speech button appears only while speech is actively playing (speaking state). Clicking it calls `speechSynthesis.cancel()` (or IPC equivalent). The speaking state indicator clears immediately.
+
+**New reply interrupts previous speech:** When a new final reply arrives and TTS is enabled, any in-progress speech is cancelled before the new utterance begins. No queuing in this slice — interrupt model is simpler and avoids stale speech after rapid exchanges.
+
+**Empty reply → no speech.** If `reply.trim()` is empty, do not call TTS.
+
+**Very long reply:** Truncate to a configurable maximum (suggested: 300 characters) before sending to TTS. Show the full text in the Pet Bubble — truncation is TTS-only. Clean, non-blocking (no error shown to user).
+
+### 5. Pet UI Changes
+
+**Speaking state:** A new `"speaking"` bubble data-state (or `data-speaking="true"` attribute on `#pet-mode-root`) is set while speech is playing and cleared when speech ends (`onend` / `onerror` event). Visually distinct from:
+- Recording: pulsing red dot (`data-recording="true"`)
+- Transcribing: indigo spinner (`data-transcribing="true"`)
+- Thinking: thinking bubble content
+
+Suggested speaking indicator: a small animated soundwave or speaker icon (CSS-only, no new image assets). Color: teal / cyan to differentiate from red (recording) and indigo (transcribing).
+
+**TTS toggle button:** Added to the Pet Menu (the `…` overflow menu or a dedicated icon row in the bubble footer). Must be reachable at Small, Medium, and Large scales. Minimum tap target: 24×24 px.
+
+**No new image assets required.** Unicode glyphs (`🔊` / `🔇`) or simple CSS shapes serve as the speaking / muted indicator.
+
+### 6. Quiet Mode Interaction
+
+Current rule: Quiet Mode suppresses idle lines only. It does not suppress user-initiated voice replies.
+
+**TASK-168A rule:** Quiet Mode does **not** suppress TTS playback when TTS is enabled. The TTS toggle is a separate user control. Rationale: Quiet Mode was designed to prevent unsolicited idle chatter; TTS playback of a user-requested reply is still user-initiated. A user who wants silence should use the TTS toggle (OFF by default).
+
+Document this rule clearly in code comments when implementing.
+
+### 7. Click-through Interaction
+
+- TTS audio playback does **not** require click-through to be OFF. Audio plays regardless of CT state.
+- Opening the TTS settings / toggle control from the Pet Menu calls `forceClickThroughOff` (same pattern as opening direct text input).
+- CT recovery strip behavior must not regress.
+
+### 8. Voice Input Interaction (Feedback Loop Prevention)
+
+- **Starting recording immediately cancels any active TTS playback** (`speechSynthesis.cancel()` or IPC stop). This prevents microphone feedback from speaker output.
+- TTS must not play while recording is active (`data-recording="true"`).
+- TTS must not play while transcribing is active (`data-transcribing="true"`).
+- Push-to-talk remains an explicit user action — TTS never triggers recording.
+
+### 9. Text Input Interaction
+
+- **Pet direct text input replies** (TASK-166E path): eligible for TTS when TTS is enabled. Same trigger rule as voice replies — speak the final assistant reply text.
+- **Full App mirrored replies** visible in the Pet Bubble (TASK-157 `updatePetSpeech` path): eligible if TTS is enabled, same rule.
+- **Do not speak user messages.** Only speak assistant (`reply`) content.
+
+### 10. Error Handling
+
+| Condition | Behavior |
+|---|---|
+| TTS engine unavailable | Set `data-tts-unavailable` attribute; TTS toggle greyed out; no crash; clean non-blocking status. |
+| TTS playback error (`onerror`) | Clear speaking state; no Pet Bubble message unless a future task adds spoken error phrases. |
+| Empty reply | Skip TTS call entirely. |
+| Reply exceeds length limit | Truncate to limit before TTS call; full text still shown in bubble. |
+| Recording active when reply arrives | Queue TTS until recording ends, OR skip — decision deferred to implementation. Recommended: skip (do not queue) to keep behavior predictable. |
+| Stack trace / JSON / URL in reply | Must not reach TTS — existing `responseForBubbleState` sanitization ensures clean text reaches bubble; same clean text goes to TTS. |
+
+### 11. State Sequence
+
+```
+[recording] → [transcribing] → [thinking] → [reply shown in bubble]
+                                                       ↓ (if TTS enabled)
+                                               [speaking state active]
+                                                       ↓ (speech ends / stopped)
+                                               [speaking state clears]
+                                               [idle / recent-reply timer starts]
+```
+
+### 12. Implementation Sketch (for future TASK-168A implementation)
+
+**pet-renderer.js additions:**
+- `PET_TTS_MAX_CHARS = 300` constant
+- `petTtsEnabled` boolean (default `false`) in `presenceState` or module-level
+- `petSpeaking` boolean flag
+- `speakPetReply(documentRef, text)` — cancels any active speech, trims/truncates text, creates `SpeechSynthesisUtterance`, sets `data-speaking`, calls `speechSynthesis.speak()`, wires `onend`/`onerror` to clear state
+- `stopPetSpeech(documentRef)` — cancels and clears state
+- `togglePetTts(documentRef)` — flips `petTtsEnabled`; if disabling, stops active speech
+- Call `speakPetReply` at the end of the successful path in `handlePetVoiceChatSend` and `handlePetDirectSend`
+- Call `stopPetSpeech` at the start of `openPetVoiceRecording`
+
+**pet.html additions:**
+- TTS toggle button in Pet Menu or bubble footer
+- Speaking indicator element (shown only when `data-speaking="true"`)
+
+**pet.css additions:**
+- `[data-speaking="true"]` — teal speaking indicator animation
+- `[data-tts-unavailable="true"]` — greyed toggle style
+- Scale-aware sizing for new controls
+
+**pet-preload.js / main.js:** Only needed if OS TTS IPC fallback is implemented. `SpeechSynthesis` path requires no IPC.
+
+### 13. Scope Limits (Explicit)
+
+The following are **out of scope** for TASK-168A (docs) and its paired implementation task:
+
+- Live2D mouth / lip sync
+- Wake word
+- Always-listening
+- Screen capture / OCR / vision
+- Global hotkeys
+- Broad settings architecture / settings persistence for TTS state
+- Paid / external cloud TTS
+- Multi-voice selection UI
+- Voice pitch / speed controls
+- TTS for error states (clean text only; future task)
+- Backend schema changes
+- New IPC channels beyond what `SpeechSynthesis` requires (none)
+
+### 14. Preserved Behaviors
+
+All of the following must continue to work after TASK-168A implementation:
+
+- TASK-167A recording lifecycle (push-to-talk, recording indicator, cancel, timeout)
+- TASK-167B STT transcription pipeline
+- TASK-167C voice transcript → `/chat` handoff
+- TASK-166E direct Pet text input
+- TASK-166D click-through toggle + recovery strip
+- TASK-166C bubble tail, scale-aware sizing, Quiet Mode hint fix
+- TASK-166B scale presets (S / M / L)
+- TASK-166A transparent shell
+- TASK-160 / TASK-162 Quiet Mode idle suppression
+- TASK-157 thinking bubble state
+- TASK-149 clean bubble behavior (no raw JSON / source / debug in bubble)
+
+### 15. Manual Windows Smoke Checklist (for future implementation)
+
+When TASK-168A implementation is complete, the following must pass on Windows before closing:
+
+1. TTS toggle/control appears in Pet Window or Pet Menu at S / M / L scales.
+2. TTS is OFF by default — no audio plays on first launch.
+3. Enabling TTS toggle → final Christina reply is spoken aloud after it appears in bubble.
+4. Thinking text is not spoken.
+5. Debug / source / JSON / backend URLs are not spoken.
+6. Stop speech control appears while speaking and stops audio immediately.
+7. New reply while speaking → previous speech interrupted cleanly.
+8. Starting recording → active TTS cancelled immediately (no feedback).
+9. TTS does not play while recording is active.
+10. Quiet Mode ON → TTS still plays if TTS is enabled (Quiet Mode does not suppress it).
+11. TTS toggle OFF → no speech regardless of Quiet Mode.
+12. Click-through recovery strip does not regress.
+13. Pet direct text input replies also trigger TTS when TTS is enabled.
+14. Empty reply → no speech attempt.
+15. No Live2D mouth sync in this slice.
+16. No wake word or always-listening behavior.
+17. No external network request from TTS path.
+18. Speaking indicator appears and clears correctly.
+19. S / M / L scale layout: TTS controls accessible and usable at all scales.
+20. All TASK-167A / B / C and TASK-166A–E behaviors preserved.
