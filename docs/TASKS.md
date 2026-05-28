@@ -14053,3 +14053,260 @@ both toggle `indicator.hidden = !active` alongside the dataset attribute.
   show rule. Fix: added `indicator.hidden = !active` to `setSpeakingState`, matching the
   identical pattern in `setRecordingState` / `setTranscribingState`. Smoke test updated.
   All automated checks re-passed before Windows re-smoke.
+
+---
+
+## TASK-169 | TTS Voice Selection / Speech Controls Design
+
+**Status:** DEFINED (docs-only)
+**Date:** 2026-05-29
+**Type:** Design — v0.3 Voice Interaction (TTS polish slice)
+**Depends on:** TASK-168B DONE
+
+### Context
+
+TASK-168B established first-pass Pet TTS using `window.speechSynthesis` with a global
+TTS toggle (ON/OFF), a 300-char truncation limit, a speaking indicator, and a stop button.
+The voice used is the browser/OS default with no rate, pitch, or volume controls exposed
+to the user. TASK-169 designs the next layer: voice selection from available system voices
+and adjustable speech controls (rate, pitch, volume), while remaining fully local and
+preserving every existing behavior from TASK-168B back through TASK-166A.
+
+### Goal
+
+Design a safe first version of TTS voice selection and speech controls:
+
+- User can choose an available system voice.
+- User can adjust rate / pitch / volume within safe bounded ranges.
+- Conservative defaults ensure readable speech on first run.
+- No cloud TTS, no voice cloning, no Live2D mouth sync, no new backend work.
+
+---
+
+### 1. Voice Selection
+
+**Behavior:**
+
+- On TTS enable or Pet Menu open, query `window.speechSynthesis.getVoices()`.
+- Display available voices with user-readable labels (name + lang, e.g. "Microsoft Zira - English (United States)").
+- Do NOT expose internal voice URI, voice index, or raw browser debug fields in Pet UI.
+- User selects a voice; selection is stored in local state (see §4 Persistence).
+- If `getVoices()` returns an empty list (browser voices not yet loaded), retry once via `speechSynthesis.onvoiceschanged` before falling back silently to default.
+- If the previously selected voice is no longer present in `getVoices()` on a subsequent call, fall back to the first available voice or the browser default (no error shown to user).
+- Empty voice list must not crash the Pet — fall back gracefully to default utterance (no `voice` property set).
+
+**Voice label format:**
+
+```
+<voice.name> (<voice.lang>)
+```
+
+Example: `"Microsoft Zira (en-US)"` — truncate name at 40 chars if needed.
+
+**Voice list ordering:**
+
+- Prefer voices matching the system locale first.
+- Fall back to full alphabetical list.
+- No hard-coded voice names in code.
+
+---
+
+### 2. Speech Controls
+
+**Controls:**
+
+| Control | SpeechSynthesis property | Safe range | Default |
+|---------|--------------------------|------------|---------|
+| Rate (speed) | `utterance.rate` | 0.7 – 1.3 | 1.0 |
+| Pitch | `utterance.pitch` | 0.8 – 1.3 | 1.0 |
+| Volume | `utterance.volume` | 0.0 – 1.0 | 1.0 |
+
+**Enforcement:**
+
+- All three values are clamped to their safe range before being set on the utterance — never trust raw persisted or user-supplied values.
+- Clamp logic: `Math.max(min, Math.min(max, value))`.
+- Values outside range must be silently clamped, not rejected with an error.
+
+**Reset to defaults:**
+
+- A "reset" action (button or menu item) restores rate=1.0, pitch=1.0, volume=1.0.
+- Reset also clears any persisted override for those keys.
+
+**Behavior continuity:**
+
+- Controls apply only to the next utterance; changing controls mid-speech does not affect the current utterance (Web Speech API does not support live mutation of a speaking utterance).
+- After `stopPetSpeech` / cancel, the next `speakPetReply` call picks up the current control values.
+
+---
+
+### 3. UI Placement
+
+**Option A — TTS submenu in Pet Menu (preferred):**
+
+```
+Pet Menu
+├── 縮小 / 中等 / 放大      (scale)
+├── 閒聊模式: 開/關         (quiet mode)
+├── 穿透模式: 開/關         (click-through)
+├── 語音播放: 開/關         (TTS toggle)    ← existing TASK-168B
+└── 語音設定 ▶              (TTS settings submenu)  ← NEW
+    ├── 聲音: [voice selector]
+    ├── 速率: [slider 0.7–1.3]
+    ├── 音調: [slider 0.8–1.3]
+    ├── 音量: [slider 0.0–1.0]
+    └── 重設語音設定         (reset button)
+```
+
+**Option B — Inline in Pet Menu (compact):**
+All TTS controls collapsed under the existing "語音播放" toggle area via a small expand arrow,
+avoiding a second menu layer. Acceptable if submenu adds complexity at small scale.
+
+**Scale rules:**
+
+- At `data-scale="small"`: sliders collapse to compact mode (narrower track, smaller font).
+- At `data-scale="medium"` / `data-scale="large"`: full-width track, readable labels.
+- Sliders must remain tappable at small scale (min touch target 28px height).
+- Voice selector at small scale: truncate to 22 chars + ellipsis.
+
+**No new image assets required.** All controls use CSS-only styling consistent with existing
+Pet Menu palette (semi-transparent dark background, teal/white accent).
+
+---
+
+### 4. Persistence
+
+**Strategy:** narrow local state — same pattern as existing `petTtsEnabled` / scale preference.
+
+**Keys (in-memory + optional `localStorage` under a namespaced key):**
+
+| Key | Type | Default |
+|-----|------|---------|
+| `pet_tts_voice` | string (voice name) | `""` (use browser default) |
+| `pet_tts_rate` | number | `1.0` |
+| `pet_tts_pitch` | number | `1.0` |
+| `pet_tts_volume` | number | `1.0` |
+
+**On load:**
+
+1. Read from `localStorage` if available.
+2. Validate each value against its safe range (type check + clamp).
+3. If any value is missing, `null`, `NaN`, or out of range → silently use default.
+4. If `pet_tts_voice` refers to a name not in the current `getVoices()` list → silently use default (no error).
+
+**On change:**
+
+- Write updated value to `localStorage` immediately after user interaction.
+- Do not write on every utterance — only on explicit user control change.
+
+**Failure modes:**
+
+- `localStorage` unavailable (e.g., private browsing) → operate in-memory only, no error shown.
+- Corrupt JSON in `localStorage` → catch + reset to defaults, no crash.
+
+**Scope limit:** Do NOT add a backend settings endpoint, a new IPC channel, or a new
+settings persistence service for these values. Use narrow renderer-side `localStorage` only.
+
+---
+
+### 5. Speaking Behavior
+
+- Voice selection + controls apply only to final assistant reply states (`"speaking"`, `"long_reply"`).
+- Thinking bubble text, recording state, transcribing state, error messages, debug/JSON output, and idle lines must not be spoken.
+- New final reply still calls `stopPetSpeech` before starting a new utterance (TASK-168B interrupt model preserved).
+- Stop speech button (■) from TASK-168B remains functional and cancels speech immediately.
+- Control changes take effect on the next call to `speakPetReply`; no re-speak of current reply.
+
+---
+
+### 6. Quiet Mode
+
+- Quiet Mode suppresses idle lines only. TTS voice selection and controls are independent.
+- Quiet Mode ON must not silently reset or override voice/rate/pitch/volume settings.
+- After reply expiry under Quiet Mode ON, Pet returns to collapsed/no-hint state normally.
+
+---
+
+### 7. Voice Input Interaction
+
+- `openPetVoiceRecording` still calls `stopPetSpeech(documentRef)` as its first line.
+- Speech control values (rate/pitch/volume) must not interfere with STT or MediaRecorder.
+- No new IPC channels introduced by voice controls.
+
+---
+
+### 8. Error Handling
+
+| Scenario | Behavior |
+|----------|----------|
+| `getVoices()` returns empty list | Retry via `onvoiceschanged`; if still empty, use browser default silently |
+| Selected voice not in current list | Fall back to browser default; no error in Pet Bubble |
+| Invalid persisted rate/pitch/volume | Silently clamp/reset to defaults |
+| `localStorage` unavailable | Operate in-memory only; no error shown |
+| `SpeechSynthesis` unavailable | `isPetTtsAvailable()` returns false; TTS toggle hidden or disabled; no crash |
+| Rate/pitch/volume set to NaN or out of range | Clamp to safe range before setting on utterance |
+
+**Prohibited in Pet Bubble:** stack traces, raw error objects, provider names, voice URIs, localStorage keys, debug JSON, internal source identifiers.
+
+---
+
+### 9. Scope Limits
+
+| Out of scope | Reason |
+|--------------|--------|
+| Cloud TTS (ElevenLabs, Azure, OpenAI, etc.) | Privacy, cost, network dependency |
+| Voice cloning / character voice model | Separate complex slice |
+| Live2D mouth sync | Separate animation slice |
+| Wake word | Separate always-on slice |
+| Always-listening | Privacy / battery |
+| Backend schema change | No server-side voice data needed |
+| Broad settings architecture / new IPC channel | Narrow localStorage pattern sufficient |
+| Global hotkeys for voice control | Separate accessibility slice |
+
+---
+
+### 10. Preserved Behaviors
+
+- TASK-168B: system TTS playback, speaking indicator, stop button, TTS ON/OFF toggle.
+- TASK-167A/B/C: voice recording → STT → /chat pipeline.
+- TASK-166E: Pet direct text input.
+- TASK-166D: click-through recovery strip.
+- TASK-166C: bubble tail / Quiet Mode hint suppression.
+- TASK-166B: S/M/L scale presets.
+- TASK-166A: transparent shell.
+- TASK-160/162: Quiet Mode idle suppression.
+- TASK-157: thinking bubble.
+- TASK-149: clean bubble behavior.
+
+---
+
+### Manual Windows Smoke Expectations (for future TASK-169 implementation)
+
+1. Voice selection UI appears in Pet Menu or TTS submenu.
+2. Available system voices load into selector without crash.
+3. Selecting a voice applies it to the next final reply TTS.
+4. If a previously selected voice is missing on reload, falls back to default silently.
+5. Rate slider changes speech speed within 0.7–1.3.
+6. Pitch slider changes pitch within 0.8–1.3.
+7. Volume slider changes playback volume within 0.0–1.0.
+8. Invalid/corrupt persisted settings fall back to defaults without crash.
+9. Stop speech button (■) still works with voice/rate/pitch/volume applied.
+10. New reply still interrupts previous speech.
+11. Starting voice recording cancels current TTS (no feedback loop).
+12. TTS OFF toggle still prevents speech regardless of voice/control settings.
+13. Thinking / recording / transcribing / debug text is not spoken.
+14. Controls remain usable at S / M / L scales.
+15. No cloud TTS, voice cloning, Live2D, wake word, or always-listening present.
+16. No stack traces, raw JSON, or internal debug text appears in Pet Bubble.
+
+---
+
+### Acceptance Criteria
+
+- [x] Voice selection behavior documented (§1).
+- [x] Speech rate / pitch / volume behavior documented (§2).
+- [x] Persistence / default / fallback strategy documented (§4).
+- [x] UI placement and S/M/L scale expectations documented (§3).
+- [x] Error handling documented (§8).
+- [x] Scope limits clearly exclude cloud TTS, voice cloning, and Live2D (§9).
+- [x] Manual Windows smoke expectations documented (§ Manual Windows Smoke Expectations).
+- [x] No runtime files modified in this docs-only step.
