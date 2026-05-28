@@ -12863,3 +12863,168 @@ Verification:
 - `python -m pytest`: PASS, 586 passed.
 - Direct Ollama URL safety scan for `main.js`, `renderer.js`, `pet-renderer.js`, and `pet-preload.js`: PASS, no `localhost:11434`, `127.0.0.1:11434`, or bare `11434` match.
 - `git diff --check`: PASS, no whitespace errors.
+
+---
+
+## TASK-167 - Voice Interaction v0.3 Push-to-talk Design
+
+**Status:** DEFINED
+**Date:** 2026-05-28
+**Type:** Design — v0.3 Voice Interaction (slice 1 of N)
+
+Goal: Design push-to-talk voice input from the Pet Window so the user can speak to the desktop AI companion directly. This is the first safe voice slice — user-initiated push-to-talk only. No wake word, no always-listening behavior. The design covers recording entry point, recording lifecycle, STT/transcription, chat pipeline reuse, privacy boundaries, error handling, Click-through/Quiet Mode interactions, and layout at all three scales.
+
+### 1. Push-to-talk Entry Point
+
+- Add a small voice/mic control in the Pet Window (Pet navigation bar or Pet Menu).
+- User explicitly holds or clicks to start recording.
+- No always-listening behavior in this task.
+- No wake word in this task.
+- Voice input is always user-initiated.
+- Control must be visually distinct from the Chat (text input) control.
+
+### 2. Recording Lifecycle
+
+- Recording starts only after explicit user action.
+- Stop recording by: release (hold-to-talk), second click (toggle), timeout, or explicit cancel.
+- A clear recording indicator must be visible while the microphone is active.
+- User can cancel recording at any point without sending.
+- Empty or silent recording must not send (detect silence or empty transcript).
+- Max recording duration should be bounded to prevent unbounded capture.
+
+### 3. STT / Transcription
+
+- Voice audio must be transcribed to text before being sent to `/chat`.
+- Prefer local STT (e.g., Whisper.cpp, whisper.net, or platform speech API) if feasible.
+- Define a provider-neutral STT interface so the provider can be swapped without touching the chat path.
+- Transcript must be reviewed internally (non-empty, non-silence check) before dispatch.
+- Do not send raw audio bytes to the `/chat` endpoint.
+- Failed transcription (STT error, timeout, empty result) must show a clean error fallback in the Pet Bubble — no stack traces, URLs, provider debug, or raw JSON.
+- Transcript may be shown briefly to the user before sending (optional, confirm in implementation task).
+
+### 4. Chat Pipeline Reuse
+
+- After successful transcription, reuse the existing `/chat` HTTP fetch flow exactly.
+- State sequence must match TASK-166E / TASK-157 behavior:
+  1. Recording state (user recording).
+  2. Transcribing state (STT in progress).
+  3. Thinking bubble (same as direct text input — `source: "pet_thinking"`).
+  4. Final reply replaces thinking bubble on success.
+  5. Clean `llm_local_error` or `backend_offline` fallback on failure.
+- `reply / mood / source` semantics preserved.
+- Do not modify backend schema, routes, or endpoints in this task.
+- No new IPC channels beyond what is required for mic/STT control — defer to implementation task.
+
+### 5. TTS (Out of Scope for This Task)
+
+- TTS reply output is deferred to a later task (TASK-168 or similar).
+- This task focuses exclusively on voice input (mic → STT → chat).
+- If TTS is mentioned during implementation, it must be filed as a separate task.
+
+### 6. Privacy / Safety
+
+- No background listening.
+- No wake word.
+- No hidden microphone capture.
+- Microphone permission must be requested explicitly (Electron `navigator.mediaDevices.getUserMedia` or system prompt).
+- A recording indicator must be visible and remain visible for the full duration of recording.
+- User can cancel at any time.
+- Raw audio must not be persisted by default.
+- Transcript must not be persisted unless the existing chat history already handles it safely and explicitly.
+- If the user denies microphone permission, show a clean user-facing message in the Pet Bubble.
+- No diagnostics, device names, permission error codes, or technical details in the Pet Bubble.
+
+### 7. Click-through Interaction
+
+- Opening or activating voice input must force Click-through OFF before recording begins.
+- Pattern: same as TASK-166E direct input — await `forceClickThroughOff` IPC ack before starting the recording UI.
+- User must not be trapped unable to stop or cancel recording.
+- The CT recovery strip from TASK-166D / TASK-166E must not regress.
+- Turning Click-through ON while recording is active must safely stop/cancel recording first.
+
+### 8. Quiet Mode Interaction
+
+- Quiet Mode suppresses idle presence behavior only.
+- Quiet Mode must not suppress user-initiated voice input.
+- Voice input while Quiet Mode is ON must still show: recording state → transcribing → thinking bubble → final reply.
+- After reply expiry under Quiet Mode ON, Pet Bubble returns to collapsed / no-hint state (same as TASK-166E behavior).
+- `isIdleRotationEligible` must remain blocked by Quiet Mode (no regression).
+
+### 9. Scale / Layout
+
+- Voice control must be usable at Small (225×300), Medium (300×400), and Large (375×500).
+- Recording indicator must not clip or overlap Pet Bubble, avatar, or action controls.
+- Pet direct text input (TASK-166E) and voice input must not conflict in layout.
+- Voice UI must be compact — Pet Window must not become a full voice/transcription app.
+
+### 10. Error Handling
+
+| Error condition | Expected Pet Bubble behavior |
+|---|---|
+| Mic permission denied | Clean user-facing message (no error codes) |
+| No microphone available | Clean fallback (no technical details) |
+| STT failure / timeout | Clean fallback |
+| Empty / silent transcription | No send; recording ends cleanly |
+| Backend offline after transcript | Clean `backend_offline` fallback |
+| LLM error after transcript | Clean `llm_local_error` fallback |
+
+No raw stack traces, URLs, provider debug, JSON responses, or diagnostics in the Pet Bubble under any condition.
+
+### 11. Preserved Behavior Table
+
+| Task | Feature | Must not regress |
+|---|---|---|
+| TASK-166A | Transparent overlay shell | ✓ |
+| TASK-166B | S/M/L scale presets | ✓ |
+| TASK-166C | Bubble tail / placement | ✓ |
+| TASK-166D | Click-through toggle + recovery strip | ✓ |
+| TASK-166E | Pet direct text input | ✓ |
+| TASK-148 | Window position persistence and reset | ✓ |
+| TASK-149 | Clean reply-only Pet Bubble | ✓ |
+| TASK-152 | Details disclosure | ✓ |
+| TASK-153 | Mood expression mapping | ✓ |
+| TASK-157 | Thinking bubble (pet_thinking source) | ✓ |
+| TASK-158/159 | Idle behavior and noise-control cooldown | ✓ |
+| TASK-160 | Quiet Mode ON/OFF behavior | ✓ |
+| TASK-162 | Quiet Mode persistence | ✓ |
+
+### 12. Scope Limits
+
+- Do not implement voice in this docs-only step.
+- Do not implement wake word (defer to v0.3 later slice or never).
+- Do not implement always-listening.
+- Do not implement screen capture, OCR, or vision.
+- Do not implement Live2D.
+- Do not implement proactive nudges.
+- Do not add broad settings architecture or global hotkeys.
+- Do not modify backend schema, routes, or endpoints in this step.
+- TTS is out of scope for this task — file separately.
+
+### 13. Implementation Split Recommendation
+
+When implementation begins, consider splitting into:
+- **TASK-167A**: Mic capture + recording UI (entry point, indicator, cancel, timeout)
+- **TASK-167B**: STT integration (local Whisper or platform API, provider-neutral interface)
+- **TASK-167C**: Chat pipeline wiring (transcript → thinking → reply → fallback)
+- **TASK-167D**: Error handling and edge cases (permission denied, silence, STT failure)
+
+### 14. Manual Windows Smoke Expectations (for implementation task)
+
+- Voice control appears in Pet Window at all three scales.
+- Microphone recording starts only after explicit user action.
+- Recording indicator is visible for the full duration of recording.
+- Recording can be cancelled without sending.
+- Empty / silent audio does not send.
+- Successful transcription sends text through the existing chat path.
+- Pet shows thinking bubble, then final reply.
+- Microphone permission denied shows a clean fallback in the Pet Bubble.
+- STT failure shows a clean fallback.
+- Backend offline shows clean fallback.
+- Click-through is forced OFF before recording begins.
+- Quiet Mode ON still allows voice input, thinking, and final reply.
+- After reply expiry under Quiet Mode ON, bubble returns to collapsed / no-hint state.
+- S / M / L scale layouts remain usable.
+- Pet direct text input (TASK-166E) does not regress.
+- No wake word or background listening exists or is detectable.
+- No raw audio is visible in DevTools network requests.
+- No stack traces, JSON, provider debug, or diagnostics appear in the Pet Bubble.
