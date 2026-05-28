@@ -9,6 +9,7 @@ const rendererHtmlPath = path.join(desktopRoot, "src", "renderer", "index.html")
 const rendererPreloadPath = path.join(desktopRoot, "src", "renderer", "preload.js");
 const petRendererPath = path.join(desktopRoot, "src", "pet", "pet-renderer.js");
 const petPreloadPath = path.join(desktopRoot, "src", "pet", "pet-preload.js");
+const petHtmlPath = path.join(desktopRoot, "src", "pet", "pet.html");
 
 function readText(filePath) {
   return fs.readFileSync(filePath, "utf8");
@@ -454,6 +455,12 @@ function testClickThroughIpcChannelInMain() {
   assertIncludes(main, "setIgnoreMouseEvents(true, { forward: true })", "main.js");
   assertIncludes(main, "setIgnoreMouseEvents(false)", "main.js");
   assertIncludes(main, "const enabled = value === true;", "main.js");
+  // TASK-166E click-fix: when CT goes OFF, OS focus must be restored
+  assertRegex(
+    main,
+    /setIgnoreMouseEvents\(false\)[\s\S]{0,120}petWindow\.focus\(\)/,
+    "main.js CT-off handler must call petWindow.focus() (TASK-166E click-fix)"
+  );
 }
 
 function testClickThroughPreloadExposesSetter() {
@@ -483,6 +490,61 @@ function testClickThroughForwardFlagIsPresent() {
   assertIncludes(main, "{ forward: true }", "main.js");
 }
 
+
+
+// ── TASK-166E: Pet Direct Text Input window-level checks ──────────────────────
+
+function testDirectInputRendererHasFunctions() {
+  // TASK-166E: all four direct input functions must be present and exported
+  const renderer = readText(petRendererPath);
+  assertIncludes(renderer, "function isPetDirectInputOpen", "pet-renderer.js");
+  assertIncludes(renderer, "function openPetDirectInput", "pet-renderer.js");
+  assertIncludes(renderer, "function closePetDirectInput", "pet-renderer.js");
+  assertIncludes(renderer, "function handlePetDirectSend", "pet-renderer.js");
+  assertIncludes(renderer, "isPetDirectInputOpen,", "pet-renderer.js exports");
+  assertIncludes(renderer, "openPetDirectInput,", "pet-renderer.js exports");
+  assertIncludes(renderer, "closePetDirectInput,", "pet-renderer.js exports");
+  assertIncludes(renderer, "handlePetDirectSend,", "pet-renderer.js exports");
+}
+
+function testDirectInputNoNewIpc() {
+  // TASK-166E: Pet direct input calls /chat via fetch from renderer — no new IPC channel
+  const main = readText(mainPath);
+  assertNotIncludes(main, "pet:send-chat", "main.js");
+  const preload = readText(petPreloadPath);
+  assertNotIncludes(preload, "pet:send-chat", "pet-preload.js");
+}
+
+function testDirectInputHtmlElements() {
+  // TASK-166E: required HTML elements exist in pet.html
+  const html = readText(petHtmlPath);
+  assertIncludes(html, 'id="pet-direct-input-panel"', "pet.html");
+  assertIncludes(html, 'id="pet-direct-input-form"', "pet.html");
+  assertIncludes(html, 'id="pet-direct-input-field"', "pet.html");
+  assertIncludes(html, 'id="pet-direct-input-send"', "pet.html");
+  assertIncludes(html, 'id="pet-direct-input-close"', "pet.html");
+}
+
+
+function testDirectInputClickFixFocusRestoredInMain() {
+  // TASK-166E click-fix: when CT goes OFF via IPC, main.js must call petWindow.focus()
+  // so the window regains OS focus and the direct input field can receive keyboard events.
+  const main = readText(mainPath);
+  assertRegex(
+    main,
+    /setIgnoreMouseEvents\(false\)[\s\S]{0,120}petWindow\.focus\(\)/,
+    "main.js must call petWindow.focus() after setIgnoreMouseEvents(false) (TASK-166E click-fix)"
+  );
+  // forceClickThroughOff in renderer must return the IPC promise
+  const renderer = readText(petRendererPath);
+  assertIncludes(renderer, "return api.setClickThrough(false);", "pet-renderer.js");
+  // openPetDirectInput must be declared async
+  assertRegex(renderer, /async function openPetDirectInput/, "pet-renderer.js");
+  // defensive pointerdown listener on panel
+  assertRegex(renderer, /directInputPanel[\s\S]{0,200}pointerdown[\s\S]{0,200}forceClickThroughOff/, "pet-renderer.js");
+  // defensive focus listener on field
+  assertRegex(renderer, /directInputField[\s\S]{0,200}"focus"[\s\S]{0,200}forceClickThroughOff/, "pet-renderer.js");
+}
 
 function run() {
   const tests = [
@@ -524,6 +586,12 @@ function run() {
     testClickThroughPreloadExposesSetter,
     testClickThroughRendererHasFunctions,
     testClickThroughForwardFlagIsPresent,
+    // TASK-166E
+    testDirectInputRendererHasFunctions,
+    testDirectInputNoNewIpc,
+    testDirectInputHtmlElements,
+    // TASK-166E click-fix
+    testDirectInputClickFixFocusRestoredInMain,
   ];
 
   for (const test of tests) {

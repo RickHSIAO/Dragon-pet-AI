@@ -7308,8 +7308,10 @@ from a temp copy outside the NTFS mount to avoid lock contention:
 
 ## TASK-166E - Pet Direct Text Input Design
 
-**Status:** DEFINED
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
 **Date:** 2026-05-28
+**Click-fix applied:** 2026-05-28 — Windows manual smoke found that when Click-through was ON, opening the Pet direct input showed the panel but the user could not type (window still had ignoreMouseEvents=true and had lost OS focus). Root cause: `forceClickThroughOff` fired the IPC async without being awaited, so `setIgnoreMouseEvents(false)` + `petWindow.focus()` hadn't completed before the input was shown. Fix: (1) `forceClickThroughOff` now returns the IPC Promise; (2) `openPetDirectInput` is now `async` and awaits it before showing the panel or calling `field.focus()`; (3) `petWindow.focus()` added to `main.js` CT-off handler so the window regains OS focus; (4) defensive `pointerdown` and `focus` listeners on the input panel and field force CT off as a fallback. 6 new click-fix tests added to pet-renderer-smoke.js, 1 to pet-window-smoke.js. Smoke counts: 135 renderer + 38 window checks pass. 619 pytest PASS. git diff --check CLEAN.
+**Click-fix2 applied:** 2026-05-28 — Second manual smoke failure found the recovery model was still broken: with CT ON, normal Pet controls (Chat button, Menu, input panel) are all unreachable because clicks pass through the window. The drag-handle-only recovery zone (156 px wide) was also too small and had a no-drag conflict on some OS paths. Root cause: CT ON intentionally makes all Pet UI non-interactive — there was no reliable first-entry recovery path. Fix: (1) Added `#pet-ct-recovery-strip` — a full-width (100%) transparent div, height 32 px, z-index 11, `pointer-events: auto`, `-webkit-app-region: no-drag`, shown only while CT is ON; (2) `setClickThrough` manages strip visibility (`hidden` when CT OFF, visible when CT ON) and closes the direct input panel if CT turns ON while it is open (visible-but-unreachable panel is confusing); (3) `initializePetMode` wires both `pointerenter` and `mousemove` on the strip to `forceClickThroughOff` (belt-and-suspenders for Electron/OS delivery variation — both events fire even under `setIgnoreMouseEvents(true, { forward: true })`); (4) `openPetDirectInput` already awaited CT-off IPC before showing input — unchanged; (5) all CT state UI reflects real interactive state. 11 new click-fix2 tests added to pet-renderer-smoke.js plus 1 new CSS check. Smoke counts: 146 renderer + 38 window checks pass. 619 pytest PASS. git diff --check CLEAN.
 **Type:** Design — v0.2 Desktop Companion Shell (slice 5 of 5)
 
 Goal: Design a small Pet-side text input flow that lets the user send a message from the Pet
@@ -8466,7 +8468,7 @@ Non-goals (TASK-166A):
 
 ## TASK-166 - Pet Overlay Shell Polish Design
 
-**Status:** IN PROGRESS — TASK-166A DONE; TASK-166B DONE; TASK-166C DONE - WINDOWS MANUAL SMOKE PASS (incl. Quiet Mode regression fix 2); TASK-166D DONE - WINDOWS MANUAL SMOKE PASS; TASK-166E DEFINED
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS — TASK-166A DONE; TASK-166B DONE; TASK-166C DONE - WINDOWS MANUAL SMOKE PASS (incl. Quiet Mode regression fix 2); TASK-166D DONE - WINDOWS MANUAL SMOKE PASS; TASK-166E DONE - WINDOWS MANUAL SMOKE PASS (click-fix + click-fix2 recovery strip)
 **Date:** 2026-05-27
 **Type:** Design — v0.2 Desktop Companion Shell
 
@@ -12826,7 +12828,7 @@ Implementation:
 - Removed the visible upper-right `#pet-menu-hotspot`.
 - Removed hotspot CSS and renderer event wiring.
 - Kept the bottom `Chat / Full App / Menu` action row.
-- Changed the bottom `Menu` button to toggle the Pet DOM menu:
+- Changed the bottom `Menu`button to toggle the Pet DOM menu:
   - closed -> open
   - open -> closed
 - Kept `Close Menu` behavior.

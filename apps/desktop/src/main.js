@@ -489,6 +489,7 @@ ipcMain.handle(PET_CLICK_THROUGH_SET_CHANNEL, (_event, value) => {  // TASK-166D
     petWindow.setIgnoreMouseEvents(true, { forward: true });
   } else {
     petWindow.setIgnoreMouseEvents(false);
+    petWindow.focus();  // TASK-166E click-fix: restore OS focus so the direct input can receive keyboard events
   }
   return { ok: true, clickThrough: enabled };
 });

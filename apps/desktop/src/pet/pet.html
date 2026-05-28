@@ -26,6 +26,10 @@
     data-supported-bubble-states="collapsed idle_default expanded handoff speaking thinking composing empty_input pending success backend_offline timeout llm_local_error fallback_mock long_reply"
     aria-label="Christina pet mode skeleton"
   >
+    <!-- TASK-166E click-fix2: CT recovery strip — full-width hover zone at top of window.
+         Only shown when click-through is ON. Hovering forces CT OFF via pointerenter/mousemove
+         even while setIgnoreMouseEvents(true, { forward: true }) is active. -->
+    <div id="pet-ct-recovery-strip" class="pet-ct-recovery-strip" aria-hidden="true" hidden></div>
     <div id="pet-drag-handle" class="pet-drag-handle" aria-label="Drag pet window" title="Drag"></div>
     <div id="pet-stage-controls" class="pet-stage-controls pet-no-drag" aria-label="Pet speech controls">
       <span id="pet-bubble-title" class="pet-sr-only">Christina Speech</span>
@@ -85,11 +89,33 @@
         </form>
       </section>
 
+      <div
+        id="pet-direct-input-panel"
+        class="pet-direct-input-panel pet-no-drag"
+        data-state="closed"
+        aria-label="Pet chat input"
+        hidden
+      >
+        <form id="pet-direct-input-form" class="pet-direct-input-form pet-no-drag" novalidate>
+          <input
+            id="pet-direct-input-field"
+            class="pet-direct-input-field pet-no-drag"
+            type="text"
+            placeholder="&#x8A0A;&#x606F;&#x2026;"
+            maxlength="500"
+            autocomplete="off"
+            aria-label="&#x8F38;&#x5165;&#x8A0A;&#x606F;&#x7D66; Christina"
+          />
+          <button id="pet-direct-input-send" class="pet-direct-input-send pet-no-drag" type="submit" aria-label="Send">&#x2191;</button>
+          <button id="pet-direct-input-close" class="pet-direct-input-close pet-no-drag" type="button" aria-label="Close input">&#x2715;</button>
+        </form>
+      </div>
+
       <p id="pet-hint" class="pet-hint pet-no-drag" aria-live="polite">&#x54FC;&#xFF0C;&#x6C5D;&#x53EB;&#x543E;&#x51FA;&#x4F86;&#x505A;&#x4EC0;&#x9EBC;&#xFF1F;</p>
     </section>
 
     <nav id="pet-mode-actions" class="pet-mode-actions pet-no-drag" aria-label="Pet mode action hooks">
-      <button id="pet-bubble-open-hook" class="pet-no-drag" type="button" data-hook="bubble-open" aria-label="Open Full App for chat" title="Open Full App for chat">Chat</button>
+      <button id="pet-bubble-open-hook" class="pet-no-drag" type="button" data-hook="bubble-open" aria-label="Open Pet chat input" title="Open Pet chat input">Chat</button>
       <button id="pet-open-full-app-hook" class="pet-no-drag" type="button" data-hook="open-full-app" aria-label="Open Full App" title="Open Full App">Full App</button>
       <button id="pet-context-menu-hook" class="pet-no-drag" type="button" data-hook="context-menu" aria-label="Open Pet menu" title="Menu">Menu</button>
     </nav>

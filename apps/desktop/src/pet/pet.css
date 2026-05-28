@@ -530,3 +530,95 @@ textarea {
 .pet-shell[data-click-through="true"] .pet-avatar {
   opacity: 0.65;
 }
+
+
+/* ── TASK-166E: Pet Direct Text Input Panel ──────────────────────────────── */
+
+.pet-direct-input-panel {
+  width: 100%;
+  -webkit-app-region: no-drag;
+}
+
+.pet-direct-input-panel[hidden] {
+  display: none;
+}
+
+.pet-direct-input-form {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 7px;
+  border: 1px solid rgba(72, 45, 34, 0.2);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 4px 12px rgba(33, 24, 20, 0.12);
+}
+
+.pet-direct-input-field {
+  min-width: 0;
+  height: 28px;
+  border: 1px solid rgba(72, 45, 34, 0.18);
+  border-radius: 8px;
+  padding: 0 8px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #3d2a22;
+  font-size: 12px;
+}
+
+.pet-direct-input-field:focus {
+  outline: 2px solid rgba(72, 45, 34, 0.4);
+  outline-offset: 0;
+}
+
+.pet-direct-input-send,
+.pet-direct-input-close {
+  width: 28px;
+  min-height: 28px;
+  padding: 0;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.pet-direct-input-send {
+  background: rgba(72, 45, 34, 0.1);
+  border-color: rgba(72, 45, 34, 0.28);
+}
+
+/* Small scale: tighter direct input */
+[data-scale="small"] .pet-direct-input-field {
+  font-size: 11px;
+  height: 24px;
+}
+
+[data-scale="small"] .pet-direct-input-send,
+[data-scale="small"] .pet-direct-input-close {
+  width: 24px;
+  min-height: 24px;
+  font-size: 12px;
+}
+
+/* ── TASK-166E click-fix2: CT recovery strip ─────────────────────────────── */
+/* Full-width hover zone at the top of the Pet window.
+   Shown only when data-click-through="true" on the shell.
+   With setIgnoreMouseEvents(true, { forward: true }), pointerenter and
+   mousemove still fire on this element even though clicks pass through,
+   providing a reliable path for the user to exit click-through mode by
+   simply moving the cursor toward the top of the Pet window. */
+.pet-ct-recovery-strip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 32px;
+  z-index: 11;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
+  background: transparent;
+  cursor: default;
+}
+
+.pet-ct-recovery-strip[hidden] {
+  display: none;
+}

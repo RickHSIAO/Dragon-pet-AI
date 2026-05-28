@@ -588,12 +588,25 @@ function getClickThrough(presenceState) {
 // TASK-166D: set click-through — true passes clicks through, false restores normal.
 // Any non-true value normalises to false (fail-safe on unknown input).
 // Session-local only — NOT persisted; default OFF so user is never stuck.
+// TASK-166E click-fix2: also manages the CT recovery strip visibility and
+// closes the direct input panel if CT turns ON while it is open.
 function setClickThrough(documentRef, presenceState, value) {
   const next = value === true;
   presenceState.clickThrough = next;
   const root = documentRef ? documentRef.getElementById("pet-mode-root") : null;
   if (root) {
     root.dataset.clickThrough = next ? "true" : "false";
+  }
+  // TASK-166E click-fix2: show CT recovery strip only while CT is ON so the
+  // user can hover the top of the window to exit click-through mode.
+  var recoveryStrip = documentRef ? documentRef.getElementById("pet-ct-recovery-strip") : null;
+  if (recoveryStrip) {
+    recoveryStrip.hidden = !next;
+  }
+  // TASK-166E click-fix2: if CT is turning ON and the direct input panel is
+  // currently open, close it — a visible-but-unreachable panel is confusing.
+  if (next && isPetDirectInputOpen(documentRef)) {
+    closePetDirectInput(documentRef);
   }
   const menuBtn = documentRef ? documentRef.getElementById("pet-menu-click-through") : null;
   if (menuBtn) {
@@ -615,12 +628,117 @@ function setPetClickThrough(documentRef, value) {
 
 // TASK-166D: force click-through OFF — called on menu open, details open, reset/hide.
 // Calls the narrow IPC bridge so main process reflects the state.
+// TASK-166E click-fix: returns the IPC Promise (or null) so async callers can await it.
 function forceClickThroughOff(documentRef) {
-  if (!getPetClickThrough(documentRef)) return;  // already OFF, no-op
+  if (!getPetClickThrough(documentRef)) return null;  // already OFF, no-op
   setPetClickThrough(documentRef, false);
   var api = typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null;
   if (api && typeof api.setClickThrough === "function") {
-    api.setClickThrough(false);
+    return api.setClickThrough(false);  // TASK-166E click-fix: return Promise so openPetDirectInput can await
+  }
+  return null;
+}
+
+
+
+// ── TASK-166E: Pet Direct Text Input Panel ────────────────────────────────────
+
+// TASK-166E: true when the direct input panel is visible and accepting input
+function isPetDirectInputOpen(documentRef) {
+  var panel = documentRef ? documentRef.getElementById("pet-direct-input-panel") : null;
+  return Boolean(panel && panel.dataset.state === "open");
+}
+
+// TASK-166E: show the compact chat input panel.
+// TASK-166E click-fix: async so we can await the IPC roundtrip that calls
+// setIgnoreMouseEvents(false) + petWindow.focus() in main process before
+// showing and focusing the input.  Without this, the panel is visible but
+// unreachable — the window is still in click-through mode and has lost OS
+// focus because the triggering click was forwarded through to the app behind.
+async function openPetDirectInput(documentRef) {
+  // Step 1: force CT OFF and await the IPC so main process processes it first.
+  var ctPromise = forceClickThroughOff(documentRef);  // TASK-166D: must be OFF before input appears
+  if (ctPromise && typeof ctPromise.then === "function") {
+    try {
+      await ctPromise;
+    } catch (_e) {
+      // IPC failure: fail safe — renderer state already set to OFF.
+      // The user can still use the recovery strip to exit click-through.
+    }
+  }
+  // Step 2: show panel and focus input (only after IPC has resolved).
+  var panel = documentRef ? documentRef.getElementById("pet-direct-input-panel") : null;
+  if (!panel) return;
+  panel.dataset.state = "open";
+  panel.hidden = false;
+  var field = documentRef ? documentRef.getElementById("pet-direct-input-field") : null;
+  if (field && typeof field.focus === "function") {
+    field.focus();
+  }
+}
+
+// TASK-166E: hide the input panel and clear the draft text.
+function closePetDirectInput(documentRef) {
+  var panel = documentRef ? documentRef.getElementById("pet-direct-input-panel") : null;
+  if (!panel) return;
+  panel.dataset.state = "closed";
+  panel.hidden = true;
+  var field = documentRef ? documentRef.getElementById("pet-direct-input-field") : null;
+  if (field) {
+    field.value = "";
+  }
+}
+
+// TASK-166E: validate input, then send through the existing /chat pipeline.
+// State sequence: forceClickThroughOff → close input → thinking → reply | error
+async function handlePetDirectSend(event, documentRef, options) {
+  if (event && typeof event.preventDefault === "function") {
+    event.preventDefault();
+  }
+  if (petChatPending) return null;
+
+  var field = documentRef ? documentRef.getElementById("pet-direct-input-field") : null;
+  var value = field && typeof field.value === "string" ? field.value.trim() : "";
+
+  if (!value) {
+    // TASK-166E: empty / whitespace — show empty_input state, keep panel open for retry
+    setBubbleState(documentRef, "empty_input");
+    if (field && typeof field.focus === "function") field.focus();
+    return null;
+  }
+
+  // Send path: force CT off, close input, show thinking bubble, call /chat
+  forceClickThroughOff(documentRef);  // TASK-166D: CT must be OFF while replying
+  closePetDirectInput(documentRef);
+  petChatPending = true;
+  setBubbleState(documentRef, "thinking");
+
+  try {
+    var data = await sendPetChatMessage(value, options || {});
+    var nextState = stateForChatSource(data.source, data.reply);
+    var statusText = sourceStatusLabel(data.source);
+    var bubbleOptions = {
+      source: data.source,
+      statusText,
+      message: detailMessageForBubbleState(nextState),
+      response: responseForBubbleState(nextState, data.reply),
+      mood: data.mood,
+    };
+    setBubbleState(documentRef, nextState, bubbleOptions);
+    rememberRecentPetReply(documentRef, nextState, bubbleOptions, options || {});
+    return data;
+  } catch (error) {
+    var errorState = "llm_local_error";
+    if (isPetChatTimeoutError(error)) {
+      errorState = "timeout";
+    } else if (isFetchNetworkError(error)) {
+      errorState = "backend_offline";
+    }
+    // TASK-166E: clean error fallback — no diagnostics, no raw URL, no stack trace
+    setBubbleState(documentRef, errorState);
+    return null;
+  } finally {
+    petChatPending = false;
   }
 }
 
@@ -1439,6 +1557,10 @@ function initializePetMode(documentRef = document) {
   const menuHideWindow = documentRef.getElementById("pet-menu-hide-window");
   const menuQuietMode = documentRef.getElementById("pet-menu-quiet-mode");  // TASK-160
   const menuClickThrough = documentRef.getElementById("pet-menu-click-through");  // TASK-166D
+  const directInputPanel = documentRef.getElementById("pet-direct-input-panel");  // TASK-166E
+  const directInputForm  = documentRef.getElementById("pet-direct-input-form");   // TASK-166E
+  const directInputField = documentRef.getElementById("pet-direct-input-field");  // TASK-166E
+  const directInputClose = documentRef.getElementById("pet-direct-input-close");  // TASK-166E
 
   if (root) {
     root.dataset.initialized = "true";
@@ -1487,7 +1609,7 @@ function initializePetMode(documentRef = document) {
   }
 
   if (bubbleOpenHook && typeof bubbleOpenHook.addEventListener === "function") {
-    bubbleOpenHook.addEventListener("click", () => handleChatHandoff(documentRef));
+    bubbleOpenHook.addEventListener("click", () => openPetDirectInput(documentRef));  // TASK-166E
   }
 
   if (bubbleCloseHook && typeof bubbleCloseHook.addEventListener === "function") {
@@ -1583,6 +1705,58 @@ function initializePetMode(documentRef = document) {
     });
   }
 
+  // TASK-166E click-fix2: full-width CT recovery strip — only visible while CT is ON.
+  // pointerenter and mousemove fire even under setIgnoreMouseEvents(true, { forward: true }),
+  // so hovering the top of the Pet window reliably exits click-through mode.
+  // Both events are wired as belt-and-suspenders because Electron/OS delivery varies.
+  var recoveryStripEl = documentRef.getElementById("pet-ct-recovery-strip");
+  if (recoveryStripEl && typeof recoveryStripEl.addEventListener === "function") {
+    recoveryStripEl.addEventListener("pointerenter", function () {
+      forceClickThroughOff(documentRef);
+    });
+    recoveryStripEl.addEventListener("mousemove", function () {
+      forceClickThroughOff(documentRef);
+    });
+  }
+
+  // TASK-166E: direct input panel — close button
+  if (directInputClose && typeof directInputClose.addEventListener === "function") {
+    directInputClose.addEventListener("click", function () {
+      closePetDirectInput(documentRef);
+    });
+  }
+
+  // TASK-166E: direct input panel — Esc key on field closes input
+  if (directInputField && typeof directInputField.addEventListener === "function") {
+    directInputField.addEventListener("keydown", function (event) {
+      if (event && event.key === "Escape") {
+        closePetDirectInput(documentRef);
+        if (typeof event.stopPropagation === "function") event.stopPropagation();
+      }
+    });
+  }
+
+  // TASK-166E: direct input panel — form submit (Enter / Send button)
+  if (directInputForm && typeof directInputForm.addEventListener === "function") {
+    directInputForm.addEventListener("submit", function (event) {
+      handlePetDirectSend(event, documentRef);
+    });
+  }
+
+  // TASK-166E click-fix: defensive CT-off listeners on the direct input panel and field.
+  // These guard against any path (Tab key, assistive tech, IPC race) where the panel
+  // is visible but CT is still ON.  forceClickThroughOff is a no-op when already OFF.
+  if (directInputPanel && typeof directInputPanel.addEventListener === "function") {
+    directInputPanel.addEventListener("pointerdown", function () {
+      forceClickThroughOff(documentRef);
+    });
+  }
+  if (directInputField && typeof directInputField.addEventListener === "function") {
+    directInputField.addEventListener("focus", function () {
+      forceClickThroughOff(documentRef);
+    });
+  }
+
   // TASK-166B: S/M/L scale preset buttons
   for (var _scaleKey of PET_VALID_SCALES) {
     (function (scaleKey) {
@@ -1600,7 +1774,11 @@ function initializePetMode(documentRef = document) {
     documentRef.addEventListener("click", (event) => closeMenuOnOutsideClick(event, documentRef));
     documentRef.addEventListener("keydown", (event) => {
       if (event && event.key === "Escape") {
-        closeMenu(documentRef);
+        if (isPetDirectInputOpen(documentRef)) {
+          closePetDirectInput(documentRef);  // TASK-166E: Esc closes direct input
+        } else {
+          closeMenu(documentRef);
+        }
       }
     });
     documentRef.addEventListener("visibilitychange", () => {
@@ -1718,5 +1896,10 @@ if (typeof module !== "undefined") {
     normalizeScale,
     setActiveScaleButton,
     applyScalePreset,
+    // TASK-166E
+    isPetDirectInputOpen,
+    openPetDirectInput,
+    closePetDirectInput,
+    handlePetDirectSend,
   };
 }

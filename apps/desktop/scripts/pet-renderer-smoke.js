@@ -165,7 +165,7 @@ function testPetHtmlReferencesStaticAssets() {
   assertIncludes(html, 'id="pet-menu-toggle-details"', "pet.html");
   assertIncludes(html, 'id="pet-menu-reset-position"', "pet.html");
   assertIncludes(html, 'id="pet-menu-hide-window"', "pet.html");
-  assertRegex(html, /id="pet-bubble-open-hook"(?:(?!>).)*aria-label="Open Full App for chat"/, "pet.html");
+  assertRegex(html, /id="pet-bubble-open-hook"(?:(?!>).)*aria-label="Open Pet chat input"/, "pet.html");  // TASK-166E: button now opens Pet direct input
   assertRegex(html, /id="pet-bubble-close-hook"(?:(?!>).)*aria-label="Hide Pet Window"/, "pet.html");
   assertRegex(html, /id="pet-open-full-app-hook"(?:(?!>).)*data-hook="open-full-app"/, "pet.html");
   assert.equal(/id="pet-open-full-app-hook"(?:(?!>).)*disabled/.test(html), false);
@@ -226,6 +226,15 @@ function testPetHtmlReferencesStaticAssets() {
     "pet.html"
   );
   assertIncludes(html, "connect-src 'self' http://localhost:8000 http://127.0.0.1:8000", "pet.html");
+  // TASK-166E click-fix2: CT recovery strip must be present in HTML
+  assertIncludes(html, 'id="pet-ct-recovery-strip"', "pet.html");
+  assertRegex(html, /id="pet-ct-recovery-strip"[\s\S]{0,200}hidden/, "pet.html — recovery strip must start hidden");
+  // Recovery strip must appear as the first element inside pet-mode-root (before drag handle)
+  assertRegex(
+    html,
+    /id="pet-mode-root"[\s\S]*id="pet-ct-recovery-strip"[\s\S]*id="pet-drag-handle"/,
+    "pet.html — recovery strip must appear before drag handle inside pet-mode-root"
+  );
   assertNotIncludes(html, "https://", "pet.html");
   assertNotIncludes(html, "localhost:11434", "pet.html");
   assertNotIncludes(html, "127.0.0.1:11434", "pet.html");
@@ -555,6 +564,12 @@ function createPetBubbleStateDocument() {
     "pet-menu-quiet-mode",    // TASK-166C: needed for quiet-mode data-attribute tests
     "pet-menu-click-through", // TASK-166D: needed for click-through toggle tests
     "pet-drag-handle",        // TASK-166D: needed for recovery strip tests
+    "pet-direct-input-panel",  // TASK-166E: direct input panel
+    "pet-direct-input-form",   // TASK-166E: direct input form
+    "pet-direct-input-field",  // TASK-166E: direct input text field
+    "pet-direct-input-send",   // TASK-166E: direct input send button
+    "pet-direct-input-close",  // TASK-166E: direct input close button
+    "pet-ct-recovery-strip",   // TASK-166E click-fix2: CT recovery strip
   ]);
 }
 
@@ -1265,9 +1280,13 @@ function testPetRendererClickAndSubmitHandlersAreLocalOnly() {
   fakeDocument.getElementById("pet-bubble-close-hook").dispatchEvent({ type: "click" });
   assert.deepEqual(calls, ["hide"]);
 
+  // TASK-166E: #pet-bubble-open-hook now opens Pet direct input, not Full App handoff.
+  // The direct input panel element is not in this minimal document, so openPetDirectInput
+  // gracefully no-ops the panel show (null check) but still forces CT off.
   fakeDocument.getElementById("pet-bubble-open-hook").dispatchEvent({ type: "click" });
-  assert.deepEqual(calls, ["hide", "open"]);
-  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "handoff");
+  // openFullApp is NOT called — no "open" entry added to calls
+  assert.deepEqual(calls, ["hide"], "bubble-open-hook must not call openFullApp (TASK-166E)");
+  // State stays idle_default since openPetDirectInput panel is null (not in this document)
   assert.doesNotMatch(fakeDocument.getElementById("pet-bubble-response").textContent, /source|status|mood|llm_local|local/);
 
   const input = fakeDocument.getElementById("pet-chat-input-hook");
@@ -3440,6 +3459,521 @@ function testDragHandlePointerenterForcesClickThroughOff() {
 }
 
 
+
+// ── TASK-166E: Pet Direct Text Input tests ────────────────────────────────────
+
+function testPetDirectInputApiExported() {
+  const mod = require(petRendererPath);
+  assert.equal(typeof mod.isPetDirectInputOpen, "function", "isPetDirectInputOpen should be exported");
+  assert.equal(typeof mod.openPetDirectInput, "function", "openPetDirectInput should be exported");
+  assert.equal(typeof mod.closePetDirectInput, "function", "closePetDirectInput should be exported");
+  assert.equal(typeof mod.handlePetDirectSend, "function", "handlePetDirectSend should be exported");
+}
+
+function testPetDirectInputDefaultsClosed() {
+  const { isPetDirectInputOpen } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+  assert.equal(isPetDirectInputOpen(fakeDocument), false, "direct input should default to closed");
+}
+
+async function testOpenPetDirectInputShowsPanel() {
+  const { openPetDirectInput, isPetDirectInputOpen } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+  await openPetDirectInput(fakeDocument);
+  assert.equal(isPetDirectInputOpen(fakeDocument), true, "panel should be open after openPetDirectInput");
+  const panel = fakeDocument.getElementById("pet-direct-input-panel");
+  assert.equal(panel.hidden, false, "panel should not be hidden");
+  assert.equal(panel.dataset.state, "open", "panel state should be 'open'");
+}
+
+async function testOpenPetDirectInputForcesClickThroughOff() {
+  const { openPetDirectInput, setPetClickThrough, getPetClickThrough } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+  setPetClickThrough(fakeDocument, true);
+  assert.equal(getPetClickThrough(fakeDocument), true, "CT should be ON before open");
+  await openPetDirectInput(fakeDocument);
+  assert.equal(getPetClickThrough(fakeDocument), false, "opening input must force click-through OFF");
+}
+
+async function testClosePetDirectInputHidesPanel() {
+  const { openPetDirectInput, closePetDirectInput, isPetDirectInputOpen } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+  await openPetDirectInput(fakeDocument);
+  assert.equal(isPetDirectInputOpen(fakeDocument), true);
+  closePetDirectInput(fakeDocument);
+  assert.equal(isPetDirectInputOpen(fakeDocument), false, "panel should be closed");
+  const panel = fakeDocument.getElementById("pet-direct-input-panel");
+  assert.equal(panel.hidden, true, "panel should be hidden after close");
+}
+
+async function testClosePetDirectInputClearsField() {
+  const { openPetDirectInput, closePetDirectInput } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+  await openPetDirectInput(fakeDocument);
+  const field = fakeDocument.getElementById("pet-direct-input-field");
+  field.value = "draft text";
+  closePetDirectInput(fakeDocument);
+  assert.equal(field.value, "", "field should be cleared on close");
+}
+
+async function testPetDirectInputEmptyDoesNotSend() {
+  const { handlePetDirectSend, setBubbleState } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+  setBubbleState(fakeDocument, "idle_default");
+  const result = await handlePetDirectSend(null, fakeDocument, {});
+  assert.equal(result, null, "empty send should return null");
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "empty_input",
+    "empty send should show empty_input state");
+}
+
+async function testPetDirectInputWhitespaceDoesNotSend() {
+  const { handlePetDirectSend, setBubbleState } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+  setBubbleState(fakeDocument, "idle_default");
+  const field = fakeDocument.getElementById("pet-direct-input-field");
+  field.value = "   ";
+  const result = await handlePetDirectSend(null, fakeDocument, {});
+  assert.equal(result, null, "whitespace-only send should return null");
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "empty_input",
+    "whitespace send should show empty_input state");
+}
+
+async function testPetDirectInputSendShowsThinkingBubble() {
+  const { handlePetDirectSend } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+  const field = fakeDocument.getElementById("pet-direct-input-field");
+  field.value = "Hello Christina!";
+  let thinkingObserved = false;
+  let fetchCalled = false;
+  const mockFetch = () => {
+    fetchCalled = true;
+    thinkingObserved = fakeDocument.getElementById("pet-bubble").dataset.state === "thinking";
+    return Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ reply: "Hi!", mood: "happy", source: "llm_local" }),
+    });
+  };
+  await handlePetDirectSend(null, fakeDocument, { fetchImpl: mockFetch, backendUrl: "http://localhost:8000" });
+  assert.equal(fetchCalled, true, "fetch should be called");
+  assert.equal(thinkingObserved, true, "thinking bubble must be shown before fetch completes");
+}
+
+async function testPetDirectInputSendSuccessShowsCleanReply() {
+  const { handlePetDirectSend } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+  const field = fakeDocument.getElementById("pet-direct-input-field");
+  field.value = "What time is it?";
+  const mockFetch = () => Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve({ reply: "Time to chat!", mood: "happy", source: "llm_local" }),
+  });
+  await handlePetDirectSend(null, fakeDocument, { fetchImpl: mockFetch, backendUrl: "http://localhost:8000" });
+  const bubble = fakeDocument.getElementById("pet-bubble");
+  assert.equal(bubble.dataset.state, "speaking", "success path should reach speaking state");
+  assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, "Time to chat!",
+    "clean reply text should appear in bubble");
+  assert.equal(fakeDocument.getElementById("pet-avatar-container").dataset.expression, "happy",
+    "mood expression should be applied");
+  assert.equal(field.value, "", "input field should be cleared after successful send");
+}
+
+async function testPetDirectInputSendErrorShowsFallback() {
+  const { handlePetDirectSend } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+  const field = fakeDocument.getElementById("pet-direct-input-field");
+  field.value = "Ping?";
+  const errorFetch = () => Promise.reject(new TypeError("Failed to fetch"));
+  await handlePetDirectSend(null, fakeDocument, { fetchImpl: errorFetch, backendUrl: "http://localhost:8000" });
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "backend_offline",
+    "network error should show backend_offline state");
+}
+
+async function testPetDirectInputSendForcesClickThroughOff() {
+  const { handlePetDirectSend, setPetClickThrough, getPetClickThrough } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+  setPetClickThrough(fakeDocument, true);
+  const field = fakeDocument.getElementById("pet-direct-input-field");
+  field.value = "Test message";
+  const mockFetch = () => Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve({ reply: "Got it.", mood: "neutral", source: "llm_local" }),
+  });
+  await handlePetDirectSend(null, fakeDocument, { fetchImpl: mockFetch, backendUrl: "http://localhost:8000" });
+  assert.equal(getPetClickThrough(fakeDocument), false,
+    "click-through must be OFF after send (TASK-166D integration)");
+}
+
+async function testPetDirectInputQuietModeDoesNotBlock() {
+  const { handlePetDirectSend, setPetQuietMode } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+  setPetQuietMode(fakeDocument, true);
+  const field = fakeDocument.getElementById("pet-direct-input-field");
+  field.value = "Are you there?";
+  const mockFetch = () => Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve({ reply: "Yes, I am.", mood: "focused", source: "llm_local" }),
+  });
+  const result = await handlePetDirectSend(null, fakeDocument, { fetchImpl: mockFetch, backendUrl: "http://localhost:8000" });
+  assert.ok(result, "Quiet Mode ON must not block Pet direct input");
+  assert.equal(fakeDocument.getElementById("pet-bubble").dataset.state, "speaking",
+    "reply should appear despite Quiet Mode ON");
+  assert.equal(fakeDocument.getElementById("pet-bubble-response").textContent, "Yes, I am.");
+}
+
+
+// ── TASK-166E click-fix: CT-off IPC await tests ───────────────────────────────
+
+async function testOpenPetDirectInputCallsIpcWhenCtOn() {
+  // click-fix: openPetDirectInput must call api.setClickThrough(false) via IPC when CT is ON
+  const { openPetDirectInput, setPetClickThrough } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+  setPetClickThrough(fakeDocument, true);
+  let ipcCalled = false;
+  let ipcValue = null;
+  const origWindow = global.window;
+  global.window = {
+    dragonPet: {
+      setClickThrough(v) { ipcCalled = true; ipcValue = v; return Promise.resolve({ ok: true }); },
+    },
+  };
+  await openPetDirectInput(fakeDocument);
+  global.window = origWindow;
+  assert.equal(ipcCalled, true, "openPetDirectInput must call api.setClickThrough when CT is ON");
+  assert.equal(ipcValue, false, "openPetDirectInput must call setClickThrough(false)");
+}
+
+async function testOpenPetDirectInputAwaitsIpcBeforeFocus() {
+  // click-fix: field.focus() must not be called until the IPC Promise resolves
+  const { openPetDirectInput, setPetClickThrough } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+  setPetClickThrough(fakeDocument, true);
+  let ipcResolved = false;
+  let focusCalledAfterIpc = false;
+  const field = fakeDocument.getElementById("pet-direct-input-field");
+  field.focus = function () { focusCalledAfterIpc = ipcResolved; };
+  let resolveIpc;
+  const origWindow = global.window;
+  global.window = {
+    dragonPet: {
+      setClickThrough() {
+        return new Promise((resolve) => {
+          resolveIpc = () => { ipcResolved = true; resolve({ ok: true }); };
+        });
+      },
+    },
+  };
+  const openPromise = openPetDirectInput(fakeDocument);
+  assert.equal(focusCalledAfterIpc, false, "field.focus must not fire before IPC resolves");
+  resolveIpc();
+  await openPromise;
+  global.window = origWindow;
+  assert.equal(ipcResolved, true, "IPC must have resolved");
+  assert.equal(focusCalledAfterIpc, true, "field.focus must be called only after IPC resolves");
+}
+
+async function testOpenPetDirectInputCtOffIpcFailSafe() {
+  // click-fix: if IPC throws, panel still opens and renderer CT state is OFF
+  const { openPetDirectInput, setPetClickThrough, getPetClickThrough, isPetDirectInputOpen } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+  setPetClickThrough(fakeDocument, true);
+  const origWindow = global.window;
+  global.window = {
+    dragonPet: {
+      setClickThrough() { return Promise.reject(new Error("IPC failed")); },
+    },
+  };
+  await openPetDirectInput(fakeDocument);  // must not throw
+  global.window = origWindow;
+  assert.equal(getPetClickThrough(fakeDocument), false, "CT must be OFF even after IPC failure");
+  assert.equal(isPetDirectInputOpen(fakeDocument), true, "panel must still open after IPC failure");
+}
+
+async function testOpenPetDirectInputClearsAvatarDimmingWhenCtOn() {
+  // click-fix: data-click-through must be cleared on root when panel opens (dimming removed)
+  const { openPetDirectInput, setPetClickThrough } = require(petRendererPath);
+  const fakeDocument = createPetBubbleStateDocument();
+  setPetClickThrough(fakeDocument, true);
+  const root = fakeDocument.getElementById("pet-mode-root");
+  assert.equal(root.dataset.clickThrough, "true", "pre-condition: dimming active");
+  await openPetDirectInput(fakeDocument);
+  assert.notEqual(root.dataset.clickThrough, "true",
+    "opening input must clear data-click-through so avatar is no longer dimmed");
+}
+
+function testDirectInputPanelPointerdownForcesCtOff() {
+  // click-fix: after initializePetMode, pointerdown on panel must force CT off via IPC
+  const { initializePetMode, getPetClickThrough, setPetClickThrough } = require(petRendererPath);
+  const doc = new FakeDocument([
+    "pet-mode-root", "pet-drag-region", "pet-drag-handle",
+    "pet-avatar-container", "pet-avatar", "pet-hint", "pet-bubble",
+    "pet-bubble-open-hook", "pet-bubble-close-hook", "pet-bubble-title",
+    "pet-bubble-status", "pet-bubble-message", "pet-bubble-response",
+    "pet-bubble-details", "pet-bubble-details-toggle", "pet-bubble-placeholder",
+    "pet-chat-form-hook", "pet-chat-input-hook", "pet-chat-send-hook",
+    "pet-open-full-app-hook", "pet-context-menu-hook", "pet-menu",
+    "pet-menu-toggle-details", "pet-menu-click-through",
+    "pet-direct-input-panel", "pet-direct-input-form", "pet-direct-input-field",
+    "pet-direct-input-send", "pet-direct-input-close",
+  ]);
+  let ipcValue = null;
+  const origWindow = global.window;
+  global.window = {
+    dragonPet: { setClickThrough(v) { ipcValue = v; }, onSpeechUpdate() { return () => {}; } },
+  };
+  initializePetMode(doc);
+  setPetClickThrough(doc, true);
+  assert.equal(getPetClickThrough(doc), true, "pre-condition: CT ON");
+  doc.getElementById("pet-direct-input-panel").dispatchEvent({ type: "pointerdown" });
+  global.window = origWindow;
+  assert.equal(ipcValue, false, "pointerdown on panel must call IPC setClickThrough(false)");
+  assert.equal(getPetClickThrough(doc), false, "CT must be OFF after pointerdown on panel");
+}
+
+function testDirectInputFieldFocusForcesCtOff() {
+  // click-fix: after initializePetMode, focus on field must force CT off via IPC
+  const { initializePetMode, getPetClickThrough, setPetClickThrough } = require(petRendererPath);
+  const doc = new FakeDocument([
+    "pet-mode-root", "pet-drag-region", "pet-drag-handle",
+    "pet-avatar-container", "pet-avatar", "pet-hint", "pet-bubble",
+    "pet-bubble-open-hook", "pet-bubble-close-hook", "pet-bubble-title",
+    "pet-bubble-status", "pet-bubble-message", "pet-bubble-response",
+    "pet-bubble-details", "pet-bubble-details-toggle", "pet-bubble-placeholder",
+    "pet-chat-form-hook", "pet-chat-input-hook", "pet-chat-send-hook",
+    "pet-open-full-app-hook", "pet-context-menu-hook", "pet-menu",
+    "pet-menu-toggle-details", "pet-menu-click-through",
+    "pet-direct-input-panel", "pet-direct-input-form", "pet-direct-input-field",
+    "pet-direct-input-send", "pet-direct-input-close",
+  ]);
+  let ipcValue = null;
+  const origWindow = global.window;
+  global.window = {
+    dragonPet: { setClickThrough(v) { ipcValue = v; }, onSpeechUpdate() { return () => {}; } },
+  };
+  initializePetMode(doc);
+  setPetClickThrough(doc, true);
+  assert.equal(getPetClickThrough(doc), true, "pre-condition: CT ON");
+  doc.getElementById("pet-direct-input-field").dispatchEvent({ type: "focus" });
+  global.window = origWindow;
+  assert.equal(ipcValue, false, "focus on input field must call IPC setClickThrough(false)");
+  assert.equal(getPetClickThrough(doc), false, "CT must be OFF after focus on direct input field");
+}
+
+function testPetDirectInputHtmlElementsExist() {
+  const html = readText(petHtmlPath);
+  assertIncludes(html, 'id="pet-direct-input-panel"', "pet.html");
+  assertIncludes(html, 'id="pet-direct-input-form"', "pet.html");
+  assertIncludes(html, 'id="pet-direct-input-field"', "pet.html");
+  assertIncludes(html, 'id="pet-direct-input-send"', "pet.html");
+  assertIncludes(html, 'id="pet-direct-input-close"', "pet.html");
+  // Panel attributes are multi-line — use bounded [\s\S] to stay within the opening tag
+  assertRegex(html, /id="pet-direct-input-panel"[\s\S]{0,300}data-state="closed"/, "pet.html");
+  assertRegex(html, /id="pet-direct-input-panel"[\s\S]{0,300}hidden/, "pet.html");
+  // Panel appears inside pet-drag-region, between pet-bubble and pet-hint
+  assertRegex(
+    html,
+    /id="pet-drag-region"[\s\S]*id="pet-bubble"[\s\S]*id="pet-direct-input-panel"[\s\S]*id="pet-hint"/,
+    "pet.html direct-input-panel ordering"
+  );
+}
+
+function testPetDirectInputCssExists() {
+  const css = readText(petCssPath);
+  assertIncludes(css, ".pet-direct-input-panel", "pet.css");
+  assertIncludes(css, ".pet-direct-input-form", "pet.css");
+  assertIncludes(css, ".pet-direct-input-field", "pet.css");
+  assertIncludes(css, ".pet-direct-input-panel[hidden]", "pet.css");
+}
+
+function testCtRecoveryStripCssExists() {
+  // TASK-166E click-fix2: CT recovery strip CSS must be present and correct
+  const css = readText(petCssPath);
+  assertIncludes(css, ".pet-ct-recovery-strip", "pet.css");
+  assertIncludes(css, ".pet-ct-recovery-strip[hidden]", "pet.css");
+  assertRegex(css, /\.pet-ct-recovery-strip[\s\S]*position:\s*absolute/, "pet.css — recovery strip must be absolute");
+  assertRegex(css, /\.pet-ct-recovery-strip[\s\S]*width:\s*100%/, "pet.css — recovery strip must be full-width");
+  assertRegex(css, /\.pet-ct-recovery-strip[\s\S]*z-index:\s*11/, "pet.css — recovery strip z-index must be 11");
+  assertRegex(css, /\.pet-ct-recovery-strip[\s\S]*pointer-events:\s*auto/, "pet.css — recovery strip must accept pointer events");
+  assertRegex(css, /\.pet-ct-recovery-strip\[hidden\][\s\S]*display:\s*none/, "pet.css — hidden strip must be display:none");
+}
+
+// ── TASK-166E click-fix2: CT recovery strip behavioral tests ─────────────────
+
+function testCtRecoveryStripHiddenWhenCtOff() {
+  // Recovery strip must be hidden when CT is explicitly set OFF
+  const { setPetClickThrough } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  // Setting CT to false must leave/make the strip hidden
+  setPetClickThrough(doc, false);
+  const strip = doc.getElementById("pet-ct-recovery-strip");
+  assert.ok(strip, "recovery strip element must exist in createPetBubbleStateDocument");
+  assert.equal(strip.hidden, true, "recovery strip must be hidden when CT is OFF");
+}
+
+function testCtRecoveryStripShownWhenCtOn() {
+  // Recovery strip must become visible when CT turns ON
+  const { setPetClickThrough } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  setPetClickThrough(doc, true);
+  const strip = doc.getElementById("pet-ct-recovery-strip");
+  assert.equal(strip.hidden, false, "recovery strip must be visible (not hidden) when CT is ON");
+}
+
+function testCtRecoveryStripHiddenAfterCtOff() {
+  // Recovery strip must be hidden again when CT returns to OFF
+  const { setPetClickThrough } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  setPetClickThrough(doc, true);
+  setPetClickThrough(doc, false);
+  const strip = doc.getElementById("pet-ct-recovery-strip");
+  assert.equal(strip.hidden, true, "recovery strip must be hidden after CT returns to OFF");
+}
+
+function testCtRecoveryStripClearsDimming() {
+  // After recovery strip fires forceClickThroughOff, root data attribute must be cleared
+  const { setPetClickThrough, forceClickThroughOff } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  setPetClickThrough(doc, true);
+  const root = doc.getElementById("pet-mode-root");
+  const strip = doc.getElementById("pet-ct-recovery-strip");
+  assert.equal(root.dataset.clickThrough, "true", "pre-condition: dimming active (data-click-through=true)");
+  assert.equal(strip.hidden, false, "pre-condition: recovery strip visible");
+  const origWindow = global.window;
+  global.window = { dragonPet: { setClickThrough() {} } };
+  forceClickThroughOff(doc);
+  global.window = origWindow;
+  assert.notEqual(root.dataset.clickThrough, "true",
+    "recovery must clear data-click-through so avatar dimming is removed");
+  assert.equal(strip.hidden, true, "recovery strip must be hidden after CT goes OFF");
+}
+
+function testCtRecoveryStripPointerenterForcesCtOff() {
+  // After initializePetMode, pointerenter on the recovery strip must force CT OFF via IPC
+  const { initializePetMode, getPetClickThrough, setPetClickThrough } = require(petRendererPath);
+  const doc = new FakeDocument([
+    "pet-mode-root", "pet-drag-region", "pet-drag-handle",
+    "pet-ct-recovery-strip",
+    "pet-avatar-container", "pet-avatar", "pet-hint", "pet-bubble",
+    "pet-bubble-open-hook", "pet-bubble-close-hook", "pet-bubble-title",
+    "pet-bubble-status", "pet-bubble-message", "pet-bubble-response",
+    "pet-bubble-details", "pet-bubble-details-toggle", "pet-bubble-placeholder",
+    "pet-chat-form-hook", "pet-chat-input-hook", "pet-chat-send-hook",
+    "pet-open-full-app-hook", "pet-context-menu-hook", "pet-menu",
+    "pet-menu-toggle-details", "pet-menu-click-through",
+    "pet-direct-input-panel", "pet-direct-input-form", "pet-direct-input-field",
+    "pet-direct-input-send", "pet-direct-input-close",
+  ]);
+  let ipcValue = null;
+  const origWindow = global.window;
+  global.window = {
+    dragonPet: { setClickThrough(v) { ipcValue = v; }, onSpeechUpdate() { return () => {}; } },
+  };
+  initializePetMode(doc);
+  setPetClickThrough(doc, true);
+  assert.equal(getPetClickThrough(doc), true, "pre-condition: CT ON");
+  // Simulate pointerenter on the recovery strip
+  doc.getElementById("pet-ct-recovery-strip").dispatchEvent({ type: "pointerenter" });
+  global.window = origWindow;
+  assert.equal(ipcValue, false, "pointerenter on recovery strip must call IPC setClickThrough(false)");
+  assert.equal(getPetClickThrough(doc), false, "CT must be OFF after recovery strip pointerenter");
+  const strip = doc.getElementById("pet-ct-recovery-strip");
+  assert.equal(strip.hidden, true, "recovery strip must be hidden after CT recovery");
+}
+
+function testCtRecoveryStripMousemoveForcesCtOff() {
+  // mousemove on the recovery strip also forces CT OFF (belt-and-suspenders for OS compat)
+  const { initializePetMode, getPetClickThrough, setPetClickThrough } = require(petRendererPath);
+  const doc = new FakeDocument([
+    "pet-mode-root", "pet-drag-region", "pet-drag-handle",
+    "pet-ct-recovery-strip",
+    "pet-avatar-container", "pet-avatar", "pet-hint", "pet-bubble",
+    "pet-bubble-open-hook", "pet-bubble-close-hook", "pet-bubble-title",
+    "pet-bubble-status", "pet-bubble-message", "pet-bubble-response",
+    "pet-bubble-details", "pet-bubble-details-toggle", "pet-bubble-placeholder",
+    "pet-chat-form-hook", "pet-chat-input-hook", "pet-chat-send-hook",
+    "pet-open-full-app-hook", "pet-context-menu-hook", "pet-menu",
+    "pet-menu-toggle-details", "pet-menu-click-through",
+    "pet-direct-input-panel", "pet-direct-input-form", "pet-direct-input-field",
+    "pet-direct-input-send", "pet-direct-input-close",
+  ]);
+  let ipcValue = null;
+  const origWindow = global.window;
+  global.window = {
+    dragonPet: { setClickThrough(v) { ipcValue = v; }, onSpeechUpdate() { return () => {}; } },
+  };
+  initializePetMode(doc);
+  setPetClickThrough(doc, true);
+  assert.equal(getPetClickThrough(doc), true, "pre-condition: CT ON");
+  // Simulate mousemove on the recovery strip
+  doc.getElementById("pet-ct-recovery-strip").dispatchEvent({ type: "mousemove" });
+  global.window = origWindow;
+  assert.equal(ipcValue, false, "mousemove on recovery strip must call IPC setClickThrough(false)");
+  assert.equal(getPetClickThrough(doc), false, "CT must be OFF after recovery strip mousemove");
+}
+
+async function testClickThroughOnClosesDirectInputIfOpen() {
+  // If the direct input panel is open when CT is toggled ON, it must be closed.
+  // A visible-but-unreachable input panel is a confusing state.
+  const { openPetDirectInput, isPetDirectInputOpen, setPetClickThrough } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  await openPetDirectInput(doc);
+  assert.equal(isPetDirectInputOpen(doc), true, "pre-condition: direct input panel is open");
+  setPetClickThrough(doc, true);
+  assert.equal(isPetDirectInputOpen(doc), false,
+    "enabling CT must close the direct input panel to prevent unusable-but-visible state");
+  const panel = doc.getElementById("pet-direct-input-panel");
+  assert.equal(panel.hidden, true, "panel element must be hidden after CT turns ON");
+}
+
+async function testClickThroughOnWithClosedInputIsNoOp() {
+  // CT ON with input already closed must not crash or change input state
+  const { isPetDirectInputOpen, setPetClickThrough } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  assert.equal(isPetDirectInputOpen(doc), false, "pre-condition: input already closed");
+  // Must not throw
+  setPetClickThrough(doc, true);
+  assert.equal(isPetDirectInputOpen(doc), false, "input must remain closed");
+  const strip = doc.getElementById("pet-ct-recovery-strip");
+  assert.equal(strip.hidden, false, "recovery strip must appear when CT turns ON");
+}
+
+function testCtOnStampsRootAttributeAndShowsStrip() {
+  // Architectural invariant: when CT is ON, root data attribute is stamped and
+  // the recovery strip is the only reliable mouse-interactive element.
+  const { setPetClickThrough } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  setPetClickThrough(doc, true);
+  const root = doc.getElementById("pet-mode-root");
+  const strip = doc.getElementById("pet-ct-recovery-strip");
+  assert.equal(root.dataset.clickThrough, "true",
+    "CT ON must stamp data-click-through=true on root (drives avatar opacity dimming in CSS)");
+  assert.equal(strip.hidden, false,
+    "CT ON must show recovery strip so hovering the top of the window exits CT mode");
+}
+
+function testCtOffClearsRootAttributeAndHidesStrip() {
+  // Turning CT OFF must clear root attribute and hide recovery strip
+  const { setPetClickThrough } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  setPetClickThrough(doc, true);
+  setPetClickThrough(doc, false);
+  const root = doc.getElementById("pet-mode-root");
+  const strip = doc.getElementById("pet-ct-recovery-strip");
+  assert.equal(root.dataset.clickThrough, "false",
+    "CT OFF must clear data-click-through on root");
+  assert.equal(strip.hidden, true,
+    "CT OFF must hide recovery strip");
+}
+
+function testPetDirectInputNoVoiceScreenCaptureOrLive2D() {
+  const renderer = readText(petRendererPath);
+  const html = readText(petHtmlPath);
+  assertNotIncludes(renderer, "getUserMedia", "pet-renderer.js");
+  assertNotIncludes(renderer, "MediaRecorder", "pet-renderer.js");
+  assertNotIncludes(renderer, "getDisplayMedia", "pet-renderer.js");
+  assertNotIncludes(html, "getUserMedia", "pet.html");
+  assertNotIncludes(html, 'type="file"', "pet.html");
+}
+
 async function run() {
   const tests = [
     testPetFilesExist,
@@ -3564,6 +4098,42 @@ async function run() {
     testForceClickThroughOffCallsIpcWhenOn,
     testOpenMenuForcesClickThroughOff,
     testDragHandlePointerenterForcesClickThroughOff,
+    // TASK-166E
+    testPetDirectInputApiExported,
+    testPetDirectInputDefaultsClosed,
+    testOpenPetDirectInputShowsPanel,
+    testOpenPetDirectInputForcesClickThroughOff,
+    testClosePetDirectInputHidesPanel,
+    testClosePetDirectInputClearsField,
+    testPetDirectInputEmptyDoesNotSend,
+    testPetDirectInputWhitespaceDoesNotSend,
+    testPetDirectInputSendShowsThinkingBubble,
+    testPetDirectInputSendSuccessShowsCleanReply,
+    testPetDirectInputSendErrorShowsFallback,
+    testPetDirectInputSendForcesClickThroughOff,
+    testPetDirectInputQuietModeDoesNotBlock,
+    testPetDirectInputHtmlElementsExist,
+    testPetDirectInputCssExists,
+    testPetDirectInputNoVoiceScreenCaptureOrLive2D,
+    // TASK-166E click-fix
+    testOpenPetDirectInputCallsIpcWhenCtOn,
+    testOpenPetDirectInputAwaitsIpcBeforeFocus,
+    testOpenPetDirectInputCtOffIpcFailSafe,
+    testOpenPetDirectInputClearsAvatarDimmingWhenCtOn,
+    testDirectInputPanelPointerdownForcesCtOff,
+    testDirectInputFieldFocusForcesCtOff,
+    // TASK-166E click-fix2: CT recovery strip + input guard
+    testCtRecoveryStripCssExists,
+    testCtRecoveryStripHiddenWhenCtOff,
+    testCtRecoveryStripShownWhenCtOn,
+    testCtRecoveryStripHiddenAfterCtOff,
+    testCtRecoveryStripClearsDimming,
+    testCtRecoveryStripPointerenterForcesCtOff,
+    testCtRecoveryStripMousemoveForcesCtOff,
+    testClickThroughOnClosesDirectInputIfOpen,
+    testClickThroughOnWithClosedInputIsNoOp,
+    testCtOnStampsRootAttributeAndShowsStrip,
+    testCtOffClearsRootAttributeAndHidesStrip,
   ];
 
   for (const test of tests) {
