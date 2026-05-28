@@ -124,6 +124,18 @@
         <button id="pet-recording-cancel" class="pet-recording-cancel pet-no-drag" type="button" aria-label="Cancel recording">&#x2715;</button>
       </div>
 
+      <!-- TASK-167B: Transcribing indicator — shown only when data-transcribing="true" on #pet-mode-root -->
+      <div
+        id="pet-transcribing-indicator"
+        class="pet-transcribing-indicator pet-no-drag"
+        aria-live="polite"
+        aria-label="Transcription status"
+        hidden
+      >
+        <span id="pet-transcribing-spinner" class="pet-transcribing-spinner" aria-hidden="true"></span>
+        <span id="pet-transcribing-status" class="pet-transcribing-status pet-no-drag">&#x8F49;&#x9304;&#x4E2D;&#x2026;</span>
+      </div>
+
       <p id="pet-hint" class="pet-hint pet-no-drag" aria-live="polite">&#x54FC;&#xFF0C;&#x6C5D;&#x53EB;&#x543E;&#x51FA;&#x4F86;&#x505A;&#x4EC0;&#x9EBC;&#xFF1F;</p>
     </section>
 

@@ -11,7 +11,7 @@ Safety boundaries:
 - /chat only writes local conversation history and internal MVP state to SQLite.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import ValidationError
 from sqlmodel import Session
 
@@ -66,8 +66,33 @@ from app.services.provider_settings_service import (
 )
 from app.services.state_service import get_chat_state_context, update_state_after_chat_turn
 from app.services.usage_meter_service import UsageRecord, estimate_text_tokens, record_usage
+from app.stt.stt_service import transcribe_audio_bytes  # TASK-167B
 
 router = APIRouter()
+
+_STT_MAX_BYTES = 10 * 1024 * 1024  # 10 MB — guard against runaway uploads
+
+
+@router.post("/stt/transcribe")
+async def stt_transcribe(audio: UploadFile = File(...)):
+    """
+    TASK-167B: Transcribe a short audio clip using local Whisper.
+
+    Accepts any audio format Whisper supports (webm, wav, ogg, mp4 …).
+    Returns {"transcript": str, "status": "ok" | "unavailable" | "empty" | "error"}.
+
+    Scope limits (TASK-167B):
+    - Local Whisper only — no external STT API calls.
+    - No audio persistence — bytes are processed in-memory only.
+    - No always-listening, wake-word, TTS, screen capture, or vision logic.
+    - /chat handoff is deferred to TASK-167C; this endpoint stops at transcript.
+    """
+    audio_bytes = await audio.read(_STT_MAX_BYTES + 1)
+    if len(audio_bytes) > _STT_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="Audio file too large (max 10 MB).")
+    mime_type = audio.content_type or "audio/webm"
+    result = transcribe_audio_bytes(audio_bytes, mime_type=mime_type)
+    return result
 
 
 @router.get("/health")

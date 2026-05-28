@@ -9,6 +9,7 @@ const PET_SPEECH_RECEIVED_CHANNEL = "pet:speech-received";
 const PET_QUIET_MODE_SET_CHANNEL = "pet:set-quiet-mode";  // TASK-162
 const PET_SCALE_SET_CHANNEL = "pet:set-scale";            // TASK-166B
 const PET_CLICK_THROUGH_SET_CHANNEL = "pet:set-click-through";  // TASK-166D
+const PET_STT_TRANSCRIBE_CHANNEL = "stt:transcribe";           // TASK-167B
 
 function sanitizePetSpeechPayload(payload = {}) {
   return {
@@ -43,5 +44,8 @@ contextBridge.exposeInMainWorld(
     setQuietMode: (value) => ipcRenderer.invoke(PET_QUIET_MODE_SET_CHANNEL, value === true),  // TASK-162
     setScale: (value) => ipcRenderer.invoke(PET_SCALE_SET_CHANNEL, value),  // TASK-166B
     setClickThrough: (enabled) => ipcRenderer.invoke(PET_CLICK_THROUGH_SET_CHANNEL, enabled === true),  // TASK-166D
+    // TASK-167B: send audio ArrayBuffer to main for STT transcription via backend.
+    // Returns Promise<{transcript: string, status: string}>.
+    transcribeAudio: (arrayBuffer) => ipcRenderer.invoke(PET_STT_TRANSCRIBE_CHANNEL, arrayBuffer),
   })
 );

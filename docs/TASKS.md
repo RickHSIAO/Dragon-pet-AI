@@ -13373,3 +13373,96 @@ No raw stack traces, URLs, provider details, JSON, or debug text in any Pet Bubb
 - Pet text input does not conflict with voice transcription.
 - No TTS / wake word / screen capture / Live2D exists in this slice.
 - Cancel during transcription returns Pet to idle cleanly.
+
+### TASK-167B Implementation Record
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Implemented:** 2026-05-28
+**Windows manual smoke:** 2026-05-28
+**Automated validation:** PASS
+
+#### Files changed
+
+- `backend/app/stt/__init__.py` -- new package init
+- `backend/app/stt/stt_service.py` -- new: lazy-loading faster-whisper STT service; empty-bytes check first; safe "unavailable" fallback when faster-whisper not installed; no disk I/O; `_reset_model_for_tests()` for isolation
+- `backend/app/api/routes.py` -- added `POST /stt/transcribe` (multipart UploadFile, 10 MB cap, returns `{transcript, status}`); no /chat schema change; no provider schema change
+- `backend/tests/test_stt_routes.py` -- new: 14 tests covering service unit tests (empty bytes, unavailable, model load failure, transcribe error, empty transcript, ok transcript) and endpoint tests (exists, json shape, empty audio, 422 missing field, 413 oversized, no chat forwarding, no audio persistence)
+- `apps/desktop/src/pet/pet-preload.js` -- added `stt:transcribe` IPC channel constant + `dragonPet.transcribeAudio(arrayBuffer)` bridge
+- `apps/desktop/src/main.js` -- added `require("http")` + `PET_STT_TRANSCRIBE_CHANNEL` + `ipcMain.handle` for `stt:transcribe`; constructs raw multipart/form-data POST to backend `/stt/transcribe`; no disk I/O; error fallbacks for empty buffer, parse errors, offline
+- `apps/desktop/src/pet/pet.html` -- added `#pet-transcribing-indicator` with spinner span and status text span
+- `apps/desktop/src/pet/pet.css` -- added `.pet-transcribing-indicator` (hidden by default), `[data-transcribing="true"] .pet-transcribing-indicator` (flex), `@keyframes pet-transcribing-spin`, `.pet-transcribing-spinner`, `.pet-transcribing-status`; mutual exclusion: transcribing hides `.pet-direct-input-panel` and `.pet-recording-indicator`
+- `apps/desktop/src/pet/pet-renderer.js` -- replaced `transcribeAudioBlob` stub with full async implementation; added `PET_STT_TIMEOUT_MS`, STT error message constants, `isTranscribingActive`, `setTranscribingState`; `stopPetVoiceRecording` enters transcribing state then routes transcript/error/null to Pet Bubble; `openPetVoiceRecording` guards against active transcription
+- `apps/desktop/scripts/pet-renderer-smoke.js` -- added 15 TASK-167B tests (transcribing state functions, HTML/CSS existence, mutual exclusion CSS, IPC bridge usage, no-chat guard, error message hygiene, stopRecording enters transcribing state, openRecording ignored when transcribing, scope checks)
+- `apps/desktop/scripts/pet-window-smoke.js` -- added 4 TASK-167B tests (STT IPC bridge in preload, IPC handler in main, no persistence in main, transcribeAudioBlob in renderer)
+
+#### Validation results
+
+| Check | Result |
+|---|---|
+| `node --check` (5 JS files) | PASS |
+| `pet-renderer-smoke.js` (180 checks) | PASS |
+| `pet-window-smoke.js` (45 checks) | PASS |
+| `renderer-chat-smoke.js` | PASS |
+| `pytest` (633 tests: 619 existing + 14 new STT) | PASS |
+| `git diff --check` | PASS |
+| No /chat schema changes | CONFIRMED |
+| No TTS/wake-word/always-listening/screen-capture/Live2D | CONFIRMED |
+| No raw audio persistence | CONFIRMED |
+
+#### STT implementation summary
+
+- **Service:** `app/stt/stt_service.py` -- lazy loads `faster-whisper` "tiny" model on first call; returns `{"transcript": str, "status": "ok"|"unavailable"|"empty"|"error"}`. Empty bytes short-circuits before Whisper check.
+- **Fallback:** When `faster-whisper` is not installed, service returns `status="unavailable"` cleanly -- no exception raised, no fake transcript.
+- **Endpoint:** `POST /stt/transcribe` -- accepts `audio` UploadFile (any Whisper-compatible format), 10 MB hard cap (HTTP 413), missing field returns 422. Returns service result directly. No `/chat` call.
+- **IPC:** `stt:transcribe` channel registered in `main.js` using Node.js built-in `http` module; no new npm dependencies. Audio is a raw multipart POST; result JSON parsed and returned to renderer.
+
+#### Pet transcribing state
+
+- `data-transcribing="true"` on `#pet-mode-root` while STT in progress
+- Shows `#pet-transcribing-indicator` with indigo spinner (distinct from recording pulse dot)
+- Hides text input panel and recording indicator while transcribing
+- 30-second timeout (`PET_STT_TIMEOUT_MS`) -- throws `Error("stt_timeout")` on expiry
+- Error taxonomy: `stt_unavailable`, `stt_timeout`, `stt_offline`, `stt_error` -- all map to clean Chinese Pet Bubble messages
+- Non-empty transcript stored in `presenceState.voiceTranscript` for TASK-167C; surfaced in Pet Bubble for user visibility
+
+#### Privacy / persistence
+
+- No audio written to disk at any layer (stt_service: no `open()`; main.js IPC handler: in-memory Buffer only)
+- No always-listening, wake word, or hidden background capture
+- No raw audio sent to external service
+- No transcript stored beyond the current session state
+
+#### Manual Windows smoke steps still needed
+
+1. `npm start` with `PET_MODE_ENABLED=true` + backend running
+2. Click mic button -- confirm recording indicator appears (pulsing red dot)
+3. Speak briefly and release mic button -- confirm transcribing spinner appears (indigo, spinning)
+4. If `faster-whisper` not installed: confirm clean "語音辨識目前不可用。" message appears in Pet Bubble, no stack trace
+5. If `faster-whisper` installed: confirm transcript text appears in Pet Bubble; confirm no /chat call is made
+6. Test empty/silent audio: confirm clean "沒有偵測到語音，請再試一次。" message
+7. Kill backend, attempt transcription: confirm "後端離線，無法辨識語音。"
+8. Confirm click-through remains OFF during transcription (Pet window is interactive)
+9. Confirm Quiet Mode ON does not suppress transcription
+10. Confirm starting text input during transcription is blocked
+11. Confirm all TASK-167A and TASK-166E behaviors unchanged (recording, text input, CT toggle, scale, Quiet Mode)
+
+
+#### Bug fix record — backend-offline stop flow (2026-05-28)
+
+**Bugs found during manual smoke investigation (TASK-167B backend-offline scenario):**
+
+**Bug 1 — Toggle called wrong function (toggle discarded instead of transcribed)**
+- `openPetVoiceRecording` second click (stop-recording toggle) was calling `cancelPetVoiceRecording` (discard audio, no STT) instead of `stopPetVoiceRecording` (build Blob, call STT).
+- Effect: second mic click silently discarded the recording with no message of any kind.
+- Fix: changed toggle branch to call `stopPetVoiceRecording(documentRef)`.
+
+**Bug 2 — MediaRecorder async timing (Blob built before data arrived)**
+- `stopPetVoiceRecording` was building `new Blob(chunks)` synchronously immediately after calling `recorder.stop()`, but the `dataavailable` event fires *after* `stop()` returns. This produced an empty Blob with zero audio data.
+- Effect: STT received 0 bytes → service returned `status="empty"` or a malformed request → backend-offline message never reached the renderer.
+- Fix: moved Blob construction and STT call into the recorder's `stop` event handler (which fires only after all `dataavailable` events). A boolean flag `voiceStopAndTranscribe` on `presenceState` signals whether to transcribe (stop) or discard (cancel).
+
+**New helper introduced:** `_petSttTranscribeChunks(documentRef, presenceState, chunks, mimeType)` — builds the Blob and drives the full `transcribeAudioBlob → bubble` pipeline. Called from both the recorder's `stop` event handler and the inactive-recorder fallback path in `stopPetVoiceRecording`.
+
+**Smoke test updated:** `testStopVoiceRecordingEntersTranscribingState` in `pet-renderer-smoke.js` updated to assert `_petSttTranscribeChunks` (not `transcribeAudioBlob` directly) in the function body.
+
+**Automated validation after fix:** PASS (180 renderer-smoke checks / 45 window-smoke checks / 633 pytest / git diff --check clean).

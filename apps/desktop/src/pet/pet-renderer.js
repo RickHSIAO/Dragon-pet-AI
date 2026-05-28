@@ -31,6 +31,14 @@ const PET_VOICE_MIC_DENIED_MSG = "麥克風權限被拒絕。請在系統設定�
 const PET_VOICE_NO_MIC_MSG = "找不到麥克風裝置。請確認麥克風已連接。";
 const PET_VOICE_UNSUPPORTED_MSG = "此環境不支援語音錄音。";
 const PET_VOICE_RECORDING_STATUS = "錄音中…";
+// TASK-167B: STT transcription
+const PET_STT_TIMEOUT_MS = 30000;  // 30-second timeout for backend STT
+const PET_TRANSCRIBING_STATUS = "轉錄中…";
+const PET_STT_UNAVAILABLE_MSG = "語音辨識目前不可用。";
+const PET_STT_TIMEOUT_MSG = "語音辨識超時，請再試一次。";
+const PET_STT_EMPTY_MSG = "沒有偵測到語音，請再試一次。";
+const PET_STT_ERROR_MSG = "語音辨識出錯，請再試一次。";
+const PET_STT_OFFLINE_MSG = "後端離線，無法辨識語音。";
 // TASK-158: short in-character idle presence lines (static local set)
 const PET_IDLE_LINES = Object.freeze([
   // neutral
@@ -739,44 +747,179 @@ function setRecordingState(documentRef, presenceState, active) {
   }
 }
 
-// TASK-167A: stub boundary for TASK-167B (STT integration).
-// Returns null to indicate transcription is not yet implemented.
-// Do NOT call /chat, do NOT fake a transcript.
-function transcribeAudioBlob(blob) {  // eslint-disable-line no-unused-vars
-  // TASK-167B will replace this stub with real STT (e.g. Whisper API).
-  return Promise.resolve(null);
+// TASK-167B: true when data-transcribing="true" is set on #pet-mode-root.
+function isTranscribingActive(documentRef) {
+  var root = documentRef ? documentRef.getElementById("pet-mode-root") : null;
+  return Boolean(root && root.dataset.transcribing === "true");
 }
 
-// TASK-167A: stop recording and hand the audio Blob to the transcription stub.
-// chunks: Array<BlobPart> accumulated by MediaRecorder ondataavailable.
-function stopPetVoiceRecording(documentRef, chunks) {
-  var presenceState = getPetPresenceState(documentRef);
-  var recorder = presenceState ? presenceState.voiceMediaRecorder : null;
-  // Stop the recorder if it is still running
-  if (recorder && recorder.state !== "inactive") {
-    try { recorder.stop(); } catch (_e) { /* ignore */ }
+// TASK-167B: manage data-transcribing attribute and transcribing indicator visibility.
+// presenceState.voiceTranscribingTimeout is set externally by the STT race timeout.
+function setTranscribingState(documentRef, presenceState, active) {
+  var root = documentRef ? documentRef.getElementById("pet-mode-root") : null;
+  if (root) {
+    root.dataset.transcribing = active ? "true" : "false";
   }
-  setRecordingState(documentRef, presenceState, false);
+  var indicator = documentRef ? documentRef.getElementById("pet-transcribing-indicator") : null;
+  if (indicator) {
+    indicator.hidden = !active;
+  }
+  if (!active && presenceState && presenceState.voiceTranscribingTimeout != null) {
+    clearTimeout(presenceState.voiceTranscribingTimeout);
+    presenceState.voiceTranscribingTimeout = null;
+  }
+}
 
-  // Build Blob from accumulated chunks
-  var mimeType = (recorder && recorder.mimeType) ? recorder.mimeType : "audio/webm";
+// TASK-167B: transcribe an audio Blob via the IPC STT bridge.
+// Returns:
+//   null          — IPC bridge unavailable (smoke/dev env) → caller: no-op
+//   ""            — empty/silent audio → caller: show empty-audio message
+//   "some text"   — successful transcript → caller: store + show in bubble
+// Throws:
+//   Error("stt_unavailable") — backend Whisper not installed
+//   Error("stt_timeout")     — STT did not respond within PET_STT_TIMEOUT_MS
+//   Error("stt_offline")     — backend unreachable
+//   Error("stt_error")       — any other backend error
+//
+// Constraints (TASK-167B scope):
+//   - Does NOT call /chat or sendPetChatMessage.
+//   - Does NOT fetch() directly — routes through narrow IPC bridge only.
+//   - Does NOT persist audio.
+//   - No fake/mock transcription — real bridge or null.
+async function transcribeAudioBlob(blob) {
+  // Guard: IPC bridge must be present (not available in Node.js smoke test env)
+  var api = (typeof window !== "undefined" && window !== null) ? window.dragonPet : null;
+  if (!api || typeof api.transcribeAudio !== "function") {
+    // STT bridge not wired (dev / smoke env) — silent no-op
+    return null;
+  }
+
+  // Convert Blob to ArrayBuffer for IPC transport
+  var arrayBuffer;
+  try {
+    arrayBuffer = await blob.arrayBuffer();
+  } catch (_e) {
+    throw new Error("stt_error");
+  }
+
+  // Race IPC call against hard timeout
+  var timeoutId;
+  var timeoutPromise = new Promise(function (_, reject) {
+    timeoutId = setTimeout(function () {
+      reject(new Error("stt_timeout"));
+    }, PET_STT_TIMEOUT_MS);
+  });
+
+  var result;
+  try {
+    result = await Promise.race([api.transcribeAudio(arrayBuffer), timeoutPromise]);
+  } catch (err) {
+    clearTimeout(timeoutId);
+    // Propagate named errors; wrap unknown ones
+    if (err && (err.message === "stt_timeout" || err.message === "stt_offline")) {
+      throw err;
+    }
+    throw new Error("stt_error");
+  }
+  clearTimeout(timeoutId);
+
+  // Normalise backend response
+  if (!result || typeof result !== "object") {
+    throw new Error("stt_error");
+  }
+  var status = result.status || "error";
+  if (status === "unavailable") throw new Error("stt_unavailable");
+  if (status === "offline")     throw new Error("stt_offline");
+  if (status === "error")       throw new Error("stt_error");
+  if (status === "empty" || !result.transcript) return "";
+  return String(result.transcript);
+}
+
+// TASK-167B: shared helper — build Blob from recorded chunks and run STT transcription.
+// Must be called AFTER the recorder's final dataavailable event has fired (i.e. from
+// the recorder's stop event, or when the recorder is already inactive).
+function _petSttTranscribeChunks(documentRef, presenceState, chunks, mimeType) {
   var audioBlob = null;
   try {
-    audioBlob = new Blob(chunks || [], { type: mimeType });
+    audioBlob = new Blob(chunks || [], { type: mimeType || "audio/webm" });
   } catch (_e) {
-    // Blob construction failure — treat as empty recording, nothing to transcribe
+    // Blob construction failure — exit transcribing state silently
+    setTranscribingState(documentRef, presenceState, false);
     return;
   }
 
-  // Hand off to STT stub (TASK-167B will implement the real call)
   transcribeAudioBlob(audioBlob).then(function (transcript) {
-    // TASK-167B: transcript will be a string; for now it is null — nothing to do.
-    if (transcript) {
-      // Future: send transcript to chat pipeline
+    setTranscribingState(documentRef, presenceState, false);
+
+    if (transcript === null) {
+      // IPC bridge not available (smoke / dev env) — silent no-op
+      return;
     }
-  }).catch(function (_err) {
-    // TASK-167B error path — swallow silently for now
+
+    if (!transcript) {
+      setBubbleState(documentRef, "idle_default");
+      var emptyEl = documentRef ? documentRef.getElementById("pet-bubble-response") : null;
+      if (emptyEl) setText(emptyEl, PET_STT_EMPTY_MSG);
+      return;
+    }
+
+    // Successful transcript — store for TASK-167C and surface in bubble.
+    // Do NOT forward to /chat here (deferred to TASK-167C).
+    if (presenceState) {
+      presenceState.voiceTranscript = transcript;
+    }
+    setBubbleState(documentRef, "expanded");
+    var bubbleResp = documentRef ? documentRef.getElementById("pet-bubble-response") : null;
+    if (bubbleResp) setText(bubbleResp, transcript);
+
+  }).catch(function (err) {
+    setTranscribingState(documentRef, presenceState, false);
+    var errCode = (err && err.message) ? err.message : "";
+    var errMsg;
+    if (errCode === "stt_unavailable") {
+      errMsg = PET_STT_UNAVAILABLE_MSG;
+    } else if (errCode === "stt_timeout") {
+      errMsg = PET_STT_TIMEOUT_MSG;
+    } else if (errCode === "stt_offline") {
+      errMsg = PET_STT_OFFLINE_MSG;
+    } else {
+      errMsg = PET_STT_ERROR_MSG;
+    }
+    setBubbleState(documentRef, "idle_default");
+    var errEl = documentRef ? documentRef.getElementById("pet-bubble-response") : null;
+    if (errEl) setText(errEl, errMsg);
   });
+}
+
+// TASK-167A/167B: stop recording and hand the audio to STT transcription.
+// Uses a flag (voiceStopAndTranscribe) so the recorder's stop event — which fires
+// AFTER the final dataavailable event — is the one that builds the Blob and calls STT.
+// This is the correct async pattern; building the Blob synchronously right after
+// recorder.stop() would race dataavailable and produce an empty Blob.
+// Does NOT forward the transcript to /chat — that is deferred to TASK-167C.
+function stopPetVoiceRecording(documentRef) {
+  var presenceState = getPetPresenceState(documentRef);
+  var recorder = presenceState ? presenceState.voiceMediaRecorder : null;
+  var mimeType  = (recorder && recorder.mimeType) ? recorder.mimeType : "audio/webm";
+
+  setRecordingState(documentRef, presenceState, false);
+
+  if (recorder && recorder.state !== "inactive") {
+    // Recorder still running: flag it so the stop event triggers transcription.
+    if (presenceState) presenceState.voiceStopAndTranscribe = true;
+    setTranscribingState(documentRef, presenceState, true);
+    try {
+      recorder.stop();
+    } catch (_e) {
+      if (presenceState) presenceState.voiceStopAndTranscribe = false;
+      setTranscribingState(documentRef, presenceState, false);
+    }
+  } else {
+    // Recorder already inactive — transcribe immediately from saved chunks.
+    var savedChunks = (presenceState && presenceState.voiceChunks) ? presenceState.voiceChunks : [];
+    setTranscribingState(documentRef, presenceState, true);
+    _petSttTranscribeChunks(documentRef, presenceState, savedChunks, mimeType);
+  }
 }
 
 // TASK-167A: cancel an in-progress recording, discarding the audio Blob.
@@ -807,9 +950,15 @@ function cancelPetVoiceRecording(documentRef) {
 // 6. Hard timeout: PET_RECORDING_MAX_MS → auto-stop.
 // 7. Clean pet bubble fallbacks for all error cases — no stack traces.
 async function openPetVoiceRecording(documentRef) {
-  // Toggle: if already recording, cancel
+  // Toggle: if already recording, stop and transcribe.
+  // The separate cancel (✕) button discards without transcribing.
   if (isPetRecordingActive(documentRef)) {
-    cancelPetVoiceRecording(documentRef);
+    stopPetVoiceRecording(documentRef);
+    return;
+  }
+
+  // TASK-167B: if STT transcription is in progress, ignore new recording requests
+  if (isTranscribingActive(documentRef)) {
     return;
   }
 
@@ -884,22 +1033,33 @@ async function openPetVoiceRecording(documentRef) {
   // Store stream + recorder in presence state for cancel/stop
   var presenceState = getPetPresenceState(documentRef);
   if (presenceState) {
-    presenceState.voiceMicStream  = stream;
-    presenceState.voiceMediaRecorder = recorder;
+    presenceState.voiceMicStream         = stream;
+    presenceState.voiceMediaRecorder     = recorder;
+    presenceState.voiceStopAndTranscribe = false;  // TASK-167B: set true by stopPetVoiceRecording
   }
 
+  // TASK-167B: store chunks reference in presenceState so stopPetVoiceRecording can reach it
   var chunks = [];
+  if (presenceState) presenceState.voiceChunks = chunks;
+
   recorder.addEventListener("dataavailable", function (event) {
     if (event.data && event.data.size > 0) {
       chunks.push(event.data);
     }
   });
 
+  // Capture mimeType now — recorder.mimeType may be empty after stop fires
+  var _mimeTypeForStop = (recorder.mimeType) ? recorder.mimeType : "audio/webm";
   recorder.addEventListener("stop", function () {
     // Release mic tracks when recorder stops
     try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (_e) { /* ignore */ }
     if (presenceState) presenceState.voiceMicStream = null;
-    // stopPetVoiceRecording already called; nothing else to do here.
+    // TASK-167B: if stopPetVoiceRecording set the flag, build Blob NOW (after dataavailable fired)
+    // and kick off STT.  cancelPetVoiceRecording leaves the flag false so we skip this.
+    if (presenceState && presenceState.voiceStopAndTranscribe) {
+      presenceState.voiceStopAndTranscribe = false;
+      _petSttTranscribeChunks(documentRef, presenceState, chunks, _mimeTypeForStop);
+    }
   });
 
   // Show recording state BEFORE starting recorder
@@ -920,7 +1080,7 @@ async function openPetVoiceRecording(documentRef) {
   // Hard timeout — auto-stop after PET_RECORDING_MAX_MS
   var timeoutId = setTimeout(function () {
     if (isPetRecordingActive(documentRef)) {
-      stopPetVoiceRecording(documentRef, chunks);
+      stopPetVoiceRecording(documentRef);
     }
   }, PET_RECORDING_MAX_MS);
   if (presenceState) {
@@ -2170,5 +2330,15 @@ if (typeof module !== "undefined") {
     cancelPetVoiceRecording,
     stopPetVoiceRecording,
     transcribeAudioBlob,
+    // TASK-167B
+    PET_STT_TIMEOUT_MS,
+    PET_TRANSCRIBING_STATUS,
+    PET_STT_UNAVAILABLE_MSG,
+    PET_STT_TIMEOUT_MSG,
+    PET_STT_EMPTY_MSG,
+    PET_STT_ERROR_MSG,
+    PET_STT_OFFLINE_MSG,
+    isTranscribingActive,
+    setTranscribingState,
   };
 }

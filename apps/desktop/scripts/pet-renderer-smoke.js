@@ -574,6 +574,9 @@ function createPetBubbleStateDocument() {
     "pet-recording-indicator", // TASK-167A: recording status indicator
     "pet-recording-cancel",    // TASK-167A: recording cancel button
     "pet-recording-dot",       // TASK-167A: pulsing recording dot
+    "pet-transcribing-indicator", // TASK-167B: transcribing spinner indicator
+    "pet-transcribing-spinner",   // TASK-167B: CSS spinner element
+    "pet-transcribing-status",    // TASK-167B: transcribing status text
   ]);
 }
 
@@ -4135,10 +4138,14 @@ function testQuietModeDoesNotSuppressVoiceRecording() {
 }
 
 async function testTranscribeAudioBlobIsStub() {
-  // TASK-167A: transcribeAudioBlob must be a stub that returns null (no STT yet)
+  // TASK-167A/167B: in Node.js smoke env (no window.dragonPet), transcribeAudioBlob returns null (safe no-op).
+  // TASK-167B replaced the static stub with real IPC logic; null is still returned when the IPC bridge
+  // is absent (smoke / dev env without contextBridge).
   const { transcribeAudioBlob } = require(petRendererPath);
-  const result = await transcribeAudioBlob(new Uint8Array([1, 2, 3]));
-  assert.equal(result, null, "transcribeAudioBlob stub must return null (TASK-167B will implement STT)");
+  // Provide a minimal blob-like object; without window.dragonPet the function short-circuits to null.
+  const fakeBlobLike = { arrayBuffer: async () => new ArrayBuffer(3) };
+  const result = await transcribeAudioBlob(fakeBlobLike);
+  assert.equal(result, null, "transcribeAudioBlob must return null when IPC bridge is absent (smoke/dev env)");
 }
 
 function testNoChatCallInTask167A() {
@@ -4202,6 +4209,189 @@ function testVoiceRendererHasGetUserMediaAndMediaRecorder() {
   const renderer = readText(petRendererPath);
   assertIncludes(renderer, "getUserMedia", "pet-renderer.js -- getUserMedia must be present for TASK-167A");
   assertIncludes(renderer, "MediaRecorder", "pet-renderer.js -- MediaRecorder must be present for TASK-167A");
+}
+
+
+// ── TASK-167B: STT transcription smoke tests ─────────────────────────────────
+
+function testTranscribingStateFunctionsExported() {
+  // TASK-167B: isTranscribingActive, setTranscribingState, and all STT constants must be exported
+  const {
+    isTranscribingActive,
+    setTranscribingState,
+    PET_STT_TIMEOUT_MS,
+    PET_TRANSCRIBING_STATUS,
+    PET_STT_UNAVAILABLE_MSG,
+    PET_STT_TIMEOUT_MSG,
+    PET_STT_EMPTY_MSG,
+    PET_STT_ERROR_MSG,
+    PET_STT_OFFLINE_MSG,
+  } = require(petRendererPath);
+  assert.equal(typeof isTranscribingActive, "function", "isTranscribingActive must be exported");
+  assert.equal(typeof setTranscribingState, "function", "setTranscribingState must be exported");
+  assert.equal(typeof PET_STT_TIMEOUT_MS, "number", "PET_STT_TIMEOUT_MS must be a number");
+  assert.ok(PET_STT_TIMEOUT_MS > 0, "PET_STT_TIMEOUT_MS must be positive");
+  assert.equal(typeof PET_TRANSCRIBING_STATUS, "string", "PET_TRANSCRIBING_STATUS must be a string");
+  assert.ok(PET_TRANSCRIBING_STATUS.length > 0, "PET_TRANSCRIBING_STATUS must be non-empty");
+  assert.equal(typeof PET_STT_UNAVAILABLE_MSG, "string", "PET_STT_UNAVAILABLE_MSG must be a string");
+  assert.equal(typeof PET_STT_TIMEOUT_MSG, "string", "PET_STT_TIMEOUT_MSG must be a string");
+  assert.equal(typeof PET_STT_EMPTY_MSG, "string", "PET_STT_EMPTY_MSG must be a string");
+  assert.equal(typeof PET_STT_ERROR_MSG, "string", "PET_STT_ERROR_MSG must be a string");
+  assert.equal(typeof PET_STT_OFFLINE_MSG, "string", "PET_STT_OFFLINE_MSG must be a string");
+}
+
+function testIsTranscribingActiveDefaultsFalse() {
+  // TASK-167B: data-transcribing must be absent/false on a fresh document
+  const { isTranscribingActive } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  assert.equal(isTranscribingActive(doc), false, "isTranscribingActive must be false on fresh document");
+}
+
+function testSetTranscribingStateActiveSetsDataAttr() {
+  // TASK-167B: setTranscribingState(true) sets data-transcribing="true" and shows indicator
+  const { setTranscribingState, isTranscribingActive } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const presenceState = {};
+  setTranscribingState(doc, presenceState, true);
+  assert.equal(isTranscribingActive(doc), true, "data-transcribing must be true after setTranscribingState(true)");
+  const indicator = doc.getElementById("pet-transcribing-indicator");
+  assert.equal(indicator.hidden, false, "transcribing indicator must be shown (hidden=false)");
+}
+
+function testSetTranscribingStateClearsDataAttr() {
+  // TASK-167B: setTranscribingState(false) clears data-transcribing and hides indicator
+  const { setTranscribingState, isTranscribingActive } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const presenceState = {};
+  setTranscribingState(doc, presenceState, true);
+  setTranscribingState(doc, presenceState, false);
+  assert.equal(isTranscribingActive(doc), false, "data-transcribing must be false after setTranscribingState(false)");
+  const indicator = doc.getElementById("pet-transcribing-indicator");
+  assert.equal(indicator.hidden, true, "transcribing indicator must be hidden after false");
+}
+
+function testSetTranscribingStateClearsTimeout() {
+  // TASK-167B: setTranscribingState(false) must clear any voiceTranscribingTimeout
+  const { setTranscribingState } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  let cleared = false;
+  const presenceState = {
+    voiceTranscribingTimeout: { _fake: true },
+  };
+  const origClearTimeout = globalThis.clearTimeout;
+  globalThis.clearTimeout = (id) => { if (id && id._fake) cleared = true; };
+  try {
+    setTranscribingState(doc, presenceState, false);
+  } finally {
+    globalThis.clearTimeout = origClearTimeout;
+  }
+  assert.equal(cleared, true, "setTranscribingState(false) must call clearTimeout on voiceTranscribingTimeout");
+  assert.equal(presenceState.voiceTranscribingTimeout, null, "voiceTranscribingTimeout must be nulled after clear");
+}
+
+function testTranscribingIndicatorHtmlExists() {
+  // TASK-167B: #pet-transcribing-indicator must exist in pet.html
+  const html = readText(petHtmlPath);
+  assertIncludes(html, "pet-transcribing-indicator", "pet.html -- #pet-transcribing-indicator must exist");
+  assertIncludes(html, "pet-transcribing-spinner", "pet.html -- .pet-transcribing-spinner must exist");
+  assertIncludes(html, "pet-transcribing-status", "pet.html -- .pet-transcribing-status must exist");
+  assertRegex(html, /id="pet-transcribing-indicator"[^>]*hidden/, "pet.html -- transcribing indicator must have hidden attr");
+}
+
+function testTranscribingCssExists() {
+  // TASK-167B: CSS for transcribing indicator, spinner, and data-transcribing selector must exist
+  const css = readText(petCssPath);
+  assertIncludes(css, ".pet-transcribing-indicator", "pet.css -- .pet-transcribing-indicator must be defined");
+  assertIncludes(css, ".pet-transcribing-spinner", "pet.css -- .pet-transcribing-spinner must be defined");
+  assertIncludes(css, ".pet-transcribing-status", "pet.css -- .pet-transcribing-status must be defined");
+  assertRegex(css, /@keyframes pet-transcribing-spin/, "pet.css -- spinner keyframes must exist");
+  assertRegex(css, /\[data-transcribing="true"\]\s*\.pet-transcribing-indicator/, "pet.css -- transcribing indicator must show when data-transcribing=true");
+  assertIncludes(css, "pet-transcribing-spin", "pet.css -- spinner animation must have unique name");
+}
+
+function testTranscribingCssHiddenByDefault() {
+  // TASK-167B: .pet-transcribing-indicator must be display:none by default
+  const css = readText(petCssPath);
+  assertRegex(css, /\.pet-transcribing-indicator\s*\{[^}]*display:\s*none/, "pet.css -- transcribing indicator must be display:none by default");
+}
+
+function testTranscribingMutualExclusionCssExists() {
+  // TASK-167B: while transcribing, text input and recording indicator must be hidden via CSS
+  const css = readText(petCssPath);
+  assertRegex(css, /\[data-transcribing="true"\]\s*\.pet-direct-input-panel/, "pet.css -- text input hidden during transcribing");
+  assertRegex(css, /\[data-transcribing="true"\]\s*\.pet-recording-indicator/, "pet.css -- recording indicator hidden during transcribing");
+}
+
+function testTranscribeAudioBlobNoChatOrFetch() {
+  // TASK-167B: transcribeAudioBlob must NOT call /chat, sendPetChatMessage, or fetch()
+  const renderer = readText(petRendererPath);
+  const transcribeMatch = renderer.match(/async function transcribeAudioBlob[\s\S]*?(?=\n\/\/\s*TASK|\nfunction|\nasync function)/);
+  assert.ok(transcribeMatch, "transcribeAudioBlob function must be present in renderer");
+  const funcBody = transcribeMatch[0];
+  assertNotIncludes(funcBody, "/chat", "transcribeAudioBlob must not reference /chat");
+  assertNotIncludes(funcBody, "sendPetChatMessage", "transcribeAudioBlob must not call sendPetChatMessage");
+  assertNotIncludes(funcBody, "fetch(", "transcribeAudioBlob must not call fetch() directly");
+}
+
+function testTranscribeAudioBlobUsesIpcBridge() {
+  // TASK-167B: transcribeAudioBlob must use window.dragonPet.transcribeAudio (IPC bridge)
+  const renderer = readText(petRendererPath);
+  assertIncludes(renderer, "transcribeAudio", "pet-renderer.js -- transcribeAudioBlob must call transcribeAudio IPC bridge");
+  assertIncludes(renderer, "dragonPet", "pet-renderer.js -- must reference dragonPet for IPC bridge");
+}
+
+function testSttErrorMessagesAreCleanStrings() {
+  // TASK-167B: all STT error constants must be plain human-readable strings (no stack traces / JSON / URLs)
+  const {
+    PET_STT_UNAVAILABLE_MSG,
+    PET_STT_TIMEOUT_MSG,
+    PET_STT_EMPTY_MSG,
+    PET_STT_ERROR_MSG,
+    PET_STT_OFFLINE_MSG,
+  } = require(petRendererPath);
+  for (const [name, msg] of [
+    ["PET_STT_UNAVAILABLE_MSG", PET_STT_UNAVAILABLE_MSG],
+    ["PET_STT_TIMEOUT_MSG", PET_STT_TIMEOUT_MSG],
+    ["PET_STT_EMPTY_MSG", PET_STT_EMPTY_MSG],
+    ["PET_STT_ERROR_MSG", PET_STT_ERROR_MSG],
+    ["PET_STT_OFFLINE_MSG", PET_STT_OFFLINE_MSG],
+  ]) {
+    assert.equal(typeof msg, "string", `${name} must be a string`);
+    assert.ok(msg.length > 0, `${name} must not be empty`);
+    assertNotIncludes(msg, "http", `${name} must not contain URLs`);
+    assertNotIncludes(msg, "{", `${name} must not contain JSON`);
+    assertNotIncludes(msg, "Error:", `${name} must not contain error class names`);
+  }
+}
+
+function testStopVoiceRecordingEntersTranscribingState() {
+  // TASK-167B: stopPetVoiceRecording must call setTranscribingState(doc, state, true) before STT
+  const renderer = readText(petRendererPath);
+  const stopMatch = renderer.match(/function stopPetVoiceRecording[\s\S]*?(?=\n\/\/ TASK-167A: cancel|\nfunction cancel)/);
+  assert.ok(stopMatch, "stopPetVoiceRecording must be present in renderer");
+  const funcBody = stopMatch[0];
+  assertIncludes(funcBody, "setTranscribingState", "stopPetVoiceRecording must call setTranscribingState");
+  assertIncludes(funcBody, "_petSttTranscribeChunks", "stopPetVoiceRecording must call _petSttTranscribeChunks");
+}
+
+function testOpenVoiceRecordingIgnoredWhenTranscribing() {
+  // TASK-167B: openPetVoiceRecording must guard against starting recording while transcribing
+  const renderer = readText(petRendererPath);
+  assertIncludes(renderer, "isTranscribingActive", "pet-renderer.js -- isTranscribingActive guard must be present in openPetVoiceRecording");
+}
+
+function testTask167BScopeChecks() {
+  // TASK-167B scope: no TTS, no wake-word, no always-listening, no screen capture, no raw audio persistence
+  const renderer = readText(petRendererPath);
+  assertNotIncludes(renderer, "getDisplayMedia", "pet-renderer.js -- no screen capture in TASK-167B");
+  assertNotIncludes(renderer, "wakeWord", "pet-renderer.js -- no wake-word in TASK-167B");
+  assertNotIncludes(renderer, "alwaysListening", "pet-renderer.js -- no always-listening in TASK-167B");
+  assertNotIncludes(renderer, "speechSynthesis", "pet-renderer.js -- no TTS in TASK-167B");
+  // transcribeAudioBlob must not forward to /chat
+  const transcribeMatch = renderer.match(/async function transcribeAudioBlob[\s\S]*?(?=\n\/\/ TASK-167B: isTranscribingActive)/);
+  if (transcribeMatch) {
+    assertNotIncludes(transcribeMatch[0], "/chat", "transcribeAudioBlob must not forward to /chat (deferred to TASK-167C)");
+  }
 }
 
 async function run() {
@@ -4384,6 +4574,22 @@ async function run() {
     testRecordingIndicatorCssHiddenByDefault,
     testRecordingIndicatorHiddenAttributeOverride,
     testVoiceRendererHasGetUserMediaAndMediaRecorder,
+    // TASK-167B
+    testTranscribingStateFunctionsExported,
+    testIsTranscribingActiveDefaultsFalse,
+    testSetTranscribingStateActiveSetsDataAttr,
+    testSetTranscribingStateClearsDataAttr,
+    testSetTranscribingStateClearsTimeout,
+    testTranscribingIndicatorHtmlExists,
+    testTranscribingCssExists,
+    testTranscribingCssHiddenByDefault,
+    testTranscribingMutualExclusionCssExists,
+    testTranscribeAudioBlobNoChatOrFetch,
+    testTranscribeAudioBlobUsesIpcBridge,
+    testSttErrorMessagesAreCleanStrings,
+    testStopVoiceRecordingEntersTranscribingState,
+    testOpenVoiceRecordingIgnoredWhenTranscribing,
+    testTask167BScopeChecks,
   ];
 
   for (const test of tests) {
@@ -4397,4 +4603,6 @@ async function run() {
 run().catch((error) => {
   console.error(error);
   process.exitCode = 1;
+});
+ 1;
 });

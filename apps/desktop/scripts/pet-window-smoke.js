@@ -593,6 +593,62 @@ function testMicPermissionHandlerInMain() {
   assertRegex(main, /petWindow[\s\S]{0,200}setPermissionRequestHandler/, "main.js — handler must be on petWindow");
 }
 
+
+// ── TASK-167B: STT IPC bridge and transcription smoke tests ──────────────────
+
+function testSttIpcBridgeExposedInPreload() {
+  // TASK-167B: pet-preload.js must expose dragonPet.transcribeAudio via IPC
+  const preload = fs.readFileSync(
+    path.join(__dirname, "../src/pet/pet-preload.js"), "utf8"
+  );
+  assertIncludes(preload, "stt:transcribe", "pet-preload.js -- stt:transcribe channel defined");
+  assertIncludes(preload, "transcribeAudio", "pet-preload.js -- transcribeAudio exposed on dragonPet");
+  assertIncludes(preload, "ipcRenderer.invoke", "pet-preload.js -- transcribeAudio uses ipcRenderer.invoke");
+}
+
+function testSttIpcHandlerInMain() {
+  // TASK-167B: main.js must register an ipcMain.handle for stt:transcribe
+  const main = fs.readFileSync(
+    path.join(__dirname, "../src/main.js"), "utf8"
+  );
+  assertIncludes(main, "stt:transcribe", "main.js -- stt:transcribe channel");
+  assertIncludes(main, "ipcMain.handle", "main.js -- ipcMain.handle registers stt handler");
+  // handler must POST to /stt/transcribe (backend endpoint)
+  assertIncludes(main, "/stt/transcribe", "main.js -- handler POSTs to /stt/transcribe");
+  // must use Node http (no electron-fetch / axios added)
+  assertIncludes(main, "require(\"http\")", "main.js -- uses built-in http for STT request");
+}
+
+function testSttHandlerNoPersistenceInMain() {
+  // TASK-167B: stt:transcribe IPC handler must not write audio to disk
+  const main = fs.readFileSync(
+    path.join(__dirname, "../src/main.js"), "utf8"
+  );
+  // Find the stt handler block — anchor on the handler comment directly above ipcMain.handle
+  const sttHandlerMatch = main.match(/\/\/ TASK-167B: stt:transcribe IPC handler[\s\S]*?ipcMain\.handle\(PET_STT_TRANSCRIBE_CHANNEL[\s\S]*?\}\s*\)\s*;/);
+  assert(sttHandlerMatch, "main.js -- stt:transcribe handler block found");
+  assertNotIncludes(sttHandlerMatch[0], "createWriteStream", "main.js -- no createWriteStream in stt handler");
+  assertNotIncludes(sttHandlerMatch[0], "fs.write", "main.js -- no fs.write in stt handler");
+  assertNotIncludes(sttHandlerMatch[0], "writeFile", "main.js -- no writeFile in stt handler");
+}
+
+function testSttTranscribeAudioBlobFunctionsInRenderer() {
+  // TASK-167B: pet-renderer.js must export transcribeAudioBlob + STT state helpers
+  const renderer = fs.readFileSync(
+    path.join(__dirname, "../src/pet/pet-renderer.js"), "utf8"
+  );
+  assertIncludes(renderer, "transcribeAudioBlob", "pet-renderer.js -- transcribeAudioBlob defined");
+  assertIncludes(renderer, "isTranscribingActive", "pet-renderer.js -- isTranscribingActive exported");
+  assertIncludes(renderer, "setTranscribingState", "pet-renderer.js -- setTranscribingState exported");
+  // transcribeAudioBlob function body must not forward to /chat — extract just that function
+  const transcribeFnMatch = renderer.match(/async function transcribeAudioBlob[\s\S]*?\n\}/);
+  assert(transcribeFnMatch, "pet-renderer.js -- transcribeAudioBlob function body found");
+  assertNotIncludes(transcribeFnMatch[0], "sendPetChatMessage",
+    "pet-renderer.js -- transcribeAudioBlob does not call sendPetChatMessage (TASK-167C boundary)");
+  assertNotIncludes(transcribeFnMatch[0], "fetch(",
+    "pet-renderer.js -- transcribeAudioBlob does not call fetch() directly");
+}
+
 function run() {
   const tests = [
     testMainHasPetWindowPrototype,
@@ -643,6 +699,11 @@ function run() {
     testVoiceRecordingFunctionsExportedFromRenderer,
     testNoNewIpcChannelsForMic,
     testMicPermissionHandlerInMain,
+    // TASK-167B
+    testSttIpcBridgeExposedInPreload,
+    testSttIpcHandlerInMain,
+    testSttHandlerNoPersistenceInMain,
+    testSttTranscribeAudioBlobFunctionsInRenderer,
   ];
 
   for (const test of tests) {

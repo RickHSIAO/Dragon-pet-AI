@@ -10,6 +10,7 @@
 
 const { app, BrowserWindow, ipcMain, screen } = require("electron");
 const fs = require("fs");
+const http = require("http");  // TASK-167B: used by stt:transcribe IPC handler
 const path = require("path");
 
 const BACKEND_URL = "http://localhost:8000";
@@ -23,6 +24,7 @@ const PET_SPEECH_RECEIVED_CHANNEL = "pet:speech-received";
 const PET_QUIET_MODE_SET_CHANNEL = "pet:set-quiet-mode";  // TASK-162
 const PET_SCALE_SET_CHANNEL = "pet:set-scale";            // TASK-166B
 const PET_CLICK_THROUGH_SET_CHANNEL = "pet:set-click-through";  // TASK-166D
+const PET_STT_TRANSCRIBE_CHANNEL = "stt:transcribe";           // TASK-167B
 const PET_WINDOW_WIDTH = 300;   // Medium default — used as fallback constant
 const PET_WINDOW_HEIGHT = 400;  // Medium default — used as fallback constant
 // TASK-166B: scale preset dimensions
@@ -504,6 +506,76 @@ ipcMain.handle(PET_CLICK_THROUGH_SET_CHANNEL, (_event, value) => {  // TASK-166D
     petWindow.focus();  // TASK-166E click-fix: restore OS focus so the direct input can receive keyboard events
   }
   return { ok: true, clickThrough: enabled };
+});
+
+
+// TASK-167B: stt:transcribe IPC handler.
+// Receives an ArrayBuffer from the renderer, wraps it in a multipart POST to the
+// backend /stt/transcribe endpoint (local Whisper), and returns the JSON result.
+// No audio is persisted to disk. Click-through is unaffected here (renderer handles CT state).
+ipcMain.handle(PET_STT_TRANSCRIBE_CHANNEL, (_event, arrayBuffer) => {
+  return new Promise((resolve) => {
+    let buffer;
+    try {
+      buffer = Buffer.from(arrayBuffer);
+    } catch (_e) {
+      resolve({ transcript: "", status: "error" });
+      return;
+    }
+
+    if (!buffer.length) {
+      resolve({ transcript: "", status: "empty" });
+      return;
+    }
+
+    const boundary = "----DragonPetSTT" + Date.now();
+    const partHeader = Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="audio"; filename="audio.webm"\r\nContent-Type: audio/webm\r\n\r\n`,
+      "utf8"
+    );
+    const partFooter = Buffer.from(`\r\n--${boundary}--\r\n`, "utf8");
+    const body = Buffer.concat([partHeader, buffer, partFooter]);
+
+    // Parse BACKEND_URL host/port (e.g. "http://localhost:8000")
+    let hostname = "127.0.0.1";
+    let port = 8000;
+    try {
+      const parsed = new URL(BACKEND_URL);
+      hostname = parsed.hostname;
+      port = parseInt(parsed.port, 10) || 8000;
+    } catch (_e) { /* use defaults */ }
+
+    const options = {
+      hostname,
+      port,
+      path: "/stt/transcribe",
+      method: "POST",
+      headers: {
+        "Content-Type": `multipart/form-data; boundary=${boundary}`,
+        "Content-Length": body.length,
+      },
+    };
+
+    const req = http.request(options, (res) => {
+      const chunks = [];
+      res.on("data", (chunk) => chunks.push(chunk));
+      res.on("end", () => {
+        try {
+          const text = Buffer.concat(chunks).toString("utf8");
+          resolve(JSON.parse(text));
+        } catch (_e) {
+          resolve({ transcript: "", status: "error" });
+        }
+      });
+    });
+
+    req.on("error", () => {
+      resolve({ transcript: "", status: "offline" });
+    });
+
+    req.write(body);
+    req.end();
+  });
 });
 
 app.whenReady().then(() => {

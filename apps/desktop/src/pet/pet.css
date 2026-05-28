@@ -751,3 +751,73 @@ textarea {
 [data-recording="true"] .pet-direct-input-panel {
   display: none;
 }
+
+/* ── TASK-167B: Transcribing state ──────────────────────────────────────────── */
+
+/* Transcribing indicator: shown via data-transcribing="true", hidden otherwise */
+.pet-transcribing-indicator {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  pointer-events: none;
+}
+
+[data-transcribing="true"] .pet-transcribing-indicator {
+  display: flex;
+}
+
+/* Spinner element — CSS-only rotating ring */
+.pet-transcribing-spinner {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 2px solid rgba(99, 102, 241, 0.3);
+  border-top-color: rgb(99, 102, 241);
+  animation: pet-transcribing-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes pet-transcribing-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Transcribing status text */
+.pet-transcribing-status {
+  font-size: 12px;
+  color: rgb(99, 102, 241);
+  white-space: nowrap;
+}
+
+/* Small scale — compact */
+[data-scale="small"] .pet-transcribing-indicator {
+  padding: 2px 5px;
+  gap: 4px;
+}
+
+[data-scale="small"] .pet-transcribing-spinner {
+  width: 6px;
+  height: 6px;
+}
+
+/* Large scale */
+[data-scale="large"] .pet-transcribing-indicator {
+  padding: 5px 10px;
+  gap: 8px;
+}
+
+[data-scale="large"] .pet-transcribing-status {
+  font-size: 13px;
+}
+
+/* CSS mutual exclusion: hide text input and recording indicator while transcribing */
+[data-transcribing="true"] .pet-direct-input-panel {
+  display: none;
+}
+
+[data-transcribing="true"] .pet-recording-indicator {
+  display: none;
+}
