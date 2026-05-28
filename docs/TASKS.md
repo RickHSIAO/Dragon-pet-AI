@@ -13222,3 +13222,154 @@ tab.
 - Pet direct text input and voice recording are mutually exclusive.
 - Quiet Mode ON allows user-initiated recording; returns to collapsed/no-hint state after recording/cancel.
 - TASK-166A/B/C/D/E behavior did not regress.
+
+---
+
+## TASK-167B - Voice STT Transcription Design
+
+**Status:** DEFINED
+**Date:** 2026-05-28
+**Type:** Design — v0.3 Voice Interaction (slice 1B: STT transcription)
+
+Goal: Design a safe speech-to-text transcription layer that converts the in-memory audio Blob captured by TASK-167A into plain transcript text, suitable for later handoff to the existing `/chat` pipeline (TASK-167C). This slice covers the STT boundary, provider strategy, transcribing UI state, privacy rules, error handling, and interaction with click-through / Quiet Mode / text input. TTS, wake word, always-listening, screen capture, and backend schema changes remain out of scope.
+
+### 1. STT Boundary
+
+The function `transcribeAudioBlob(blob) -> Promise<string>` — stubbed in TASK-167A as `Promise.resolve(null)` — is fully implemented in this slice.
+
+- **Input:** in-memory `Blob` (prefer `audio/webm;codecs=opus`) from TASK-167A `MediaRecorder`.
+- **Output:** plain transcript string (`""` for empty/silent/unrecognised; non-empty trimmed string otherwise).
+- **Never returns `null` after this slice** — callers receive `""` on any failure or silence, and a non-empty string on success.
+- Transcript is `trim()`-ed before any downstream use.
+- Empty or whitespace-only transcript is treated as silence — no chat send, no error bubble.
+- Low-confidence or unclear transcript: treat as empty — do not send.
+- Invalid or zero-length Blob: skip STT, return `""` immediately.
+
+### 2. Provider Strategy
+
+**Preferred implementation path:** local Whisper via a narrow backend endpoint.
+
+- Add a new POST endpoint `POST /stt/transcribe` to the FastAPI backend.
+  - Input: multipart audio file upload (the Blob bytes + MIME type).
+  - Output: `{ "transcript": "..." }` (empty string on silence/failure).
+  - Uses `faster-whisper` or `openai-whisper` on the backend (whichever is installed).
+  - No external API call by default — local inference only.
+  - Timeout: 15 seconds (backend enforced).
+  - Returns HTTP 200 with empty transcript on silence/unsupported — never HTTP 500 for expected STT failure paths.
+- **Fallback path:** if local Whisper is unavailable (model not found, backend offline), `transcribeAudioBlob` returns `""` and Pet shows a clean fallback message.
+- No broad provider architecture changes — a single narrow endpoint only.
+- No API key requirement for local path.
+- Platform STT (Web Speech API) is explicitly excluded — it sends audio to an external server.
+
+### 3. Privacy
+
+- No always-listening. No wake word. No hidden microphone capture.
+- Audio is sent to the backend STT endpoint **only** after explicit user-initiated recording stop.
+- Raw audio Blob is not written to disk at any point.
+- Transcript text is not persisted beyond the current session's chat flow unless the user explicitly sends a message.
+- Backend STT endpoint processes audio in-memory and discards it after transcription.
+- No audio or transcript telemetry.
+
+### 4. Pet UI — Transcribing State
+
+After recording stops (not cancelled), Pet enters a `"transcribing"` state while STT runs.
+
+- A distinct visual indicator is shown: e.g., a spinner or subtle text ("辨識中…") in the Pet Bubble or nav area.
+- `"transcribing"` state is distinct from:
+  - Recording state (`data-recording="true"` + pulsing red dot) — TASK-167A.
+  - Thinking state (`"thinking"` bubble state) — TASK-157.
+  - Idle / collapsed state.
+- User may cancel transcription (discards the audio Blob, returns to idle state).
+- If transcript is empty/silent: Pet returns quietly to idle/collapsed — no error bubble, no action.
+- If transcript is non-empty: either sends immediately (TASK-167C) or surfaces for user confirmation (deferred).
+- `data-transcribing="true"` attribute on `#pet-mode-root` drives CSS transcribing state, analogous to `data-recording="true"`.
+
+### 5. Chat Handoff Boundary
+
+Chat handoff is **deferred to TASK-167C**. TASK-167B stops at transcript generation.
+
+- On non-empty transcript, TASK-167B surfaces the transcript text visually (e.g., pre-fills the Pet direct input field with the transcript, or shows a transient "Did you say: …?" bubble).
+- User may confirm send or discard.
+- TASK-167B does **not** call `/chat` or `sendPetChatMessage`.
+- TASK-167C will wire non-empty transcript → existing `/chat` pipeline, reusing TASK-157 thinking/reply/error state sequence.
+- `reply / mood / source` semantics are preserved for TASK-167C use.
+- Source value for voice-originated messages: `"pet_voice"` (analogous to `"pet_thinking"` in TASK-157).
+
+### 6. Error Handling
+
+| Condition | Pet Bubble behaviour |
+|---|---|
+| STT unavailable (Whisper not installed) | Clean one-line message: "語音辨識目前無法使用。" |
+| STT timeout (> 15 s) | Clean one-line message: "語音辨識逾時，請再試一次。" |
+| Empty / silent audio | Silent: Pet returns to idle/collapsed, no message. |
+| Low-confidence result | Treated as empty — silent return to idle. |
+| Invalid audio Blob | Clean one-line message: "無法辨識音訊，請再試一次。" |
+| Backend offline | Clean one-line message (same as existing backend-offline fallback). |
+| Cancel during transcription | Silent: discard Blob, return to idle. |
+
+No raw stack traces, URLs, provider details, JSON, or debug text in any Pet Bubble error message.
+
+### 7. Click-through Interaction
+
+- Click-through remains forced OFF during transcription (same `forceClickThroughOff` pattern as TASK-166E / TASK-167A).
+- Click-through cannot be activated while `data-transcribing="true"`.
+- Recovery strip behaviour from TASK-166D must not regress.
+- If transcription completes or is cancelled, click-through state reverts to user's prior preference.
+
+### 8. Quiet Mode Interaction
+
+- Quiet Mode suppresses idle only — it does not suppress user-initiated transcription.
+- If Quiet Mode is ON and transcription completes with an empty result, Pet returns to collapsed/no-hint state.
+- If Quiet Mode is ON and transcription produces a non-empty result, Pet surfaces the transcript for confirmation (TASK-167B) or sends it (TASK-167C) — Quiet Mode does not suppress this.
+
+### 9. Direct Text Input Interaction
+
+- If text input panel is open when transcription begins, close it (consistent with TASK-167A voice/text mutual exclusion).
+- If user opens text input during transcription, cancel transcription silently.
+- Voice transcript should not create a full Pet chat history panel — single-exchange display only.
+
+### 10. Scope Limits
+
+- Do not implement TTS.
+- Do not implement wake word.
+- Do not implement always-listening.
+- Do not implement screen capture.
+- Do not implement OCR / vision.
+- Do not implement Live2D.
+- Do not add broad provider settings architecture.
+- Do not persist raw audio by default.
+- Backend change is limited to one narrow endpoint `POST /stt/transcribe` — no schema or provider config changes.
+
+### 11. Preserved Behaviour Table
+
+| Feature | Expected after TASK-167B |
+|---|---|
+| TASK-149 position persistence | No regression |
+| TASK-157 thinking bubble | No regression |
+| TASK-159 idle rotation / cooldown | No regression |
+| TASK-162 Quiet Mode | No regression |
+| TASK-166A transparent shell | No regression |
+| TASK-166B scale presets | No regression |
+| TASK-166C bubble tail | No regression |
+| TASK-166D click-through toggle | No regression |
+| TASK-166E Pet direct text input | No regression |
+| TASK-167A mic capture UI | No regression |
+
+### 12. Next Slice
+
+**TASK-167C** — Voice Chat Handoff: wire non-empty transcript from TASK-167B into the existing `/chat` pipeline, reusing the TASK-157 thinking/reply/error state sequence. Source: `"pet_voice"`. No new UI required beyond what TASK-167B defines.
+
+### 13. Manual Windows Smoke Expectations (for implementation task)
+
+- Recording an audio Blob and stopping produces a transcribing indicator.
+- Transcribing indicator is visually distinct from recording dot and thinking bubble.
+- Empty / silent audio returns Pet to idle cleanly (no error, no action).
+- Successful transcription produces clean transcript text in Pet.
+- STT failure shows a clean one-line fallback in Pet Bubble.
+- No raw audio is written to disk at any point.
+- No hidden background listening occurs.
+- Click-through remains OFF during transcription.
+- Quiet Mode ON does not suppress transcription.
+- Pet text input does not conflict with voice transcription.
+- No TTS / wake word / screen capture / Live2D exists in this slice.
+- Cancel during transcription returns Pet to idle cleanly.
