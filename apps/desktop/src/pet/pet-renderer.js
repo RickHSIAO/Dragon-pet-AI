@@ -41,6 +41,8 @@ const PET_STT_ERROR_MSG = "語音辨識出錯，請再試一次。";
 const PET_STT_OFFLINE_MSG = "後端離線，無法辨識語音。";
 // TASK-167C: voice transcript → /chat handoff
 const PET_VOICE_CHAT_MAX_CHARS = 2000;
+// TASK-168B: TTS playback — max characters sent to SpeechSynthesis
+const PET_TTS_MAX_CHARS = 300;
 const PET_VOICE_TRANSCRIPT_TOO_LONG_MSG = "語音太長，請縮短後再試。";
 // TASK-158: short in-character idle presence lines (static local set)
 const PET_IDLE_LINES = Object.freeze([
@@ -65,6 +67,8 @@ const PET_UNSAFE_DETAIL_PATTERN =
   /<think\b|<\/think>|thinking|done thinking|reasoning|traceback|stack trace|api[_-]?key|[{[}\]]/i;
 const PET_UNSAFE_DETAIL_TOKENS = Object.freeze(["localhost", "127.0.0.1", ["114", "34"].join("")]);
 let petChatPending = false;
+let petTtsEnabled = false;     // TASK-168B: TTS is OFF by default
+let petSpeakingActive = false; // TASK-168B: true while SpeechSynthesis is speaking
 const petPresenceStates = typeof WeakMap === "function" ? new WeakMap() : null;
 let fallbackPetPresenceState = null;
 
@@ -841,6 +845,87 @@ async function transcribeAudioBlob(blob) {
 // TASK-167B: shared helper — build Blob from recorded chunks and run STT transcription.
 // Must be called AFTER the recorder's final dataavailable event has fired (i.e. from
 // the recorder's stop event, or when the recorder is already inactive).
+// TASK-168B: returns true if window.speechSynthesis is available in this context.
+function isPetTtsAvailable() {
+  return typeof window !== "undefined" && !!window.speechSynthesis;
+}
+
+// TASK-168B: set or clear the speaking state on #pet-mode-root.
+// Shows / hides the speaking indicator and stop button via data-speaking attribute.
+// TASK-168B-FIX: also toggle indicator.hidden so the !important CSS guard is lifted,
+// matching the same pattern used by setRecordingState / setTranscribingState.
+function setSpeakingState(documentRef, active) {
+  petSpeakingActive = !!active;
+  var root = documentRef ? documentRef.getElementById("pet-mode-root") : null;
+  if (root) {
+    if (active) {
+      root.dataset.speaking = "true";
+    } else {
+      delete root.dataset.speaking;
+    }
+  }
+  var indicator = documentRef ? documentRef.getElementById("pet-speaking-indicator") : null;
+  if (indicator) {
+    indicator.hidden = !active;
+  }
+}
+
+// TASK-168B: cancel any active TTS speech and clear speaking state.
+// Safe to call when nothing is playing (no-op).
+function stopPetSpeech(documentRef) {
+  if (isPetTtsAvailable()) {
+    try { window.speechSynthesis.cancel(); } catch (_e) { /* ignore */ }
+  }
+  setSpeakingState(documentRef, false);
+}
+
+// TASK-168B: speak a final assistant reply if TTS is enabled.
+// Only speaks for final reply states ("speaking", "long_reply").
+// Empty reply, thinking state, error states, recording/transcribing → no-op.
+// Truncates to PET_TTS_MAX_CHARS; full text remains visible in bubble.
+function speakPetReply(documentRef, reply, state) {
+  // Guard: TTS must be enabled
+  if (!petTtsEnabled) return;
+  // Guard: SpeechSynthesis must be available
+  if (!isPetTtsAvailable()) return;
+  // Guard: only speak final reply states
+  if (state !== "speaking" && state !== "long_reply") return;
+  // Guard: do not speak while recording or transcribing (feedback loop prevention)
+  if (isPetRecordingActive(documentRef)) return;
+  if (isTranscribingActive(documentRef)) return;
+  // Guard: empty or non-string reply
+  var text = typeof reply === "string" ? reply.trim() : "";
+  if (!text) return;
+  // Truncate to TTS limit
+  if (text.length > PET_TTS_MAX_CHARS) {
+    text = text.slice(0, PET_TTS_MAX_CHARS);
+  }
+  // Cancel any in-progress speech before starting new utterance
+  stopPetSpeech(documentRef);
+  try {
+    var utterance = new window.SpeechSynthesisUtterance(text);
+    utterance.onstart = function () { setSpeakingState(documentRef, true); };
+    utterance.onend = function () { setSpeakingState(documentRef, false); };
+    utterance.onerror = function () { setSpeakingState(documentRef, false); };
+    window.speechSynthesis.speak(utterance);
+  } catch (_e) {
+    // SpeechSynthesis failure — clear state silently, no Pet Bubble error
+    setSpeakingState(documentRef, false);
+  }
+}
+
+// TASK-168B: toggle TTS on/off. Stops any active speech when disabling.
+function togglePetTts(documentRef) {
+  petTtsEnabled = !petTtsEnabled;
+  if (!petTtsEnabled) stopPetSpeech(documentRef);
+  var btn = documentRef ? documentRef.getElementById("pet-menu-tts") : null;
+  if (btn) {
+    btn.setAttribute("aria-pressed", petTtsEnabled ? "true" : "false");
+    btn.textContent = petTtsEnabled ? "語音播放: 開" : "語音播放: 關";
+  }
+  return petTtsEnabled;
+}
+
 async function handlePetVoiceChatSend(documentRef, transcript, options) {
   if (petChatPending) return null;
   forceClickThroughOff(documentRef);
@@ -860,6 +945,8 @@ async function handlePetVoiceChatSend(documentRef, transcript, options) {
     };
     setBubbleState(documentRef, nextState, bubbleOptions);
     rememberRecentPetReply(documentRef, nextState, bubbleOptions, options || {});
+    // TASK-168B: speak final reply if TTS enabled
+    speakPetReply(documentRef, data.reply, nextState);
     return data;
   } catch (error) {
     var errorState = "llm_local_error";
@@ -988,6 +1075,9 @@ function cancelPetVoiceRecording(documentRef) {
 // 6. Hard timeout: PET_RECORDING_MAX_MS → auto-stop.
 // 7. Clean pet bubble fallbacks for all error cases — no stack traces.
 async function openPetVoiceRecording(documentRef) {
+  // TASK-168B: cancel any active TTS speech before recording starts
+  // (prevents microphone feedback from speaker output)
+  stopPetSpeech(documentRef);
   // Toggle: if already recording, stop and transcribe.
   // The separate cancel (✕) button discards without transcribing.
   if (isPetRecordingActive(documentRef)) {
@@ -1163,6 +1253,8 @@ async function handlePetDirectSend(event, documentRef, options) {
     };
     setBubbleState(documentRef, nextState, bubbleOptions);
     rememberRecentPetReply(documentRef, nextState, bubbleOptions, options || {});
+    // TASK-168B: speak final reply if TTS enabled
+    speakPetReply(documentRef, data.reply, nextState);
     return data;
   } catch (error) {
     var errorState = "llm_local_error";
@@ -2000,6 +2092,8 @@ function initializePetMode(documentRef = document) {
   const directInputClose = documentRef.getElementById("pet-direct-input-close");  // TASK-166E
   const micHook          = documentRef.getElementById("pet-mic-hook");            // TASK-167A
   const recordingCancel  = documentRef.getElementById("pet-recording-cancel");    // TASK-167A
+  const menuTts          = documentRef.getElementById("pet-menu-tts");           // TASK-168B
+  const ttsSpeakingStop  = documentRef.getElementById("pet-tts-stop");           // TASK-168B
 
   if (root) {
     root.dataset.initialized = "true";
@@ -2133,6 +2227,21 @@ function initializePetMode(documentRef = document) {
         _ctApi.setClickThrough(newClickThrough);
       }
       closeMenu(documentRef);
+    });
+  }
+
+  // TASK-168B: TTS toggle
+  if (menuTts && typeof menuTts.addEventListener === "function") {
+    menuTts.addEventListener("click", function () {
+      togglePetTts(documentRef);
+      closeMenu(documentRef);
+    });
+  }
+
+  // TASK-168B: stop speech button
+  if (ttsSpeakingStop && typeof ttsSpeakingStop.addEventListener === "function") {
+    ttsSpeakingStop.addEventListener("click", function () {
+      stopPetSpeech(documentRef);
     });
   }
 
@@ -2382,5 +2491,12 @@ if (typeof module !== "undefined") {
     PET_VOICE_CHAT_MAX_CHARS,
     PET_VOICE_TRANSCRIPT_TOO_LONG_MSG,
     handlePetVoiceChatSend,
+    // TASK-168B
+    PET_TTS_MAX_CHARS,
+    isPetTtsAvailable,
+    setSpeakingState,
+    stopPetSpeech,
+    speakPetReply,
+    togglePetTts,
   };
 }

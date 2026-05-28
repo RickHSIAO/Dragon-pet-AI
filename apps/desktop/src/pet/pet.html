@@ -136,6 +136,19 @@
         <span id="pet-transcribing-status" class="pet-transcribing-status pet-no-drag">&#x8F49;&#x9304;&#x4E2D;&#x2026;</span>
       </div>
 
+      <!-- TASK-168B: Speaking indicator — shown only when data-speaking="true" on #pet-mode-root -->
+      <div
+        id="pet-speaking-indicator"
+        class="pet-speaking-indicator pet-no-drag"
+        aria-live="polite"
+        aria-label="Speaking status"
+        hidden
+      >
+        <span class="pet-speaking-wave" aria-hidden="true">&#x266A;</span>
+        <span id="pet-speaking-status" class="pet-speaking-status pet-no-drag">&#x56DE;&#x61C9;&#x4E2D;&#x2026;</span>
+        <button id="pet-tts-stop" class="pet-tts-stop pet-no-drag" type="button" aria-label="Stop speech">&#x25A0;</button>
+      </div>
+
       <p id="pet-hint" class="pet-hint pet-no-drag" aria-live="polite">&#x54FC;&#xFF0C;&#x6C5D;&#x53EB;&#x543E;&#x51FA;&#x4F86;&#x505A;&#x4EC0;&#x9EBC;&#xFF1F;</p>
     </section>
 
@@ -160,6 +173,7 @@
       <button id="pet-menu-hide-window" class="pet-menu-item pet-no-drag" type="button" data-menu-action="hide-window">Hide Pet Window</button>
       <button id="pet-menu-quiet-mode" class="pet-menu-item pet-no-drag" type="button" data-menu-action="quiet-mode" aria-pressed="false">Quiet Mode: Off</button>
       <button id="pet-menu-click-through" class="pet-menu-item pet-no-drag" type="button" data-menu-action="click-through" aria-pressed="false">Click-through: Off</button>
+      <button id="pet-menu-tts" class="pet-menu-item pet-no-drag" type="button" data-menu-action="tts" aria-pressed="false">&#x8A9E;&#x97F3;&#x64AD;&#x653E;: &#x95DC;</button>
       <div id="pet-menu-scale-group" class="pet-menu-scale-group pet-no-drag" role="group" aria-label="Window size">
         <button id="pet-menu-scale-small"  class="pet-menu-scale-btn pet-no-drag" type="button" data-scale="small"  aria-pressed="false">S</button>
         <button id="pet-menu-scale-medium" class="pet-menu-scale-btn pet-no-drag" type="button" data-scale="medium" aria-pressed="true">M</button>

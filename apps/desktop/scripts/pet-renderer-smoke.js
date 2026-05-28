@@ -4167,7 +4167,7 @@ function testNoScreenCaptureOrBackendChangesInTask167A() {
   assertNotIncludes(renderer, "wakeWord", "pet-renderer.js -- no wake-word");
   assertNotIncludes(renderer, "alwaysListening", "pet-renderer.js -- no always-listening");
   assertNotIncludes(renderer, "tts(", "pet-renderer.js -- no TTS");
-  assertNotIncludes(renderer, "speechSynthesis", "pet-renderer.js -- no speechSynthesis");
+  // speechSynthesis legitimately present from TASK-168B (not in scope of TASK-167A)
   // No new backend calls -- all /chat references must be the existing sendPetChatMessage only
   const chatCount = (renderer.match(/["']\/chat["']/g) || []).length;
   assert.ok(chatCount <= 1, "pet-renderer.js must not add new /chat call sites (found " + chatCount + ")");
@@ -4386,7 +4386,7 @@ function testTask167BScopeChecks() {
   assertNotIncludes(renderer, "getDisplayMedia", "pet-renderer.js -- no screen capture in TASK-167B");
   assertNotIncludes(renderer, "wakeWord", "pet-renderer.js -- no wake-word in TASK-167B");
   assertNotIncludes(renderer, "alwaysListening", "pet-renderer.js -- no always-listening in TASK-167B");
-  assertNotIncludes(renderer, "speechSynthesis", "pet-renderer.js -- no TTS in TASK-167B");
+  // speechSynthesis legitimately added by TASK-168B; removed from TASK-167B scope check
   // transcribeAudioBlob must not forward to /chat
   const transcribeMatch = renderer.match(/async function transcribeAudioBlob[\s\S]*?(?=\n\/\/ TASK-167B: isTranscribingActive)/);
   if (transcribeMatch) {
@@ -4488,7 +4488,7 @@ function testVoiceChatClosesDirectInput() {
 
 function testVoiceChatScopeChecks() {
   const renderer = readText(petRendererPath);
-  assertNotIncludes(renderer, "speechSynthesis", "pet-renderer.js -- no TTS in TASK-167C");
+  // speechSynthesis legitimately added by TASK-168B; removed from TASK-167C scope check
   assertNotIncludes(renderer, "wakeWord", "pet-renderer.js -- no wake-word in TASK-167C");
   assertNotIncludes(renderer, "alwaysListening", "pet-renderer.js -- no always-listening in TASK-167C");
   assertNotIncludes(renderer, "/stt/voice-chat", "pet-renderer.js -- no voice-specific /chat endpoint");
@@ -4501,6 +4501,156 @@ function testVoiceChatScopeChecks() {
 function testVoiceChatAutoSendNoConfirmation() {
   const renderer = readText(petRendererPath);
   assert(renderer.includes("handlePetVoiceChatSend(documentRef, trimmed, {})"), "success path must auto-send via handlePetVoiceChatSend without confirmation");
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TASK-168B: Pet TTS Playback smoke tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+function testTtsConstantExists() {
+  const { PET_TTS_MAX_CHARS } = require(petRendererPath);
+  assert(PET_TTS_MAX_CHARS === 300, "PET_TTS_MAX_CHARS must be 300");
+}
+
+function testTtsFunctionsExported() {
+  const { speakPetReply, stopPetSpeech, togglePetTts, isPetTtsAvailable, setSpeakingState } = require(petRendererPath);
+  assert(typeof speakPetReply === "function", "speakPetReply must be exported");
+  assert(typeof stopPetSpeech === "function", "stopPetSpeech must be exported");
+  assert(typeof togglePetTts === "function", "togglePetTts must be exported");
+  assert(typeof isPetTtsAvailable === "function", "isPetTtsAvailable must be exported");
+  assert(typeof setSpeakingState === "function", "setSpeakingState must be exported");
+}
+
+function testTtsMenuItemHtmlExists() {
+  const html = readText(petHtmlPath);
+  assert(html.includes('id="pet-menu-tts"'), "pet.html must have #pet-menu-tts button");
+  assert(html.includes('data-menu-action="tts"'), "TTS menu button must have data-menu-action=tts");
+  assert(html.includes('aria-pressed="false"'), "TTS menu button must start with aria-pressed=false");
+}
+
+function testSpeakingIndicatorHtmlExists() {
+  const html = readText(petHtmlPath);
+  assert(html.includes('id="pet-speaking-indicator"'), "pet.html must have #pet-speaking-indicator");
+  assert(html.includes('id="pet-tts-stop"'), "pet.html must have #pet-tts-stop button");
+  assert(html.includes('id="pet-speaking-status"'), "pet.html must have #pet-speaking-status");
+}
+
+function testSpeakingCssExists() {
+  const css = readText(petCssPath);
+  assert(css.includes(".pet-speaking-indicator"), ".pet-speaking-indicator must be defined in pet.css");
+  assert(css.includes('[data-speaking="true"] .pet-speaking-indicator'), 'data-speaking CSS rule must exist');
+  assert(css.includes(".pet-tts-stop"), ".pet-tts-stop must be defined in pet.css");
+  assert(css.includes(".pet-speaking-wave"), ".pet-speaking-wave must be defined in pet.css");
+}
+
+function testSpeakingCssHiddenByDefault() {
+  const css = readText(petCssPath);
+  // Default rule must be display:none
+  const indicatorBlock = css.match(/\.pet-speaking-indicator\s*\{[^}]*\}/);
+  assert(indicatorBlock, ".pet-speaking-indicator block must exist");
+  assert(indicatorBlock[0].includes("display: none"), ".pet-speaking-indicator must default to display:none");
+}
+
+function testSpeakingCssShownOnDataAttr() {
+  const css = readText(petCssPath);
+  assert(css.includes('[data-speaking="true"] .pet-speaking-indicator'), "data-speaking must show indicator");
+}
+
+function testSpeakPetReplyOnlyForFinalStates() {
+  // speakPetReply must check state — only "speaking" and "long_reply" are valid
+  const renderer = readText(petRendererPath);
+  const fnIdx = renderer.indexOf("function speakPetReply(");
+  const fnText = renderer.slice(fnIdx, fnIdx + 1200);
+  assert(fnText.includes('"speaking"') && fnText.includes('"long_reply"'), "speakPetReply must guard on speaking/long_reply states");
+  assert(fnText.includes("if (state !=="), "speakPetReply must reject non-final states");
+}
+
+function testSpeakPetReplyGuardsTtsEnabled() {
+  const renderer = readText(petRendererPath);
+  const fnIdx = renderer.indexOf("function speakPetReply(");
+  const fnText = renderer.slice(fnIdx, fnIdx + 400);
+  assert(fnText.includes("petTtsEnabled"), "speakPetReply must check petTtsEnabled");
+  assert(fnText.includes("isPetTtsAvailable"), "speakPetReply must check isPetTtsAvailable");
+}
+
+function testSpeakPetReplyGuardsRecordingAndTranscribing() {
+  const renderer = readText(petRendererPath);
+  const fnIdx = renderer.indexOf("function speakPetReply(");
+  const fnText = renderer.slice(fnIdx, fnIdx + 1200);
+  assert(fnText.includes("isPetRecordingActive"), "speakPetReply must guard against recording active");
+  assert(fnText.includes("isTranscribingActive"), "speakPetReply must guard against transcribing active");
+}
+
+function testSpeakPetReplyTruncatesLongReply() {
+  const renderer = readText(petRendererPath);
+  const fnIdx = renderer.indexOf("function speakPetReply(");
+  const fnText = renderer.slice(fnIdx, fnIdx + 1200);
+  assert(fnText.includes("PET_TTS_MAX_CHARS"), "speakPetReply must use PET_TTS_MAX_CHARS for truncation");
+  assert(fnText.includes(".slice(0, PET_TTS_MAX_CHARS)"), "speakPetReply must slice to PET_TTS_MAX_CHARS");
+}
+
+function testSpeakPetReplyEmptyTextNoOp() {
+  const renderer = readText(petRendererPath);
+  const fnIdx = renderer.indexOf("function speakPetReply(");
+  const fnText = renderer.slice(fnIdx, fnIdx + 1200);
+  assert(fnText.includes("if (!text) return"), "speakPetReply must return early on empty text");
+}
+
+function testSpeakPetReplyCancelsPreviousSpeech() {
+  const renderer = readText(petRendererPath);
+  const fnIdx = renderer.indexOf("function speakPetReply(");
+  const fnText = renderer.slice(fnIdx, fnIdx + 1200);
+  assert(fnText.includes("stopPetSpeech(documentRef)"), "speakPetReply must cancel previous speech before new utterance");
+}
+
+function testSpeakingStateSetsDataAttr() {
+  const renderer = readText(petRendererPath);
+  const fnIdx = renderer.indexOf("function setSpeakingState(");
+  const fnText = renderer.slice(fnIdx, fnIdx + 600);
+  assert(fnText.includes('root.dataset.speaking = "true"'), 'setSpeakingState must set dataset.speaking="true" when active');
+  assert(fnText.includes("delete root.dataset.speaking"), "setSpeakingState must delete dataset.speaking when inactive");
+  // TASK-168B-FIX: must also toggle indicator.hidden so the !important CSS guard is lifted
+  assert(fnText.includes('getElementById("pet-speaking-indicator")'), "setSpeakingState must look up #pet-speaking-indicator");
+  assert(fnText.includes("indicator.hidden = !active"), "setSpeakingState must set indicator.hidden = !active to override CSS !important guard");
+}
+
+function testOpenVoiceRecordingStopsSpeech() {
+  const renderer = readText(petRendererPath);
+  const fnIdx = renderer.indexOf("async function openPetVoiceRecording(");
+  const fnText = renderer.slice(fnIdx, fnIdx + 400);
+  assert(fnText.includes("stopPetSpeech(documentRef)"), "openPetVoiceRecording must call stopPetSpeech to prevent feedback");
+}
+
+function testVoiceChatSendWiresSpeakPetReply() {
+  const renderer = readText(petRendererPath);
+  const fnIdx = renderer.indexOf("async function handlePetVoiceChatSend(");
+  const fnText = renderer.slice(fnIdx, fnIdx + 1400);
+  assert(fnText.includes("speakPetReply(documentRef, data.reply, nextState)"), "handlePetVoiceChatSend must call speakPetReply");
+}
+
+function testDirectSendWiresSpeakPetReply() {
+  const renderer = readText(petRendererPath);
+  const fnIdx = renderer.indexOf("async function handlePetDirectSend(");
+  const fnText = renderer.slice(fnIdx, fnIdx + 1800);
+  assert(fnText.includes("speakPetReply(documentRef, data.reply, nextState)"), "handlePetDirectSend must call speakPetReply");
+}
+
+function testTask168BScopeChecks() {
+  const renderer = readText(petRendererPath);
+  // No cloud TTS
+  assertNotIncludes(renderer, "elevenlabs", "no ElevenLabs TTS in TASK-168B");
+  assertNotIncludes(renderer, "google.cloud", "no Google Cloud TTS in TASK-168B");
+  assertNotIncludes(renderer, "azure.cognitiveservices", "no Azure TTS in TASK-168B");
+  // No Live2D
+  assertNotIncludes(renderer, "Live2D", "no Live2D in TASK-168B");
+  assertNotIncludes(renderer, "live2d", "no live2d in TASK-168B");
+  // No wake word / always-listening
+  assertNotIncludes(renderer, "wakeWord", "no wake word in TASK-168B");
+  assertNotIncludes(renderer, "alwaysListening", "no always-listening in TASK-168B");
+  // SpeechSynthesis must be used (window.speechSynthesis)
+  assert(renderer.includes("window.speechSynthesis"), "must use window.speechSynthesis (not external API)");
+  assert(renderer.includes("SpeechSynthesisUtterance"), "must use SpeechSynthesisUtterance");
 }
 
 
@@ -4714,6 +4864,25 @@ async function run() {
     testVoiceChatClosesDirectInput,
     testVoiceChatScopeChecks,
     testVoiceChatAutoSendNoConfirmation,
+    // TASK-168B
+    testTtsConstantExists,
+    testTtsFunctionsExported,
+    testTtsMenuItemHtmlExists,
+    testSpeakingIndicatorHtmlExists,
+    testSpeakingCssExists,
+    testSpeakingCssHiddenByDefault,
+    testSpeakingCssShownOnDataAttr,
+    testSpeakPetReplyOnlyForFinalStates,
+    testSpeakPetReplyGuardsTtsEnabled,
+    testSpeakPetReplyGuardsRecordingAndTranscribing,
+    testSpeakPetReplyTruncatesLongReply,
+    testSpeakPetReplyEmptyTextNoOp,
+    testSpeakPetReplyCancelsPreviousSpeech,
+    testSpeakingStateSetsDataAttr,
+    testOpenVoiceRecordingStopsSpeech,
+    testVoiceChatSendWiresSpeakPetReply,
+    testDirectSendWiresSpeakPetReply,
+    testTask168BScopeChecks,
   ];
 
   for (const test of tests) {

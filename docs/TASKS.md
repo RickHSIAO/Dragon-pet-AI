@@ -13895,3 +13895,161 @@ When TASK-168A implementation is complete, the following must pass on Windows be
 18. Speaking indicator appears and clears correctly.
 19. S / M / L scale layout: TTS controls accessible and usable at all scales.
 20. All TASK-167A / B / C and TASK-166A–E behaviors preserved.
+
+---
+
+## TASK-168B - Pet TTS Playback Implementation
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-29
+**Closed:** 2026-05-29
+**Type:** Implementation — v0.3 Voice Interaction (TTS playback slice)
+
+### Changes Made
+
+**`apps/desktop/src/pet/pet-renderer.js`**
+- Added constant `PET_TTS_MAX_CHARS = 300`
+- Added module-level state: `petTtsEnabled = false` (OFF by default), `petSpeakingActive = false`
+- Added `isPetTtsAvailable()` — checks `window.speechSynthesis` availability
+- Added `setSpeakingState(documentRef, active)` — sets/clears `data-speaking` on `#pet-mode-root`
+- Added `stopPetSpeech(documentRef)` — cancels `speechSynthesis`, clears speaking state; safe no-op when silent
+- Added `speakPetReply(documentRef, reply, state)`:
+  - Guards: `petTtsEnabled`, `isPetTtsAvailable()`, state must be `"speaking"` or `"long_reply"`, not recording, not transcribing, non-empty text
+  - Truncates to `PET_TTS_MAX_CHARS` before speaking (full text still in bubble)
+  - Cancels previous speech before starting new utterance
+  - Wires `onstart` / `onend` / `onerror` to `setSpeakingState`
+  - Catches `SpeechSynthesisUtterance` exceptions silently — no Pet Bubble error shown
+- Added `togglePetTts(documentRef)` — flips `petTtsEnabled`, stops speech on disable, updates `#pet-menu-tts` label and `aria-pressed`
+- Wired `speakPetReply` into `handlePetVoiceChatSend` success path (after `rememberRecentPetReply`)
+- Wired `speakPetReply` into `handlePetDirectSend` success path (after `rememberRecentPetReply`)
+- Wired `stopPetSpeech` as first call in `openPetVoiceRecording` (prevents mic feedback loop)
+- Wired `menuTts` click → `togglePetTts` + `closeMenu` in `initializePetMode`
+- Wired `ttsSpeakingStop` click → `stopPetSpeech` in `initializePetMode`
+- Exported: `PET_TTS_MAX_CHARS`, `isPetTtsAvailable`, `setSpeakingState`, `stopPetSpeech`, `speakPetReply`, `togglePetTts`
+
+**`apps/desktop/src/pet/pet.html`**
+- Added `#pet-speaking-indicator` div (shown when `data-speaking="true"` on `#pet-mode-root`): soundwave glyph (♪), status text "回應中…", stop button `#pet-tts-stop`
+- Added `#pet-menu-tts` button in Pet Menu: label "語音播放: 關", `aria-pressed="false"`, `data-menu-action="tts"`
+
+**`apps/desktop/src/pet/pet.css`**
+- `.pet-speaking-indicator`: teal color scheme (`rgb(20, 184, 166)`), hidden by default (`display: none`)
+- `[data-speaking="true"] .pet-speaking-indicator`: `display: flex`
+- `.pet-speaking-wave`: pulsing opacity animation (1.1s ease-in-out)
+- `.pet-tts-stop`: teal-bordered stop button
+- Scale variants: Small (compact padding/font) and Large (expanded padding/font)
+- Mutual exclusion: `[data-recording="true"]` and `[data-transcribing="true"]` both hide `.pet-speaking-indicator`
+
+**`apps/desktop/scripts/pet-renderer-smoke.js`** — 18 new TASK-168B tests (193 → 211 total):
+- `testTtsConstantExists`, `testTtsFunctionsExported`
+- `testTtsMenuItemHtmlExists`, `testSpeakingIndicatorHtmlExists`
+- `testSpeakingCssExists`, `testSpeakingCssHiddenByDefault`, `testSpeakingCssShownOnDataAttr`
+- `testSpeakPetReplyOnlyForFinalStates`, `testSpeakPetReplyGuardsTtsEnabled`
+- `testSpeakPetReplyGuardsRecordingAndTranscribing`, `testSpeakPetReplyTruncatesLongReply`
+- `testSpeakPetReplyEmptyTextNoOp`, `testSpeakPetReplyCancelsPreviousSpeech`
+- `testSpeakingStateSetsDataAttr`, `testOpenVoiceRecordingStopsSpeech`
+- `testVoiceChatSendWiresSpeakPetReply`, `testDirectSendWiresSpeakPetReply`
+- `testTask168BScopeChecks`
+
+### TTS Toggle / Playback Behavior
+- **Default:** TTS is OFF. User enables via Pet Menu → "語音播放: 關/開".
+- **Trigger:** final reply states only (`"speaking"`, `"long_reply"`); not thinking, error, recording, or transcribing states.
+- **Interrupt model:** new reply cancels previous speech (`stopPetSpeech` before new utterance).
+- **Stop:** `#pet-tts-stop` button visible only during `data-speaking="true"`; click cancels speech immediately.
+- **Length limit:** 300 chars sent to `SpeechSynthesis`; full reply still visible in bubble.
+- **Provider:** `window.speechSynthesis` + `SpeechSynthesisUtterance` (Chromium/Electron, fully local, zero cost). No external API.
+
+### Speaking State
+- `data-speaking="true"` on `#pet-mode-root` while utterance plays.
+- Teal speaking indicator shown; distinct from red recording dot and indigo transcribing spinner.
+- CSS mutual exclusion: indicator hidden during recording and transcribing (CSS overrides).
+
+### Quiet Mode / Click-through / Recording Interaction
+- **Quiet Mode:** does not suppress TTS. User controls TTS separately via toggle.
+- **Click-through:** playback requires no CT change. Opening Pet Menu (which hosts TTS toggle) already forces CT OFF via existing `forceClickThroughOff`.
+- **Recording feedback loop:** `stopPetSpeech` called at the top of `openPetVoiceRecording` — TTS always cancelled before mic opens.
+
+### Validation Results
+- `node --check` pet-renderer.js: PASS
+- `node --check` pet-renderer-smoke.js: PASS
+- pet-renderer-smoke.js (211 checks): PASS
+- pet-window-smoke.js (45 checks): PASS
+- renderer-chat-smoke.js: PASS
+- pytest (633 tests): PASS
+- `git diff --check`: PASS
+- Scope: no cloud TTS, no Live2D, no wake word, no always-listening, no backend schema change
+
+**Status:** IMPLEMENTED - NEEDS WINDOWS MANUAL SMOKE
+
+---
+
+## TASK-168B-FIX | Speaking Indicator Not Visible — Root Cause & Fix
+
+**Status:** DONE — INCLUDED IN TASK-168B WINDOWS MANUAL SMOKE PASS
+
+### Root Cause
+`setSpeakingState(documentRef, active)` only toggled `root.dataset.speaking` on `#pet-mode-root`.
+It never touched the `hidden` HTML attribute on `#pet-speaking-indicator`.
+The CSS block `.pet-speaking-indicator[hidden] { display: none !important; }` (matching the same
+`!important` guard used for `.pet-recording-indicator[hidden]`) permanently won over the show rule
+`[data-speaking="true"] .pet-speaking-indicator { display: flex; }` because `hidden` was never removed.
+
+This is identical to the pattern `setRecordingState` and `setTranscribingState` correctly implement:
+both toggle `indicator.hidden = !active` alongside the dataset attribute.
+
+### Files Changed
+- **`apps/desktop/src/pet/pet-renderer.js`** — `setSpeakingState`: added
+  `var indicator = documentRef.getElementById("pet-speaking-indicator"); if (indicator) indicator.hidden = !active;`
+  immediately after the `root.dataset.speaking` block (3 lines, no other logic changed).
+- **`apps/desktop/scripts/pet-renderer-smoke.js`** — `testSpeakingStateSetsDataAttr` extended:
+  two new assertions verify `getElementById("pet-speaking-indicator")` is present and
+  `indicator.hidden = !active` is called.
+
+### Validation Results (TASK-168B-FIX)
+- `node --check` pet-renderer.js: PASS
+- `node --check` pet-renderer-smoke.js: PASS
+- pet-renderer-smoke.js (211 checks): PASS
+- pet-window-smoke.js (45 checks): PASS
+- renderer-chat-smoke.js: PASS
+- pytest (633 tests): PASS
+- `git diff --check`: PASS
+
+---
+
+## TASK-168B WINDOWS MANUAL SMOKE CLOSEOUT
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Closed:** 2026-05-29
+**Type:** Docs-only closeout
+
+### Manual Smoke Results (Windows)
+
+- TTS toggle appears in Pet Menu; shows "語音播放: 關" on first launch (default OFF).
+- With TTS OFF: Christina replies play no audio.
+- Turning TTS ON: control state updates to "語音播放: 開".
+- Final Christina replies spoken aloud when TTS is ON.
+- Thinking bubble text not spoken.
+- Recording status not spoken.
+- Transcribing status not spoken.
+- Raw JSON, source, debug, provider details, and diagnostics not spoken.
+- Speaking indicator (teal, ♪ + "回應中…") appears while TTS is speaking.
+- Speaking indicator visually distinct from recording (red dot) / transcribing (indigo spinner) / thinking.
+- Stop speech button (■) visible while speaking; cancels audio and clears indicator on click.
+- New final reply safely interrupts previous speech.
+- Starting voice recording stops current TTS immediately (no mic feedback loop).
+- Quiet Mode ON: TTS still plays for user-enabled final replies (independent controls).
+- After reply expiry under Quiet Mode ON: Pet returns to collapsed / no-hint state.
+- Speaking indicator and stop control work at Small / Medium / Large scales.
+- TASK-167A recording lifecycle: no regression.
+- TASK-167B STT transcription: no regression.
+- TASK-167C voice transcript to chat: no regression.
+- TASK-166E Pet direct text input: no regression.
+- Scope confirmed: no cloud TTS, Live2D mouth sync, wake word, always-listening,
+  screen capture, OCR/vision, backend schema change, or global hotkey features present.
+
+### Bugs Found and Fixed During Smoke
+- **TASK-168B-FIX:** Speaking indicator not visible. Root cause: `setSpeakingState` never
+  removed the HTML `hidden` attribute from `#pet-speaking-indicator`. CSS rule
+  `.pet-speaking-indicator[hidden] { display: none !important; }` overrode the data-speaking
+  show rule. Fix: added `indicator.hidden = !active` to `setSpeakingState`, matching the
+  identical pattern in `setRecordingState` / `setTranscribingState`. Smoke test updated.
+  All automated checks re-passed before Windows re-smoke.
