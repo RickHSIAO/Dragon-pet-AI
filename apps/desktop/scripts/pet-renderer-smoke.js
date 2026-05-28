@@ -4394,6 +4394,116 @@ function testTask167BScopeChecks() {
   }
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TASK-167C: Voice Transcript → /chat Handoff smoke tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+function testVoiceChatConstantsExist() {
+  const { PET_VOICE_CHAT_MAX_CHARS, PET_VOICE_TRANSCRIPT_TOO_LONG_MSG } = require(petRendererPath);
+  assert(PET_VOICE_CHAT_MAX_CHARS === 2000, "PET_VOICE_CHAT_MAX_CHARS must be 2000");
+  assert(typeof PET_VOICE_TRANSCRIPT_TOO_LONG_MSG === "string", "PET_VOICE_TRANSCRIPT_TOO_LONG_MSG must be a string");
+  assert(PET_VOICE_TRANSCRIPT_TOO_LONG_MSG.length > 0, "PET_VOICE_TRANSCRIPT_TOO_LONG_MSG must not be empty");
+}
+
+function testVoiceChatTooLongMsgIsCleanString() {
+  const { PET_VOICE_TRANSCRIPT_TOO_LONG_MSG } = require(petRendererPath);
+  assertNotIncludes(PET_VOICE_TRANSCRIPT_TOO_LONG_MSG, "{", "too-long msg must not contain JSON");
+  assertNotIncludes(PET_VOICE_TRANSCRIPT_TOO_LONG_MSG, "Error", "too-long msg must not contain Error");
+  assertNotIncludes(PET_VOICE_TRANSCRIPT_TOO_LONG_MSG, "stack", "too-long msg must not contain stack");
+}
+
+function testHandlePetVoiceChatSendExported() {
+  const { handlePetVoiceChatSend } = require(petRendererPath);
+  assert(typeof handlePetVoiceChatSend === "function", "handlePetVoiceChatSend must be exported");
+}
+
+function testHandlePetVoiceChatSendCallsSendPetChatMessage() {
+  const renderer = readText(petRendererPath);
+  assert(renderer.includes("sendPetChatMessage(transcript"), "handlePetVoiceChatSend must call sendPetChatMessage with transcript");
+}
+
+function testHandlePetVoiceChatSendSetsThinkingState() {
+  const renderer = readText(petRendererPath);
+  const fnIdx = renderer.indexOf("async function handlePetVoiceChatSend(");
+  assert(fnIdx !== -1, "handlePetVoiceChatSend must exist in pet-renderer.js");
+  const fnEnd = renderer.indexOf("\nfunction ", fnIdx + 1);
+  const fnText = fnEnd !== -1 ? renderer.slice(fnIdx, fnEnd) : renderer.slice(fnIdx, fnIdx + 1200);
+  assert(fnText.includes('"thinking"'), 'handlePetVoiceChatSend must set bubble state to "thinking"');
+  assert(fnText.includes("petChatPending = true"), "handlePetVoiceChatSend must set petChatPending=true");
+  assert(fnText.includes("petChatPending = false"), "handlePetVoiceChatSend must clear petChatPending in finally");
+}
+
+function testHandlePetVoiceChatSendForcesCTOff() {
+  const renderer = readText(petRendererPath);
+  const fnIdx = renderer.indexOf("async function handlePetVoiceChatSend(");
+  const fnText = renderer.slice(fnIdx, fnIdx + 1200);
+  assert(fnText.includes("forceClickThroughOff"), "handlePetVoiceChatSend must call forceClickThroughOff");
+  assert(fnText.includes("closePetDirectInput"), "handlePetVoiceChatSend must call closePetDirectInput");
+}
+
+function testHandlePetVoiceChatSendHandlesErrors() {
+  const renderer = readText(petRendererPath);
+  const fnIdx = renderer.indexOf("async function handlePetVoiceChatSend(");
+  const fnText = renderer.slice(fnIdx, fnIdx + 1200);
+  assert(fnText.includes("isPetChatTimeoutError"), "handlePetVoiceChatSend must check isPetChatTimeoutError");
+  assert(fnText.includes("isFetchNetworkError"), "handlePetVoiceChatSend must check isFetchNetworkError");
+  assert(fnText.includes('"backend_offline"'), "handlePetVoiceChatSend must set backend_offline error state");
+  assert(fnText.includes('"timeout"'), "handlePetVoiceChatSend must set timeout error state");
+  assert(fnText.includes("rememberRecentPetReply"), "handlePetVoiceChatSend must call rememberRecentPetReply on success");
+}
+
+function testVoiceChatHandoffClearsVoiceTranscript() {
+  const renderer = readText(petRendererPath);
+  assert(renderer.includes("presenceState.voiceTranscript = null"), "success path must clear voiceTranscript (not persist it)");
+  assertNotIncludes(renderer, "presenceState.voiceTranscript = transcript", "must not persist raw transcript after TASK-167C");
+}
+
+function testVoiceChatTooLongDoesNotSendToChat() {
+  const renderer = readText(petRendererPath);
+  assert(renderer.includes("PET_VOICE_CHAT_MAX_CHARS"), "success path must check PET_VOICE_CHAT_MAX_CHARS");
+  assert(renderer.includes("PET_VOICE_TRANSCRIPT_TOO_LONG_MSG"), "success path must display PET_VOICE_TRANSCRIPT_TOO_LONG_MSG on too-long");
+  assert(renderer.includes("trimmed.length > PET_VOICE_CHAT_MAX_CHARS"), "must check trimmed.length against PET_VOICE_CHAT_MAX_CHARS");
+  const tooLongIdx = renderer.indexOf("trimmed.length > PET_VOICE_CHAT_MAX_CHARS");
+  const returnIdx = renderer.indexOf("return;", tooLongIdx);
+  const autoSendIdx = renderer.indexOf("handlePetVoiceChatSend(documentRef, trimmed", tooLongIdx);
+  assert(returnIdx < autoSendIdx, "too-long branch return must precede handlePetVoiceChatSend call");
+}
+
+function testVoiceChatNullTranscriptIsNoOp() {
+  const renderer = readText(petRendererPath);
+  const fnIdx = renderer.indexOf("async function handlePetVoiceChatSend(");
+  const fnText = renderer.slice(fnIdx, fnIdx + 200);
+  assert(fnText.includes("if (petChatPending) return null"), "handlePetVoiceChatSend must return null if petChatPending");
+}
+
+function testVoiceChatClosesDirectInput() {
+  const renderer = readText(petRendererPath);
+  const fnIdx = renderer.indexOf("async function handlePetVoiceChatSend(");
+  const fnText = renderer.slice(fnIdx, fnIdx + 1200);
+  const closeIdx = fnText.indexOf("closePetDirectInput");
+  const thinkingIdx = fnText.indexOf('"thinking"');
+  assert(closeIdx < thinkingIdx, "closePetDirectInput must be called before setBubbleState(thinking)");
+}
+
+function testVoiceChatScopeChecks() {
+  const renderer = readText(petRendererPath);
+  assertNotIncludes(renderer, "speechSynthesis", "pet-renderer.js -- no TTS in TASK-167C");
+  assertNotIncludes(renderer, "wakeWord", "pet-renderer.js -- no wake-word in TASK-167C");
+  assertNotIncludes(renderer, "alwaysListening", "pet-renderer.js -- no always-listening in TASK-167C");
+  assertNotIncludes(renderer, "/stt/voice-chat", "pet-renderer.js -- no voice-specific /chat endpoint");
+  assertNotIncludes(renderer, "/chat/voice", "pet-renderer.js -- no voice-specific /chat endpoint variant");
+  const fnIdx = renderer.indexOf("async function handlePetVoiceChatSend(");
+  const fnText = renderer.slice(fnIdx, fnIdx + 1200);
+  assertNotIncludes(fnText, "fetch(", "handlePetVoiceChatSend must not duplicate fetch logic -- reuse sendPetChatMessage");
+}
+
+function testVoiceChatAutoSendNoConfirmation() {
+  const renderer = readText(petRendererPath);
+  assert(renderer.includes("handlePetVoiceChatSend(documentRef, trimmed, {})"), "success path must auto-send via handlePetVoiceChatSend without confirmation");
+}
+
+
 async function run() {
   const tests = [
     testPetFilesExist,
@@ -4590,6 +4700,20 @@ async function run() {
     testStopVoiceRecordingEntersTranscribingState,
     testOpenVoiceRecordingIgnoredWhenTranscribing,
     testTask167BScopeChecks,
+    // TASK-167C
+    testVoiceChatConstantsExist,
+    testVoiceChatTooLongMsgIsCleanString,
+    testHandlePetVoiceChatSendExported,
+    testHandlePetVoiceChatSendCallsSendPetChatMessage,
+    testHandlePetVoiceChatSendSetsThinkingState,
+    testHandlePetVoiceChatSendForcesCTOff,
+    testHandlePetVoiceChatSendHandlesErrors,
+    testVoiceChatHandoffClearsVoiceTranscript,
+    testVoiceChatTooLongDoesNotSendToChat,
+    testVoiceChatNullTranscriptIsNoOp,
+    testVoiceChatClosesDirectInput,
+    testVoiceChatScopeChecks,
+    testVoiceChatAutoSendNoConfirmation,
   ];
 
   for (const test of tests) {
@@ -4603,6 +4727,4 @@ async function run() {
 run().catch((error) => {
   console.error(error);
   process.exitCode = 1;
-});
- 1;
 });

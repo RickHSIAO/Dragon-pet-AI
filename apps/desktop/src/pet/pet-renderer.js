@@ -39,6 +39,9 @@ const PET_STT_TIMEOUT_MSG = "語音辨識超時，請再試一次。";
 const PET_STT_EMPTY_MSG = "沒有偵測到語音，請再試一次。";
 const PET_STT_ERROR_MSG = "語音辨識出錯，請再試一次。";
 const PET_STT_OFFLINE_MSG = "後端離線，無法辨識語音。";
+// TASK-167C: voice transcript → /chat handoff
+const PET_VOICE_CHAT_MAX_CHARS = 2000;
+const PET_VOICE_TRANSCRIPT_TOO_LONG_MSG = "語音太長，請縮短後再試。";
 // TASK-158: short in-character idle presence lines (static local set)
 const PET_IDLE_LINES = Object.freeze([
   // neutral
@@ -838,6 +841,37 @@ async function transcribeAudioBlob(blob) {
 // TASK-167B: shared helper — build Blob from recorded chunks and run STT transcription.
 // Must be called AFTER the recorder's final dataavailable event has fired (i.e. from
 // the recorder's stop event, or when the recorder is already inactive).
+async function handlePetVoiceChatSend(documentRef, transcript, options) {
+  if (petChatPending) return null;
+  forceClickThroughOff(documentRef);
+  closePetDirectInput(documentRef);
+  petChatPending = true;
+  setBubbleState(documentRef, "thinking");
+  try {
+    var data = await sendPetChatMessage(transcript, options || {});
+    var nextState = stateForChatSource(data.source, data.reply);
+    var statusText = sourceStatusLabel(data.source);
+    var bubbleOptions = {
+      source: data.source,
+      statusText: statusText,
+      message: detailMessageForBubbleState(nextState),
+      response: responseForBubbleState(nextState, data.reply),
+      mood: data.mood,
+    };
+    setBubbleState(documentRef, nextState, bubbleOptions);
+    rememberRecentPetReply(documentRef, nextState, bubbleOptions, options || {});
+    return data;
+  } catch (error) {
+    var errorState = "llm_local_error";
+    if (isPetChatTimeoutError(error)) errorState = "timeout";
+    else if (isFetchNetworkError(error)) errorState = "backend_offline";
+    setBubbleState(documentRef, errorState);
+    return null;
+  } finally {
+    petChatPending = false;
+  }
+}
+
 function _petSttTranscribeChunks(documentRef, presenceState, chunks, mimeType) {
   var audioBlob = null;
   try {
@@ -863,14 +897,18 @@ function _petSttTranscribeChunks(documentRef, presenceState, chunks, mimeType) {
       return;
     }
 
-    // Successful transcript — store for TASK-167C and surface in bubble.
-    // Do NOT forward to /chat here (deferred to TASK-167C).
-    if (presenceState) {
-      presenceState.voiceTranscript = transcript;
+    // TASK-167C: validate and auto-send to /chat.
+    // Clear voiceTranscript — no longer persisted after handoff.
+    if (presenceState) { presenceState.voiceTranscript = null; }
+    var trimmed = transcript.trim();
+    if (trimmed.length > PET_VOICE_CHAT_MAX_CHARS) {
+      setBubbleState(documentRef, "idle_default");
+      var longEl = documentRef ? documentRef.getElementById("pet-bubble-response") : null;
+      if (longEl) setText(longEl, PET_VOICE_TRANSCRIPT_TOO_LONG_MSG);
+      return;
     }
-    setBubbleState(documentRef, "expanded");
-    var bubbleResp = documentRef ? documentRef.getElementById("pet-bubble-response") : null;
-    if (bubbleResp) setText(bubbleResp, transcript);
+    // Auto-send valid transcript — no confirmation step (TASK-167C)
+    handlePetVoiceChatSend(documentRef, trimmed, {});
 
   }).catch(function (err) {
     setTranscribingState(documentRef, presenceState, false);
@@ -2340,5 +2378,9 @@ if (typeof module !== "undefined") {
     PET_STT_OFFLINE_MSG,
     isTranscribingActive,
     setTranscribingState,
+    // TASK-167C
+    PET_VOICE_CHAT_MAX_CHARS,
+    PET_VOICE_TRANSCRIPT_TOO_LONG_MSG,
+    handlePetVoiceChatSend,
   };
 }

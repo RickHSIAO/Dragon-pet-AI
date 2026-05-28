@@ -12868,7 +12868,7 @@ Verification:
 
 ## TASK-167 - Voice Interaction v0.3 Push-to-talk Design
 
-**Status:** DEFINED
+**Status:** IN PROGRESS (TASK-167A/B/C DONE; TTS / further polish remaining)
 **Date:** 2026-05-28
 **Type:** Design — v0.3 Voice Interaction (slice 1 of N)
 
@@ -13623,3 +13623,80 @@ When TASK-167C is implemented, the following must pass on Windows before the tas
 17. No TTS, wake word, always-listening, screen capture, OCR/vision, Live2D, backend `/chat` schema change, or global hotkey exists.
 18. No raw JSON, provider details, stack traces, URLs, or debug/source fields appear in Pet Bubble.
 19. All TASK-167A, TASK-167B, and TASK-166A–E behaviors are preserved.
+
+---
+
+## TASK-167C - IMPLEMENTATION RECORD
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-29
+
+### Changes Made
+
+**`apps/desktop/src/pet/pet-renderer.js`**
+- Added constants `PET_VOICE_CHAT_MAX_CHARS = 2000` and `PET_VOICE_TRANSCRIPT_TOO_LONG_MSG` (繁中 user-facing string)
+- Added `handlePetVoiceChatSend(documentRef, transcript, options)` async function:
+  - Guards against double-send via `petChatPending`
+  - Calls `forceClickThroughOff` + `closePetDirectInput` for mutual exclusion
+  - Sets bubble to `"thinking"` before awaiting `sendPetChatMessage`
+  - On success: calls `stateForChatSource`, `sourceStatusLabel`, `detailMessageForBubbleState`, `responseForBubbleState`, `setBubbleState`, `rememberRecentPetReply`
+  - On error: classifies via `isPetChatTimeoutError` / `isFetchNetworkError` → sets `"timeout"` / `"backend_offline"` / `"llm_local_error"` state
+  - Clears `petChatPending` in `finally`
+- Updated `_petSttTranscribeChunks` success path: clears `presenceState.voiceTranscript`, trims transcript, shows `PET_VOICE_TRANSCRIPT_TOO_LONG_MSG` if > 2000 chars, otherwise auto-sends via `handlePetVoiceChatSend`
+- Exported: `PET_VOICE_CHAT_MAX_CHARS`, `PET_VOICE_TRANSCRIPT_TOO_LONG_MSG`, `handlePetVoiceChatSend`
+
+**`apps/desktop/scripts/pet-renderer-smoke.js`** — 13 new TASK-167C tests added (193 total):
+- `testVoiceChatConstantsExist`, `testVoiceChatTooLongMsgIsCleanString`
+- `testHandlePetVoiceChatSendExported`, `testHandlePetVoiceChatSendCallsSendPetChatMessage`
+- `testHandlePetVoiceChatSendSetsThinkingState`, `testHandlePetVoiceChatSendForcesCTOff`
+- `testHandlePetVoiceChatSendHandlesErrors`, `testVoiceChatHandoffClearsVoiceTranscript`
+- `testVoiceChatTooLongDoesNotSendToChat`, `testVoiceChatNullTranscriptIsNoOp`
+- `testVoiceChatClosesDirectInput`, `testVoiceChatScopeChecks`, `testVoiceChatAutoSendNoConfirmation`
+
+### Validation Results
+- `node --check` pet-renderer.js: PASS
+- `node --check` pet-renderer-smoke.js: PASS
+- pet-renderer-smoke.js (193 checks): PASS
+- pet-window-smoke.js (45 checks): PASS
+- renderer-chat-smoke.js: PASS
+- pytest (633 tests): PASS
+- `git diff --check`: PASS
+
+### Scope Preserved
+No TTS, wake word, always-listening, screen capture, OCR/vision, Live2D, global hotkeys, voice-specific /chat endpoint, backend schema changes, or raw diagnostics in Pet Bubble. All TASK-167A/B/166A-E behaviors preserved.
+
+## TASK-167C - WINDOWS MANUAL SMOKE CLOSEOUT
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-29
+
+### Windows Manual Smoke Results
+
+All checklist items passed on Windows:
+
+- Voice recording starts only after explicit user action.
+- After recording stops, Pet enters transcribing state.
+- Valid transcript is produced.
+- Valid transcript is automatically sent to the existing /chat path.
+- Pet shows TASK-157 thinking bubble after transcript handoff.
+- Final clean Christina reply appears in Pet Bubble.
+- Voice test phrase was recognized and reflected in the reply (unique keywords confirmed: "藍色蘋果", "167C", "DNA測試").
+- Mood expression mapping still works.
+- Empty/silent transcript does not call /chat.
+- STT unavailable/failure does not call /chat.
+- Transcript too long or invalid transcript does not call /chat.
+- /chat backend offline after transcript shows clean fallback.
+- Pet Bubble does not show raw JSON, source, debug, stack trace, provider details, STT metadata, or backend URLs.
+- Quiet Mode ON allows voice chat and returns to collapsed/no-hint after reply expiry.
+- Click-through is forced OFF before recording/transcription/chat handoff.
+- Recovery strip behavior did not regress.
+- Pet direct text input and voice chat do not conflict.
+- TASK-167A recording lifecycle did not regress.
+- TASK-167B STT transcription did not regress.
+- TASK-166E direct Pet text input did not regress.
+- No TTS, wake word, always-listening, screen capture, OCR/vision, Live2D, backend /chat schema change, or global hotkey features were added.
+
+### Closeout Notes
+
+This is a docs-only closeout — no runtime implementation files were modified.
+Parent TASK-167 remains IN PROGRESS: TTS, wake word, and further voice polish are not yet implemented.
