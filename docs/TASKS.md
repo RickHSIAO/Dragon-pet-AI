@@ -13028,3 +13028,157 @@ When implementation begins, consider splitting into:
 - No wake word or background listening exists or is detectable.
 - No raw audio is visible in DevTools network requests.
 - No stack traces, JSON, provider debug, or diagnostics appear in the Pet Bubble.
+
+---
+
+## TASK-167A - Pet Voice Push-to-talk UI / Mic Capture Design
+
+**Status:** DEFINED
+**Date:** 2026-05-28
+**Type:** Design — v0.3 Voice Interaction (slice 1A: UI + mic capture lifecycle)
+
+Goal: Design the first v0.3 voice implementation slice — the Pet-side push-to-talk UI control and microphone capture lifecycle. This slice covers only the recording entry point, recording state, permission handling, captured audio boundary, and error fallbacks. STT, TTS, wake word, and backend changes are out of scope.
+
+### 1. Voice Control
+
+- Add a compact Mic / Voice button in the Pet Window navigation bar (alongside Chat / Full App / Menu) or as an item inside the Pet Menu.
+- Preferred placement: Pet navigation bar, so it is always accessible without opening a menu.
+- Icon or short text label is acceptable — no new image assets required.
+- Control must be usable at Small (225×300), Medium (300×400), and Large (375×500) scales without clipping or overlap.
+- Control must not conflict with: Chat (text input), Full App, Menu, Click-through indicator, or Quiet Mode state.
+- While recording is active, the mic button transitions to a cancel/stop affordance.
+
+### 2. Push-to-talk Lifecycle
+
+**Preferred mode for first implementation: toggle-to-record (click once to start, click again to stop).**
+
+Rationale: hold-to-talk requires sustained pointer pressure, which is awkward at a desk; toggle-to-record is safer for long dictation and maps better to keyboard Cancel (Escape). Hold-to-talk may be added as an option in a later task.
+
+Lifecycle steps:
+
+1. User clicks the Mic control → recording begins.
+2. Pet shows recording state (see §3).
+3. User stops recording by: second click on Mic/Stop, pressing Escape, Cancel button, or timeout.
+4. On stop (not cancel): audio is handed to TASK-167B STT boundary.
+5. On cancel: recording is discarded silently — no send, no error.
+6. On timeout: recording is stopped automatically; audio may be discarded or handed to STT depending on length (document the threshold).
+
+No wake word. No always-listening.
+
+### 3. Recording State
+
+- While recording is active, `#pet-mode-root` receives a `data-recording="true"` attribute (or equivalent) so CSS can reflect state.
+- Pet Bubble may show a short, clean status line while recording: e.g., "正在錄音…" / "Recording…". Must not show diagnostics, device names, or technical details.
+- Recording state must be visually distinct from the Thinking bubble (`source: "pet_thinking"`) — different indicator style, not the animated thinking dots.
+- A clear visible recording indicator (pulsing ring, mic icon, or color change) must appear on or near the Mic control.
+- Recording state must be dismissed cleanly on stop or cancel.
+
+### 4. Microphone Permission
+
+- Permission request (`navigator.mediaDevices.getUserMedia`) must only be called after explicit user action (first click of the Mic control). No pre-emptive permission request on startup.
+- Permission prompt is OS-native; no custom UI needed for the prompt itself.
+- **Permission denied**: Pet Bubble shows a clean, one-line user-facing message (e.g., "需要麥克風授權。" / "Microphone permission required."). No error codes, browser API names, device paths, or stack traces.
+- **No microphone device available**: Pet Bubble shows a clean fallback (e.g., "找不到麥克風。" / "No microphone found."). No technical details.
+- **User cancels the OS permission prompt**: treat as a silent cancel — no error bubble, mic button returns to idle state.
+- After any permission failure, Pet returns to its pre-recording idle state cleanly.
+
+### 5. Captured Audio Boundary
+
+- Audio must be captured in memory only (e.g., `MediaRecorder` + in-memory `Blob`).
+- Do not write raw audio to disk by default.
+- Do not send raw audio bytes to `/chat` or any backend endpoint.
+- On recording stop (not cancel): hand the captured `Blob` or `ArrayBuffer` to the TASK-167B STT interface via a well-defined internal boundary (e.g., a local function or IPC call that returns a transcript string). TASK-167A does not implement STT — it only defines the handoff point.
+- On recording cancel: discard the in-memory audio immediately.
+- On timeout stop: audio handling follows the same path as normal stop.
+- No audio playback in this slice (TTS is deferred).
+
+### 6. Click-through Interaction
+
+- Clicking the Mic control must force Click-through OFF before recording begins — same pattern as TASK-166E `openPetDirectInput`: await `forceClickThroughOff` IPC ack, then start recording.
+- While recording is active, Click-through must remain OFF so the user can click Stop/Cancel.
+- If Click-through is toggled ON while recording is active, recording must be stopped/cancelled first before CT is applied.
+- CT recovery strip behavior from TASK-166D must not regress.
+
+### 7. Quiet Mode Interaction
+
+- Quiet Mode suppresses idle presence behavior only.
+- Quiet Mode must not suppress user-initiated voice recording.
+- The Mic control must remain accessible while Quiet Mode is ON.
+- After recording stop/cancel while Quiet Mode is ON, Pet returns to collapsed / no-hint idle state (same behavior as TASK-166E after reply expiry under Quiet Mode).
+- `isIdleRotationEligible` must remain blocked by Quiet Mode — no regression.
+
+### 8. Voice / Text Input Mutual Exclusion
+
+- Voice recording and Pet direct text input (TASK-166E) must not both be active simultaneously.
+- Starting voice recording must close / dismiss the Pet text input panel if it is open.
+- Opening the Pet text input panel must stop/cancel voice recording if it is active.
+- No "both open at once" state is permitted.
+- Mutual exclusion must be enforced at the renderer level before IPC is sent.
+
+### 9. Error Handling
+
+| Error condition | Expected Pet Bubble behavior |
+|---|---|
+| Mic permission denied | Clean one-line user-facing message |
+| No mic device | Clean fallback, no device path |
+| Recording timeout (auto-stop) | Recording ends cleanly; status clears |
+| Capture API failure (`getUserMedia` error other than permission) | Clean fallback |
+| Recording cancelled by user | Silent cancel, no bubble change |
+
+No raw stack traces, browser API error names, device identifiers, JSON, URLs, or diagnostics in the Pet Bubble under any condition.
+
+### 10. Preserved Behavior Table
+
+| Task | Feature | Must not regress |
+|---|---|---|
+| TASK-166A | Transparent overlay shell | ✓ |
+| TASK-166B | S/M/L scale presets | ✓ |
+| TASK-166C | Bubble tail / placement, Quiet Mode hint fix | ✓ |
+| TASK-166D | Click-through toggle + CT recovery strip | ✓ |
+| TASK-166E | Pet direct text input | ✓ |
+| TASK-160 | Quiet Mode ON/OFF behavior | ✓ |
+| TASK-162 | Quiet Mode persistence | ✓ |
+| TASK-157 | Thinking bubble (pet_thinking source) | ✓ |
+| TASK-149 | Clean reply-only Pet Bubble | ✓ |
+| TASK-148 | Window position persistence and reset | ✓ |
+
+### 11. Scope Limits
+
+- Do not implement STT in this task (deferred to TASK-167B).
+- Do not implement TTS (deferred to TASK-168+).
+- Do not implement wake word.
+- Do not implement always-listening.
+- Do not implement screen capture, OCR, or vision.
+- Do not implement Live2D.
+- Do not modify backend schema, routes, or endpoints.
+- Do not add broad settings architecture or global hotkeys.
+- Do not implement audio playback.
+- IPC channel count must be minimal — prefer extending existing channels if safe; document any new channels explicitly.
+
+### 12. Implementation Notes
+
+- Electron renderer can access `navigator.mediaDevices.getUserMedia` if `contextIsolation` settings allow; otherwise use a preload bridge. Document which approach is used.
+- `MediaRecorder` API is available in Chromium (Electron). Preferred codec: `audio/webm;codecs=opus` for Whisper compatibility (TASK-167B).
+- The `data-recording` attribute on `#pet-mode-root` drives CSS state (same pattern as `data-click-through`, `data-quiet-mode`).
+- The STT boundary for TASK-167B should be a single function: `transcribeAudioBlob(blob) → Promise<string>` — stub it in this slice, implement in 167B.
+- Pet Menu mic toggle vs. nav bar placement: nav bar is preferred; if it conflicts with Small scale layout, fall back to Pet Menu with a visual indicator on the menu button.
+
+### 13. Manual Windows Smoke Expectations (for implementation task)
+
+- Mic / Voice control is visible in Pet Window at all three scales.
+- Recording starts only after explicit user click.
+- Recording indicator is clearly visible while recording is active.
+- Second click or Escape stops recording.
+- Cancel discards audio silently with no error in Pet Bubble.
+- Permission denied shows a clean one-line message in Pet Bubble.
+- No microphone shows a clean one-line message in Pet Bubble.
+- Click-through is forced OFF before recording begins.
+- Click-through cannot be activated while recording is active.
+- Quiet Mode ON does not suppress the Mic control or recording.
+- Starting voice recording closes Pet text input panel.
+- Opening Pet text input cancels recording.
+- S / M / L scale layouts remain usable.
+- Pet direct text input (TASK-166E) does not regress.
+- No STT, TTS, wake word, or background listening exists in this slice.
+- No raw audio bytes appear in DevTools network requests.
+- No stack traces, JSON, device paths, or diagnostics appear in Pet Bubble.
