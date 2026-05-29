@@ -14703,3 +14703,159 @@ The following must not regress when TASK-171 is later implemented:
 - [x] Scope limits documented (§13).
 - [x] Manual Windows smoke expectations documented.
 - [x] No runtime files modified in this docs-only step.
+
+## TASK-171A | User-Triggered Screenshot Capture Implementation Design
+
+**Status:** DEFINED (docs-only)
+**Date:** 2026-05-29
+**Type:** Design — v0.4 Screen Context (slice 1A, implementation design)
+**Depends on:** TASK-171 DEFINED
+
+### Context
+
+TASK-171 established the high-level design for user-triggered screenshot capture. TASK-171A narrows that design into a concrete implementation specification for the first working slice: one button in the Full App triggers one primary-display screenshot, stored in memory only, with clean status feedback. No OCR, no vision, no `/chat` integration, no disk writes.
+
+### §1 — Entry Point
+
+**Full App button only for slice 1A.** Pet Menu shortcut and voice trigger are explicitly deferred.
+
+- Button label: "擷取螢幕" (or "Capture Screen" for English builds).
+- Button placement: Full App companion/chat panel, in a visible but non-primary location (not the main send button area; e.g. a toolbar or settings row).
+- Clicking the button is the only trigger. No keyboard shortcut, no global hotkey, no voice activation in this slice.
+- Button must be disabled (or show a spinner) while a capture is in progress to prevent double-trigger.
+- Capture happens only after the click event — not on hover, focus, or any implicit interaction.
+
+No background capture. No periodic capture. No hidden capture. No capture on app launch.
+
+### §2 — Capture Target
+
+Primary display full screenshot only.
+
+- Use Electron `desktopCapturer.getSources({ types: ["screen"] })`.
+- Select the source whose `display_id` matches the primary display, or fallback to the first source if primary cannot be identified.
+- Capture the full display surface — no cropping, no active-window isolation, no region selection.
+- Extract image as a data URL (`image/png`) or `NativeImage` in main process.
+- Pass image data to renderer via narrow IPC (not a file path).
+
+Deferred for later slices:
+- Multi-monitor display picker.
+- Active window isolation.
+- Region / area selection.
+- Capture resolution scaling.
+
+### §3 — Storage
+
+Screenshot is held in memory only. One capture at a time.
+
+- Renderer holds at most one screenshot data URL in a module-level variable (e.g. `let lastScreenshot = null`).
+- New capture replaces previous; previous is discarded (garbage-collected).
+- Screenshot is never written to `app.getPath("userData")`, temp files, or any filesystem path.
+- Screenshot is never persisted across app restart.
+- Screenshot is never uploaded automatically.
+- Screenshot is never sent to `/chat` automatically.
+- If app window closes or reloads, the in-memory screenshot is lost by design.
+
+### §4 — IPC Design
+
+Narrow, explicit, single-purpose IPC channel.
+
+| Channel | Direction | Purpose |
+|---|---|---|
+| `screen:capture-once` | renderer → main | Request one primary display screenshot |
+| (response) | main → renderer | Returns `{ ok: true, dataUrl: "data:image/png;base64,..." }` on success or `{ ok: false, error: "reason-code" }` on failure |
+
+Implementation rules:
+- `screen:capture-once` is the only new IPC channel added in this slice.
+- Main process handler calls `desktopCapturer.getSources(...)`, selects primary display source, captures image, returns data URL to renderer.
+- Handler does not accept any arguments from renderer (no user-supplied path, no display ID override in this slice).
+- Preload exposes only a narrow `captureScreen()` function — not the raw `ipcRenderer.invoke` call, not `desktopCapturer` directly.
+- No broad desktop/system/filesystem APIs are exposed through preload.
+- No arbitrary file paths are returned to the renderer.
+- IPC error responses use short reason codes (`"permission-denied"`, `"no-source"`, `"capture-failed"`) — not raw Electron error objects or stack traces.
+
+### §5 — UI Result
+
+**Success path:**
+1. User clicks "擷取螢幕".
+2. Button disables / shows spinner.
+3. Main process captures screenshot.
+4. Renderer receives data URL.
+5. Button re-enables.
+6. Status area shows: "螢幕截圖完成。尚未儲存，可供後續分析使用。" (Screenshot captured. Not saved. Ready for future analysis.)
+7. Optionally: show a small thumbnail preview in Full App panel (not in Pet Bubble).
+
+**Failure path:**
+1. Capture fails or permission is denied.
+2. Button re-enables.
+3. Status area shows clean Chinese message mapped from reason code:
+   - `"permission-denied"` → "無法截圖，缺少螢幕擷取權限。"
+   - `"no-source"` → "找不到可截圖的螢幕。"
+   - `"capture-failed"` → "截圖失敗，請稍後再試。"
+4. No raw Electron error objects, stack traces, IPC channel names, file paths, or JSON shown in the UI.
+
+**Pet Bubble (if mirrored):**
+- May show a short clean status: "已截圖。" or "截圖失敗。"
+- Must not show data URLs, file paths, base64 blobs, or debug details.
+- Capture status must not be stored in Pet Bubble history or idle rotation.
+
+### §6 — Privacy
+
+- Capture is user-triggered only — no automatic, background, or passive capture.
+- Screenshot data is treated as sensitive from the moment of capture.
+- Screenshot is not analyzed automatically (no OCR, no vision inference, no model call).
+- Screenshot is not sent to any external service.
+- Screenshot is not saved to disk by default.
+- Any future analysis (TASK-172+) requires a separate explicit user action and a dedicated design with user-visible confirmation.
+
+### §7 — Pet Behavior
+
+- Pet Bubble may show a brief clean capture status if the capture was user-initiated from a Pet Menu entry (future slice) — not in this slice.
+- In slice 1A (Full App button only), Pet is not involved in the capture flow.
+- No idle or proactive capture behavior.
+- Quiet Mode suppresses idle content only; it must not block a user-triggered capture button in the Full App.
+- Click-through: Full App is a regular window (not click-through overlay) so no click-through complication in this slice. If Pet Menu capture is added later, click-through must be forced OFF before the capture UI appears.
+
+### §8 — Scope Limits (This Slice)
+
+- Do not implement OCR.
+- Do not implement computer vision or image analysis.
+- Do not implement screenshot-to-chat or screenshot-to-`/chat`.
+- Do not implement cloud vision provider.
+- Do not implement background or periodic screenshot monitoring.
+- Do not implement proactive companion nudges based on screen content.
+- Do not implement screenshot persistence to disk or `userData`.
+- Do not implement multi-monitor picker, active window capture, or region selection.
+- Do not implement Pet Menu capture button (deferred).
+- Do not implement voice-triggered capture (deferred).
+- Do not modify backend schema or add new backend endpoints.
+- Do not expose broad filesystem or desktop system APIs via preload.
+- Do not add global hotkeys.
+- Do not modify runtime implementation files in this docs-only step.
+
+### Manual Windows Smoke Expectations (for future TASK-171A implementation)
+
+- Full App shows "擷取螢幕" button in the appropriate UI location.
+- Clicking button captures the primary display — no background screenshots occur at any other time.
+- Button disables during capture and re-enables after result.
+- Success: clean "螢幕截圖完成。尚未儲存，可供後續分析使用。" message appears.
+- Failure (e.g. permission denied): clean Chinese fallback message — no stack trace, no Electron error object, no IPC channel name in UI.
+- Screenshot is not present as a file anywhere on the filesystem after capture.
+- Screenshot is not sent to `/chat` or any external service automatically.
+- App holds only the latest capture in memory; previous capture is replaced.
+- Restarting the app: no screenshot is retained.
+- Voice recording, STT, TTS, TTS controls, direct Pet text input, Quiet Mode, click-through recovery all work normally — no regression.
+- No OCR, vision analysis, cloud upload, or background monitoring exists in the codebase after implementation.
+- `git diff --check` clean after implementation.
+
+### Acceptance Criteria
+
+- [x] Entry point (Full App button only) documented (§1).
+- [x] Primary-display-only capture target documented (§2).
+- [x] Memory-only storage documented (§3).
+- [x] Narrow IPC design (`screen:capture-once`) documented (§4).
+- [x] UI success and failure paths documented (§5).
+- [x] Privacy and no-analysis boundaries documented (§6).
+- [x] Pet behavior documented (§7).
+- [x] Scope limits documented (§8).
+- [x] Manual Windows smoke expectations documented.
+- [x] No runtime files modified in this docs-only step.
