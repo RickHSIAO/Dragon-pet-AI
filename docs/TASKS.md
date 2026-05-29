@@ -15460,3 +15460,242 @@ Manual smoke passed. All expected behaviors confirmed:
 - Scope confirmed clean: no cloud vision, no background monitoring, no screenshot history, no Pet commentary, no /chat handoff.
 
 TASK-172A is closed. Next step: TASK-172A-OCR — wire actual OCR provider (Option A: tesseract.js or Option B: backend POST /ocr/extract) to replace the `runOcrAnalysis` stub.
+
+## TASK-172A-OCR | Wire Actual OCR Provider for Screenshot Analysis
+
+**Status:** DEFINED (docs-only)
+**Date:** 2026-05-29
+**Type:** Design — v0.4 Screen Context (slice 2A-OCR, OCR wiring only)
+**Depends on:** TASK-172A DONE (confirmation flow + unavailable fallback implemented)
+
+### Context
+
+TASK-172A delivered the full user-confirmed analysis flow with a clean unavailable fallback: "分析這張" button, sensitive-content warning, "正在分析…" status, and "分析功能目前不可用。" fallback. The `runOcrAnalysis()` stub always returns `{ ok: false, error: "ocr-unavailable" }`. TASK-172A-OCR replaces that stub with an actual local OCR provider and produces a real bounded screen-text summary. No `/chat` handoff in this task.
+
+### Goal
+
+Wire a local OCR provider into `runOcrAnalysis()` so that after user confirmation, the app extracts visible text from the in-memory screenshot and shows a clean bounded summary. No cloud vision. No `/chat`. No background monitoring. No disk save.
+
+### §1 — OCR Provider Strategy
+
+**Priority: local only. No cloud.**
+
+**Option A — Renderer-side `tesseract.js` (preferred first attempt):**
+
+- Load `tesseract.js` in the Electron renderer process (npm package or CDN-style bundle via webpack/esbuild).
+- Call `Tesseract.recognize(dataUrl, langs)` where `langs` is `"eng+chi_tra"` (English + Traditional Chinese) if both language data files are acceptable in bundle size; fall back to `"eng"` only if bundle size exceeds the threshold below.
+- Worker initialisation: `Tesseract.createWorker()` with lazy init on first analysis (not on app start).
+- **Feasibility gate (must measure before wiring):**
+  - Renderer bundle size increase must be ≤ 10 MB (WASM + language data).
+  - Cold-start latency on first OCR must be ≤ 5 s on a typical developer machine.
+  - If either threshold is exceeded, document the result and fall back to Option B.
+- Advantage: no IPC round-trip, no backend change, no new npm server-side dependency.
+- Risk: WASM bundle size; first-run worker startup latency; language data download/bundling.
+
+**Option B — Backend local OCR endpoint (fallback if Option A fails feasibility gate):**
+
+- Add a new FastAPI endpoint `POST /ocr/extract` (multipart or JSON with base64 image).
+- Backend uses `pytesseract` (wraps system Tesseract binary) or `easyocr` (pure Python, no system binary required).
+  - `pytesseract` requires Tesseract binary installed on user machine — must handle `TesseractNotFoundError` gracefully.
+  - `easyocr` is self-contained but ~500 MB model download on first use — document this clearly.
+- IPC bridge: new narrow channel `screen:analyze-once` (renderer → main → backend via `http`).
+- Main returns `{ ok, text }` or `{ ok: false, error: "reason-code" }`.
+- No new broad IPC surface; no raw screenshot stored on backend; text only returned.
+- Advantage: keeps renderer bundle lean; reuses Python backend pattern.
+- Risk: system Tesseract binary requirement (pytesseract) or large model download (easyocr).
+
+**Decision record (to be filled during implementation):**
+
+| Criterion | Option A result | Option B result | Decision |
+|---|---|---|---|
+| Bundle/install size | (measure) | (measure) | (choose) |
+| Cold-start latency | (measure) | (measure) | (choose) |
+| Language support | eng+chi_tra feasible? | eng+chi_tra feasible? | (choose) |
+| Implementation risk | (assess) | (assess) | (choose) |
+
+Document the decision in the TASK-172A-OCR implementation record before writing any code.
+
+**No cloud OCR.** No OpenAI Vision, no Google Vision, no Azure CV, no Anthropic Vision. No silent upload. No external API call.
+
+### §2 — Input
+
+- Input is `lastScreenshotDataUrl` — the in-memory screenshot dataUrl set by TASK-171A.
+- Analysis only starts after the TASK-172A sensitive-content confirmation.
+- Do not read screenshots from disk.
+- Do not persist screenshots before or after OCR.
+- Do not pass raw dataUrl to any external service.
+- Maximum input size guard: if `dataUrl.length` exceeds a reasonable threshold (suggested: 20 MB as string), return `{ ok: false, error: "screenshot-too-large" }` before attempting OCR.
+
+### §3 — Output and Cleanup
+
+OCR returns raw extracted text. Before display, apply:
+
+1. **Strip** leading/trailing whitespace.
+2. **Collapse** consecutive blank lines (3+ newlines → 2 newlines).
+3. **Remove** lines that are purely noise (single characters, repeated symbols — implementation judgement).
+4. **Truncate** to 800 characters maximum (remainder silently discarded — not an error).
+5. **Check** if cleaned result is non-empty after cleanup.
+
+**Display format (Full App UI):**
+
+If cleaned text is non-empty:
+```
+螢幕摘要：
+{cleaned text}
+```
+
+If no useful text after cleanup:
+```
+未偵測到可用文字。
+```
+
+**Never show in UI:**
+- Raw base64 or `data:image/...` strings.
+- Stack traces or exception messages.
+- Tesseract/easyocr internal error objects.
+- Provider internals (WASM paths, model names, worker IDs).
+- Raw JSON blobs.
+- File paths or backend URLs.
+
+### §4 — Performance
+
+OCR may take 2–10 seconds depending on screenshot size and provider. During OCR:
+
+- "正在分析…" status must be visible (already implemented in TASK-172A).
+- "分析這張" button must remain disabled (already implemented in TASK-172A via `analyzeInFlight`).
+- User must not be able to start overlapping analyses (already guarded by `analyzeInFlight` flag).
+- Full App UI must remain responsive (OCR must run async — `await runOcrAnalysis(dataUrl)` — never block the main thread from the renderer's perspective).
+
+For `tesseract.js` (Option A):
+- Worker initialisation is the main latency source on first run; document measured cold-start.
+- Worker may be kept alive after first use (cached `worker` reference) to avoid re-init on subsequent analyses — implementation choice; document in record.
+- Language data loading: prefer bundled data files over CDN fetch if offline use is a goal.
+
+For backend OCR (Option B):
+- IPC timeout: suggested 30 s (matching STT pattern from TASK-167B).
+- Backend must not block other requests during OCR — FastAPI background task or thread pool executor recommended.
+
+### §5 — Privacy
+
+- Screenshot `dataUrl` stays in `lastScreenshotDataUrl` (renderer memory only). Not sent to any external service.
+- OCR text result stays in `lastScreenSummary` (renderer memory only).
+- No disk save for screenshot or summary.
+- No screenshot history; only latest capture and latest summary retained.
+- "清除截圖" resets both (already implemented in TASK-172A).
+- Raw screenshot must not appear in logs, console output, or error reports.
+- No background monitoring. No automatic analysis after capture. Analysis requires explicit confirmation every time.
+
+For Option B (backend): backend OCR endpoint must not persist the image data. It receives the base64 image in the request body, runs OCR in memory, returns text, and discards the image. No database write, no file write, no audit log of screenshot content.
+
+### §6 — Error Handling
+
+All failure cases must show clean, character-facing messages.
+
+| Failure | Reason code | Clean fallback |
+|---|---|---|
+| No screenshot in memory | `no-screenshot` | "請先擷取螢幕截圖。" |
+| Screenshot cleared | `screenshot-cleared` | "截圖已清除，請重新擷取。" |
+| User cancels confirmation | (cancel) | Silently re-enable button. No error. |
+| OCR dependency unavailable | `ocr-unavailable` | "分析功能目前不可用。" |
+| OCR worker init failed | `ocr-init-failed` | "分析功能初始化失敗，請稍後再試。" |
+| OCR timeout | `ocr-timeout` | "分析逾時，請稍後再試。" |
+| Invalid screenshot dataUrl | `invalid-dataurl` | "截圖格式錯誤，請重新擷取。" |
+| Screenshot too large | `screenshot-too-large` | "截圖過大，無法分析。" |
+| No useful text found | `no-text` | "未偵測到可用文字。" |
+| Unexpected OCR failure | `ocr-failed` | "分析失敗，請稍後再試。" |
+
+`no-text` is informational (not shown as error). All others except `no-screenshot` may be shown with error styling.
+
+### §7 — Chat Boundary
+
+- TASK-172A-OCR must **not** call `/chat`.
+- TASK-172A-OCR must **not** send the summary to `/chat`.
+- TASK-172A-OCR must **not** inject screen context into any existing message flow.
+- Pet Bubble must not receive the screenshot or summary in this slice.
+- TASK-172B (deferred) will design the optional user-confirmed summary → `/chat` context handoff.
+
+### §8 — UI
+
+No new UI elements required. TASK-172A already implemented:
+- "分析這張" button (disabled before capture).
+- Sensitive-content warning (`window.confirm`).
+- "正在分析…" status during analysis.
+- `#analyze-screen-summary` panel for summary output.
+- `#analyze-screen-status` for status/error messages.
+- "清除截圖" button.
+
+TASK-172A-OCR only needs to replace `runOcrAnalysis()` to return real OCR results. All display logic (`setAnalyzeScreenSummary`, `setAnalyzeScreenStatus`, `cleanOcrText`) is already wired.
+
+### §9 — Tests
+
+New tests to add during implementation:
+
+- Static scope: `runOcrAnalysis` no longer immediately returns `ocr-unavailable` (if OCR is wired).
+- OCR success path: mock `runOcrAnalysis` returning `{ ok: true, text: "Hello\nWorld" }` → summary shows "螢幕摘要：\nHello\nWorld".
+- OCR no-text path: mock returning `{ ok: true, text: "   " }` → status shows "未偵測到可用文字。"
+- OCR timeout path: mock returning `{ ok: false, error: "ocr-timeout" }` → status shows clean timeout message.
+- OCR init-failed path: mock returning `{ ok: false, error: "ocr-init-failed" }` → status shows clean init-failed message.
+- `cleanOcrText` unit: 800-char truncation, blank-line collapse, whitespace strip.
+- No `/chat` call during any OCR path.
+- No raw base64 appears in summary or status for any path.
+- Existing TASK-171A capture tests still pass.
+- Existing TASK-172A confirmation/cancel/clear tests still pass.
+- Voice/TTS/Pet tests still pass.
+
+### §10 — Scope Limits (This Docs-Only Step)
+
+- Do **not** implement OCR in this docs-only step.
+- Do **not** implement cloud vision or multimodal LLM analysis.
+- Do **not** implement `/chat` handoff (deferred to TASK-172B).
+- Do **not** implement Pet commentary on screenshots.
+- Do **not** implement background monitoring.
+- Do **not** persist screenshots or summaries to disk.
+- Do **not** modify backend `/chat` schema.
+- Do **not** add broad provider architecture beyond the OCR endpoint.
+- Do **not** modify any runtime implementation file in this docs-only step.
+
+### §11 — Preserved Existing Behavior
+
+- TASK-171A: "擷取螢幕" button, in-memory screenshot, no disk save.
+- TASK-172A: "分析這張" button, sensitive-content confirmation, "清除截圖", unavailable fallback.
+- Full App chat: typing, Enter key, Send button, `/chat` pipeline.
+- Pet direct text input (TASK-166E).
+- Voice input / STT / voice-to-chat (TASK-167A–C).
+- TTS playback and voice controls (TASK-168B, TASK-169).
+- Quiet Mode idle suppression.
+- Click-through toggle and CT recovery strip.
+- Clean Pet Bubble speech rules.
+- Pet window position persistence (TASK-148).
+
+### Manual Windows Smoke Expectations (for future TASK-172A-OCR implementation)
+
+- "分析這張" button disabled before screenshot capture.
+- Capture enables button.
+- Clicking "分析這張" shows sensitive-content warning.
+- Cancel prevents OCR; button re-enabled; no error shown.
+- Confirm starts OCR; "正在分析…" appears.
+- OCR success → "螢幕摘要：\n{bounded text}" appears in Full App. Text is readable and bounded (not a raw dump).
+- No useful text → "未偵測到可用文字。" appears cleanly.
+- OCR unavailable / init failed / timeout → clean Chinese fallback message appears.
+- Screenshot is not written to disk at any point.
+- Screenshot is not uploaded externally.
+- `/chat` is not called.
+- Raw base64, stack traces, JSON, provider internals, and file paths never appear in UI.
+- "清除截圖" clears screenshot, summary, and disables button.
+- Existing voice / TTS / Pet / Full App chat / direct text input features do not regress.
+
+### Acceptance Criteria
+
+- [x] OCR provider strategy documented (§1), including Option A vs B decision criteria and decision record template.
+- [x] Input behavior documented (§2).
+- [x] Output cleanup and display format documented (§3).
+- [x] Performance requirements documented (§4).
+- [x] Privacy and memory-only boundaries documented (§5).
+- [x] Error handling table documented (§6).
+- [x] `/chat` boundary documented (§7).
+- [x] UI behavior documented (§8).
+- [x] New test cases documented (§9).
+- [x] Scope limits documented (§10).
+- [x] Preserved existing behavior documented (§11).
+- [x] Manual Windows smoke expectations documented.
+- [x] No runtime files modified in this docs-only step.
