@@ -15010,3 +15010,181 @@ During TASK-171A implementation, the NTFS mount produced NUL-byte-padded files w
 4. Adding regression smoke tests to prevent recurrence.
 
 All TASK-171A smoke tests and regression tests pass after recovery.
+
+## TASK-172 | Screenshot Analysis / User-Confirmed Vision Design
+
+**Status:** DEFINED (docs-only)
+**Date:** 2026-05-29
+**Type:** Design — v0.4 Screen Context (slice 2, user-confirmed analysis)
+**Depends on:** TASK-171A DONE (screenshot capture implemented and passed Windows smoke)
+
+### Context
+
+TASK-171A delivered user-triggered primary display screenshot capture with in-memory storage, no disk save, no analysis, and no /chat integration. TASK-172 designs the next layer: after the user captures a screenshot, they must explicitly confirm "分析這張" (Analyze This) before any analysis occurs. No automatic analysis. No background monitoring. No silent upload.
+
+### Goal
+
+Design a privacy-safe screenshot analysis flow: user captures → user explicitly confirms analysis → app extracts screen context → produces a clean summary for potential chat handoff. Analysis is always explicit, never passive.
+
+### §1 — User-Confirmed Analysis
+
+Analysis must only happen after two explicit user actions: (1) screenshot capture and (2) analysis confirmation. Capture alone must not trigger analysis. There is no automatic analysis, no background monitoring, no periodic screenshot, and no passive screen reading.
+
+The UI must make the two-step nature clear to the user. The analysis button must be disabled until a screenshot exists in memory.
+
+### §2 — Entry Point
+
+**Recommended first implementation:** Full App "分析這張" / "Analyze Screenshot" button, enabled only after a successful TASK-171A capture.
+
+- Button state: disabled (grayed) when no screenshot exists; enabled after capture.
+- Clicking the button shows a confirmation step or immediately starts analysis with a clear "正在分析…" status.
+- Analysis button should include a warning: "截圖內容可能含有敏感資訊，請確認再分析。" (Screenshot may contain sensitive information — please confirm before analysis.)
+- Pet Menu and voice trigger are deferred.
+- If the user took a new screenshot, the previous one is discarded before analysis starts.
+
+### §3 — Analysis Scope
+
+**Recommended first slice:** screenshot dataUrl → short screen-context summary text. The summary is a compact plain-text description of what is visible on screen (e.g. "User is viewing a Python code editor with a function named 'processData'.").
+
+Do not send the raw screenshot dataUrl to /chat as unstructured content. Preferred analysis boundary:
+
+```
+[screenshot dataUrl]
+    ↓ (analysis step — TASK-172A)
+[screen context summary string]
+    ↓ (optional chat handoff — TASK-172B, deferred)
+[/chat context injection]
+```
+
+**OCR option:** If a local OCR library is available (e.g. `tesseract.js`), extract visible text from screenshot. OCR limitations: does not understand layout, formatting, or non-text elements; may produce noisy output from complex UIs.
+
+**Vision model option:** If a multimodal LLM (e.g. Ollama with LLaVA or similar) is available and user has granted explicit permission, send the screenshot to the model for a natural-language description. Privacy boundary: explicit user consent required before any screenshot is sent to a model. No silent cloud upload. Provider must be locally hosted or explicitly user-approved.
+
+### §4 — Provider Strategy
+
+- **Prefer local first:** local OCR (tesseract.js in renderer) or local vision model (Ollama multimodal).
+- If no provider is available: show clean fallback — "分析功能目前不可用。" Do not offer degraded cloud fallback silently.
+- If a cloud provider is considered: must be a separate explicit opt-in (not the same as the existing `/chat` provider). Out of scope for this design task.
+- Do not modify existing `/chat` schema or provider settings in this task.
+- Do not add broad provider architecture unless strictly required for the analysis step.
+
+### §5 — Privacy
+
+- Screenshot is treated as sensitive data from capture to analysis.
+- No disk persistence by default (in-memory only, per TASK-171A).
+- No raw screenshot upload without explicit user confirmation.
+- No screenshot stored in logs, error reports, or audit records.
+- No screenshot history (only latest capture retained in memory, per TASK-171A).
+- User can discard current screenshot via a "清除截圖" (Clear Screenshot) button at any time.
+- User can cancel during the analysis confirmation step — no analysis starts on cancel.
+- After analysis, the raw dataUrl is still not persisted; only the summary string may be retained in memory.
+
+### §6 — Redaction / Safety Boundary
+
+First implementation may not automatically redact, but must warn users before analysis. Document the following redaction risks for future implementation:
+
+- **Passwords / PIN fields:** may be captured in screenshot.
+- **API keys / tokens:** visible in terminal, code editors, browser address bars.
+- **Private messages:** chat apps, email, notifications.
+- **Financial / account data:** banking UIs, invoices.
+- **Browser tabs and URLs:** may reveal browsing history.
+
+Before analysis (TASK-172A implementation), the app must show a visible warning:
+"截圖內容可能含有密碼、API 金鑰或私密訊息。請確認截圖內容後再繼續分析。"
+(Screenshot may contain passwords, API keys, or private messages. Please review before proceeding.)
+
+No silent analysis of sensitive content. User must explicitly dismiss this warning.
+
+Future slice (TASK-173+): implement pixel-blur on detected password input fields, or user-directed region exclusion before analysis.
+
+### §7 — Chat Handoff
+
+TASK-172 defines but does not implement the screenshot summary → /chat handoff.
+
+**Recommended task split:**
+
+| Task | Scope |
+|---|---|
+| TASK-172A | Implement: screenshot analysis → summary text only (OCR or local vision). No /chat. |
+| TASK-172B | Implement: user-confirmed summary → /chat context injection (prepend summary to user message). |
+
+In the current design:
+- After analysis, the summary is shown in the Full App UI: "螢幕摘要：{summary text}".
+- The summary is NOT automatically sent to /chat.
+- A future "加入對話" (Add to Chat) button (TASK-172B) would let the user inject the summary into their next message.
+- Pet Bubble must not show raw base64, JSON, stack traces, file paths, provider internals, or debug fields.
+
+### §8 — Pet Behavior
+
+- Pet does not receive the raw screenshot in this task or future task without explicit design.
+- Pet may eventually receive a clean one-sentence summary (future task).
+- Pet does not proactively comment on screenshots.
+- Quiet Mode suppresses idle only and must not block explicit user-triggered analysis.
+- Click-through recovery (TASK-166E) must not regress when analysis is triggered from Full App.
+
+### §9 — Error Handling
+
+All failure cases must show clean, character-facing messages. No raw stack traces, base64 blobs, provider URLs, JSON, or debug fields.
+
+| Failure | Clean fallback |
+|---|---|
+| No screenshot in memory | "請先擷取螢幕截圖。" |
+| Screenshot cleared / expired | "截圖已清除，請重新擷取。" |
+| Analysis provider unavailable | "分析功能目前不可用。" |
+| OCR/vision model failure | "分析失敗，請稍後再試。" |
+| Screenshot too large / memory error | "截圖過大，無法分析。" |
+| User cancels | Silently re-enable analysis button; no error shown. |
+
+### §10 — Scope Limits (This Docs-Only Step)
+
+- Do not implement analysis in this docs-only step.
+- Do not implement background monitoring.
+- Do not implement automatic screenshot analysis.
+- Do not implement cloud upload without explicit design.
+- Do not implement screenshot history.
+- Do not implement proactive companion nudges based on screen content.
+- Do not implement Live2D mouth sync.
+- Do not modify backend `/chat` schema.
+- Do not add broad provider architecture beyond what is strictly required for analysis.
+- Do not modify any runtime implementation file in this docs-only step.
+
+### §11 — Preserved Existing Behavior
+
+- TASK-171A: screenshot capture (Full App button, in-memory, no disk save).
+- Full App chat (typing, Enter key, Send button).
+- Pet direct text input (TASK-166E).
+- Voice input / STT / voice-to-chat (TASK-167A–C).
+- TTS playback and voice controls (TASK-168B, TASK-169).
+- Quiet Mode idle suppression.
+- Click-through toggle and recovery strip.
+- Clean Pet Bubble speech rules (no diagnostics, no raw JSON).
+
+### Manual Windows Smoke Expectations (for future TASK-172A implementation)
+
+- "分析這張" button appears in Full App ONLY after a screenshot has been captured.
+- Before capture, button is disabled (grayed) — clicking does nothing.
+- Clicking "分析這張" shows a sensitive-content warning before proceeding.
+- User can cancel the warning — analysis does not start.
+- After confirmation, "正在分析…" status appears.
+- Analysis completes: clean summary appears ("螢幕摘要：{text}").
+- Capture alone does NOT trigger analysis — two separate explicit actions required.
+- No screenshot is saved to disk at any point.
+- No screenshot is uploaded to any external service without explicit confirmation.
+- Clean fallback message appears if analysis provider is unavailable.
+- Raw base64, JSON, stack traces, provider details, and file paths are never shown in UI.
+- `/chat` is not called unless TASK-172B explicitly implements it.
+- Existing voice / TTS / Pet / direct text input features do not regress.
+
+### Acceptance Criteria
+
+- [x] User-confirmed analysis flow documented (§1, §2).
+- [x] Analysis scope and provider strategy documented (§3, §4).
+- [x] Privacy boundaries documented (§5).
+- [x] Redaction / sensitive-content risks documented (§6).
+- [x] Chat handoff boundary documented (§7).
+- [x] Pet behavior documented (§8).
+- [x] Error handling documented (§9).
+- [x] Scope limits documented (§10).
+- [x] Preserved existing behavior documented (§11).
+- [x] Manual Windows smoke expectations documented.
+- [x] No runtime files modified in this docs-only step.
