@@ -331,7 +331,8 @@ function testPetCssUsesStaticPetDimensions() {
   assertNotIncludes(css, "background-image", "pet.css");
   assertNotIncludes(css, "mask-image", "pet.css");
   assertNotIncludes(css, "-webkit-mask", "pet.css");
-  assertRegex(css, /\.pet-menu[\s\S]*max-height:\s*144px/, "pet.css");
+  // TASK-169: max-height increased from 144px to 260px to accommodate TTS settings panel
+  assertRegex(css, /\.pet-menu[\s\S]*max-height:\s*260px/, "pet.css");
   assertRegex(css, /\.pet-menu[\s\S]*overflow-y:\s*auto/, "pet.css");
   assertRegex(css, /\.pet-stage,\s*\r?\n\.pet-drag-region[\s\S]*-webkit-app-region:\s*no-drag\b/, "pet.css");
   assertRegex(css, /\.pet-avatar[\s\S]*-webkit-app-region:\s*no-drag\b/, "pet.css");
@@ -4655,6 +4656,178 @@ function testTask168BScopeChecks() {
 
 
 async function run() {
+// ── TASK-169: TTS Voice Selection / Speech Controls smoke tests ───────────────
+
+function testTask169ConstantsDefined() {
+  const renderer = readText(petRendererPath);
+  assert(renderer.includes('PET_TTS_LS_VOICE'), "PET_TTS_LS_VOICE constant must be defined");
+  assert(renderer.includes('PET_TTS_LS_RATE'), "PET_TTS_LS_RATE constant must be defined");
+  assert(renderer.includes('PET_TTS_LS_PITCH'), "PET_TTS_LS_PITCH constant must be defined");
+  assert(renderer.includes('PET_TTS_LS_VOLUME'), "PET_TTS_LS_VOLUME constant must be defined");
+  assert(renderer.includes('PET_TTS_RATE_MIN'), "PET_TTS_RATE_MIN must be defined");
+  assert(renderer.includes('PET_TTS_RATE_MAX'), "PET_TTS_RATE_MAX must be defined");
+  assert(renderer.includes('PET_TTS_RATE_DEF'), "PET_TTS_RATE_DEF must be defined");
+  assert(renderer.includes('PET_TTS_PITCH_MIN'), "PET_TTS_PITCH_MIN must be defined");
+  assert(renderer.includes('PET_TTS_PITCH_MAX'), "PET_TTS_PITCH_MAX must be defined");
+  assert(renderer.includes('PET_TTS_PITCH_DEF'), "PET_TTS_PITCH_DEF must be defined");
+  assert(renderer.includes('PET_TTS_VOL_MIN'), "PET_TTS_VOL_MIN must be defined");
+  assert(renderer.includes('PET_TTS_VOL_MAX'), "PET_TTS_VOL_MAX must be defined");
+  assert(renderer.includes('PET_TTS_VOL_DEF'), "PET_TTS_VOL_DEF must be defined");
+}
+
+function testTask169FunctionsExported() {
+  const { clampTtsValue, loadTtsSettings, saveTtsSettings,
+          getPetTtsVoiceObject, populatePetVoiceSelector,
+          syncTtsControlDisplays, resetTtsControls } = require(petRendererPath);
+  assert(typeof clampTtsValue          === "function", "clampTtsValue must be exported");
+  assert(typeof loadTtsSettings        === "function", "loadTtsSettings must be exported");
+  assert(typeof saveTtsSettings        === "function", "saveTtsSettings must be exported");
+  assert(typeof getPetTtsVoiceObject   === "function", "getPetTtsVoiceObject must be exported");
+  assert(typeof populatePetVoiceSelector === "function", "populatePetVoiceSelector must be exported");
+  assert(typeof syncTtsControlDisplays === "function", "syncTtsControlDisplays must be exported");
+  assert(typeof resetTtsControls       === "function", "resetTtsControls must be exported");
+}
+
+function testTask169HtmlElements() {
+  const html = readText(petHtmlPath);
+  assert(html.includes('id="pet-menu-tts-settings"'), "pet.html must have #pet-menu-tts-settings toggle");
+  assert(html.includes('id="pet-tts-settings"'), "pet.html must have #pet-tts-settings panel");
+  assert(html.includes('id="pet-tts-voice-select"'), "pet.html must have #pet-tts-voice-select");
+  assert(html.includes('id="pet-tts-rate"'), "pet.html must have #pet-tts-rate slider");
+  assert(html.includes('id="pet-tts-pitch"'), "pet.html must have #pet-tts-pitch slider");
+  assert(html.includes('id="pet-tts-volume"'), "pet.html must have #pet-tts-volume slider");
+  assert(html.includes('id="pet-tts-reset"'), "pet.html must have #pet-tts-reset button");
+  assert(html.includes('id="pet-tts-rate-val"'), "pet.html must have #pet-tts-rate-val display");
+  assert(html.includes('id="pet-tts-pitch-val"'), "pet.html must have #pet-tts-pitch-val display");
+  assert(html.includes('id="pet-tts-volume-val"'), "pet.html must have #pet-tts-volume-val display");
+}
+
+function testTask169CssExists() {
+  const css = readText(petCssPath);
+  assert(css.includes('.pet-tts-settings'), ".pet-tts-settings must be defined in pet.css");
+  assert(css.includes('.pet-tts-voice-select'), ".pet-tts-voice-select must be defined");
+  assert(css.includes('.pet-tts-slider'), ".pet-tts-slider must be defined");
+  assert(css.includes('.pet-tts-label'), ".pet-tts-label must be defined");
+  assert(css.includes('.pet-tts-settings[hidden]'), ".pet-tts-settings[hidden] override must exist");
+}
+
+function testTask169GetVoicesUsed() {
+  const renderer = readText(petRendererPath);
+  assert(renderer.includes('getVoices()'), "renderer must call speechSynthesis.getVoices()");
+}
+
+function testTask169VoicesChangedHandled() {
+  const renderer = readText(petRendererPath);
+  assert(renderer.includes('onvoiceschanged'), "renderer must handle onvoiceschanged for async voice loading");
+}
+
+function testTask169ClampLogic() {
+  const { clampTtsValue, PET_TTS_RATE_MIN, PET_TTS_RATE_MAX, PET_TTS_RATE_DEF,
+          PET_TTS_PITCH_MIN, PET_TTS_PITCH_MAX, PET_TTS_PITCH_DEF,
+          PET_TTS_VOL_MIN, PET_TTS_VOL_MAX, PET_TTS_VOL_DEF } = require(petRendererPath);
+  // Clamp below min
+  assert(clampTtsValue(0.1, PET_TTS_RATE_MIN, PET_TTS_RATE_MAX, PET_TTS_RATE_DEF) === PET_TTS_RATE_MIN,
+    "clampTtsValue must clamp below min to min");
+  // Clamp above max
+  assert(clampTtsValue(9.9, PET_TTS_RATE_MIN, PET_TTS_RATE_MAX, PET_TTS_RATE_DEF) === PET_TTS_RATE_MAX,
+    "clampTtsValue must clamp above max to max");
+  // NaN falls back to default
+  assert(clampTtsValue(NaN, PET_TTS_RATE_MIN, PET_TTS_RATE_MAX, PET_TTS_RATE_DEF) === PET_TTS_RATE_DEF,
+    "clampTtsValue must return def for NaN");
+  // Corrupt string falls back to default
+  assert(clampTtsValue("bad", PET_TTS_PITCH_MIN, PET_TTS_PITCH_MAX, PET_TTS_PITCH_DEF) === PET_TTS_PITCH_DEF,
+    "clampTtsValue must return def for non-numeric string");
+  // In-range value passes through
+  assert(clampTtsValue(0.9, PET_TTS_RATE_MIN, PET_TTS_RATE_MAX, PET_TTS_RATE_DEF) === 0.9,
+    "clampTtsValue must pass through in-range value unchanged");
+  // Volume boundaries
+  assert(clampTtsValue(-1, PET_TTS_VOL_MIN, PET_TTS_VOL_MAX, PET_TTS_VOL_DEF) === PET_TTS_VOL_MIN,
+    "clampTtsValue: volume below 0 clamped to 0");
+  assert(clampTtsValue(2.0, PET_TTS_VOL_MIN, PET_TTS_VOL_MAX, PET_TTS_VOL_DEF) === PET_TTS_VOL_MAX,
+    "clampTtsValue: volume above 1 clamped to 1");
+}
+
+function testTask169LoadTtsSettingsDefaults() {
+  const { loadTtsSettings, PET_TTS_RATE_DEF, PET_TTS_PITCH_DEF, PET_TTS_VOL_DEF } = require(petRendererPath);
+  // Without localStorage (Node environment), should return safe defaults
+  const s = loadTtsSettings();
+  assert(typeof s === "object" && s !== null, "loadTtsSettings must return an object");
+  assert(typeof s.voice  === "string",  "loadTtsSettings.voice must be a string");
+  assert(typeof s.rate   === "number",  "loadTtsSettings.rate must be a number");
+  assert(typeof s.pitch  === "number",  "loadTtsSettings.pitch must be a number");
+  assert(typeof s.volume === "number",  "loadTtsSettings.volume must be a number");
+  assert(s.rate   === PET_TTS_RATE_DEF,  "loadTtsSettings.rate default must equal PET_TTS_RATE_DEF");
+  assert(s.pitch  === PET_TTS_PITCH_DEF, "loadTtsSettings.pitch default must equal PET_TTS_PITCH_DEF");
+  assert(s.volume === PET_TTS_VOL_DEF,   "loadTtsSettings.volume default must equal PET_TTS_VOL_DEF");
+}
+
+function testTask169GetPetTtsVoiceObjectFallback() {
+  const { getPetTtsVoiceObject } = require(petRendererPath);
+  // In Node env: no window.speechSynthesis → must return null (not crash)
+  const result = getPetTtsVoiceObject();
+  assert(result === null, "getPetTtsVoiceObject must return null when speechSynthesis unavailable");
+}
+
+function testTask169PopulateVoiceSelectorSafeWithoutSpeechSynthesis() {
+  const { populatePetVoiceSelector } = require(petRendererPath);
+  // Must not throw even with null documentRef and no speechSynthesis
+  let threw = false;
+  try { populatePetVoiceSelector(null); } catch (_e) { threw = true; }
+  assert(!threw, "populatePetVoiceSelector must not throw when documentRef is null");
+}
+
+function testTask169SpeakPetReplyUsesVoiceSettings() {
+  const renderer = readText(petRendererPath);
+  const fnIdx = renderer.indexOf("function speakPetReply(");
+  const fnText = renderer.slice(fnIdx, fnIdx + 1400);
+  assert(fnText.includes("getPetTtsVoiceObject()"), "speakPetReply must call getPetTtsVoiceObject");
+  assert(fnText.includes("utterance.rate"), "speakPetReply must set utterance.rate");
+  assert(fnText.includes("utterance.pitch"), "speakPetReply must set utterance.pitch");
+  assert(fnText.includes("utterance.volume"), "speakPetReply must set utterance.volume");
+  assert(fnText.includes("clampTtsValue"), "speakPetReply must clamp voice control values");
+}
+
+function testTask169ResetTtsControlsRestoresDefaults() {
+  const renderer = readText(petRendererPath);
+  const fnIdx = renderer.indexOf("function resetTtsControls(");
+  const fnText = renderer.slice(fnIdx, fnIdx + 400);
+  assert(fnText.includes("PET_TTS_RATE_DEF"), "resetTtsControls must reset rate to PET_TTS_RATE_DEF");
+  assert(fnText.includes("PET_TTS_PITCH_DEF"), "resetTtsControls must reset pitch to PET_TTS_PITCH_DEF");
+  assert(fnText.includes("PET_TTS_VOL_DEF"), "resetTtsControls must reset volume to PET_TTS_VOL_DEF");
+  assert(fnText.includes("saveTtsSettings"), "resetTtsControls must call saveTtsSettings");
+  assert(fnText.includes("syncTtsControlDisplays"), "resetTtsControls must sync UI displays");
+}
+
+function testTask169LoadSettingsOnInit() {
+  const renderer = readText(petRendererPath);
+  assert(renderer.includes("loadTtsSettings()"), "initializePetMode must call loadTtsSettings on init");
+  assert(renderer.includes("syncTtsControlDisplays(documentRef)"), "initializePetMode must call syncTtsControlDisplays");
+  assert(renderer.includes("populatePetVoiceSelector(documentRef)"), "initializePetMode must call populatePetVoiceSelector");
+}
+
+function testTask169VoiceSettingsPanelToggleWired() {
+  const renderer = readText(petRendererPath);
+  assert(renderer.includes('getElementById("pet-menu-tts-settings")'),
+    "initializePetMode must look up #pet-menu-tts-settings");
+  assert(renderer.includes('getElementById("pet-tts-settings")'),
+    "initializePetMode must look up #pet-tts-settings panel");
+  assert(renderer.includes('getElementById("pet-tts-voice-select")'),
+    "initializePetMode must look up #pet-tts-voice-select");
+  assert(renderer.includes('getElementById("pet-tts-reset")'),
+    "initializePetMode must look up #pet-tts-reset");
+}
+
+function testTask169ScopeChecks() {
+  const renderer = readText(petRendererPath);
+  assert(!renderer.includes("ElevenLabs"), "No ElevenLabs cloud TTS");
+  assert(!renderer.includes("azure.cognitive"), "No Azure TTS");
+  assert(!renderer.includes("openai.com/audio"), "No OpenAI TTS API");
+  assert(!renderer.includes("voice_clone"), "No voice cloning");
+  assert(!renderer.includes("lipsync"), "No Live2D lipsync");
+  assert(!renderer.includes("wake_word"), "No wake word");
+  assert(!renderer.includes("always_listening"), "No always-listening");
+}
+
   const tests = [
     testPetFilesExist,
     testPetHtmlReferencesStaticAssets,
@@ -4883,6 +5056,22 @@ async function run() {
     testVoiceChatSendWiresSpeakPetReply,
     testDirectSendWiresSpeakPetReply,
     testTask168BScopeChecks,
+    // TASK-169
+    testTask169ConstantsDefined,
+    testTask169FunctionsExported,
+    testTask169HtmlElements,
+    testTask169CssExists,
+    testTask169GetVoicesUsed,
+    testTask169VoicesChangedHandled,
+    testTask169ClampLogic,
+    testTask169LoadTtsSettingsDefaults,
+    testTask169GetPetTtsVoiceObjectFallback,
+    testTask169PopulateVoiceSelectorSafeWithoutSpeechSynthesis,
+    testTask169SpeakPetReplyUsesVoiceSettings,
+    testTask169ResetTtsControlsRestoresDefaults,
+    testTask169LoadSettingsOnInit,
+    testTask169VoiceSettingsPanelToggleWired,
+    testTask169ScopeChecks,
   ];
 
   for (const test of tests) {

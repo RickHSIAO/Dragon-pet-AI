@@ -348,7 +348,7 @@ body {
   right: 10px;
   bottom: 42px;
   width: 160px;
-  max-height: 144px;
+  max-height: 260px;
   display: grid;
   gap: 4px;
   overflow-y: auto;
@@ -907,4 +907,78 @@ textarea {
 
 [data-transcribing="true"] .pet-speaking-indicator {
   display: none;
+}
+
+/* ── TASK-169: TTS Voice Selection / Speech Controls ─────────────────────── */
+
+/* Scale max-height for Pet Menu when TTS settings panel may be open */
+[data-scale="small"] .pet-menu {
+  max-height: 210px;
+}
+
+[data-scale="large"] .pet-menu {
+  max-height: 340px;
+}
+
+/* TTS settings panel: collapsed by default via [hidden] */
+.pet-tts-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 5px 2px 2px 2px;
+  border-top: 1px solid rgba(72, 45, 34, 0.12);
+  margin-top: 2px;
+}
+
+.pet-tts-settings[hidden] {
+  display: none;
+}
+
+.pet-tts-label {
+  font-size: 11px;
+  color: #4b3128;
+  margin: 0;
+  display: block;
+}
+
+.pet-tts-voice-select {
+  width: 100%;
+  font-size: 11px;
+  font-family: inherit;
+  border: 1px solid rgba(72, 45, 34, 0.22);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #4b3128;
+  padding: 2px 4px;
+  min-height: 26px;
+  -webkit-app-region: no-drag;
+}
+
+.pet-tts-slider {
+  width: 100%;
+  margin: 0;
+  height: 18px;
+  accent-color: rgb(20, 184, 166);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+/* Small scale: compact TTS settings */
+[data-scale="small"] .pet-tts-label {
+  font-size: 10px;
+}
+
+[data-scale="small"] .pet-tts-voice-select {
+  font-size: 10px;
+  min-height: 22px;
+}
+
+/* Large scale: slightly larger */
+[data-scale="large"] .pet-tts-label {
+  font-size: 12px;
+}
+
+[data-scale="large"] .pet-tts-voice-select {
+  font-size: 12px;
+  min-height: 28px;
 }

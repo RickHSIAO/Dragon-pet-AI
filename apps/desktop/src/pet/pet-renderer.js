@@ -43,6 +43,21 @@ const PET_STT_OFFLINE_MSG = "後端離線，無法辨識語音。";
 const PET_VOICE_CHAT_MAX_CHARS = 2000;
 // TASK-168B: TTS playback — max characters sent to SpeechSynthesis
 const PET_TTS_MAX_CHARS = 300;
+// TASK-169: localStorage keys for TTS settings persistence
+const PET_TTS_LS_VOICE  = "pet_tts_voice";
+const PET_TTS_LS_RATE   = "pet_tts_rate";
+const PET_TTS_LS_PITCH  = "pet_tts_pitch";
+const PET_TTS_LS_VOLUME = "pet_tts_volume";
+// TASK-169: safe bounds and defaults for speech controls
+const PET_TTS_RATE_MIN  = 0.7;
+const PET_TTS_RATE_MAX  = 1.3;
+const PET_TTS_RATE_DEF  = 1.0;
+const PET_TTS_PITCH_MIN = 0.8;
+const PET_TTS_PITCH_MAX = 1.3;
+const PET_TTS_PITCH_DEF = 1.0;
+const PET_TTS_VOL_MIN   = 0.0;
+const PET_TTS_VOL_MAX   = 1.0;
+const PET_TTS_VOL_DEF   = 1.0;
 const PET_VOICE_TRANSCRIPT_TOO_LONG_MSG = "語音太長，請縮短後再試。";
 // TASK-158: short in-character idle presence lines (static local set)
 const PET_IDLE_LINES = Object.freeze([
@@ -69,6 +84,10 @@ const PET_UNSAFE_DETAIL_TOKENS = Object.freeze(["localhost", "127.0.0.1", ["114"
 let petChatPending = false;
 let petTtsEnabled = false;     // TASK-168B: TTS is OFF by default
 let petSpeakingActive = false; // TASK-168B: true while SpeechSynthesis is speaking
+let petTtsVoiceName = "";     // TASK-169: name of selected TTS voice ("" = browser default)
+let petTtsRate      = 1.0;   // TASK-169: current speech rate
+let petTtsPitch     = 1.0;   // TASK-169: current pitch
+let petTtsVolume    = 1.0;   // TASK-169: current volume
 const petPresenceStates = typeof WeakMap === "function" ? new WeakMap() : null;
 let fallbackPetPresenceState = null;
 
@@ -904,6 +923,12 @@ function speakPetReply(documentRef, reply, state) {
   stopPetSpeech(documentRef);
   try {
     var utterance = new window.SpeechSynthesisUtterance(text);
+    // TASK-169: apply voice selection and speech controls (all values clamped)
+    var _voiceObj = getPetTtsVoiceObject();
+    if (_voiceObj) { utterance.voice = _voiceObj; }
+    utterance.rate   = clampTtsValue(petTtsRate,   PET_TTS_RATE_MIN,  PET_TTS_RATE_MAX,  PET_TTS_RATE_DEF);
+    utterance.pitch  = clampTtsValue(petTtsPitch,  PET_TTS_PITCH_MIN, PET_TTS_PITCH_MAX, PET_TTS_PITCH_DEF);
+    utterance.volume = clampTtsValue(petTtsVolume, PET_TTS_VOL_MIN,   PET_TTS_VOL_MAX,   PET_TTS_VOL_DEF);
     utterance.onstart = function () { setSpeakingState(documentRef, true); };
     utterance.onend = function () { setSpeakingState(documentRef, false); };
     utterance.onerror = function () { setSpeakingState(documentRef, false); };
@@ -924,6 +949,124 @@ function togglePetTts(documentRef) {
     btn.textContent = petTtsEnabled ? "語音播放: 開" : "語音播放: 關";
   }
   return petTtsEnabled;
+}
+
+// ── TASK-169: TTS Voice Selection / Speech Controls ───────────────────────────
+
+// TASK-169: clamp numeric value within [min, max]; return def on NaN/invalid.
+function clampTtsValue(value, min, max, def) {
+  var n = parseFloat(value);
+  if (isNaN(n)) return def;
+  return Math.max(min, Math.min(max, n));
+}
+
+// TASK-169: load TTS settings from localStorage; validate and clamp.
+// Falls back to safe defaults on any failure or unavailability.
+function loadTtsSettings() {
+  var voice = "";
+  var rate  = PET_TTS_RATE_DEF;
+  var pitch = PET_TTS_PITCH_DEF;
+  var vol   = PET_TTS_VOL_DEF;
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      var rv = window.localStorage.getItem(PET_TTS_LS_VOICE);
+      if (typeof rv === "string") { voice = rv; }
+      var rr = window.localStorage.getItem(PET_TTS_LS_RATE);
+      if (rr !== null) { rate  = clampTtsValue(rr, PET_TTS_RATE_MIN,  PET_TTS_RATE_MAX,  PET_TTS_RATE_DEF); }
+      var rp = window.localStorage.getItem(PET_TTS_LS_PITCH);
+      if (rp !== null) { pitch = clampTtsValue(rp, PET_TTS_PITCH_MIN, PET_TTS_PITCH_MAX, PET_TTS_PITCH_DEF); }
+      var rvol = window.localStorage.getItem(PET_TTS_LS_VOLUME);
+      if (rvol !== null) { vol = clampTtsValue(rvol, PET_TTS_VOL_MIN, PET_TTS_VOL_MAX, PET_TTS_VOL_DEF); }
+    }
+  } catch (_e) { /* localStorage unavailable — use in-memory defaults */ }
+  return { voice: voice, rate: rate, pitch: pitch, volume: vol };
+}
+
+// TASK-169: persist current TTS settings to localStorage. Silent no-op on failure.
+function saveTtsSettings() {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      window.localStorage.setItem(PET_TTS_LS_VOICE,  petTtsVoiceName);
+      window.localStorage.setItem(PET_TTS_LS_RATE,   String(petTtsRate));
+      window.localStorage.setItem(PET_TTS_LS_PITCH,  String(petTtsPitch));
+      window.localStorage.setItem(PET_TTS_LS_VOLUME, String(petTtsVolume));
+    }
+  } catch (_e) { /* ignore */ }
+}
+
+// TASK-169: look up the selected voice object from speechSynthesis.getVoices().
+// Returns null if not found or voice list empty (caller uses browser default).
+function getPetTtsVoiceObject() {
+  if (!isPetTtsAvailable() || !petTtsVoiceName) return null;
+  try {
+    var voices = window.speechSynthesis.getVoices();
+    for (var i = 0; i < voices.length; i++) {
+      if (voices[i].name === petTtsVoiceName) return voices[i];
+    }
+  } catch (_e) {}
+  return null; // selected voice gone — use browser default
+}
+
+// TASK-169: populate voice selector with available voices.
+// Safe when selector is absent or voice list is empty.
+function populatePetVoiceSelector(documentRef) {
+  if (!isPetTtsAvailable()) return;
+  var sel = documentRef ? documentRef.getElementById("pet-tts-voice-select") : null;
+  if (!sel) return;
+  try {
+    var voices = window.speechSynthesis.getVoices();
+    if (!voices || voices.length === 0) return; // wait for onvoiceschanged
+    sel.innerHTML = "";
+    var defOpt = documentRef.createElement ? documentRef.createElement("option") : null;
+    if (defOpt) {
+      defOpt.value = "";
+      defOpt.textContent = "系統預設"; // 系統預設
+      sel.appendChild(defOpt);
+    }
+    var found = false;
+    for (var i = 0; i < voices.length; i++) {
+      var v = voices[i];
+      var opt = documentRef.createElement ? documentRef.createElement("option") : null;
+      if (!opt) continue;
+      opt.value = v.name;
+      var label = v.name + " (" + v.lang + ")";
+      if (label.length > 44) { label = label.slice(0, 41) + "..."; }
+      opt.textContent = label;
+      if (v.name === petTtsVoiceName) { opt.selected = true; found = true; }
+      sel.appendChild(opt);
+    }
+    // If stored voice is missing from the current list, reset to default
+    if (petTtsVoiceName && !found) {
+      petTtsVoiceName = "";
+      sel.value = "";
+    }
+  } catch (_e) {}
+}
+
+// TASK-169: sync slider inputs and value labels to current in-memory state.
+function syncTtsControlDisplays(documentRef) {
+  var rateVal   = documentRef ? documentRef.getElementById("pet-tts-rate-val")   : null;
+  var pitchVal  = documentRef ? documentRef.getElementById("pet-tts-pitch-val")  : null;
+  var volVal    = documentRef ? documentRef.getElementById("pet-tts-volume-val") : null;
+  var rateIn    = documentRef ? documentRef.getElementById("pet-tts-rate")    : null;
+  var pitchIn   = documentRef ? documentRef.getElementById("pet-tts-pitch")   : null;
+  var volIn     = documentRef ? documentRef.getElementById("pet-tts-volume")  : null;
+  if (rateVal)  rateVal.textContent  = petTtsRate.toFixed(2);
+  if (pitchVal) pitchVal.textContent = petTtsPitch.toFixed(2);
+  if (volVal)   volVal.textContent   = petTtsVolume.toFixed(2);
+  if (rateIn)   rateIn.value   = String(petTtsRate);
+  if (pitchIn)  pitchIn.value  = String(petTtsPitch);
+  if (volIn)    volIn.value    = String(petTtsVolume);
+}
+
+// TASK-169: reset rate/pitch/volume to safe defaults; save + update UI.
+// Voice selection is not reset (user may prefer to keep their voice).
+function resetTtsControls(documentRef) {
+  petTtsRate   = PET_TTS_RATE_DEF;
+  petTtsPitch  = PET_TTS_PITCH_DEF;
+  petTtsVolume = PET_TTS_VOL_DEF;
+  saveTtsSettings();
+  syncTtsControlDisplays(documentRef);
 }
 
 async function handlePetVoiceChatSend(documentRef, transcript, options) {
@@ -2093,7 +2236,14 @@ function initializePetMode(documentRef = document) {
   const micHook          = documentRef.getElementById("pet-mic-hook");            // TASK-167A
   const recordingCancel  = documentRef.getElementById("pet-recording-cancel");    // TASK-167A
   const menuTts          = documentRef.getElementById("pet-menu-tts");           // TASK-168B
-  const ttsSpeakingStop  = documentRef.getElementById("pet-tts-stop");           // TASK-168B
+  const ttsSpeakingStop    = documentRef.getElementById("pet-tts-stop");           // TASK-168B
+  const menuTtsSettings    = documentRef.getElementById("pet-menu-tts-settings"); // TASK-169
+  const ttsSettingsPanel   = documentRef.getElementById("pet-tts-settings");      // TASK-169
+  const ttsVoiceSelect     = documentRef.getElementById("pet-tts-voice-select");  // TASK-169
+  const ttsRateInput       = documentRef.getElementById("pet-tts-rate");          // TASK-169
+  const ttsPitchInput      = documentRef.getElementById("pet-tts-pitch");         // TASK-169
+  const ttsVolumeInput     = documentRef.getElementById("pet-tts-volume");        // TASK-169
+  const ttsResetBtn        = documentRef.getElementById("pet-tts-reset");         // TASK-169
 
   if (root) {
     root.dataset.initialized = "true";
@@ -2244,6 +2394,83 @@ function initializePetMode(documentRef = document) {
       stopPetSpeech(documentRef);
     });
   }
+
+  // TASK-169: TTS settings panel toggle
+  if (menuTtsSettings && typeof menuTtsSettings.addEventListener === "function") {
+    menuTtsSettings.addEventListener("click", function () {
+      if (!ttsSettingsPanel) return;
+      var isOpen = !ttsSettingsPanel.hidden;
+      ttsSettingsPanel.hidden = isOpen;
+      menuTtsSettings.setAttribute("aria-expanded", isOpen ? "false" : "true");
+      menuTtsSettings.textContent = isOpen ? "語音設定 ▶" : "語音設定 ▼";
+      if (!isOpen) {
+        populatePetVoiceSelector(documentRef);
+        syncTtsControlDisplays(documentRef);
+      }
+    });
+  }
+
+  // TASK-169: voice selector
+  if (ttsVoiceSelect && typeof ttsVoiceSelect.addEventListener === "function") {
+    ttsVoiceSelect.addEventListener("change", function () {
+      petTtsVoiceName = ttsVoiceSelect.value || "";
+      saveTtsSettings();
+    });
+  }
+
+  // TASK-169: rate slider
+  if (ttsRateInput && typeof ttsRateInput.addEventListener === "function") {
+    ttsRateInput.addEventListener("input", function () {
+      petTtsRate = clampTtsValue(ttsRateInput.value, PET_TTS_RATE_MIN, PET_TTS_RATE_MAX, PET_TTS_RATE_DEF);
+      syncTtsControlDisplays(documentRef);
+      saveTtsSettings();
+    });
+  }
+
+  // TASK-169: pitch slider
+  if (ttsPitchInput && typeof ttsPitchInput.addEventListener === "function") {
+    ttsPitchInput.addEventListener("input", function () {
+      petTtsPitch = clampTtsValue(ttsPitchInput.value, PET_TTS_PITCH_MIN, PET_TTS_PITCH_MAX, PET_TTS_PITCH_DEF);
+      syncTtsControlDisplays(documentRef);
+      saveTtsSettings();
+    });
+  }
+
+  // TASK-169: volume slider
+  if (ttsVolumeInput && typeof ttsVolumeInput.addEventListener === "function") {
+    ttsVolumeInput.addEventListener("input", function () {
+      petTtsVolume = clampTtsValue(ttsVolumeInput.value, PET_TTS_VOL_MIN, PET_TTS_VOL_MAX, PET_TTS_VOL_DEF);
+      syncTtsControlDisplays(documentRef);
+      saveTtsSettings();
+    });
+  }
+
+  // TASK-169: reset TTS controls button
+  if (ttsResetBtn && typeof ttsResetBtn.addEventListener === "function") {
+    ttsResetBtn.addEventListener("click", function () {
+      resetTtsControls(documentRef);
+    });
+  }
+
+  // TASK-169: wire onvoiceschanged for async voice loading; safe if unsupported
+  if (isPetTtsAvailable()) {
+    try {
+      window.speechSynthesis.onvoiceschanged = function () {
+        populatePetVoiceSelector(documentRef);
+      };
+    } catch (_e) {}
+  }
+
+  // TASK-169: load persisted TTS settings and apply to state + controls on init
+  (function () {
+    var s = loadTtsSettings();
+    petTtsVoiceName = s.voice;
+    petTtsRate      = s.rate;
+    petTtsPitch     = s.pitch;
+    petTtsVolume    = s.volume;
+    syncTtsControlDisplays(documentRef);
+    populatePetVoiceSelector(documentRef);
+  }());
 
   // TASK-166D: recovery strip — pointerenter on drag handle forces click-through OFF
   var dragHandle = documentRef.getElementById("pet-drag-handle");
@@ -2498,5 +2725,26 @@ if (typeof module !== "undefined") {
     stopPetSpeech,
     speakPetReply,
     togglePetTts,
+    // TASK-169
+    PET_TTS_LS_VOICE,
+    PET_TTS_LS_RATE,
+    PET_TTS_LS_PITCH,
+    PET_TTS_LS_VOLUME,
+    PET_TTS_RATE_MIN,
+    PET_TTS_RATE_MAX,
+    PET_TTS_RATE_DEF,
+    PET_TTS_PITCH_MIN,
+    PET_TTS_PITCH_MAX,
+    PET_TTS_PITCH_DEF,
+    PET_TTS_VOL_MIN,
+    PET_TTS_VOL_MAX,
+    PET_TTS_VOL_DEF,
+    clampTtsValue,
+    loadTtsSettings,
+    saveTtsSettings,
+    getPetTtsVoiceObject,
+    populatePetVoiceSelector,
+    syncTtsControlDisplays,
+    resetTtsControls,
   };
 }

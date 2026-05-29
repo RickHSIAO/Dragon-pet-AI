@@ -174,6 +174,27 @@
       <button id="pet-menu-quiet-mode" class="pet-menu-item pet-no-drag" type="button" data-menu-action="quiet-mode" aria-pressed="false">Quiet Mode: Off</button>
       <button id="pet-menu-click-through" class="pet-menu-item pet-no-drag" type="button" data-menu-action="click-through" aria-pressed="false">Click-through: Off</button>
       <button id="pet-menu-tts" class="pet-menu-item pet-no-drag" type="button" data-menu-action="tts" aria-pressed="false">&#x8A9E;&#x97F3;&#x64AD;&#x653E;: &#x95DC;</button>
+      <!-- TASK-169: TTS settings toggle -->
+      <button id="pet-menu-tts-settings" class="pet-menu-item pet-no-drag" type="button"
+              data-menu-action="tts-settings" aria-expanded="false">&#x8A9E;&#x97F3;&#x8A2D;&#x5B9A; &#x25B6;</button>
+      <!-- TASK-169: TTS settings panel (hidden by default) -->
+      <div id="pet-tts-settings" class="pet-tts-settings pet-no-drag" hidden>
+        <span class="pet-tts-label pet-no-drag">&#x8072;&#x97F3;</span>
+        <select id="pet-tts-voice-select" class="pet-tts-voice-select pet-no-drag"
+                aria-label="TTS voice">
+          <option value="">&#x7CFB;&#x7D71;&#x9810;&#x8A2D;</option>
+        </select>
+        <span class="pet-tts-label pet-no-drag">&#x901F;&#x7387;: <span id="pet-tts-rate-val">1.00</span></span>
+        <input id="pet-tts-rate" type="range" min="0.7" max="1.3" step="0.05" value="1"
+               class="pet-tts-slider pet-no-drag" aria-label="Speech rate">
+        <span class="pet-tts-label pet-no-drag">&#x97F3;&#x8ABF;: <span id="pet-tts-pitch-val">1.00</span></span>
+        <input id="pet-tts-pitch" type="range" min="0.8" max="1.3" step="0.05" value="1"
+               class="pet-tts-slider pet-no-drag" aria-label="Speech pitch">
+        <span class="pet-tts-label pet-no-drag">&#x97F3;&#x91CF;: <span id="pet-tts-volume-val">1.00</span></span>
+        <input id="pet-tts-volume" type="range" min="0" max="1" step="0.05" value="1"
+               class="pet-tts-slider pet-no-drag" aria-label="Speech volume">
+        <button id="pet-tts-reset" class="pet-menu-item pet-no-drag" type="button">&#x91CD;&#x8A2D;&#x8A9E;&#x97F3;&#x8A2D;&#x5B9A;</button>
+      </div>
       <div id="pet-menu-scale-group" class="pet-menu-scale-group pet-no-drag" role="group" aria-label="Window size">
         <button id="pet-menu-scale-small"  class="pet-menu-scale-btn pet-no-drag" type="button" data-scale="small"  aria-pressed="false">S</button>
         <button id="pet-menu-scale-medium" class="pet-menu-scale-btn pet-no-drag" type="button" data-scale="medium" aria-pressed="true">M</button>

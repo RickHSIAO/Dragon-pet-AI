@@ -14310,3 +14310,75 @@ settings persistence service for these values. Use narrow renderer-side `localSt
 - [x] Scope limits clearly exclude cloud TTS, voice cloning, and Live2D (§9).
 - [x] Manual Windows smoke expectations documented (§ Manual Windows Smoke Expectations).
 - [x] No runtime files modified in this docs-only step.
+
+## TASK-169 IMPLEMENTATION RECORD
+
+**Status:** IMPLEMENTED — NEEDS WINDOWS MANUAL SMOKE
+**Date:** 2026-05-29
+**Type:** Implementation — v0.3 Voice Interaction (TTS polish slice)
+
+### What Was Done
+
+TASK-169 added TTS voice selection and speech controls (rate / pitch / volume) to the existing `window.speechSynthesis`-based Pet TTS from TASK-168B. No cloud TTS, no voice cloning, no Live2D, no backend changes, no new IPC channels.
+
+**`apps/desktop/src/pet/pet-renderer.js`** — constants, state, functions, init wiring:
+- Constants added after `PET_TTS_MAX_CHARS`: `PET_TTS_LS_VOICE`, `PET_TTS_LS_RATE`, `PET_TTS_LS_PITCH`, `PET_TTS_LS_VOLUME` (localStorage keys); `PET_TTS_RATE_MIN/MAX/DEF` (0.7/1.3/1.0), `PET_TTS_PITCH_MIN/MAX/DEF` (0.8/1.3/1.0), `PET_TTS_VOL_MIN/MAX/DEF` (0.0/1.0/1.0).
+- State variables added: `petTtsVoiceName` (""), `petTtsRate` (1.0), `petTtsPitch` (1.0), `petTtsVolume` (1.0).
+- New functions (inserted before `handlePetVoiceChatSend`): `clampTtsValue`, `loadTtsSettings`, `saveTtsSettings`, `getPetTtsVoiceObject`, `populatePetVoiceSelector`, `syncTtsControlDisplays`, `resetTtsControls`.
+- `speakPetReply` extended: calls `getPetTtsVoiceObject()` and applies clamped rate/pitch/volume to `SpeechSynthesisUtterance` before speaking.
+- `initializePetMode` extended: getElementById lookups for all 7 new UI elements; listeners for settings panel toggle, voice selector change, rate/pitch/volume sliders, reset button; `onvoiceschanged` handler; init IIFE loading persisted settings and syncing displays.
+- Module exports updated to include all new constants and functions.
+
+**`apps/desktop/src/pet/pet.html`** — UI elements added in Pet Menu after TTS toggle:
+- `<button id="pet-menu-tts-settings">` (語音設定 ▶/▼ toggle, `aria-expanded`).
+- `<div id="pet-tts-settings" hidden>` containing: voice `<select id="pet-tts-voice-select">`, rate/pitch/volume `<input type="range">` with value display spans, `<button id="pet-tts-reset">` (重設語音設定).
+
+**`apps/desktop/src/pet/pet.css`** — styles added:
+- `.pet-menu { max-height: 260px; }` (was 144px) to accommodate settings panel.
+- Scale-specific overrides: `[data-scale="small"] .pet-menu { max-height: 210px; }`, `[data-scale="large"] .pet-menu { max-height: 340px; }`.
+- `.pet-tts-settings` (flex column, gap, padding, border), `.pet-tts-settings[hidden] { display: none; }`, `.pet-tts-label`, `.pet-tts-voice-select` (full width), `.pet-tts-slider` (full width, accent-color teal).
+- Scale variants for small/large voice selector and slider sizing.
+
+**`apps/desktop/scripts/pet-renderer-smoke.js`** — 15 new TASK-169 tests (211 → 226 total):
+`testTask169ConstantsDefined`, `testTask169FunctionsExported`, `testTask169HtmlElements`, `testTask169CssExists`, `testTask169GetVoicesUsed`, `testTask169VoicesChangedHandled`, `testTask169ClampLogic`, `testTask169LoadTtsSettingsDefaults`, `testTask169GetPetTtsVoiceObjectFallback`, `testTask169PopulateVoiceSelectorSafeWithoutSpeechSynthesis`, `testTask169SpeakPetReplyUsesVoiceSettings`, `testTask169ResetTtsControlsRestoresDefaults`, `testTask169LoadSettingsOnInit`, `testTask169VoiceSettingsPanelToggleWired`, `testTask169ScopeChecks`.
+
+### Validation Results
+
+- `node --check apps/desktop/src/pet/pet-renderer.js` — PASS
+- `node apps/desktop/scripts/pet-renderer-smoke.js` — 226/226 PASS (15 new TASK-169 tests all PASS)
+- `node apps/desktop/scripts/pet-window-smoke.js` — 45/45 PASS
+- `node apps/desktop/scripts/renderer-chat-smoke.js` — PASS
+- `cd apps/desktop && npm run test:renderer` — PASS
+- `python -m pytest backend/tests/ -p no:cacheprovider -q` — 633 PASS
+- `git diff --check` — clean (no trailing whitespace)
+- `rg TASK-169 docs/TASKS.md docs/ROADMAP.md` — present in both docs
+- Scope confirmed: no cloud TTS, ElevenLabs, Azure, OpenAI, voice cloning, Live2D, wake word, always-listening, backend schema change, or new IPC channel.
+
+### Smoke Fix Note
+
+`testTask169SpeakPetReplyUsesVoiceSettings` initially used `renderer.slice(fnIdx, fnIdx + 1000)` — too short to reach the `getPetTtsVoiceObject()` call at offset ~972 within `speakPetReply`. Fixed slice to `fnIdx + 1400`.
+
+## TASK-169 WINDOWS MANUAL SMOKE CLOSEOUT
+
+**Status:** DONE — WINDOWS MANUAL SMOKE PASS / DONE — PASS
+**Date:** 2026-05-29
+
+Manual smoke passed on Windows. All acceptance criteria confirmed:
+
+- TTS voice settings panel appears from Pet Menu ("語音設定 ▶/▼" toggle).
+- Available SpeechSynthesis voices load and display as user-readable name + lang labels.
+- Selecting a different voice applies to final reply TTS.
+- Missing / unavailable selected voice falls back safely to browser default.
+- Rate slider (0.7–1.3) changes speech speed perceptibly.
+- Pitch slider (0.8–1.3) changes pitch perceptibly.
+- Volume slider (0.0–1.0) changes playback volume perceptibly.
+- Reset-to-default restores rate / pitch / volume to 1.0.
+- Settings persist after Pet Window reload / restart (localStorage).
+- Corrupt / missing persisted values fall back safely to defaults.
+- TTS OFF still prevents speech (toggle from TASK-168B unchanged).
+- Stop speech (■) still works and clears speaking indicator.
+- New reply still interrupts previous speech safely.
+- Starting voice recording still cancels current TTS (no mic feedback loop).
+- Thinking / recording / transcribing / debug text not spoken.
+- S / M / L scales remain usable with settings panel open.
+- Scope confirmed clean: no cloud TTS, ElevenLabs, Azure, OpenAI, voice cloning, Live2D, wake word, always-listening, backend schema change, new IPC channel, or broad settings architecture added.
