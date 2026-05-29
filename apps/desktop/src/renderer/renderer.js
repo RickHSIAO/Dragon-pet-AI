@@ -29,6 +29,9 @@ const chatProviderStatus = document.getElementById("chat-provider-status");
 const chatRuntimeStatus = document.getElementById("chat-runtime-status");
 const showPetWindowBtn = document.getElementById("show-pet-window-btn");
 const showPetWindowStatus = document.getElementById("show-pet-window-status");
+// TASK-171A: Full App screenshot capture controls.
+const captureScreenBtn = document.getElementById("capture-screen-btn");
+const captureScreenStatus = document.getElementById("capture-screen-status");
 const memoryForm  = document.getElementById("memory-form");
 const memoryType  = document.getElementById("memory-type");
 const memoryContent = document.getElementById("memory-content");
@@ -133,6 +136,60 @@ async function showPetWindowFromFullApp() {
     setShowPetWindowStatus("Pet Window request failed.", true);
     return null;
   }
+}
+
+
+
+// ---------------------------------------------------------------------------
+// TASK-171A: user-triggered primary-display screenshot capture (Full App only).
+// Safety: only on explicit click; in-memory dataUrl only; never disk/chat/OCR/vision/background.
+// ---------------------------------------------------------------------------
+let lastScreenshotDataUrl = null;
+let captureScreenInFlight = false;
+
+const CAPTURE_FAILURE_MESSAGES = {
+  "permission-denied": "無法截圖，缺少螢幕擷取權限。",
+  "no-source": "找不到可截圖的螢幕。",
+  "capture-failed": "截圖失敗，請稍後再試。",
+};
+
+function setCaptureScreenStatus(message, isError) {
+  if (!captureScreenStatus) return;
+  captureScreenStatus.textContent = message;
+  captureScreenStatus.className = isError === true
+    ? "header-action-status error"
+    : "header-action-status";
+}
+
+async function captureScreenFromFullApp() {
+  if (captureScreenInFlight) return null;
+  const api = (typeof window !== "undefined" && window.dragonPet) ? window.dragonPet : null;
+  if (!api || typeof api.captureScreen !== "function") {
+    setCaptureScreenStatus("螢幕擷取功能未啟用。", true);
+    return null;
+  }
+  captureScreenInFlight = true;
+  if (captureScreenBtn) captureScreenBtn.disabled = true;
+  setCaptureScreenStatus("擷取中…", false);
+  let result = null;
+  try {
+    result = await api.captureScreen();
+  } catch (_error) {
+    result = { ok: false, error: "capture-failed" };
+  } finally {
+    captureScreenInFlight = false;
+    if (captureScreenBtn) captureScreenBtn.disabled = false;
+  }
+  if (result && result.ok && typeof result.dataUrl === "string"
+      && result.dataUrl.startsWith("data:image/")) {
+    lastScreenshotDataUrl = result.dataUrl;
+    setCaptureScreenStatus("螢幕截圖完成。尚未儲存，可供後續分析使用。", false);
+    return { ok: true };
+  }
+  const reason = (result && typeof result.error === "string") ? result.error : "capture-failed";
+  const safeMessage = CAPTURE_FAILURE_MESSAGES[reason] || CAPTURE_FAILURE_MESSAGES["capture-failed"];
+  setCaptureScreenStatus(safeMessage, true);
+  return { ok: false };
 }
 
 function updatePetSpeechFromChatResponse(data) {
@@ -1622,6 +1679,13 @@ sendBtn.addEventListener("click", () => {
 if (showPetWindowBtn) {
   showPetWindowBtn.addEventListener("click", () => {
     showPetWindowFromFullApp();
+  });
+}
+
+// TASK-171A: capture button click is the ONLY trigger.
+if (captureScreenBtn) {
+  captureScreenBtn.addEventListener("click", () => {
+    captureScreenFromFullApp();
   });
 }
 

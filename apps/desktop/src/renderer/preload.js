@@ -4,6 +4,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 const PET_SHOW_WINDOW_CHANNEL = "pet:show-window";
 const PET_SPEECH_UPDATE_CHANNEL = "pet:speech-update";
+const SCREEN_CAPTURE_ONCE_CHANNEL = "screen:capture-once";  // TASK-171A
 
 function sanitizePetSpeechPayload(payload = {}) {
   return {
@@ -19,5 +20,7 @@ contextBridge.exposeInMainWorld(
     showPetWindow: () => ipcRenderer.invoke(PET_SHOW_WINDOW_CHANNEL),
     updatePetSpeech: (payload) =>
       ipcRenderer.invoke(PET_SPEECH_UPDATE_CHANNEL, sanitizePetSpeechPayload(payload)),
+    // TASK-171A: narrow Full App screenshot capture surface.
+    captureScreen: () => ipcRenderer.invoke(SCREEN_CAPTURE_ONCE_CHANNEL),
   })
 );

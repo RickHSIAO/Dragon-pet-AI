@@ -8,7 +8,7 @@
  * - No shell execution, no file system access, no live2D
  */
 
-const { app, BrowserWindow, ipcMain, screen } = require("electron");
+const { app, BrowserWindow, desktopCapturer, ipcMain, screen } = require("electron");
 const fs = require("fs");
 const http = require("http");  // TASK-167B: used by stt:transcribe IPC handler
 const path = require("path");
@@ -25,6 +25,7 @@ const PET_QUIET_MODE_SET_CHANNEL = "pet:set-quiet-mode";  // TASK-162
 const PET_SCALE_SET_CHANNEL = "pet:set-scale";            // TASK-166B
 const PET_CLICK_THROUGH_SET_CHANNEL = "pet:set-click-through";  // TASK-166D
 const PET_STT_TRANSCRIBE_CHANNEL = "stt:transcribe";           // TASK-167B
+const SCREEN_CAPTURE_ONCE_CHANNEL = "screen:capture-once";     // TASK-171A
 const PET_WINDOW_WIDTH = 300;   // Medium default — used as fallback constant
 const PET_WINDOW_HEIGHT = 400;  // Medium default — used as fallback constant
 // TASK-166B: scale preset dimensions
@@ -507,6 +508,48 @@ ipcMain.handle(PET_CLICK_THROUGH_SET_CHANNEL, (_event, value) => {  // TASK-166D
   }
   return { ok: true, clickThrough: enabled };
 });
+
+
+// TASK-171A: screen:capture-once IPC handler.
+// One primary-display screenshot per user click. No disk save, no /chat, no OCR,
+// no vision, no background monitoring. Renderer receives a data URL only.
+// Reason codes only on failure — no raw Electron error objects, no stack traces.
+ipcMain.handle(SCREEN_CAPTURE_ONCE_CHANNEL, async () => {
+  try {
+    const primary = screen.getPrimaryDisplay();
+    const sources = await desktopCapturer.getSources({
+      types: ["screen"],
+      thumbnailSize: {
+        width: primary.size.width,
+        height: primary.size.height,
+      },
+    });
+    if (!sources || sources.length === 0) {
+      return { ok: false, error: "no-source" };
+    }
+    const primaryId = String(primary.id);
+    let selected = sources.find((s) => String(s.display_id) === primaryId);
+    if (!selected) {
+      selected = sources[0];
+    }
+    const thumbnail = selected && selected.thumbnail;
+    if (!thumbnail || thumbnail.isEmpty()) {
+      return { ok: false, error: "capture-failed" };
+    }
+    const dataUrl = thumbnail.toDataURL();
+    if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:image/")) {
+      return { ok: false, error: "capture-failed" };
+    }
+    return { ok: true, dataUrl };
+  } catch (_err) {
+    const msg = _err && typeof _err.message === "string" ? _err.message.toLowerCase() : "";
+    if (msg.includes("permission") || msg.includes("denied") || msg.includes("not authorized")) {
+      return { ok: false, error: "permission-denied" };
+    }
+    return { ok: false, error: "capture-failed" };
+  }
+});
+
 
 
 // TASK-167B: stt:transcribe IPC handler.

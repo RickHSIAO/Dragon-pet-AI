@@ -1932,6 +1932,9 @@ async function main() {
   await testUpdatePetThinkingStateFunctionExists();
   await testUpdatePetThinkingStateCallsUpdatePetSpeechWithPetThinkingSource();
   await testUpdatePetThinkingStateHandlesNoPetBridge();
+  // TASK-171A: screenshot capture regression + scope tests
+  const task171a = require("./task171a-capture-smoke.js");
+  await task171a.runAll({ loadRenderer, sendChat, settle, textOf });
   console.log("renderer chat smoke: PASS");
 }
 
