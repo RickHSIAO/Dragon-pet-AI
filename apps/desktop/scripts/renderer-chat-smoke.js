@@ -395,7 +395,10 @@ async function loadRenderer(options = {}) {
         search: "?backend=http%3A%2F%2Flocalhost%3A8000",
       },
       dragonPet: options.dragonPet || undefined,
-      confirm: () => true,
+      // TASK-172A: allow tests to override window.confirm behaviour.
+      confirm: typeof options.confirmOverride === "function"
+        ? options.confirmOverride
+        : () => true,
       // TASK-108: idle timer registers window.addEventListener("focus", ...) — stub it
       addEventListener() {},
     },

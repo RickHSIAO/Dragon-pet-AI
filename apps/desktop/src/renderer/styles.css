@@ -102,6 +102,27 @@ textarea {
   color: #ff8a8a;
 }
 
+/* TASK-172A: secondary action button (清除截圖) */
+.header-action-btn--secondary {
+  opacity: 0.75;
+}
+
+/* TASK-172A: screen analysis summary panel */
+.analyze-screen-summary {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 6px 18px;
+  max-height: 120px;
+  overflow-y: auto;
+  padding: 8px 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 #character-status {
   background: var(--surface);
   border-bottom: 1px solid var(--border);

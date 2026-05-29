@@ -32,6 +32,11 @@ const showPetWindowStatus = document.getElementById("show-pet-window-status");
 // TASK-171A: Full App screenshot capture controls.
 const captureScreenBtn = document.getElementById("capture-screen-btn");
 const captureScreenStatus = document.getElementById("capture-screen-status");
+// TASK-172A: analyze + clear controls.
+const analyzeScreenBtn = document.getElementById("analyze-screen-btn");
+const analyzeScreenStatus = document.getElementById("analyze-screen-status");
+const analyzeScreenSummaryEl = document.getElementById("analyze-screen-summary");
+const clearScreenBtn = document.getElementById("clear-screen-btn");
 const memoryForm  = document.getElementById("memory-form");
 const memoryType  = document.getElementById("memory-type");
 const memoryContent = document.getElementById("memory-content");
@@ -183,6 +188,9 @@ async function captureScreenFromFullApp() {
   if (result && result.ok && typeof result.dataUrl === "string"
       && result.dataUrl.startsWith("data:image/")) {
     lastScreenshotDataUrl = result.dataUrl;
+    lastScreenSummary = null;         // TASK-172A: new capture clears prior summary
+    setAnalyzeScreenSummary(null);    // TASK-172A: hide old summary panel
+    updateAnalyzeButtonState();       // TASK-172A: enable analyze button
     setCaptureScreenStatus("螢幕截圖完成。尚未儲存，可供後續分析使用。", false);
     return { ok: true };
   }
@@ -190,6 +198,124 @@ async function captureScreenFromFullApp() {
   const safeMessage = CAPTURE_FAILURE_MESSAGES[reason] || CAPTURE_FAILURE_MESSAGES["capture-failed"];
   setCaptureScreenStatus(safeMessage, true);
   return { ok: false };
+}
+
+// ---------------------------------------------------------------------------
+// TASK-172A: user-confirmed screenshot OCR summary (Full App only).
+// Privacy: no cloud vision, no /chat, no background monitoring, no disk save.
+// OCR is unavailable in this slice — clean fallback shown until wired up.
+// ---------------------------------------------------------------------------
+let lastScreenSummary = null;
+let analyzeInFlight = false;
+
+const ANALYZE_CONFIRM_MSG =
+  "截圖內容可能含有密碼、API 金鑰或私密訊息。\n請確認截圖內容後再繼續分析。";
+
+const ANALYZE_FAILURE_MESSAGES = {
+  "ocr-unavailable":      "分析功能目前不可用。",
+  "ocr-failed":           "分析失敗，請稍後再試。",
+  "screenshot-too-large": "截圖過大，無法分析。",
+  "no-screenshot":        "請先擷取螢幕截圖。",
+  "screenshot-cleared":   "截圖已清除，請重新擷取。",
+  "no-text":              "未偵測到可用文字。",
+};
+
+function setAnalyzeScreenStatus(message, isError) {
+  if (!analyzeScreenStatus) return;
+  analyzeScreenStatus.textContent = message;
+  analyzeScreenStatus.className = isError === true
+    ? "header-action-status error"
+    : "header-action-status";
+}
+
+function setAnalyzeScreenSummary(text) {
+  if (!analyzeScreenSummaryEl) return;
+  if (!text) {
+    analyzeScreenSummaryEl.hidden = true;
+    analyzeScreenSummaryEl.textContent = "";
+    return;
+  }
+  analyzeScreenSummaryEl.textContent = text;
+  analyzeScreenSummaryEl.hidden = false;
+}
+
+function updateAnalyzeButtonState() {
+  const hasScreenshot = typeof lastScreenshotDataUrl === "string"
+    && lastScreenshotDataUrl.startsWith("data:image/");
+  if (analyzeScreenBtn) analyzeScreenBtn.disabled = !hasScreenshot || analyzeInFlight;
+  if (clearScreenBtn) clearScreenBtn.hidden = !hasScreenshot;
+}
+
+function clearScreenshot() {
+  lastScreenshotDataUrl = null;
+  lastScreenSummary = null;
+  updateAnalyzeButtonState();
+  setAnalyzeScreenStatus("", false);
+  setAnalyzeScreenSummary(null);
+  setCaptureScreenStatus("截圖已清除。", false);
+}
+
+// TASK-172A: OCR stub — unavailable fallback for this slice.
+// Returns { ok: false, error: "ocr-unavailable" } until tesseract.js or
+// a backend OCR endpoint is wired up in a future implementation step.
+// Safety: never uploads dataUrl externally, never calls /chat.
+function runOcrAnalysis(_dataUrl) {
+  return Promise.resolve({ ok: false, error: "ocr-unavailable" });
+}
+
+function cleanOcrText(raw) {
+  if (typeof raw !== "string") return "";
+  const trimmed = raw.trim();
+  const collapsed = trimmed.replace(/\n{3,}/g, "\n\n");
+  const MAX_OCR_CHARS = 800;
+  return collapsed.length > MAX_OCR_CHARS ? collapsed.slice(0, MAX_OCR_CHARS) : collapsed;
+}
+
+async function analyzeScreenFromFullApp() {
+  if (analyzeInFlight) return;
+  if (!lastScreenshotDataUrl || !lastScreenshotDataUrl.startsWith("data:image/")) {
+    setAnalyzeScreenStatus(ANALYZE_FAILURE_MESSAGES["no-screenshot"], true);
+    return;
+  }
+  // Explicit sensitive-content confirmation required before every analysis.
+  const confirmFn =
+    typeof window !== "undefined" && typeof window.confirm === "function"
+      ? window.confirm.bind(window)
+      : () => false;
+  const userConfirmed = confirmFn(ANALYZE_CONFIRM_MSG);
+  if (!userConfirmed) {
+    return; // silently do nothing; button stays enabled
+  }
+  analyzeInFlight = true;
+  if (analyzeScreenBtn) analyzeScreenBtn.disabled = true;
+  setAnalyzeScreenStatus("正在分析…", false);
+  setAnalyzeScreenSummary(null);
+  let result = null;
+  try {
+    result = await runOcrAnalysis(lastScreenshotDataUrl);
+  } catch (_err) {
+    result = { ok: false, error: "ocr-failed" };
+  } finally {
+    analyzeInFlight = false;
+    updateAnalyzeButtonState();
+  }
+  if (result && result.ok) {
+    const cleaned = cleanOcrText(result.text);
+    if (!cleaned) {
+      setAnalyzeScreenStatus(ANALYZE_FAILURE_MESSAGES["no-text"], false);
+      lastScreenSummary = null;
+    } else {
+      lastScreenSummary = cleaned;
+      setAnalyzeScreenStatus("", false);
+      setAnalyzeScreenSummary("螢幕摘要：\n" + cleaned);
+    }
+    return;
+  }
+  const failReason = (result && typeof result.error === "string") ? result.error : "ocr-failed";
+  const failMsg = ANALYZE_FAILURE_MESSAGES[failReason] || ANALYZE_FAILURE_MESSAGES["ocr-failed"];
+  const isErr = failReason !== "no-text";
+  setAnalyzeScreenStatus(failMsg, isErr);
+  lastScreenSummary = null;
 }
 
 function updatePetSpeechFromChatResponse(data) {
@@ -1688,6 +1814,23 @@ if (captureScreenBtn) {
     captureScreenFromFullApp();
   });
 }
+
+// TASK-172A: analyze button — only fires after screenshot exists + user confirms.
+if (analyzeScreenBtn) {
+  analyzeScreenBtn.addEventListener("click", () => {
+    analyzeScreenFromFullApp();
+  });
+}
+
+// TASK-172A: clear button — resets screenshot + summary, disables analyze.
+if (clearScreenBtn) {
+  clearScreenBtn.addEventListener("click", () => {
+    clearScreenshot();
+  });
+}
+
+// TASK-172A: initialise button state on load (no screenshot yet → disabled).
+updateAnalyzeButtonState();
 
 memoryForm.addEventListener("submit", (e) => {
   e.preventDefault();

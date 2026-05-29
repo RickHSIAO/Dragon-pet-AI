@@ -36,7 +36,15 @@
          In-memory dataUrl only. No disk save, no /chat send, no OCR, no vision. -->
     <button id="capture-screen-btn" class="header-action-btn" type="button">擷取螢幕</button>
     <span id="capture-screen-status" class="header-action-status" role="status"></span>
+    <!-- TASK-172A: user-confirmed OCR analysis. Disabled until screenshot exists in memory.
+         No cloud vision. No /chat. No background analysis. Explicit confirmation required. -->
+    <button id="analyze-screen-btn" class="header-action-btn" type="button" disabled>分析這張</button>
+    <span id="analyze-screen-status" class="header-action-status" role="status"></span>
+    <button id="clear-screen-btn" class="header-action-btn header-action-btn--secondary" type="button" hidden>清除截圖</button>
   </header>
+
+  <!-- TASK-172A: screen summary panel. Hidden until analysis produces output. -->
+  <div id="analyze-screen-summary" class="analyze-screen-summary" hidden></div>
 
   <!-- ── Character status ───────────────────────────────── -->
   <div id="character-status">
