@@ -14506,3 +14506,200 @@ Audit and improve voice interaction latency (recording → STT → /chat → TTS
 - [x] Known limitations listed.
 - [x] Next roadmap options listed with guidance.
 - [x] No runtime files modified.
+
+## TASK-171 | Screen Context / User-Triggered Screenshot Design
+
+**Status:** DEFINED (docs-only)
+**Date:** 2026-05-29
+**Type:** Design — v0.4 Screen Context (slice 1, user-triggered screenshot)
+**Depends on:** TASK-170 DONE (v0.3 Voice Interaction checkpoint)
+
+### Context
+
+TASK-170 confirmed the v0.3 Voice Interaction loop is stable and complete. The broader product vision is a desktop AI companion that can sit near the screen edge, converse with the user, and eventually understand what the user is currently doing on screen. TASK-171 begins screen context carefully with the smallest safe slice: explicit user-triggered screenshot capture only. No background monitoring. No automatic analysis. No cloud vision.
+
+### Goal
+
+Design a privacy-safe first screen context slice: the user explicitly asks the Pet or Full App to capture the current screen, the app obtains a screenshot, and stores it in memory for a single session. All analysis is deferred to a future task with explicit user confirmation.
+
+### §1 — User-Triggered Only
+
+Screen capture happens only after an explicit user action. There is no background monitoring, no periodic screenshot, no hidden capture, and no always-on vision. The user must clearly know when capture is happening. Capture must never be triggered by idle state, Quiet Mode, or proactive companion behavior.
+
+### §2 — Entry Points
+
+**Recommended first implementation:** Full App button (safe, visible, easy to debug).
+
+**Possible entry points:**
+- Full App: dedicated "截圖" (screenshot) button in the main chat/companion UI. Preferred for v0.4 slice 1 — highly visible, no click-through complexity.
+- Pet Menu: shortcut button in Pet overlay. May be added in a follow-up slice once Full App path is stable. Must force click-through OFF before capture.
+- Text command: user types "截圖" or "看一下螢幕" in Pet or Full App chat. Requires command detection in `/chat` response or local keyword match — deferred to a later slice.
+- Voice command: user says "看一下螢幕". Requires voice trigger handling — deferred and must require confirmation before capture to avoid accidental triggers.
+
+Capture must not be triggered by:
+- Idle rotation or idle behavior.
+- Quiet Mode state changes.
+- Proactive companion nudges.
+- System events (window focus, app launch, etc.).
+
+### §3 — Capture Target
+
+**Recommended first version:** Full primary display screenshot only. No active-window permission complexity. No area selection.
+
+| Mode | Recommended | Notes |
+|---|---|---|
+| Full primary display | ✅ v0.4 slice 1 | Simple; requires no additional permissions |
+| Active window only | Future | Requires additional OS APIs |
+| Selected area | Future | Requires overlay UI |
+| Multi-monitor | Future | Can be deferred; document as limitation |
+
+First version captures one screenshot of the primary display at moment of user action. Multi-monitor support (e.g. display picker) is deferred and documented as a known limitation.
+
+### §4 — Privacy Boundaries
+
+- Screenshot treated as sensitive data.
+- Not saved to disk by default.
+- Kept in-memory only for the current session (cleared on app close or explicit discard).
+- No automatic upload to any external service.
+- No cloud vision provider in this task.
+- No OCR or vision analysis in this task (deferred to TASK-172).
+- If screenshot is later sent to a model, that requires a separate task with explicit user confirmation and a dedicated design.
+- Screenshot data must not be logged, written to `app.getPath("userData")`, or stored in any persistent location without explicit user action.
+
+### §5 — Redaction / Safety Boundary
+
+First implementation may not redact, but the design must document this boundary clearly:
+
+- Passwords, API keys, private messages, browser content, and personal information may appear in a screenshot.
+- Screenshot-to-analysis must require explicit user confirmation before any model sees the image.
+- The app must not silently analyze sensitive screen content.
+- Future redaction options to document for TASK-172: pixel-blur on detected password fields, browser URL bar masking, or user-directed "exclude this region" selection.
+- Until redaction is implemented, users must be warned that the screenshot may contain sensitive content before it is used for analysis.
+
+### §6 — Pet / Full App UX
+
+**Capture flow:**
+1. User clicks capture button (Full App or Pet Menu).
+2. App shows clear "正在截圖…" (capturing) status in UI.
+3. Screenshot taken.
+4. App shows clean confirmation: "截圖完成，尚未儲存，可供後續分析使用。" (screenshot captured, not saved, ready for future analysis).
+5. No raw file paths, Electron internals, IPC debug output, or error stack traces shown in Pet Bubble.
+6. Pet Bubble remains character-facing and clean.
+
+**Status display rules:**
+- Capture status shown only in the UI element that triggered it (Full App panel or Pet Bubble reply).
+- Capture status must not become idle chatter or repeat in future idle rotation.
+- Capture confirmation must clear after a short period or on next user action.
+
+### §7 — Chat Integration
+
+TASK-171 does not send screenshots to `/chat` automatically.
+
+- Screenshot stored in memory; not used for any model inference in this task.
+- Screenshot-to-chat / screenshot-to-vision analysis deferred to TASK-172.
+- If screenshot is held in memory, it is scoped to one session and cleared on app close.
+- User must explicitly confirm before any analysis occurs in a future task.
+- The `/chat` endpoint schema is not changed in this task.
+
+### §8 — Voice Interaction
+
+Voice-triggered screenshot is deferred. First implementation avoids accidental capture via voice.
+
+If voice trigger is added in a future slice:
+- User says "看一下螢幕" → app does not capture immediately.
+- App asks for explicit confirmation (e.g. "確定要截圖嗎？") before capture.
+- No passive listening for screen capture trigger.
+- Accidental trigger during dictation must not cause a capture.
+
+### §9 — Click-Through / Quiet Mode
+
+- Capture control must not trap the user in click-through mode.
+- If capture is triggered from Pet Menu, click-through must be forced OFF before the capture UI appears.
+- After capture, Pet Window should return to previous click-through state.
+- Quiet Mode suppresses idle behavior only; it must not block explicit user-triggered screenshot capture.
+- Capture status confirmation must not be treated as idle content or suppressed by Quiet Mode.
+
+### §10 — Error Handling
+
+All failure cases must show clean, character-facing messages in the Pet Bubble or Full App UI. No raw stack traces, file paths, Electron API error objects, IPC channel names, or debug details exposed.
+
+| Failure | Clean fallback |
+|---|---|
+| Capture permission denied | "無法截圖，缺少螢幕擷取權限。" |
+| `desktopCapturer` unavailable | "截圖功能在此裝置上不可用。" |
+| No display found | "找不到可截圖的螢幕。" |
+| Capture operation failed | "截圖失敗，請稍後再試。" |
+| Screenshot too large / memory error | "截圖過大，無法處理，請稍後再試。" |
+
+### §11 — Implementation Direction (for future TASK-172+)
+
+Recommended Electron approach:
+- Use `desktopCapturer.getSources({ types: ["screen"] })` to enumerate screens.
+- Capture primary display source; extract image data as `NativeImage` or data URL.
+- Keep image in renderer memory or pass via narrow IPC to main process in-memory only.
+- Do not write to filesystem without explicit user action.
+- IPC channel: `screen:capture-once` (main process handler; no return of raw filesystem paths).
+- Do not expose `desktopCapturer` directly to renderer via preload; keep behind a narrow IPC bridge.
+- Do not add global hotkeys or system-level event listeners for screen capture.
+- Do not expose arbitrary filesystem or system APIs.
+
+### §12 — Preserved Existing Behavior
+
+The following must not regress when TASK-171 is later implemented:
+
+- TASK-166 Desktop Companion Shell (transparent overlay, scale variants, tailored bubble).
+- TASK-167 full voice input pipeline (recording → STT → /chat).
+- TASK-168B system TTS playback (speaking indicator, stop button, TTS toggle).
+- TASK-169 TTS voice controls (voice selector, rate/pitch/volume, persistence).
+- TASK-170 v0.3 Voice Interaction loop.
+- Quiet Mode idle suppression behavior.
+- Click-through toggle and recovery strip (TASK-166D / TASK-166E).
+- Direct Pet text input (TASK-166E).
+- Pet Bubble clean speech rules (no diagnostics, no raw JSON, no stack traces).
+
+### §13 — Scope Limits (This Docs-Only Step)
+
+- Do not implement screenshot capture.
+- Do not implement OCR.
+- Do not implement computer vision.
+- Do not implement screen content analysis.
+- Do not implement background screen monitoring.
+- Do not implement proactive nudges based on screen content.
+- Do not implement cloud vision provider.
+- Do not implement screenshot persistence to disk.
+- Do not implement Live2D.
+- Do not modify backend schema.
+- Do not modify any runtime implementation file in this docs-only step.
+
+### Manual Windows Smoke Expectations (for future TASK-171 implementation)
+
+- Capture control appears only in the approved UI location (Full App button for v0.4 slice 1).
+- Capture happens only after explicit user click — never automatically.
+- No background screenshots occur during normal use, idle, or Quiet Mode.
+- User receives clear "正在截圖…" capturing status followed by clean confirmation.
+- Screenshot is not saved to disk by default; no file appears in filesystem.
+- Screenshot is not sent to `/chat` automatically; no model sees the image without confirmation.
+- Capture failure (permission denied, API unavailable) shows clean Chinese fallback message in Pet Bubble — no stack trace, no Electron error object.
+- Click-through recovery strip does not regress when Pet Menu capture path is used.
+- Quiet Mode does not block explicit capture triggered by user.
+- Pet Bubble shows no raw file paths, IPC channel names, or debug details.
+- TTS / voice / direct text input all still work normally after a capture event.
+- No OCR, vision analysis, cloud upload, or background monitoring exists in the codebase.
+
+### Acceptance Criteria
+
+- [x] User-triggered screen capture behavior documented (§1).
+- [x] Entry points documented with recommended first implementation (§2).
+- [x] Capture target assumptions documented (§3).
+- [x] Privacy boundaries documented (§4).
+- [x] Redaction / safety boundary documented (§5).
+- [x] Pet / Full App UX flow documented (§6).
+- [x] Chat integration boundary documented (§7).
+- [x] Voice interaction boundary documented (§8).
+- [x] Click-through / Quiet Mode interaction documented (§9).
+- [x] Error handling documented (§10).
+- [x] Implementation direction documented (§11).
+- [x] Preserved existing behavior documented (§12).
+- [x] Scope limits documented (§13).
+- [x] Manual Windows smoke expectations documented.
+- [x] No runtime files modified in this docs-only step.
