@@ -15188,3 +15188,399 @@ All failure cases must show clean, character-facing messages. No raw stack trace
 - [x] Preserved existing behavior documented (§11).
 - [x] Manual Windows smoke expectations documented.
 - [x] No runtime files modified in this docs-only step.
+
+## TASK-172A | Screenshot OCR Summary Implementation Design
+
+**Status:** DEFINED (docs-only)
+**Date:** 2026-05-29
+**Type:** Design — v0.4 Screen Context (slice 2A, OCR summary only)
+**Depends on:** TASK-172 DEFINED (user-confirmed analysis design)
+
+### Context
+
+TASK-171A delivered user-triggered primary display screenshot capture: in-memory only, no disk save, no analysis, no `/chat`. TASK-172 designed the user-confirmed analysis flow and recommended splitting implementation into TASK-172A (analysis → summary text only) and TASK-172B (summary → `/chat` context handoff, deferred). TASK-172A is the next implementation slice: after a screenshot exists in memory, the user clicks "分析這張", confirms a sensitive-content warning, and the app runs local OCR and displays a clean screen summary. No `/chat` handoff in this task.
+
+### Goal
+
+Design the implementation of user-confirmed screenshot analysis via local OCR. Output is a clean plain-text summary shown in the Full App UI only. No cloud vision. No `/chat` call. No Pet commentary. Always explicit — two separate user actions required (capture, then confirm analysis).
+
+### §1 — Entry Point
+
+The Full App shows a "分析這張" (Analyze This) button. Behavior:
+
+- Button is **disabled** (grayed, `disabled` attribute) before any screenshot exists in memory.
+- Button becomes **enabled** after a successful TASK-171A capture (`lastScreenshotDataUrl` is set).
+- Button is **separate** from the "擷取螢幕" (Capture Screen) button. The two actions are visually and functionally distinct.
+- If the user captures a new screenshot after a prior analysis, the prior summary is cleared before the next analysis starts.
+- No Pet Menu trigger.
+- No voice trigger.
+- No background or automatic analysis.
+
+### §2 — Sensitive-Content Confirmation
+
+Before analysis starts, the UI must show a visible warning. The user must explicitly confirm before any OCR runs.
+
+**Warning text (zh-TW):**
+> 截圖內容可能含有密碼、API 金鑰或私密訊息。請確認截圖內容後再繼續分析。
+
+**Warning text (en, for design reference):**
+> Screenshot may contain passwords, API keys, or private messages. Please review before proceeding.
+
+Confirmation flow:
+- Clicking "分析這張" shows the warning (modal dialog or inline panel — implementation choice).
+- User can **cancel** → analysis does not start; button returns to enabled state; no status change.
+- User can **confirm** → analysis starts; status changes to "正在分析…".
+- Every analysis requires a fresh confirmation. There is no "always confirm" toggle in TASK-172A.
+
+### §3 — OCR / Analysis Strategy
+
+**Provider priority: local first. No cloud.**
+
+**Option A — Renderer-side `tesseract.js`:**
+- Run OCR entirely in the Electron renderer process using `tesseract.js`.
+- Screenshot `dataUrl` passed directly to `Tesseract.recognize()` in the renderer.
+- Advantage: no IPC round-trip, no backend change, no new npm server dependency.
+- Risk: `tesseract.js` bundle size (~4–8 MB WASM) and worker startup latency (~1–3 s on first run).
+- Feasibility check required before TASK-172A implementation: measure bundle size impact on renderer startup. If unacceptable (>10 MB increase or >3 s cold-start regression), use Option B.
+
+**Option B — Backend local OCR endpoint:**
+- Add a new FastAPI endpoint `POST /ocr/extract` accepting a base64-encoded PNG or JPEG.
+- Backend uses `pytesseract` (wraps system Tesseract) or `easyocr` for extraction.
+- IPC bridge: new narrow channel `screen:analyze-once` (renderer → main → backend).
+- Main returns `{ ok, text }` or `{ ok: false, error: "reason-code" }`.
+- Advantage: keeps renderer bundle lean; reuses existing Python backend pattern.
+- Risk: requires Tesseract binary installed on user machine; must handle missing-binary gracefully.
+
+**Decision rule for implementation:** attempt Option A first. If bundle size or cold-start regression is unacceptable after measurement, fall back to Option B. Document the decision in the TASK-172A implementation record.
+
+**Unavailable fallback:**
+- If neither Option A nor Option B is available at runtime, show: "分析功能目前不可用。"
+- Do not fake analysis or return empty/placeholder summary.
+
+**No cloud vision in TASK-172A.** No OpenAI Vision, no Google Vision, no Azure CV, no Anthropic Vision. Cloud vision requires a separate explicit opt-in design (future task).
+
+### §4 — Summary Output
+
+OCR raw text must be cleaned before display:
+
+- Strip leading/trailing whitespace and blank lines.
+- Collapse multiple consecutive blank lines to one.
+- Truncate to a reasonable display length (suggested max: 800 chars; remainder silently discarded — not an error).
+- Do **not** show raw OCR dumps by default (no character-by-character noise output).
+- Do **not** show raw `dataUrl` / base64.
+- Do **not** show provider internals, backend URLs, stack traces, or JSON.
+
+**Display format (Full App UI):**
+```
+螢幕摘要：
+{cleaned summary text}
+```
+
+If OCR finds no useful text (empty result after cleaning):
+```
+未偵測到可用文字。
+```
+
+The summary is shown in the Full App UI only. Pet Bubble does not receive the analysis in TASK-172A.
+
+### §5 — Storage and Memory
+
+- Screenshot `dataUrl` remains in memory only (per TASK-171A: `lastScreenshotDataUrl` in renderer state).
+- OCR summary text may be stored in renderer memory only (`lastScreenSummary` or equivalent variable).
+- No disk save for screenshot or summary.
+- No screenshot history; only the latest capture and latest summary are retained.
+- The user can clear both via a "清除截圖" (Clear Screenshot) button at any time; clearing resets `lastScreenshotDataUrl`, `lastScreenSummary`, disables the Analyze button, and clears the summary display area.
+- Raw screenshot must not appear in logs, error reports, or console output.
+- After analysis, only the summary string is retained in memory; the raw `dataUrl` is not re-persisted.
+
+### §6 — Chat Boundary
+
+- TASK-172A must **not** call `/chat`.
+- TASK-172A must **not** send the summary to `/chat`.
+- TASK-172A must **not** inject screen context into any existing message flow.
+- Pet Bubble must not receive the analysis summary in TASK-172A.
+- TASK-172B (deferred) will design the optional user-confirmed summary → `/chat` context handoff.
+- The "加入對話" (Add to Chat) button is **not** implemented in TASK-172A; the summary display is read-only.
+
+### §7 — Privacy
+
+- No background monitoring.
+- No automatic analysis after capture. Capture alone never triggers analysis.
+- No external upload. Screenshot and summary stay on-device.
+- No cloud OCR or cloud vision.
+- Explicit user confirmation required every time before analysis runs.
+- No raw screenshot in logs, error reports, audit records, or console.
+- Only the summary string (plain text) may be retained in memory post-analysis.
+
+### §8 — Error Handling
+
+All failure cases must show clean, character-facing messages. No raw base64, stack traces, file paths, backend URLs, JSON, or provider internals in the UI.
+
+| Failure | Clean fallback |
+|---|---|
+| No screenshot in memory | "請先擷取螢幕截圖。" |
+| Screenshot cleared / expired | "截圖已清除，請重新擷取。" |
+| User cancels confirmation | Silently re-enable Analyze button. No error shown. |
+| OCR provider unavailable | "分析功能目前不可用。" |
+| OCR model failure / exception | "分析失敗，請稍後再試。" |
+| Screenshot too large for OCR | "截圖過大，無法分析。" |
+| OCR result empty / no useful text | "未偵測到可用文字。" |
+
+UI must never show: raw base64, stack traces, file paths, backend URLs, raw JSON, provider internal names, or Tesseract/easyocr error objects.
+
+### §9 — Preserved Existing Behavior
+
+The following must not regress when TASK-172A is implemented:
+
+- TASK-171A: "擷取螢幕" button, in-memory screenshot, no disk save.
+- Full App chat: typing, Enter key, Send button, `/chat` pipeline.
+- Pet direct text input (TASK-166E).
+- Voice input / STT / voice-to-chat (TASK-167A–C).
+- TTS playback and voice controls (TASK-168B, TASK-169).
+- Quiet Mode idle suppression.
+- Click-through toggle and CT recovery strip (TASK-166E click-fix2).
+- Clean Pet Bubble speech rules (no diagnostics, no raw JSON).
+- Pet window position persistence (TASK-148).
+
+### §10 — Scope Limits (This Docs-Only Step)
+
+- Do **not** implement OCR in this docs-only step.
+- Do **not** implement vision model (local or cloud).
+- Do **not** implement cloud provider or cloud opt-in flow.
+- Do **not** implement `/chat` handoff (deferred to TASK-172B).
+- Do **not** implement Pet commentary on screenshots.
+- Do **not** implement background or automatic monitoring.
+- Do **not** persist screenshots or summaries to disk.
+- Do **not** modify backend `/chat` schema.
+- Do **not** add broad provider architecture beyond what is strictly required for the OCR analysis endpoint.
+- Do **not** modify any runtime implementation file in this docs-only step.
+
+### Manual Windows Smoke Expectations (for future TASK-172A implementation)
+
+- "分析這張" button appears in Full App and is **disabled** before any screenshot is captured.
+- After a successful capture, "分析這張" button becomes **enabled**.
+- Clicking "分析這張" shows the sensitive-content warning before any analysis starts.
+- User can cancel the warning — analysis does not run; button returns to enabled.
+- After confirmation, "正在分析…" status appears.
+- OCR unavailable → "分析功能目前不可用。" appears cleanly.
+- OCR success → "螢幕摘要：\n{cleaned text}" appears in Full App.
+- No useful OCR text → "未偵測到可用文字。" appears cleanly.
+- Capture alone does **not** trigger analysis — two explicit actions required.
+- No screenshot or summary is saved to disk.
+- No screenshot or summary is sent to `/chat` or any external service.
+- "清除截圖" clears screenshot, summary, and disables Analyze button.
+- After clearing, "分析這張" button is disabled or shows "請先擷取螢幕截圖。" on click.
+- Raw base64, stack traces, JSON, backend URLs, and provider internals never appear in UI.
+- Existing voice / TTS / Pet / Full App chat / direct text input features do not regress.
+
+### Acceptance Criteria
+
+- [x] "分析這張" flow is documented (§1, §2).
+- [x] Sensitive-content confirmation is documented (§2).
+- [x] OCR / local analysis strategy documented, including Option A vs Option B decision rule (§3).
+- [x] Summary output behavior documented (§4).
+- [x] Storage and privacy boundaries documented (§5, §7).
+- [x] `/chat` boundary is documented (§6).
+- [x] Error handling table is documented (§8).
+- [x] Preserved existing behavior documented (§9).
+- [x] Scope limits documented (§10).
+- [x] Manual Windows smoke expectations documented.
+- [x] No runtime files modified in this docs-only step.
+
+## TASK-172A | Screenshot OCR Summary Implementation Design
+
+**Status:** DEFINED (docs-only)
+**Date:** 2026-05-29
+**Type:** Design — v0.4 Screen Context (slice 2A, OCR summary only)
+**Depends on:** TASK-172 DEFINED (user-confirmed analysis design)
+
+### Context
+
+TASK-171A delivered user-triggered primary display screenshot capture: in-memory only, no disk save, no analysis, no `/chat`. TASK-172 designed the user-confirmed analysis flow and recommended splitting implementation into TASK-172A (analysis → summary text only) and TASK-172B (summary → `/chat` context handoff, deferred). TASK-172A is the next implementation slice: after a screenshot exists in memory, the user clicks "分析這張", confirms a sensitive-content warning, and the app runs local OCR and displays a clean screen summary. No `/chat` handoff in this task.
+
+### Goal
+
+Design the implementation of user-confirmed screenshot analysis via local OCR. Output is a clean plain-text summary shown in the Full App UI only. No cloud vision. No `/chat` call. No Pet commentary. Always explicit — two separate user actions required (capture, then confirm analysis).
+
+### §1 — Entry Point
+
+The Full App shows a "分析這張" (Analyze This) button. Behavior:
+
+- Button is **disabled** (grayed, `disabled` attribute) before any screenshot exists in memory.
+- Button becomes **enabled** after a successful TASK-171A capture (`lastScreenshotDataUrl` is set).
+- Button is **separate** from the "擷取螢幕" (Capture Screen) button. The two actions are visually and functionally distinct.
+- If the user captures a new screenshot after a prior analysis, the prior summary is cleared before the next analysis starts.
+- No Pet Menu trigger.
+- No voice trigger.
+- No background or automatic analysis.
+
+### §2 — Sensitive-Content Confirmation
+
+Before analysis starts, the UI must show a visible warning. The user must explicitly confirm before any OCR runs.
+
+**Warning text (zh-TW):**
+> 截圖內容可能含有密碼、API 金鑰或私密訊息。請確認截圖內容後再繼續分析。
+
+**Warning text (en, for design reference):**
+> Screenshot may contain passwords, API keys, or private messages. Please review before proceeding.
+
+Confirmation flow:
+- Clicking "分析這張" shows the warning (modal dialog or inline panel — implementation choice).
+- User can **cancel** → analysis does not start; button returns to enabled state; no status change.
+- User can **confirm** → analysis starts; status changes to "正在分析…".
+- Every analysis requires a fresh confirmation. There is no "always confirm" toggle in TASK-172A.
+
+### §3 — OCR / Analysis Strategy
+
+**Provider priority: local first. No cloud.**
+
+**Option A — Renderer-side `tesseract.js`:**
+- Run OCR entirely in the Electron renderer process using `tesseract.js`.
+- Screenshot `dataUrl` passed directly to `Tesseract.recognize()` in the renderer.
+- Advantage: no IPC round-trip, no backend change, no new npm server dependency.
+- Risk: `tesseract.js` bundle size (~4–8 MB WASM) and worker startup latency (~1–3 s on first run).
+- Feasibility check required before TASK-172A implementation: measure bundle size impact on renderer startup. If unacceptable (>10 MB increase or >3 s cold-start regression), use Option B.
+
+**Option B — Backend local OCR endpoint:**
+- Add a new FastAPI endpoint `POST /ocr/extract` accepting a base64-encoded PNG or JPEG.
+- Backend uses `pytesseract` (wraps system Tesseract) or `easyocr` for extraction.
+- IPC bridge: new narrow channel `screen:analyze-once` (renderer → main → backend).
+- Main returns `{ ok, text }` or `{ ok: false, error: "reason-code" }`.
+- Advantage: keeps renderer bundle lean; reuses existing Python backend pattern.
+- Risk: requires Tesseract binary installed on user machine; must handle missing-binary gracefully.
+
+**Decision rule for implementation:** attempt Option A first. If bundle size or cold-start regression is unacceptable after measurement, fall back to Option B. Document the decision in the TASK-172A implementation record.
+
+**Unavailable fallback:**
+- If neither Option A nor Option B is available at runtime, show: "分析功能目前不可用。"
+- Do not fake analysis or return empty/placeholder summary.
+
+**No cloud vision in TASK-172A.** No OpenAI Vision, no Google Vision, no Azure CV, no Anthropic Vision. Cloud vision requires a separate explicit opt-in design (future task).
+
+### §4 — Summary Output
+
+OCR raw text must be cleaned before display:
+
+- Strip leading/trailing whitespace and blank lines.
+- Collapse multiple consecutive blank lines to one.
+- Truncate to a reasonable display length (suggested max: 800 chars; remainder silently discarded — not an error).
+- Do **not** show raw OCR dumps by default (no character-by-character noise output).
+- Do **not** show raw `dataUrl` / base64.
+- Do **not** show provider internals, backend URLs, stack traces, or JSON.
+
+**Display format (Full App UI):**
+```
+螢幕摘要：
+{cleaned summary text}
+```
+
+If OCR finds no useful text (empty result after cleaning):
+```
+未偵測到可用文字。
+```
+
+The summary is shown in the Full App UI only. Pet Bubble does not receive the analysis in TASK-172A.
+
+### §5 — Storage and Memory
+
+- Screenshot `dataUrl` remains in memory only (per TASK-171A: `lastScreenshotDataUrl` in renderer state).
+- OCR summary text may be stored in renderer memory only (`lastScreenSummary` or equivalent variable).
+- No disk save for screenshot or summary.
+- No screenshot history; only the latest capture and latest summary are retained.
+- The user can clear both via a "清除截圖" (Clear Screenshot) button at any time; clearing resets `lastScreenshotDataUrl`, `lastScreenSummary`, disables the Analyze button, and clears the summary display area.
+- Raw screenshot must not appear in logs, error reports, or console output.
+- After analysis, only the summary string is retained in memory; the raw `dataUrl` is not re-persisted.
+
+### §6 — Chat Boundary
+
+- TASK-172A must **not** call `/chat`.
+- TASK-172A must **not** send the summary to `/chat`.
+- TASK-172A must **not** inject screen context into any existing message flow.
+- Pet Bubble must not receive the analysis summary in TASK-172A.
+- TASK-172B (deferred) will design the optional user-confirmed summary → `/chat` context handoff.
+- The "加入對話" (Add to Chat) button is **not** implemented in TASK-172A; the summary display is read-only.
+
+### §7 — Privacy
+
+- No background monitoring.
+- No automatic analysis after capture. Capture alone never triggers analysis.
+- No external upload. Screenshot and summary stay on-device.
+- No cloud OCR or cloud vision.
+- Explicit user confirmation required every time before analysis runs.
+- No raw screenshot in logs, error reports, audit records, or console.
+- Only the summary string (plain text) may be retained in memory post-analysis.
+
+### §8 — Error Handling
+
+All failure cases must show clean, character-facing messages. No raw base64, stack traces, file paths, backend URLs, JSON, or provider internals in the UI.
+
+| Failure | Clean fallback |
+|---|---|
+| No screenshot in memory | "請先擷取螢幕截圖。" |
+| Screenshot cleared / expired | "截圖已清除，請重新擷取。" |
+| User cancels confirmation | Silently re-enable Analyze button. No error shown. |
+| OCR provider unavailable | "分析功能目前不可用。" |
+| OCR model failure / exception | "分析失敗，請稍後再試。" |
+| Screenshot too large for OCR | "截圖過大，無法分析。" |
+| OCR result empty / no useful text | "未偵測到可用文字。" |
+
+UI must never show: raw base64, stack traces, file paths, backend URLs, raw JSON, provider internal names, or Tesseract/easyocr error objects.
+
+### §9 — Preserved Existing Behavior
+
+The following must not regress when TASK-172A is implemented:
+
+- TASK-171A: "擷取螢幕" button, in-memory screenshot, no disk save.
+- Full App chat: typing, Enter key, Send button, `/chat` pipeline.
+- Pet direct text input (TASK-166E).
+- Voice input / STT / voice-to-chat (TASK-167A–C).
+- TTS playback and voice controls (TASK-168B, TASK-169).
+- Quiet Mode idle suppression.
+- Click-through toggle and CT recovery strip (TASK-166E click-fix2).
+- Clean Pet Bubble speech rules (no diagnostics, no raw JSON).
+- Pet window position persistence (TASK-148).
+
+### §10 — Scope Limits (This Docs-Only Step)
+
+- Do **not** implement OCR in this docs-only step.
+- Do **not** implement vision model (local or cloud).
+- Do **not** implement cloud provider or cloud opt-in flow.
+- Do **not** implement `/chat` handoff (deferred to TASK-172B).
+- Do **not** implement Pet commentary on screenshots.
+- Do **not** implement background or automatic monitoring.
+- Do **not** persist screenshots or summaries to disk.
+- Do **not** modify backend `/chat` schema.
+- Do **not** add broad provider architecture beyond what is strictly required for the OCR analysis endpoint.
+- Do **not** modify any runtime implementation file in this docs-only step.
+
+### Manual Windows Smoke Expectations (for future TASK-172A implementation)
+
+- "分析這張" button appears in Full App and is **disabled** before any screenshot is captured.
+- After a successful capture, "分析這張" button becomes **enabled**.
+- Clicking "分析這張" shows the sensitive-content warning before any analysis starts.
+- User can cancel the warning — analysis does not run; button returns to enabled.
+- After confirmation, "正在分析…" status appears.
+- OCR unavailable → "分析功能目前不可用。" appears cleanly.
+- OCR success → "螢幕摘要：\n{cleaned text}" appears in Full App.
+- No useful OCR text → "未偵測到可用文字。" appears cleanly.
+- Capture alone does **not** trigger analysis — two explicit actions required.
+- No screenshot or summary is saved to disk.
+- No screenshot or summary is sent to `/chat` or any external service.
+- "清除截圖" clears screenshot, summary, and disables Analyze button.
+- After clearing, "分析這張" button is disabled or shows "請先擷取螢幕截圖。" on click.
+- Raw base64, stack traces, JSON, backend URLs, and provider internals never appear in UI.
+- Existing voice / TTS / Pet / Full App chat / direct text input features do not regress.
+
+### Acceptance Criteria
+
+- [x] "分析這張" flow is documented (§1, §2).
+- [x] Sensitive-content confirmation is documented (§2).
+- [x] OCR / local analysis strategy documented, including Option A vs Option B decision rule (§3).
+- [x] Summary output behavior documented (§4).
+- [x] Storage and privacy boundaries documented (§5, §7).
+- [x] `/chat` boundary is documented (§6).
+- [x] Error handling table is documented (§8).
+- [x] Preserved existing behavior documented (§9).
+- [x] Scope limits documented (§10).
+- [x] Manual Windows smoke expectations documented.
+- [x] No runtime files modified in this docs-only step.
