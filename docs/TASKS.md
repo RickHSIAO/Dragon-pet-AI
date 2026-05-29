@@ -14382,3 +14382,127 @@ Manual smoke passed on Windows. All acceptance criteria confirmed:
 - Thinking / recording / transcribing / debug text not spoken.
 - S / M / L scales remain usable with settings panel open.
 - Scope confirmed clean: no cloud TTS, ElevenLabs, Azure, OpenAI, voice cloning, Live2D, wake word, always-listening, backend schema change, new IPC channel, or broad settings architecture added.
+
+## TASK-170 | Voice Interaction v0.3 Release Checkpoint
+
+**Status:** DONE (docs-only checkpoint)
+**Date:** 2026-05-29
+**Type:** Milestone Checkpoint — v0.3 Voice Interaction
+**Depends on:** TASK-167A, TASK-167B, TASK-167C, TASK-168B, TASK-169 all DONE
+
+### Context
+
+The v0.3 Voice Interaction loop is now complete: user speaks → microphone capture → STT transcription → /chat → Christina text reply → TTS playback with voice selection and speech controls. This checkpoint records the milestone before starting the next major roadmap stage.
+
+### Completed Voice Capabilities
+
+**Recording:**
+- Explicit push-to-talk microphone recording (hold/click mic button — no wake word, no always-listening).
+- Recording indicator (red pulsing CSS state, distinct from transcribing/speaking/thinking).
+- Mic permission handled via Electron `session.setPermissionRequestHandler` (narrow, Pet window only).
+- Audio stored only as in-memory Blob; never written to disk, never persisted.
+
+**STT:**
+- Audio Blob sent to backend `POST /stt/transcribe` via narrow IPC bridge (`stt:transcribe`).
+- Transcribing state shown while awaiting result (indigo indicator).
+- Clean fallback on STT failure: user-facing Chinese error message, no raw stack trace or JSON in Pet Bubble.
+
+**Voice-to-Chat:**
+- Validated transcript auto-sent to `/chat` pipeline (same path as TASK-166E direct text input).
+- Transcripts > 2000 chars rejected with clean error message.
+- `petChatPending` guard prevents double-send.
+- Thinking bubble shown immediately on send; replaced by final Christina reply on success.
+- No new backend endpoint, no schema change.
+
+**TTS Playback:**
+- `window.speechSynthesis` (Chromium/Electron, fully local, zero cost).
+- TTS OFF by default; user enables via Pet Menu toggle ("語音播放: 關/開").
+- Final reply states only (`speaking` / `long_reply`) — thinking, error, recording, transcribing, debug text never spoken.
+- Reply length capped at 300 chars for TTS; full text still shown in bubble.
+- New reply interrupts previous speech (cancel → new utterance).
+- Starting voice recording cancels active TTS (prevents mic feedback loop).
+
+**Speaking Controls:**
+- Stop button (■) visible during `data-speaking="true"`; cancels speech immediately.
+- Teal speaking indicator (CSS, distinct from recording red / transcribing indigo / thinking).
+- Voice selector: `speechSynthesis.getVoices()` + `onvoiceschanged`; user-readable `Name (lang)` labels.
+- Rate slider: 0.7–1.3, default 1.0.
+- Pitch slider: 0.8–1.3, default 1.0.
+- Volume slider: 0.0–1.0, default 1.0.
+- Reset-to-default button restores all three to 1.0.
+- All values clamped before application to `SpeechSynthesisUtterance`.
+
+**Persistence:**
+- Narrow renderer localStorage keys: `pet_tts_voice`, `pet_tts_rate`, `pet_tts_pitch`, `pet_tts_volume`.
+- Missing or corrupt values clamp to safe defaults; `localStorage` unavailable → in-memory only, no crash.
+- Settings persist across Pet Window reload and app restart.
+
+### Safety Boundaries Preserved
+
+- No wake word.
+- No always-listening.
+- No hidden microphone capture.
+- No raw audio persistence (Blob in-memory only; cleared after transcription).
+- No cloud TTS (fully local `window.speechSynthesis`).
+- No voice cloning.
+- No Live2D mouth sync.
+- No screen capture / OCR / vision.
+- No backend `/chat` schema changes.
+- No global hotkeys.
+- No ElevenLabs / Azure / OpenAI / third-party voice provider.
+- Pet Bubble shows no raw JSON, stack traces, URLs, or provider internals.
+
+### Manual Smoke Summary
+
+All manual smoke passes confirmed across TASK-167A through TASK-169:
+
+- Recording lifecycle works: mic button → red indicator → release → transcribing → result.
+- STT works: voice transcript appears correctly; clean error on failure.
+- Voice transcript auto-sends to `/chat`; thinking bubble → final Christina reply.
+- TTS playback works: final replies spoken aloud when TTS ON.
+- TTS controls work: voice selector, rate/pitch/volume sliders, reset, persist on reload.
+- Stop speech button cancels audio immediately; speaking indicator clears.
+- Quiet Mode interactions preserved (idle suppression only; TTS unaffected).
+- Click-through recovery strip preserved (TASK-166E regression clean).
+- Direct Pet text input preserved (TASK-166E).
+- S/M/L scale usability preserved across all voice UI elements.
+- Pet Bubble remains clean — no diagnostics, JSON, or provider internals leaked.
+
+### Known Limitations
+
+- System voices may sound generic; quality depends on OS voice packs installed.
+- Selected voice depends on Windows installed voices (varies by machine).
+- No dedicated Christina character voice.
+- No TTS emotion control (pitch/rate fixed per reply; no per-mood variation).
+- No Live2D mouth sync.
+- No screen context / current-work awareness (Christina cannot see what user is doing).
+- No proactive voice response (Christina does not initiate speech unprompted).
+- No background listening (by design; push-to-talk only).
+
+### Automated Test Coverage at Checkpoint
+
+- `pet-renderer-smoke.js`: 226 PASS (covers all TASK-167A–169 behavior).
+- `pet-window-smoke.js`: 45 PASS.
+- `renderer-chat-smoke.js`: PASS.
+- `python -m pytest backend/tests/`: 633 PASS.
+- `git diff --check`: clean.
+
+### Recommended Next Roadmap Options
+
+**Option A — TASK-171: Screen Context / User-Triggered Screenshot Design**
+Define a design for letting Christina see the user's current screen context on demand (user-triggered screenshot → image passed to LLM). Adds desktop assistant awareness. No always-on capture. Recommended if priority is making Christina contextually aware of the user's work.
+
+**Option B — TASK-171: Character Voice Provider Strategy**
+Design a pluggable voice provider abstraction so a higher-quality or character-specific TTS voice can be wired in without replacing the local fallback. Recommended if priority is making Christina sound more like a distinct character.
+
+**Option C — TASK-171: Voice Interaction Polish / Latency + UX Cleanup**
+Audit and improve voice interaction latency (recording → STT → /chat → TTS pipeline), add visual timing feedback, improve error messaging, and address any UX friction found during extended use. Recommended if priority is stability and polish before adding new capability.
+
+### Acceptance Criteria
+
+- [x] Voice v0.3 checkpoint documented.
+- [x] Completed capabilities listed (recording, STT, voice-to-chat, TTS, controls, persistence).
+- [x] Safety boundaries listed.
+- [x] Known limitations listed.
+- [x] Next roadmap options listed with guidance.
+- [x] No runtime files modified.
