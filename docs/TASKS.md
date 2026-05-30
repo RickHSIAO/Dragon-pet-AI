@@ -18160,6 +18160,58 @@ All 4 suites + `git diff --check` + `git status --short`
 
 ---
 
+## TASK-191 | Voice / TTS Regression Baseline
+
+**Status:** DONE
+**Date:** 2026-05-31
+
+### Goal
+
+Establish a regression baseline for all Voice / STT / TTS / Quiet Mode / voice settings UI features in the Pet Window. Confirm no regressions introduced by TASK-188–190.
+
+### Approach
+
+- Code survey of all voice/TTS/Pet files (pet-renderer.js, pet.html, pet.css, main.js, preload.js)
+- Run all automated smoke suites + backend STT tests
+- Document state machine, mutual exclusion matrix, error taxonomy, TTS settings reference
+- Write manual smoke checklist for areas not covered by automated tests
+- No bugs found → docs-only task
+
+### Findings
+
+**No regressions found.** All 101 automated voice/STT/TTS tests pass.
+TASK-188, TASK-189, TASK-190 only touched Full App renderer files — Pet Window was not modified.
+
+### Automated Test Baseline
+
+| Suite | Voice/STT/TTS tests | Total | Result |
+|---|---|---|---|
+| `pet-renderer-smoke.js` | 80 | 226 | PASS |
+| `pet-window-smoke.js` | 7 | 45 | PASS |
+| `backend/tests/test_stt_routes.py` | 14 | 14 | PASS |
+| `python -m pytest tests/ -q` | — | 667 | PASS |
+
+### Files Modified
+
+| File | Change | Runtime? |
+|---|---|---|
+| `docs/VOICE_TTS_REGRESSION_NOTES.md` | Created — full baseline: test coverage table, state machine reference, mutual exclusion matrix, error taxonomy, TTS settings reference, manual smoke checklist (8 scenarios), known gaps and pre-existing limitations | No |
+| `docs/TASKS.md` | TASK-191 section added | No |
+| `docs/ROADMAP.md` | TASK-191 DONE entry | No |
+
+### Acceptance Criteria
+
+- [x] `pet-renderer-smoke.js` — `226 checks PASS`.
+- [x] `pet-window-smoke.js` — `45 checks PASS`.
+- [x] `renderer-chat-smoke.js` — PASS.
+- [x] `python -m pytest tests/ -q` — `667 PASS`.
+- [x] `git diff --check` — CLEAN.
+- [x] `docs/VOICE_TTS_REGRESSION_NOTES.md` created with full baseline.
+- [x] No runtime files modified.
+- [x] No bugs found, no regressions.
+
+---
+
 ## TASK-190 | Provider Settings UI Manual Smoke / Visual Check
 
 **Status:** DONE

@@ -444,7 +444,9 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 **Screen Context v0.4 COMPLETE** — see `docs/SCREEN_CONTEXT_V04_RELEASE_SUMMARY.md`
 
-**Next planned task:** TASK-191 — (TBD)
+**Next planned task:** TASK-192 — (TBD)
+
+- TASK-191 DONE (2026-05-31): Voice / TTS regression baseline. Code survey of all Pet Window voice/STT/TTS files. Confirmed: no regressions from TASK-188–190. Automated baseline: 80 voice tests in pet-renderer-smoke (PASS), 7 STT/voice tests in pet-window-smoke (PASS), 14 backend STT tests (PASS). Documented: recording/transcribing/speaking state machine, 12-entry mutual exclusion matrix, 9-entry error taxonomy (all clean Chinese, no raw exceptions), TTS settings reference (voice/rate/pitch/volume, localStorage persistence). Manual smoke checklist (8 scenarios). Known gaps: getUserMedia, speechSynthesis, faster-whisper quality, 30-sec timeout, Windows CT — all manual-only. No bugs found. Docs-only task: created `docs/VOICE_TTS_REGRESSION_NOTES.md`. 667 backend PASS. git diff --check CLEAN.
 
 - TASK-190 DONE (2026-05-31): Provider Settings UI manual smoke closeout. Static inspection of all TASK-189 changes. Bug found: `calcProviderStatusSummary` misclassified `key_status = "invalid"/"test_failed"` as "not configured" — fixed (now shows "API key invalid or connection test failed." in error state). Manual smoke checklist written (14 scenarios covering mock, Ollama active/fallback/error, cloud provider, Test Connection, API key regression). Pre-existing issue noted: `lastChatSource = "not_checked"` (truthy) prevents "before first chat" branch in `syncChatRuntimeProviderStatus` from running. renderer-chat-smoke PASS (2 new edge-case tests), pet-renderer 226 PASS, pet-window 45 PASS, git diff --check CLEAN.
 
