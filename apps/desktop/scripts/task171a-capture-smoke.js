@@ -48,11 +48,14 @@ function testStaticSourceScopeChecks() {
     "main.js must not write screenshots to disk");
   // TASK-171A multi-monitor scope: must match by display_id, not blindly use sources[0]
   assert.ok(/display_id/.test(main),
-    "main.js must attempt display_id matching for primary display");
-  assert.ok(/primaryId/.test(main),
-    "main.js must derive primaryId from screen.getPrimaryDisplay()");
-  assert.ok(/primary-display-ambiguous/.test(main),
-    "main.js must return primary-display-ambiguous when multi-monitor match fails");
+    "main.js must attempt display_id matching");
+  // TASK-174: click-to-select display picker replaces always-primary logic.
+  assert.ok(/showDisplayPicker/.test(main),
+    "main.js must define showDisplayPicker for click-to-select capture (TASK-174)");
+  assert.ok(/getAllDisplays/.test(main),
+    "main.js must use screen.getAllDisplays to enumerate displays (TASK-174)");
+  assert.ok(/selected-display-ambiguous/.test(main),
+    "main.js must return selected-display-ambiguous when multi-monitor match fails");
   assert.ok(/primary-display-ambiguous/.test(
     fs.readFileSync(rendererPath,"utf8")),
     "renderer.js must map primary-display-ambiguous to a clean zh-TW message");
@@ -325,6 +328,12 @@ async function runAll(ctx) {
   await test172BClearHidesAskButton(ctx);
   await test172BAskButtonHiddenOnNoTextOcr(ctx);
   await test172BAskNeverPostsRawScreenshot(ctx);
+  // TASK-174 tests
+  test174StaticSourceScopeChecks();
+  await test174PickerCancelShowsCleanMessage(ctx);
+  await test174SelectedDisplayAmbiguousShowsCleanMessage(ctx);
+  await test174PickerFailedShowsCleanMessage(ctx);
+  await test174SuccessWithMatchedSourceStillWorksEndToEnd(ctx);
 }
 
 module.exports = { runAll };
@@ -784,4 +793,150 @@ async function test172BAskNeverPostsRawScreenshot(ctx) {
       "chat payload must never contain raw screenshot base64"
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// TASK-174: Click-to-Select Display Capture — smoke tests
+// ---------------------------------------------------------------------------
+
+function test174StaticSourceScopeChecks() {
+  const main     = fs.readFileSync(mainPath, "utf8");
+  const renderer = fs.readFileSync(rendererPath, "utf8");
+  const pickerPreload = fs.readFileSync(
+    path.join(desktopRoot, "src", "picker", "picker-preload.js"), "utf8");
+
+  // main.js: picker infrastructure
+  assert.ok(/showDisplayPicker/.test(main),
+    "main.js must define showDisplayPicker (TASK-174)");
+  assert.ok(/getAllDisplays/.test(main),
+    "main.js must use screen.getAllDisplays to enumerate displays");
+  assert.ok(/screen-picker:selected/.test(main),
+    "main.js must handle screen-picker:selected IPC");
+  assert.ok(/screen-picker:cancel/.test(main),
+    "main.js must handle screen-picker:cancel IPC");
+
+  // main.js: error codes
+  assert.ok(/screen-pick-cancelled/.test(main),
+    "main.js must define screen-pick-cancelled error code");
+  assert.ok(/selected-display-ambiguous/.test(main),
+    "main.js must define selected-display-ambiguous error code");
+  assert.ok(/screen-picker-failed/.test(main),
+    "main.js must define screen-picker-failed error code");
+
+  // main.js: single-source guard preserved
+  assert.ok(/sources\.length === 1/.test(main),
+    "main.js must guard sources[0] fallback with sources.length === 1");
+
+  // main.js: picker windows destroyed after select/cancel
+  assert.ok(/\.destroy\(\)/.test(main),
+    "main.js must destroy picker windows after select or cancel");
+
+  // renderer.js maps all three new codes
+  assert.ok(/screen-pick-cancelled/.test(renderer),
+    "renderer.js must map screen-pick-cancelled to clean zh-TW message");
+  assert.ok(/selected-display-ambiguous/.test(renderer),
+    "renderer.js must map selected-display-ambiguous to clean zh-TW message");
+  assert.ok(/screen-picker-failed/.test(renderer),
+    "renderer.js must map screen-picker-failed to clean zh-TW message");
+
+  // picker-preload.js: sends picker IPC, does not touch desktopCapturer
+  assert.ok(/screen-picker:selected/.test(pickerPreload),
+    "picker-preload.js must send screen-picker:selected");
+  assert.ok(/screen-picker:cancel/.test(pickerPreload),
+    "picker-preload.js must send screen-picker:cancel");
+  assert.ok(!/desktopCapturer/.test(pickerPreload),
+    "picker-preload.js must not access desktopCapturer");
+
+  // Normal renderer preload: still does not expose desktopCapturer
+  assert.ok(!/desktopCapturer/.test(fs.readFileSync(
+    path.join(desktopRoot, "src", "renderer", "preload.js"), "utf8")),
+    "renderer preload.js must not expose desktopCapturer");
+}
+
+async function test174PickerCancelShowsCleanMessage(ctx) {
+  // Simulates user pressing Esc in the picker: captureScreen returns screen-pick-cancelled.
+  const { document } = await ctx.loadRenderer({
+    dragonPet: {
+      captureScreen: () =>
+        Promise.resolve({ ok: false, error: "screen-pick-cancelled" }),
+    },
+  });
+  document.getElementById("capture-screen-btn").click();
+  await ctx.settle();
+  const status = ctx.textOf(document, "capture-screen-status");
+  assert.ok(status.includes("取消") || status.length > 0,
+    "screen-pick-cancelled must show clean zh-TW message, got: " + status);
+  assert.ok(!status.includes("screen-pick-cancelled"),
+    "status must not echo raw error code screen-pick-cancelled");
+  assert.ok(document.getElementById("analyze-screen-btn").disabled,
+    "analyze button must remain disabled after pick cancelled");
+}
+
+async function test174SelectedDisplayAmbiguousShowsCleanMessage(ctx) {
+  // Simulates display_id mismatch on multi-monitor system after picker selected.
+  const { document } = await ctx.loadRenderer({
+    dragonPet: {
+      captureScreen: () =>
+        Promise.resolve({ ok: false, error: "selected-display-ambiguous" }),
+    },
+  });
+  document.getElementById("capture-screen-btn").click();
+  await ctx.settle();
+  const status = ctx.textOf(document, "capture-screen-status");
+  assert.ok(
+    status.includes("無法") || status.includes("螢幕") || status.includes("稍後"),
+    "selected-display-ambiguous must show clean zh-TW message, got: " + status
+  );
+  assert.ok(!status.includes("ambiguous"),
+    "status must not echo raw error code selected-display-ambiguous");
+  assert.ok(!status.includes("display_id") && !status.includes("source"),
+    "status must not expose internal IDs");
+  assert.ok(document.getElementById("analyze-screen-btn").disabled,
+    "analyze button must remain disabled when selected display is ambiguous");
+}
+
+async function test174PickerFailedShowsCleanMessage(ctx) {
+  // Simulates picker window creation failure (e.g. concurrent session).
+  const { document } = await ctx.loadRenderer({
+    dragonPet: {
+      captureScreen: () =>
+        Promise.resolve({ ok: false, error: "screen-picker-failed" }),
+    },
+  });
+  document.getElementById("capture-screen-btn").click();
+  await ctx.settle();
+  const status = ctx.textOf(document, "capture-screen-status");
+  assert.ok(
+    status.includes("選擇器") || status.includes("無法") || status.includes("稍後"),
+    "screen-picker-failed must show clean zh-TW message, got: " + status
+  );
+  assert.ok(!status.includes("screen-picker-failed"),
+    "status must not echo raw error code screen-picker-failed");
+  assert.ok(document.getElementById("analyze-screen-btn").disabled,
+    "analyze button must remain disabled when picker failed");
+}
+
+async function test174SuccessWithMatchedSourceStillWorksEndToEnd(ctx) {
+  // Regression: OCR + /chat handoff pipeline must work after TASK-174 capture change.
+  const { document, state } = await ctx.loadRenderer({
+    dragonPet: {
+      captureScreen: () =>
+        Promise.resolve({ ok: true, dataUrl: "data:image/png;base64,AAA" }),
+    },
+    ocrMode: "success",
+    confirmOverride: () => true,
+  });
+  document.getElementById("capture-screen-btn").click();
+  await ctx.settle();
+  document.getElementById("analyze-screen-btn").click();
+  await ctx.settle();
+  const summary = document.getElementById("analyze-screen-summary").textContent || "";
+  assert.ok(summary.includes("螢幕摘要") || summary.includes("Hello"),
+    "OCR pipeline must still work after TASK-174 capture change, got: " + summary);
+  const askBtn = document.getElementById("ask-screen-btn");
+  assert.ok(!askBtn.hidden,
+    "ask-screen-btn must appear after OCR success (TASK-172B regression)");
+  const chatBeforeAsk = state.calls.filter((c) => c.url.endsWith("/chat")).length;
+  assert.equal(chatBeforeAsk, 0,
+    "capture + OCR alone must not POST to /chat (TASK-172B regression)");
 }

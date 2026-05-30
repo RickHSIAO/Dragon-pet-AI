@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100vw; height: 100vh;
+      background: rgba(0, 0, 0, 0.45);
+      cursor: crosshair;
+      display: flex; align-items: center; justify-content: center;
+      user-select: none;
+    }
+    .label {
+      text-align: center;
+      color: #fff;
+      font-family: system-ui, -apple-system, sans-serif;
+      pointer-events: none;
+    }
+    .label h1 { font-size: 2rem; font-weight: 600; margin-bottom: 0.5rem; }
+    .label p  { font-size: 1rem; opacity: 0.75; }
+  </style>
+</head>
+<body>
+  <div class="label">
+    <h1>點選此螢幕擷取</h1>
+    <p>Esc 取消</p>
+  </div>
+</body>
+</html>

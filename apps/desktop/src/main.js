@@ -25,7 +25,9 @@ const PET_QUIET_MODE_SET_CHANNEL = "pet:set-quiet-mode";  // TASK-162
 const PET_SCALE_SET_CHANNEL = "pet:set-scale";            // TASK-166B
 const PET_CLICK_THROUGH_SET_CHANNEL = "pet:set-click-through";  // TASK-166D
 const PET_STT_TRANSCRIBE_CHANNEL = "stt:transcribe";           // TASK-167B
-const SCREEN_CAPTURE_ONCE_CHANNEL = "screen:capture-once";     // TASK-171A
+const SCREEN_CAPTURE_ONCE_CHANNEL   = "screen:capture-once";      // TASK-171A
+const SCREEN_PICKER_SELECTED_CHANNEL = "screen-picker:selected"; // TASK-174
+const SCREEN_PICKER_CANCEL_CHANNEL   = "screen-picker:cancel";   // TASK-174
 const PET_WINDOW_WIDTH = 300;   // Medium default — used as fallback constant
 const PET_WINDOW_HEIGHT = 400;  // Medium default — used as fallback constant
 // TASK-166B: scale preset dimensions
@@ -510,37 +512,128 @@ ipcMain.handle(PET_CLICK_THROUGH_SET_CHANNEL, (_event, value) => {  // TASK-166D
 });
 
 
-// TASK-171A: screen:capture-once IPC handler.
-// One primary-display screenshot per user click. No disk save, no /chat, no OCR,
-// no vision, no background monitoring. Renderer receives a data URL only.
-// Reason codes only on failure — no raw Electron error objects, no stack traces.
+// TASK-174: guard against concurrent picker sessions.
+let pickerInFlight = false;
+
+// Opens a semi-transparent picker overlay on every connected display.
+// Resolves with the selected display id string, or null on Esc/close.
+// All picker windows are destroyed before this function returns.
+async function showDisplayPicker(displays) {
+  return new Promise((resolve) => {
+    const pickerWindows = [];
+    let settled = false;
+
+    function cleanup() {
+      for (const win of pickerWindows) {
+        if (!win.isDestroyed()) win.destroy();
+      }
+      pickerWindows.length = 0;
+    }
+
+    function settle(result) {
+      if (settled) return;
+      settled = true;
+      ipcMain.removeListener(SCREEN_PICKER_SELECTED_CHANNEL, onSelected);
+      ipcMain.removeListener(SCREEN_PICKER_CANCEL_CHANNEL, onCancel);
+      cleanup();
+      resolve(result);
+    }
+
+    function onSelected(_event, displayId) {
+      settle(typeof displayId === "string" && displayId.length > 0 ? displayId : null);
+    }
+
+    function onCancel() {
+      settle(null);
+    }
+
+    ipcMain.on(SCREEN_PICKER_SELECTED_CHANNEL, onSelected);
+    ipcMain.on(SCREEN_PICKER_CANCEL_CHANNEL, onCancel);
+
+    for (const display of displays) {
+      const { x, y, width, height } = display.bounds;
+      const win = new BrowserWindow({
+        x, y, width, height,
+        frame:       false,
+        transparent: true,
+        alwaysOnTop: true,
+        skipTaskbar: true,
+        focusable:   true,
+        webPreferences: {
+          contextIsolation: true,
+          nodeIntegration:  false,
+          preload: path.join(__dirname, "picker", "picker-preload.js"),
+        },
+      });
+      win.setIgnoreMouseEvents(false);
+      win.loadFile(path.join(__dirname, "picker", "picker.html"), {
+        query: { displayId: String(display.id) },
+      });
+      win.on("closed", () => {
+        if (!settled) {
+          const remaining = pickerWindows.filter((w) => !w.isDestroyed()).length;
+          if (remaining === 0) settle(null);
+        }
+      });
+      pickerWindows.push(win);
+    }
+  });
+}
+
+// TASK-174: screen:capture-once IPC handler.
+// Shows a click-to-select overlay on every connected display; user clicks the
+// desired monitor. Main process captures exactly the selected display.
+// Replaces the cursor-position approach (rejected: clicking the button moves
+// the cursor to the app-window monitor, so capture always targeted the wrong
+// screen on dual-monitor setups).
+// Normal renderer never receives raw display IDs or desktopCapturer source list.
+// No disk save, no /chat, no OCR, no background monitoring.
 ipcMain.handle(SCREEN_CAPTURE_ONCE_CHANNEL, async () => {
+  if (pickerInFlight) {
+    return { ok: false, error: "screen-picker-failed" };
+  }
+  pickerInFlight = true;
   try {
-    const primary = screen.getPrimaryDisplay();
+    const displays = screen.getAllDisplays();
+    if (!displays || displays.length === 0) {
+      return { ok: false, error: "no-source" };
+    }
+
+    const selectedId = await showDisplayPicker(displays);
+
+    if (selectedId === null) {
+      return { ok: false, error: "screen-pick-cancelled" };
+    }
+
+    const targetDisplay = displays.find((d) => String(d.id) === selectedId);
+    if (!targetDisplay) {
+      return { ok: false, error: "screen-picker-failed" };
+    }
+
     const sources = await desktopCapturer.getSources({
       types: ["screen"],
       thumbnailSize: {
-        width: primary.size.width,
-        height: primary.size.height,
+        width:  targetDisplay.size.width,
+        height: targetDisplay.size.height,
       },
     });
     if (!sources || sources.length === 0) {
       return { ok: false, error: "no-source" };
     }
-    const primaryId = String(primary.id);
-    let selected = sources.find((s) => String(s.display_id) === primaryId);
+
+    // Match source to selected display by display_id.
+    const targetId = String(targetDisplay.id);
+    let selected = sources.find((s) => String(s.display_id) === targetId);
     if (!selected) {
-      // TASK-171A multi-monitor scope fix: if display_id matching fails and
-      // there is more than one source, we cannot safely identify the primary
-      // display — fail with a clean error rather than silently capturing the
-      // wrong screen or a virtual desktop spanning multiple monitors.
-      // Single-monitor systems have exactly one source and are always safe.
+      // Single-monitor: one source always corresponds to the only display — safe to use.
+      // Multi-monitor: cannot safely identify which source matches — fail with clean error.
       if (sources.length === 1) {
         selected = sources[0];
       } else {
-        return { ok: false, error: "primary-display-ambiguous" };
+        return { ok: false, error: "selected-display-ambiguous" };
       }
     }
+
     const thumbnail = selected && selected.thumbnail;
     if (!thumbnail || thumbnail.isEmpty()) {
       return { ok: false, error: "capture-failed" };
@@ -556,6 +649,8 @@ ipcMain.handle(SCREEN_CAPTURE_ONCE_CHANNEL, async () => {
       return { ok: false, error: "permission-denied" };
     }
     return { ok: false, error: "capture-failed" };
+  } finally {
+    pickerInFlight = false;
   }
 });
 

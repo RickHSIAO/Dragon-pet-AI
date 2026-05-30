@@ -16796,155 +16796,129 @@ TASK-173 is docs-only. The following are explicitly out of scope:
 
 ---
 
-## TASK-174 | Capture Current Mouse Display / Active Monitor Design
+## TASK-174 | Click-to-Select Display Capture
 
-**Status:** DEFINED (docs-only)
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
 **Date:** 2026-05-30
-**Type:** Design — v0.4+ Screen Context (capture improvement)
+**Type:** Implementation — v0.4+ Screen Context (capture improvement)
 **Depends on:** TASK-171A DONE, TASK-171A-MULTIMONITOR-SCOPE-FIX DONE, TASK-173 DONE
 
 ### Context
 
-TASK-171A-MULTIMONITOR-SCOPE-FIX made capture primary-display safe: on multi-monitor systems where `display_id` matching fails, the app returns `primary-display-ambiguous` rather than silently capturing the virtual desktop. However, the user has dual monitors and may be working on the secondary display. Capture always targets the primary display, which is safe but not always convenient.
+**Original design (rejected after UX review):** TASK-174 was initially designed to capture the display under the mouse cursor (`screen.getCursorScreenPoint` + `getDisplayNearestPoint`). This design was implemented and then rejected during manual UX review.
 
-TASK-174 designs the next improvement: when the user clicks "擷取螢幕", the app captures the display that currently contains the mouse cursor rather than always capturing the primary display. This requires no cloud dependency, no background monitoring, and no change to the explicit-trigger-only model.
+**Rejection reason:** Clicking the "擷取螢幕" button naturally moves the cursor to the monitor where the app window is displayed. Therefore, "capture the display where the cursor is" always captured the app-window monitor, not the user's intended secondary monitor. The cursor-based approach failed to solve the original problem.
 
-This is docs-only. No runtime files are modified in this task.
+**Redesign:** TASK-174 was redesigned to use a click-to-select display picker. When the user clicks "擷取螢幕", the main process opens a semi-transparent overlay on every connected display. The user explicitly clicks the desired monitor. Main process captures exactly that display.
 
-### §1 — Capture Target Strategy
+### §1 — Picker UX Flow
 
 On user click of "擷取螢幕":
 
-1. Main process calls `screen.getCursorScreenPoint()` to get the current cursor position `{ x, y }`.
-2. Main process calls `screen.getDisplayNearestPoint(cursorPoint)` to get the display closest to the cursor.
-3. The `id` of that display is used as the match target (same `String(display.id)` comparison used in TASK-171A-MULTIMONITOR-SCOPE-FIX).
-4. Main process calls `desktopCapturer.getSources({ types: ["screen"] })`.
-5. A source is selected by matching `String(source.display_id) === String(cursorDisplay.id)`.
-6. If a match is found, that source is used for capture.
-7. If no match is found and only one source exists (single-monitor fallback), `sources[0]` is used.
-8. If no match is found and multiple sources exist, capture fails safely with a clean error code (see §3).
-
-The main process chooses the capture source entirely. The renderer never sees raw source IDs, display IDs, or the `desktopCapturer` source list.
+1. Main process calls `screen.getAllDisplays()` to get all connected displays.
+2. Main process opens one `BrowserWindow` per display — frameless, transparent, `alwaysOnTop`, `skipTaskbar` — sized to cover the full bounds of that display.
+3. Each picker window loads `src/picker/picker.html` and shows a semi-transparent dark overlay with label "點選此螢幕擷取" / "Esc 取消".
+4. The display's ID is passed to the picker window via URL query string (`?displayId=...`); `picker-preload.js` reads it and sends it back with the `screen-picker:selected` event.
+5. User clicks the desired monitor → picker sends `screen-picker:selected` with the display ID.
+6. User presses Esc → picker sends `screen-picker:cancel`.
+7. Main process receives the first event, removes listeners, destroys all picker windows, then proceeds.
+8. On selection: main process captures the selected display via `desktopCapturer`.
+9. On cancel: returns `{ ok: false, error: "screen-pick-cancelled" }`.
 
 ### §2 — IPC / Security Boundary
 
-The existing narrow IPC channel `screen:capture-once` is reused without change to its surface. The implementation change is entirely inside the main-process handler.
-
-- `contextIsolation: true` remains unchanged.
-- `nodeIntegration: false` remains unchanged.
-- The preload surface (`captureScreen()`) remains unchanged.
-- The renderer does not receive display IDs, source IDs, or the `desktopCapturer` source list.
-- `screen.getCursorScreenPoint` and `screen.getDisplayNearestPoint` are called in the main process only.
-- No new IPC channels are added in this task.
+- The existing `screen:capture-once` channel and `captureScreen()` preload surface are unchanged.
+- Two new internal IPC channels (`screen-picker:selected`, `screen-picker:cancel`) exist only between the picker windows and the main process — they are never exposed to the normal renderer.
+- `contextIsolation: true`, `nodeIntegration: false` for both the main renderer and picker windows.
+- The normal renderer never receives raw display IDs, source IDs, or `desktopCapturer` source list.
+- Picker windows are internal to the main process and have no connection to the Full App renderer.
 
 ### §3 — Fallback and Ambiguity Handling
 
 | Condition | Behavior |
 |---|---|
-| Cursor display ID matches one source | Use matched source. ✓ |
-| No match found, only one source exists | Use `sources[0]` (single-monitor safe). ✓ |
-| No match found, multiple sources exist | Return `{ ok: false, error: "current-display-ambiguous" }`. |
-| `getCursorScreenPoint` returns null/undefined | Attempt primary-display fallback; if multi-source, return `{ ok: false, error: "cursor-point-unavailable" }`. |
-| `getDisplayNearestPoint` returns null/undefined | Same fallback chain as above. |
-| `desktopCapturer.getSources` returns empty array | Return `{ ok: false, error: "no-desktop-source" }`. |
-| Thumbnail stream empty | Return `{ ok: false, error: "thumbnail-empty" }`. |
-| Permission denied | Return `{ ok: false, error: "permission-denied" }`. |
+| Selected display ID matches one source | Use matched source ✓ |
+| No match, one source exists | Use `sources[0]` (single-monitor safe) ✓ |
+| No match, multiple sources exist | Return `{ ok: false, error: "selected-display-ambiguous" }` |
+| Picker cancelled (Esc or all windows closed) | Return `{ ok: false, error: "screen-pick-cancelled" }` |
+| Picker already in flight | Return `{ ok: false, error: "screen-picker-failed" }` |
+| `getAllDisplays` returns empty array | Return `{ ok: false, error: "no-source" }` |
+| Selected display ID not found in displays list | Return `{ ok: false, error: "screen-picker-failed" }` |
+| Permission denied | Return `{ ok: false, error: "permission-denied" }` |
 
-All error codes must be mapped to clean zh-TW strings in `renderer.js` `CAPTURE_FAILURE_MESSAGES`. The UI must never display raw Electron errors, display IDs, source IDs, stack traces, file paths, raw JSON, backend URLs, or base64 data.
+### §4 — New Files
 
-Suggested zh-TW messages (to be finalised at implementation time):
-- `current-display-ambiguous` → `"無法確認目前滑鼠所在螢幕，請重試。"`
-- `cursor-point-unavailable` → `"無法取得目前滑鼠位置，請重試。"`
+- `apps/desktop/src/picker/picker.html` — minimal overlay; CSS-only, no inline script, no external resources.
+- `apps/desktop/src/picker/picker-preload.js` — attaches `click` and `keydown` listeners; sends IPC on selection or cancel; reads `displayId` from URL query.
 
-### §4 — UI
+### §5 — Picker Window Lifecycle
 
-- No new button is required.
-- The existing "擷取螢幕" button triggers capture of the current mouse display.
-- The existing `capture-screen-status` span shows success/error messages.
-- An optional tooltip explaining `"會截取目前滑鼠所在螢幕"` may be added later but is not required in the first implementation.
-- No new Pet Menu trigger, no new voice trigger, no new keyboard shortcut.
-
-### §5 — OCR / Analysis Interaction
-
-All existing downstream flows are unchanged:
-
-- "分析這張" user-confirmed OCR flow (TASK-172A) is unchanged.
-- Sensitive-content warning before OCR is unchanged.
-- Backend OCR endpoint (`POST /ocr/extract`) is unchanged.
-- OCR preprocessing pipeline is unchanged.
-- "問克莉絲蒂娜這個畫面" user-confirmed `/chat` handoff (TASK-172B) is unchanged.
-- "清除截圖" still clears screenshot, summary, and handoff state.
+- All picker windows are created immediately when "擷取螢幕" is clicked.
+- The first `screen-picker:selected` or `screen-picker:cancel` event causes immediate cleanup: IPC listeners removed, all windows destroyed.
+- If all picker windows are closed externally without a selection, the promise resolves as cancel.
+- A `pickerInFlight` guard prevents concurrent picker sessions.
 
 ### §6 — Privacy Boundaries
 
-All TASK-171A and TASK-172B privacy rules remain in force:
-
-- User-triggered capture only — no background monitoring, no periodic cursor tracking, no automatic screenshot.
-- Screenshot held in renderer memory only — no disk save, no history, no cloud upload.
+- User-triggered capture only; no background monitoring, no automatic screenshot.
+- `getCursorScreenPoint` is no longer used in the capture path.
+- Screenshot held in renderer memory only; no disk save, no cloud upload.
 - No raw screenshot dataUrl sent to `/chat`.
 - No image bytes sent to `/chat`.
-- No cloud OCR or cloud vision.
-- `getCursorScreenPoint` is called once per user click, in the main process only — no continuous cursor tracking.
-- No cursor position data is logged or persisted.
 
 ### §7 — Error Handling
 
-The renderer `CAPTURE_FAILURE_MESSAGES` map must include entries for all new error codes introduced in this task (`current-display-ambiguous`, `cursor-point-unavailable`, and any others added at implementation time).
+New `renderer.js` `CAPTURE_FAILURE_MESSAGES` entries:
 
-The UI must never show:
-- Raw Electron error messages or exception text
-- Display IDs or source IDs
-- Stack traces
-- File paths
-- Raw JSON objects
-- Backend URLs
-- base64 dataUrl fragments
+- `screen-pick-cancelled` → `"已取消擷取螢幕。"`
+- `selected-display-ambiguous` → `"無法確認選取的螢幕來源，請重試。"`
+- `screen-picker-failed` → `"無法開啟螢幕選擇器，請重試。"`
 
-### §8 — Testing Plan (for implementation step)
+The UI must never show raw Electron errors, display IDs, source IDs, stack traces, file paths, raw JSON, backend URLs, or base64 dataUrl fragments.
 
-**Static source checks (`task171a-capture-smoke.js` or new smoke file):**
+### §8 — Testing Plan
 
-- `main.js` calls `screen.getCursorScreenPoint` (or equivalent) in the `screen:capture-once` handler.
-- `main.js` calls `screen.getDisplayNearestPoint` (or equivalent).
-- `main.js` matches `desktopCapturer` source by `display_id` against the cursor display.
-- `main.js` does not blindly use `sources[0]` when multiple screen sources exist.
-- Multi-monitor ambiguity with no match returns a clean error object, not `sources[0]`.
-- `renderer.js` `CAPTURE_FAILURE_MESSAGES` contains `current-display-ambiguous` mapping.
-- Capture does not call `/chat`.
-- Capture does not persist screenshot.
+**Static smoke (`task171a-capture-smoke.js`):**
 
-**Dynamic tests:**
+- `main.js` defines `showDisplayPicker`.
+- `main.js` uses `screen.getAllDisplays`.
+- `main.js` handles `screen-picker:selected` and `screen-picker:cancel`.
+- `main.js` defines `screen-pick-cancelled`, `selected-display-ambiguous`, `screen-picker-failed` error codes.
+- `main.js` guards `sources[0]` with `sources.length === 1`.
+- `main.js` calls `.destroy()` on picker windows.
+- `renderer.js` maps all three new codes.
+- `picker-preload.js` sends `screen-picker:selected` and `screen-picker:cancel`; does not access `desktopCapturer`.
+- Normal renderer `preload.js` does not expose `desktopCapturer`.
 
-- Mock `getCursorScreenPoint` + `getDisplayNearestPoint` to return a matching display → capture succeeds with correct source.
-- Mock to return a non-matching display with multiple sources → returns clean error.
-- Mock to return a non-matching display with single source → falls back to `sources[0]`.
-- Renderer shows clean zh-TW error for `current-display-ambiguous`.
-- OCR and `/chat` handoff tests remain passing after capture change.
-- Pet / voice / TTS tests remain passing.
+**Dynamic smoke:**
+
+- `screen-pick-cancelled` → renderer shows clean "取消" message; analyze button stays disabled.
+- `selected-display-ambiguous` → renderer shows clean "無法確認" message; analyze button stays disabled; no raw IDs shown.
+- `screen-picker-failed` → renderer shows clean "選擇器" message; analyze button stays disabled.
+- Capture success → OCR + `/chat` handoff pipeline works end-to-end (TASK-172B regression).
 
 **Manual Windows smoke (see §9).**
 
 ### §9 — Manual Windows Smoke Expectations
 
-1. Open Full App with mouse on the **primary monitor**. Click "擷取螢幕". Run OCR ("分析這張"). Confirm OCR summary contains text from the primary monitor only. Confirm secondary monitor's unique text does not appear in the summary.
-2. Move mouse to the **secondary monitor**. Click "擷取螢幕". Run OCR. Confirm OCR summary contains text from the secondary monitor only. Confirm primary monitor's unique text does not appear in the summary.
-3. Confirm no virtual desktop / both-screen capture occurs on either step.
-4. If source matching fails (e.g. display ID mismatch), confirm the UI shows a clean zh-TW message, not raw Electron error text.
-5. Confirm "分析這張" confirmation dialog still appears before OCR.
-6. Confirm "問克莉絲蒂娜這個畫面" still works correctly after capture and OCR.
-7. Confirm "清除截圖" still clears all state.
+1. Click "擷取螢幕" — a semi-transparent overlay appears on **both** monitors simultaneously with label "點選此螢幕擷取" / "Esc 取消".
+2. Click the **primary monitor** overlay → overlays close → run OCR → confirm summary shows primary monitor content; secondary monitor content absent.
+3. Click "擷取螢幕" again → click the **secondary monitor** overlay → run OCR → confirm summary shows secondary monitor content; primary monitor content absent.
+4. Click "擷取螢幕" → press **Esc** → overlays close → status shows "已取消擷取螢幕。"; analyze button disabled; no screenshot stored.
+5. Confirm "分析這張" sensitive-content confirmation dialog still appears before OCR.
+6. Confirm "問克莉絲蒂娜這個畫面" still works after capture and OCR.
+7. Confirm "清除截圖" still clears all state and hides the ask button.
 8. Confirm Full App chat, voice/STT, TTS, Pet behavior: no regression.
 
 ### §10 — Scope Limits
 
 Do **not** implement in TASK-174:
 
-- Region selection capture.
+- Region selection / drag-to-crop capture (deferred to TASK-175/TASK-176).
 - Active-window capture.
 - Always-on screen watching or periodic capture.
 - Screenshot keyboard shortcut.
-- Pet-triggered capture.
-- Voice-triggered capture.
+- Pet-triggered or voice-triggered capture.
 - Cloud vision or cloud OCR.
 - Image upload to any LLM or vision provider.
 - `/chat` schema changes.
@@ -16953,37 +16927,58 @@ Do **not** implement in TASK-174:
 
 ### §11 — Preserved Existing Behavior
 
-The following must not regress when TASK-174 is implemented:
-
-- TASK-171A user-triggered capture.
+- TASK-171A user-triggered capture and preload surface.
 - TASK-171A-MULTIMONITOR-SCOPE-FIX safety rule (sources[0] only on single-source systems).
 - TASK-172A "分析這張" sensitive-content confirmation and OCR flow.
 - TASK-172A-OCR-BACKEND `POST /ocr/extract` local OCR.
 - TASK-172A-OCR-POLISH preprocessing pipeline.
 - TASK-172B "問克莉絲蒂娜這個畫面" user-confirmed `/chat` handoff.
-- Full App chat flow.
-- Pet direct input.
-- Voice / STT / voice-to-chat.
-- TTS playback and voice controls.
-- Quiet Mode.
-- Click-through recovery.
-- Clean Pet Bubble rules.
+- Full App chat, Pet direct input, voice/STT, TTS, Quiet Mode, click-through recovery.
+
+### Implementation Record (2026-05-30)
+
+**Cursor-based approach (rejected):** Initially implemented `getCursorScreenPoint` + `getDisplayNearestPoint` to capture the cursor's display. Rejected after manual UX review: clicking the "擷取螢幕" button moves the cursor to the app-window monitor, so the cursor-based approach always captured the wrong screen on dual-monitor setups.
+
+**Picker-based approach (implemented):** Main process opens one semi-transparent `BrowserWindow` per display. User clicks desired monitor. Main process destroys all pickers and captures the selected display.
+
+Files changed:
+- `apps/desktop/src/picker/picker.html` — new; minimal CSS-only overlay.
+- `apps/desktop/src/picker/picker-preload.js` — new; attaches click/keydown listeners; sends `screen-picker:selected` / `screen-picker:cancel` IPC.
+- `apps/desktop/src/main.js` — added `SCREEN_PICKER_SELECTED_CHANNEL`, `SCREEN_PICKER_CANCEL_CHANNEL`, `pickerInFlight`, `showDisplayPicker()`; replaced `screen:capture-once` handler.
+- `apps/desktop/src/renderer/renderer.js` — replaced cursor error codes with picker error codes in `CAPTURE_FAILURE_MESSAGES`.
+- `apps/desktop/scripts/task171a-capture-smoke.js` — updated static checks; replaced 3 cursor-era test174 functions with 4 picker-era tests.
+
+Smoke: `renderer-chat-smoke.js` PASS.
 
 ### Acceptance Criteria
 
 - [x] TASK-174 design documented in `docs/TASKS.md`.
-- [x] `docs/ROADMAP.md` updated with TASK-174 DEFINED docs-only entry.
-- [x] Current mouse display capture strategy documented (§1).
+- [x] `docs/ROADMAP.md` updated with TASK-174 entry.
+- [x] Click-to-select picker UX documented (§1).
 - [x] IPC/security boundaries documented (§2).
 - [x] Fallback and ambiguity handling documented (§3).
-- [x] UI documented (§4).
+- [x] New files documented (§4).
+- [x] Picker window lifecycle documented (§5).
 - [x] Privacy boundaries documented (§6).
 - [x] Error handling documented (§7).
 - [x] Testing plan documented (§8).
 - [x] Manual Windows smoke expectations documented (§9).
 - [x] Scope limits documented (§10).
 - [x] Preserved existing behavior documented (§11).
-- [x] No runtime files modified.
-- [ ] Implementation complete (deferred to TASK-174 implementation step).
-- [ ] Desktop smoke tests passing.
-- [ ] Windows manual smoke PASS.
+- [x] Implementation complete.
+- [x] Desktop smoke tests passing (`renderer-chat-smoke.js` PASS).
+- [x] Windows manual smoke PASS.
+
+### Windows Manual Smoke Results (2026-05-30) — PASS
+
+| # | Scenario | Result |
+|---|---|---|
+| 1 | Click "擷取螢幕" → semi-transparent picker overlay appeared on **both** monitors simultaneously | PASS |
+| 2 | Click **primary monitor** overlay → overlays close → OCR ran → summary shows `PRIMARY_MONITOR_TASK174_TEST` only; secondary content absent | PASS |
+| 3 | Click **secondary monitor** overlay → overlays close → OCR ran → summary shows `SECONDARY_MONITOR_TASK174_TEST` only; primary content absent | PASS |
+| 4 | No virtual desktop / dual-screen combined capture observed | PASS |
+| 5 | Press **Esc** → overlays close → status shows "已取消擷取螢幕。"; analyze button disabled; no screenshot stored | PASS |
+| 6 | "分析這張" sensitive-content confirmation dialog still appears before OCR | PASS |
+| 7 | "問克莉絲蒂娜這個畫面" still works after capture and OCR | PASS |
+| 8 | "清除截圖" clears all state and hides the ask button | PASS |
+| 9 | Full App chat, Pet Bubble, voice/STT, TTS: no regression | PASS |

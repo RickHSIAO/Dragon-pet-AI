@@ -156,10 +156,14 @@ let lastScreenshotDataUrl = null;
 let captureScreenInFlight = false;
 
 const CAPTURE_FAILURE_MESSAGES = {
-  "permission-denied": "無法截圖，缺少螢幕擷取權限。",
-  "no-source": "找不到可截圖的螢幕。",
-  "capture-failed": "截圖失敗，請稍後再試。",
-  "primary-display-ambiguous": "無法確認主要螢幕來源，請重試。",
+  "permission-denied":          "無法截圖，缺少螢幕擷取權限。",
+  "no-source":                  "找不到可截圖的螢幕。",
+  "capture-failed":             "截圖失敗，請稍後再試。",
+  "primary-display-ambiguous":  "無法確認主要螢幕來源，請重試。",
+  // TASK-174: click-to-select display picker error codes.
+  "screen-pick-cancelled":      "已取消擷取螢幕。",
+  "selected-display-ambiguous": "無法確認選取的螢幕來源，請重試。",
+  "screen-picker-failed":       "無法開啟螢幕選擇器，請重試。",
 };
 
 function setCaptureScreenStatus(message, isError) {
