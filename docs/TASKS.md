@@ -18160,6 +18160,49 @@ All 4 suites + `git diff --check` + `git status --short`
 
 ---
 
+## TASK-190 | Provider Settings UI Manual Smoke / Visual Check
+
+**Status:** DONE
+**Date:** 2026-05-31
+
+### Goal
+
+Manual smoke closeout for TASK-189 Provider Settings UI changes. Static inspection of all changed files; manual smoke checklist documented; edge-case bug found and fixed.
+
+### Static Inspection Findings
+
+**Bug found and fixed:**
+- `calcProviderStatusSummary` (renderer.js): cloud provider with `key_status = "invalid"` or `"test_failed"` was classified as "not configured" because neither value was in `["configured", "not_tested", "test_success"]`. Fixed — added separate `keyBad` check for these two values, showing "API key invalid or connection test failed." (error state) instead.
+
+**Pre-existing issues noted (not introduced by TASK-189):**
+- `lastChatSource = "not_checked"` (truthy) means `syncChatRuntimeProviderStatus`'s "before first chat" branch never fires; `#chat-provider-status` briefly shows raw `"not_checked"` between settings load and first chat. Pre-existing, low impact.
+- `#chat-runtime-status` initial HTML: "mock mode - no AI connected" — mildly technical. Acceptable for dev phase.
+
+**No other issues found:** API key input not cleared by save-settings flow; Test Connection messages clean; all 8 `sourceStatusMessage()` paths plain English; all 8 provider summary states verified by static analysis and smoke tests.
+
+### Files Modified
+
+| File | Change | Runtime? |
+|---|---|---|
+| `apps/desktop/src/renderer/renderer.js` | `calcProviderStatusSummary`: added `keyBad` branch for `invalid`/`test_failed` key states | Yes (UI text only) |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | 2 new TASK-190 edge-case tests | No |
+| `docs/DESKTOP_UX_POLISH_NOTES.md` | TASK-189+190 section + full manual smoke checklist (14 scenarios) | No |
+| `docs/TASKS.md` | TASK-190 section added | No |
+| `docs/ROADMAP.md` | TASK-190 DONE entry | No |
+
+### Acceptance Criteria
+
+- [x] `renderer-chat-smoke.js` — PASS (2 new TASK-190 edge-case tests pass).
+- [x] `pet-renderer-smoke.js` — `226 checks PASS` (not touched, no regression).
+- [x] `pet-window-smoke.js` — `45 checks PASS` (not touched, no regression).
+- [x] `python -m pytest tests/ -q` — `667 PASS` baseline (no backend change).
+- [x] `git diff --check` — CLEAN.
+- [x] Edge-case bug fixed: `invalid`/`test_failed` key status now shows "API key invalid or connection test failed."
+- [x] Manual smoke checklist written to `docs/DESKTOP_UX_POLISH_NOTES.md` (14 scenarios).
+- [x] No new features added. No runtime behavior beyond UI text change.
+
+---
+
 ## TASK-189 | Provider Settings UI Polish Pass
 
 **Status:** DONE

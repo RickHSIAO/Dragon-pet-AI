@@ -1925,6 +1925,38 @@ function testTask189SourceStatusMessagesNotRaw() {
   assert.doesNotMatch(rendererSrc, /"source=backend_offline/);
 }
 
+async function testTask190ProviderStatusSummaryInvalidKey() {
+  // TASK-190 edge case: invalid/test_failed key should show error, not "not configured"
+  const { document } = await loadRenderer({
+    providerSettings: {
+      provider: "anthropic",
+      real_provider_enabled: true,
+      llm_chat_enabled: true,
+      fallback_to_mock: false,
+      key_status: "test_failed",
+      resolved_provider: "anthropic",
+    },
+  });
+  const summary = textOf(document, "provider-status-summary");
+  assert.match(summary, /invalid or connection test failed/i);
+  assert.doesNotMatch(summary, /not configured/i);
+}
+
+async function testTask190ProviderStatusSummaryCloudActive() {
+  const { document } = await loadRenderer({
+    providerSettings: {
+      provider: "anthropic",
+      real_provider_enabled: true,
+      llm_chat_enabled: true,
+      fallback_to_mock: false,
+      key_status: "test_success",
+      resolved_provider: "anthropic",
+    },
+  });
+  const summary = textOf(document, "provider-status-summary");
+  assert.match(summary, /anthropic active/i);
+}
+
 
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
@@ -2006,6 +2038,9 @@ async function main() {
   await testTask189ProviderStatusSummaryOllamaActive();
   await testTask189ProviderStatusSummaryFallbackWarning();
   testTask189SourceStatusMessagesNotRaw();
+  // TASK-190: Provider Settings manual smoke closeout — edge case tests
+  await testTask190ProviderStatusSummaryInvalidKey();
+  await testTask190ProviderStatusSummaryCloudActive();
   console.log("renderer chat smoke: PASS");
 }
 

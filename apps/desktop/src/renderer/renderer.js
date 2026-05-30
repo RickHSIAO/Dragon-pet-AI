@@ -832,8 +832,12 @@ function calcProviderStatusSummary(settings) {
     return { text: "Current: Ollama active — local AI connected.", state: "active" };
   }
   // Cloud provider
-  const keyOk = ["configured", "not_tested", "test_success"].includes(keyStatus);
-  if (!keyOk) {
+  const keyActive = ["configured", "not_tested", "test_success"].includes(keyStatus);
+  const keyBad = ["invalid", "test_failed"].includes(keyStatus);
+  if (keyBad) {
+    return { text: `Current: ${provider} selected — API key invalid or connection test failed.`, state: "error" };
+  }
+  if (!keyActive) {
     return { text: `Current: ${provider} selected — API key not configured.`, state: "error" };
   }
   if (!llmEnabled) {
