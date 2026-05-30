@@ -16793,3 +16793,197 @@ TASK-173 is docs-only. The following are explicitly out of scope:
 - [x] Recommended next priority documented (§6).
 - [x] Scope limits documented (§7).
 - [x] No runtime files modified.
+
+---
+
+## TASK-174 | Capture Current Mouse Display / Active Monitor Design
+
+**Status:** DEFINED (docs-only)
+**Date:** 2026-05-30
+**Type:** Design — v0.4+ Screen Context (capture improvement)
+**Depends on:** TASK-171A DONE, TASK-171A-MULTIMONITOR-SCOPE-FIX DONE, TASK-173 DONE
+
+### Context
+
+TASK-171A-MULTIMONITOR-SCOPE-FIX made capture primary-display safe: on multi-monitor systems where `display_id` matching fails, the app returns `primary-display-ambiguous` rather than silently capturing the virtual desktop. However, the user has dual monitors and may be working on the secondary display. Capture always targets the primary display, which is safe but not always convenient.
+
+TASK-174 designs the next improvement: when the user clicks "擷取螢幕", the app captures the display that currently contains the mouse cursor rather than always capturing the primary display. This requires no cloud dependency, no background monitoring, and no change to the explicit-trigger-only model.
+
+This is docs-only. No runtime files are modified in this task.
+
+### §1 — Capture Target Strategy
+
+On user click of "擷取螢幕":
+
+1. Main process calls `screen.getCursorScreenPoint()` to get the current cursor position `{ x, y }`.
+2. Main process calls `screen.getDisplayNearestPoint(cursorPoint)` to get the display closest to the cursor.
+3. The `id` of that display is used as the match target (same `String(display.id)` comparison used in TASK-171A-MULTIMONITOR-SCOPE-FIX).
+4. Main process calls `desktopCapturer.getSources({ types: ["screen"] })`.
+5. A source is selected by matching `String(source.display_id) === String(cursorDisplay.id)`.
+6. If a match is found, that source is used for capture.
+7. If no match is found and only one source exists (single-monitor fallback), `sources[0]` is used.
+8. If no match is found and multiple sources exist, capture fails safely with a clean error code (see §3).
+
+The main process chooses the capture source entirely. The renderer never sees raw source IDs, display IDs, or the `desktopCapturer` source list.
+
+### §2 — IPC / Security Boundary
+
+The existing narrow IPC channel `screen:capture-once` is reused without change to its surface. The implementation change is entirely inside the main-process handler.
+
+- `contextIsolation: true` remains unchanged.
+- `nodeIntegration: false` remains unchanged.
+- The preload surface (`captureScreen()`) remains unchanged.
+- The renderer does not receive display IDs, source IDs, or the `desktopCapturer` source list.
+- `screen.getCursorScreenPoint` and `screen.getDisplayNearestPoint` are called in the main process only.
+- No new IPC channels are added in this task.
+
+### §3 — Fallback and Ambiguity Handling
+
+| Condition | Behavior |
+|---|---|
+| Cursor display ID matches one source | Use matched source. ✓ |
+| No match found, only one source exists | Use `sources[0]` (single-monitor safe). ✓ |
+| No match found, multiple sources exist | Return `{ ok: false, error: "current-display-ambiguous" }`. |
+| `getCursorScreenPoint` returns null/undefined | Attempt primary-display fallback; if multi-source, return `{ ok: false, error: "cursor-point-unavailable" }`. |
+| `getDisplayNearestPoint` returns null/undefined | Same fallback chain as above. |
+| `desktopCapturer.getSources` returns empty array | Return `{ ok: false, error: "no-desktop-source" }`. |
+| Thumbnail stream empty | Return `{ ok: false, error: "thumbnail-empty" }`. |
+| Permission denied | Return `{ ok: false, error: "permission-denied" }`. |
+
+All error codes must be mapped to clean zh-TW strings in `renderer.js` `CAPTURE_FAILURE_MESSAGES`. The UI must never display raw Electron errors, display IDs, source IDs, stack traces, file paths, raw JSON, backend URLs, or base64 data.
+
+Suggested zh-TW messages (to be finalised at implementation time):
+- `current-display-ambiguous` → `"無法確認目前滑鼠所在螢幕，請重試。"`
+- `cursor-point-unavailable` → `"無法取得目前滑鼠位置，請重試。"`
+
+### §4 — UI
+
+- No new button is required.
+- The existing "擷取螢幕" button triggers capture of the current mouse display.
+- The existing `capture-screen-status` span shows success/error messages.
+- An optional tooltip explaining `"會截取目前滑鼠所在螢幕"` may be added later but is not required in the first implementation.
+- No new Pet Menu trigger, no new voice trigger, no new keyboard shortcut.
+
+### §5 — OCR / Analysis Interaction
+
+All existing downstream flows are unchanged:
+
+- "分析這張" user-confirmed OCR flow (TASK-172A) is unchanged.
+- Sensitive-content warning before OCR is unchanged.
+- Backend OCR endpoint (`POST /ocr/extract`) is unchanged.
+- OCR preprocessing pipeline is unchanged.
+- "問克莉絲蒂娜這個畫面" user-confirmed `/chat` handoff (TASK-172B) is unchanged.
+- "清除截圖" still clears screenshot, summary, and handoff state.
+
+### §6 — Privacy Boundaries
+
+All TASK-171A and TASK-172B privacy rules remain in force:
+
+- User-triggered capture only — no background monitoring, no periodic cursor tracking, no automatic screenshot.
+- Screenshot held in renderer memory only — no disk save, no history, no cloud upload.
+- No raw screenshot dataUrl sent to `/chat`.
+- No image bytes sent to `/chat`.
+- No cloud OCR or cloud vision.
+- `getCursorScreenPoint` is called once per user click, in the main process only — no continuous cursor tracking.
+- No cursor position data is logged or persisted.
+
+### §7 — Error Handling
+
+The renderer `CAPTURE_FAILURE_MESSAGES` map must include entries for all new error codes introduced in this task (`current-display-ambiguous`, `cursor-point-unavailable`, and any others added at implementation time).
+
+The UI must never show:
+- Raw Electron error messages or exception text
+- Display IDs or source IDs
+- Stack traces
+- File paths
+- Raw JSON objects
+- Backend URLs
+- base64 dataUrl fragments
+
+### §8 — Testing Plan (for implementation step)
+
+**Static source checks (`task171a-capture-smoke.js` or new smoke file):**
+
+- `main.js` calls `screen.getCursorScreenPoint` (or equivalent) in the `screen:capture-once` handler.
+- `main.js` calls `screen.getDisplayNearestPoint` (or equivalent).
+- `main.js` matches `desktopCapturer` source by `display_id` against the cursor display.
+- `main.js` does not blindly use `sources[0]` when multiple screen sources exist.
+- Multi-monitor ambiguity with no match returns a clean error object, not `sources[0]`.
+- `renderer.js` `CAPTURE_FAILURE_MESSAGES` contains `current-display-ambiguous` mapping.
+- Capture does not call `/chat`.
+- Capture does not persist screenshot.
+
+**Dynamic tests:**
+
+- Mock `getCursorScreenPoint` + `getDisplayNearestPoint` to return a matching display → capture succeeds with correct source.
+- Mock to return a non-matching display with multiple sources → returns clean error.
+- Mock to return a non-matching display with single source → falls back to `sources[0]`.
+- Renderer shows clean zh-TW error for `current-display-ambiguous`.
+- OCR and `/chat` handoff tests remain passing after capture change.
+- Pet / voice / TTS tests remain passing.
+
+**Manual Windows smoke (see §9).**
+
+### §9 — Manual Windows Smoke Expectations
+
+1. Open Full App with mouse on the **primary monitor**. Click "擷取螢幕". Run OCR ("分析這張"). Confirm OCR summary contains text from the primary monitor only. Confirm secondary monitor's unique text does not appear in the summary.
+2. Move mouse to the **secondary monitor**. Click "擷取螢幕". Run OCR. Confirm OCR summary contains text from the secondary monitor only. Confirm primary monitor's unique text does not appear in the summary.
+3. Confirm no virtual desktop / both-screen capture occurs on either step.
+4. If source matching fails (e.g. display ID mismatch), confirm the UI shows a clean zh-TW message, not raw Electron error text.
+5. Confirm "分析這張" confirmation dialog still appears before OCR.
+6. Confirm "問克莉絲蒂娜這個畫面" still works correctly after capture and OCR.
+7. Confirm "清除截圖" still clears all state.
+8. Confirm Full App chat, voice/STT, TTS, Pet behavior: no regression.
+
+### §10 — Scope Limits
+
+Do **not** implement in TASK-174:
+
+- Region selection capture.
+- Active-window capture.
+- Always-on screen watching or periodic capture.
+- Screenshot keyboard shortcut.
+- Pet-triggered capture.
+- Voice-triggered capture.
+- Cloud vision or cloud OCR.
+- Image upload to any LLM or vision provider.
+- `/chat` schema changes.
+- Changes to OCR provider or preprocessing pipeline.
+- Screenshot persistence.
+
+### §11 — Preserved Existing Behavior
+
+The following must not regress when TASK-174 is implemented:
+
+- TASK-171A user-triggered capture.
+- TASK-171A-MULTIMONITOR-SCOPE-FIX safety rule (sources[0] only on single-source systems).
+- TASK-172A "分析這張" sensitive-content confirmation and OCR flow.
+- TASK-172A-OCR-BACKEND `POST /ocr/extract` local OCR.
+- TASK-172A-OCR-POLISH preprocessing pipeline.
+- TASK-172B "問克莉絲蒂娜這個畫面" user-confirmed `/chat` handoff.
+- Full App chat flow.
+- Pet direct input.
+- Voice / STT / voice-to-chat.
+- TTS playback and voice controls.
+- Quiet Mode.
+- Click-through recovery.
+- Clean Pet Bubble rules.
+
+### Acceptance Criteria
+
+- [x] TASK-174 design documented in `docs/TASKS.md`.
+- [x] `docs/ROADMAP.md` updated with TASK-174 DEFINED docs-only entry.
+- [x] Current mouse display capture strategy documented (§1).
+- [x] IPC/security boundaries documented (§2).
+- [x] Fallback and ambiguity handling documented (§3).
+- [x] UI documented (§4).
+- [x] Privacy boundaries documented (§6).
+- [x] Error handling documented (§7).
+- [x] Testing plan documented (§8).
+- [x] Manual Windows smoke expectations documented (§9).
+- [x] Scope limits documented (§10).
+- [x] Preserved existing behavior documented (§11).
+- [x] No runtime files modified.
+- [ ] Implementation complete (deferred to TASK-174 implementation step).
+- [ ] Desktop smoke tests passing.
+- [ ] Windows manual smoke PASS.
