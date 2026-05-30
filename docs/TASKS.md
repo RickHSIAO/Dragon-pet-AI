@@ -17953,3 +17953,43 @@ This preserves the original intent (pet IPC stays narrow/handle-based) while all
 - [x] No runtime behavior changed.
 - [x] No new features added.
 - [x] No safety boundaries changed.
+
+---
+
+## TASK-184 | Smoke Command Runbook / One-Command Verification Docs
+
+**Status:** DONE — DOCS-ONLY
+**Date:** 2026-05-30
+**Type:** Developer tooling documentation
+
+### Goal
+
+Create a concise, copy-pasteable runbook of all automated smoke and regression commands, so that after any change the correct test subset is immediately obvious without reading individual task docs.
+
+### Deliverables
+
+| File | Action |
+|---|---|
+| `docs/DESKTOP_SMOKE_RUNBOOK.md` | Created — full runbook |
+| `docs/TASKS.md` | TASK-184 section added |
+| `docs/ROADMAP.md` | TASK-184 DONE entry; next task TASK-185 TBD |
+
+### Contents of DESKTOP_SMOKE_RUNBOOK.md
+
+1. **Quick Reference** — one copy-paste block running all four suites + git hygiene.
+2. **Suite Details** — per-suite: command, location, count, runtime, what it covers, when to run.
+3. **When to Run Which Suite** — change-scoped guidance (renderer change → renderer-chat-smoke; main.js/IPC change → pet-window-smoke; OCR change → pytest; etc.).
+4. **One-Shot Full Regression Block** — `Push-Location`/`Pop-Location` safe PowerShell block for complete regression.
+5. **Expected Healthy Baseline** — table of expected output strings.
+6. **Smoke Suite File Map** — where each script lives + related docs.
+7. **Common Failures & Fixes** — `Cannot find module`, pytest cache warning, AssertionError on pet-window-smoke, FakeDocument harness note, whitespace errors.
+
+### Acceptance Criteria
+
+- [x] `docs/DESKTOP_SMOKE_RUNBOOK.md` created.
+- [x] All four automated suites documented with PowerShell commands.
+- [x] Change-scoped guidance: which suite to run for renderer / pet / IPC / OCR changes.
+- [x] Full regression one-liner block included.
+- [x] Reference to `docs/SCREEN_CONTEXT_RELEASE_SMOKE_CHECKLIST.md` for manual 43-item release check.
+- [x] Reference to `docs/LOCAL_DEV_RUNBOOK.md` for stack startup.
+- [x] No runtime files modified.

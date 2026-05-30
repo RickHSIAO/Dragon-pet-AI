@@ -444,7 +444,9 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 **Screen Context v0.4 COMPLETE** — see `docs/SCREEN_CONTEXT_V04_RELEASE_SUMMARY.md`
 
-**Next planned task:** TASK-184 — (v0.5 scope TBD; options: OCR quality polish, local vision research, or general assistant feature work)
+**Next planned task:** TASK-185 — (v0.5 scope TBD; options: OCR quality polish, local vision research, or general assistant feature work)
+
+- TASK-184 DONE - DOCS-ONLY (2026-05-30): Smoke command runbook / one-command verification docs. Created `docs/DESKTOP_SMOKE_RUNBOOK.md`: quick-reference block (all four suites + git hygiene), per-suite details (command, count, runtime, coverage, when to run), change-scoped guidance (renderer → renderer-chat-smoke; main.js/IPC → pet-window-smoke; OCR → pytest; etc.), one-shot full regression PowerShell block with Push/Pop-Location, expected healthy baseline table, smoke suite file map, and common failures & fixes. No runtime files modified.
 
 - TASK-183 DONE (2026-05-30): General app regression / startup smoke cleanup. Found and fixed a pre-existing test regression in `pet-window-smoke.js` caused by Screen Context v0.4 picker IPC: `testPetOpenFullAppIpcIsFixedAndNarrow` asserted `assertNotIncludes(main, "ipcMain.on(")` which was correct before v0.4 but TASK-174/175/176 legitimately added `ipcMain.on()` for picker event channels (all scoped, all paired with `ipcMain.removeListener()`). Replaced overly-broad assertion with two precise guards: (1) `assertNotIncludes(main, "ipcMain.on(PET_")` — pet IPC still uses handle-only; (2) `assertIncludes(main, "ipcMain.removeListener(")` — cleanup pattern exists. All four suites now pass: renderer-chat-smoke PASS, pet-renderer-smoke 226 PASS, pet-window-smoke 45 PASS, OCR pytest 34 PASS.
 
