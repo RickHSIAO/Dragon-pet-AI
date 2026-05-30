@@ -15779,3 +15779,255 @@ Manual smoke passed. All expected behaviors confirmed:
 Option A (renderer-side tesseract.js) formally rejected. Root cause: `nodeIntegration:false` + `contextIsolation:true` make `require()` unavailable in the Electron renderer; `window.Tesseract` is never set. Fixing this without bundling or IPC restructuring is out of scope.
 
 Next step: TASK-172A-OCR-BACKEND — backend local OCR via `POST /ocr/extract` (Option B: `pytesseract` or `easyocr`) with narrow `screen:analyze-once` IPC bridge.
+
+## TASK-172A-OCR-BACKEND | Backend Local OCR Endpoint Design
+
+**Status:** DEFINED (docs-only)
+**Date:** 2026-05-30
+**Type:** Design — v0.4 Screen Context (slice 2A-OCR-B, backend OCR Option B)
+**Depends on:** TASK-172A-OCR DONE (Option A rejected; safe fallback confirmed)
+
+### Context
+
+TASK-172A-OCR formally rejected renderer-side tesseract.js (Option A) because the Full App BrowserWindow uses `nodeIntegration:false` + `contextIsolation:true`, making `require()` unavailable in the renderer and `window.Tesseract` unset. Weakening Electron security is not acceptable. TASK-172A-OCR-BACKEND designs Option B: a backend-local OCR endpoint that receives the user-confirmed in-memory screenshot dataUrl, runs OCR on the Python backend, and returns a clean bounded text result via a narrow IPC bridge. No cloud OCR. No /chat. No disk persistence by default.
+
+### Goal
+
+Design a backend `POST /ocr/extract` endpoint that accepts a base64-encoded screenshot, runs local OCR, and returns `{ ok, text }` or `{ ok: false, error }`. The renderer calls this via a narrow preload IPC channel after user confirmation. No runtime files are modified in this docs-only step.
+
+### §1 — Architecture
+
+```
+[renderer.js]
+  → lastScreenshotDataUrl (in-memory, TASK-171A)
+  → user confirms "分析這張" (TASK-172A)
+  → window.dragonPet.analyzeScreen(dataUrl)   [preload IPC — new narrow API]
+      → ipcRenderer.invoke("screen:analyze-once", dataUrl)
+          → main.js screen:analyze-once handler
+              → POST http://localhost:{PORT}/ocr/extract  { image: dataUrl }
+                  → backend app/ocr/ocr_routes.py
+                      → ocr_service.py (pytesseract or easyocr)
+                      → returns { ok: true, text: "..." }
+                         or { ok: false, error: "reason-code" }
+          → main.js returns { ok, text } or { ok: false, error } to renderer
+  → renderer displays summary or clean fallback
+```
+
+No `/chat` is called at any step. No Pet Bubble involvement. No disk persistence by default.
+
+### §2 — IPC / API Boundary
+
+**Preload new surface:**
+- `window.dragonPet.analyzeScreen(dataUrl)` — calls `ipcRenderer.invoke("screen:analyze-once", dataUrl)`.
+- No broad network, filesystem, or desktop APIs exposed.
+- Preload validates that dataUrl is a string starting with `data:image/` before invoking IPC.
+
+**Main IPC handler (`screen:analyze-once`):**
+- Receives dataUrl from renderer (already validated by preload).
+- Performs own validation (string, `data:image/` prefix, max length).
+- POSTs to `http://localhost:{PORT}/ocr/extract` with `{ image: dataUrl }` JSON body.
+- Uses built-in `http` module (no new npm dependencies) — matching the STT IPC pattern from TASK-167B.
+- Timeout: 30 s (matching STT pattern).
+- Returns `{ ok: true, text: "..." }` or `{ ok: false, error: "reason-code" }`.
+- Never returns raw Python tracebacks, stack traces, or provider internals.
+- Channel name: `screen:analyze-once` (reuse the name defined in TASK-172A-OCR design; replaces the renderer-side stub call path).
+
+**Backend endpoint (`POST /ocr/extract`):**
+- FastAPI router at `app/ocr/ocr_routes.py`.
+- Accepts JSON body: `{ "image": "<dataUrl string>" }`.
+- Max payload: 20 MB.
+- Returns `{ "ok": true, "text": "..." }` or `{ "ok": false, "error": "reason-code" }`.
+- No raw traceback in response. No provider internals in response. HTTP 200 for both ok and error paths (error signalled via body, not HTTP status) — matching existing `/chat` and `/stt/transcribe` patterns.
+
+### §3 — OCR Provider Options
+
+**Option B-1: `pytesseract` (preferred first attempt)**
+- Python wrapper for the Tesseract binary.
+- Tesseract binary must be installed on the user machine (Windows: Tesseract installer from UB-Mannheim; macOS: `brew install tesseract`; Linux: `apt install tesseract-ocr`).
+- Language data: `tesseract-ocr-eng` (English) + `tesseract-ocr-chi-tra` (Traditional Chinese) packages.
+- Python package: `pip install pytesseract pillow`.
+- Advantage: proven, fast, small Python package.
+- Risk: external binary install required; `TesseractNotFoundError` if binary missing → handle as `ocr-unavailable`.
+- Cold-start: minimal (binary already loaded by OS on first call).
+- Install burden for Windows: user must run Tesseract installer manually; document in runbook.
+
+**Option B-2: `easyocr` (fallback if pytesseract binary install is unacceptable)**
+- Pure Python, no external binary required.
+- Automatic model download (~200–500 MB on first use per language).
+- Python package: `pip install easyocr`.
+- Advantage: no external binary; supports many languages.
+- Risk: very large first-run download; `torch` dependency (~1–2 GB on Windows); slow cold-start (model loading).
+- Install burden for Windows: `pip install easyocr` pulls torch; model downloaded on first OCR call.
+
+**Decision rule for implementation:** Attempt Option B-1 (`pytesseract`) first. If Tesseract binary is not installed on the target machine, fall back to `ocr-unavailable` cleanly — do not auto-download or auto-install. If Option B-1 is rejected after implementation, document reason and evaluate Option B-2. Document decision in the TASK-172A-OCR-BACKEND implementation record.
+
+**No cloud OCR.** No Google Vision, OpenAI Vision, Azure CV, or Anthropic Vision. No silent upload.
+
+### §4 — Input Validation
+
+Both the preload stub and the backend endpoint must validate independently:
+
+**Preload validation (before IPC invoke):**
+- `typeof dataUrl === "string"` and `dataUrl.startsWith("data:image/")`.
+- If invalid: do not invoke IPC; renderer shows `"截圖格式錯誤，請重新擷取。"`.
+
+**Main IPC handler validation:**
+- Same prefix check.
+- String length ≤ 20 MB (string character count guard — `dataUrl.length <= 20 * 1024 * 1024`).
+- If too large: return `{ ok: false, error: "payload-too-large" }`.
+
+**Backend validation:**
+- Check `image` field present and non-empty → else `missing-image`.
+- Check `data:image/` prefix → else `invalid-dataurl`.
+- Check base64 decode succeeds → else `invalid-dataurl`.
+- Check decoded byte length ≤ 20 MB → else `payload-too-large`.
+- Check MIME type is a supported image type (png, jpeg, webp, bmp) → else `unsupported-mime`.
+
+**Screenshot storage during OCR:**
+- Prefer in-memory processing: decode base64 → `PIL.Image.open(io.BytesIO(image_bytes))` → pass PIL image to `pytesseract.image_to_string()` directly.
+- If temporary file is unavoidable (some provider APIs require a file path): write to `tempfile.mkstemp()` in the OS temp directory, run OCR, delete the temp file immediately in a `finally` block. Document this behavior explicitly in the implementation record.
+- Never write screenshot to the project directory, backend directory, or any persistent location.
+- Never log the raw image bytes or base64 string.
+
+### §5 — Output Cleanup
+
+Backend returns raw OCR text. Before returning to renderer, backend must clean:
+
+1. Strip leading/trailing whitespace.
+2. Collapse 3+ consecutive newlines to 2.
+3. Normalize runs of 3+ spaces/tabs on a line to a single space.
+4. Truncate to 800 characters (remainder silently discarded).
+5. If result is empty/whitespace after cleanup: return `{ ok: false, error: "no-text" }`.
+
+Renderer applies `cleanOcrText()` (already implemented in TASK-172A) as a second-pass safety net.
+
+Do not log raw OCR output at INFO level. Log only a length count (e.g. `[OCR] extracted {n} chars`) at DEBUG level if needed.
+
+### §6 — Privacy
+
+- Screenshot dataUrl never leaves the local machine.
+- Backend OCR endpoint is `localhost` only; no external network call.
+- No screenshot stored to disk by default (in-memory pipeline; temp file cleaned immediately if needed).
+- No screenshot history maintained on backend.
+- OCR result text not stored to database, not logged at INFO level, not sent to `/chat`.
+- Renderer keeps summary in `lastScreenSummary` (memory only); cleared by "清除截圖".
+- No background monitoring. Analysis only on explicit user confirmation every time.
+- No Pet Bubble receives screenshot or summary.
+
+### §7 — Error Handling
+
+**Reason codes and clean zh-TW UI messages:**
+
+| Reason code | Clean UI message |
+|---|---|
+| `missing-image` | "請先擷取螢幕截圖。" |
+| `invalid-dataurl` | "截圖格式錯誤，請重新擷取。" |
+| `unsupported-mime` | "截圖格式不支援，請重新擷取。" |
+| `payload-too-large` | "截圖過大，無法分析。" |
+| `ocr-unavailable` | "分析功能目前不可用。" |
+| `ocr-timeout` | "分析逾時，請稍後再試。" |
+| `ocr-failed` | "分析失敗，請稍後再試。" |
+| `no-text` | "未偵測到可用文字。" |
+| `backend-offline` | "後端無法連線，請稍後再試。" |
+
+`no-text` is informational (not shown as error). All others may use error styling.
+
+UI must never show: raw base64, Python tracebacks, stack traces, file paths, backend URLs, provider internal names, raw JSON, or model names.
+
+### §8 — Performance
+
+- OCR may take 2–10 seconds. "正在分析…" must be visible during this time (already implemented in TASK-172A).
+- Analyze button stays disabled during OCR (already guarded by `analyzeInFlight` in TASK-172A).
+- No overlapping OCR jobs (already guarded by `analyzeInFlight`).
+- IPC timeout: 30 s in main.js handler. If backend does not respond in 30 s: return `{ ok: false, error: "ocr-timeout" }`.
+- Backend timeout: FastAPI endpoint should enforce its own internal timeout (e.g. `asyncio.wait_for` or thread pool executor with timeout) to avoid blocking other requests.
+- Cold-start: first OCR call with `pytesseract` is fast (binary already loaded); document in runbook.
+- Cold-start with `easyocr`: first call triggers model download and loading (~30–120 s); do not use without warning user.
+- Full App UI must remain responsive throughout (OCR runs async from renderer's perspective).
+
+### §9 — Testing Plan
+
+**Backend pytest tests (`tests/test_ocr_routes.py`):**
+- Valid dataUrl with mock OCR → `{ ok: true, text: "Hello" }`.
+- Invalid dataUrl prefix → `{ ok: false, error: "invalid-dataurl" }`.
+- Missing `image` field → `{ ok: false, error: "missing-image" }`.
+- Payload too large → `{ ok: false, error: "payload-too-large" }`.
+- OCR provider unavailable (mock `pytesseract.image_to_string` raising `TesseractNotFoundError`) → `{ ok: false, error: "ocr-unavailable" }`.
+- Empty OCR result → `{ ok: false, error: "no-text" }`.
+- No raw Python traceback in any response body.
+- No raw image data in any response body.
+
+**Desktop smoke tests (additions to `task171a-capture-smoke.js`):**
+- `window.dragonPet.analyzeScreen` exposed via preload after implementation.
+- Capture alone does not call `analyzeScreen`.
+- Cancel prevents `analyzeScreen` call.
+- Confirm triggers `analyzeScreen` call.
+- Mock `analyzeScreen` returning `{ ok: true, text: "Hello" }` → summary shows "螢幕摘要：\nHello".
+- Mock returning `{ ok: false, error: "no-text" }` → shows "未偵測到可用文字。".
+- Mock returning `{ ok: false, error: "ocr-unavailable" }` → shows clean fallback, no raw error code.
+- Mock returning `{ ok: false, error: "backend-offline" }` → shows clean fallback.
+- `/chat` not called during any OCR path.
+- No raw base64 / JSON / stack traces appear in status or summary panel.
+- Existing TASK-171A, TASK-172A, voice, TTS, Pet tests still pass.
+
+### §10 — Scope Limits (This Docs-Only Step)
+
+- Do **not** implement `/chat` handoff.
+- Do **not** implement Pet commentary.
+- Do **not** implement cloud OCR or cloud vision.
+- Do **not** implement background monitoring.
+- Do **not** persist screenshot history.
+- Do **not** weaken Electron security (`nodeIntegration` stays `false`).
+- Do **not** enable `nodeIntegration` or disable `contextIsolation`.
+- Do **not** add broad provider architecture.
+- Do **not** modify any runtime implementation file in this docs-only step.
+
+### §11 — Preserved Existing Behavior
+
+- TASK-171A: "擷取螢幕" button, in-memory screenshot, no disk save.
+- TASK-172A: "分析這張" button, sensitive-content confirmation, "清除截圖", unavailable fallback.
+- TASK-172A-OCR: clean `ocr-init-failed` fallback, DevTools diagnostic, `_initOcrWorker` structure.
+- Full App chat: typing, Enter key, Send button, `/chat` pipeline.
+- Pet direct text input (TASK-166E).
+- Voice input / STT / voice-to-chat (TASK-167A–C).
+- TTS playback and voice controls (TASK-168B, TASK-169).
+- Quiet Mode idle suppression.
+- Click-through toggle and CT recovery strip.
+- Clean Pet Bubble speech rules.
+- Pet window position persistence (TASK-148).
+
+### Manual Windows Smoke Expectations (for future TASK-172A-OCR-BACKEND implementation)
+
+- Renderer-side OCR remains disabled (TASK-172A-OCR Option A still rejected).
+- "分析這張" button disabled before screenshot capture.
+- Capture enables button.
+- Clicking "分析這張" shows sensitive-content warning.
+- Cancel prevents backend OCR call.
+- Capture alone does not call backend OCR.
+- Confirm starts analysis; "正在分析…" appears.
+- Tesseract binary installed → OCR succeeds → bounded summary shown ("螢幕摘要：\n{text}").
+- No useful text found → "未偵測到可用文字。" shown cleanly.
+- Backend offline → "後端無法連線，請稍後再試。" shown cleanly.
+- Tesseract binary missing → "分析功能目前不可用。" shown cleanly.
+- No screenshot written to disk (or temp file deleted immediately if used).
+- No screenshot uploaded externally.
+- `/chat` not called.
+- Pet Bubble does not receive screenshot or summary.
+- No raw base64, Python traceback, stack trace, file path, backend URL, or JSON in UI.
+- Existing chat / voice / TTS / Pet / direct text input features do not regress.
+
+### Acceptance Criteria
+
+- [x] Backend OCR architecture documented (§1).
+- [x] IPC / API boundary documented (§2).
+- [x] OCR provider choice criteria documented (§3).
+- [x] Input validation documented (§4).
+- [x] Output cleanup documented (§5).
+- [x] Privacy/storage boundaries documented (§6).
+- [x] Error codes and UI messages documented (§7).
+- [x] Performance constraints documented (§8).
+- [x] Testing plan documented (§9).
+- [x] Scope limits documented (§10).
+- [x] Preserved existing behavior documented (§11).
+- [x] Manual Windows smoke expectations documented.
+- [x] No runtime files modified in this docs-only step.
