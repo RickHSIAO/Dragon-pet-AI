@@ -221,6 +221,7 @@ const ANALYZE_FAILURE_MESSAGES = {
   "no-screenshot":        "請先擷取螢幕截圖。",
   "screenshot-cleared":   "截圖已清除，請重新擷取。",
   "no-text":              "未偵測到可用文字。",
+  "backend-offline":      "後端無法連線，請稍後再試。",
 };
 
 function setAnalyzeScreenStatus(message, isError) {
@@ -258,53 +259,11 @@ function clearScreenshot() {
   setCaptureScreenStatus("截圖已清除。", false);
 }
 
-// TASK-172A-OCR: tesseract.js Option A — formally rejected.
-// Root cause: Electron renderer has nodeIntegration:false + contextIsolation:true.
-// require() is undefined in renderer; window.Tesseract is never set (no <script> load).
-// tesseract.js cannot be accessed without a bundler or preload/IPC bridge.
-// Fallback: clean "ocr-unavailable" or "ocr-init-failed" shown; no fake success.
-// Next step: Option B — backend local OCR endpoint (see TASK-172A-OCR docs).
-// State vars + _initOcrWorker kept for Option B swap-in; they produce clean fallback now.
-let _ocrWorker = null;
-let _ocrWorkerReady = false;
-let _ocrWorkerInitFailed = false;
-const OCR_DATAURL_MAX_LEN = 20 * 1024 * 1024; // 20 MB string length guard
+// TASK-172A-OCR-BACKEND: backend local OCR via POST /ocr/extract (Option B).
+// Renderer uses existing fetch() — no new IPC, no require(), no nodeIntegration change.
+// Privacy: dataUrl sent to localhost backend only; no external upload; no /chat call.
+const OCR_DATAURL_MAX_LEN = 20 * 1024 * 1024; // 20 MB string-length guard
 const OCR_TIMEOUT_MS = 30000;
-
-async function _initOcrWorker() {
-  if (_ocrWorkerReady) return true;
-  if (_ocrWorkerInitFailed) return false;
-  try {
-    const Tesseract = (typeof require !== "undefined")
-      ? require("tesseract.js")
-      : (window.Tesseract || null);
-    if (!Tesseract) {
-      // TASK-172A-OCR: Option A rejected — tesseract.js not reachable.
-      // require() unavailable (nodeIntegration:false); window.Tesseract not set.
-      // Diagnostic visible in DevTools console only; never shown in UI.
-      if (typeof console !== "undefined" && console.error) {
-        console.error("[TASK-172A-OCR] OCR unavailable: require() not defined in renderer"
-          + " (nodeIntegration:false + contextIsolation:true); window.Tesseract is undefined."
-          + " Option A (renderer-side tesseract.js) rejected. See TASK-172A-OCR docs.");
-      }
-      _ocrWorkerInitFailed = true;
-      return false;
-    }
-    _ocrWorker = await Tesseract.createWorker("eng", 1, {
-      logger: () => {},  // suppress progress logs — no provider internals in console
-    });
-    _ocrWorkerReady = true;
-    return true;
-  } catch (_e) {
-    if (typeof console !== "undefined" && console.error) {
-      console.error("[TASK-172A-OCR] OCR init exception:",
-        _e && _e.message ? _e.message : String(_e));
-    }
-    _ocrWorkerInitFailed = true;
-    _ocrWorker = null;
-    return false;
-  }
-}
 
 async function runOcrAnalysis(dataUrl) {
   if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:image/")) {
@@ -313,23 +272,36 @@ async function runOcrAnalysis(dataUrl) {
   if (dataUrl.length > OCR_DATAURL_MAX_LEN) {
     return { ok: false, error: "screenshot-too-large" };
   }
-  const ready = await _initOcrWorker();
-  if (!ready) {
-    return { ok: false, error: _ocrWorkerInitFailed ? "ocr-init-failed" : "ocr-unavailable" };
-  }
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve({ ok: false, error: "ocr-timeout" }), OCR_TIMEOUT_MS);
-    _ocrWorker.recognize(dataUrl).then((result) => {
-      clearTimeout(timer);
-      const text = (result && result.data && typeof result.data.text === "string")
-        ? result.data.text
-        : "";
-      resolve({ ok: true, text });
-    }).catch((_e) => {
-      clearTimeout(timer);
-      resolve({ ok: false, error: "ocr-failed" });
+  let fetchResult = null;
+  try {
+    // AbortController for timeout — available in Electron renderer and modern browsers.
+    // Falls back to no timeout in test sandboxes where AbortController is absent.
+    let signal;
+    let timeoutId = null;
+    if (typeof AbortController !== "undefined") {
+      const controller = new AbortController();
+      signal = controller.signal;
+      timeoutId = setTimeout(() => controller.abort(), OCR_TIMEOUT_MS);
+    }
+    const res = await fetch(`${BACKEND_URL}/ocr/extract`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: dataUrl }),
+      signal,
     });
-  });
+    if (timeoutId !== null) clearTimeout(timeoutId);
+    if (!res.ok) {
+      return { ok: false, error: "ocr-failed" };
+    }
+    fetchResult = await res.json();
+  } catch (_e) {
+    const isAbort = _e && _e.name === "AbortError";
+    return { ok: false, error: isAbort ? "ocr-timeout" : "backend-offline" };
+  }
+  if (!fetchResult || typeof fetchResult.ok !== "boolean") {
+    return { ok: false, error: "ocr-failed" };
+  }
+  return fetchResult;
 }
 
 function cleanOcrText(raw) {

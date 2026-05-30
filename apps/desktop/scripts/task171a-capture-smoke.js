@@ -177,6 +177,77 @@ async function testCaptureNeverPostsToChat(ctx) {
   assert.equal(after, before, "capture must not POST to /chat");
 }
 
+// ---------------------------------------------------------------------------
+// TASK-172A-OCR-BACKEND: backend fetch OCR tests
+// ---------------------------------------------------------------------------
+
+async function test172ABackendOcrSuccess(ctx) {
+  const { document } = await ctx.loadRenderer({
+    dragonPet: { captureScreen: () => Promise.resolve({ ok: true, dataUrl: "data:image/png;base64,AAA" }) },
+    confirmOverride: () => true,
+    ocrMode: "success",
+  });
+  document.getElementById("capture-screen-btn").click();
+  await ctx.settle();
+  document.getElementById("analyze-screen-btn").click();
+  await ctx.settle();
+  const summary = document.getElementById("analyze-screen-summary").textContent || "";
+  const status = ctx.textOf(document, "analyze-screen-status");
+  assert.ok(summary.includes("螢幕摘要") || summary.includes("Hello"),
+    "OCR success must show summary, got summary=" + summary + " status=" + status);
+  assert.ok(!summary.includes("base64"), "summary must not show raw base64");
+  assert.ok(!summary.includes("data:image"), "summary must not show data URL");
+}
+
+async function test172ABackendOcrNoText(ctx) {
+  const { document } = await ctx.loadRenderer({
+    dragonPet: { captureScreen: () => Promise.resolve({ ok: true, dataUrl: "data:image/png;base64,AAA" }) },
+    confirmOverride: () => true,
+    ocrMode: "no-text",
+  });
+  document.getElementById("capture-screen-btn").click();
+  await ctx.settle();
+  document.getElementById("analyze-screen-btn").click();
+  await ctx.settle();
+  const status = ctx.textOf(document, "analyze-screen-status");
+  assert.ok(status.includes("未偵測到"),
+    "no-text must show 未偵測到可用文字。 got: " + status);
+}
+
+async function test172ABackendOcrUnavailableShowsClean(ctx) {
+  const { document } = await ctx.loadRenderer({
+    dragonPet: { captureScreen: () => Promise.resolve({ ok: true, dataUrl: "data:image/png;base64,AAA" }) },
+    confirmOverride: () => true,
+    ocrMode: "unavailable",
+  });
+  document.getElementById("capture-screen-btn").click();
+  await ctx.settle();
+  document.getElementById("analyze-screen-btn").click();
+  await ctx.settle();
+  const status = ctx.textOf(document, "analyze-screen-status");
+  assert.ok(status.includes("不可用") || status.includes("失敗") || status.includes("連線"),
+    "OCR unavailable must show clean fallback, got: " + status);
+  assert.ok(!status.includes("ocr-unavailable"), "must not echo raw reason code");
+  assert.ok(!status.includes("base64"), "must not show raw base64");
+}
+
+async function test172ABackendOcrNeverPostsToChat(ctx) {
+  const { document, state } = await ctx.loadRenderer({
+    dragonPet: { captureScreen: () => Promise.resolve({ ok: true, dataUrl: "data:image/png;base64,AAA" }) },
+    confirmOverride: () => true,
+    ocrMode: "success",
+  });
+  document.getElementById("capture-screen-btn").click();
+  await ctx.settle();
+  const before = state.calls.filter((c) => c.url.endsWith("/chat")).length;
+  document.getElementById("analyze-screen-btn").click();
+  await ctx.settle();
+  const after = state.calls.filter((c) => c.url.endsWith("/chat")).length;
+  assert.equal(after, before, "OCR must never POST to /chat");
+  const ocrCalls = state.calls.filter((c) => c.url.endsWith("/ocr/extract"));
+  assert.equal(ocrCalls.length, 1, "OCR must call /ocr/extract exactly once");
+}
+
 async function runAll(ctx) {
   // TASK-171A tests
   testStaticSourceScopeChecks();
@@ -202,6 +273,11 @@ async function runAll(ctx) {
   await test172AAnalyzeWithNoScreenshotShowsCleanError(ctx);
   // TASK-172A-OCR static checks
   test172AOcrStaticChecks();
+  // TASK-172A-OCR-BACKEND dynamic tests
+  await test172ABackendOcrSuccess(ctx);
+  await test172ABackendOcrNoText(ctx);
+  await test172ABackendOcrUnavailableShowsClean(ctx);
+  await test172ABackendOcrNeverPostsToChat(ctx);
 }
 
 module.exports = { runAll };
@@ -442,39 +518,27 @@ async function test172AAnalyzeWithNoScreenshotShowsCleanError(ctx) {
 function test172AOcrStaticChecks() {
   const renderer = fs.readFileSync(rendererPath, "utf8");
 
-  // New error codes in ANALYZE_FAILURE_MESSAGES
-  assert.ok(/ocr-init-failed/.test(renderer),
-    "renderer.js must have ocr-init-failed in ANALYZE_FAILURE_MESSAGES");
-  assert.ok(/ocr-timeout/.test(renderer),
-    "renderer.js must have ocr-timeout in ANALYZE_FAILURE_MESSAGES");
-  assert.ok(/invalid-dataurl/.test(renderer),
-    "renderer.js must have invalid-dataurl in ANALYZE_FAILURE_MESSAGES");
-
-  // _initOcrWorker structure retained for Option B swap-in
-  assert.ok(/_initOcrWorker/.test(renderer),
-    "renderer.js must define _initOcrWorker");
+  // TASK-172A-OCR-BACKEND: runOcrAnalysis uses fetch to /ocr/extract (Option B)
+  assert.ok(/\/ocr\/extract/.test(renderer),
+    "renderer.js runOcrAnalysis must call /ocr/extract");
   assert.ok(/OCR_TIMEOUT_MS/.test(renderer),
     "renderer.js must define OCR_TIMEOUT_MS");
   assert.ok(/OCR_DATAURL_MAX_LEN/.test(renderer),
     "renderer.js must define OCR_DATAURL_MAX_LEN");
+  assert.ok(/ocr-timeout/.test(renderer),
+    "renderer.js must handle ocr-timeout error");
+  assert.ok(/backend-offline/.test(renderer),
+    "renderer.js must handle backend-offline error");
+  assert.ok(/invalid-dataurl/.test(renderer),
+    "renderer.js must handle invalid-dataurl error");
 
-  // TASK-172A-OCR Option A rejection: DevTools diagnostic must be present
-  assert.ok(/TASK-172A-OCR.*OCR unavailable/.test(renderer),
-    "renderer.js must have DevTools-only diagnostic for Option A rejection");
-  assert.ok(/nodeIntegration.*false/.test(renderer),
-    "renderer.js diagnostic must explain nodeIntegration:false as root cause");
-  assert.ok(/console\.error/.test(renderer),
-    "renderer.js must log OCR init failure to DevTools (not UI)");
-
-  // cleanOcrText normalizes spaces
-  assert.ok(/\[ \\t\]\{3,\}/.test(renderer),
-    "renderer.js cleanOcrText must normalize runs of spaces/tabs");
-
-  // Safety: dataUrl guard present
+  // Safety: dataUrl guard before fetch
   assert.ok(/startsWith\("data:image\/"/.test(renderer),
     "renderer.js runOcrAnalysis must guard for data:image/ prefix");
 
-  // Option A rejection must not use cloud vision
+  // No cloud vision; no nodeIntegration weakening; no /chat in OCR path
   assert.ok(!/gpt-4-vision|claude-vision|google.*vision|azure.*vision/i.test(renderer),
     "renderer.js must not reference cloud vision APIs");
+  assert.ok(!/nodeIntegration.*true/.test(renderer),
+    "renderer.js must not enable nodeIntegration");
 }

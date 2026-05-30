@@ -15782,7 +15782,7 @@ Next step: TASK-172A-OCR-BACKEND — backend local OCR via `POST /ocr/extract` (
 
 ## TASK-172A-OCR-BACKEND | Backend Local OCR Endpoint Design
 
-**Status:** DEFINED (docs-only)
+**Status:** DONE — WINDOWS MANUAL SMOKE PASS
 **Date:** 2026-05-30
 **Type:** Design — v0.4 Screen Context (slice 2A-OCR-B, backend OCR Option B)
 **Depends on:** TASK-172A-OCR DONE (Option A rejected; safe fallback confirmed)
@@ -16031,3 +16031,84 @@ UI must never show: raw base64, Python tracebacks, stack traces, file paths, bac
 - [x] Preserved existing behavior documented (§11).
 - [x] Manual Windows smoke expectations documented.
 - [x] No runtime files modified in this docs-only step.
+
+## TASK-172A-OCR-BACKEND IMPLEMENTATION RECORD
+
+**Status:** DONE — WINDOWS MANUAL SMOKE PASS
+**Date:** 2026-05-30
+**OCR provider:** pytesseract (Option B-1). Real OCR text extraction works when Tesseract binary is installed. Clean `ocr-unavailable` fallback when binary is missing — backend never crashes.
+
+### Files changed
+
+- `backend/app/ocr/__init__.py` — new empty package init.
+- `backend/app/ocr/ocr_service.py` — new: validates dataUrl, decodes in memory (io.BytesIO), runs `pytesseract.image_to_string()`, cleans/bounds output to 800 chars, returns `{"ok", "text"}` or `{"ok": False, "error": "reason-code"}`. Never writes to disk. Never logs raw image bytes. Clean fallback for missing pytesseract, missing Tesseract binary, empty OCR result.
+- `backend/app/api/routes.py` — added `POST /ocr/extract` route. Validates JSON body, applies 26 MB string-length guard, delegates to `extract_text_from_dataurl()`. Returns clean `{"ok", ...}` body with HTTP 200 for both success and error paths. No raw tracebacks in response.
+- `backend/tests/test_ocr_routes.py` — new: 16 tests covering service unit (clean text, bounds, empty, invalid base64, wrong mime, missing pytesseract mock) + API route (missing image, invalid dataUrl, wrong mime, bad base64, no traceback, valid PNG roundtrip, mocked success).
+- `apps/desktop/src/renderer/renderer.js` — replaced tesseract.js (Option A rejected) block with backend fetch: `runOcrAnalysis()` calls `fetch(BACKEND_URL + '/ocr/extract', {method:"POST",...})` with AbortController timeout (30 s). No IPC change. No preload change. Added `backend-offline` to `ANALYZE_FAILURE_MESSAGES`.
+- `apps/desktop/scripts/renderer-chat-smoke.js` — added `/ocr/extract` handler in `createFetchStub` with `ocrMode` option (success / no-text / ocr-failed / unavailable).
+- `apps/desktop/scripts/task171a-capture-smoke.js` — updated `test172AOcrStaticChecks` for Option B; added 4 new dynamic tests: `test172ABackendOcrSuccess`, `test172ABackendOcrNoText`, `test172ABackendOcrUnavailableShowsClean`, `test172ABackendOcrNeverPostsToChat`.
+
+### OCR summary behavior
+
+- Success with text: `"螢幕摘要:\n{cleaned text}"` (max 800 chars).
+- No useful text: `"未偵測到可用文字。"`
+- Backend offline: `"後端無法連線，請稍後再試。"`
+- pytesseract/Tesseract missing: `"分析功能目前不可用。"`
+- Timeout (30 s): `"分析逾時，請稍後再試。"`
+
+### Privacy / storage
+
+- dataUrl sent to localhost `/ocr/extract` only — no external upload.
+- Backend decodes in memory (`io.BytesIO`) — no temp file, no disk write.
+- Raw image bytes and OCR output are never logged.
+- No /chat call. No Pet Bubble involvement. No screenshot history.
+- Renderer clears summary on "清除截圖".
+
+### Automated validation
+
+- `node --check` all changed JS: PASS
+- `renderer-chat-smoke.js`: PASS
+- `task171a-capture-smoke.js`: PASS
+- `pet-renderer-smoke.js`: PASS (226 checks)
+- `pet-window-smoke.js`: PASS (45 checks)
+- pytest (649 total, including 16 new OCR tests): PASS
+- `git diff --check`: CLEAN
+- NUL bytes: 0 in all changed files
+
+### Manual Windows smoke steps still needed
+
+1. Start backend (`uvicorn app.main:app --reload`) and app.
+2. Verify `GET /health` works; `POST /ocr/extract` endpoint is present.
+3. Capture screenshot → "分析這張" enabled.
+4. Confirm analysis → "正在分析…" appears.
+5. **With Tesseract installed:** OCR runs → bounded summary shown (`螢幕摘要:\n{text}`), or `"未偵測到可用文字。"` if screen is mostly images.
+6. **Without Tesseract:** clean `"分析功能目前不可用。"` shown.
+7. No raw base64, Python traceback, JSON, file paths, or backend URLs in UI.
+8. No `/chat` call in network log.
+9. "清除截圖" resets all state.
+10. Existing Full App chat, Pet, voice, TTS, Quiet Mode unaffected.
+
+## TASK-172A-OCR-BACKEND WINDOWS MANUAL SMOKE CLOSEOUT
+
+**Status:** DONE — WINDOWS MANUAL SMOKE PASS
+**Date:** 2026-05-30
+
+Manual smoke passed. Backend OCR path confirmed working.
+
+- Backend starts normally; `POST /ocr/extract` endpoint available.
+- Screenshot capture works; "分析這張" enabled after capture.
+- Sensitive-content warning shown; cancel prevents OCR.
+- Confirm starts backend OCR; "正在分析…" appears; backend OCR returns text; Full App displays bounded "螢幕摘要" panel.
+- OCR quality is rough on the current UI screenshot — characters from overlapping UI elements produce noisy output. OCR extraction works end-to-end; quality polish is future work.
+- OCR provider unavailable → clean "分析功能目前不可用。" fallback.
+- No useful text → clean "未偵測到可用文字。"
+- No raw base64, JSON, Python traceback, provider internals, backend URLs, or file paths in UI.
+- Screenshot and summary remain memory-only. No disk write. No external upload. /chat not called. Pet Bubble not involved.
+- Existing features confirmed unaffected: Full App chat, Pet direct input, voice/STT/TTS, Quiet Mode, click-through.
+- Scope confirmed clean: no cloud OCR, cloud vision, background monitoring, screenshot persistence, Pet commentary, /chat handoff.
+
+**OCR provider result:** pytesseract (Option B-1) confirmed working. Tesseract binary must be installed (Windows: UB-Mannheim installer). When binary is missing, clean `ocr-unavailable` fallback shown.
+
+**Known OCR quality limitation:** OCR output on complex UI screenshots is noisy (overlapping elements, icons, non-text regions). This is a known limitation of Tesseract on full-desktop screenshots. Future improvement options: pre-process image (crop, grayscale, upscale), tune Tesseract config, or add chi_tra language data for Traditional Chinese.
+
+**Next step:** TASK-172A-OCR-POLISH (OCR output quality improvement) or TASK-172B (user-confirmed summary → /chat context handoff), depending on roadmap priority.

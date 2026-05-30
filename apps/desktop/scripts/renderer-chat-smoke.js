@@ -265,6 +265,20 @@ function createFetchStub(state) {
         usage_estimate: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
       });
     }
+    if (target.endsWith("/ocr/extract")) {
+      // TASK-172A-OCR-BACKEND: backend OCR mock
+      if (state.ocrMode === "success") {
+        return new FakeResponse(200, { ok: true, text: "Hello World" });
+      }
+      if (state.ocrMode === "no-text") {
+        return new FakeResponse(200, { ok: false, error: "no-text" });
+      }
+      if (state.ocrMode === "ocr-failed") {
+        return new FakeResponse(200, { ok: false, error: "ocr-failed" });
+      }
+      // default: ocr-unavailable
+      return new FakeResponse(200, { ok: false, error: "ocr-unavailable" });
+    }
     if (target.endsWith("/chat")) {
       if (state.pauseChat) {
         await new Promise((resolve) => {
@@ -371,6 +385,7 @@ async function loadRenderer(options = {}) {
   const state = {
     calls: [],
     chatMode: options.chatMode || "success",
+    ocrMode: options.ocrMode || "unavailable",  // TASK-172A-OCR-BACKEND
     pauseChat: Boolean(options.pauseChat),
     resolveChat: null,
     providerSettings: defaultProviderSettings(options.providerSettings || {}),

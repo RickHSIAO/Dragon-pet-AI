@@ -67,6 +67,7 @@ from app.services.provider_settings_service import (
 from app.services.state_service import get_chat_state_context, update_state_after_chat_turn
 from app.services.usage_meter_service import UsageRecord, estimate_text_tokens, record_usage
 from app.stt.stt_service import transcribe_audio_bytes  # TASK-167B
+from app.ocr.ocr_service import extract_text_from_dataurl  # TASK-172A-OCR-BACKEND
 
 router = APIRouter()
 
@@ -93,6 +94,35 @@ async def stt_transcribe(audio: UploadFile = File(...)):
     mime_type = audio.content_type or "audio/webm"
     result = transcribe_audio_bytes(audio_bytes, mime_type=mime_type)
     return result
+
+
+@router.post("/ocr/extract")
+async def ocr_extract(request: Request):
+    """
+    TASK-172A-OCR-BACKEND: Extract text from a base64 image dataUrl using local OCR.
+
+    Accepts: {"image": "<data:image/...;base64,...>"}
+    Returns: {"ok": true, "text": "..."} or {"ok": false, "error": "reason-code"}
+
+    Privacy: image decoded in memory; no disk write; no external upload; no /chat call.
+    Error codes: missing-image, invalid-dataurl, unsupported-mime, payload-too-large,
+                 ocr-unavailable, ocr-failed, no-text.
+    Never returns raw tracebacks or provider internals.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return {"ok": False, "error": "invalid-dataurl"}
+
+    image_dataurl = body.get("image") if isinstance(body, dict) else None
+    if not image_dataurl:
+        return {"ok": False, "error": "missing-image"}
+
+    # String-length guard before decoding (20 MB as base64 string ≈ 26.7 MB decoded)
+    if len(image_dataurl) > 26 * 1024 * 1024:
+        return {"ok": False, "error": "payload-too-large"}
+
+    return extract_text_from_dataurl(image_dataurl)
 
 
 @router.get("/health")
