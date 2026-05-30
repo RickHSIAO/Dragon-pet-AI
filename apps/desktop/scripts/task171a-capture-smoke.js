@@ -314,6 +314,17 @@ async function runAll(ctx) {
   await test172ABackendOcrNoText(ctx);
   await test172ABackendOcrUnavailableShowsClean(ctx);
   await test172ABackendOcrNeverPostsToChat(ctx);
+  // TASK-172B tests
+  test172BStaticSourceScopeChecks();
+  await test172BAskButtonHiddenWithoutSummary(ctx);
+  await test172BAskButtonVisibleAfterOcr(ctx);
+  await test172BCancelConfirmDoesNotPostToChat(ctx);
+  await test172BConfirmPostsSummaryToChat(ctx);
+  await test172BPayloadNeverContainsDataUrl(ctx);
+  await test172BPayloadNeverContainsBase64(ctx);
+  await test172BClearHidesAskButton(ctx);
+  await test172BAskButtonHiddenOnNoTextOcr(ctx);
+  await test172BAskNeverPostsRawScreenshot(ctx);
 }
 
 module.exports = { runAll };
@@ -577,4 +588,200 @@ function test172AOcrStaticChecks() {
     "renderer.js must not reference cloud vision APIs");
   assert.ok(!/nodeIntegration.*true/.test(renderer),
     "renderer.js must not enable nodeIntegration");
+}
+
+// ---------------------------------------------------------------------------
+// TASK-172B: User-Confirmed Screenshot Summary to Chat Handoff — smoke tests
+// ---------------------------------------------------------------------------
+
+const fakeCapture = {
+  dragonPet: {
+    captureScreen: () =>
+      Promise.resolve({ ok: true, dataUrl: "data:image/png;base64,AAA" }),
+  },
+};
+
+function test172BStaticSourceScopeChecks() {
+  const renderer = fs.readFileSync(rendererPath, "utf8");
+  const html = fs.readFileSync(indexPath, "utf8");
+
+  // HTML: ask button and status span exist; button starts hidden
+  assert.match(html, /id="ask-screen-btn"/,
+    "index.html must have ask-screen-btn");
+  assert.match(html, /id="ask-screen-btn"[^>]*hidden/,
+    "ask-screen-btn must start hidden");
+  assert.match(html, /id="ask-screen-status"/,
+    "index.html must have ask-screen-status");
+
+  // Renderer: required functions and constants
+  assert.ok(/function askScreenFromFullApp/.test(renderer),
+    "renderer.js must define askScreenFromFullApp");
+  assert.ok(/function updateAskButtonState/.test(renderer),
+    "renderer.js must define updateAskButtonState");
+  assert.ok(/ASK_SCREEN_CONFIRM_MSG/.test(renderer),
+    "renderer.js must define ASK_SCREEN_CONFIRM_MSG");
+  assert.ok(/CHAT_SUMMARY_PREFIX/.test(renderer),
+    "renderer.js must define CHAT_SUMMARY_PREFIX");
+
+  // Privacy: CHAT_SUMMARY_PREFIX must not embed data:image
+  assert.ok(!/data:image/.test(renderer.match(/CHAT_SUMMARY_PREFIX\s*=\s*"([^"]+)"/)?.[1] || ""),
+    "CHAT_SUMMARY_PREFIX must not contain data:image");
+
+  // Safety: askScreenFromFullApp uses window.confirm
+  assert.ok(/ASK_SCREEN_CONFIRM_MSG/.test(renderer) && /window\.confirm/.test(renderer),
+    "renderer.js must use window.confirm for ask handoff");
+
+  // updateAskButtonState called in clearScreenshot
+  assert.ok(/function clearScreenshot[\s\S]{0,300}updateAskButtonState/.test(renderer),
+    "clearScreenshot must call updateAskButtonState");
+}
+
+async function test172BAskButtonHiddenWithoutSummary(ctx) {
+  const { document } = await ctx.loadRenderer({ ...fakeCapture, ocrMode: "no-text" });
+  const btn = document.getElementById("ask-screen-btn");
+  assert.ok(btn.hidden, "ask button must be hidden on load (no OCR summary)");
+}
+
+async function test172BAskButtonVisibleAfterOcr(ctx) {
+  const { document } = await ctx.loadRenderer({
+    ...fakeCapture,
+    ocrMode: "success",
+    confirmOverride: () => true,
+  });
+  document.getElementById("capture-screen-btn").click();
+  await ctx.settle();
+  document.getElementById("analyze-screen-btn").click();
+  await ctx.settle();
+  const btn = document.getElementById("ask-screen-btn");
+  assert.ok(!btn.hidden, "ask button must be visible after successful OCR");
+}
+
+async function test172BCancelConfirmDoesNotPostToChat(ctx) {
+  // OCR confirm (call 1) = true; ask confirm (call 2) = false.
+  let confirmCount = 0;
+  const { document, state } = await ctx.loadRenderer({
+    ...fakeCapture,
+    ocrMode: "success",
+    confirmOverride: () => { confirmCount++; return confirmCount === 1; },
+  });
+  document.getElementById("capture-screen-btn").click();
+  await ctx.settle();
+  document.getElementById("analyze-screen-btn").click();
+  await ctx.settle();
+  const chatBefore = state.calls.filter((c) => c.url.endsWith("/chat")).length;
+  document.getElementById("ask-screen-btn").click();
+  await ctx.settle();
+  const chatAfter = state.calls.filter((c) => c.url.endsWith("/chat")).length;
+  assert.equal(chatAfter, chatBefore, "cancelling ask confirmation must not POST to /chat");
+}
+
+async function test172BConfirmPostsSummaryToChat(ctx) {
+  const { document, state } = await ctx.loadRenderer({
+    ...fakeCapture,
+    ocrMode: "success",
+    confirmOverride: () => true,
+  });
+  document.getElementById("capture-screen-btn").click();
+  await ctx.settle();
+  document.getElementById("analyze-screen-btn").click();
+  await ctx.settle();
+  document.getElementById("ask-screen-btn").click();
+  await ctx.settle();
+  const chatCalls = state.calls.filter((c) => c.url.endsWith("/chat"));
+  assert.ok(chatCalls.length >= 1, "confirming ask must POST to /chat");
+  const body = JSON.parse(chatCalls[chatCalls.length - 1].body);
+  assert.ok(
+    typeof body.message === "string" && body.message.includes("Hello World"),
+    "chat payload must contain OCR summary text"
+  );
+}
+
+async function test172BPayloadNeverContainsDataUrl(ctx) {
+  const { document, state } = await ctx.loadRenderer({
+    ...fakeCapture,
+    ocrMode: "success",
+    confirmOverride: () => true,
+  });
+  document.getElementById("capture-screen-btn").click();
+  await ctx.settle();
+  document.getElementById("analyze-screen-btn").click();
+  await ctx.settle();
+  document.getElementById("ask-screen-btn").click();
+  await ctx.settle();
+  for (const call of state.calls.filter((c) => c.url.endsWith("/chat"))) {
+    assert.ok(!call.body.includes("data:image/"), "chat payload must never contain raw dataUrl");
+  }
+}
+
+async function test172BPayloadNeverContainsBase64(ctx) {
+  const { document, state } = await ctx.loadRenderer({
+    ...fakeCapture,
+    ocrMode: "success",
+    confirmOverride: () => true,
+  });
+  document.getElementById("capture-screen-btn").click();
+  await ctx.settle();
+  document.getElementById("analyze-screen-btn").click();
+  await ctx.settle();
+  document.getElementById("ask-screen-btn").click();
+  await ctx.settle();
+  for (const call of state.calls.filter((c) => c.url.endsWith("/chat"))) {
+    const body = JSON.parse(call.body);
+    const msg = typeof body.message === "string" ? body.message : "";
+    assert.ok(msg.length < 2000, "chat message must be bounded summary, not raw base64");
+  }
+}
+
+async function test172BClearHidesAskButton(ctx) {
+  const { document } = await ctx.loadRenderer({
+    ...fakeCapture,
+    ocrMode: "success",
+    confirmOverride: () => true,
+  });
+  document.getElementById("capture-screen-btn").click();
+  await ctx.settle();
+  document.getElementById("analyze-screen-btn").click();
+  await ctx.settle();
+  const askBtn = document.getElementById("ask-screen-btn");
+  assert.ok(!askBtn.hidden, "ask button must be visible after OCR succeeds");
+  document.getElementById("clear-screen-btn").click();
+  await ctx.settle();
+  assert.ok(askBtn.hidden, "ask button must be hidden after clear");
+}
+
+async function test172BAskButtonHiddenOnNoTextOcr(ctx) {
+  const { document } = await ctx.loadRenderer({
+    ...fakeCapture,
+    ocrMode: "no-text",
+    confirmOverride: () => true,
+  });
+  document.getElementById("capture-screen-btn").click();
+  await ctx.settle();
+  document.getElementById("analyze-screen-btn").click();
+  await ctx.settle();
+  const askBtn = document.getElementById("ask-screen-btn");
+  assert.ok(askBtn.hidden, "ask button must remain hidden when OCR finds no text");
+}
+
+async function test172BAskNeverPostsRawScreenshot(ctx) {
+  const { document, state } = await ctx.loadRenderer({
+    ...fakeCapture,
+    ocrMode: "success",
+    confirmOverride: () => true,
+  });
+  document.getElementById("capture-screen-btn").click();
+  await ctx.settle();
+  document.getElementById("analyze-screen-btn").click();
+  await ctx.settle();
+  document.getElementById("ask-screen-btn").click();
+  await ctx.settle();
+  // /ocr/extract legitimately sends the dataUrl; only /chat must never contain it.
+  for (const call of state.calls.filter((c) => c.url.endsWith("/chat"))) {
+    const body = call.body || "";
+    assert.ok(
+      !body.includes("data:image/png;base64") &&
+      !body.includes("data:image/jpeg;base64"),
+      "chat payload must never contain raw screenshot base64"
+    );
+  }
 }

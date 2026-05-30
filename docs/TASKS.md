@@ -16462,7 +16462,7 @@ if (!selected) {
 
 ## TASK-172B | User-Confirmed Screenshot Summary to Chat Handoff Design
 
-**Status:** DEFINED (docs-only)
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
 **Date:** 2026-05-30
 **Type:** Design — v0.4 Screen Context (slice 2B, OCR-to-chat handoff)
 **Depends on:** TASK-172A-OCR-POLISH DONE, TASK-172A-OCR-BACKEND DONE, TASK-171A DONE
@@ -16639,6 +16639,34 @@ Desktop smoke tests to add:
 - [x] Testing plan documented (§9).
 - [x] Manual Windows smoke expectations documented (§10).
 - [x] No runtime files modified.
-- [ ] Implementation complete (deferred to TASK-172B implementation step).
-- [ ] Desktop smoke tests passing.
-- [ ] Windows manual smoke PASS.
+- [x] Implementation complete.
+- [x] Desktop smoke tests passing (renderer-chat-smoke.js PASS, task171a-capture-smoke.js PASS).
+- [x] Windows manual smoke PASS.
+
+### Implementation Record (2026-05-30)
+
+Files changed:
+- `apps/desktop/src/renderer/index.html` — added `ask-screen-btn` (hidden) and `ask-screen-status` inside `<header>`.
+- `apps/desktop/src/renderer/renderer.js` — added DOM refs (`askScreenBtn`, `askScreenStatus`), state flag (`askScreenInFlight`), constants (`ASK_SCREEN_CONFIRM_MSG`, `CHAT_SUMMARY_PREFIX`), functions (`setAskScreenStatus`, `updateAskButtonState`, `askScreenFromFullApp`); updated `clearScreenshot` and three `lastScreenSummary` assignment sites to call `updateAskButtonState()`; added ask button event listener and init call.
+- `apps/desktop/scripts/task171a-capture-smoke.js` — added 9 TASK-172B smoke tests (static checks + 8 dynamic).
+
+Privacy preserved: only bounded summary text (max 800 chars, cleaned OCR output) is sent to `/chat`. No dataUrl, no image bytes. User must confirm before every handoff. Button hidden until OCR summary exists; hidden again on clear.
+
+### Closeout (2026-05-30) — DONE - WINDOWS MANUAL SMOKE PASS
+
+Windows manual smoke PASS. All acceptance criteria met.
+
+Smoke results:
+- Screenshot capture works.
+- OCR analysis works and displays "螢幕摘要".
+- "問克莉絲蒂娜這個畫面" appears only after OCR summary exists.
+- Clicking shows privacy confirmation dialog.
+- Cancel prevents `/chat` call.
+- Confirm sends only bounded OCR summary text to `/chat`.
+- Raw screenshot dataUrl / base64 / image bytes not sent to `/chat`.
+- Christina replies through normal Full App chat flow.
+- Clearing screenshot clears summary and hides the handoff button.
+- No Pet autonomous commentary added.
+- Pet mirror / TTS follow existing final-reply rules only.
+- No screenshot persistence, no cloud OCR/vision, no background monitoring.
+- Chat / voice / TTS / Pet behavior: no regression.

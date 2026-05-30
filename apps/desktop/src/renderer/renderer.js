@@ -37,6 +37,9 @@ const analyzeScreenBtn = document.getElementById("analyze-screen-btn");
 const analyzeScreenStatus = document.getElementById("analyze-screen-status");
 const analyzeScreenSummaryEl = document.getElementById("analyze-screen-summary");
 const clearScreenBtn = document.getElementById("clear-screen-btn");
+// TASK-172B: ask Christina about current OCR summary.
+const askScreenBtn    = document.getElementById("ask-screen-btn");
+const askScreenStatus = document.getElementById("ask-screen-status");
 const memoryForm  = document.getElementById("memory-form");
 const memoryType  = document.getElementById("memory-type");
 const memoryContent = document.getElementById("memory-content");
@@ -208,6 +211,7 @@ async function captureScreenFromFullApp() {
 // ---------------------------------------------------------------------------
 let lastScreenSummary = null;
 let analyzeInFlight = false;
+let askScreenInFlight = false;
 
 const ANALYZE_CONFIRM_MSG =
   "截圖內容可能含有密碼、API 金鑰或私密訊息。\n請確認截圖內容後再繼續分析。";
@@ -255,9 +259,62 @@ function clearScreenshot() {
   lastScreenshotDataUrl = null;
   lastScreenSummary = null;
   updateAnalyzeButtonState();
+  updateAskButtonState();
   setAnalyzeScreenStatus("", false);
   setAnalyzeScreenSummary(null);
   setCaptureScreenStatus("截圖已清除。", false);
+}
+
+// TASK-172B: ask Christina about current OCR summary.
+// Privacy: sends only bounded summary text via existing sendMessage(); no dataUrl, no image bytes.
+const ASK_SCREEN_CONFIRM_MSG =
+  "螢幕摘要將傳送給 Christina 作為對話內容。\n" +
+  "摘要可能含有：私訊或個人訊息、帳戶或財務資料、API 金鑰或密碼、工作文件。\n" +
+  "確定要繼續嗎？";
+const CHAT_SUMMARY_PREFIX = "請根據以下螢幕摘要幫我判斷：\n\n";
+
+function setAskScreenStatus(message, isError) {
+  if (!askScreenStatus) return;
+  askScreenStatus.textContent = message;
+  askScreenStatus.className = isError === true
+    ? "header-action-status error"
+    : "header-action-status";
+}
+
+function updateAskButtonState() {
+  const hasSummary =
+    typeof lastScreenSummary === "string" && lastScreenSummary.trim().length > 0;
+  if (askScreenBtn) {
+    askScreenBtn.hidden    = !hasSummary;
+    askScreenBtn.disabled  = !hasSummary || askScreenInFlight || analyzeInFlight || isSending;
+  }
+  if (askScreenStatus && !hasSummary) {
+    askScreenStatus.textContent = "";
+    askScreenStatus.className   = "header-action-status";
+  }
+}
+
+async function askScreenFromFullApp() {
+  if (askScreenInFlight || isSending) return;
+  const summary = lastScreenSummary;
+  if (!summary || typeof summary !== "string" || !summary.trim()) {
+    setAskScreenStatus("請先分析螢幕截圖。", true);
+    return;
+  }
+  const confirmFn =
+    typeof window !== "undefined" && typeof window.confirm === "function"
+      ? window.confirm.bind(window)
+      : () => false;
+  if (!confirmFn(ASK_SCREEN_CONFIRM_MSG)) return;
+  const message = CHAT_SUMMARY_PREFIX + summary;
+  askScreenInFlight = true;
+  updateAskButtonState();
+  try {
+    await sendMessage(message);
+  } finally {
+    askScreenInFlight = false;
+    updateAskButtonState();
+  }
 }
 
 // TASK-172A-OCR-BACKEND: backend local OCR via POST /ocr/extract (Option B).
@@ -350,8 +407,10 @@ async function analyzeScreenFromFullApp() {
     if (!cleaned) {
       setAnalyzeScreenStatus(ANALYZE_FAILURE_MESSAGES["no-text"], false);
       lastScreenSummary = null;
+      updateAskButtonState();
     } else {
       lastScreenSummary = cleaned;
+      updateAskButtonState();
       setAnalyzeScreenStatus("", false);
       setAnalyzeScreenSummary("螢幕摘要：\n" + cleaned);
     }
@@ -362,6 +421,7 @@ async function analyzeScreenFromFullApp() {
   const isErr = failReason !== "no-text";
   setAnalyzeScreenStatus(failMsg, isErr);
   lastScreenSummary = null;
+  updateAskButtonState();
 }
 
 function updatePetSpeechFromChatResponse(data) {
@@ -1875,8 +1935,16 @@ if (clearScreenBtn) {
   });
 }
 
-// TASK-172A: initialise button state on load (no screenshot yet → disabled).
+// TASK-172B: ask button — sends OCR summary to chat after privacy confirmation.
+if (askScreenBtn) {
+  askScreenBtn.addEventListener("click", () => {
+    askScreenFromFullApp();
+  });
+}
+
+// TASK-172A/172B: initialise button states on load (no screenshot yet).
 updateAnalyzeButtonState();
+updateAskButtonState();
 
 memoryForm.addEventListener("submit", (e) => {
   e.preventDefault();
