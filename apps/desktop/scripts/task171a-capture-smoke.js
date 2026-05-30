@@ -334,6 +334,11 @@ async function runAll(ctx) {
   await test174SelectedDisplayAmbiguousShowsCleanMessage(ctx);
   await test174PickerFailedShowsCleanMessage(ctx);
   await test174SuccessWithMatchedSourceStillWorksEndToEnd(ctx);
+  // TASK-175 tests
+  test175StaticSourceScopeChecks();
+  await test175RegionPickCancelledShowsCleanMessage(ctx);
+  await test175RegionTooSmallShowsCleanMessage(ctx);
+  await test175RegionCropFailedShowsCleanMessage(ctx);
 }
 
 module.exports = { runAll };
@@ -939,4 +944,113 @@ async function test174SuccessWithMatchedSourceStillWorksEndToEnd(ctx) {
   const chatBeforeAsk = state.calls.filter((c) => c.url.endsWith("/chat")).length;
   assert.equal(chatBeforeAsk, 0,
     "capture + OCR alone must not POST to /chat (TASK-172B regression)");
+}
+
+// ---------------------------------------------------------------------------
+// TASK-175: Region Drag-to-Select Capture — smoke tests
+// ---------------------------------------------------------------------------
+
+function test175StaticSourceScopeChecks() {
+  const main     = fs.readFileSync(mainPath, "utf8");
+  const renderer = fs.readFileSync(rendererPath, "utf8");
+  const regionPreload = fs.readFileSync(
+    path.join(desktopRoot, "src", "picker", "region-picker-preload.js"), "utf8");
+
+  // main.js: region picker infrastructure
+  assert.ok(/showRegionPicker/.test(main),
+    "main.js must define showRegionPicker (TASK-175)");
+  assert.ok(/screen-region:selected/.test(main),
+    "main.js must handle screen-region:selected IPC (TASK-175)");
+  assert.ok(/screen-region:cancel/.test(main),
+    "main.js must handle screen-region:cancel IPC (TASK-175)");
+  assert.ok(/MIN_REGION_LOGICAL_PX/.test(main),
+    "main.js must define MIN_REGION_LOGICAL_PX constant (TASK-175)");
+  assert.ok(/scaleFactor/.test(main),
+    "main.js must use scaleFactor for physical pixel conversion (TASK-175)");
+  assert.ok(/\.crop\(/.test(main),
+    "main.js must crop thumbnail to the selected region (TASK-175)");
+
+  // main.js: error codes
+  assert.ok(/region-pick-cancelled/.test(main),
+    "main.js must define region-pick-cancelled error code");
+  assert.ok(/region-too-small/.test(main),
+    "main.js must define region-too-small error code");
+  assert.ok(/region-crop-failed/.test(main),
+    "main.js must define region-crop-failed error code");
+
+  // renderer.js: maps all three new codes to clean zh-TW messages
+  assert.ok(/region-pick-cancelled/.test(renderer),
+    "renderer.js must map region-pick-cancelled to clean zh-TW message");
+  assert.ok(/region-too-small/.test(renderer),
+    "renderer.js must map region-too-small to clean zh-TW message");
+  assert.ok(/region-crop-failed/.test(renderer),
+    "renderer.js must map region-crop-failed to clean zh-TW message");
+
+  // region-picker-preload.js: sends region IPC, never touches desktopCapturer or raw display IDs
+  assert.ok(/screen-region:selected/.test(regionPreload),
+    "region-picker-preload.js must send screen-region:selected");
+  assert.ok(/screen-region:cancel/.test(regionPreload),
+    "region-picker-preload.js must send screen-region:cancel");
+  assert.ok(!/desktopCapturer/.test(regionPreload),
+    "region-picker-preload.js must not access desktopCapturer");
+  assert.ok(!/displayId/.test(regionPreload),
+    "region-picker-preload.js must not handle raw display IDs");
+}
+
+async function test175RegionPickCancelledShowsCleanMessage(ctx) {
+  const { document } = await ctx.loadRenderer({
+    dragonPet: {
+      captureScreen: () =>
+        Promise.resolve({ ok: false, error: "region-pick-cancelled" }),
+    },
+  });
+  document.getElementById("capture-screen-btn").click();
+  await ctx.settle();
+  const status = ctx.textOf(document, "capture-screen-status");
+  assert.ok(status.length > 0,
+    "region-pick-cancelled must produce a non-empty status message");
+  assert.ok(!status.includes("region-pick-cancelled"),
+    "status must not echo raw error code region-pick-cancelled, got: " + status);
+  assert.ok(document.getElementById("analyze-screen-btn").disabled,
+    "analyze button must remain disabled after region pick cancelled");
+}
+
+async function test175RegionTooSmallShowsCleanMessage(ctx) {
+  const { document } = await ctx.loadRenderer({
+    dragonPet: {
+      captureScreen: () =>
+        Promise.resolve({ ok: false, error: "region-too-small" }),
+    },
+  });
+  document.getElementById("capture-screen-btn").click();
+  await ctx.settle();
+  const status = ctx.textOf(document, "capture-screen-status");
+  assert.ok(status.length > 0,
+    "region-too-small must produce a non-empty status message");
+  assert.ok(!status.includes("region-too-small"),
+    "status must not echo raw error code region-too-small, got: " + status);
+  assert.ok(!status.includes("MIN_REGION") && !status.includes("logW") && !status.includes("logH"),
+    "status must not expose internal variable names");
+  assert.ok(document.getElementById("analyze-screen-btn").disabled,
+    "analyze button must remain disabled when region is too small");
+}
+
+async function test175RegionCropFailedShowsCleanMessage(ctx) {
+  const { document } = await ctx.loadRenderer({
+    dragonPet: {
+      captureScreen: () =>
+        Promise.resolve({ ok: false, error: "region-crop-failed" }),
+    },
+  });
+  document.getElementById("capture-screen-btn").click();
+  await ctx.settle();
+  const status = ctx.textOf(document, "capture-screen-status");
+  assert.ok(status.length > 0,
+    "region-crop-failed must produce a non-empty status message");
+  assert.ok(!status.includes("region-crop-failed"),
+    "status must not echo raw error code region-crop-failed, got: " + status);
+  assert.ok(!status.includes("crop") && !status.includes("bitmap"),
+    "status must not expose internal crop/bitmap terminology");
+  assert.ok(document.getElementById("analyze-screen-btn").disabled,
+    "analyze button must remain disabled when region crop failed");
 }

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100vw; height: 100vh;
+      overflow: hidden;
+      background: transparent;
+      user-select: none;
+    }
+    canvas {
+      position: fixed; top: 0; left: 0;
+      cursor: crosshair;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="region-canvas"></canvas>
+</body>
+</html>

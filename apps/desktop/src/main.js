@@ -25,9 +25,12 @@ const PET_QUIET_MODE_SET_CHANNEL = "pet:set-quiet-mode";  // TASK-162
 const PET_SCALE_SET_CHANNEL = "pet:set-scale";            // TASK-166B
 const PET_CLICK_THROUGH_SET_CHANNEL = "pet:set-click-through";  // TASK-166D
 const PET_STT_TRANSCRIBE_CHANNEL = "stt:transcribe";           // TASK-167B
-const SCREEN_CAPTURE_ONCE_CHANNEL   = "screen:capture-once";      // TASK-171A
-const SCREEN_PICKER_SELECTED_CHANNEL = "screen-picker:selected"; // TASK-174
-const SCREEN_PICKER_CANCEL_CHANNEL   = "screen-picker:cancel";   // TASK-174
+const SCREEN_CAPTURE_ONCE_CHANNEL    = "screen:capture-once";      // TASK-171A
+const SCREEN_PICKER_SELECTED_CHANNEL = "screen-picker:selected";  // TASK-174
+const SCREEN_PICKER_CANCEL_CHANNEL   = "screen-picker:cancel";    // TASK-174
+const SCREEN_REGION_SELECTED_CHANNEL = "screen-region:selected";  // TASK-175
+const SCREEN_REGION_CANCEL_CHANNEL   = "screen-region:cancel";    // TASK-175
+const MIN_REGION_LOGICAL_PX          = 16;                        // TASK-175: minimum selectable region in logical px
 const PET_WINDOW_WIDTH = 300;   // Medium default — used as fallback constant
 const PET_WINDOW_HEIGHT = 400;  // Medium default — used as fallback constant
 // TASK-166B: scale preset dimensions
@@ -580,13 +583,63 @@ async function showDisplayPicker(displays) {
   });
 }
 
-// TASK-174: screen:capture-once IPC handler.
-// Shows a click-to-select overlay on every connected display; user clicks the
-// desired monitor. Main process captures exactly the selected display.
-// Replaces the cursor-position approach (rejected: clicking the button moves
-// the cursor to the app-window monitor, so capture always targeted the wrong
-// screen on dual-monitor setups).
-// Normal renderer never receives raw display IDs or desktopCapturer source list.
+// TASK-175: shows a drag-to-select region overlay on the given display.
+// Resolves with { x, y, width, height } in CSS logical pixels (relative to display top-left),
+// or null on Esc/window close. Main process owns DPI conversion and crop.
+async function showRegionPicker(display) {
+  return new Promise((resolve) => {
+    let settled = false;
+    let win = null;
+
+    function settle(result) {
+      if (settled) return;
+      settled = true;
+      ipcMain.removeListener(SCREEN_REGION_SELECTED_CHANNEL, onSelected);
+      ipcMain.removeListener(SCREEN_REGION_CANCEL_CHANNEL, onCancel);
+      if (win && !win.isDestroyed()) win.destroy();
+      resolve(result);
+    }
+
+    function onSelected(_event, rect) {
+      settle(rect && typeof rect === "object" ? rect : null);
+    }
+
+    function onCancel() {
+      settle(null);
+    }
+
+    ipcMain.on(SCREEN_REGION_SELECTED_CHANNEL, onSelected);
+    ipcMain.on(SCREEN_REGION_CANCEL_CHANNEL, onCancel);
+
+    const { x, y, width, height } = display.bounds;
+    win = new BrowserWindow({
+      x, y, width, height,
+      frame:       false,
+      transparent: true,
+      alwaysOnTop: true,
+      skipTaskbar: true,
+      focusable:   true,
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration:  false,
+        preload: path.join(__dirname, "picker", "region-picker-preload.js"),
+      },
+    });
+    win.setIgnoreMouseEvents(false);
+    win.loadFile(path.join(__dirname, "picker", "region-picker.html"));
+    win.on("closed", () => {
+      if (!settled) settle(null);
+    });
+  });
+}
+
+// TASK-174/175: screen:capture-once IPC handler.
+// Phase 1 (TASK-174): click-to-select overlay on every connected display; user picks monitor.
+// Phase 2 (TASK-175): drag-to-select region overlay on the chosen display; user drags a rect.
+// Main process captures the selected display at physical resolution, crops to the region,
+// and returns the cropped dataUrl. DPI/scaleFactor conversion is done here — the renderer
+// only ever receives a plain { ok, dataUrl } result.
+// Normal renderer never receives raw display IDs, source IDs, or desktopCapturer source list.
 // No disk save, no /chat, no OCR, no background monitoring.
 ipcMain.handle(SCREEN_CAPTURE_ONCE_CHANNEL, async () => {
   if (pickerInFlight) {
@@ -599,8 +652,8 @@ ipcMain.handle(SCREEN_CAPTURE_ONCE_CHANNEL, async () => {
       return { ok: false, error: "no-source" };
     }
 
+    // Phase 1: display picker (TASK-174)
     const selectedId = await showDisplayPicker(displays);
-
     if (selectedId === null) {
       return { ok: false, error: "screen-pick-cancelled" };
     }
@@ -610,12 +663,33 @@ ipcMain.handle(SCREEN_CAPTURE_ONCE_CHANNEL, async () => {
       return { ok: false, error: "screen-picker-failed" };
     }
 
+    // Phase 2: region picker (TASK-175) — user drags a rect on the selected display
+    const rawRect = await showRegionPicker(targetDisplay);
+    if (rawRect === null) {
+      return { ok: false, error: "region-pick-cancelled" };
+    }
+
+    // Validate minimum region size in logical pixels before any DPI math
+    const logW = typeof rawRect.width  === "number" ? rawRect.width  : 0;
+    const logH = typeof rawRect.height === "number" ? rawRect.height : 0;
+    if (logW < MIN_REGION_LOGICAL_PX || logH < MIN_REGION_LOGICAL_PX) {
+      return { ok: false, error: "region-too-small" };
+    }
+
+    // Phase 3: capture full display at physical resolution, then crop
+    // scaleFactor converts logical (CSS) pixels to physical (bitmap) pixels.
+    // display.bounds uses logical pixels; physical = logical × scaleFactor.
+    // Multi-monitor setups may have negative bounds.x/y — irrelevant here because
+    // the region rect is relative to the picker window's own top-left (= display top-left).
+    const scaleFactor  = (typeof targetDisplay.scaleFactor === "number"
+                          && targetDisplay.scaleFactor > 0)
+                         ? targetDisplay.scaleFactor : 1;
+    const physDisplayW = Math.round(targetDisplay.bounds.width  * scaleFactor);
+    const physDisplayH = Math.round(targetDisplay.bounds.height * scaleFactor);
+
     const sources = await desktopCapturer.getSources({
       types: ["screen"],
-      thumbnailSize: {
-        width:  targetDisplay.size.width,
-        height: targetDisplay.size.height,
-      },
+      thumbnailSize: { width: physDisplayW, height: physDisplayH },
     });
     if (!sources || sources.length === 0) {
       return { ok: false, error: "no-source" };
@@ -638,7 +712,30 @@ ipcMain.handle(SCREEN_CAPTURE_ONCE_CHANNEL, async () => {
     if (!thumbnail || thumbnail.isEmpty()) {
       return { ok: false, error: "capture-failed" };
     }
-    const dataUrl = thumbnail.toDataURL();
+
+    // Convert region from logical to physical pixels and clamp to display bounds.
+    // rawRect.{x,y} are relative to the picker window = relative to display top-left.
+    const cropX = Math.max(0, Math.round(rawRect.x * scaleFactor));
+    const cropY = Math.max(0, Math.round(rawRect.y * scaleFactor));
+    const cropW = Math.min(Math.round(logW * scaleFactor), physDisplayW - cropX);
+    const cropH = Math.min(Math.round(logH * scaleFactor), physDisplayH - cropY);
+
+    if (cropW <= 0 || cropH <= 0) {
+      return { ok: false, error: "region-too-small" };
+    }
+
+    let cropped;
+    try {
+      cropped = thumbnail.crop({ x: cropX, y: cropY, width: cropW, height: cropH });
+    } catch (_cropErr) {
+      return { ok: false, error: "region-crop-failed" };
+    }
+
+    if (!cropped || cropped.isEmpty()) {
+      return { ok: false, error: "region-crop-failed" };
+    }
+
+    const dataUrl = cropped.toDataURL();
     if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:image/")) {
       return { ok: false, error: "capture-failed" };
     }

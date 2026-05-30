@@ -16982,3 +16982,192 @@ Smoke: `renderer-chat-smoke.js` PASS.
 | 7 | "問克莉絲蒂娜這個畫面" still works after capture and OCR | PASS |
 | 8 | "清除截圖" clears all state and hides the ask button | PASS |
 | 9 | Full App chat, Pet Bubble, voice/STT, TTS: no regression | PASS |
+
+---
+
+## TASK-175 | Region Drag-to-Select Screenshot Capture
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-30
+**Type:** Implementation — v0.4+ Screen Context (region capture)
+**Depends on:** TASK-174 DONE
+
+### Context
+
+TASK-174 added a click-to-select display picker so users can choose which monitor to capture. TASK-175 extends the flow: after the user selects a display, a second overlay opens on that display and lets the user drag a rectangle. Only the selected rectangle is captured; the full-screen bitmap is never stored or returned to the renderer.
+
+### §1 — UX Flow
+
+On user click of "擷取螢幕":
+
+1. Main process calls `screen.getAllDisplays()`.
+2. **Phase 1 — Display picker (TASK-174):** One semi-transparent overlay opens per display ("點選此螢幕擷取"). User clicks the desired monitor.
+3. **Phase 2 — Region picker (TASK-175):** A canvas overlay opens on the selected display. Initial state shows a full dark overlay with "拖曳選取螢幕區域 / Esc 取消".
+4. User presses and holds the mouse button and drags a rectangle. The selected region becomes transparent (punch-out effect) so the user can see what they are selecting. A size label (e.g. `640 × 480`) appears near the selection. Corner grab handles and a blue border confirm the selection area.
+5. User releases the mouse button → main process receives `{ x, y, width, height }` in CSS logical pixels.
+6. Esc at any point in Phase 2 → cancel with `region-pick-cancelled`.
+7. Main process validates minimum region size (`MIN_REGION_LOGICAL_PX = 16`) → captures full display at physical resolution → crops to the selected region → returns cropped dataUrl to renderer.
+
+### §2 — IPC / Security Boundary
+
+- `screen:capture-once` and `captureScreen()` preload surface are unchanged.
+- Two new internal IPC channels (`screen-region:selected`, `screen-region:cancel`) exist only between the region picker window and the main process — never exposed to the normal renderer.
+- `contextIsolation: true`, `nodeIntegration: false` for all windows (display picker, region picker, normal renderer).
+- The normal renderer never receives raw display IDs, physical pixel values, source IDs, full-screen dataUrl, or crop coordinates.
+- DPI conversion (`scaleFactor`) and `thumbnail.crop()` are performed exclusively in the main process.
+
+### §3 — DPI / Coordinate Handling
+
+Windows DPI/scaleFactor can cause CSS logical coordinates to differ from physical (bitmap) pixel coordinates. TASK-175 handles this explicitly:
+
+| Value | Unit | Source |
+|---|---|---|
+| `display.bounds.{width,height}` | logical px | `screen.getAllDisplays()` |
+| `display.scaleFactor` | ratio | `screen.getAllDisplays()` |
+| Physical display size | physical px | `bounds × scaleFactor` |
+| `rawRect.{x,y,width,height}` from picker | logical px (CSS) | `region-picker-preload.js` |
+| `cropX/Y/W/H` | physical px | `Math.round(logical × scaleFactor)` |
+| `thumbnailSize` requested from `desktopCapturer` | physical px | `bounds × scaleFactor` |
+
+- Multi-monitor negative bounds (`display.bounds.x < 0`) are correctly handled because `rawRect` coordinates are always relative to the picker window's own top-left (= the selected display's top-left). No global-coordinate adjustment is needed for the crop.
+- All crop values are clamped: `cropX = max(0, ...)`, `cropW = min(..., physDisplayW - cropX)`.
+- If `cropW ≤ 0` or `cropH ≤ 0` after clamping, returns `region-too-small`.
+
+### §4 — Fallback and Error Handling
+
+| Condition | Error code |
+|---|---|
+| Display picker cancelled (Esc / all picker windows closed) | `screen-pick-cancelled` |
+| Region picker cancelled (Esc / window closed before mouseup) | `region-pick-cancelled` |
+| Selected region smaller than `MIN_REGION_LOGICAL_PX` (16 logical px) in either dimension | `region-too-small` |
+| `thumbnail.crop()` throws | `region-crop-failed` |
+| Cropped image is empty | `region-crop-failed` |
+| Source matching fails (multi-monitor, no display_id match) | `selected-display-ambiguous` |
+| No displays | `no-source` |
+| Permission denied | `permission-denied` |
+| Picker already in flight (concurrent) | `screen-picker-failed` |
+
+All error codes map to clean zh-TW messages in `CAPTURE_FAILURE_MESSAGES`. No raw codes, IDs, pixel values, stack traces, or internal terms are ever shown in the UI.
+
+### §5 — New Files
+
+- `apps/desktop/src/picker/region-picker.html` — canvas-only UI; CSP `"default-src 'none'; style-src 'unsafe-inline'"`. No script tags; no inline JS.
+- `apps/desktop/src/picker/region-picker-preload.js` — canvas drag logic via `DOMContentLoaded`; sends `screen-region:selected` / `screen-region:cancel`; never sees display IDs or desktopCapturer.
+
+### §6 — Privacy Boundaries
+
+- User-triggered capture only; no automatic region capture.
+- Full-screen bitmap captured in main process memory only; never returned to renderer; immediately discarded after crop.
+- Only the cropped region dataUrl is returned to the renderer.
+- No disk save at any step (neither full-screen nor crop).
+- No cloud upload, no /chat call, no OCR triggered automatically.
+- Pet window is not involved.
+
+### §7 — Scope Limits
+
+Do **not** implement in TASK-175:
+
+- Freehand or polygon selection.
+- Resizable selection handles after mouseup.
+- Window-snapping / active-window auto-detect.
+- Keyboard-driven region selection.
+- Global hotkey for region capture.
+- Screenshot persistence or history.
+- Cloud vision or cloud OCR.
+- Auto-OCR after region capture.
+- `/chat` schema changes.
+- Changes to OCR preprocessing pipeline.
+
+### §8 — Testing Plan
+
+**Static smoke (`task171a-capture-smoke.js`):**
+
+- `main.js` defines `showRegionPicker`.
+- `main.js` handles `screen-region:selected` and `screen-region:cancel`.
+- `main.js` defines `MIN_REGION_LOGICAL_PX`.
+- `main.js` uses `scaleFactor` for physical pixel conversion.
+- `main.js` calls `.crop(` on thumbnail.
+- `main.js` defines `region-pick-cancelled`, `region-too-small`, `region-crop-failed` error codes.
+- `region-picker-preload.js` sends `screen-region:selected` and `screen-region:cancel`; never accesses desktopCapturer or raw display IDs.
+- `renderer.js` maps all three new codes to clean zh-TW messages.
+
+**Dynamic smoke:**
+
+- `region-pick-cancelled` → renderer shows clean "取消" message; analyze button stays disabled.
+- `region-too-small` → renderer shows clean message; analyze button stays disabled; no raw code or internal terms exposed.
+- `region-crop-failed` → renderer shows clean message; analyze button stays disabled; no raw code or bitmap terms exposed.
+
+**Manual Windows smoke (see §9).**
+
+### §9 — Manual Windows Smoke Expectations
+
+1. Click "擷取螢幕" → display picker overlays appear on both monitors.
+2. Click the **primary monitor** overlay → display picker closes → region picker canvas opens on primary monitor showing "拖曳選取螢幕區域 / Esc 取消".
+3. Drag a rectangle on the primary monitor → size label (`W × H`) appears during drag → release mouse → region picker closes → OCR runs → confirm summary contains only primary monitor region content.
+4. Repeat with the **secondary monitor**: select secondary monitor → drag region → confirm summary contains only secondary monitor region content.
+5. Drag a **very small region** (< 16 logical px in either dimension) → status shows "選取範圍太小，請重新拖曳較大區域。"; analyze button disabled.
+6. Press **Esc** during region drag → status shows "已取消選取區域。"; analyze button disabled; no screenshot stored.
+7. Press **Esc** during display picker → status shows "已取消擷取螢幕。"; analyze button disabled.
+8. After a successful region capture: "分析這張" confirmation dialog still appears before OCR.
+9. After a successful region capture + OCR: "問克莉絲蒂娜這個畫面" still works.
+10. "清除截圖" still clears all state and hides the ask button.
+11. Full App chat, voice/STT, TTS, Pet behavior: no regression.
+
+### §10 — Preserved Existing Behavior
+
+- TASK-171A user-triggered capture and preload surface.
+- TASK-171A-MULTIMONITOR-SCOPE-FIX: `sources[0]` only on single-source systems.
+- TASK-172A "分析這張" sensitive-content confirmation and OCR flow.
+- TASK-172A-OCR-BACKEND `POST /ocr/extract` local OCR.
+- TASK-172A-OCR-POLISH preprocessing pipeline.
+- TASK-172B "問克莉絲蒂娜這個畫面" user-confirmed `/chat` handoff.
+- TASK-174 click-to-select display picker (Phase 1 is unchanged).
+- Full App chat, Pet direct input, voice/STT, TTS, Quiet Mode, click-through recovery.
+
+### Implementation Record (2026-05-30)
+
+**Approach:** Extended the TASK-174 two-phase capture (display picker → region picker → capture/crop). After the user selects a display, a new canvas-based `BrowserWindow` opens on that display. The preload draws a punch-out selection rect using a canvas. On mouseup the preload sends `{ x, y, width, height }` in CSS logical pixels to main process via `screen-region:selected`. Main process converts to physical pixels using `display.scaleFactor`, captures the full display at physical resolution via `desktopCapturer`, crops with `thumbnail.crop()`, and returns the cropped dataUrl.
+
+Files changed:
+- `apps/desktop/src/picker/region-picker.html` — new; canvas-only overlay; no inline script.
+- `apps/desktop/src/picker/region-picker-preload.js` — new; canvas drag logic; sends `screen-region:selected` / `screen-region:cancel`.
+- `apps/desktop/src/main.js` — added `SCREEN_REGION_SELECTED_CHANNEL`, `SCREEN_REGION_CANCEL_CHANNEL`, `MIN_REGION_LOGICAL_PX`, `showRegionPicker()`; updated `screen:capture-once` handler to add region picker phase and crop.
+- `apps/desktop/src/renderer/renderer.js` — added `region-pick-cancelled`, `region-too-small`, `region-crop-failed` to `CAPTURE_FAILURE_MESSAGES`.
+- `apps/desktop/scripts/task171a-capture-smoke.js` — added `test175StaticSourceScopeChecks`, `test175RegionPickCancelledShowsCleanMessage`, `test175RegionTooSmallShowsCleanMessage`, `test175RegionCropFailedShowsCleanMessage`; updated `runAll()`.
+
+Smoke: `renderer-chat-smoke.js` PASS.
+
+### Acceptance Criteria
+
+- [x] TASK-175 design documented in `docs/TASKS.md`.
+- [x] `docs/ROADMAP.md` updated with TASK-175 entry.
+- [x] UX flow documented (§1).
+- [x] IPC/security boundaries documented (§2).
+- [x] DPI/coordinate handling documented (§3).
+- [x] Error handling documented (§4).
+- [x] New files documented (§5).
+- [x] Privacy boundaries documented (§6).
+- [x] Scope limits documented (§7).
+- [x] Testing plan documented (§8).
+- [x] Manual Windows smoke expectations documented (§9).
+- [x] Preserved existing behavior documented (§10).
+- [x] Implementation complete.
+- [x] Desktop smoke tests passing (`renderer-chat-smoke.js` PASS).
+- [x] Windows manual smoke PASS.
+
+### Windows Manual Smoke Results (2026-05-30) — PASS
+
+| # | Scenario | Result |
+|---|---|---|
+| 1 | Click "擷取螢幕" → display picker overlays appeared on **both** monitors simultaneously | PASS |
+| 2 | Click **primary monitor** → region picker opened on primary monitor with "拖曳選取螢幕區域" | PASS |
+| 3 | Drag on primary → punch-out effect + blue border + size label visible; release → OCR summary shows `PRIMARY_REGION_TASK175_TEST` only; secondary content absent | PASS |
+| 4 | Click **secondary monitor** → drag region → OCR summary shows `SECONDARY_REGION_TASK175_TEST` only; primary content absent | PASS |
+| 5 | No virtual desktop / dual-screen combined capture observed | PASS |
+| 6 | Drag **very small region** (< 16 logical px) → "選取範圍太小，請重新拖曳較大區域。"; analyze button disabled | PASS |
+| 7 | Press **Esc** during region picker → "已取消選取區域。"; analyze button disabled; no screenshot stored | PASS |
+| 8 | Press **Esc** during display picker → "已取消擷取螢幕。" | PASS |
+| 9 | "分析這張" confirmation flow not degraded after successful region capture | PASS |
+| 10 | "問克莉絲蒂娜這個畫面" not degraded after capture + OCR | PASS |
+| 11 | "清除截圖" clears screenshot / OCR summary / ask button state | PASS |
+| 12 | Full App chat, Pet, voice/STT, TTS: no regression | PASS |

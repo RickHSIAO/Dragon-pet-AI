@@ -164,6 +164,10 @@ const CAPTURE_FAILURE_MESSAGES = {
   "screen-pick-cancelled":      "已取消擷取螢幕。",
   "selected-display-ambiguous": "無法確認選取的螢幕來源，請重試。",
   "screen-picker-failed":       "無法開啟螢幕選擇器，請重試。",
+  // TASK-175: region drag-to-select error codes.
+  "region-pick-cancelled":      "已取消選取區域。",
+  "region-too-small":           "選取範圍太小，請重新拖曳較大區域。",
+  "region-crop-failed":         "區域擷取失敗，請稍後再試。",
 };
 
 function setCaptureScreenStatus(message, isError) {
