@@ -16757,7 +16757,7 @@ The following tasks are recommended for the v0.4+ or v0.5 Screen Context roadmap
 - **TASK-177** — OCR language/data installer checks for `chi_tra`.
 - **TASK-178** — Screen Context release smoke checklist.
 - **TASK-179** — Optional Pet UI hint after OCR summary exists.
-- **TASK-180** — Optional visual model / local multimodal provider research (docs-only).
+- **TASK-180** — Optional Visual Model / Multimodal Screenshot Understanding (docs-only backlog note). Default remains OCR text-only; visual analysis requires explicit user opt-in, confirmation, and sensitive-data warning every time. Local vision model (e.g. LLaVA via Ollama) preferred; cloud vision requires separate opt-in plus cost/privacy warning. No background monitoring, no auto-send.
 
 ### §6 — Recommended Next Priority
 
@@ -17171,3 +17171,275 @@ Smoke: `renderer-chat-smoke.js` PASS.
 | 10 | "問克莉絲蒂娜這個畫面" not degraded after capture + OCR | PASS |
 | 11 | "清除截圖" clears screenshot / OCR summary / ask button state | PASS |
 | 12 | Full App chat, Pet, voice/STT, TTS: no regression | PASS |
+
+---
+
+## TASK-176 | Window Picker Capture
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-30
+**Type:** Implementation — v0.4+ Screen Context (window capture)
+**Depends on:** TASK-174 DONE, TASK-175 DONE
+
+### Context
+
+TASK-174 added display-level capture and TASK-175 added region selection. TASK-176 adds a third capture mode: capture a specific application window selected from a list.
+
+**Active-window auto-detection is intentionally not implemented.** The same UX problem that defeated TASK-174 v1's cursor-based approach applies here: clicking the "擷取視窗" button moves OS focus to the dragon-pet-ai app window, making this app the "active window" at the moment of capture. Any heuristic based on `GetForegroundWindow` (Windows), `CGWindowListCopyWindowInfo` (macOS), or similar would always resolve to this app. Electron does not expose a native "focused app window" API. An explicit window picker is the only reliable and correct solution.
+
+### §1 — UX Flow
+
+On user click of "擷取視窗" (new button, separate from "擷取螢幕"):
+
+1. Main process calls `desktopCapturer.getSources({ types: ["window"], thumbnailSize: { width: 1920, height: 1920 } })`.
+2. Filters to named windows (unnamed/system windows excluded).
+3. If no windows found → returns `no-window-source` immediately.
+4. Opens a non-transparent `BrowserWindow` centered on the primary display, showing a scrollable list of window names.
+5. Main process pushes `[{ index, name }]` to the picker window via `win.webContents.send("window-picker:list", ...)`. **Source IDs are never sent to the picker.**
+6. User clicks a window name → picker sends `window-picker:selected` with the integer **index** (not source ID).
+7. User presses Esc → picker sends `window-picker:cancel`.
+8. Main process looks up `sources[index]` to get the selected source, destroys picker, returns the source thumbnail dataUrl.
+9. Same success/error UI and analyze/OCR/chat pipeline as existing capture modes.
+
+### §2 — IPC / Security Boundary
+
+- New channel `screen:capture-window` (renderer → main), exposed as `captureWindow()` in preload.
+- `WINDOW_PICKER_LIST_CHANNEL` (`window-picker:list`) — main → picker: `[{ index, name }]` only.
+- `WINDOW_PICKER_SELECTED_CHANNEL` (`window-picker:selected`) — picker → main: integer index only.
+- `WINDOW_PICKER_CANCEL_CHANNEL` (`window-picker:cancel`) — picker → main.
+- Source IDs, raw window handles, and `desktopCapturer` source list never reach the normal renderer or the picker preload.
+- `contextIsolation: true`, `nodeIntegration: false` for all windows.
+- `pickerInFlight` guard prevents concurrent picker sessions (shared with TASK-174/175 guard).
+
+### §3 — Technical Limitations
+
+| Limitation | Note |
+|---|---|
+| Active-window auto-detection | Not implemented — Electron has no safe API; clicking the button always focuses this app |
+| Minimized windows | `desktopCapturer` may return an empty thumbnail for minimized windows → `window-capture-failed` |
+| Background/headless processes | Usually excluded by name filter (empty name), but not guaranteed |
+| Window ordering | List order from `desktopCapturer` is OS-dependent, may not match Z-order |
+| Window IDs | Not stable across `getSources` calls if windows are closed/reopened between calls |
+
+### §4 — Error Handling
+
+| Condition | Error code |
+|---|---|
+| User presses Esc or closes picker | `window-pick-cancelled` |
+| `pickerInFlight` already set (concurrent) | `window-picker-failed` |
+| Invalid index returned from picker | `window-picker-failed` |
+| No named windows found | `no-window-source` |
+| `desktopCapturer.getSources` throws | `window-capture-failed` |
+| Thumbnail is empty (minimized/hidden window) | `window-capture-failed` |
+| Permission denied | `permission-denied` |
+
+All error codes map to clean zh-TW messages in `CAPTURE_FAILURE_MESSAGES`.
+
+### §5 — New Files
+
+- `apps/desktop/src/picker/window-picker.html` — opaque dark window; `<div id="window-list">` populated by preload; `<div id="no-windows">` fallback. CSP `"default-src 'none'; style-src 'unsafe-inline'"`.
+- `apps/desktop/src/picker/window-picker-preload.js` — listens for `window-picker:list`; builds list using `textContent` (no innerHTML); sends `window-picker:selected` with integer index; sends `window-picker:cancel` on Esc.
+
+### §6 — Privacy Boundaries
+
+- User-triggered only; no background monitoring.
+- `desktopCapturer.getSources({ types: ["window"] })` called only on explicit button click.
+- Window thumbnails captured in main process memory; never returned to renderer as a list.
+- Only the single selected window's dataUrl is returned to renderer.
+- No disk save, no cloud upload, no /chat auto-call, no OCR auto-trigger.
+
+### §7 — Scope Limits
+
+Do **not** implement in TASK-176:
+
+- Active-window auto-detection (OS-level native module required; out of scope for safety/portability).
+- Window thumbnail preview in picker (deferred — adds IPC complexity; name list is sufficient for MVP).
+- Window Z-order / MRU sorting.
+- Window grouping by process/app.
+- Global hotkey for window capture.
+- Multiple simultaneous window captures.
+
+### §8 — Testing Plan
+
+**Static smoke (`task171a-capture-smoke.js`):**
+
+- `main.js` defines `showWindowPicker`, `screen:capture-window`, `window-picker:list` push.
+- `main.js` builds `pickerList` with `{ index, name }` only — no source IDs in picker data.
+- `main.js` defines all four error codes.
+- `renderer.js` maps all four new codes to clean zh-TW messages.
+- `preload.js` exposes `captureWindow()` and does not expose `desktopCapturer`.
+- `index.html` has `capture-window-btn`.
+- `window-picker-preload.js` sends integer index, not source IDs; never accesses desktopCapturer.
+
+**Dynamic smoke:**
+
+- `window-pick-cancelled` → clean message; analyze disabled.
+- `window-picker-failed` → clean message; analyze disabled.
+- `no-window-source` → clean message; analyze disabled.
+- `window-capture-failed` → clean message; analyze disabled.
+- Window capture success → `lastScreenshotDataUrl` stored; analyze enabled.
+- Window capture success → no `/chat` POST triggered.
+
+**Manual Windows smoke: PASS (2026-05-30) — see §9.**
+
+### §9 — Manual Windows Smoke Results (2026-05-30)
+
+| # | Test | Result |
+|---|---|---|
+| 1 | Click "擷取視窗" → window picker opens (dark overlay, not transparent) → shows list of open window names | PASS |
+| 2 | Click Notepad / target window → picker closes → status "視窗截圖完成。尚未儲存，可供後續分析使用。"; analyze enabled | PASS |
+| 3 | Click "分析這張" → OCR / summary only shows selected window content (`WINDOW_PICKER_TASK176_TEST`); other window content absent | PASS |
+| 4 | Repeat with browser / second window → OCR / summary only shows that window content (`BROWSER_WINDOW_TASK176_TEST`); isolation confirmed | PASS |
+| 5 | Press **Esc** in window picker → clean message "已取消選取視窗。"; analyze disabled | PASS |
+| 6 | Existing "擷取螢幕" → display picker → region drag-to-select flow unaffected | PASS |
+| 7 | "分析這張" confirmation flow not degraded after window capture | PASS |
+| 8 | "問克莉絲蒂娜這個畫面" not degraded after window capture + OCR | PASS |
+| 9 | "清除截圖" clears screenshot / OCR summary / ask button state | PASS |
+| 10 | Full App chat, Pet, voice/STT, TTS: no regression | PASS |
+
+### §10 — Preserved Existing Behavior
+
+- TASK-171A/174/175 `screen:capture-once` flow (擷取螢幕 → display picker → region picker) is unchanged.
+- TASK-172A "分析這張" OCR flow.
+- TASK-172A-OCR-BACKEND `POST /ocr/extract` local OCR.
+- TASK-172A-OCR-POLISH preprocessing pipeline.
+- TASK-172B "問克莉絲蒂娜這個畫面" `/chat` handoff.
+- Full App chat, Pet direct input, voice/STT, TTS, Quiet Mode, click-through recovery.
+
+### Implementation Record (2026-05-30)
+
+**Active-window auto-detection rejected:** Same reason as TASK-174 v1 cursor approach — clicking the button changes OS focus to this app. Electron has no `screen.getActiveWindow()` API. Explicit picker is the only correct solution.
+
+**Approach:** Added `screen:capture-window` IPC channel and `showWindowPicker()` in main process. `desktopCapturer.getSources({ types: ["window"] })` is called once on button click; results stored in main process. Picker window receives `[{ index, name }]` (never source IDs) via `win.webContents.send()`. User selects by index; main process resolves the source, captures the thumbnail, returns cropped dataUrl.
+
+Files changed:
+- `apps/desktop/src/picker/window-picker.html` — new; dark opaque list UI.
+- `apps/desktop/src/picker/window-picker-preload.js` — new; renders name list; sends index on click.
+- `apps/desktop/src/main.js` — added `SCREEN_CAPTURE_WINDOW_CHANNEL`, `WINDOW_PICKER_*` constants, `WINDOW_CAPTURE_THUMB_SIZE`, `showWindowPicker()`, `screen:capture-window` handler.
+- `apps/desktop/src/renderer/preload.js` — added `SCREEN_CAPTURE_WINDOW_CHANNEL`, `captureWindow()`.
+- `apps/desktop/src/renderer/index.html` — added `capture-window-btn` / `capture-window-status`.
+- `apps/desktop/src/renderer/renderer.js` — added DOM refs, four new error codes, `setCaptureWindowStatus`, `captureWindowInFlight`, `captureWindowFromFullApp()`, event listener.
+- `apps/desktop/scripts/task171a-capture-smoke.js` — added `test176StaticSourceScopeChecks` + 6 dynamic tests; updated `runAll()`.
+
+Smoke: `renderer-chat-smoke.js` PASS.
+
+### Acceptance Criteria
+
+- [x] TASK-176 design documented in `docs/TASKS.md`.
+- [x] `docs/ROADMAP.md` updated with TASK-176 entry.
+- [x] Active-window auto-detection limitation documented (§3).
+- [x] UX flow documented (§1).
+- [x] IPC/security boundaries documented (§2).
+- [x] Error handling documented (§4).
+- [x] New files documented (§5).
+- [x] Privacy boundaries documented (§6).
+- [x] Scope limits documented (§7).
+- [x] Testing plan documented (§8).
+- [x] Manual Windows smoke expectations documented (§9).
+- [x] Preserved existing behavior documented (§10).
+- [x] Implementation complete.
+- [x] Desktop smoke tests passing (`renderer-chat-smoke.js` PASS).
+- [x] Windows manual smoke PASS.
+
+---
+
+## TASK-180 | Optional Visual Model / Multimodal Screenshot Understanding
+
+**Status:** BACKLOG — DOCS-ONLY NOTE (no runtime implementation)
+**Date:** 2026-05-30
+**Type:** Future improvement / backlog note — v0.5+ Screen Context
+**Depends on:** TASK-172A DONE (OCR pipeline), TASK-172B DONE (/chat handoff), TASK-176 DONE (window capture)
+
+### Background
+
+After TASK-172A and TASK-172B, the screen context pipeline is:
+
+```
+capture → OCR text → "螢幕摘要" display → optional /chat handoff
+```
+
+The current pipeline extracts *text only* via Tesseract OCR. For screenshots that are diagram-heavy, image-based UIs, or contain no selectable text, OCR produces sparse or empty output. A visual/multimodal model (e.g. LLaVA, Moondream, or a cloud vision API) could describe image content directly without relying on text extraction.
+
+This note documents the motivation, safety constraints, and recommended approach for a future optional visual understanding layer. **No runtime changes are made in this task.**
+
+### §1 — Motivation
+
+- OCR fails silently on icon-heavy, diagram-heavy, or rendered-image screenshots.
+- A local vision model could describe the visual content of a screenshot and supplement (not replace) OCR text output.
+- User-confirmed visual analysis would close the gap between "what text is on screen" (TASK-172A) and "what is happening on screen" (this future task).
+
+### §2 — Safety Constraints (all 10 required before any implementation)
+
+The following constraints are **non-negotiable** and must all be satisfied before any runtime implementation of visual/multimodal analysis:
+
+1. **Not in TASK-176 scope.**
+   TASK-176 is window capture only. TASK-176 adds no visual analysis, no vision model calls, and no image-to-AI pipeline. This future work is explicitly deferred beyond TASK-176.
+
+2. **Not auto-enabled.**
+   Visual analysis must never be enabled by default. It requires explicit user action to activate — both a feature flag/setting change *and* an explicit per-use confirmation.
+
+3. **No background monitoring.**
+   The visual model must never be called without a user-initiated trigger. No passive screenshot watching, no idle analysis, no automatic re-analysis after capture. Explicit trigger only.
+
+4. **No auto-send image to AI.**
+   The screenshot image (dataUrl) must never be sent to any AI model (local or cloud) without an explicit user confirmation that happens *after* the screenshot is taken. "I captured your screen and am now analyzing it" is not acceptable.
+
+5. **User-confirmed only.**
+   A confirmation dialog (similar to the TASK-172B `/chat` handoff confirmation) must be displayed before every visual analysis. This includes a description of what is about to happen and which model will receive the image. The user must click Confirm, not just Proceed from a prior step.
+
+6. **Default remains OCR text-only.**
+   The existing OCR pipeline (Tesseract, TASK-172A) must continue to function as the primary and default analysis mode. Visual/multimodal analysis is a supplementary opt-in layer, not a replacement. Removing or bypassing the OCR path is out of scope for this task.
+
+7. **Local vision model preferred.**
+   A local model (e.g. LLaVA or Moondream via Ollama) is the preferred backend for visual analysis. No network call, no cloud account required, no API key. If a local vision model is unavailable, the feature should display a clear "visual analysis unavailable" message rather than silently falling back to cloud.
+
+8. **Cloud vision requires explicit opt-in plus cost/privacy warning.**
+   If a cloud vision API (e.g. OpenAI Vision, Google Cloud Vision, Anthropic Claude vision) is used, it must be:
+   - Enabled via a separate explicit provider setting (distinct from the text LLM provider).
+   - Confirmed with a cost and privacy warning on each use: "This will send a screenshot to [provider]. Your image may be processed by external servers. This may incur charges."
+   - Never auto-enabled as a fallback when a local model is unavailable.
+
+9. **Sensitive data warning required.**
+   Before any image is sent to any model (local or cloud), the user must see a sensitive data warning that explicitly names the risks: passwords, API keys, private messages, personal information, and confidential documents that may be visible in the screenshot. The warning must be impossible to "accept once and skip forever" — it must appear on every analysis.
+
+10. **Separate from OCR-only mode.**
+    The visual analysis pipeline must be a clearly distinct code path from the OCR text pipeline. It must be possible to:
+    - Use OCR text-only without visual analysis ever being triggered.
+    - Use visual analysis as a supplementary step *after* OCR (not instead of).
+    - Disable visual analysis without affecting OCR.
+    These three operational modes must remain independently testable and independently smoke-testable.
+
+### §3 — Recommended Approach (future implementation, not this task)
+
+When implementing TASK-180, the recommended approach is:
+
+1. **Provider detection:** Poll the existing Ollama provider for a vision-capable model (e.g. `llava`, `moondream`). If none found, show "visual analysis unavailable — no local vision model detected."
+2. **User opt-in setting:** Add a `VISUAL_ANALYSIS_ENABLED` backend setting (default `false`). Expose a toggle in Provider Settings section. Setting must survive restart.
+3. **New UI button:** Add an explicit "視覺分析這張" button (hidden until `VISUAL_ANALYSIS_ENABLED=true` AND a screenshot exists). Do not reuse or extend the "分析這張" OCR button.
+4. **Confirmation flow:** Two-step: (a) sensitive data warning, (b) provider/cost warning if cloud. Both required on every click.
+5. **API call:** `POST /vision/analyze` (new backend endpoint) — accepts `dataUrl`, returns `{ summary: string }`. Never reuses `/ocr/extract`.
+6. **Display:** Show visual summary in a new `#visual-analysis-summary` panel, separate from `#analyze-screen-summary` (OCR). Both panels can coexist.
+7. **/chat integration:** Same explicit handoff model as TASK-172B — user confirms before any visual summary reaches `/chat`.
+
+### §4 — Out of Scope for TASK-180 (backlog note only)
+
+- No runtime code changes of any kind.
+- No new IPC channels.
+- No new backend endpoints.
+- No new UI elements.
+- No provider setting changes.
+- No vision model download or installation.
+
+### §5 — Scope Limits
+
+This task is a **docs-only backlog note**. It exists to ensure the safety constraints are recorded before any implementation begins, so that future implementors cannot claim ignorance of the privacy, cost, and confirmation requirements.
+
+### Acceptance Criteria
+
+- [x] TASK-180 backlog note documented in `docs/TASKS.md`.
+- [x] TASK-180 bullet added to `docs/ROADMAP.md`.
+- [x] §5 Recommended Next Tasks in TASK-173 section updated with expanded TASK-180 description.
+- [x] All 10 safety constraints documented (§2).
+- [x] Recommended approach documented (§3).
+- [x] Out-of-scope items documented (§4).
+- [x] No runtime files modified.

@@ -31,6 +31,11 @@ const SCREEN_PICKER_CANCEL_CHANNEL   = "screen-picker:cancel";    // TASK-174
 const SCREEN_REGION_SELECTED_CHANNEL = "screen-region:selected";  // TASK-175
 const SCREEN_REGION_CANCEL_CHANNEL   = "screen-region:cancel";    // TASK-175
 const MIN_REGION_LOGICAL_PX          = 16;                        // TASK-175: minimum selectable region in logical px
+const SCREEN_CAPTURE_WINDOW_CHANNEL  = "screen:capture-window";   // TASK-176
+const WINDOW_PICKER_LIST_CHANNEL     = "window-picker:list";      // TASK-176: main → picker (name list)
+const WINDOW_PICKER_SELECTED_CHANNEL = "window-picker:selected";  // TASK-176: picker → main (index)
+const WINDOW_PICKER_CANCEL_CHANNEL   = "window-picker:cancel";    // TASK-176: picker → main
+const WINDOW_CAPTURE_THUMB_SIZE      = 1920;                      // TASK-176: max thumbnail dimension for window capture
 const PET_WINDOW_WIDTH = 300;   // Medium default — used as fallback constant
 const PET_WINDOW_HEIGHT = 400;  // Medium default — used as fallback constant
 // TASK-166B: scale preset dimensions
@@ -632,6 +637,131 @@ async function showRegionPicker(display) {
     });
   });
 }
+
+// TASK-176: shows a window picker listing all capturable windows by name.
+// User clicks a window name; main process returns the selected source (never the source ID list).
+// Returns { source } on success or { error } on cancel/failure.
+// Active-window auto-detection is intentionally not implemented:
+//   clicking the picker button focuses this app window, so "active window" always resolves
+//   to dragon-pet-ai — defeating the purpose. Explicit selection is the correct UX.
+async function showWindowPicker() {
+  let rawSources;
+  try {
+    rawSources = await desktopCapturer.getSources({
+      types: ["window"],
+      thumbnailSize: { width: WINDOW_CAPTURE_THUMB_SIZE, height: WINDOW_CAPTURE_THUMB_SIZE },
+      fetchWindowIcons: false,
+    });
+  } catch (_e) {
+    return { error: "window-capture-failed" };
+  }
+
+  // Filter to named windows only (system/background processes often have no name).
+  const sources = (rawSources || []).filter(
+    (s) => typeof s.name === "string" && s.name.length > 0
+  );
+  if (sources.length === 0) {
+    return { error: "no-window-source" };
+  }
+
+  // Build picker data: index + name only. Source IDs are kept here in main process.
+  const pickerList = sources.map((s, i) => ({ index: i, name: s.name }));
+
+  return new Promise((resolve) => {
+    let settled = false;
+    let win = null;
+
+    function settle(result) {
+      if (settled) return;
+      settled = true;
+      ipcMain.removeListener(WINDOW_PICKER_SELECTED_CHANNEL, onSelected);
+      ipcMain.removeListener(WINDOW_PICKER_CANCEL_CHANNEL, onCancel);
+      if (win && !win.isDestroyed()) win.destroy();
+      resolve(result);
+    }
+
+    function onSelected(_event, index) {
+      const src = (typeof index === "number" && index >= 0 && index < sources.length)
+                  ? sources[index] : null;
+      settle(src ? { source: src } : { error: "window-picker-failed" });
+    }
+
+    function onCancel() {
+      settle({ error: "window-pick-cancelled" });
+    }
+
+    ipcMain.on(WINDOW_PICKER_SELECTED_CHANNEL, onSelected);
+    ipcMain.on(WINDOW_PICKER_CANCEL_CHANNEL, onCancel);
+
+    const workArea = screen.getPrimaryDisplay().workArea;
+    const winW = Math.min(680, workArea.width  - 80);
+    const winH = Math.min(520, workArea.height - 80);
+    win = new BrowserWindow({
+      x: Math.round(workArea.x + (workArea.width  - winW) / 2),
+      y: Math.round(workArea.y + (workArea.height - winH) / 2),
+      width: winW, height: winH,
+      frame:       false,
+      transparent: false,
+      backgroundColor: "#1a1a2e",
+      alwaysOnTop: true,
+      skipTaskbar: true,
+      focusable:   true,
+      resizable:   false,
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration:  false,
+        preload: path.join(__dirname, "picker", "window-picker-preload.js"),
+      },
+    });
+
+    win.loadFile(path.join(__dirname, "picker", "window-picker.html"));
+
+    win.webContents.on("dom-ready", () => {
+      if (!win || win.isDestroyed()) return;
+      win.webContents.send(WINDOW_PICKER_LIST_CHANNEL, pickerList);
+    });
+
+    win.on("closed", () => {
+      if (!settled) settle({ error: "window-pick-cancelled" });
+    });
+  });
+}
+
+// TASK-176: screen:capture-window IPC handler.
+// Presents an explicit window picker — active-window auto-detection is not used
+// (interaction moves OS focus to this app, defeating any cursor/focus heuristic).
+// Normal renderer never receives source IDs, source list, or raw window handles.
+// No disk save, no /chat, no OCR, no background monitoring.
+ipcMain.handle(SCREEN_CAPTURE_WINDOW_CHANNEL, async () => {
+  if (pickerInFlight) {
+    return { ok: false, error: "window-picker-failed" };
+  }
+  pickerInFlight = true;
+  try {
+    const pickerResult = await showWindowPicker();
+    if (pickerResult.error) {
+      return { ok: false, error: pickerResult.error };
+    }
+    const { source } = pickerResult;
+    const thumbnail = source && source.thumbnail;
+    if (!thumbnail || thumbnail.isEmpty()) {
+      return { ok: false, error: "window-capture-failed" };
+    }
+    const dataUrl = thumbnail.toDataURL();
+    if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:image/")) {
+      return { ok: false, error: "window-capture-failed" };
+    }
+    return { ok: true, dataUrl };
+  } catch (_err) {
+    const msg = _err && typeof _err.message === "string" ? _err.message.toLowerCase() : "";
+    if (msg.includes("permission") || msg.includes("denied") || msg.includes("not authorized")) {
+      return { ok: false, error: "permission-denied" };
+    }
+    return { ok: false, error: "window-capture-failed" };
+  } finally {
+    pickerInFlight = false;
+  }
+});
 
 // TASK-174/175: screen:capture-once IPC handler.
 // Phase 1 (TASK-174): click-to-select overlay on every connected display; user picks monitor.

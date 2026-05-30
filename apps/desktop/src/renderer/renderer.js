@@ -32,6 +32,9 @@ const showPetWindowStatus = document.getElementById("show-pet-window-status");
 // TASK-171A: Full App screenshot capture controls.
 const captureScreenBtn = document.getElementById("capture-screen-btn");
 const captureScreenStatus = document.getElementById("capture-screen-status");
+// TASK-176: window picker capture controls.
+const captureWindowBtn    = document.getElementById("capture-window-btn");
+const captureWindowStatus = document.getElementById("capture-window-status");
 // TASK-172A: analyze + clear controls.
 const analyzeScreenBtn = document.getElementById("analyze-screen-btn");
 const analyzeScreenStatus = document.getElementById("analyze-screen-status");
@@ -168,6 +171,11 @@ const CAPTURE_FAILURE_MESSAGES = {
   "region-pick-cancelled":      "已取消選取區域。",
   "region-too-small":           "選取範圍太小，請重新拖曳較大區域。",
   "region-crop-failed":         "區域擷取失敗，請稍後再試。",
+  // TASK-176: window picker error codes.
+  "window-pick-cancelled":      "已取消選取視窗。",
+  "window-picker-failed":       "無法開啟視窗選擇器，請重試。",
+  "no-window-source":           "找不到可截圖的視窗。",
+  "window-capture-failed":      "視窗截圖失敗，請稍後再試。",
 };
 
 function setCaptureScreenStatus(message, isError) {
@@ -209,6 +217,55 @@ async function captureScreenFromFullApp() {
   const reason = (result && typeof result.error === "string") ? result.error : "capture-failed";
   const safeMessage = CAPTURE_FAILURE_MESSAGES[reason] || CAPTURE_FAILURE_MESSAGES["capture-failed"];
   setCaptureScreenStatus(safeMessage, true);
+  return { ok: false };
+}
+
+// ---------------------------------------------------------------------------
+// TASK-176: explicit window picker capture (Full App only).
+// Safety: only on explicit click; in-memory dataUrl only; never disk/chat/OCR/background.
+// Feeds into the same lastScreenshotDataUrl / analyze / ask / clear pipeline.
+// ---------------------------------------------------------------------------
+let captureWindowInFlight = false;
+
+function setCaptureWindowStatus(message, isError) {
+  if (!captureWindowStatus) return;
+  captureWindowStatus.textContent = message;
+  captureWindowStatus.className = isError === true
+    ? "header-action-status error"
+    : "header-action-status";
+}
+
+async function captureWindowFromFullApp() {
+  if (captureWindowInFlight) return null;
+  const api = (typeof window !== "undefined" && window.dragonPet) ? window.dragonPet : null;
+  if (!api || typeof api.captureWindow !== "function") {
+    setCaptureWindowStatus("視窗擷取功能未啟用。", true);
+    return null;
+  }
+  captureWindowInFlight = true;
+  if (captureWindowBtn) captureWindowBtn.disabled = true;
+  setCaptureWindowStatus("選取視窗中…", false);
+  let result = null;
+  try {
+    result = await api.captureWindow();
+  } catch (_error) {
+    result = { ok: false, error: "window-capture-failed" };
+  } finally {
+    captureWindowInFlight = false;
+    if (captureWindowBtn) captureWindowBtn.disabled = false;
+  }
+  if (result && result.ok && typeof result.dataUrl === "string"
+      && result.dataUrl.startsWith("data:image/")) {
+    lastScreenshotDataUrl = result.dataUrl;
+    lastScreenSummary = null;
+    setAnalyzeScreenSummary(null);
+    updateAnalyzeButtonState();
+    setCaptureWindowStatus("視窗截圖完成。尚未儲存，可供後續分析使用。", false);
+    return { ok: true };
+  }
+  const reason = (result && typeof result.error === "string") ? result.error : "window-capture-failed";
+  const safeMessage = CAPTURE_FAILURE_MESSAGES[reason] || CAPTURE_FAILURE_MESSAGES["capture-failed"];
+  setCaptureWindowStatus(safeMessage, true);
   return { ok: false };
 }
 
@@ -1926,6 +1983,13 @@ if (showPetWindowBtn) {
 if (captureScreenBtn) {
   captureScreenBtn.addEventListener("click", () => {
     captureScreenFromFullApp();
+  });
+}
+
+// TASK-176: window capture button click is the ONLY trigger.
+if (captureWindowBtn) {
+  captureWindowBtn.addEventListener("click", () => {
+    captureWindowFromFullApp();
   });
 }
 

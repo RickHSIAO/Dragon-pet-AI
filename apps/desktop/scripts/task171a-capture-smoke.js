@@ -339,6 +339,14 @@ async function runAll(ctx) {
   await test175RegionPickCancelledShowsCleanMessage(ctx);
   await test175RegionTooSmallShowsCleanMessage(ctx);
   await test175RegionCropFailedShowsCleanMessage(ctx);
+  // TASK-176 tests
+  test176StaticSourceScopeChecks();
+  await test176WindowPickCancelledShowsCleanMessage(ctx);
+  await test176WindowPickerFailedShowsCleanMessage(ctx);
+  await test176NoWindowSourceShowsCleanMessage(ctx);
+  await test176WindowCaptureFailedShowsCleanMessage(ctx);
+  await test176WindowCaptureSuccessEnablesAnalyze(ctx);
+  await test176WindowCaptureNeverPostsToChat(ctx);
 }
 
 module.exports = { runAll };
@@ -1053,4 +1061,169 @@ async function test175RegionCropFailedShowsCleanMessage(ctx) {
     "status must not expose internal crop/bitmap terminology");
   assert.ok(document.getElementById("analyze-screen-btn").disabled,
     "analyze button must remain disabled when region crop failed");
+}
+
+// ---------------------------------------------------------------------------
+// TASK-176: Window Picker Capture — smoke tests
+// ---------------------------------------------------------------------------
+
+function test176StaticSourceScopeChecks() {
+  const main     = fs.readFileSync(mainPath, "utf8");
+  const renderer = fs.readFileSync(rendererPath, "utf8");
+  const preload  = fs.readFileSync(preloadPath, "utf8");
+  const html     = fs.readFileSync(indexPath, "utf8");
+  const winPickerPreload = fs.readFileSync(
+    path.join(desktopRoot, "src", "picker", "window-picker-preload.js"), "utf8");
+
+  // main.js: window picker infrastructure
+  assert.ok(/showWindowPicker/.test(main),
+    "main.js must define showWindowPicker (TASK-176)");
+  assert.ok(/screen:capture-window/.test(main),
+    "main.js must define screen:capture-window IPC channel");
+  assert.ok(/window-picker:selected/.test(main),
+    "main.js must handle window-picker:selected IPC");
+  assert.ok(/window-picker:cancel/.test(main),
+    "main.js must handle window-picker:cancel IPC");
+  assert.ok(/window-picker:list/.test(main),
+    "main.js must push window list to picker via window-picker:list");
+  assert.ok(/pickerList/.test(main),
+    "main.js must build pickerList (name+index only, no source IDs) before sending to picker");
+
+  // main.js: error codes
+  assert.ok(/window-pick-cancelled/.test(main), "main.js must define window-pick-cancelled");
+  assert.ok(/window-picker-failed/.test(main),  "main.js must define window-picker-failed");
+  assert.ok(/no-window-source/.test(main),       "main.js must define no-window-source");
+  assert.ok(/window-capture-failed/.test(main),  "main.js must define window-capture-failed");
+
+  // renderer.js: maps all four error codes
+  assert.ok(/window-pick-cancelled/.test(renderer), "renderer.js must map window-pick-cancelled");
+  assert.ok(/window-picker-failed/.test(renderer),  "renderer.js must map window-picker-failed");
+  assert.ok(/no-window-source/.test(renderer),       "renderer.js must map no-window-source");
+  assert.ok(/window-capture-failed/.test(renderer),  "renderer.js must map window-capture-failed");
+
+  // preload.js: exposes captureWindow, not raw desktopCapturer
+  assert.ok(/captureWindow/.test(preload),
+    "preload.js must expose captureWindow function (TASK-176)");
+  assert.ok(!/desktopCapturer/.test(preload),
+    "preload.js must not expose desktopCapturer directly");
+
+  // index.html: button exists
+  assert.ok(/capture-window-btn/.test(html),
+    "index.html must have capture-window-btn");
+
+  // window-picker-preload.js: sends integer index, never raw source IDs
+  assert.ok(/window-picker:selected/.test(winPickerPreload),
+    "window-picker-preload.js must send window-picker:selected");
+  assert.ok(/window-picker:cancel/.test(winPickerPreload),
+    "window-picker-preload.js must send window-picker:cancel");
+  assert.ok(/window-picker:list/.test(winPickerPreload),
+    "window-picker-preload.js must listen for window-picker:list");
+  assert.ok(!/desktopCapturer/.test(winPickerPreload),
+    "window-picker-preload.js must not access desktopCapturer");
+  assert.ok(!/source\.id/.test(winPickerPreload),
+    "window-picker-preload.js must not send raw source IDs");
+}
+
+async function test176WindowPickCancelledShowsCleanMessage(ctx) {
+  const { document } = await ctx.loadRenderer({
+    dragonPet: {
+      captureWindow: () => Promise.resolve({ ok: false, error: "window-pick-cancelled" }),
+    },
+  });
+  document.getElementById("capture-window-btn").click();
+  await ctx.settle();
+  const status = ctx.textOf(document, "capture-window-status");
+  assert.ok(status.length > 0,
+    "window-pick-cancelled must produce a non-empty status message");
+  assert.ok(!status.includes("window-pick-cancelled"),
+    "status must not echo raw error code window-pick-cancelled, got: " + status);
+  assert.ok(document.getElementById("analyze-screen-btn").disabled,
+    "analyze button must remain disabled after window pick cancelled");
+}
+
+async function test176WindowPickerFailedShowsCleanMessage(ctx) {
+  const { document } = await ctx.loadRenderer({
+    dragonPet: {
+      captureWindow: () => Promise.resolve({ ok: false, error: "window-picker-failed" }),
+    },
+  });
+  document.getElementById("capture-window-btn").click();
+  await ctx.settle();
+  const status = ctx.textOf(document, "capture-window-status");
+  assert.ok(status.length > 0,
+    "window-picker-failed must produce a non-empty status message");
+  assert.ok(!status.includes("window-picker-failed"),
+    "status must not echo raw error code window-picker-failed, got: " + status);
+  assert.ok(document.getElementById("analyze-screen-btn").disabled,
+    "analyze button must remain disabled when window picker failed");
+}
+
+async function test176NoWindowSourceShowsCleanMessage(ctx) {
+  const { document } = await ctx.loadRenderer({
+    dragonPet: {
+      captureWindow: () => Promise.resolve({ ok: false, error: "no-window-source" }),
+    },
+  });
+  document.getElementById("capture-window-btn").click();
+  await ctx.settle();
+  const status = ctx.textOf(document, "capture-window-status");
+  assert.ok(status.length > 0,
+    "no-window-source must produce a non-empty status message");
+  assert.ok(!status.includes("no-window-source"),
+    "status must not echo raw error code no-window-source, got: " + status);
+  assert.ok(!status.includes("source") || status.includes("視窗"),
+    "status must not expose internal 'source' terminology without context");
+  assert.ok(document.getElementById("analyze-screen-btn").disabled,
+    "analyze button must remain disabled when no window source found");
+}
+
+async function test176WindowCaptureFailedShowsCleanMessage(ctx) {
+  const { document } = await ctx.loadRenderer({
+    dragonPet: {
+      captureWindow: () => Promise.resolve({ ok: false, error: "window-capture-failed" }),
+    },
+  });
+  document.getElementById("capture-window-btn").click();
+  await ctx.settle();
+  const status = ctx.textOf(document, "capture-window-status");
+  assert.ok(status.length > 0,
+    "window-capture-failed must produce a non-empty status message");
+  assert.ok(!status.includes("window-capture-failed"),
+    "status must not echo raw error code window-capture-failed, got: " + status);
+  assert.ok(document.getElementById("analyze-screen-btn").disabled,
+    "analyze button must remain disabled when window capture failed");
+}
+
+async function test176WindowCaptureSuccessEnablesAnalyze(ctx) {
+  const { document } = await ctx.loadRenderer({
+    dragonPet: {
+      captureWindow: () =>
+        Promise.resolve({ ok: true, dataUrl: "data:image/png;base64,AAA" }),
+    },
+  });
+  assert.ok(document.getElementById("analyze-screen-btn").disabled,
+    "analyze button must start disabled");
+  document.getElementById("capture-window-btn").click();
+  await ctx.settle();
+  assert.ok(!document.getElementById("analyze-screen-btn").disabled,
+    "analyze button must be enabled after successful window capture");
+  const status = ctx.textOf(document, "capture-window-status");
+  assert.ok(status.includes("截圖完成") || status.length > 0,
+    "success status must show a clean message, got: " + status);
+  assert.ok(!status.includes("data:image") && !status.includes("base64"),
+    "status must not expose raw dataUrl or base64");
+}
+
+async function test176WindowCaptureNeverPostsToChat(ctx) {
+  const { document, state } = await ctx.loadRenderer({
+    dragonPet: {
+      captureWindow: () =>
+        Promise.resolve({ ok: true, dataUrl: "data:image/png;base64,AAA" }),
+    },
+  });
+  document.getElementById("capture-window-btn").click();
+  await ctx.settle();
+  const chatCalls = state.calls.filter((c) => c.url.endsWith("/chat")).length;
+  assert.equal(chatCalls, 0,
+    "window capture alone must not POST to /chat (TASK-176 isolation)");
 }
