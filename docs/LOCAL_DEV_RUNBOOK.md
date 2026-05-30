@@ -286,6 +286,47 @@ Wait 30–60 s and retry — `dev-smoke.ps1` will show the warmup hint and repor
 
 ---
 
+### `source=llm_local_error` in chat status pill
+
+The Full App chat status shows `source=llm_local_error` when the local Ollama provider
+returned an error or timed out. The backend returns a safe fallback reply so no crash occurs.
+
+**Diagnosis checklist:**
+
+```powershell
+# 1. Is Ollama running?
+curl.exe http://127.0.0.1:11434/api/tags
+# Expected: JSON with "models" list. If connection refused → start Ollama.
+
+# 2. Is the model loaded?
+curl.exe http://127.0.0.1:11434/api/ps
+# Expected: JSON with running models. If empty → model is not loaded yet (cold start).
+
+# 3. Warm up the model
+ollama run qwen3:8b "請用一句繁體中文回覆：ready"
+# Wait for reply, then retry chat.
+
+# 4. Is fallback_to_mock enabled? (masks Ollama errors with a mock reply)
+# In Provider Settings UI: confirm "fallback_to_mock" shows "false".
+# Or check settings file:
+Get-Content backend\data\provider_settings.json
+```
+
+**Common root causes:**
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `source=llm_local_error` on first request | Cold-start: model not yet in memory | Warm up with `ollama run qwen3:8b` first |
+| `source=llm_local_error` on every request | Ollama not running | `ollama serve` |
+| `source=mock` despite Ollama configured | `fallback_to_mock=true` or Ollama failing silently | Check `/provider/settings`, disable fallback |
+| `source=llm_local_error` after idle period | `OLLAMA_KEEP_ALIVE` expired, model unloaded | Increase `OLLAMA_KEEP_ALIVE` or warm up again |
+
+The backend performs one automatic retry (`MAX_TIMEOUT_RETRIES = 1`) if the first chat
+times out but `/api/tags` is reachable — this covers the case where the model is loading
+but the server is alive.
+
+---
+
 ### `provider_settings.json` not persisting across restarts
 
 If settings reset to `provider=mock` on restart, the settings file path may not be writable.
@@ -315,8 +356,11 @@ git check-ignore backend\data\provider_settings.json
 | `LLM_MODEL` | _(none)_ | Model name passed to the provider |
 | `LLM_PROVIDER_ENABLED` | `false` | Enables real provider factory |
 | `LLM_CHAT_ENABLED` | `false` | Routes `/chat` through LLM adapter |
-| `LLM_LOCAL_CHAT_TIMEOUT_SECONDS` | `90` | Timeout for local Ollama generation (1–300 s) |
+| `LLM_LOCAL_CHAT_TIMEOUT_SECONDS` | `90` | Timeout for local Ollama chat generation (1–300 s). Also accepts legacy `OLLAMA_TIMEOUT_SECONDS`. |
+| `LLM_LOCAL_TEST_TIMEOUT_SECONDS` | `10` | Timeout for Test Connection (`/api/tags` health probe, not generation). Intentionally shorter than chat timeout. (1–60 s) |
 | `LLM_FALLBACK_TO_MOCK` | `true` | Falls back to mock on provider error |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server base URL. Must start with `http://localhost` or `http://127.0.0.1`. Any other value is ignored and the default is used. |
+| `OLLAMA_KEEP_ALIVE` | `30m` | How long Ollama keeps the model loaded in memory after the last request. `30m` avoids cold-start latency for repeated sessions. Set to `0` to unload immediately or `-1` to never unload. |
 | `DB_PATH` | `sqlite:///./data/dragon_pet.db` | SQLite path (relative to `backend/`) |
 | `SETTINGS_FILE_PATH` | `data/provider_settings.json` | Persisted settings path |
 | `MEMORY_INJECTION_ENABLED` | `false` | Enables memory-aware chat (TASK-023) |

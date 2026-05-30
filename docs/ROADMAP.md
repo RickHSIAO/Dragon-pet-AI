@@ -444,7 +444,9 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 **Screen Context v0.4 COMPLETE** — see `docs/SCREEN_CONTEXT_V04_RELEASE_SUMMARY.md`
 
-**Next planned task:** TASK-185 — (v0.5 scope TBD; options: OCR quality polish, local vision research, or general assistant feature work)
+**Next planned task:** TASK-186 — (v0.5 scope TBD; options: OCR quality polish, local vision research, or general assistant feature work)
+
+- TASK-185 DONE (2026-05-30): Provider / Ollama stability pass. Runtime: no bugs found — `keep_alive="30m"`, 1-retry on timeout, 90 s chat timeout, separate 10 s test-connection timeout, all error categories safe. Docs gap: `LOCAL_DEV_RUNBOOK.md` env var table was missing `OLLAMA_BASE_URL`, `OLLAMA_KEEP_ALIVE`, and `LLM_LOCAL_TEST_TIMEOUT_SECONDS`; added all three with description and defaults. Also added `source=llm_local_error` diagnosis section (Ollama not running, cold-start, fallback_to_mock masking errors, keep_alive expiry). Test results: 644 backend PASS, renderer-chat-smoke PASS.
 
 - TASK-184 DONE - DOCS-ONLY (2026-05-30): Smoke command runbook / one-command verification docs. Created `docs/DESKTOP_SMOKE_RUNBOOK.md`: quick-reference block (all four suites + git hygiene), per-suite details (command, count, runtime, coverage, when to run), change-scoped guidance (renderer → renderer-chat-smoke; main.js/IPC → pet-window-smoke; OCR → pytest; etc.), one-shot full regression PowerShell block with Push/Pop-Location, expected healthy baseline table, smoke suite file map, and common failures & fixes. No runtime files modified.
 

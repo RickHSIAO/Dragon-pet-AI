@@ -17993,3 +17993,68 @@ Create a concise, copy-pasteable runbook of all automated smoke and regression c
 - [x] Reference to `docs/SCREEN_CONTEXT_RELEASE_SMOKE_CHECKLIST.md` for manual 43-item release check.
 - [x] Reference to `docs/LOCAL_DEV_RUNBOOK.md` for stack startup.
 - [x] No runtime files modified.
+
+---
+
+## TASK-185 | Provider / Ollama Stability Pass
+
+**Status:** DONE
+**Date:** 2026-05-30
+**Type:** Stability pass + docs update
+
+### Goal
+
+Post-v0.4 stability check of the local LLM provider pipeline: Ollama configuration, `keep_alive` / timeout / retry behaviour, `fallback_to_mock`, `provider_timeout` error UI, and env var documentation completeness.
+
+### Checks Performed
+
+| Area | Result |
+|---|---|
+| `python -m pytest tests/ -q --ignore=test_provider_settings_persistence.py` | **644 PASS** |
+| `node renderer-chat-smoke.js` | **PASS** |
+| `ollama_provider.py` — keep_alive, retry, timeout, error categories | Correct — no bugs |
+| `config.py` — `get_ollama_keep_alive`, `get_local_chat_timeout_seconds`, `get_local_test_timeout_seconds` | Correct |
+| Renderer provider error handling (`llm_local_error`, `provider_timeout`, `fallback_to_mock`) | Correct |
+| `LOCAL_DEV_RUNBOOK.md` env var table | **Gap found** — 3 vars missing |
+
+### Findings
+
+**Runtime: no bugs found.**
+
+The Ollama provider stability code is sound:
+- `keep_alive = "30m"` (configurable via `OLLAMA_KEEP_ALIVE`) avoids cold-start latency on repeated requests.
+- One automatic retry (`MAX_TIMEOUT_RETRIES = 1`) after timeout if `/api/tags` is reachable.
+- Chat timeout default 90 s (`LLM_LOCAL_CHAT_TIMEOUT_SECONDS`), clamped [1, 300].
+- Test Connection timeout default 10 s (`LLM_LOCAL_TEST_TIMEOUT_SECONDS`), intentionally separate.
+- All error categories (`provider_timeout`, `ollama_unavailable`, `model_not_found`, `provider_error`) return safe fallback responses — no raw Ollama response bodies forwarded.
+- Renderer correctly maps `source=llm_local_error` → "Ollama Error" status pill + diagnostic hint text.
+- `fallback_to_mock` status is visible in Provider Settings UI.
+
+**Docs gap found:**
+
+`docs/LOCAL_DEV_RUNBOOK.md` env var table was missing three variables that are documented in `OLLAMA_RUNTIME_SMOKE_CHECKLIST.md` but not in the main dev runbook:
+- `OLLAMA_BASE_URL` (default `http://localhost:11434`, localhost-only guard)
+- `OLLAMA_KEEP_ALIVE` (default `30m`, controls model memory retention)
+- `LLM_LOCAL_TEST_TIMEOUT_SECONDS` (default `10`, Test Connection probe timeout)
+
+Also added a `source=llm_local_error` diagnosis section to `LOCAL_DEV_RUNBOOK.md` covering: Ollama not running, cold-start, `fallback_to_mock` masking errors, and `OLLAMA_KEEP_ALIVE` expiry.
+
+**Provider settings persistence tests:** 20 pre-existing errors in `test_provider_settings_persistence.py` (venv activation failure in bash context). These are not new regressions — the 3 non-error tests in that file pass.
+
+### Files Modified
+
+| File | Change | Runtime? |
+|---|---|---|
+| `docs/LOCAL_DEV_RUNBOOK.md` | Added 3 missing env vars; added `source=llm_local_error` diagnosis section | No |
+| `docs/TASKS.md` | TASK-185 section added | No |
+| `docs/ROADMAP.md` | TASK-185 DONE entry; next task TASK-186 TBD | No |
+
+### Acceptance Criteria
+
+- [x] `pytest tests/ --ignore=test_provider_settings_persistence.py` — 644 PASS.
+- [x] `renderer-chat-smoke.js` — PASS.
+- [x] `git diff --check` — CLEAN.
+- [x] `OLLAMA_BASE_URL`, `OLLAMA_KEEP_ALIVE`, `LLM_LOCAL_TEST_TIMEOUT_SECONDS` added to `LOCAL_DEV_RUNBOOK.md`.
+- [x] `source=llm_local_error` diagnosis section added.
+- [x] No runtime files modified.
+- [x] No safety boundaries changed.
