@@ -18058,3 +18058,42 @@ Also added a `source=llm_local_error` diagnosis section to `LOCAL_DEV_RUNBOOK.md
 - [x] `source=llm_local_error` diagnosis section added.
 - [x] No runtime files modified.
 - [x] No safety boundaries changed.
+
+---
+
+## TASK-186 | Provider Settings Persistence Tests Cleanup
+
+**Status:** DONE
+**Date:** 2026-05-30
+
+### Goal
+
+Investigate and fix 20 pre-existing pytest ERRORs in `backend/tests/test_provider_settings_persistence.py`. Restore the full backend test suite to clean pass. No runtime behavior change.
+
+### Root Cause
+
+All 20 errors were fixture setup failures (`tmp_path` could not be created), not test logic failures. Pytest's `tmp_path` fixture tries to scan `C:\Users\雪狼丸\AppData\Local\Temp\pytest-of-RickHSIAO` via `os.scandir()` to find the next numbered temp directory. That system temp path has a Windows ACL permission error on this machine — `PermissionError: [WinError 5] Access is denied`.
+
+The 3 tests that passed (`test_empty_path_returns_none`, `test_empty_path_is_noop`, `test_disabled_persistence_with_empty_path`) happened to not use the `tmp_path` fixture argument, so they were unaffected.
+
+### Fix
+
+Added `addopts = --basetemp=.pytest-tmp` to `backend/pytest.ini`. This redirects all `tmp_path` fixture directories to `backend/.pytest-tmp/` (a local project path), bypassing the system temp directory entirely.
+
+Also added `.pytest-tmp/` and `.pytest-tmp*/` to the root `.gitignore` so the generated temp directories are not tracked.
+
+### Files Modified
+
+| File | Change | Runtime? |
+|---|---|---|
+| `backend/pytest.ini` | Added `addopts = --basetemp=.pytest-tmp` | No |
+| `.gitignore` | Added `.pytest-tmp/` and `.pytest-tmp*/` ignore patterns | No |
+| `docs/TASKS.md` | TASK-186 section added | No |
+| `docs/ROADMAP.md` | TASK-186 DONE entry; next task TBD | No |
+
+### Acceptance Criteria
+
+- [x] `python -m pytest tests/test_provider_settings_persistence.py -q` — `23 passed, 1 warning`.
+- [x] `python -m pytest tests/ -q` — `667 passed, 1 warning` (full suite clean).
+- [x] No runtime files modified.
+- [x] No test logic changed — only pytest configuration.

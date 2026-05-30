@@ -444,7 +444,9 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 **Screen Context v0.4 COMPLETE** — see `docs/SCREEN_CONTEXT_V04_RELEASE_SUMMARY.md`
 
-**Next planned task:** TASK-186 — (v0.5 scope TBD; options: OCR quality polish, local vision research, or general assistant feature work)
+**Next planned task:** TASK-187 — (v0.5 scope TBD; options: OCR quality polish, local vision research, or general assistant feature work)
+
+- TASK-186 DONE (2026-05-30): Provider settings persistence tests cleanup. Root cause: `tmp_path` fixture failed with `PermissionError [WinError 5]` on `C:\Users\雪狼丸\AppData\Local\Temp\pytest-of-RickHSIAO` — system temp ACL issue on this machine. Fix: added `addopts = --basetemp=.pytest-tmp` to `backend/pytest.ini`; added `.pytest-tmp/` and `.pytest-tmp*/` to `.gitignore`. Result: `23 passed, 1 warning` (persistence file alone); `667 passed, 1 warning` (full suite). No runtime files modified, no test logic changed.
 
 - TASK-185 DONE (2026-05-30): Provider / Ollama stability pass. Runtime: no bugs found — `keep_alive="30m"`, 1-retry on timeout, 90 s chat timeout, separate 10 s test-connection timeout, all error categories safe. Docs gap: `LOCAL_DEV_RUNBOOK.md` env var table was missing `OLLAMA_BASE_URL`, `OLLAMA_KEEP_ALIVE`, and `LLM_LOCAL_TEST_TIMEOUT_SECONDS`; added all three with description and defaults. Also added `source=llm_local_error` diagnosis section (Ollama not running, cold-start, fallback_to_mock masking errors, keep_alive expiry). Test results: 644 backend PASS, renderer-chat-smoke PASS.
 
