@@ -43,6 +43,8 @@ const clearScreenBtn = document.getElementById("clear-screen-btn");
 // TASK-172B: ask Christina about current OCR summary.
 const askScreenBtn    = document.getElementById("ask-screen-btn");
 const askScreenStatus = document.getElementById("ask-screen-status");
+// TASK-179: gentle hint shown after OCR summary exists.
+const ocrAskHintEl = document.getElementById("ocr-ask-hint");
 const memoryForm  = document.getElementById("memory-form");
 const memoryType  = document.getElementById("memory-type");
 const memoryContent = document.getElementById("memory-content");
@@ -357,6 +359,8 @@ function updateAskButtonState() {
     askScreenStatus.textContent = "";
     askScreenStatus.className   = "header-action-status";
   }
+  // TASK-179: show/hide gentle hint alongside the ask button.
+  if (ocrAskHintEl) ocrAskHintEl.hidden = !hasSummary;
 }
 
 async function askScreenFromFullApp() {

@@ -17592,6 +17592,84 @@ The checklist is stored at `docs/SCREEN_CONTEXT_RELEASE_SMOKE_CHECKLIST.md` and 
 
 ---
 
+## TASK-179 | Optional Pet UI Hint After OCR Summary Exists
+
+**Status:** DONE
+**Date:** 2026-05-30
+**Depends on:** TASK-172A DONE (OCR summary), TASK-172B DONE (ask-screen flow)
+
+### Goal
+
+After "分析這張" produces an OCR summary, show a gentle, non-intrusive one-line hint in the Full App UI below the "螢幕摘要" panel. The hint points the user toward the "問克莉絲蒂娜這個畫面" button and clarifies that only OCR text (not the image) is sent.
+
+### §1 — Scope
+
+- **In scope:** `index.html` hint div, `styles.css` class, `renderer.js` DOM ref + `updateAskButtonState()` toggle, smoke tests, docs.
+- **Out of scope:** Pet window hint (deferred), any auto-chat, auto-OCR, auto-capture, or Pet autonomous commentary.
+
+### §2 — Behavior
+
+| State | Hint visible? |
+|---|---|
+| App loaded, no capture | Hidden |
+| Capture done, no OCR | Hidden |
+| OCR produced text → `lastScreenSummary` set | **Visible** |
+| OCR returned no text (`no-text`) | Hidden |
+| OCR failed (`ocr-failed`, `ocr-unavailable`) | Hidden |
+| "清除截圖" clicked | Hidden |
+
+### §3 — Privacy & Safety (10 constraints)
+
+1. Hint is display-only — no auto-chat, no auto-OCR, no auto-capture.
+2. Hint never sends image, dataUrl, or base64 to any endpoint.
+3. No cloud vision, no local vision model called.
+4. User must still click "問克莉絲蒂娜這個畫面" + confirm before `/chat` is called.
+5. Pet Bubble does not receive or comment on screenshot or OCR text.
+6. No screenshot written to disk by this feature.
+7. Hint hidden by default — only shown after explicit OCR success.
+8. No `setInterval` / background monitoring. State is purely reactive.
+9. `updateAskButtonState()` is the single toggle point — no additional state introduced.
+10. Pet window hint deferred; no Pet IPC changes in this task.
+
+### §4 — Implementation
+
+**`apps/desktop/src/renderer/index.html`**
+- Added `<div id="ocr-ask-hint" class="ocr-ask-hint" hidden>` after `#analyze-screen-summary`.
+- Hint text: "已產生螢幕摘要。點「問克莉絲蒂娜這個畫面」讓她根據文字摘要回覆（不傳送圖片）。"
+
+**`apps/desktop/src/renderer/styles.css`**
+- Added `.ocr-ask-hint { color: var(--text-muted, #888); font-size: 11px; line-height: 1.4; margin: 2px 18px 6px; padding: 0; }`.
+
+**`apps/desktop/src/renderer/renderer.js`**
+- Added `const ocrAskHintEl = document.getElementById("ocr-ask-hint");` after existing DOM refs.
+- Added `if (ocrAskHintEl) ocrAskHintEl.hidden = !hasSummary;` at the end of `updateAskButtonState()`.
+
+**`apps/desktop/scripts/task171a-capture-smoke.js`**
+- Added `test179StaticChecks()`: verifies `id="ocr-ask-hint"` exists and starts hidden in HTML; `ocrAskHintEl` referenced in `renderer.js`; `ocrAskHintEl.hidden = !hasSummary` wired in `updateAskButtonState`.
+- Added 5 dynamic tests: hint visible after OCR success, hidden on no-text, hidden on OCR failure, hidden after clear, hint never auto-posts to `/chat`.
+
+### §5 — Test Results
+
+```
+renderer-chat-smoke.js  PASS
+task171a-capture-smoke  exit 0
+node --check            PASS (renderer.js + task171a-capture-smoke.js)
+```
+
+### Acceptance Criteria
+
+- [x] `index.html`: `#ocr-ask-hint` div exists, starts hidden.
+- [x] `styles.css`: `.ocr-ask-hint` class defined.
+- [x] `renderer.js`: `ocrAskHintEl` DOM ref; hint toggled in `updateAskButtonState()`.
+- [x] Hint appears only after OCR produces non-empty text.
+- [x] Hint hidden on no-text, OCR failure, and after clear.
+- [x] Hint never triggers `/chat`, `/ocr/extract`, or any capture.
+- [x] Pet Bubble not affected.
+- [x] `renderer-chat-smoke.js` PASS; static + 5 dynamic TASK-179 smoke tests PASS.
+- [x] `docs/TASKS.md` and `docs/ROADMAP.md` updated.
+
+---
+
 ## TASK-180 | Optional Visual Model / Multimodal Screenshot Understanding
 
 **Status:** BACKLOG — DOCS-ONLY NOTE (no runtime implementation)

@@ -349,6 +349,13 @@ async function runAll(ctx) {
   await test176WindowCaptureNeverPostsToChat(ctx);
   // TASK-177 tests
   test177StaticChecks();
+  // TASK-179 tests
+  test179StaticChecks();
+  await test179HintAppearsAfterOcrSuccess(ctx);
+  await test179HintHiddenOnNoText(ctx);
+  await test179HintHiddenOnOcrFailure(ctx);
+  await test179ClearHidesHint(ctx);
+  await test179HintNeverPostsToChat(ctx);
 }
 
 module.exports = { runAll };
@@ -1276,4 +1283,106 @@ function test177StaticChecks() {
   // renderer.js: ocr-unavailable still maps to clean zh-TW message (regression)
   assert.ok(/ocr-unavailable.*分析功能目前不可用/.test(renderer),
     "renderer.js must still map ocr-unavailable to clean zh-TW message (TASK-177 regression)");
+}
+
+// ---------------------------------------------------------------------------
+// TASK-179: Optional Pet UI hint after OCR summary exists — static + dynamic
+// ---------------------------------------------------------------------------
+
+function test179StaticChecks() {
+  const renderer = fs.readFileSync(rendererPath, "utf8");
+  const html     = fs.readFileSync(indexPath, "utf8");
+
+  // HTML: hint div exists and starts hidden
+  assert.match(html, /id="ocr-ask-hint"/,
+    "index.html must have ocr-ask-hint element (TASK-179)");
+  assert.match(html, /id="ocr-ask-hint"[^>]*hidden/,
+    "ocr-ask-hint must start hidden (TASK-179)");
+
+  // Renderer: DOM ref and hint toggle wired in updateAskButtonState
+  assert.ok(/ocrAskHintEl/.test(renderer),
+    "renderer.js must reference ocrAskHintEl (TASK-179)");
+  assert.ok(/ocrAskHintEl.*hidden\s*=\s*!hasSummary/.test(renderer),
+    "renderer.js must toggle ocrAskHintEl.hidden = !hasSummary in updateAskButtonState (TASK-179)");
+
+  // Safety: hint must never auto-post to chat, never auto-analyze, never auto-capture
+  assert.ok(!/ocrAskHintEl.*\/chat/.test(renderer),
+    "renderer.js ocrAskHintEl must not reference /chat (TASK-179 safety)");
+}
+
+async function test179HintAppearsAfterOcrSuccess(ctx) {
+  const { document } = await ctx.loadRenderer({
+    ...fakeCapture,
+    ocrMode: "success",
+    confirmOverride: () => true,
+  });
+  document.getElementById("capture-screen-btn").click();
+  await ctx.settle();
+  document.getElementById("analyze-screen-btn").click();
+  await ctx.settle();
+  const hint = document.getElementById("ocr-ask-hint");
+  assert.ok(hint, "ocr-ask-hint element must exist in DOM");
+  assert.ok(!hint.hidden, "ocr-ask-hint must be visible after successful OCR (TASK-179)");
+}
+
+async function test179HintHiddenOnNoText(ctx) {
+  const { document } = await ctx.loadRenderer({
+    ...fakeCapture,
+    ocrMode: "no-text",
+    confirmOverride: () => true,
+  });
+  document.getElementById("capture-screen-btn").click();
+  await ctx.settle();
+  document.getElementById("analyze-screen-btn").click();
+  await ctx.settle();
+  const hint = document.getElementById("ocr-ask-hint");
+  assert.ok(hint.hidden, "ocr-ask-hint must stay hidden when OCR finds no text (TASK-179)");
+}
+
+async function test179HintHiddenOnOcrFailure(ctx) {
+  const { document } = await ctx.loadRenderer({
+    ...fakeCapture,
+    ocrMode: "ocr-failed",
+    confirmOverride: () => true,
+  });
+  document.getElementById("capture-screen-btn").click();
+  await ctx.settle();
+  document.getElementById("analyze-screen-btn").click();
+  await ctx.settle();
+  const hint = document.getElementById("ocr-ask-hint");
+  assert.ok(hint.hidden, "ocr-ask-hint must stay hidden when OCR fails (TASK-179)");
+}
+
+async function test179ClearHidesHint(ctx) {
+  const { document } = await ctx.loadRenderer({
+    ...fakeCapture,
+    ocrMode: "success",
+    confirmOverride: () => true,
+  });
+  document.getElementById("capture-screen-btn").click();
+  await ctx.settle();
+  document.getElementById("analyze-screen-btn").click();
+  await ctx.settle();
+  const hint = document.getElementById("ocr-ask-hint");
+  assert.ok(!hint.hidden, "hint must be visible before clear");
+  document.getElementById("clear-screen-btn").click();
+  await ctx.settle();
+  assert.ok(hint.hidden, "ocr-ask-hint must be hidden after clear (TASK-179)");
+}
+
+async function test179HintNeverPostsToChat(ctx) {
+  // Hint is purely informational — it must never trigger a /chat call by itself.
+  const { document, state } = await ctx.loadRenderer({
+    ...fakeCapture,
+    ocrMode: "success",
+    confirmOverride: () => true,
+  });
+  document.getElementById("capture-screen-btn").click();
+  await ctx.settle();
+  document.getElementById("analyze-screen-btn").click();
+  await ctx.settle();
+  // Hint is now visible — verify no /chat was auto-posted
+  const chatCalls = state.calls.filter((c) => c.url.endsWith("/chat")).length;
+  assert.equal(chatCalls, 0,
+    "ocr-ask-hint appearing must not auto-POST to /chat (TASK-179 safety)");
 }

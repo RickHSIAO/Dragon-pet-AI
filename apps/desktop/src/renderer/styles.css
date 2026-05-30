@@ -123,6 +123,15 @@ textarea {
   word-break: break-word;
 }
 
+/* TASK-179: hint shown after OCR summary appears */
+.ocr-ask-hint {
+  color: var(--text-muted, #888);
+  font-size: 11px;
+  line-height: 1.4;
+  margin: 2px 18px 6px;
+  padding: 0;
+}
+
 #character-status {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
