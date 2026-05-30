@@ -2,9 +2,9 @@
 
 ## Purpose
 
-This checklist covers the full Screen Context v0.4 feature set (TASK-174 through TASK-177).
-Use it to verify that every capture mode, OCR analysis path, chat handoff, and privacy
-boundary is working correctly before declaring a Screen Context release complete.
+This checklist covers the full Screen Context v0.4 feature set (TASK-174 through TASK-179).
+Use it to verify that every capture mode, OCR analysis path, chat handoff, OCR ask hint,
+and privacy boundary is working correctly before declaring a Screen Context release complete.
 
 Automated tests (pytest + renderer-chat-smoke) must pass before running this checklist.
 
@@ -89,6 +89,7 @@ uvicorn app.main:app --reload --port 8000
 
 ## Section C — Chat Handoff (TASK-172B)
 
+- [ ] **C0** After OCR summary exists, OCR ask hint appears below "螢幕摘要" panel (was hidden before); hint text mentions 文字摘要 and does NOT mention dataUrl or image *(TASK-179)*
 - [ ] **C1** After OCR summary exists, "問克莉絲蒂娜這個畫面" button appears (was hidden before)
 - [ ] **C2** Click "問克莉絲蒂娜這個畫面" → privacy confirmation dialog appears
 - [ ] **C3** Click **Cancel** → no `/chat` POST sent; button remains visible
@@ -102,7 +103,7 @@ uvicorn app.main:app --reload --port 8000
 ## Section D — Clear Screenshot
 
 - [ ] **D1** "清除截圖" button visible after any successful capture
-- [ ] **D2** Click "清除截圖" → "分析這張" disabled; "螢幕摘要" panel hidden; "問克莉絲蒂娜這個畫面" hidden; "清除截圖" hidden
+- [ ] **D2** Click "清除截圖" → "分析這張" disabled; "螢幕摘要" panel hidden; OCR ask hint hidden; "問克莉絲蒂娜這個畫面" hidden; "清除截圖" hidden
 - [ ] **D3** All capture-dependent UI resets to pre-capture state
 - [ ] **D4** After clear, clicking "擷取螢幕" or "擷取視窗" starts a fresh capture with no leftover state
 
@@ -167,6 +168,6 @@ Fill this in when all items pass:
 
 ## Related Docs
 
-- [TASKS.md](TASKS.md) — task-by-task implementation record for TASK-171A through TASK-180
+- [TASKS.md](TASKS.md) — task-by-task implementation record for TASK-171A through TASK-181
 - [ROADMAP.md](ROADMAP.md) — Screen Context milestone history
 - [OLLAMA_RUNTIME_SMOKE_CHECKLIST.md](OLLAMA_RUNTIME_SMOKE_CHECKLIST.md) — Ollama provider smoke (separate from screen context)

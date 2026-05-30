@@ -17821,7 +17821,7 @@ Screen Context v0.4 is the complete user-triggered screen awareness layer for dr
 
 ### §2 — Safety Boundary Confirmation
 
-All 9 v0.4 safety boundaries are enforced and smoke-verified:
+All 10 v0.4 safety boundaries are enforced and smoke-verified:
 
 1. No automatic capture (button-only)
 2. No background monitoring (no polling loop)
@@ -17851,3 +17851,48 @@ All 9 v0.4 safety boundaries are enforced and smoke-verified:
 - [x] No runtime files modified.
 - [x] `git diff --check` — no whitespace errors.
 - [x] NUL bytes — none.
+
+---
+
+## TASK-182 | Screen Context Stability Cleanup / Post-Release Regression Pass
+
+**Status:** DONE — DOCS-ONLY
+**Date:** 2026-05-30
+**Type:** Post-release stability cleanup — docs consistency + test verification
+**Depends on:** TASK-181 DONE (v0.4 final checkpoint)
+
+### Goal
+
+Post-release regression pass after Screen Context v0.4 was pushed. Verify all automated tests still pass, identify doc inconsistencies introduced during rapid v0.4 delivery, and fix them. No new features, no runtime behavior changes.
+
+### Checks Performed
+
+| Check | Result |
+|---|---|
+| `pytest tests/test_ocr_routes.py -q` | 34 PASS |
+| `node renderer-chat-smoke.js` | PASS |
+| `git diff --check` | CLEAN (no whitespace errors) |
+| `git status --short` | Clean working tree (all v0.4 work committed) |
+
+### Inconsistencies Found and Fixed
+
+| File | Issue | Fix |
+|---|---|---|
+| `SCREEN_CONTEXT_V04_RELEASE_SUMMARY.md` | Header "Tasks" omitted TASK-181 | Added TASK-181 to docs-only list |
+| `SCREEN_CONTEXT_V04_RELEASE_SUMMARY.md` | TASK-179 Windows smoke row said "Ready for manual verification" | Updated to "PASS — automated smoke" |
+| `SCREEN_CONTEXT_V04_RELEASE_SUMMARY.md` | Sign-off "Tasks covered" omitted TASK-181 | Added TASK-181 |
+| `SCREEN_CONTEXT_RELEASE_SMOKE_CHECKLIST.md` | Purpose scope said "TASK-174 through TASK-177" (outdated) | Extended to "TASK-174 through TASK-179" |
+| `SCREEN_CONTEXT_RELEASE_SMOKE_CHECKLIST.md` | D2 missing OCR ask hint hide check | Added "OCR ask hint hidden" to D2 |
+| `SCREEN_CONTEXT_RELEASE_SMOKE_CHECKLIST.md` | No checklist item for OCR ask hint appearing | Added item C0 (TASK-179) |
+| `SCREEN_CONTEXT_RELEASE_SMOKE_CHECKLIST.md` | Related Docs referred to "TASK-171A through TASK-180" | Updated to TASK-181 |
+| `TASKS.md` TASK-181 §2 | Said "9 v0.4 safety boundaries" but release summary table has 10 | Fixed to "10" |
+
+### Acceptance Criteria
+
+- [x] `pytest tests/test_ocr_routes.py` — 34 PASS.
+- [x] `renderer-chat-smoke.js` — PASS.
+- [x] `git diff --check` — CLEAN.
+- [x] All 8 doc inconsistencies fixed.
+- [x] No runtime files modified.
+- [x] No new features added.
+- [x] No safety boundaries changed.

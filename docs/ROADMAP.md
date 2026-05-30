@@ -444,7 +444,9 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 **Screen Context v0.4 COMPLETE** — see `docs/SCREEN_CONTEXT_V04_RELEASE_SUMMARY.md`
 
-**Next planned task:** TASK-182 — (v0.5 scope TBD; options: OCR quality polish, local vision research, or general stability work)
+**Next planned task:** TASK-183 — (v0.5 scope TBD; options: OCR quality polish, local vision research, or general assistant feature work)
+
+- TASK-182 DONE - DOCS-ONLY (2026-05-30): Screen Context stability cleanup / post-release regression pass. Automated test re-verification: 34 OCR pytest PASS, renderer-chat-smoke PASS, git diff --check CLEAN. Docs inconsistencies found and fixed: (1) `SCREEN_CONTEXT_V04_RELEASE_SUMMARY.md` header/TASK-179 smoke row/sign-off omitted TASK-181; (2) `SCREEN_CONTEXT_RELEASE_SMOKE_CHECKLIST.md` Purpose scope outdated (TASK-177→TASK-179), D2 missing hint-hide check, new C0 item for OCR ask hint, Related Docs updated to TASK-181; (3) `TASKS.md` TASK-181 §2 said "9" safety boundaries (table has 10). No runtime files modified.
 
 - TASK-181 DONE - DOCS-ONLY (2026-05-30): Screen Context v0.4 Final Checkpoint / Release Summary. All 9 runtime tasks (TASK-171A through TASK-179) and 4 docs tasks (TASK-173/178/180/181) recorded. Created `docs/SCREEN_CONTEXT_V04_RELEASE_SUMMARY.md` (7 sections: completed capabilities, safety boundaries, known limitations, test status, file inventory, v0.5 recommendations, sign-off). All safety boundaries confirmed: no auto-capture, no background monitoring, no auto-OCR, no auto-/chat, no image to AI, no disk write, OCR text-only default, no Pet autonomous commentary, contextIsolation/nodeIntegration enforced. Test status: 34 OCR pytest PASS, renderer-chat-smoke PASS, task171a-capture-smoke exit 0, Windows manual smoke PASS all tasks. No runtime files modified.
 

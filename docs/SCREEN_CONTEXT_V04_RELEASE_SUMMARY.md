@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-30
 **Milestone:** Screen Context v0.4 complete
-**Tasks:** TASK-171A through TASK-179 (runtime); TASK-173, TASK-178, TASK-180 (docs-only)
+**Tasks:** TASK-171A through TASK-179 (runtime); TASK-173, TASK-178, TASK-180, TASK-181 (docs-only)
 **Status:** ALL RUNTIME TASKS DONE — WINDOWS MANUAL SMOKE PASS
 
 ---
@@ -108,7 +108,7 @@ All capture modes:
 | TASK-175 (region capture) | PASS — region isolation confirmed |
 | TASK-176 (window picker) | PASS — window isolation confirmed |
 | TASK-177 (OCR language diagnostics) | PASS — `GET /ocr/status` confirmed |
-| TASK-179 (OCR ask hint) | Ready for manual verification |
+| TASK-179 (OCR ask hint) | PASS — automated smoke (hint show/hide, never auto-posts to `/chat`) |
 
 ### Release Checklist
 
@@ -187,7 +187,7 @@ All capture modes:
 | Field | Value |
 |---|---|
 | Date | 2026-05-30 |
-| Tasks covered | TASK-171A through TASK-179 (+ TASK-173/178/180 docs) |
+| Tasks covered | TASK-171A through TASK-179 (+ TASK-173/178/180/181 docs) |
 | `pytest test_ocr_routes.py` | 34 PASS |
 | `renderer-chat-smoke.js` | PASS |
 | Windows manual smoke | PASS (all tasks except TASK-179 hint verification) |
