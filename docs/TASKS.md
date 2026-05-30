@@ -18212,6 +18212,69 @@ TASK-188, TASK-189, TASK-190 only touched Full App renderer files — Pet Window
 
 ---
 
+## TASK-192 | Voice / TTS Manual Smoke Closeout
+
+**Status:** IMPLEMENTED - NEEDS WINDOWS MANUAL SMOKE
+**Date:** 2026-05-31
+
+### Goal
+
+Expand the TASK-191 Voice/TTS regression baseline into an executable 14-item manual smoke checklist. Organise each item with preconditions, step-by-step checks, and explicit pass criteria. Docs-only task — no runtime changes.
+
+### Approach
+
+- Replaced the 8-scenario (A–H) TASK-191 checklist in `docs/VOICE_TTS_REGRESSION_NOTES.md` with a numbered 14-item executable checklist
+- Each item maps to one of the user's specified verification areas: mic visibility, recording indicator, transcribing guard, STT→chat handoff, thinking→reply, TTS ON/OFF, Quiet Mode, voice settings, mutual exclusion, transcribing guard, error message cleanliness (5 sub-scenarios), direct text input, Full App mirror
+- Updated `docs/TASKS.md` and `docs/ROADMAP.md` with TASK-192 entry
+- No runtime files touched
+
+### Manual Smoke Checklist Summary
+
+| # | Area | Key Checks |
+|---|---|---|
+| 1 | Mic button visibility | S/M/L scales; not hidden by CSS |
+| 2 | Recording indicator | `data-recording="true"`; red dot; text input hidden |
+| 3 | Transcribing indicator | `data-transcribing="true"`; spinner visible; text input hidden |
+| 4 | STT → /chat handoff | Transcript delivered; thinking bubble; voice transcript cleared |
+| 5 | Thinking → reply | thinking → speaking/long_reply; clean bubble text; mood update |
+| 6 | TTS ON | Audible speech; `data-speaking`; cancelled on new recording |
+| 7 | TTS OFF | No speech; no `data-speaking` attribute |
+| 8 | Quiet Mode | Idle suppressed; recording unaffected; TTS behaviour unchanged |
+| 9 | Voice settings panel | Voice selector; rate/pitch/volume ranges; localStorage persistence; reset |
+| 10 | Recording ↔ text input | CSS mutual exclusion; JS cancel-each-other guards |
+| 11 | Transcribing blocks recording | `isTranscribingActive()` guard prevents re-recording |
+| 12 | Error message cleanliness | 5 sub-scenarios: no mic, denied, STT unavailable, offline, empty audio |
+| 13 | Direct text input regression | Input works; voice state does not corrupt it; TTS fires |
+| 14 | Full App → Pet mirror | Mirror fires; clean bubble; voice does not interfere |
+
+### Files Modified
+
+| File | Change | Runtime? |
+|---|---|---|
+| `docs/VOICE_TTS_REGRESSION_NOTES.md` | Manual Smoke Checklist expanded from 8 scenarios to 14 executable items with preconditions and pass criteria; Findings section updated with TASK-192 status | No |
+| `docs/TASKS.md` | TASK-192 section added | No |
+| `docs/ROADMAP.md` | TASK-192 entry added; next planned task updated to TASK-193 TBD | No |
+
+### Automated Suite Results (pre-commit verification)
+
+| Suite | Result |
+|---|---|
+| `pet-renderer-smoke.js` | PASS — 226 checks |
+| `pet-window-smoke.js` | PASS — 45 checks |
+| `renderer-chat-smoke.js` | PASS |
+| `git diff --check` | CLEAN |
+
+### Acceptance Criteria
+
+- [x] `docs/VOICE_TTS_REGRESSION_NOTES.md` manual smoke checklist expanded to 14 items with preconditions and pass criteria
+- [x] `docs/TASKS.md` TASK-192 section added with status IMPLEMENTED - NEEDS WINDOWS MANUAL SMOKE
+- [x] `docs/ROADMAP.md` TASK-192 entry added
+- [ ] Windows manual smoke — all 14 items PASS ← **PENDING**
+- [x] No runtime files modified
+- [x] No new bugs introduced
+
+---
+
 ## TASK-190 | Provider Settings UI Manual Smoke / Visual Check
 
 **Status:** DONE

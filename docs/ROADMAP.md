@@ -444,7 +444,9 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 **Screen Context v0.4 COMPLETE** — see `docs/SCREEN_CONTEXT_V04_RELEASE_SUMMARY.md`
 
-**Next planned task:** TASK-192 — (TBD)
+**Next planned task:** TASK-193 — (TBD)
+
+- TASK-192 IMPLEMENTED - NEEDS WINDOWS MANUAL SMOKE (2026-05-31): Voice / TTS Manual Smoke Closeout. Docs-only task. Expanded TASK-191 Voice/TTS regression baseline into an executable 14-item manual smoke checklist in `docs/VOICE_TTS_REGRESSION_NOTES.md`. Each item has preconditions, step-by-step checks, and explicit pass criteria. Areas: mic button visibility (3 scales), recording indicator + CSS mutual exclusion, transcribing guard (`isTranscribingActive()`), STT→/chat handoff + transcript cleared, thinking→reply bubble, TTS ON/OFF audible, Quiet Mode (idle suppressed / recording unaffected / TTS unchanged), voice settings panel (voice selector / rate / pitch / volume / localStorage / reset), recording↔text input bidirectional mutual exclusion, transcribing blocks recording, error message cleanliness (5 sub-scenarios: no mic / denied / STT unavailable / backend offline / empty audio — all clean Chinese), direct text input regression, Full App→Pet mirror. pet-renderer-smoke 226 PASS, pet-window-smoke 45 PASS, renderer-chat-smoke PASS, git diff --check CLEAN. Windows manual smoke PENDING.
 
 - TASK-191 DONE (2026-05-31): Voice / TTS regression baseline. Code survey of all Pet Window voice/STT/TTS files. Confirmed: no regressions from TASK-188–190. Automated baseline: 80 voice tests in pet-renderer-smoke (PASS), 7 STT/voice tests in pet-window-smoke (PASS), 14 backend STT tests (PASS). Documented: recording/transcribing/speaking state machine, 12-entry mutual exclusion matrix, 9-entry error taxonomy (all clean Chinese, no raw exceptions), TTS settings reference (voice/rate/pitch/volume, localStorage persistence). Manual smoke checklist (8 scenarios). Known gaps: getUserMedia, speechSynthesis, faster-whisper quality, 30-sec timeout, Windows CT — all manual-only. No bugs found. Docs-only task: created `docs/VOICE_TTS_REGRESSION_NOTES.md`. 667 backend PASS. git diff --check CLEAN.
 

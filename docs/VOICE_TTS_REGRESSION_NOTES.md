@@ -172,73 +172,238 @@ All error messages are clean Chinese strings — no raw exceptions, no traceback
 
 ## Manual Smoke Checklist
 
+> Created: TASK-191 (2026-05-31). Expanded to executable 14-item form: TASK-192 (2026-05-31).
 > For use when running Pet Window in development. `npm start` with backend live.
+> Prerequisites: backend running (`uvicorn`), `npm start`, Pet Window open (click "Show Pet").
 
-### A. Mic Button / Recording
+---
 
-- [ ] Pet Window visible — mic button (🎤) visible in nav bar at S/M/L scales
-- [ ] Click mic → recording indicator (pulsing red dot) appears
-- [ ] Click mic again → recording stops, transcribing indicator (spinner) appears
-- [ ] Press Esc during recording → recording cancelled, no STT call, bubble shows idle
-- [ ] Click ✕ → recording cancelled cleanly
-- [ ] 30-second hard timeout: wait 30 s without stopping → auto-stop and STT attempt
+### 1. Pet Window Mic Button 可見性
 
-### B. Recording → Transcribing → Chat Handoff
+**Precondition:** Pet Window open at any scale (S / M / L).
 
-- [ ] Record a short phrase → STT completes → transcript sent to `/chat`
-- [ ] Pet bubble shows "thinking" during STT + chat
-- [ ] Pet reply renders in bubble, TTS speaks if enabled
-- [ ] `presenceState.voiceTranscript` is cleared after send (no stale transcript)
+- [ ] Mic button (🎤) visible in Pet nav bar at S scale (300×400)
+- [ ] Mic button visible at M scale (340×470)
+- [ ] Mic button visible at L scale (380×540)
+- [ ] Mic button not hidden by any CSS at the three scales
 
-### C. TTS On/Off
+**Pass:** Button present and not hidden at all three scales.
 
-- [ ] Pet menu "語音播放: 關" toggles TTS on → "語音播放: 開"
-- [ ] With TTS ON: reply from `/chat` is spoken via `speechSynthesis`
-- [ ] With TTS ON and recording starts: previous TTS speech is cancelled
-- [ ] TTS OFF: no speech on reply
+---
 
-### D. TTS Settings Panel
+### 2. 點 Mic 後 Recording Indicator 是否出現
 
-- [ ] Click "語音設定 ▶" → voice settings panel expands
-- [ ] Voice selector populates from `speechSynthesis.getVoices()`
-- [ ] Rate/pitch/volume sliders adjust values (displayed beside slider)
-- [ ] Values persist across Pet Window restart (localStorage)
-- [ ] "重設語音設定" resets all sliders to defaults (rate 1.00, pitch 1.00, volume 1.00)
+**Precondition:** Mic permission granted at OS level. Pet Window open.
 
-### E. Quiet Mode Interaction
+- [ ] Click mic button → `data-recording="true"` set on `#pet-mode-root`
+- [ ] Pulsing red recording indicator (`#pet-recording-indicator`) becomes visible
+- [ ] Text input panel (`.pet-direct-input-panel`) is hidden (CSS mutual exclusion)
+- [ ] TTS speaking indicator hidden during recording (CSS mutual exclusion)
 
-- [ ] Quiet Mode ON: idle rotation stops, bubble collapses
-- [ ] Quiet Mode ON: Pet hint text hidden
-- [ ] Quiet Mode ON: voice recording still works (not suppressed)
-- [ ] Quiet Mode ON: TTS still plays for chat replies
-- [ ] Quiet Mode OFF: idle rotation resumes after cooldown
+**Pass:** Red indicator visible; text input and speaking indicator hidden.
 
-### F. Error Message Cleanliness
+---
 
-- [ ] Recording with mic blocked → Chinese error, no raw exception in bubble
-- [ ] Backend down → STT offline message in Chinese, no raw traceback
-- [ ] faster-whisper not installed → "語音辨識目前不可用", no raw error
-- [ ] Empty audio → "沒有偵測到語音", no raw error
+### 3. 再點 Mic 後是否進入 Transcribing
 
-### G. Mutual Exclusion
+**Precondition:** Recording is active (step 2 passed).
 
-- [ ] During recording: Pet text input panel not visible
-- [ ] During transcribing: Pet text input panel not visible
-- [ ] During recording: TTS speaking indicator not visible
-- [ ] Open Pet direct text input → active recording is cancelled
+- [ ] Click mic again → `data-recording` clears / becomes false
+- [ ] `data-transcribing="true"` set on `#pet-mode-root`
+- [ ] Spinning transcribing indicator (`#pet-transcribing-indicator`) becomes visible
+- [ ] Text input panel still hidden during transcribing (CSS mutual exclusion)
+- [ ] Transcribing indicator disappears when STT completes (or errors out)
 
-### H. Pet Direct Text Input — Voice Regression
+**Pass:** Transcribing indicator visible after second click; input panel hidden throughout.
 
-- [ ] Type in Pet text field, submit → chat reply appears, bubble updates
-- [ ] Voice recording in progress: text input hidden
-- [ ] TTS speaks on direct input reply if TTS ON
-- [ ] No regression from TASK-189/190 Provider Settings changes (separate section)
+---
+
+### 4. STT 成功後 Transcript 是否送到 /chat
+
+**Precondition:** faster-whisper installed and `/stt/transcribe` available. Record a short audible phrase (e.g., "你好").
+
+- [ ] Transcribing indicator disappears → Pet bubble enters "thinking" state
+- [ ] Backend `/chat` receives the transcript (not raw audio bytes)
+- [ ] `presenceState.voiceTranscript` is cleared after send (no stale transcript on next recording)
+- [ ] DevTools Network tab (or backend log) confirms POST to `/chat` with `message` = transcript text
+
+**Pass:** Transcript delivered to `/chat`; thinking bubble shows; voice transcript cleared.
+
+---
+
+### 5. Pet 是否出現 Thinking → Reply
+
+**Precondition:** Step 4 passed; `/chat` responding.
+
+- [ ] Pet bubble shows "thinking" state (spinner / thinking text) while waiting for `/chat`
+- [ ] Pet mood expression changes to "focused" during thinking
+- [ ] On `/chat` response: bubble transitions to "speaking" or "long_reply" state
+- [ ] Reply text is clean character-facing text (no raw JSON, no traceback, no `source=` prefixes)
+- [ ] Pet expression updates to mood from response
+
+**Pass:** thinking → reply transition clean; no raw diagnostics in bubble text.
+
+---
+
+### 6. TTS ON 時是否會朗讀回覆
+
+**Precondition:** Pet menu → "語音播放: 關" → toggle to "語音播放: 開" (TTS enabled).
+
+- [ ] Pet menu shows "語音播放: 開" after toggle
+- [ ] After a `/chat` reply arrives: `speechSynthesis.speak()` fires → audible speech
+- [ ] `data-speaking="true"` set on `#pet-mode-root` during speech
+- [ ] Speech uses reply text (not thinking text, not error text)
+- [ ] When recording starts during TTS: previous speech cancelled (`stopPetSpeech()` called)
+
+**Pass:** Audible TTS after reply; `data-speaking` attribute correct; stopped on new recording.
+
+---
+
+### 7. TTS OFF 時是否不朗讀
+
+**Precondition:** TTS disabled (Pet menu shows "語音播放: 關").
+
+- [ ] Send a chat via voice → reply arrives → no audible speech
+- [ ] `data-speaking` attribute does not appear on `#pet-mode-root`
+- [ ] Send a chat via Pet direct text input → no audible speech
+- [ ] Toggle TTS OFF mid-reply: current speech stops; subsequent replies silent
+
+**Pass:** No speech fired when TTS is off.
+
+---
+
+### 8. Quiet Mode ON 時行為
+
+**Precondition:** Pet menu → toggle Quiet Mode ON.
+
+#### 8a. Idle Bubble Suppressed
+- [ ] Idle rotation stops — bubble stays collapsed or shows `idle_default` without cycling
+- [ ] Pet hint text (`#pet-hint`) hidden (CSS `display:none` when Quiet Mode ON)
+- [ ] No new idle-rotation texts cycle automatically
+
+#### 8b. Voice Recording 仍可用
+- [ ] Click mic → recording starts normally (Quiet Mode does NOT block recording)
+- [ ] Recording indicator appears; text input hidden
+- [ ] Record phrase → STT → `/chat` → reply → bubble updates normally
+
+#### 8c. Chat Reply TTS 行為符合設計
+- [ ] With TTS ON + Quiet Mode ON: TTS still fires for `"speaking"` / `"long_reply"` states
+- [ ] With TTS OFF + Quiet Mode ON: no speech (same as non-Quiet Mode)
+- [ ] Error/timeout states: TTS blocked by `speakPetReply` state guard (same as non-Quiet Mode)
+
+**Pass:** Idle suppressed; recording unaffected; TTS behaviour unchanged by Quiet Mode.
+
+---
+
+### 9. Voice Settings Panel
+
+**Precondition:** Pet menu → click "語音設定 ▶" to expand voice settings panel.
+
+- [ ] Panel expands; all controls visible: voice selector, rate, pitch, volume sliders, reset button
+- [ ] Voice selector (`#pet-tts-voice-select`) populates with system voices from `speechSynthesis.getVoices()`
+- [ ] Rate slider (`#pet-tts-rate`): range 0.7–1.3, step 0.05; default 1.00; value shown beside slider
+- [ ] Pitch slider (`#pet-tts-pitch`): range 0.8–1.3, step 0.05; default 1.00; value shown beside slider
+- [ ] Volume slider (`#pet-tts-volume`): range 0.0–1.0, step 0.05; default 1.00; value shown beside slider
+- [ ] Changing a slider → value label updates immediately
+- [ ] Settings persist across Pet Window close and reopen (localStorage: `pet_tts_rate`, `pet_tts_pitch`, `pet_tts_volume`, `pet_tts_voice`)
+- [ ] "重設語音設定" button resets all sliders to defaults (rate 1.00, pitch 1.00, volume 1.00)
+- [ ] Reset also clears voice selector to browser default
+
+**Pass:** All controls present, ranges correct, localStorage persistence confirmed, reset works.
+
+---
+
+### 10. 錄音時文字輸入是否隱藏或互斥
+
+**Precondition:** Pet Window open; `#pet-direct-input-panel` accessible.
+
+- [ ] Start recording → `.pet-direct-input-panel` not visible (CSS: `[data-recording="true"] .pet-direct-input-panel { display:none }`)
+- [ ] Transcribing state → `.pet-direct-input-panel` still hidden (CSS: `[data-transcribing="true"] .pet-direct-input-panel { display:none }`)
+- [ ] Open Pet direct text input during recording → `cancelPetVoiceRecording()` called → recording cancelled; text input opens
+- [ ] Start recording while text input open → `closePetDirectInput()` called → text input closes; recording starts
+
+**Pass:** Text input and recording are fully mutually exclusive in both directions.
+
+---
+
+### 11. Transcribing 時是否不能再次錄音
+
+**Precondition:** Recording active → stopped → transcribing state active.
+
+- [ ] Click mic during transcribing → `openPetVoiceRecording()` returns early (`isTranscribingActive()` guard)
+- [ ] No new recording starts while transcribing
+- [ ] Transcribing indicator remains visible; not replaced by recording indicator
+- [ ] After transcribing completes (or errors): mic can be clicked again normally
+
+**Pass:** `isTranscribingActive()` guard prevents re-recording; state machine remains consistent.
+
+---
+
+### 12. 錯誤情境文案是否乾淨
+
+**Test each error condition independently. All messages must be clean Chinese strings — no raw exceptions, no tracebacks, no internal field names.**
+
+#### 12a. 沒麥克風 (No Mic Device)
+- [ ] OS mic disabled / unplugged → click mic → bubble shows: **"找不到麥克風裝置。請確認麥克風已連接。"**
+- [ ] No raw `NotFoundError` or JS exception visible
+
+#### 12b. 權限拒絕 (Mic Permission Denied)
+- [ ] OS mic permission denied → click mic → bubble shows: **"麥克風權限被拒絕。請在系統設定中開啟麥克風權限。"**
+- [ ] No raw `NotAllowedError` visible
+
+#### 12c. STT Unavailable (faster-whisper Not Installed)
+- [ ] Backend running but `faster-whisper` not installed → after transcribing → bubble shows: **"語音辨識目前不可用。"**
+- [ ] Backend returns `{ status: "unavailable" }` — not a 500 error
+
+#### 12d. Backend Offline
+- [ ] Backend not running → after transcribing → bubble shows: **"後端離線，無法辨識語音。"**
+- [ ] No raw HTTP error / connection refused message visible
+
+#### 12e. Empty Audio
+- [ ] Record in silence (no speech) → transcribing completes → bubble shows: **"沒有偵測到語音，請再試一次。"**
+- [ ] Backend returns `{ status: "empty" }` — handled gracefully
+
+**Pass for each:** Clean Chinese message shown; no raw exception/traceback/field name visible.
+
+---
+
+### 13. Pet Direct Text Input 是否沒有被 Voice 狀態破壞
+
+**Precondition:** No voice activity. Ensure TTS OFF for clean test. Then TTS ON for step 3.
+
+- [ ] Open Pet direct text input (e.g., keyboard shortcut or menu) → input field appears
+- [ ] Type a message → submit → Pet bubble shows reply; Full App chat updates
+- [ ] Pet expression updates with mood from reply
+- [ ] With TTS ON: TTS speaks the reply from direct text input
+- [ ] Voice recording in progress → text input hidden (mutual exclusion — same as item 10)
+- [ ] No console errors related to Provider Settings changes (TASK-189/190 regression check)
+- [ ] `#pet-direct-input-panel` state not corrupted by previous voice recording/transcribing session
+
+**Pass:** Direct text input works independently; voice state does not corrupt it.
+
+---
+
+### 14. Full App Chat / Pet Reply Mirror 是否正常
+
+**Precondition:** Full App open; Pet Window open. Backend live.
+
+- [ ] Send chat in Full App → reply arrives in Full App chat area
+- [ ] Pet bubble mirrors the reply (IPC `pet:speech` fired from `renderer.js`)
+- [ ] Pet expression updates in Pet Window to match mood in reply
+- [ ] Pet bubble shows reply text only (no raw JSON, no `source=`, no diagnostics)
+- [ ] Voice recording from Pet Window does not crash or affect Full App chat display
+- [ ] TTS fires in Pet Window for mirrored reply (if TTS ON)
+- [ ] No console errors in either window
+
+**Pass:** Full App → Pet mirror works; voice path does not interfere with Full App chat.
 
 ---
 
 ## Findings
 
 **No bugs found.** All 101 automated voice/STT/TTS tests pass. No regressions introduced by TASK-188, TASK-189, or TASK-190 (which touched only Full App renderer files, not Pet Window).
+
+**TASK-192 status:** Manual smoke checklist expanded to 14 executable items (2026-05-31). Awaiting Windows manual smoke run.
 
 ### Areas with No Automated Test Coverage (Manual-only)
 
