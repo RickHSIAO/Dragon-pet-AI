@@ -329,6 +329,8 @@ function clearScreenshot() {
   updateAskButtonState();
   setAnalyzeScreenStatus("", false);
   setAnalyzeScreenSummary(null);
+  // Clear both capture status spans so neither shows stale "截圖完成" after clear.
+  setCaptureWindowStatus("", false);
   setCaptureScreenStatus("截圖已清除。", false);
 }
 

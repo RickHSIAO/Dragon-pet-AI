@@ -356,6 +356,8 @@ async function runAll(ctx) {
   await test179HintHiddenOnOcrFailure(ctx);
   await test179ClearHidesHint(ctx);
   await test179HintNeverPostsToChat(ctx);
+  // TASK-188 UX polish: clear also resets window capture status
+  await test188ClearWindowStatusAfterClear(ctx);
 }
 
 module.exports = { runAll };
@@ -1385,4 +1387,29 @@ async function test179HintNeverPostsToChat(ctx) {
   const chatCalls = state.calls.filter((c) => c.url.endsWith("/chat")).length;
   assert.equal(chatCalls, 0,
     "ocr-ask-hint appearing must not auto-POST to /chat (TASK-179 safety)");
+}
+
+// ---------------------------------------------------------------------------
+// TASK-188 UX polish: window capture status cleared on clear (bug fix)
+// ---------------------------------------------------------------------------
+
+async function test188ClearWindowStatusAfterClear(ctx) {
+  // After window capture, clearScreenshot() must also clear capture-window-status.
+  // Previously it only cleared capture-screen-status, leaving a stale "截圖完成" message.
+  const { document } = await ctx.loadRenderer({
+    dragonPet: {
+      captureWindow: () =>
+        Promise.resolve({ ok: true, dataUrl: "data:image/png;base64,AAA" }),
+    },
+  });
+  document.getElementById("capture-window-btn").click();
+  await ctx.settle();
+  const statusBefore = ctx.textOf(document, "capture-window-status");
+  assert.ok(statusBefore.length > 0,
+    "window capture must show a success status before clear, got: " + statusBefore);
+  document.getElementById("clear-screen-btn").click();
+  await ctx.settle();
+  const statusAfter = ctx.textOf(document, "capture-window-status");
+  assert.ok(statusAfter.length === 0,
+    "capture-window-status must be empty after clearScreenshot() (TASK-188 UX polish), got: \"" + statusAfter + "\"");
 }

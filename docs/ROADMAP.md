@@ -444,7 +444,9 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 **Screen Context v0.4 COMPLETE** — see `docs/SCREEN_CONTEXT_V04_RELEASE_SUMMARY.md`
 
-**Next planned task:** TASK-188 — (v0.5 scope TBD; options: OCR quality polish, local vision research, or general assistant feature work)
+**Next planned task:** TASK-189 — (v0.5 scope TBD; options: OCR quality polish, local vision research, or general assistant feature work)
+
+- TASK-188 DONE (2026-05-30): Pet / Full App UX polish pass. Reviewed Full App header buttons, OCR flow, Pet Window bubble/menu/idle text, Provider Settings, Pet↔Full App navigation. Two fixes: (1) `clearScreenshot()` bug — after window capture, `capture-window-status` was not cleared on "清除截圖", leaving stale "視窗截圖完成。尚未儲存" message; added `setCaptureWindowStatus("", false)` to fix; added smoke test `test188ClearWindowStatusAfterClear`; (2) `version-tag` "v0.1 skeleton" → "dev" (stale since TASK-003). Created `docs/DESKTOP_UX_POLISH_NOTES.md` with full findings (8 issues: 2 fixed, 6 noted/deferred). Runtime: only minimal bug fix (no schema/API/provider/Screen Context change). renderer-chat-smoke PASS, pet-renderer 226 PASS, pet-window 45 PASS.
 
 - TASK-187 DONE (2026-05-30): Full project test baseline / CI readiness check. All 5 automated suites verified clean: `python -m pytest tests/ -q` → `667 passed, 1 warning`; `test_ocr_routes.py` → `34 passed`; `renderer-chat-smoke` PASS; `pet-renderer-smoke` 226 checks; `pet-window-smoke` 45 checks; `git diff --check` CLEAN. Updated `docs/DESKTOP_SMOKE_RUNBOOK.md`: promoted full backend suite (667) to primary gate in Quick Reference, added Suite 1 (full) + Suite 1a (OCR subset), updated When-to-Run and One-Shot block, updated baseline table, added `.pytest-tmp/` note, updated file map. CI readiness: backend suite is hermetic (no Ollama needed); desktop smokes need only Node.js; `--basetemp` resolves Windows CI tmp-path issues. No runtime files modified.
 

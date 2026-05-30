@@ -18157,3 +18157,52 @@ All 4 suites + `git diff --check` + `git status --short`
 - [x] `docs/DESKTOP_SMOKE_RUNBOOK.md` updated with full backend suite as primary gate.
 - [x] No runtime files modified.
 - [x] No safety boundaries changed.
+
+---
+
+## TASK-188 | Pet / Full App UX Polish Pass
+
+**Status:** DONE
+**Date:** 2026-05-30
+
+### Goal
+
+Small UX review pass across Full App header buttons, OCR flow, Pet Window, Provider Settings,
+and Pet↔Full App navigation. Find text inconsistencies, stale state hints, misleading messages.
+Fix only small, safe issues; document others as deferred.
+
+### Issues Found
+
+| # | Location | Issue | Action |
+|---|---|---|---|
+| 1 | `renderer.js` `clearScreenshot()` | After window capture, "清除截圖" cleared `capture-screen-status` but left `capture-window-status` stale showing "視窗截圖完成。尚未儲存..." | **FIXED** — added `setCaptureWindowStatus("", false)` |
+| 2 | `index.html` header | `version-tag` said "v0.1 skeleton" since TASK-003 | **FIXED** — changed to `dev` |
+| 3 | `#chat-source-status` initial value | "source: not_checked" looks like an error before first chat | NOTED — developer-facing, intentional |
+| 4 | Provider Settings labels | Technical: "Resolved provider", "key_status: not_configured" | NOTED — developer-facing section |
+| 5 | Pet idle/handoff text | "去 Full App 說話" may confuse new users | NOTED — established character design |
+| 6 | Pet Menu "Toggle Details" | Unclear what "details" refers to | NOTED — needs more design consideration |
+| 7 | "Save Non-secret Settings" button | Confusing label for new users | NOTED — intentional distinction |
+| 8 | Memory toggle hint | Technical `MEMORY_INJECTION_ENABLED` language | NOTED — developer-facing |
+
+### Files Modified
+
+| File | Change | Runtime? |
+|---|---|---|
+| `apps/desktop/src/renderer/renderer.js` | `clearScreenshot()` now also clears `captureWindowStatus` | Yes (bug fix) |
+| `apps/desktop/src/renderer/index.html` | `version-tag` "v0.1 skeleton" → "dev" | Yes (cosmetic) |
+| `apps/desktop/scripts/task171a-capture-smoke.js` | Added `test188ClearWindowStatusAfterClear` | No |
+| `docs/DESKTOP_UX_POLISH_NOTES.md` | Created — full UX findings doc (fixed + noted + reviewed) | No |
+| `docs/TASKS.md` | TASK-188 section added | No |
+| `docs/ROADMAP.md` | TASK-188 DONE entry; next task TASK-189 | No |
+
+### Acceptance Criteria
+
+- [x] `renderer-chat-smoke.js` — PASS (new `test188ClearWindowStatusAfterClear` passes).
+- [x] `pet-renderer-smoke.js` — `226 checks PASS` (no regression).
+- [x] `pet-window-smoke.js` — `45 checks PASS` (no regression).
+- [x] `git diff --check` — CLEAN.
+- [x] `clearScreenshot()` clears both capture status spans (no stale window status).
+- [x] `version-tag` updated from "v0.1 skeleton" to "dev".
+- [x] Safety boundaries unchanged — no auto-capture, no auto-OCR, no auto-/chat.
+- [x] No Provider/Ollama runtime behavior changed.
+- [x] `docs/DESKTOP_UX_POLISH_NOTES.md` created with full findings.
