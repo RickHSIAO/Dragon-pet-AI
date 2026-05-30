@@ -444,7 +444,9 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 **Screen Context v0.4 COMPLETE** — see `docs/SCREEN_CONTEXT_V04_RELEASE_SUMMARY.md`
 
-**Next planned task:** TASK-187 — (v0.5 scope TBD; options: OCR quality polish, local vision research, or general assistant feature work)
+**Next planned task:** TASK-188 — (v0.5 scope TBD; options: OCR quality polish, local vision research, or general assistant feature work)
+
+- TASK-187 DONE (2026-05-30): Full project test baseline / CI readiness check. All 5 automated suites verified clean: `python -m pytest tests/ -q` → `667 passed, 1 warning`; `test_ocr_routes.py` → `34 passed`; `renderer-chat-smoke` PASS; `pet-renderer-smoke` 226 checks; `pet-window-smoke` 45 checks; `git diff --check` CLEAN. Updated `docs/DESKTOP_SMOKE_RUNBOOK.md`: promoted full backend suite (667) to primary gate in Quick Reference, added Suite 1 (full) + Suite 1a (OCR subset), updated When-to-Run and One-Shot block, updated baseline table, added `.pytest-tmp/` note, updated file map. CI readiness: backend suite is hermetic (no Ollama needed); desktop smokes need only Node.js; `--basetemp` resolves Windows CI tmp-path issues. No runtime files modified.
 
 - TASK-186 DONE (2026-05-30): Provider settings persistence tests cleanup. Root cause: `tmp_path` fixture failed with `PermissionError [WinError 5]` on `C:\Users\雪狼丸\AppData\Local\Temp\pytest-of-RickHSIAO` — system temp ACL issue on this machine. Fix: added `addopts = --basetemp=.pytest-tmp` to `backend/pytest.ini`; added `.pytest-tmp/` and `.pytest-tmp*/` to `.gitignore`. Result: `23 passed, 1 warning` (persistence file alone); `667 passed, 1 warning` (full suite). No runtime files modified, no test logic changed.
 

@@ -18097,3 +18097,63 @@ Also added `.pytest-tmp/` and `.pytest-tmp*/` to the root `.gitignore` so the ge
 - [x] `python -m pytest tests/ -q` — `667 passed, 1 warning` (full suite clean).
 - [x] No runtime files modified.
 - [x] No test logic changed — only pytest configuration.
+
+---
+
+## TASK-187 | Full Project Test Baseline / CI Readiness Check
+
+**Status:** DONE
+**Date:** 2026-05-30
+
+### Goal
+
+Establish the complete automated test baseline for the project now that TASK-186 restored the full backend suite. Document the full baseline in `docs/DESKTOP_SMOKE_RUNBOOK.md`, update "when to run which suite" guidance, and confirm all suites pass cleanly.
+
+### Verified Baseline (2026-05-30)
+
+All suites run from a clean tree (`git status` = clean, up to date with `origin/main`):
+
+| Suite | Command | Result |
+|---|---|---|
+| Full backend pytest | `python -m pytest tests/ -q` (from `backend/`) | `667 passed, 1 warning in ~6s` |
+| OCR pytest (subset) | `python -m pytest tests/test_ocr_routes.py -q` | `34 passed, 1 warning in ~2s` |
+| renderer-chat-smoke | `node apps/desktop/scripts/renderer-chat-smoke.js` | `renderer chat smoke: PASS` |
+| pet-renderer-smoke | `node apps/desktop/scripts/pet-renderer-smoke.js` | `pet renderer smoke complete (226 checks)` |
+| pet-window-smoke | `node apps/desktop/scripts/pet-window-smoke.js` | `pet window smoke complete (45 checks)` |
+| `git diff --check` | — | CLEAN (no whitespace errors) |
+
+### CI Readiness Assessment
+
+**Pre-commit minimum bar (fast, ~10s total):**
+1. Full backend pytest: `python -m pytest tests/ -q` — 667 tests, ~6s
+2. Relevant desktop smoke (based on changed files)
+3. `git diff --check`
+
+**Full regression bar (before cross-cutting commits):**
+All 4 suites + `git diff --check` + `git status --short`
+
+**Future CI notes:**
+- Backend suite is hermetic (no external calls, no Ollama needed, `sqlite:///:memory:`). Suitable for standard CI runner.
+- Desktop smokes require only Node.js (no Electron runtime). Suitable for CI with `node` available.
+- Tesseract binary not required — OCR probes are mocked in `test_ocr_routes.py`.
+- `--basetemp=.pytest-tmp` in `pytest.ini` avoids Windows system-temp permission issues; on Linux CI the default basetemp works fine.
+
+### Files Modified
+
+| File | Change | Runtime? |
+|---|---|---|
+| `docs/DESKTOP_SMOKE_RUNBOOK.md` | Upgraded Quick Reference to full backend suite (667); added Suite 1 (full) + Suite 1a (OCR subset); updated When-to-Run, One-Shot block, baseline table, file map, common failures; added `.pytest-tmp/` note | No |
+| `docs/TASKS.md` | TASK-187 section added | No |
+| `docs/ROADMAP.md` | TASK-187 DONE entry | No |
+
+### Acceptance Criteria
+
+- [x] `python -m pytest tests/ -q` — `667 passed, 1 warning`.
+- [x] `python -m pytest tests/test_ocr_routes.py -q` — `34 passed, 1 warning`.
+- [x] `renderer-chat-smoke.js` — PASS.
+- [x] `pet-renderer-smoke.js` — `226 checks`.
+- [x] `pet-window-smoke.js` — `45 checks`.
+- [x] `git diff --check` — CLEAN.
+- [x] `docs/DESKTOP_SMOKE_RUNBOOK.md` updated with full backend suite as primary gate.
+- [x] No runtime files modified.
+- [x] No safety boundaries changed.
