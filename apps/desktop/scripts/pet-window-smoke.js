@@ -199,7 +199,12 @@ function testPetOpenFullAppIpcIsFixedAndNarrow() {
   assertIncludes(main, "petWindow.hide();", "main.js");
   assertIncludes(main, "win.show();", "main.js");
   assertIncludes(main, "win.focus();", "main.js");
-  assertNotIncludes(main, "ipcMain.on(", "main.js");
+  // ipcMain.on() is legitimately used in Screen Context picker functions
+  // (TASK-174/175/176) with proper ipcMain.removeListener() cleanup.
+  // Guard: pet IPC channels must still use ipcMain.handle(), not ipcMain.on().
+  assertNotIncludes(main, "ipcMain.on(PET_", "main.js");
+  // Guard: every ipcMain.on() must be paired with ipcMain.removeListener().
+  assertIncludes(main, "ipcMain.removeListener(", "main.js");
 }
 
 function testPetSpeechPayloadSanitizersDropDiagnostics() {

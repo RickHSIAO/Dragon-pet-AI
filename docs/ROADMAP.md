@@ -444,7 +444,9 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 **Screen Context v0.4 COMPLETE** — see `docs/SCREEN_CONTEXT_V04_RELEASE_SUMMARY.md`
 
-**Next planned task:** TASK-183 — (v0.5 scope TBD; options: OCR quality polish, local vision research, or general assistant feature work)
+**Next planned task:** TASK-184 — (v0.5 scope TBD; options: OCR quality polish, local vision research, or general assistant feature work)
+
+- TASK-183 DONE (2026-05-30): General app regression / startup smoke cleanup. Found and fixed a pre-existing test regression in `pet-window-smoke.js` caused by Screen Context v0.4 picker IPC: `testPetOpenFullAppIpcIsFixedAndNarrow` asserted `assertNotIncludes(main, "ipcMain.on(")` which was correct before v0.4 but TASK-174/175/176 legitimately added `ipcMain.on()` for picker event channels (all scoped, all paired with `ipcMain.removeListener()`). Replaced overly-broad assertion with two precise guards: (1) `assertNotIncludes(main, "ipcMain.on(PET_")` — pet IPC still uses handle-only; (2) `assertIncludes(main, "ipcMain.removeListener(")` — cleanup pattern exists. All four suites now pass: renderer-chat-smoke PASS, pet-renderer-smoke 226 PASS, pet-window-smoke 45 PASS, OCR pytest 34 PASS.
 
 - TASK-182 DONE - DOCS-ONLY (2026-05-30): Screen Context stability cleanup / post-release regression pass. Automated test re-verification: 34 OCR pytest PASS, renderer-chat-smoke PASS, git diff --check CLEAN. Docs inconsistencies found and fixed: (1) `SCREEN_CONTEXT_V04_RELEASE_SUMMARY.md` header/TASK-179 smoke row/sign-off omitted TASK-181; (2) `SCREEN_CONTEXT_RELEASE_SMOKE_CHECKLIST.md` Purpose scope outdated (TASK-177→TASK-179), D2 missing hint-hide check, new C0 item for OCR ask hint, Related Docs updated to TASK-181; (3) `TASKS.md` TASK-181 §2 said "9" safety boundaries (table has 10). No runtime files modified.
 

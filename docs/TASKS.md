@@ -17896,3 +17896,60 @@ Post-release regression pass after Screen Context v0.4 was pushed. Verify all au
 - [x] No runtime files modified.
 - [x] No new features added.
 - [x] No safety boundaries changed.
+
+---
+
+## TASK-183 | General App Regression / Startup Smoke Cleanup
+
+**Status:** DONE
+**Date:** 2026-05-30
+**Type:** Post-release regression pass + smoke cleanup
+**Depends on:** TASK-182 DONE (post-release doc cleanup)
+
+### Goal
+
+Full-app regression smoke pass after Screen Context v0.4 封版. Run all three desktop smoke suites plus backend OCR tests. Fix any test breakage caused by v0.4 work that was not caught during individual task delivery.
+
+### Issue Found and Fixed
+
+**`pet-window-smoke.js` `testPetOpenFullAppIpcIsFixedAndNarrow` — FAIL (pre-existing regression from TASK-174/175/176)**
+
+The test contained `assertNotIncludes(main, "ipcMain.on(", "main.js")` which asserted that `main.js` contains no `ipcMain.on()` calls. This assertion was correct before Screen Context v0.4, when all IPC in `main.js` used `ipcMain.handle()`.
+
+Screen Context TASK-174/175/176 legitimately introduced `ipcMain.on()` for picker event IPC (display picker, region picker, window picker) — these use the one-way event pattern rather than request-response because the picker window fires events asynchronously when the user clicks. All six `ipcMain.on()` calls are:
+- Inside scoped async functions (`showDisplayPicker`, `showRegionOverlay`, `showWindowPicker`)
+- Properly paired with `ipcMain.removeListener()` cleanup on settle/cancel
+
+**Fix:** Replaced the overly-broad assertion with two precise guards:
+1. `assertNotIncludes(main, "ipcMain.on(PET_", "main.js")` — pet IPC channels must still use `ipcMain.handle()` only
+2. `assertIncludes(main, "ipcMain.removeListener(", "main.js")` — all `ipcMain.on()` listeners must have cleanup
+
+This preserves the original intent (pet IPC stays narrow/handle-based) while allowing picker IPC to use the appropriate pattern.
+
+### Smoke Results
+
+| Suite | Before fix | After fix |
+|---|---|---|
+| `renderer-chat-smoke.js` | PASS | PASS |
+| `pet-renderer-smoke.js` | PASS (226 checks) | PASS (226 checks) |
+| `pet-window-smoke.js` | **FAIL** (`testPetOpenFullAppIpcIsFixedAndNarrow`) | **PASS** (45 checks) |
+| `pytest tests/test_ocr_routes.py` | 34 PASS | 34 PASS |
+
+### Files Modified
+
+| File | Change | Runtime? |
+|---|---|---|
+| `apps/desktop/scripts/pet-window-smoke.js` | Replace overly-broad `assertNotIncludes(main, "ipcMain.on(")` with two precise guards | No (test-only) |
+| `docs/TASKS.md` | TASK-183 section added | No |
+| `docs/ROADMAP.md` | TASK-183 DONE entry; next task updated | No |
+
+### Acceptance Criteria
+
+- [x] `renderer-chat-smoke.js` — PASS.
+- [x] `pet-renderer-smoke.js` — PASS (226 checks).
+- [x] `pet-window-smoke.js` — PASS (45 checks).
+- [x] `pytest tests/test_ocr_routes.py` — 34 PASS.
+- [x] `git diff --check` — CLEAN.
+- [x] No runtime behavior changed.
+- [x] No new features added.
+- [x] No safety boundaries changed.
