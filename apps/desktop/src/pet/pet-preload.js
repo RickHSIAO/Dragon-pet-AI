@@ -10,12 +10,23 @@ const PET_QUIET_MODE_SET_CHANNEL = "pet:set-quiet-mode";  // TASK-162
 const PET_SCALE_SET_CHANNEL = "pet:set-scale";            // TASK-166B
 const PET_CLICK_THROUGH_SET_CHANNEL = "pet:set-click-through";  // TASK-166D
 const PET_STT_TRANSCRIBE_CHANNEL = "stt:transcribe";           // TASK-167B
+const PET_CHAT_MIRROR_CHANNEL = "pet:chat-mirror";             // TASK-193
 
 function sanitizePetSpeechPayload(payload = {}) {
   return {
     reply: typeof payload.reply === "string" ? payload.reply : "",
     mood: typeof payload.mood === "string" ? payload.mood : "neutral",
     source: typeof payload.source === "string" ? payload.source : "unknown",
+  };
+}
+
+// TASK-193: sanitize mirror payload before sending to main — text-only, no blobs.
+function sanitizeMirrorPayload(payload = {}) {
+  return {
+    userMessage: typeof payload.userMessage === "string" ? payload.userMessage.slice(0, 2000) : "",
+    reply: typeof payload.reply === "string" ? payload.reply.slice(0, 800) : "",
+    mood: typeof payload.mood === "string" ? payload.mood.slice(0, 30) : "neutral",
+    source: typeof payload.source === "string" ? payload.source.slice(0, 30) : "unknown",
   };
 }
 
@@ -47,5 +58,8 @@ contextBridge.exposeInMainWorld(
     // TASK-167B: send audio ArrayBuffer to main for STT transcription via backend.
     // Returns Promise<{transcript: string, status: string}>.
     transcribeAudio: (arrayBuffer) => ipcRenderer.invoke(PET_STT_TRANSCRIBE_CHANNEL, arrayBuffer),
+    // TASK-193: send user text + AI reply to Full App chat via IPC bridge.
+    // Payload is text-only; main sanitizes and forwards to fullAppWindow if available.
+    mirrorChatToFullApp: (payload) => ipcRenderer.invoke(PET_CHAT_MIRROR_CHANNEL, sanitizeMirrorPayload(payload)),
   })
 );

@@ -25,6 +25,8 @@ const PET_QUIET_MODE_SET_CHANNEL = "pet:set-quiet-mode";  // TASK-162
 const PET_SCALE_SET_CHANNEL = "pet:set-scale";            // TASK-166B
 const PET_CLICK_THROUGH_SET_CHANNEL = "pet:set-click-through";  // TASK-166D
 const PET_STT_TRANSCRIBE_CHANNEL = "stt:transcribe";           // TASK-167B
+const PET_CHAT_MIRROR_CHANNEL = "pet:chat-mirror";             // TASK-193: Pet → main → Full App
+const PET_CHAT_MIRROR_RECEIVED_CHANNEL = "pet:chat-mirror-received";  // TASK-193: main → Full App
 const SCREEN_CAPTURE_ONCE_CHANNEL    = "screen:capture-once";      // TASK-171A
 const SCREEN_PICKER_SELECTED_CHANNEL = "screen-picker:selected";  // TASK-174
 const SCREEN_PICKER_CANCEL_CHANNEL   = "screen-picker:cancel";    // TASK-174
@@ -46,6 +48,7 @@ const PET_WINDOW_STATE_FILE = "pet-window-state.json";
 const PET_WINDOW_EDGE_MARGIN = 24;
 const PET_WINDOW_SAVE_DEBOUNCE_MS = 300;
 const PET_SPEECH_REPLY_MAX_LENGTH = 800;
+const PET_CHAT_MIRROR_USER_MAX_LENGTH = 2000;  // TASK-193: max user message chars forwarded to Full App
 
 let fullAppWindow = null;
 let petWindow = null;
@@ -950,6 +953,29 @@ ipcMain.handle(PET_STT_TRANSCRIBE_CHANNEL, (_event, arrayBuffer) => {
     req.write(body);
     req.end();
   });
+});
+
+// TASK-193: receive Pet Window chat event and forward to Full App chat area.
+// Payload contains user text + AI reply — text-only, no audio blob, no base64.
+// No-op if fullAppWindow is unavailable or destroyed.
+ipcMain.handle(PET_CHAT_MIRROR_CHANNEL, (_event, payload = {}) => {
+  const userMessage = typeof payload.userMessage === "string"
+    ? payload.userMessage.slice(0, PET_CHAT_MIRROR_USER_MAX_LENGTH) : "";
+  const reply = typeof payload.reply === "string"
+    ? payload.reply.slice(0, PET_SPEECH_REPLY_MAX_LENGTH) : "";
+  const mood = typeof payload.mood === "string" ? payload.mood.slice(0, 30) : "neutral";
+  const source = typeof payload.source === "string" ? payload.source.slice(0, 30) : "unknown";
+
+  if (!userMessage || !reply) {
+    return { ok: false, reason: "empty_payload" };
+  }
+
+  if (!fullAppWindow || fullAppWindow.isDestroyed()) {
+    return { ok: false, reason: "full_app_unavailable" };
+  }
+
+  fullAppWindow.webContents.send(PET_CHAT_MIRROR_RECEIVED_CHANNEL, { userMessage, reply, mood, source });
+  return { ok: true };
 });
 
 app.whenReady().then(() => {

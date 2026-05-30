@@ -654,6 +654,44 @@ function testSttTranscribeAudioBlobFunctionsInRenderer() {
     "pet-renderer.js -- transcribeAudioBlob does not call fetch() directly");
 }
 
+// ---------------------------------------------------------------------------
+// TASK-193: Pet chat mirror IPC channel checks
+// ---------------------------------------------------------------------------
+
+function testTask193ChatMirrorChannelInPetPreload() {
+  const preload = readText(petPreloadPath);
+  assertIncludes(preload, 'PET_CHAT_MIRROR_CHANNEL = "pet:chat-mirror"', "pet-preload.js");
+  assertIncludes(preload, "mirrorChatToFullApp:", "pet-preload.js");
+  assertIncludes(preload, "ipcRenderer.invoke(PET_CHAT_MIRROR_CHANNEL", "pet-preload.js");
+  assertIncludes(preload, "sanitizeMirrorPayload", "pet-preload.js");
+}
+
+function testTask193ChatMirrorChannelInMain() {
+  const main = readText(mainPath);
+  assertIncludes(main, 'PET_CHAT_MIRROR_CHANNEL = "pet:chat-mirror"', "main.js");
+  assertIncludes(main, 'PET_CHAT_MIRROR_RECEIVED_CHANNEL = "pet:chat-mirror-received"', "main.js");
+  assertIncludes(main, "ipcMain.handle(PET_CHAT_MIRROR_CHANNEL", "main.js");
+}
+
+function testTask193ChatMirrorChannelInRendererPreload() {
+  const preload = readText(rendererPreloadPath);
+  assertIncludes(preload, 'PET_CHAT_MIRROR_RECEIVED_CHANNEL = "pet:chat-mirror-received"', "renderer/preload.js");
+  assertIncludes(preload, "onChatMirrorFromPet", "renderer/preload.js");
+  assertIncludes(preload, "ipcRenderer.on(PET_CHAT_MIRROR_RECEIVED_CHANNEL", "renderer/preload.js");
+  assertIncludes(preload, "ipcRenderer.removeListener(PET_CHAT_MIRROR_RECEIVED_CHANNEL", "renderer/preload.js");
+}
+
+function testTask193MainMirrorHandlerSanitizesPayload() {
+  const main = readText(mainPath);
+  // handler must sanitize userMessage and reply (slice to max length)
+  assertIncludes(main, "PET_CHAT_MIRROR_USER_MAX_LENGTH", "main.js");
+  assertIncludes(main, "PET_SPEECH_REPLY_MAX_LENGTH", "main.js mirror uses reply max");
+  // must be no-op when fullAppWindow missing
+  assertIncludes(main, "full_app_unavailable", "main.js mirror handler must return ok:false when Full App unavailable");
+  // must guard empty payload
+  assertIncludes(main, "empty_payload", "main.js mirror handler must return ok:false for empty payload");
+}
+
 function run() {
   const tests = [
     testMainHasPetWindowPrototype,
@@ -709,6 +747,11 @@ function run() {
     testSttIpcHandlerInMain,
     testSttHandlerNoPersistenceInMain,
     testSttTranscribeAudioBlobFunctionsInRenderer,
+    // TASK-193
+    testTask193ChatMirrorChannelInPetPreload,
+    testTask193ChatMirrorChannelInMain,
+    testTask193ChatMirrorChannelInRendererPreload,
+    testTask193MainMirrorHandlerSanitizesPayload,
   ];
 
   for (const test of tests) {

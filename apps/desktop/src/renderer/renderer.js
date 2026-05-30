@@ -2156,6 +2156,23 @@ msgInput.addEventListener("input", () => {
   msgInput.style.height = Math.min(msgInput.scrollHeight, 100) + "px";
 });
 
+// TASK-193: append Pet Window chat messages (user text + AI reply) to Full App chat.
+// Fired by main process when Pet Window completes a successful /chat call.
+// Payload is text-only — no audio blob, no base64, no raw diagnostics.
+// No-op if window.dragonPet.onChatMirrorFromPet is unavailable (test env, preload absent).
+function setupPetChatMirrorListener() {
+  const api = typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null;
+  if (!api || typeof api.onChatMirrorFromPet !== "function") return;
+  api.onChatMirrorFromPet(function (payload) {
+    if (!payload.userMessage || !payload.reply) return;
+    appendMessage("user", payload.userMessage, { autoScroll: true });
+    appendMessage("pet", payload.reply);
+    maybeScrollChatToBottom();
+    setMood(payload.mood);
+  });
+}
+setupPetChatMirrorListener();
+
 // TASK-108: idle timer — reset activity on user interactions.
 // Adding extra listeners on existing elements is intentional (stacking is fine).
 // Guards for window/document: addEventListener may be absent in test environments.

@@ -4446,7 +4446,7 @@ function testHandlePetVoiceChatSendForcesCTOff() {
 function testHandlePetVoiceChatSendHandlesErrors() {
   const renderer = readText(petRendererPath);
   const fnIdx = renderer.indexOf("async function handlePetVoiceChatSend(");
-  const fnText = renderer.slice(fnIdx, fnIdx + 1200);
+  const fnText = renderer.slice(fnIdx, fnIdx + 1500);
   assert(fnText.includes("isPetChatTimeoutError"), "handlePetVoiceChatSend must check isPetChatTimeoutError");
   assert(fnText.includes("isFetchNetworkError"), "handlePetVoiceChatSend must check isFetchNetworkError");
   assert(fnText.includes('"backend_offline"'), "handlePetVoiceChatSend must set backend_offline error state");
@@ -5072,6 +5072,13 @@ function testTask169ScopeChecks() {
     testTask169LoadSettingsOnInit,
     testTask169VoiceSettingsPanelToggleWired,
     testTask169ScopeChecks,
+    // TASK-193
+    testTask193MirrorFunctionExported,
+    testTask193HandleVoiceChatCallsMirror,
+    testTask193HandleDirectSendCallsMirror,
+    testTask193MirrorOnlyOnSuccess,
+    testTask193MirrorNoAudioBlob,
+    testTask193MirrorPayloadStructure,
   ];
 
   for (const test of tests) {
@@ -5080,6 +5087,60 @@ function testTask169ScopeChecks() {
   }
 
   console.log(`[PASS] pet renderer smoke complete (${tests.length} checks)`);
+}
+
+// ---------------------------------------------------------------------------
+// TASK-193: Pet Chat Mirror tests
+// ---------------------------------------------------------------------------
+
+function testTask193MirrorFunctionExported() {
+  const { mirrorPetChatToFullApp } = require(petRendererPath);
+  assert(typeof mirrorPetChatToFullApp === "function", "mirrorPetChatToFullApp must be exported");
+}
+
+function testTask193HandleVoiceChatCallsMirror() {
+  const renderer = readText(petRendererPath);
+  const fnIdx = renderer.indexOf("async function handlePetVoiceChatSend(");
+  const fnText = renderer.slice(fnIdx, fnIdx + 1500);
+  assertIncludes(fnText, "mirrorPetChatToFullApp(transcript, data)", "handlePetVoiceChatSend must call mirrorPetChatToFullApp with transcript");
+}
+
+function testTask193HandleDirectSendCallsMirror() {
+  const renderer = readText(petRendererPath);
+  const fnIdx = renderer.indexOf("async function handlePetDirectSend(");
+  const fnText = renderer.slice(fnIdx, fnIdx + 2200);
+  assertIncludes(fnText, "mirrorPetChatToFullApp(value, data)", "handlePetDirectSend must call mirrorPetChatToFullApp with value");
+}
+
+function testTask193MirrorOnlyOnSuccess() {
+  const renderer = readText(petRendererPath);
+  const fnIdx = renderer.indexOf("function mirrorPetChatToFullApp(");
+  const fnText = renderer.slice(fnIdx, fnIdx + 600);
+  // mirror function must guard on non-empty userMessage and reply
+  assertIncludes(fnText, "typeof userMessage !== \"string\"", "mirrorPetChatToFullApp must guard userMessage type");
+  assertIncludes(fnText, "typeof data.reply !== \"string\"", "mirrorPetChatToFullApp must guard reply type");
+  // must not use fetch — text-only IPC call
+  assertNotIncludes(fnText, "fetch(", "mirrorPetChatToFullApp must not call fetch");
+}
+
+function testTask193MirrorNoAudioBlob() {
+  const renderer = readText(petRendererPath);
+  const fnIdx = renderer.indexOf("function mirrorPetChatToFullApp(");
+  const fnText = renderer.slice(fnIdx, fnIdx + 600);
+  assertNotIncludes(fnText, "Blob", "mirrorPetChatToFullApp must not reference Blob");
+  assertNotIncludes(fnText, "ArrayBuffer", "mirrorPetChatToFullApp must not reference ArrayBuffer");
+  assertNotIncludes(fnText, "base64", "mirrorPetChatToFullApp must not reference base64");
+  assertNotIncludes(fnText, "audioBlob", "mirrorPetChatToFullApp must not reference audioBlob");
+}
+
+function testTask193MirrorPayloadStructure() {
+  const renderer = readText(petRendererPath);
+  const fnIdx = renderer.indexOf("function mirrorPetChatToFullApp(");
+  const fnText = renderer.slice(fnIdx, fnIdx + 600);
+  assertIncludes(fnText, "userMessage:", "mirrorPetChatToFullApp payload must include userMessage field");
+  assertIncludes(fnText, "reply:", "mirrorPetChatToFullApp payload must include reply field");
+  assertIncludes(fnText, "mood:", "mirrorPetChatToFullApp payload must include mood field");
+  assertIncludes(fnText, "source:", "mirrorPetChatToFullApp payload must include source field");
 }
 
 run().catch((error) => {

@@ -18212,6 +18212,108 @@ TASK-188, TASK-189, TASK-190 only touched Full App renderer files — Pet Window
 
 ---
 
+## TASK-193 | Mirror Pet Text / Voice Messages into Full App Chat
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-31
+
+### Goal
+
+When the user sends a message via Pet direct text input or Pet voice/STT, mirror both the user text and the AI reply into the Full App Chat area to form a unified conversation record.
+
+### Approach
+
+New narrow IPC channel `pet:chat-mirror` (Pet Window → main → Full App renderer):
+
+1. `pet-renderer.js` — new `mirrorPetChatToFullApp(userMessage, data)` helper; called from `handlePetVoiceChatSend` (transcript) and `handlePetDirectSend` (value) on successful /chat completion only
+2. `pet-preload.js` — expose `mirrorChatToFullApp(payload)` → `ipcRenderer.invoke("pet:chat-mirror", sanitizeMirrorPayload(payload))`; sanitize: userMessage ≤ 2000 chars, reply ≤ 800 chars, mood/source ≤ 30 chars each; no audio blob, no base64
+3. `main.js` — `ipcMain.handle("pet:chat-mirror", ...)`: slice fields to max lengths; no-op (ok:false) if fullAppWindow missing or payload empty; forward via `fullAppWindow.webContents.send("pet:chat-mirror-received", payload)`
+4. `renderer/preload.js` — expose `onChatMirrorFromPet(callback)` that listens on `"pet:chat-mirror-received"`; sanitize in listener; returns removeListener cleanup function
+5. `renderer.js` — `setupPetChatMirrorListener()` called at module level; guards empty userMessage/reply; calls `appendMessage("user", ...)` + `appendMessage("pet", ...)` + `maybeScrollChatToBottom()` + `setMood()`
+
+### Safety / Privacy Boundaries
+
+| Constraint | Implementation |
+|---|---|
+| No audio blob in IPC | `mirrorPetChatToFullApp` only accepts string `userMessage` + parsed `data.reply` — never a Blob or ArrayBuffer |
+| No base64 in IPC | payload contains only text fields; sanitized at pet-preload and main |
+| No auto-capture / monitoring | mirror only fires on user-initiated successful /chat |
+| STT empty/failed never mirrors | `handlePetVoiceChatSend` only calls mirror in try-block success path; STT errors go to catch |
+| Full App window unavailable is no-op | main handler returns `{ok:false, reason:"full_app_unavailable"}` if `fullAppWindow` is null/destroyed |
+| contextIsolation maintained | all channels go through contextBridge; no ipcRenderer exposed to renderer world |
+| IPC bridge is narrow | only `userMessage`, `reply`, `mood`, `source` — no raw diagnostics, no stack traces, no JSON dumps |
+
+### Files Modified
+
+| File | Change | Runtime? |
+|---|---|---|
+| `apps/desktop/src/pet/pet-renderer.js` | Added `mirrorPetChatToFullApp()` helper; called from `handlePetVoiceChatSend` and `handlePetDirectSend` on success | Yes |
+| `apps/desktop/src/pet/pet-preload.js` | Added `PET_CHAT_MIRROR_CHANNEL`, `sanitizeMirrorPayload()`, `mirrorChatToFullApp` in contextBridge | Yes |
+| `apps/desktop/src/main.js` | Added `PET_CHAT_MIRROR_CHANNEL`, `PET_CHAT_MIRROR_RECEIVED_CHANNEL`, `PET_CHAT_MIRROR_USER_MAX_LENGTH`; added `ipcMain.handle` forwarder | Yes |
+| `apps/desktop/src/renderer/preload.js` | Added `PET_CHAT_MIRROR_RECEIVED_CHANNEL`, `onChatMirrorFromPet()` in contextBridge | Yes |
+| `apps/desktop/src/renderer/renderer.js` | Added `setupPetChatMirrorListener()`, called at module level | Yes |
+| `apps/desktop/scripts/pet-renderer-smoke.js` | 6 TASK-193 tests; widened 2 slice windows (1200→1500, +2200) for `handlePetVoiceChatSend` and `handlePetDirectSend` | No |
+| `apps/desktop/scripts/pet-window-smoke.js` | 4 TASK-193 tests (IPC channel presence, main handler sanitization) | No |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | 5 TASK-193 tests (listener setup, mirror append, empty guards, missing API no-op) | No |
+| `docs/TASKS.md` | TASK-193 section added | No |
+| `docs/ROADMAP.md` | TASK-193 entry added; next planned task TASK-194 TBD | No |
+
+### Test Coverage
+
+| Test | Suite | What it verifies |
+|---|---|---|
+| `testTask193MirrorFunctionExported` | pet-renderer-smoke | `mirrorPetChatToFullApp` exported |
+| `testTask193HandleVoiceChatCallsMirror` | pet-renderer-smoke | `handlePetVoiceChatSend` calls mirror with `transcript` |
+| `testTask193HandleDirectSendCallsMirror` | pet-renderer-smoke | `handlePetDirectSend` calls mirror with `value` |
+| `testTask193MirrorOnlyOnSuccess` | pet-renderer-smoke | guards for non-empty string; no fetch in mirror fn |
+| `testTask193MirrorNoAudioBlob` | pet-renderer-smoke | no Blob / ArrayBuffer / base64 / audioBlob in mirror fn |
+| `testTask193MirrorPayloadStructure` | pet-renderer-smoke | payload has userMessage / reply / mood / source |
+| `testTask193ChatMirrorChannelInPetPreload` | pet-window-smoke | channel constant + sanitize + invoke in pet-preload.js |
+| `testTask193ChatMirrorChannelInMain` | pet-window-smoke | both channel constants + ipcMain.handle in main.js |
+| `testTask193ChatMirrorChannelInRendererPreload` | pet-window-smoke | received channel + onChatMirrorFromPet + on/removeListener in renderer/preload.js |
+| `testTask193MainMirrorHandlerSanitizesPayload` | pet-window-smoke | max length constants + empty_payload + full_app_unavailable guards |
+| `testTask193OnChatMirrorListenerSetup` | renderer-chat-smoke | setupPetChatMirrorListener + appendMessage calls in renderer.js |
+| `testTask193MirrorFromPetAppendsUserAndReply` | renderer-chat-smoke | fire callback → 2 messages appended (user + pet) |
+| `testTask193MirrorEmptyUserMessageIsNoOp` | renderer-chat-smoke | empty userMessage → no append |
+| `testTask193MirrorEmptyReplyIsNoOp` | renderer-chat-smoke | empty reply → no append |
+| `testTask193MirrorMissingApiIsNoOp` | renderer-chat-smoke | missing onChatMirrorFromPet → no crash |
+
+### Automated Suite Results
+
+| Suite | Result |
+|---|---|
+| `pet-renderer-smoke.js` | PASS — 232 checks (+6 new) |
+| `pet-window-smoke.js` | PASS — 49 checks (+4 new) |
+| `renderer-chat-smoke.js` | PASS (+5 new) |
+| `git diff --check` | CLEAN |
+
+### Acceptance Criteria
+
+- [x] Pet direct text input message appears in Full App Chat after send
+- [x] Pet voice/STT transcript appears in Full App Chat after STT success
+- [x] AI reply from Pet chat appears in Full App Chat
+- [x] STT failure / empty audio does not mirror anything to Full App
+- [x] Full App window missing → Pet chat continues normally (no-op)
+- [x] No audio blob / base64 / raw diagnostics in mirror payload
+- [x] `pet-renderer-smoke.js` — 232 checks PASS
+- [x] `pet-window-smoke.js` — 49 checks PASS
+- [x] `renderer-chat-smoke.js` — PASS
+- [x] `git diff --check` CLEAN
+- [x] contextIsolation maintained; IPC bridge is narrow
+- [x] Windows manual smoke — Pet direct input + voice mirror PASS ← **2026-05-31**
+
+### Windows Manual Smoke Results (2026-05-31)
+
+| # | Scenario | Result |
+|---|---|---|
+| 1 | Pet direct text input mirror | Pet Bubble shows reply; Full App Chat shows user text + reply | PASS |
+| 2 | Pet voice/STT mirror | STT transcript → Pet Bubble thinking→reply; Full App Chat shows transcript + reply | PASS |
+| 3 | STT empty / failure | No blank user message in Full App Chat; Pet Bubble shows clean error, no traceback | PASS |
+| 4 | Full App unavailable / hidden | Pet chat continues normally; no crash from mirror failure | PASS |
+| 5 | Regression | Full App chat, Full App→Pet reply mirror, Pet direct input, Pet voice/STT/TTS — no regression | PASS |
+
+---
+
 ## TASK-192 | Voice / TTS Manual Smoke Closeout
 
 **Status:** IMPLEMENTED - NEEDS WINDOWS MANUAL SMOKE

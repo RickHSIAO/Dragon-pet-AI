@@ -1958,6 +1958,104 @@ async function testTask190ProviderStatusSummaryCloudActive() {
 }
 
 
+// ---------------------------------------------------------------------------
+// TASK-193: Pet Chat Mirror tests
+// ---------------------------------------------------------------------------
+
+function testTask193OnChatMirrorListenerSetup() {
+  const renderer = fs.readFileSync(rendererPath, "utf8");
+  assert(renderer.includes("setupPetChatMirrorListener"), "renderer.js must define setupPetChatMirrorListener");
+  assert(renderer.includes("onChatMirrorFromPet"), "renderer.js must call onChatMirrorFromPet");
+  assert(renderer.includes("appendMessage(\"user\", payload.userMessage"), "mirror handler must append user message");
+  assert(renderer.includes("appendMessage(\"pet\", payload.reply"), "mirror handler must append pet reply");
+}
+
+async function testTask193MirrorFromPetAppendsUserAndReply() {
+  let mirrorCallback = null;
+  const { document } = await loadRenderer({
+    dragonPet: {
+      showPetWindow: async () => ({ ok: true }),
+      updatePetSpeech: async () => ({ ok: true }),
+      captureScreen: async () => ({ ok: false }),
+      captureWindow: async () => ({ ok: false }),
+      onChatMirrorFromPet: (cb) => { mirrorCallback = cb; return () => {}; },
+    },
+  });
+
+  assert(typeof mirrorCallback === "function", "onChatMirrorFromPet callback must be registered");
+
+  const chatArea = document.getElementById("chat-area");
+  const beforeCount = chatArea.children.length;
+
+  mirrorCallback({ userMessage: "Hello via Pet", reply: "Hi from Christina", mood: "happy", source: "llm_local" });
+  await settle();
+
+  const messages = chatArea.children.slice(beforeCount);
+  assert.equal(messages.length, 2, "mirror should append exactly 2 messages (user + pet)");
+  const userMsg = messages[0].children.map((c) => c.textContent).join(" ");
+  const petMsg  = messages[1].children.map((c) => c.textContent).join(" ");
+  assert.match(userMsg, /Hello via Pet/);
+  assert.match(petMsg, /Hi from Christina/);
+}
+
+async function testTask193MirrorEmptyUserMessageIsNoOp() {
+  let mirrorCallback = null;
+  const { document } = await loadRenderer({
+    dragonPet: {
+      showPetWindow: async () => ({ ok: true }),
+      updatePetSpeech: async () => ({ ok: true }),
+      captureScreen: async () => ({ ok: false }),
+      captureWindow: async () => ({ ok: false }),
+      onChatMirrorFromPet: (cb) => { mirrorCallback = cb; return () => {}; },
+    },
+  });
+
+  const chatArea = document.getElementById("chat-area");
+  const beforeCount = chatArea.children.length;
+
+  mirrorCallback({ userMessage: "", reply: "Some reply", mood: "neutral", source: "mock" });
+  await settle();
+
+  assert.equal(chatArea.children.length, beforeCount, "empty userMessage must not append any messages");
+}
+
+async function testTask193MirrorEmptyReplyIsNoOp() {
+  let mirrorCallback = null;
+  const { document } = await loadRenderer({
+    dragonPet: {
+      showPetWindow: async () => ({ ok: true }),
+      updatePetSpeech: async () => ({ ok: true }),
+      captureScreen: async () => ({ ok: false }),
+      captureWindow: async () => ({ ok: false }),
+      onChatMirrorFromPet: (cb) => { mirrorCallback = cb; return () => {}; },
+    },
+  });
+
+  const chatArea = document.getElementById("chat-area");
+  const beforeCount = chatArea.children.length;
+
+  mirrorCallback({ userMessage: "Hello", reply: "", mood: "neutral", source: "mock" });
+  await settle();
+
+  assert.equal(chatArea.children.length, beforeCount, "empty reply must not append any messages");
+}
+
+async function testTask193MirrorMissingApiIsNoOp() {
+  // With no dragonPet.onChatMirrorFromPet, renderer should not throw
+  const { document } = await loadRenderer({
+    dragonPet: {
+      showPetWindow: async () => ({ ok: true }),
+      updatePetSpeech: async () => ({ ok: true }),
+      captureScreen: async () => ({ ok: false }),
+      captureWindow: async () => ({ ok: false }),
+      // onChatMirrorFromPet intentionally absent
+    },
+  });
+  const chatArea = document.getElementById("chat-area");
+  // No crash — just verify the existing startup messages are present
+  assert(chatArea.children.length >= 1, "chat should have startup message");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -2041,6 +2139,12 @@ async function main() {
   // TASK-190: Provider Settings manual smoke closeout — edge case tests
   await testTask190ProviderStatusSummaryInvalidKey();
   await testTask190ProviderStatusSummaryCloudActive();
+  // TASK-193: Pet chat mirror tests
+  testTask193OnChatMirrorListenerSetup();
+  await testTask193MirrorFromPetAppendsUserAndReply();
+  await testTask193MirrorEmptyUserMessageIsNoOp();
+  await testTask193MirrorEmptyReplyIsNoOp();
+  await testTask193MirrorMissingApiIsNoOp();
   console.log("renderer chat smoke: PASS");
 }
 
