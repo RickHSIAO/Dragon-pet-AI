@@ -16755,7 +16755,7 @@ The following tasks are recommended for the v0.4+ or v0.5 Screen Context roadmap
 - **TASK-175** — Region selection screenshot capture.
 - **TASK-176** — Active-window screenshot capture.
 - **TASK-177** — OCR language/data installer checks for `chi_tra`. Adds `_probe_ocr_status()` / `get_ocr_status()` to `ocr_service.py`, exposes `GET /ocr/status` diagnostic endpoint, handles `selected_lang=None` cleanly, and documents Windows Tesseract installation.
-- **TASK-178** — Screen Context release smoke checklist.
+- **TASK-178** — Screen Context v0.4 release smoke checklist. Covers all capture modes (TASK-174/175/176), OCR analysis (TASK-172A/177), chat handoff (TASK-172B), privacy/safety boundaries, and regression. Checklist at `docs/SCREEN_CONTEXT_RELEASE_SMOKE_CHECKLIST.md`.
 - **TASK-179** — Optional Pet UI hint after OCR summary exists.
 - **TASK-180** — Optional Visual Model / Multimodal Screenshot Understanding (docs-only backlog note). Default remains OCR text-only; visual analysis requires explicit user opt-in, confirmation, and sensitive-data warning every time. Local vision model (e.g. LLaVA via Ollama) preferred; cloud vision requires separate opt-in plus cost/privacy warning. No background monitoring, no auto-send.
 
@@ -17524,6 +17524,71 @@ Actual OCR status on test machine:
 - [x] Windows installation guide documented (§5).
 - [x] No cloud OCR, no disk write, no screenshot persistence.
 - [x] Windows manual smoke PASS.
+
+---
+
+## TASK-178 | Screen Context v0.4 Release Smoke Checklist
+
+**Status:** DONE - DOCS-ONLY
+**Date:** 2026-05-30
+**Type:** Docs-only — v0.4 Screen Context release verification
+**Depends on:** TASK-172A DONE, TASK-172B DONE, TASK-174 DONE, TASK-175 DONE, TASK-176 DONE, TASK-177 DONE
+
+### Context
+
+TASK-178 collects all Screen Context v0.4 capabilities into a single checklist document for release verification. It does not add runtime code or change any existing behavior.
+
+The checklist is stored at `docs/SCREEN_CONTEXT_RELEASE_SMOKE_CHECKLIST.md` and covers:
+
+- **Pre-flight:** backend health + `GET /ocr/status` diagnostic
+- **Section A:** All three capture modes (display picker, region drag, window picker)
+- **Section B:** OCR analysis flow + chi_tra / eng fallback verification
+- **Section C:** Chat handoff — OCR text only, no image
+- **Section D:** Clear screenshot state reset
+- **Section E:** Privacy & safety prohibitions (no auto-capture, no background monitoring, no auto-OCR, no auto-/chat, no disk write, no cloud OCR, no image sent to AI)
+- **Section F:** Full App regression (chat, Pet, voice/STT, TTS, Quiet Mode, memory)
+
+### §1 — Checklist Summary
+
+| Section | Items | Focus |
+|---|---|---|
+| Pre-flight | P1–P6 | Backend + OCR status |
+| A — Capture Modes | A1-1 to A3-5 | TASK-174/175/176 |
+| B — OCR Analysis | B1–B9 | TASK-172A + TASK-177 |
+| C — Chat Handoff | C1–C7 | TASK-172B |
+| D — Clear Screenshot | D1–D4 | State reset |
+| E — Privacy & Safety | E1–E8 | Prohibition checks |
+| F — Regression | F1–F8 | Full App features |
+| **Total** | **43 items** | |
+
+### §2 — Known Limitations (documented, not blocking)
+
+- OCR output can contain UI noise (window chrome, icons) — expected Tesseract limitation.
+- Window picker list order is OS-dependent; does not reflect visual Z-order.
+- Minimized windows may return an empty capture thumbnail.
+- chi_tra fallback to eng degrades Traditional Chinese extraction quality.
+- Visual/multimodal analysis deferred to TASK-180 (backlog).
+
+### §3 — Scope Limits
+
+- No runtime code changes.
+- No new IPC channels.
+- No new backend endpoints.
+- No new UI elements.
+
+### Acceptance Criteria
+
+- [x] `docs/SCREEN_CONTEXT_RELEASE_SMOKE_CHECKLIST.md` created.
+- [x] §5 Recommended Next Tasks in TASK-173 section updated with TASK-178 description.
+- [x] TASK-178 section documented in `docs/TASKS.md`.
+- [x] `docs/ROADMAP.md` updated with TASK-178 entry.
+- [x] All capture modes covered in checklist (TASK-174/175/176).
+- [x] OCR analysis + language fallback covered (TASK-172A/177).
+- [x] Chat handoff covered (TASK-172B).
+- [x] Privacy & safety prohibitions documented (Section E, 8 items).
+- [x] Full App regression covered (Section F, 8 items).
+- [x] Known limitations documented.
+- [x] No runtime files modified.
 
 ---
 
