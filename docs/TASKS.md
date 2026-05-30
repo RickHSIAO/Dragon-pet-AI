@@ -16747,28 +16747,30 @@ All v0.4 Screen Context tasks passed Windows manual smoke:
 | TASK-172B | "問克莉絲蒂娜這個畫面" hidden until summary exists; cancel prevents `/chat`; confirm sends bounded text only; Christina replies normally. |
 | Cross-task regression | Chat / voice / TTS / Pet behavior: no regression across all tasks. |
 
-### §5 — Recommended Next Tasks
+### §5 — Recommended Next Tasks (all DONE as of 2026-05-30)
 
-The following tasks are recommended for the v0.4+ or v0.5 Screen Context roadmap:
+All recommended v0.4+ tasks have been completed:
 
-- **TASK-174** — Capture current mouse display / current active monitor. *(Recommended first — see §6.)*
-- **TASK-175** — Region selection screenshot capture.
-- **TASK-176** — Active-window screenshot capture.
-- **TASK-177** — OCR language/data installer checks for `chi_tra`. Adds `_probe_ocr_status()` / `get_ocr_status()` to `ocr_service.py`, exposes `GET /ocr/status` diagnostic endpoint, handles `selected_lang=None` cleanly, and documents Windows Tesseract installation.
-- **TASK-178** — Screen Context v0.4 release smoke checklist. Covers all capture modes (TASK-174/175/176), OCR analysis (TASK-172A/177), chat handoff (TASK-172B), privacy/safety boundaries, and regression. Checklist at `docs/SCREEN_CONTEXT_RELEASE_SMOKE_CHECKLIST.md`.
-- **TASK-179** — Optional Pet UI hint after OCR summary exists.
-- **TASK-180** — Optional Visual Model / Multimodal Screenshot Understanding (docs-only backlog note). Default remains OCR text-only; visual analysis requires explicit user opt-in, confirmation, and sensitive-data warning every time. Local vision model (e.g. LLaVA via Ollama) preferred; cloud vision requires separate opt-in plus cost/privacy warning. No background monitoring, no auto-send.
+| Task | Name | Status |
+|---|---|---|
+| TASK-174 | Click-to-select display picker | DONE — WINDOWS MANUAL SMOKE PASS |
+| TASK-175 | Region drag-to-select capture | DONE — WINDOWS MANUAL SMOKE PASS |
+| TASK-176 | Window picker capture | DONE — WINDOWS MANUAL SMOKE PASS |
+| TASK-177 | OCR language/data diagnostics (`chi_tra` probe, `GET /ocr/status`) | DONE — WINDOWS MANUAL SMOKE PASS |
+| TASK-178 | Screen Context v0.4 release smoke checklist | DONE — DOCS-ONLY |
+| TASK-179 | Optional Pet UI hint after OCR summary | DONE |
+| TASK-180 | Visual model / multimodal backlog note | BACKLOG — DOCS-ONLY |
+| TASK-181 | Screen Context v0.4 final checkpoint | DONE — DOCS-ONLY |
 
-### §6 — Recommended Next Priority
+See `docs/SCREEN_CONTEXT_V04_RELEASE_SUMMARY.md` for the full v0.4 release record.
 
-**TASK-174: Capture current mouse display / active monitor** is the recommended next implementation task.
+### §6 — Recommended Next Priority (updated 2026-05-30)
 
-Rationale:
-- The user has a dual-monitor setup.
-- Current primary-display-only capture is safe but not always convenient — the user may be working on the secondary display.
-- Capturing the display where the mouse cursor is currently located is a targeted improvement that requires no cloud dependency, no background monitoring, and no change to the explicit-trigger-only model.
-- It remains fully user-triggered.
-- It does not require region selection or window enumeration.
+Screen Context v0.4 is complete. Recommended v0.5 directions:
+
+- **Quality/polish:** OCR post-processing to reduce UI noise; summary readability improvements.
+- **Local vision research (TASK-180):** LLaVA or Moondream via Ollama for diagram/icon-heavy screenshots — explicit opt-in only.
+- **General stability:** Non-screen assistant feature work if vision is not the next priority.
 
 ### §7 — Scope Limits
 
@@ -17770,3 +17772,82 @@ This task is a **docs-only backlog note**. It exists to ensure the safety constr
 - [x] Recommended approach documented (§3).
 - [x] Out-of-scope items documented (§4).
 - [x] No runtime files modified.
+
+---
+
+## TASK-181 | Screen Context v0.4 Final Checkpoint / Release Summary
+
+**Status:** DONE — DOCS-ONLY
+**Date:** 2026-05-30
+**Type:** Milestone checkpoint — v0.4 Screen Context complete
+**Covers:** TASK-171A through TASK-180
+
+### Goal
+
+Produce a final release summary for the Screen Context v0.4 milestone, recording all completed capabilities, safety boundaries, known limitations, test status, and v0.5 recommendations. No runtime changes.
+
+### Deliverables
+
+| File | Action |
+|---|---|
+| `docs/SCREEN_CONTEXT_V04_RELEASE_SUMMARY.md` | Created — full release record |
+| `docs/TASKS.md` | TASK-173 §5/§6 updated to reflect all tasks DONE; TASK-181 section added |
+| `docs/ROADMAP.md` | TASK-181 DONE entry added |
+
+### §1 — v0.4 Milestone Summary
+
+Screen Context v0.4 is the complete user-triggered screen awareness layer for dragon-pet-ai. It covers:
+
+**Capture (3 modes):**
+- Click-to-select display picker (TASK-174) — semi-transparent overlay per monitor
+- Region drag-to-select (TASK-175) — canvas overlay, crops to selected rectangle
+- Window picker (TASK-176) — dark opaque picker, window isolated by index
+
+**OCR Analysis:**
+- `POST /ocr/extract` with preprocessing pipeline (TASK-172A-OCR-BACKEND/POLISH)
+- Language probe: `chi_tra` preferred, `eng` fallback (TASK-177)
+- `GET /ocr/status` diagnostic endpoint (TASK-177)
+- All OCR user-confirmed, in-memory, text-only output ≤ 800 chars
+
+**Chat Handoff:**
+- "問克莉絲蒂娜這個畫面" — user-confirmed, OCR text only, no image (TASK-172B)
+- OCR ask hint — display-only, no auto-chat (TASK-179)
+
+**Docs / QA:**
+- 43-item release smoke checklist (TASK-178)
+- Multimodal/vision backlog note with 10 safety constraints (TASK-180)
+- Mid-milestone checkpoint (TASK-173)
+- This final release summary (TASK-181)
+
+### §2 — Safety Boundary Confirmation
+
+All 9 v0.4 safety boundaries are enforced and smoke-verified:
+
+1. No automatic capture (button-only)
+2. No background monitoring (no polling loop)
+3. No automatic OCR (explicit click + confirm)
+4. No automatic `/chat` (explicit click + confirm)
+5. No image/dataUrl to AI (OCR text only in `/chat`)
+6. No screenshot written to disk
+7. OCR text-only default (Tesseract local, no cloud)
+8. No Pet autonomous screen commentary
+9. `contextIsolation: true`, `nodeIntegration: false` on all windows
+
+### §3 — Test Status at Release
+
+| Suite | Result |
+|---|---|
+| `pytest tests/test_ocr_routes.py` | 34 PASS |
+| `node renderer-chat-smoke.js` | PASS |
+| `node task171a-capture-smoke.js` | exit 0 |
+| Windows manual smoke (all tasks) | PASS |
+
+### Acceptance Criteria
+
+- [x] `docs/SCREEN_CONTEXT_V04_RELEASE_SUMMARY.md` created (7 sections, complete release record).
+- [x] TASK-173 §5/§6 updated — all recommended tasks now marked DONE.
+- [x] TASK-181 section added to `docs/TASKS.md`.
+- [x] `docs/ROADMAP.md` updated with TASK-181 DONE entry.
+- [x] No runtime files modified.
+- [x] `git diff --check` — no whitespace errors.
+- [x] NUL bytes — none.
