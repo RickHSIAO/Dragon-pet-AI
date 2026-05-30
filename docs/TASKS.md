@@ -16670,3 +16670,126 @@ Smoke results:
 - Pet mirror / TTS follow existing final-reply rules only.
 - No screenshot persistence, no cloud OCR/vision, no background monitoring.
 - Chat / voice / TTS / Pet behavior: no regression.
+
+---
+
+## TASK-173 | v0.4 Screen Context Checkpoint / Release Summary
+
+**Status:** DONE - DOCS-ONLY CHECKPOINT
+**Date:** 2026-05-30
+**Type:** Checkpoint / Release Summary — v0.4 Screen Context (docs-only)
+**Depends on:** TASK-171A DONE, TASK-171A-MULTIMONITOR-SCOPE-FIX DONE, TASK-172 DONE, TASK-172A DONE, TASK-172A-OCR DONE, TASK-172A-OCR-BACKEND DONE, TASK-172A-OCR-POLISH DONE, TASK-172B DONE
+
+### Context
+
+The v0.4 Screen Context chain is complete. This checkpoint documents the completed milestone: what is now working, what safety and privacy boundaries are preserved, what known limitations remain, and what next tasks are recommended.
+
+No runtime files are modified in this task.
+
+### §1 — Completed Capability Summary
+
+The following capabilities are now implemented and Windows-manual-smoke-verified:
+
+- Full App can capture a screenshot by explicit user action ("擷取螢幕").
+- Capture is primary-display safe; secondary monitors are not silently included. If primary-display matching fails on a multi-monitor system, capture returns a clean `primary-display-ambiguous` error rather than silently capturing the virtual desktop.
+- Screenshot is held in renderer memory only — no disk save, no history, no cloud upload.
+- User can click "分析這張" to start OCR analysis.
+- A sensitive-content confirmation dialog appears before OCR runs; the user must explicitly confirm.
+- Backend local OCR runs via `POST /ocr/extract` (pytesseract, localhost only).
+- OCR preprocessing pipeline (grayscale → 2× upscale → contrast → sharpen) improves readability.
+- Cleaned OCR output appears in the Full App UI as "螢幕摘要" (max 800 chars; no raw base64 or provider internals shown).
+- After an OCR summary exists, the user can click "問克莉絲蒂娜這個畫面".
+- A second privacy confirmation appears before any `/chat` call; the user must explicitly confirm.
+- Only the bounded OCR summary text is sent to `/chat` — no dataUrl, no image bytes.
+- Christina's reply arrives through the normal Full App chat flow; Pet mirror and TTS follow existing final-reply rules.
+
+### §2 — Privacy and Safety Boundaries
+
+The following boundaries were preserved across all v0.4 Screen Context tasks and are verified by smoke tests and manual smoke:
+
+- No automatic screenshot capture — all capture is explicit user-triggered only.
+- No background screenshot monitoring or periodic capture.
+- No screenshot persistence — in-memory only; cleared by "清除截圖" or reload.
+- No processed image persistence — OCR preprocessing output not saved to disk.
+- No raw screenshot dataUrl sent to `/chat` at any point.
+- No image bytes sent to `/chat`.
+- No cloud OCR or cloud vision — all processing is local (pytesseract, localhost backend).
+- No automatic analysis-to-chat pipeline — OCR and chat handoff are two separate explicit user actions with separate confirmations.
+- No Pet autonomous commentary triggered by screenshot or OCR completion.
+- No Electron security weakening — `contextIsolation: true`, `nodeIntegration: false` unchanged.
+- User confirmation required before OCR and again before chat handoff.
+- All error messages are clean zh-TW strings — no raw tracebacks, base64 blobs, or provider internals exposed in the UI.
+
+### §3 — Known Limitations
+
+The following limitations are present as of this milestone and are candidates for future tasks:
+
+- OCR output can still contain UI noise (icon labels, tooltips, partial words near element boundaries).
+- OCR quality depends on Tesseract installation and available language data.
+- Traditional Chinese OCR requires `chi_tra.traineddata`; may degrade or error if absent.
+- Current capture targets the primary display only — no current-monitor selection, no mouse-monitor selection.
+- No region-selection capture — the full primary display is always captured.
+- No active-window capture.
+- No image-based visual reasoning — `/chat` receives a text OCR summary only, not real image input; visual layout, color, icons, and non-text information are lost.
+- The OCR summary can omit or mis-read content depending on font, contrast, language mix, or DPI.
+
+### §4 — Manual Smoke Summary
+
+All v0.4 Screen Context tasks passed Windows manual smoke:
+
+| Task | Smoke result |
+|---|---|
+| TASK-171A | Screenshot capture: explicit trigger, primary display only, no disk save. |
+| TASK-171A-MULTIMONITOR-SCOPE-FIX | Dual-monitor: primary only captured; secondary display excluded from OCR summary. |
+| TASK-172A | "分析這張" confirmation dialog shown; cancel prevents OCR; OCR fallback clean. |
+| TASK-172A-OCR-BACKEND | Backend local OCR via `/ocr/extract`; summary displayed correctly. |
+| TASK-172A-OCR-POLISH | OCR preprocessing improves readability; no raw base64 in UI. |
+| TASK-172B | "問克莉絲蒂娜這個畫面" hidden until summary exists; cancel prevents `/chat`; confirm sends bounded text only; Christina replies normally. |
+| Cross-task regression | Chat / voice / TTS / Pet behavior: no regression across all tasks. |
+
+### §5 — Recommended Next Tasks
+
+The following tasks are recommended for the v0.4+ or v0.5 Screen Context roadmap:
+
+- **TASK-174** — Capture current mouse display / current active monitor. *(Recommended first — see §6.)*
+- **TASK-175** — Region selection screenshot capture.
+- **TASK-176** — Active-window screenshot capture.
+- **TASK-177** — OCR language/data installer checks for `chi_tra`.
+- **TASK-178** — Screen Context release smoke checklist.
+- **TASK-179** — Optional Pet UI hint after OCR summary exists.
+- **TASK-180** — Optional visual model / local multimodal provider research (docs-only).
+
+### §6 — Recommended Next Priority
+
+**TASK-174: Capture current mouse display / active monitor** is the recommended next implementation task.
+
+Rationale:
+- The user has a dual-monitor setup.
+- Current primary-display-only capture is safe but not always convenient — the user may be working on the secondary display.
+- Capturing the display where the mouse cursor is currently located is a targeted improvement that requires no cloud dependency, no background monitoring, and no change to the explicit-trigger-only model.
+- It remains fully user-triggered.
+- It does not require region selection or window enumeration.
+
+### §7 — Scope Limits
+
+TASK-173 is docs-only. The following are explicitly out of scope:
+
+- No runtime code changes.
+- No cloud vision.
+- No autonomous Pet commentary.
+- No background screenshot watching.
+- No new provider architecture.
+- No `/chat` schema changes.
+
+### Acceptance Criteria
+
+- [x] TASK-173 checkpoint documented in `docs/TASKS.md`.
+- [x] `docs/ROADMAP.md` updated with TASK-173 DONE docs-only entry.
+- [x] Completed capabilities documented (§1).
+- [x] Privacy and safety boundaries documented (§2).
+- [x] Known limitations documented (§3).
+- [x] Manual smoke summary documented (§4).
+- [x] Next task options documented (§5).
+- [x] Recommended next priority documented (§6).
+- [x] Scope limits documented (§7).
+- [x] No runtime files modified.
