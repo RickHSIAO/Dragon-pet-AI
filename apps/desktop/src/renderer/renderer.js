@@ -83,6 +83,8 @@ const providerFallbackStatus = document.getElementById("provider-fallback-status
 const providerSettingsStatus = document.getElementById("provider-settings-status");
 const providerUsageSummary = document.getElementById("provider-usage-summary");
 const providerWarning = document.getElementById("provider-warning");
+// TASK-189: plain-English provider state summary
+const providerStatusSummaryEl = document.getElementById("provider-status-summary");
 // TASK-083: pet avatar expression area
 const petFace        = document.getElementById("pet-face");
 const petDisplayHint = document.getElementById("pet-display-hint");
@@ -809,6 +811,37 @@ function providerSummary(settings = currentProviderSettings) {
   return `provider: ${provider} | resolved: ${resolved} | model: ${model}`;
 }
 
+// TASK-189: plain-English description of the current provider state for the status summary bar.
+function calcProviderStatusSummary(settings) {
+  const provider = settings.provider || "mock";
+  const realEnabled = Boolean(settings.real_provider_enabled);
+  const llmEnabled = Boolean(settings.llm_chat_enabled);
+  const fallback = settings.fallback_to_mock !== false;
+  const keyStatus = settings.key_status || "not_configured";
+
+  if (!realEnabled || provider === "mock") {
+    return { text: "Current: Mock mode — no real AI connected.", state: "mock" };
+  }
+  if (provider === "ollama") {
+    if (!llmEnabled) {
+      return { text: "Current: Ollama selected — AI chat is disabled. Enable 'AI chat' to use it.", state: "warning" };
+    }
+    if (fallback) {
+      return { text: "Current: Ollama with fallback — real AI when available, mock on failure.", state: "warning" };
+    }
+    return { text: "Current: Ollama active — local AI connected.", state: "active" };
+  }
+  // Cloud provider
+  const keyOk = ["configured", "not_tested", "test_success"].includes(keyStatus);
+  if (!keyOk) {
+    return { text: `Current: ${provider} selected — API key not configured.`, state: "error" };
+  }
+  if (!llmEnabled) {
+    return { text: `Current: ${provider} selected — AI chat is disabled. Enable 'AI chat' to use it.`, state: "warning" };
+  }
+  return { text: `Current: ${provider} active — cloud AI connected.`, state: "active" };
+}
+
 function isOllamaChatPath(settings = currentProviderSettings) {
   return (
     (settings.provider === "ollama" || settings.resolved_provider === "ollama") &&
@@ -819,28 +852,28 @@ function isOllamaChatPath(settings = currentProviderSettings) {
 
 function sourceStatusMessage(source, settings = currentProviderSettings) {
   if (source === "llm_local") {
-    return "source=llm_local - local Ollama reply received through the backend.";
+    return "Ollama response received. Local AI is active.";
   }
   if (source === "llm_local_error") {
-    return "source=llm_local_error - local provider failed safely. The local model may still be loading; check Ollama server, model name, or timeout.";
+    return "Local AI failed — the model may still be loading. Check that Ollama is running and the model name is correct.";
   }
   if (source === "mock") {
     if (settings.resolved_provider === "ollama" && !settings.llm_chat_enabled) {
-      return "source=mock - LLM chat is disabled, so /chat is using mock.";
+      return "Using mock — AI chat is disabled. Enable 'AI chat' in Provider Settings to use Ollama.";
     }
     if (settings.resolved_provider === "ollama" && settings.fallback_to_mock !== false) {
-      return "source=mock - Ollama is configured, but fallback_to_mock is enabled or a provider failure fell back to mock.";
+      return "Using mock fallback — Ollama is configured but a provider error occurred and fallback is on.";
     }
     if (settings.provider === "ollama" || settings.resolved_provider === "ollama") {
-      return "source=mock - Ollama is selected but /chat resolved to mock. Refresh settings and check backend state.";
+      return "Using mock — Ollama is selected but not responding. Refresh Provider Settings.";
     }
-    return "source=mock - mock provider response.";
+    return "Using mock provider.";
   }
   if (source === "llm_real") {
-    return "source=llm_real - cloud provider response through the backend.";
+    return "Cloud AI response received.";
   }
   if (source === "llm_real_error") {
-    return "source=llm_real_error - cloud provider failed safely.";
+    return "Cloud AI failed. Check your API key and provider settings.";
   }
   if (source === "pending") {
     return isOllamaChatPath(settings)
@@ -848,7 +881,7 @@ function sourceStatusMessage(source, settings = currentProviderSettings) {
       : "Waiting for backend chat response.";
   }
   if (source === "backend_offline") {
-    return "source=backend_offline - backend is not reachable.";
+    return "Backend is not reachable. Make sure the backend is running.";
   }
   return "Chat source will appear after the next response.";
 }
@@ -1385,6 +1418,10 @@ function renderProviderSettings(settings) {
   currentProviderSettings = settings;
   syncChatRuntimeProviderStatus();
   updateKeyUIState(settings);
+  // TASK-189: update plain-English status summary
+  const { text: summaryText, state: summaryState } = calcProviderStatusSummary(settings);
+  providerStatusSummaryEl.textContent = summaryText;
+  providerStatusSummaryEl.className = `provider-status-summary ${summaryState}`;
 }
 
 async function loadProviderSettings() {
@@ -1414,7 +1451,7 @@ async function saveProviderSettings() {
     );
     return;
   }
-  setProviderSettingsStatus("Saving non-secret provider settings...");
+  setProviderSettingsStatus("Saving provider settings...");
 
   try {
     const body = {
@@ -1435,7 +1472,7 @@ async function saveProviderSettings() {
     });
     const settings = await parseJsonResponse(res);
     renderProviderSettings(settings);
-    setProviderSettingsStatus("Non-secret provider settings saved.");
+    setProviderSettingsStatus("Provider settings saved.");
   } catch (err) {
     setProviderSettingsStatus(formatBackendError(err), true);
   }
@@ -1525,7 +1562,7 @@ function updateKeyUIState(settings) {
   if (!isRealProvider) {
     testProviderConnectionBtn.title = "Configure a real provider before testing.";
   } else if (isLocalProvider && !realProviderEnabled) {
-    testProviderConnectionBtn.title = "Enable real provider (real_provider_enabled) before testing.";
+    testProviderConnectionBtn.title = "Enable 'Use real AI' in Provider Settings before testing.";
   } else if (isLocalProvider && isTestingConnection) {
     testProviderConnectionBtn.title = "Test in progress...";
   } else if (isLocalProvider) {
@@ -1534,7 +1571,7 @@ function updateKeyUIState(settings) {
   } else if (!keyExists) {
     testProviderConnectionBtn.title = "Save an API key before testing.";
   } else if (!realProviderEnabled) {
-    testProviderConnectionBtn.title = "Enable real provider (real_provider_enabled) before testing.";
+    testProviderConnectionBtn.title = "Enable 'Use real AI' in Provider Settings before testing.";
   } else if (isTestingConnection) {
     testProviderConnectionBtn.title = "Test in progress...";
   } else {
@@ -1741,7 +1778,7 @@ async function runTestConnection() {
     return;
   }
   if (!realProviderEnabled) {
-    setProviderTestMsg("Enable real provider (real_provider_enabled) before testing.", true);
+    setProviderTestMsg("Enable 'Use real AI' in Provider Settings before testing.", true);
     return;
   }
   if (isTestingConnection) {

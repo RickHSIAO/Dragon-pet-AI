@@ -655,6 +655,44 @@ textarea {
   word-break: break-all;
 }
 
+/* ── TASK-189: Provider status summary bar ─────────────────── */
+.provider-status-summary {
+  background: var(--pet-bubble);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 14px;
+  padding: 9px 12px;
+}
+.provider-status-summary:empty {
+  display: none;
+}
+.provider-status-summary.mock {
+  color: var(--text-muted);
+}
+.provider-status-summary.active {
+  border-color: #3a6b3a;
+  color: #6fd16f;
+}
+.provider-status-summary.warning {
+  border-color: #7a6020;
+  color: #f0c060;
+}
+.provider-status-summary.error {
+  border-color: #7a3030;
+  color: #ff8a8a;
+}
+
+/* ── TASK-189: Provider save note ─────────────────────────── */
+.provider-save-note {
+  color: var(--text-muted);
+  font-size: 12px;
+  grid-column: 1 / -1;
+  line-height: 1.5;
+  margin-top: -4px;
+}
+
 /* ── Memory-aware chat toggle (TASK-023) ─────────────────── */
 #provider-settings-section {
   background: var(--surface);

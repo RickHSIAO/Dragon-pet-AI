@@ -542,7 +542,7 @@ async function testSuccessfulLocalChatUpdatesMoodAndSourceStatus() {
 
   assert.equal(textOf(document, "mood-label"), "focused");
   assert.equal(textOf(document, "chat-source-status"), "source: llm_local");
-  assert.match(textOf(document, "chat-runtime-status"), /source=llm_local/);
+  assert.match(textOf(document, "chat-runtime-status"), /Ollama response received/i);
 
   const usageText = document
     .getElementById("provider-usage-summary")
@@ -617,7 +617,7 @@ async function testLocalProviderFailureWithoutFallbackIsVisible() {
   await sendChat(document, "local fail");
 
   assert.equal(textOf(document, "chat-source-status"), "source: llm_local_error");
-  assert.match(textOf(document, "chat-runtime-status"), /local provider failed safely/i);
+  assert.match(textOf(document, "chat-runtime-status"), /Local AI failed/i);
   assert.match(textOf(document, "chat-runtime-status"), /model may still be loading/i);
 }
 
@@ -630,7 +630,7 @@ async function testMockFallbackStateIsDistinguishable() {
   await sendChat(document, "fallback");
 
   assert.equal(textOf(document, "chat-source-status"), "source: mock");
-  assert.match(textOf(document, "chat-runtime-status"), /fallback_to_mock is enabled/i);
+  assert.match(textOf(document, "chat-runtime-status"), /Using mock fallback/i);
 
   const usageText = document
     .getElementById("provider-usage-summary")
@@ -1878,6 +1878,53 @@ async function testUpdatePetThinkingStateHandlesNoPetBridge() {
     "updatePetThinkingState must not crash when dragonPet bridge is absent");
 }
 
+// ---------------------------------------------------------------------------
+// TASK-189: Provider Settings UI Polish tests
+// ---------------------------------------------------------------------------
+
+function testTask189ProviderSettingsButtonText() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.match(html, /Save Provider Settings/);
+  assert.doesNotMatch(html, /Save Non-secret Settings/);
+}
+
+async function testTask189ProviderStatusSummaryMockMode() {
+  const { document } = await loadRenderer({
+    providerSettings: { provider: "mock", real_provider_enabled: false, llm_chat_enabled: false },
+  });
+  const summary = textOf(document, "provider-status-summary");
+  assert.match(summary, /Mock mode/i);
+}
+
+async function testTask189ProviderStatusSummaryOllamaActive() {
+  // default settings: ollama, real_provider_enabled: true, llm_chat_enabled: true, fallback_to_mock: false
+  const { document } = await loadRenderer();
+  const summary = textOf(document, "provider-status-summary");
+  assert.match(summary, /Ollama active/i);
+}
+
+async function testTask189ProviderStatusSummaryFallbackWarning() {
+  const { document } = await loadRenderer({
+    providerSettings: {
+      provider: "ollama",
+      real_provider_enabled: true,
+      llm_chat_enabled: true,
+      fallback_to_mock: true,
+    },
+  });
+  const summary = textOf(document, "provider-status-summary");
+  assert.match(summary, /fallback/i);
+}
+
+function testTask189SourceStatusMessagesNotRaw() {
+  // Verify that sourceStatusMessage-derived runtime messages no longer start with "source=xxx"
+  const rendererSrc = fs.readFileSync(rendererPath, "utf8");
+  assert.doesNotMatch(rendererSrc, /"source=llm_local/);
+  assert.doesNotMatch(rendererSrc, /"source=mock/);
+  assert.doesNotMatch(rendererSrc, /"source=llm_real/);
+  assert.doesNotMatch(rendererSrc, /"source=backend_offline/);
+}
+
 
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
@@ -1953,6 +2000,12 @@ async function main() {
   // TASK-171A: screenshot capture regression + scope tests
   const task171a = require("./task171a-capture-smoke.js");
   await task171a.runAll({ loadRenderer, sendChat, settle, textOf });
+  // TASK-189: Provider Settings UI polish tests
+  testTask189ProviderSettingsButtonText();
+  await testTask189ProviderStatusSummaryMockMode();
+  await testTask189ProviderStatusSummaryOllamaActive();
+  await testTask189ProviderStatusSummaryFallbackWarning();
+  testTask189SourceStatusMessagesNotRaw();
   console.log("renderer chat smoke: PASS");
 }
 

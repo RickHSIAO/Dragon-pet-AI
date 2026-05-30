@@ -18160,6 +18160,59 @@ All 4 suites + `git diff --check` + `git status --short`
 
 ---
 
+## TASK-189 | Provider Settings UI Polish Pass
+
+**Status:** DONE
+**Date:** 2026-05-30
+
+### Goal
+
+Polish the Full App Provider Settings section — labels, status messages, and save button text — so a general user can understand the current AI provider state without reading internal debug strings.
+
+### Scope
+
+- No runtime behavior change.
+- No backend, API schema, provider, key storage, or Screen Context change.
+- Text, labels, hints, new status summary element, and CSS only.
+
+### Issues Found and Fixed
+
+| # | Location | Issue | Action |
+|---|---|---|---|
+| 1 | `index.html` `save-provider-settings-btn` | "Save Non-secret Settings" is confusing | FIXED — "Save Provider Settings" + note about API key |
+| 2 | `renderer.js` `sourceStatusMessage()` | Messages started with `source=xxx -` technical prefix | FIXED — all 8 messages rewritten to plain English |
+| 3 | `index.html` checkbox labels | "Real provider enabled", "LLM chat enabled", "Fallback to mock" are technical | FIXED — "Use real AI", "Enable AI chat", "Fall back to mock if AI fails" |
+| 4 | `index.html` status grid labels | "Resolved provider", "Real provider enabled", "LLM chat enabled", "Key status" | FIXED — "Active provider", "Real AI", "AI chat", "API key", "Mock fallback" |
+| 5 | `index.html` `#chat-source-status` initial text | "source: not_checked" looks like an error before first chat | FIXED — "—" (em dash) |
+| 6 | No plain-English current-state summary | User had to cross-reference 8 grid cells to understand AI state | FIXED — added `#provider-status-summary` bar with colour states |
+| 7 | `renderer.js` `updateKeyUIState` tooltips | Tooltip text exposed raw `real_provider_enabled` field name | FIXED — "Enable 'Use real AI' in Provider Settings before testing." |
+| 8 | `renderer.js` save status messages | "Saving non-secret provider settings…" / "Non-secret provider settings saved." | FIXED — "Saving provider settings…" / "Provider settings saved." |
+
+### Files Modified
+
+| File | Change | Runtime? |
+|---|---|---|
+| `apps/desktop/src/renderer/index.html` | Button text, checkbox labels, grid labels, initial source status, new summary div, save note | Yes (UI text only) |
+| `apps/desktop/src/renderer/renderer.js` | `sourceStatusMessage()` messages, save messages, `calcProviderStatusSummary()` function, DOM ref, `renderProviderSettings()` wiring, button tooltips | Yes (UI text only) |
+| `apps/desktop/src/renderer/styles.css` | `.provider-status-summary` block + state variants, `.provider-save-note` | Yes (CSS only) |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | 3 updated assertions + 5 new TASK-189 tests | No |
+| `docs/TASKS.md` | TASK-189 section added | No |
+| `docs/ROADMAP.md` | TASK-189 DONE entry; next task TASK-190 TBD | No |
+
+### Acceptance Criteria
+
+- [x] `renderer-chat-smoke.js` — PASS (5 new tests pass, 3 updated assertions pass).
+- [x] `pet-renderer-smoke.js` — `226 checks PASS` (no regression — Pet not touched).
+- [x] `pet-window-smoke.js` — `45 checks PASS` (no regression — Pet not touched).
+- [x] `git diff --check` — CLEAN.
+- [x] No backend files modified.
+- [x] No runtime behavior change — provider/Ollama logic unchanged.
+- [x] No schema, key storage, or Screen Context change.
+- [x] `#provider-status-summary` renders "Mock mode", "Ollama active", fallback warning, and API key error states correctly.
+- [x] `sourceStatusMessage()` output no longer contains `source=xxx -` prefix strings.
+
+---
+
 ## TASK-188 | Pet / Full App UX Polish Pass
 
 **Status:** DONE

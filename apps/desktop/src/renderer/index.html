@@ -60,7 +60,7 @@
     <div class="mood-indicator"></div>
     <span>Mood:</span>
     <span id="mood-label">neutral</span>
-    <span id="chat-source-status" class="chat-runtime-pill">source: not_checked</span>
+    <span id="chat-source-status" class="chat-runtime-pill">—</span>
     <span id="chat-provider-status" class="chat-runtime-pill">provider: mock</span>
     <span id="chat-runtime-status" class="status-note">mock mode - no AI connected</span>
   </div>
@@ -216,10 +216,13 @@ No active memories.</pre>
     <div class="section-header">
       <div>
         <h2 id="provider-settings-title">Provider Settings</h2>
-        <p>Configure provider, model, and API key. Test Connection is available only after the safe preconditions are met.</p>
+        <p>Configure your AI provider, model, and API key.</p>
       </div>
       <button id="refresh-provider-settings-btn" type="button">Refresh Settings</button>
     </div>
+
+    <!-- TASK-189: plain-English summary of current provider state, updated on settings load -->
+    <div id="provider-status-summary" class="provider-status-summary" aria-live="polite"></div>
 
     <form id="provider-settings-form" class="provider-settings-form">
       <label>
@@ -244,20 +247,21 @@ No active memories.</pre>
 
       <label class="provider-settings-checkbox">
         <input id="provider-real-enabled" type="checkbox" />
-        Real provider enabled
+        Use real AI
       </label>
 
       <label class="provider-settings-checkbox">
         <input id="provider-llm-chat-enabled" type="checkbox" />
-        LLM chat enabled
+        Enable AI chat
       </label>
 
       <label class="provider-settings-checkbox">
         <input id="provider-fallback-to-mock" type="checkbox" checked />
-        Fallback to mock
+        Fall back to mock if AI fails
       </label>
 
-      <button id="save-provider-settings-btn" type="submit">Save Non-secret Settings</button>
+      <button id="save-provider-settings-btn" type="submit">Save Provider Settings</button>
+      <p class="provider-save-note">Provider, model, and toggle settings only. API key is stored separately using the controls below.</p>
     </form>
 
     <div id="provider-warning" class="provider-warning">
@@ -274,7 +278,7 @@ No active memories.</pre>
         <strong id="provider-current-model">default</strong>
       </div>
       <div>
-        <span>Key status</span>
+        <span>API key</span>
         <strong id="provider-key-status">not_configured</strong>
       </div>
       <div>
@@ -282,19 +286,19 @@ No active memories.</pre>
         <strong id="provider-last-test-status">not_tested</strong>
       </div>
       <div>
-        <span>Resolved provider</span>
+        <span>Active provider</span>
         <strong id="provider-resolved-provider">mock</strong>
       </div>
       <div>
-        <span>Real provider enabled</span>
+        <span>Real AI</span>
         <strong id="provider-real-enabled-status">false</strong>
       </div>
       <div>
-        <span>LLM chat enabled</span>
+        <span>AI chat</span>
         <strong id="provider-llm-chat-enabled-status">false</strong>
       </div>
       <div>
-        <span>Fallback to mock</span>
+        <span>Mock fallback</span>
         <strong id="provider-fallback-status">true</strong>
       </div>
     </div>
