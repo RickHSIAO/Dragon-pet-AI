@@ -8,10 +8,17 @@
     "dev": "electron . --dev",
     "test:renderer": "node scripts/renderer-chat-smoke.js"
   },
-  "keywords": ["desktop", "electron", "ai-pet"],
+  "keywords": [
+    "desktop",
+    "electron",
+    "ai-pet"
+  ],
   "author": "",
   "license": "MIT",
   "devDependencies": {
     "electron": "^30.0.0"
+  },
+  "dependencies": {
+    "tesseract.js": "^7.0.0"
   }
 }

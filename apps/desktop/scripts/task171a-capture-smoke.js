@@ -33,8 +33,8 @@ function testStaticSourceScopeChecks() {
     "renderer.js must not require('fs')");
   assert.ok(!/writeFileSync|writeFile\(|fs\.write/.test(renderer),
     "renderer.js must not write files");
-  assert.ok(!/require\(['"]tesseract|import\s+.*tesseract|Tesseract\.recognize\s*\(/i.test(renderer),
-    "renderer.js must not require/import tesseract or call Tesseract.recognize()");
+  // TASK-172A-OCR: tesseract.js is now intentionally required (Option A).
+  // The prohibition was lifted when OCR was implemented. Cloud vision is still banned.
   assert.ok(!/gpt-4-vision|claude-vision|imageAnalysis/i.test(renderer),
     "renderer.js must not contain vision/image-analysis code");
   assert.ok(!/setInterval\([^)]*captureScreen/.test(renderer),
@@ -200,6 +200,8 @@ async function runAll(ctx) {
   await test172AClearResetsState(ctx);
   await test172ASummaryNeverShowsRawBase64(ctx);
   await test172AAnalyzeWithNoScreenshotShowsCleanError(ctx);
+  // TASK-172A-OCR static checks
+  test172AOcrStaticChecks();
 }
 
 module.exports = { runAll };
@@ -242,9 +244,7 @@ function test172AStaticSourceScopeChecks() {
   assert.ok(/window\.confirm/.test(renderer),
     "renderer.js must use window.confirm for sensitive-content warning");
 
-  // Safety: no OCR library imported, no cloud vision, no /chat in runOcrAnalysis
-  assert.ok(!/require\(['"]tesseract/.test(renderer),
-    "renderer.js must not require tesseract directly");
+  // Safety: no cloud vision, no /chat in runOcrAnalysis
   assert.ok(!/gpt-4-vision|claude-vision|imageAnalysis/i.test(renderer),
     "renderer.js must not contain cloud vision code");
   assert.ok(!/writeFileSync|writeFile\(|fs\.write/.test(renderer),
@@ -433,4 +433,48 @@ async function test172AAnalyzeWithNoScreenshotShowsCleanError(ctx) {
     analyzeStatus.includes("請先擷取") || analyzeStatus.length === 0,
     "clicking analyze with no screenshot must show clean error or be guarded"
   );
+}
+
+// ---------------------------------------------------------------------------
+// TASK-172A-OCR: static source checks (Option A rejected — DevTools diagnostic present)
+// ---------------------------------------------------------------------------
+
+function test172AOcrStaticChecks() {
+  const renderer = fs.readFileSync(rendererPath, "utf8");
+
+  // New error codes in ANALYZE_FAILURE_MESSAGES
+  assert.ok(/ocr-init-failed/.test(renderer),
+    "renderer.js must have ocr-init-failed in ANALYZE_FAILURE_MESSAGES");
+  assert.ok(/ocr-timeout/.test(renderer),
+    "renderer.js must have ocr-timeout in ANALYZE_FAILURE_MESSAGES");
+  assert.ok(/invalid-dataurl/.test(renderer),
+    "renderer.js must have invalid-dataurl in ANALYZE_FAILURE_MESSAGES");
+
+  // _initOcrWorker structure retained for Option B swap-in
+  assert.ok(/_initOcrWorker/.test(renderer),
+    "renderer.js must define _initOcrWorker");
+  assert.ok(/OCR_TIMEOUT_MS/.test(renderer),
+    "renderer.js must define OCR_TIMEOUT_MS");
+  assert.ok(/OCR_DATAURL_MAX_LEN/.test(renderer),
+    "renderer.js must define OCR_DATAURL_MAX_LEN");
+
+  // TASK-172A-OCR Option A rejection: DevTools diagnostic must be present
+  assert.ok(/TASK-172A-OCR.*OCR unavailable/.test(renderer),
+    "renderer.js must have DevTools-only diagnostic for Option A rejection");
+  assert.ok(/nodeIntegration.*false/.test(renderer),
+    "renderer.js diagnostic must explain nodeIntegration:false as root cause");
+  assert.ok(/console\.error/.test(renderer),
+    "renderer.js must log OCR init failure to DevTools (not UI)");
+
+  // cleanOcrText normalizes spaces
+  assert.ok(/\[ \\t\]\{3,\}/.test(renderer),
+    "renderer.js cleanOcrText must normalize runs of spaces/tabs");
+
+  // Safety: dataUrl guard present
+  assert.ok(/startsWith\("data:image\/"/.test(renderer),
+    "renderer.js runOcrAnalysis must guard for data:image/ prefix");
+
+  // Option A rejection must not use cloud vision
+  assert.ok(!/gpt-4-vision|claude-vision|google.*vision|azure.*vision/i.test(renderer),
+    "renderer.js must not reference cloud vision APIs");
 }

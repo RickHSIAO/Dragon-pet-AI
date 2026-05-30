@@ -213,6 +213,9 @@ const ANALYZE_CONFIRM_MSG =
 
 const ANALYZE_FAILURE_MESSAGES = {
   "ocr-unavailable":      "分析功能目前不可用。",
+  "ocr-init-failed":      "分析功能初始化失敗，請稍後再試。",
+  "ocr-timeout":          "分析逾時，請稍後再試。",
+  "invalid-dataurl":      "截圖格式錯誤，請重新擷取。",
   "ocr-failed":           "分析失敗，請稍後再試。",
   "screenshot-too-large": "截圖過大，無法分析。",
   "no-screenshot":        "請先擷取螢幕截圖。",
@@ -255,20 +258,90 @@ function clearScreenshot() {
   setCaptureScreenStatus("截圖已清除。", false);
 }
 
-// TASK-172A: OCR stub — unavailable fallback for this slice.
-// Returns { ok: false, error: "ocr-unavailable" } until tesseract.js or
-// a backend OCR endpoint is wired up in a future implementation step.
-// Safety: never uploads dataUrl externally, never calls /chat.
-function runOcrAnalysis(_dataUrl) {
-  return Promise.resolve({ ok: false, error: "ocr-unavailable" });
+// TASK-172A-OCR: tesseract.js Option A — formally rejected.
+// Root cause: Electron renderer has nodeIntegration:false + contextIsolation:true.
+// require() is undefined in renderer; window.Tesseract is never set (no <script> load).
+// tesseract.js cannot be accessed without a bundler or preload/IPC bridge.
+// Fallback: clean "ocr-unavailable" or "ocr-init-failed" shown; no fake success.
+// Next step: Option B — backend local OCR endpoint (see TASK-172A-OCR docs).
+// State vars + _initOcrWorker kept for Option B swap-in; they produce clean fallback now.
+let _ocrWorker = null;
+let _ocrWorkerReady = false;
+let _ocrWorkerInitFailed = false;
+const OCR_DATAURL_MAX_LEN = 20 * 1024 * 1024; // 20 MB string length guard
+const OCR_TIMEOUT_MS = 30000;
+
+async function _initOcrWorker() {
+  if (_ocrWorkerReady) return true;
+  if (_ocrWorkerInitFailed) return false;
+  try {
+    const Tesseract = (typeof require !== "undefined")
+      ? require("tesseract.js")
+      : (window.Tesseract || null);
+    if (!Tesseract) {
+      // TASK-172A-OCR: Option A rejected — tesseract.js not reachable.
+      // require() unavailable (nodeIntegration:false); window.Tesseract not set.
+      // Diagnostic visible in DevTools console only; never shown in UI.
+      if (typeof console !== "undefined" && console.error) {
+        console.error("[TASK-172A-OCR] OCR unavailable: require() not defined in renderer"
+          + " (nodeIntegration:false + contextIsolation:true); window.Tesseract is undefined."
+          + " Option A (renderer-side tesseract.js) rejected. See TASK-172A-OCR docs.");
+      }
+      _ocrWorkerInitFailed = true;
+      return false;
+    }
+    _ocrWorker = await Tesseract.createWorker("eng", 1, {
+      logger: () => {},  // suppress progress logs — no provider internals in console
+    });
+    _ocrWorkerReady = true;
+    return true;
+  } catch (_e) {
+    if (typeof console !== "undefined" && console.error) {
+      console.error("[TASK-172A-OCR] OCR init exception:",
+        _e && _e.message ? _e.message : String(_e));
+    }
+    _ocrWorkerInitFailed = true;
+    _ocrWorker = null;
+    return false;
+  }
+}
+
+async function runOcrAnalysis(dataUrl) {
+  if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:image/")) {
+    return { ok: false, error: "invalid-dataurl" };
+  }
+  if (dataUrl.length > OCR_DATAURL_MAX_LEN) {
+    return { ok: false, error: "screenshot-too-large" };
+  }
+  const ready = await _initOcrWorker();
+  if (!ready) {
+    return { ok: false, error: _ocrWorkerInitFailed ? "ocr-init-failed" : "ocr-unavailable" };
+  }
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve({ ok: false, error: "ocr-timeout" }), OCR_TIMEOUT_MS);
+    _ocrWorker.recognize(dataUrl).then((result) => {
+      clearTimeout(timer);
+      const text = (result && result.data && typeof result.data.text === "string")
+        ? result.data.text
+        : "";
+      resolve({ ok: true, text });
+    }).catch((_e) => {
+      clearTimeout(timer);
+      resolve({ ok: false, error: "ocr-failed" });
+    });
+  });
 }
 
 function cleanOcrText(raw) {
   if (typeof raw !== "string") return "";
   const trimmed = raw.trim();
-  const collapsed = trimmed.replace(/\n{3,}/g, "\n\n");
+  // Collapse 3+ newlines to 2, normalize runs of spaces on each line
+  const collapsed = trimmed
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]{3,}/g, "  ");
   const MAX_OCR_CHARS = 800;
-  return collapsed.length > MAX_OCR_CHARS ? collapsed.slice(0, MAX_OCR_CHARS) : collapsed;
+  const bounded = collapsed.length > MAX_OCR_CHARS ? collapsed.slice(0, MAX_OCR_CHARS) : collapsed;
+  return bounded;
 }
 
 async function analyzeScreenFromFullApp() {

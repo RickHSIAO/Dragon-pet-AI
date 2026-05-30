@@ -15463,9 +15463,9 @@ TASK-172A is closed. Next step: TASK-172A-OCR — wire actual OCR provider (Opti
 
 ## TASK-172A-OCR | Wire Actual OCR Provider for Screenshot Analysis
 
-**Status:** DEFINED (docs-only)
+**Status:** DONE — OPTION A REJECTED / SAFE FALLBACK PASS (real OCR text extraction NOT complete)
 **Date:** 2026-05-29
-**Type:** Design — v0.4 Screen Context (slice 2A-OCR, OCR wiring only)
+**Type:** Design → Implementation — v0.4 Screen Context (slice 2A-OCR, OCR wiring)
 **Depends on:** TASK-172A DONE (confirmation flow + unavailable fallback implemented)
 
 ### Context
@@ -15699,3 +15699,83 @@ New tests to add during implementation:
 - [x] Preserved existing behavior documented (§11).
 - [x] Manual Windows smoke expectations documented.
 - [x] No runtime files modified in this docs-only step.
+
+## TASK-172A-OCR IMPLEMENTATION RECORD
+
+**Status:** DONE — OPTION A REJECTED / SAFE FALLBACK PASS (real OCR text extraction NOT complete)
+**Date:** 2026-05-30
+**Type:** Implementation — v0.4 Screen Context (slice 2A-OCR, OCR wiring)
+**Depends on:** TASK-172A DONE, TASK-171A DONE
+
+### OCR Provider Decision
+
+**Option A implemented:** tesseract.js v7.0.0 installed as a runtime dependency.
+- Unpacked size: ~1.4 MB (well under the 50 MB feasibility gate).
+- npm install: SUCCESS (no errors; 1 unrelated high severity advisory pre-existed).
+- Decision: Option A feasible and implemented. No fallback to Option B needed.
+
+### Files changed
+
+- `apps/desktop/src/renderer/renderer.js` — replaced `runOcrAnalysis()` stub with real implementation: lazy `_initOcrWorker()` (tesseract.js `createWorker("eng", 1)`), `OCR_DATAURL_MAX_LEN` (20 MB guard), `OCR_TIMEOUT_MS` (30 s), `_ocrWorkerReady`/`_ocrWorkerInitFailed` state flags; added 3 new error codes to `ANALYZE_FAILURE_MESSAGES` (`ocr-init-failed`, `ocr-timeout`, `invalid-dataurl`); updated `cleanOcrText()` to also normalize runs of spaces/tabs (`/[ \t]{3,}/g`).
+- `apps/desktop/scripts/task171a-capture-smoke.js` — updated TASK-171A scope check to allow `require("tesseract.js")` (no longer prohibited); updated TASK-172A static check to remove the tesseract prohibition comment; added `test172AOcrStaticChecks()` function verifying new error codes, `_initOcrWorker`, `OCR_TIMEOUT_MS`, `OCR_DATAURL_MAX_LEN`, space-normalization regex, and `data:image/` guard; wired into `runAll`.
+- `apps/desktop/package.json` — added `"tesseract.js": "^7.0.0"` to `dependencies`.
+
+### OCR behavior summary
+
+1. First analyze click: lazy worker init (tesseract.js WASM load, cold-start ~1–5 s on first use).
+2. Worker cached in `_ocrWorker` — subsequent analyses are fast.
+3. If init fails (WASM unavailable): `ocr-init-failed` → "分析功能初始化失敗，請稍後再試。"
+4. Timeout after 30 s: `ocr-timeout` → "分析逾時，請稍後再試。"
+5. Bad dataUrl: `invalid-dataurl` → "截圖格式錯誤，請重新擷取。"
+6. OCR success, no text: `no-text` → "未偵測到可用文字。"
+7. OCR success, text found: shows "螢幕摘要：\n{cleaned text}" (bounded 800 chars).
+8. Privacy: dataUrl never leaves renderer; no /chat; no external upload.
+
+### Automated validation results
+
+- `node --check` all changed JS files: PASS
+- `node apps/desktop/scripts/renderer-chat-smoke.js`: PASS
+- `node apps/desktop/scripts/task171a-capture-smoke.js`: PASS
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: PASS (226 checks)
+- `node apps/desktop/scripts/pet-window-smoke.js`: PASS (45 checks)
+- `git diff --check`: CLEAN
+- NUL byte check: all modified files NUL-free
+
+### Manual Windows smoke steps still needed (TASK-172A-OCR)
+
+1. Start app. Verify app loads normally (no console errors from tesseract.js on startup).
+2. Click "擷取螢幕". Verify capture succeeds. Verify "分析這張" becomes enabled.
+3. Click "分析這張". Confirm sensitive-content warning. Verify "正在分析…" appears.
+4. Wait for OCR (cold-start may take 5–10 s on first run). Verify one of:
+   - Text found: "螢幕摘要：\n..." appears with readable, bounded text.
+   - No text: "未偵測到可用文字。" appears.
+   - Init failed: "分析功能初始化失敗，請稍後再試。" appears.
+5. Verify no raw base64, JSON, stack traces, or provider internals appear in UI.
+6. Verify `/chat` was not called (check network tab or backend log).
+7. Click "清除截圖". Verify state resets correctly.
+8. Click "分析這張" a second time (worker is now cached). Verify analysis completes faster.
+9. Verify existing features unaffected: Full App chat, Pet direct input, voice/STT/TTS, Quiet Mode.
+
+
+## TASK-172A-OCR WINDOWS MANUAL SMOKE CLOSEOUT
+
+**Status:** DONE — OPTION A REJECTED / SAFE FALLBACK PASS
+**Date:** 2026-05-30
+**NOTE:** Real OCR text extraction is NOT complete. This closeout covers Option A rejection, clean fallback, and DevTools diagnostic only.
+
+Manual smoke passed. All expected behaviors confirmed:
+
+- App launches normally; OCR is not initialized at startup (lazy init, no startup cost).
+- Screenshot capture works; "分析這張" enabled only after capture.
+- Sensitive-content warning shows on click; Cancel prevents analysis.
+- Confirm starts analysis; DevTools console shows: `[TASK-172A-OCR] OCR unavailable: require() not defined in renderer (nodeIntegration:false + contextIsolation:true); window.Tesseract is undefined. Option A (renderer-side tesseract.js) rejected.`
+- UI shows clean fallback: "分析功能初始化失敗，請稍後再試。"
+- No raw stack trace, provider internals, JSON, file paths, backend URLs, or base64 dataUrl in UI.
+- Screenshot and summary remain memory-only. No disk write. No external upload. /chat not called.
+- Pet Bubble does not receive screenshot or summary.
+- Existing features confirmed unaffected: Full App chat, Pet direct input, voice/STT/TTS, Quiet Mode, click-through.
+- Scope confirmed clean: no cloud OCR, cloud vision, background monitoring, screenshot persistence, Pet commentary, /chat handoff.
+
+Option A (renderer-side tesseract.js) formally rejected. Root cause: `nodeIntegration:false` + `contextIsolation:true` make `require()` unavailable in the Electron renderer; `window.Tesseract` is never set. Fixing this without bundling or IPC restructuring is out of scope.
+
+Next step: TASK-172A-OCR-BACKEND — backend local OCR via `POST /ocr/extract` (Option B: `pytesseract` or `easyocr`) with narrow `screen:analyze-once` IPC bridge.
