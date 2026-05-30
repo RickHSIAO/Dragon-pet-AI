@@ -38,26 +38,112 @@ OCR_PREPROCESS_SHARPEN = True
 _SUPPORTED_MIMES = {"png", "jpeg", "jpg", "webp", "bmp", "gif", "tiff"}
 
 # ---------------------------------------------------------------------------
-# Language detection — module-level cache
+# Language / capability detection — module-level cache
 # ---------------------------------------------------------------------------
-_ocr_lang_cache: "str | None" = None
+_ocr_status_cache: "dict | None" = None
 
 
-def _get_ocr_lang() -> str:
-    """Return best available OCR language string, cached after first call."""
-    global _ocr_lang_cache
-    if _ocr_lang_cache is not None:
-        return _ocr_lang_cache
+def _probe_ocr_status() -> dict:
+    """
+    Probe Tesseract availability and language data. Never raises.
+
+    Returns dict with keys:
+      tesseract_available: bool
+      chi_tra_available:   bool
+      eng_available:       bool
+      selected_lang:       str | None  ("eng+chi_tra", "eng", or None)
+      fallback_reason:     str | None
+
+    Fallback reason codes:
+      pytesseract-not-installed   — pytesseract Python package missing
+      tesseract-binary-not-found  — Tesseract binary not on PATH
+      chi_tra-language-data-missing — chi_tra.traineddata not installed
+      no-language-data            — even eng.traineddata is missing
+    """
     try:
         import pytesseract
         from PIL import Image
-        # Probe chi_tra with a 1×1 blank image — cheap and conclusive.
-        blank = Image.new("L", (1, 1), 255)
+    except ImportError:
+        return {
+            "tesseract_available": False,
+            "chi_tra_available": False,
+            "eng_available": False,
+            "selected_lang": None,
+            "fallback_reason": "pytesseract-not-installed",
+        }
+
+    blank = Image.new("L", (1, 1), 255)
+
+    # Probe eng — also verifies the Tesseract binary is reachable.
+    try:
+        pytesseract.image_to_string(blank, lang="eng")
+        eng_available = True
+        tesseract_available = True
+    except Exception as exc:
+        exc_name = type(exc).__name__
+        if "TesseractNotFound" in exc_name or "FileNotFoundError" in exc_name:
+            return {
+                "tesseract_available": False,
+                "chi_tra_available": False,
+                "eng_available": False,
+                "selected_lang": None,
+                "fallback_reason": "tesseract-binary-not-found",
+            }
+        # Binary present but eng language data missing or other error.
+        eng_available = False
+        tesseract_available = True
+
+    # Probe chi_tra only when Tesseract binary is confirmed available.
+    try:
         pytesseract.image_to_string(blank, lang="eng+chi_tra")
-        _ocr_lang_cache = "eng+chi_tra"
+        chi_tra_available = True
     except Exception:
-        _ocr_lang_cache = "eng"
-    return _ocr_lang_cache
+        chi_tra_available = False
+
+    if not eng_available and not chi_tra_available:
+        return {
+            "tesseract_available": True,
+            "chi_tra_available": False,
+            "eng_available": False,
+            "selected_lang": None,
+            "fallback_reason": "no-language-data",
+        }
+
+    if chi_tra_available:
+        return {
+            "tesseract_available": True,
+            "chi_tra_available": True,
+            "eng_available": eng_available,
+            "selected_lang": "eng+chi_tra",
+            "fallback_reason": None,
+        }
+
+    return {
+        "tesseract_available": True,
+        "chi_tra_available": False,
+        "eng_available": True,
+        "selected_lang": "eng",
+        "fallback_reason": "chi_tra-language-data-missing",
+    }
+
+
+def get_ocr_status() -> dict:
+    """
+    Return OCR language availability and diagnostic info. Cached after first call.
+
+    Keys: tesseract_available, chi_tra_available, eng_available,
+          selected_lang, fallback_reason.
+    Never raises.
+    """
+    global _ocr_status_cache
+    if _ocr_status_cache is None:
+        _ocr_status_cache = _probe_ocr_status()
+    return _ocr_status_cache
+
+
+def _get_ocr_lang() -> "str | None":
+    """Return selected OCR language string, or None if unavailable. Cached via get_ocr_status."""
+    return get_ocr_status().get("selected_lang")
 
 
 # ---------------------------------------------------------------------------
@@ -256,6 +342,9 @@ def extract_text_from_dataurl(image_dataurl: str) -> dict:
             return {"ok": False, "error": "ocr-failed"}
 
     lang = _get_ocr_lang()
+    if lang is None:
+        # Tesseract present but no language data installed.
+        return {"ok": False, "error": "ocr-unavailable"}
 
     try:
         raw_text = pytesseract.image_to_string(pil_image, lang=lang, config=OCR_TESSERACT_CONFIG)

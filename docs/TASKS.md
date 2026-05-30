@@ -16754,7 +16754,7 @@ The following tasks are recommended for the v0.4+ or v0.5 Screen Context roadmap
 - **TASK-174** — Capture current mouse display / current active monitor. *(Recommended first — see §6.)*
 - **TASK-175** — Region selection screenshot capture.
 - **TASK-176** — Active-window screenshot capture.
-- **TASK-177** — OCR language/data installer checks for `chi_tra`.
+- **TASK-177** — OCR language/data installer checks for `chi_tra`. Adds `_probe_ocr_status()` / `get_ocr_status()` to `ocr_service.py`, exposes `GET /ocr/status` diagnostic endpoint, handles `selected_lang=None` cleanly, and documents Windows Tesseract installation.
 - **TASK-178** — Screen Context release smoke checklist.
 - **TASK-179** — Optional Pet UI hint after OCR summary exists.
 - **TASK-180** — Optional Visual Model / Multimodal Screenshot Understanding (docs-only backlog note). Default remains OCR text-only; visual analysis requires explicit user opt-in, confirmation, and sensitive-data warning every time. Local vision model (e.g. LLaVA via Ollama) preferred; cloud vision requires separate opt-in plus cost/privacy warning. No background monitoring, no auto-send.
@@ -17339,6 +17339,190 @@ Smoke: `renderer-chat-smoke.js` PASS.
 - [x] Preserved existing behavior documented (§10).
 - [x] Implementation complete.
 - [x] Desktop smoke tests passing (`renderer-chat-smoke.js` PASS).
+- [x] Windows manual smoke PASS.
+
+---
+
+## TASK-177 | OCR Language / Data Installer Checks for chi_tra
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-30
+**Type:** Implementation — v0.4+ Screen Context (OCR quality / diagnostics)
+**Depends on:** TASK-172A-OCR-BACKEND DONE, TASK-172A-OCR-POLISH DONE
+
+### Context
+
+The OCR pipeline (TASK-172A) uses `pytesseract` + Tesseract binary with `eng+chi_tra` for Traditional Chinese support. On fresh Windows installs or CI environments, the Tesseract binary may be absent, or the `chi_tra.traineddata` file may not be installed even when Tesseract is present. The previous code silently fell back to `eng` with no diagnostic information and no way to query the current state.
+
+TASK-177 adds explicit capability probing, structured diagnostic output, a queryable `GET /ocr/status` endpoint, and full test coverage for all four failure modes.
+
+### §1 — Design: OCR Status Probe
+
+A new `_probe_ocr_status()` function in `ocr_service.py` replaces the former single-line `_get_ocr_lang()` probe. It returns a structured dict:
+
+```python
+{
+  "tesseract_available": bool,
+  "chi_tra_available":   bool,
+  "eng_available":       bool,
+  "selected_lang":       str | None,   # "eng+chi_tra", "eng", or None
+  "fallback_reason":     str | None,   # see §2
+}
+```
+
+`get_ocr_status()` wraps the probe with a module-level cache (`_ocr_status_cache`) so the probe runs at most once per process lifetime.
+
+`_get_ocr_lang()` is preserved as a thin wrapper returning `get_ocr_status()["selected_lang"]`.
+
+### §2 — Fallback Reason Codes
+
+| `fallback_reason` | Meaning |
+|---|---|
+| `None` | `chi_tra` available; using `eng+chi_tra` |
+| `chi_tra-language-data-missing` | Tesseract binary OK; `chi_tra.traineddata` not found; using `eng` |
+| `tesseract-binary-not-found` | Tesseract binary not on PATH; `TesseractNotFoundError` raised |
+| `pytesseract-not-installed` | `pytesseract` Python package not installed |
+| `no-language-data` | Tesseract binary present but even `eng.traineddata` is missing |
+
+### §3 — OCR Behavior by State
+
+| State | `selected_lang` | `extract_text_from_dataurl` result |
+|---|---|---|
+| `chi_tra` + `eng` available | `"eng+chi_tra"` | Normal OCR with full zh-TW support |
+| Only `eng` available | `"eng"` | Fallback OCR; `eng`-only text extraction |
+| `selected_lang = None` | `None` | `{"ok": false, "error": "ocr-unavailable"}` — clean, no crash |
+| pytesseract missing | `None` | `{"ok": false, "error": "ocr-unavailable"}` — ImportError guard |
+
+The `lang is None` guard (added to `extract_text_from_dataurl`) fires before any pytesseract call, ensuring no crash or unhandled exception when language data is absent.
+
+### §4 — New Endpoint: `GET /ocr/status`
+
+```
+GET /ocr/status
+→ 200 {
+    "tesseract_available": true/false,
+    "chi_tra_available":   true/false,
+    "eng_available":       true/false,
+    "selected_lang":       "eng+chi_tra" | "eng" | null,
+    "fallback_reason":     null | "chi_tra-language-data-missing" | ...
+  }
+```
+
+Never exposes Python tracebacks or internal module names. Cache reuses `_ocr_status_cache`; same value that `extract_text_from_dataurl` uses. Backend must be restarted to re-probe (e.g., after installing language data).
+
+### §5 — Windows Installation Guide
+
+**Step 1: Install Tesseract**
+1. Download the installer from [UB Mannheim Tesseract builds](https://github.com/UB-Mannheim/tesseract/wiki) (e.g., `tesseract-ocr-w64-setup-5.x.x.exe`).
+2. Run the installer. During installation, select **Additional language data → Chinese (Traditional)** to install `chi_tra.traineddata`.
+3. Add the Tesseract install directory to PATH (default: `C:\Program Files\Tesseract-OCR`).
+4. Restart the backend process.
+
+**Step 2: Verify Installation**
+```powershell
+tesseract --version
+tesseract --list-langs  # should include chi_tra and eng
+```
+
+**Step 3: Query the backend diagnostic endpoint**
+```
+GET http://localhost:8000/ocr/status
+```
+Expected response when both are installed:
+```json
+{
+  "tesseract_available": true,
+  "chi_tra_available": true,
+  "eng_available": true,
+  "selected_lang": "eng+chi_tra",
+  "fallback_reason": null
+}
+```
+If `chi_tra_available` is false, re-run the Tesseract installer and add Traditional Chinese language data, then restart the backend.
+
+**Step 4: Install chi_tra manually (if already have Tesseract)**
+1. Download `chi_tra.traineddata` from [tesseract-ocr/tessdata](https://github.com/tesseract-ocr/tessdata) (or tessdata_best / tessdata_fast).
+2. Copy to the Tesseract `tessdata` directory (default: `C:\Program Files\Tesseract-OCR\tessdata\`).
+3. Restart the backend.
+
+### §6 — Privacy Boundaries (unchanged)
+
+- No disk write, no screenshot persistence.
+- No cloud OCR, no external upload.
+- No auto-capture, no background monitoring.
+- `GET /ocr/status` returns only boolean flags and string reason codes — no image data.
+
+### §7 — Scope Limits
+
+Do **not** implement in TASK-177:
+- UI display of OCR language status in the renderer.
+- Automatic installation of language data.
+- Cloud OCR fallback.
+- `POST /ocr/install-lang` endpoint.
+
+### §8 — Files Changed
+
+- `backend/app/ocr/ocr_service.py` — replaced `_ocr_lang_cache` + `_get_ocr_lang()` with `_ocr_status_cache` + `_probe_ocr_status()` + `get_ocr_status()`; added `lang is None` guard in `extract_text_from_dataurl()`.
+- `backend/app/api/routes.py` — added `get_ocr_status` import; added `GET /ocr/status` endpoint.
+- `backend/tests/test_ocr_routes.py` — updated `test_chi_tra_fallback_does_not_crash`; added 7 new TASK-177 tests (all 4 failure modes + endpoint + lang=None + structure).
+- `apps/desktop/scripts/task171a-capture-smoke.js` — added `test177StaticChecks()` static scope check; added to `runAll()`.
+
+### §9 — Test Coverage (all passing)
+
+| Test | Coverage |
+|---|---|
+| `test_get_ocr_status_returns_valid_structure` | All 5 keys present, correct types |
+| `test_probe_ocr_status_chi_tra_missing_falls_back_to_eng` | chi_tra fails → `selected_lang="eng"`, `fallback_reason="chi_tra-language-data-missing"` |
+| `test_probe_ocr_status_tesseract_binary_not_found` | TesseractNotFoundError → `tesseract_available=False`, `selected_lang=None` |
+| `test_probe_ocr_status_no_language_data` | eng fails (non-TesseractNotFound) → `fallback_reason="no-language-data"` |
+| `test_get_ocr_lang_returns_none_when_no_language_available` | `_get_ocr_lang()` returns `None` when cache has `selected_lang=None` |
+| `test_extract_returns_ocr_unavailable_when_lang_is_none` | `extract_text_from_dataurl` returns `ocr-unavailable` when lang=None |
+| `test_ocr_status_endpoint_returns_valid_structure` | `GET /ocr/status` → 200, all 5 keys, no tracebacks |
+| `test_chi_tra_fallback_does_not_crash` (updated) | `get_ocr_status()` returns valid dict, never raises |
+| `test177StaticChecks` (desktop smoke) | `_probe_ocr_status`, `get_ocr_status`, `_ocr_status_cache`, all 4 reason codes, `lang is None` guard, `/ocr/status` route, `ocr-unavailable` message regression |
+
+### §10 — Manual Windows Smoke Results (2026-05-30)
+
+Actual OCR status on test machine:
+```json
+{
+  "tesseract_available": true,
+  "chi_tra_available": true,
+  "eng_available": true,
+  "selected_lang": "eng+chi_tra",
+  "fallback_reason": null
+}
+```
+
+| # | Test | Result |
+|---|---|---|
+| 1 | `GET /ocr/status` returns valid JSON; no Python traceback | PASS |
+| 2 | Response contains all 5 keys: `tesseract_available`, `chi_tra_available`, `eng_available`, `selected_lang`, `fallback_reason` | PASS |
+| 3 | `tesseract_available: true`, `chi_tra_available: true`, `eng_available: true`, `selected_lang: "eng+chi_tra"`, `fallback_reason: null` | PASS |
+| 4 | `chi_tra` available; `selected_lang` displays `eng+chi_tra` | PASS |
+| 5 | "擷取螢幕" → region drag → "分析這張": OCR runs normally, no Python traceback in UI | PASS |
+| 6 | "擷取視窗" → select window → "分析這張": OCR runs normally, no Python traceback in UI | PASS |
+| 7 | "問克莉絲蒂娜這個畫面" sends only OCR text summary; no image data sent | PASS |
+| 8 | "清除截圖" clears screenshot / OCR summary / ask button state | PASS |
+| 9 | Full App chat, Pet, voice/STT, TTS: no regression | PASS |
+
+### Acceptance Criteria
+
+- [x] TASK-177 documented in `docs/TASKS.md`.
+- [x] `docs/ROADMAP.md` updated with TASK-177 entry.
+- [x] `_probe_ocr_status()` and `get_ocr_status()` implemented in `ocr_service.py`.
+- [x] All 4 fallback reason codes documented and tested (§2, §9).
+- [x] `lang is None` guard added to `extract_text_from_dataurl()`.
+- [x] `GET /ocr/status` endpoint implemented.
+- [x] 7 new TASK-177 backend tests passing (34 total OCR tests PASS).
+- [x] `test177StaticChecks` static scope check added and passing.
+- [x] `node --check` SYNTAX OK.
+- [x] `git diff --check` CLEAN.
+- [x] NUL byte check: 0 on all modified files.
+- [x] Full pytest suite: 647 PASS (20 pre-existing errors in unrelated test file).
+- [x] Desktop smoke: `renderer-chat-smoke.js` PASS.
+- [x] Windows installation guide documented (§5).
+- [x] No cloud OCR, no disk write, no screenshot persistence.
 - [x] Windows manual smoke PASS.
 
 ---

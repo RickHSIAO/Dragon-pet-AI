@@ -67,7 +67,7 @@ from app.services.provider_settings_service import (
 from app.services.state_service import get_chat_state_context, update_state_after_chat_turn
 from app.services.usage_meter_service import UsageRecord, estimate_text_tokens, record_usage
 from app.stt.stt_service import transcribe_audio_bytes  # TASK-167B
-from app.ocr.ocr_service import extract_text_from_dataurl  # TASK-172A-OCR-BACKEND
+from app.ocr.ocr_service import extract_text_from_dataurl, get_ocr_status  # TASK-172A-OCR-BACKEND, TASK-177
 
 router = APIRouter()
 
@@ -123,6 +123,25 @@ async def ocr_extract(request: Request):
         return {"ok": False, "error": "payload-too-large"}
 
     return extract_text_from_dataurl(image_dataurl)
+
+
+@router.get("/ocr/status")
+async def ocr_status_check():
+    """
+    TASK-177: Return OCR language availability and Tesseract diagnostic info.
+
+    Returns: {
+      "tesseract_available": bool,
+      "chi_tra_available": bool,
+      "eng_available": bool,
+      "selected_lang": str | null,
+      "fallback_reason": str | null
+    }
+
+    Never exposes Python tracebacks or provider internals.
+    Cached: probed once on first call, result reused for the process lifetime.
+    """
+    return get_ocr_status()
 
 
 @router.get("/health")

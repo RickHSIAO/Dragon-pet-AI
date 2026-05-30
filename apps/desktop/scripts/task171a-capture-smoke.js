@@ -347,6 +347,8 @@ async function runAll(ctx) {
   await test176WindowCaptureFailedShowsCleanMessage(ctx);
   await test176WindowCaptureSuccessEnablesAnalyze(ctx);
   await test176WindowCaptureNeverPostsToChat(ctx);
+  // TASK-177 tests
+  test177StaticChecks();
 }
 
 module.exports = { runAll };
@@ -1226,4 +1228,52 @@ async function test176WindowCaptureNeverPostsToChat(ctx) {
   const chatCalls = state.calls.filter((c) => c.url.endsWith("/chat")).length;
   assert.equal(chatCalls, 0,
     "window capture alone must not POST to /chat (TASK-176 isolation)");
+}
+
+// ---------------------------------------------------------------------------
+// TASK-177: OCR language/data installer checks — static scope checks
+// ---------------------------------------------------------------------------
+
+function test177StaticChecks() {
+  const projectRoot = path.resolve(desktopRoot, "..", "..");
+  const ocrServicePath  = path.join(projectRoot, "backend", "app", "ocr", "ocr_service.py");
+  const routesPath      = path.join(projectRoot, "backend", "app", "api", "routes.py");
+  const renderer        = fs.readFileSync(rendererPath, "utf8");
+
+  const ocrService = fs.readFileSync(ocrServicePath, "utf8");
+  const routes     = fs.readFileSync(routesPath, "utf8");
+
+  // ocr_service.py: new probe / status API
+  assert.ok(/def _probe_ocr_status/.test(ocrService),
+    "ocr_service.py must define _probe_ocr_status()");
+  assert.ok(/def get_ocr_status/.test(ocrService),
+    "ocr_service.py must define get_ocr_status()");
+  assert.ok(/_ocr_status_cache/.test(ocrService),
+    "ocr_service.py must use _ocr_status_cache (not old _ocr_lang_cache)");
+  assert.ok(!/^_ocr_lang_cache/.test(ocrService),
+    "ocr_service.py must not have top-level _ocr_lang_cache (replaced by _ocr_status_cache)");
+
+  // ocr_service.py: fallback reason codes documented
+  assert.ok(/pytesseract-not-installed/.test(ocrService),
+    "ocr_service.py must document pytesseract-not-installed reason");
+  assert.ok(/tesseract-binary-not-found/.test(ocrService),
+    "ocr_service.py must document tesseract-binary-not-found reason");
+  assert.ok(/chi_tra-language-data-missing/.test(ocrService),
+    "ocr_service.py must document chi_tra-language-data-missing reason");
+  assert.ok(/no-language-data/.test(ocrService),
+    "ocr_service.py must document no-language-data reason");
+
+  // ocr_service.py: lang=None guard before OCR call
+  assert.ok(/if lang is None/.test(ocrService),
+    "ocr_service.py must guard against lang=None before calling pytesseract");
+
+  // routes.py: GET /ocr/status endpoint exists
+  assert.ok(/\/ocr\/status/.test(routes),
+    "routes.py must define GET /ocr/status endpoint");
+  assert.ok(/get_ocr_status/.test(routes),
+    "routes.py must import and call get_ocr_status");
+
+  // renderer.js: ocr-unavailable still maps to clean zh-TW message (regression)
+  assert.ok(/ocr-unavailable.*分析功能目前不可用/.test(renderer),
+    "renderer.js must still map ocr-unavailable to clean zh-TW message (TASK-177 regression)");
 }

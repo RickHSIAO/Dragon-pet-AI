@@ -263,15 +263,19 @@ def test_clean_ocr_no_text_after_cleanup_returns_empty():
 
 
 def test_chi_tra_fallback_does_not_crash():
-    """_get_ocr_lang() must return a string and never raise."""
+    """get_ocr_status() must return a valid dict and never raise."""
     from app.ocr import ocr_service
     # Reset cache so it re-probes
-    ocr_service._ocr_lang_cache = None
-    lang = ocr_service._get_ocr_lang()
-    assert isinstance(lang, str)
-    assert lang in ("eng", "eng+chi_tra")
+    ocr_service._ocr_status_cache = None
+    status = ocr_service.get_ocr_status()
+    assert isinstance(status, dict)
+    assert "selected_lang" in status
+    assert "tesseract_available" in status
+    # If Tesseract is available, selected_lang must be eng or eng+chi_tra
+    if status["tesseract_available"]:
+        assert status["selected_lang"] in ("eng", "eng+chi_tra")
     # Reset for other tests
-    ocr_service._ocr_lang_cache = None
+    ocr_service._ocr_status_cache = None
 
 
 def test_api_response_contains_no_traceback_or_internals():
@@ -288,3 +292,151 @@ def test_api_response_contains_no_traceback_or_internals():
         assert "PIL" not in text
         assert "ImageEnhance" not in text
         assert "io.BytesIO" not in text
+
+
+# ---------------------------------------------------------------------------
+# TASK-177: OCR language/data installer checks
+# ---------------------------------------------------------------------------
+
+def _reset_ocr_status_cache():
+    from app.ocr import ocr_service
+    ocr_service._ocr_status_cache = None
+
+
+def test_get_ocr_status_returns_valid_structure():
+    """get_ocr_status() must return a dict with all required keys and correct types."""
+    from app.ocr.ocr_service import get_ocr_status
+    _reset_ocr_status_cache()
+    status = get_ocr_status()
+    assert isinstance(status, dict)
+    assert "tesseract_available" in status
+    assert "chi_tra_available" in status
+    assert "eng_available" in status
+    assert "selected_lang" in status
+    assert "fallback_reason" in status
+    assert isinstance(status["tesseract_available"], bool)
+    assert isinstance(status["chi_tra_available"], bool)
+    assert isinstance(status["eng_available"], bool)
+    assert status["selected_lang"] is None or isinstance(status["selected_lang"], str)
+    assert status["fallback_reason"] is None or isinstance(status["fallback_reason"], str)
+    _reset_ocr_status_cache()
+
+
+def test_probe_ocr_status_chi_tra_missing_falls_back_to_eng():
+    """When chi_tra probe fails but eng succeeds: selected_lang=eng, fallback_reason set."""
+    from app.ocr import ocr_service
+
+    call_count = [0]
+
+    def fake_image_to_string(img, lang="eng", config=""):
+        call_count[0] += 1
+        if "chi_tra" in lang:
+            raise Exception("Error opening data file tessdata/chi_tra.traineddata")
+        return ""  # eng succeeds
+
+    _reset_ocr_status_cache()
+    with patch("pytesseract.image_to_string", side_effect=fake_image_to_string):
+        status = ocr_service._probe_ocr_status()
+
+    assert status["tesseract_available"] is True
+    assert status["chi_tra_available"] is False
+    assert status["eng_available"] is True
+    assert status["selected_lang"] == "eng"
+    assert status["fallback_reason"] == "chi_tra-language-data-missing"
+    _reset_ocr_status_cache()
+
+
+def test_probe_ocr_status_tesseract_binary_not_found():
+    """When TesseractNotFoundError is raised: tesseract_available=False, selected_lang=None."""
+    from app.ocr import ocr_service
+
+    class FakeTesseractNotFoundError(EnvironmentError):
+        pass
+
+    def fake_not_found(img, lang="eng", config=""):
+        raise FakeTesseractNotFoundError("TesseractNotFound: tesseract is not installed")
+
+    _reset_ocr_status_cache()
+    with patch("pytesseract.image_to_string", side_effect=fake_not_found):
+        status = ocr_service._probe_ocr_status()
+
+    assert status["tesseract_available"] is False
+    assert status["chi_tra_available"] is False
+    assert status["eng_available"] is False
+    assert status["selected_lang"] is None
+    assert status["fallback_reason"] == "tesseract-binary-not-found"
+    _reset_ocr_status_cache()
+
+
+def test_probe_ocr_status_no_language_data():
+    """When eng probe fails (not TesseractNotFound) and chi_tra also fails: selected_lang=None."""
+    from app.ocr import ocr_service
+
+    def fake_lang_error(img, lang="eng", config=""):
+        raise Exception("Error opening data file tessdata/eng.traineddata")
+
+    _reset_ocr_status_cache()
+    with patch("pytesseract.image_to_string", side_effect=fake_lang_error):
+        status = ocr_service._probe_ocr_status()
+
+    assert status["tesseract_available"] is True
+    assert status["eng_available"] is False
+    assert status["chi_tra_available"] is False
+    assert status["selected_lang"] is None
+    assert status["fallback_reason"] == "no-language-data"
+    _reset_ocr_status_cache()
+
+
+def test_get_ocr_lang_returns_none_when_no_language_available():
+    """_get_ocr_lang() returns None when get_ocr_status has selected_lang=None."""
+    from app.ocr import ocr_service
+
+    _reset_ocr_status_cache()
+    ocr_service._ocr_status_cache = {
+        "tesseract_available": True,
+        "chi_tra_available": False,
+        "eng_available": False,
+        "selected_lang": None,
+        "fallback_reason": "no-language-data",
+    }
+    result = ocr_service._get_ocr_lang()
+    assert result is None
+    _reset_ocr_status_cache()
+
+
+def test_extract_returns_ocr_unavailable_when_lang_is_none():
+    """extract_text_from_dataurl returns ocr-unavailable when _get_ocr_lang() is None."""
+    tiny_png_b64 = (
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    )
+    dataurl = f"data:image/png;base64,{tiny_png_b64}"
+
+    _reset_ocr_status_cache()
+    with patch("app.ocr.ocr_service._get_ocr_lang", return_value=None):
+        result = ocr_service.extract_text_from_dataurl(dataurl)
+
+    assert result["ok"] is False
+    assert result["error"] == "ocr-unavailable"
+    _reset_ocr_status_cache()
+
+
+def test_ocr_status_endpoint_returns_valid_structure():
+    """GET /ocr/status returns a dict with all required diagnostic keys."""
+    _reset_ocr_status_cache()
+    res = client.get("/ocr/status")
+    assert res.status_code == 200
+    data = res.json()
+    assert "tesseract_available" in data
+    assert "chi_tra_available" in data
+    assert "eng_available" in data
+    assert "selected_lang" in data
+    assert "fallback_reason" in data
+    assert isinstance(data["tesseract_available"], bool)
+    assert isinstance(data["chi_tra_available"], bool)
+    assert isinstance(data["eng_available"], bool)
+    # No Python internals in response
+    text = res.text
+    assert "Traceback" not in text
+    assert "pytesseract" not in text
+    assert "PIL" not in text
+    _reset_ocr_status_cache()
