@@ -16459,3 +16459,186 @@ if (!selected) {
 - No raw error codes, tracebacks, or JSON in UI.
 - `/chat` not called. Pet Bubble did not receive screenshot or summary.
 - Full App chat, Pet direct input, voice/STT/TTS, Quiet Mode, click-through: no regression.
+
+## TASK-172B | User-Confirmed Screenshot Summary to Chat Handoff Design
+
+**Status:** DEFINED (docs-only)
+**Date:** 2026-05-30
+**Type:** Design — v0.4 Screen Context (slice 2B, OCR-to-chat handoff)
+**Depends on:** TASK-172A-OCR-POLISH DONE, TASK-172A-OCR-BACKEND DONE, TASK-171A DONE
+
+### Context
+
+TASK-172A-OCR-POLISH delivered the full local OCR pipeline: user captures screenshot → confirms sensitive-content warning → backend preprocesses and OCRs the image → "螢幕摘要" text appears in the Full App UI. The summary is display-only — no `/chat` call is made automatically.
+
+TASK-172B designs the next explicit user action: after reading the OCR summary, the user can choose to ask Christina about it. This is a separate, confirmed action, not an automatic consequence of OCR.
+
+### §1 — Entry Point
+
+A new button **"問克莉絲蒂娜這個畫面"** (Ask Christina about this screen) appears in the Full App UI:
+
+- Shown/enabled **only** after a valid OCR summary exists (`lastScreenSummary` is a non-empty string).
+- Hidden or disabled before OCR summary exists, before capture, or after "清除截圖" clears state.
+- Separate from: "擷取螢幕" (capture), "分析這張" (analyze/OCR), "清除截圖" (clear).
+- No automatic chat handoff after OCR completes — this button is the only trigger.
+- No Pet Bubble automatic trigger in this slice.
+
+### §2 — Confirmation
+
+Clicking "問克莉絲蒂娜這個畫面" must show a confirmation dialog before any `/chat` call:
+
+```
+這張螢幕摘要將傳送給 Christina 作為對話內容。
+螢幕摘要可能含有：私訊或個人訊息、帳戶或財務資料、
+API 金鑰或密碼、工作文件或機密資料。
+確定要繼續嗎？
+```
+
+- User can cancel → `/chat` is **not** called; button remains enabled.
+- User confirms → proceed to §3.
+- Every handoff requires a fresh confirmation; no "always confirm" toggle in TASK-172B.
+
+### §3 — Chat Payload
+
+Only the bounded OCR summary text is sent to `/chat`. Nothing else.
+
+**Send:**
+- Summary text (bounded, cleaned, max 800 chars — already enforced by `cleanOcrText`).
+- Embedded in the user message with a clean prefix.
+
+**Do NOT send:**
+- Raw screenshot `dataUrl`.
+- Image bytes or binary data.
+- OCR provider name, config, or metadata.
+- Hidden debug fields.
+- Raw base64 data.
+
+**Suggested user message format:**
+
+```
+請根據以下螢幕摘要幫我判斷：
+
+{summary}
+```
+
+This embeds the summary as visible user-sent text in the chat history. No hidden injection, no separate context field unless the current `/chat` schema already supports one.
+
+**Schema note:** The current `/chat` request schema is `{ message, use_memory }`. TASK-172B does **not** change this schema. The summary is embedded in `message` with the prefix above. If a future task adds a `context` or `source` field, that is out of scope here.
+
+### §4 — UI Behavior During and After Handoff
+
+- While the `/chat` request is pending: show the existing thinking/loading state (existing `pending` expression, "Waiting for backend reply…" status, `captureScreenInFlight`-style guard on the handoff button).
+- The handoff button is disabled while the `/chat` request is in flight.
+- Final assistant reply appears in the normal Full App chat area — no new display path.
+- Pet Window speech mirror follows existing rules: if `updatePetSpeech` is called by the existing chat success path, the Pet will receive the reply through the existing IPC bridge, unchanged.
+- TTS follows existing rules: if TTS is enabled and the final reply triggers TTS, it fires through the existing TTS path — no new voice path.
+- Do **not** create a new Pet-only response route or a separate Pet commentary path.
+
+### §5 — Privacy and Storage Boundaries
+
+- Requires explicit user confirmation on every handoff click (§2).
+- No automatic analysis-to-chat.
+- No background monitoring.
+- Raw screenshot `dataUrl` is **never** sent to `/chat`.
+- Summary is bounded to 800 chars before sending.
+- No screenshot or summary is persisted to disk.
+- No cloud OCR or cloud vision is introduced.
+- No OCR summary history separate from normal chat history (the sent user message appears in chat history as any user message would).
+- User can clear screenshot and summary before handoff using "清除截圖"; clearing disables/hides the handoff button.
+
+### §6 — Error Handling
+
+All failures must show a clean UI message. No raw error codes, stack traces, Python tracebacks, JSON, backend URLs, or provider internals in UI.
+
+| Error condition | UI behavior |
+|---|---|
+| No screenshot captured | Button hidden/disabled — user cannot reach handoff |
+| No OCR summary available | Button hidden/disabled — user cannot reach handoff |
+| Summary cleared before handoff | Button hidden/disabled — user cannot reach handoff |
+| User cancels confirmation | Silent — button stays enabled, no status change |
+| Summary too long (> 800 chars after clean) | Truncate to 800 chars before sending (already enforced by `cleanOcrText`); optionally show a note |
+| OCR summary contains no useful text | Button should remain hidden/disabled if `lastScreenSummary` is empty or null |
+| `/chat` backend offline | Show existing backend-offline fallback: "Cannot reach backend at …" |
+| `/chat` timeout | Show existing timeout/error fallback |
+| Malformed `/chat` response | Show existing error fallback |
+
+### §7 — Scope Limits
+
+Do **not** implement in TASK-172B:
+
+- Automatic screen watching or live screen monitoring.
+- Cloud vision or image upload to LLM.
+- Screenshot persistence.
+- Pet autonomous commentary triggered by OCR.
+- Broad multimodal provider architecture.
+- New IPC channels or preload surface changes.
+- New backend endpoints.
+- Changes to `/chat` request or response schema.
+- Electron `nodeIntegration` enablement or contextIsolation weakening.
+- Background listeners, timers, or auto-triggers.
+
+### §8 — Preserved Existing Behavior
+
+The following must not regress when TASK-172B is implemented:
+
+- TASK-171A: "擷取螢幕" button, in-memory screenshot, primary-display capture.
+- TASK-171A-MULTIMONITOR-SCOPE-FIX: `primary-display-ambiguous` safe fallback.
+- TASK-172A: "分析這張" button, sensitive-content confirmation, "清除截圖".
+- TASK-172A-OCR-BACKEND: backend local OCR via `POST /ocr/extract`.
+- TASK-172A-OCR-POLISH: preprocessing pipeline, Tesseract config, output cleanup.
+- Full App chat (`sendMessage` / `/chat` path).
+- Pet direct text input (TASK-166E).
+- Voice input / STT / voice-to-chat (TASK-167A–C).
+- TTS playback and voice controls (TASK-168B, TASK-169).
+- Quiet Mode idle suppression.
+- Click-through toggle and CT recovery strip.
+- Clean Pet Bubble speech rules (TASK-149, TASK-152).
+
+### §9 — Testing Plan (for future implementation)
+
+Desktop smoke tests to add:
+
+| Test | Type |
+|---|---|
+| Handoff button hidden/disabled before OCR summary exists | Static/dynamic |
+| Handoff button enabled after OCR summary exists | Dynamic |
+| Clicking handoff shows confirmation dialog | Dynamic |
+| Cancel confirmation prevents `/chat` call | Dynamic |
+| Confirm calls existing `/chat` path exactly once | Dynamic |
+| Only summary text sent in `message`, not `dataUrl` | Dynamic |
+| Raw base64/dataUrl never appears in sent payload | Dynamic |
+| Summary bounded to ≤ 800 chars before send | Dynamic |
+| Backend offline shows clean zh-TW fallback | Dynamic |
+| "清除截圖" disables handoff button | Dynamic |
+| Existing Full App chat still works after wiring | Dynamic (regression) |
+| Pet/voice/TTS behavior does not regress | Dynamic (regression) |
+
+### §10 — Manual Windows Smoke Expectations (for future TASK-172B implementation)
+
+1. Capture screenshot ("擷取螢幕").
+2. Analyze screenshot ("分析這張" → confirm sensitive-content warning).
+3. OCR summary ("螢幕摘要") appears in Full App UI.
+4. "問克莉絲蒂娜這個畫面" button appears/enables only after OCR summary exists.
+5. Clicking it shows confirmation warning (mentions private messages, financial data, API keys/passwords, work documents).
+6. Cancel → button re-enables, `/chat` not called, no status change.
+7. Confirm → user message with prefix + bounded summary appears in chat; Christina replies based on the summary.
+8. No raw screenshot or base64 data visible in chat or status.
+9. No screenshot is saved to disk.
+10. Pet Bubble does not receive screenshot or OCR summary outside existing chat reply mirroring.
+11. Full App chat, voice/STT, TTS, Quiet Mode, click-through: no regression.
+
+### Acceptance Criteria
+
+- [x] TASK-172B design documented in `docs/TASKS.md`.
+- [x] User-confirmed handoff requirement documented (§1, §2).
+- [x] Chat payload boundary documented (§3): summary text only, no dataUrl, no image bytes.
+- [x] Privacy/storage boundaries documented (§5).
+- [x] Error handling documented (§6).
+- [x] Scope limits documented (§7).
+- [x] Preserved existing behavior documented (§8).
+- [x] Testing plan documented (§9).
+- [x] Manual Windows smoke expectations documented (§10).
+- [x] No runtime files modified.
+- [ ] Implementation complete (deferred to TASK-172B implementation step).
+- [ ] Desktop smoke tests passing.
+- [ ] Windows manual smoke PASS.
