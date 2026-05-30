@@ -46,6 +46,16 @@ function testStaticSourceScopeChecks() {
     "main.js must not background-poll desktopCapturer");
   assert.ok(!/writeFileSync.*thumbnail|fs\.write.*toDataURL/.test(main),
     "main.js must not write screenshots to disk");
+  // TASK-171A multi-monitor scope: must match by display_id, not blindly use sources[0]
+  assert.ok(/display_id/.test(main),
+    "main.js must attempt display_id matching for primary display");
+  assert.ok(/primaryId/.test(main),
+    "main.js must derive primaryId from screen.getPrimaryDisplay()");
+  assert.ok(/primary-display-ambiguous/.test(main),
+    "main.js must return primary-display-ambiguous when multi-monitor match fails");
+  assert.ok(/primary-display-ambiguous/.test(
+    fs.readFileSync(rendererPath,"utf8")),
+    "renderer.js must map primary-display-ambiguous to a clean zh-TW message");
 
   assert.match(preload,
     /captureScreen\s*:\s*\(\s*\)\s*=>\s*ipcRenderer\.invoke\(\s*SCREEN_CAPTURE_ONCE_CHANNEL\s*\)/,
@@ -178,6 +188,31 @@ async function testCaptureNeverPostsToChat(ctx) {
 }
 
 // ---------------------------------------------------------------------------
+// TASK-171A multi-monitor scope: primary-display-ambiguous failure test
+// ---------------------------------------------------------------------------
+
+async function testCaptureAmbiguousDisplayShowsCleanMessage(ctx) {
+  // Simulates multi-monitor: captureScreen returns primary-display-ambiguous
+  const { document } = await ctx.loadRenderer({
+    dragonPet: {
+      captureScreen: () =>
+        Promise.resolve({ ok: false, error: "primary-display-ambiguous" }),
+    },
+  });
+  document.getElementById("capture-screen-btn").click();
+  await ctx.settle();
+  const status = ctx.textOf(document, "capture-screen-status");
+  assert.ok(status.includes("螢幕") || status.includes("稍後") || status.includes("無法"),
+    "primary-display-ambiguous must show clean zh-TW message, got: " + status);
+  assert.ok(!status.includes("ambiguous"),
+    "status must not echo raw error code primary-display-ambiguous");
+  assert.ok(!status.includes("base64"), "status must not show raw base64");
+  // Analyze button must still be disabled (no screenshot stored)
+  assert.ok(document.getElementById("analyze-screen-btn").disabled,
+    "analyze button must remain disabled when capture fails with ambiguous");
+}
+
+// ---------------------------------------------------------------------------
 // TASK-172A-OCR-BACKEND: backend fetch OCR tests
 // ---------------------------------------------------------------------------
 
@@ -259,6 +294,7 @@ async function runAll(ctx) {
   await testCaptureFailureUsesSafeMappedMessage(ctx);
   await testCaptureMissingBridgeDoesNotCrash(ctx);
   await testCaptureNeverPostsToChat(ctx);
+  await testCaptureAmbiguousDisplayShowsCleanMessage(ctx); // TASK-171A multi-monitor
   // TASK-172A tests
   test172AStaticSourceScopeChecks();
   await test172AAnalyzeButtonDisabledBeforeCapture(ctx);

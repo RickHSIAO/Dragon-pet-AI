@@ -16113,11 +16113,13 @@ Manual smoke passed. Backend OCR path confirmed working.
 
 **Next step:** TASK-172A-OCR-POLISH (OCR output quality improvement) or TASK-172B (user-confirmed summary → /chat context handoff), depending on roadmap priority.
 
+**REGRESSION NOTE (2026-05-30 — TASK-172A-OCR-POLISH manual smoke, resolved):** TASK-172A-OCR-POLISH Windows manual smoke found that the OCR summary included text from both monitors simultaneously (e.g. "HELLO OCR TEST 123" + "SECOND SCREEN TEST 456" from separate physical screens), confirming that screenshot capture was not scoped to the primary display. Root cause: TASK-171A `screen:capture-once` handler used `selected = sources[0]` as a fallback when `display_id` matching failed — on Windows multi-monitor, `sources[0]` is typically the virtual desktop spanning all monitors. Fix: `TASK-171A-MULTIMONITOR-SCOPE-FIX` — DONE - WINDOWS MANUAL SMOKE PASS (2026-05-30). See that section for full details. Re-smoke confirmed capture is scoped to primary display only.
+
 ## TASK-172A-OCR-POLISH | OCR Image Preprocessing / Quality Improvement
 
-**Status:** DEFINED (docs-only)
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
 **Date:** 2026-05-30
-**Type:** Design — v0.4 Screen Context (slice 2A-OCR-POLISH, OCR quality)
+**Type:** Implementation — v0.4 Screen Context (slice 2A-OCR-POLISH, OCR quality)
 **Depends on:** TASK-172A-OCR-BACKEND DONE (backend pytesseract OCR confirmed working)
 
 ### Context
@@ -16311,4 +16313,149 @@ UI must never show: raw base64, Python tracebacks, file paths, backend URLs, pro
 - [x] Scope limits documented (§10).
 - [x] Preserved existing behavior documented (§11).
 - [x] Manual Windows smoke expectations documented.
-- [x] No runtime files modified in this docs-only step.
+- [x] `preprocess_for_ocr()` pipeline implemented in `backend/app/ocr/ocr_service.py` (grayscale → upscale → contrast → sharpen, all in-memory).
+- [x] `OCR_TESSERACT_CONFIG = "--psm 11 --oem 3 --dpi 150"` set.
+- [x] `_get_ocr_lang()` detects `chi_tra`, falls back to `eng` on missing language data.
+- [x] `_clean_ocr_text()` drops symbol-only garbage lines, collapses repeated chars, preserves code/path/URL lines, safety fallback at 60% removal threshold.
+- [x] 11 new pytest tests added (`test_preprocess_*`, `test_extract_image_too_large_*`, `test_tesseract_config_*`, `test_clean_ocr_*`, `test_chi_tra_*`, `test_api_response_*`); 660 total passed, 0 failed.
+- [x] Windows manual smoke: OCR still requires screenshot + user confirmation, preprocessing improves readability, no temp files written, no traceback/provider internals in UI.
+
+### TASK-172A-OCR-POLISH Windows Manual Smoke Closeout (2026-05-30)
+
+**Result:** PASS
+
+- OCR preprocessing ran in memory; no temp files written to disk.
+- Visible "螢幕摘要" produced with improved text extraction quality.
+- Primary screen "PRIMARY SCREEN ONLY 111" extracted correctly.
+- Secondary screen "SECONDARY SCREEN 222" was NOT included — capture boundary confirmed primary display only (after TASK-171A-MULTIMONITOR-SCOPE-FIX).
+- No raw base64, JSON, Python traceback, provider internals, backend URLs, or file paths appeared in UI.
+- Screenshot and processed image remained memory-only throughout.
+- `/chat` was not called by the OCR path.
+- Pet Bubble did not receive screenshot or OCR summary.
+- "清除截圖" correctly reset both screenshot and summary.
+- Full App chat still works. Pet direct input still works. Voice / STT / voice-to-chat still work. TTS playback and voice controls still work. Quiet Mode and click-through behavior did not regress.
+- No cloud OCR, cloud vision, screenshot persistence, Pet commentary, or `/chat` handoff was added.
+
+**Known limitation:** OCR output still contains some UI noise from window chrome and desktop icons. This is an expected Tesseract limitation on full-desktop screenshots. Text quality is improved over the pre-polish baseline and sufficient for this slice; further refinement is deferred to future tasks.
+
+## TASK-171A-MULTIMONITOR-SCOPE-FIX | Multi-monitor Capture Scope Bug Fix
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-30
+**Type:** Bug fix — TASK-171A regression found during TASK-172A-OCR-POLISH manual smoke
+**Depends on:** TASK-171A DONE
+**Blocks:** TASK-172A-OCR-POLISH closeout
+
+### Root Cause
+
+TASK-171A's `screen:capture-once` IPC handler in `main.js` had a multi-monitor scope bug. After selecting sources with `desktopCapturer.getSources({ types: ["screen"] })`, it attempted to match the primary display by `display_id`, but fell back unsafely:
+
+```javascript
+// Committed (buggy) version:
+const primaryId = String(primary.id);
+let selected = sources.find((s) => String(s.display_id) === primaryId);
+if (!selected) {
+  selected = sources[0];  // BUG: blindly falls back to first source
+}
+```
+
+On Windows multi-monitor setups, `desktopCapturer.getSources()` typically returns a virtual desktop (entire combined desktop spanning all monitors) as the first entry. When `display_id` matching failed — which is common on Windows because the Electron `display_id` string format may differ from `screen.getPrimaryDisplay().id` — the code silently captured `sources[0]`, which is the full virtual desktop, not the primary display.
+
+**Observed symptom (TASK-172A-OCR-POLISH manual smoke):** The OCR summary included text from both monitors simultaneously — e.g. "HELLO OCR TEST 123" (primary) and "SECOND SCREEN TEST 456" (secondary) — confirming the capture was not scoped to the primary display.
+
+### Fix
+
+`apps/desktop/src/main.js` — changed the fallback block:
+
+```javascript
+// Fixed version:
+if (!selected) {
+  // TASK-171A multi-monitor scope fix: if display_id matching fails and
+  // there is more than one source, we cannot safely identify the primary
+  // display — fail with a clean error rather than silently capturing the
+  // wrong screen or a virtual desktop spanning multiple monitors.
+  // Single-monitor systems have exactly one source and are always safe.
+  if (sources.length === 1) {
+    selected = sources[0];
+  } else {
+    return { ok: false, error: "primary-display-ambiguous" };
+  }
+}
+```
+
+`apps/desktop/src/renderer/renderer.js` — added mapping:
+
+```javascript
+"primary-display-ambiguous": "無法確認主要螢幕來源，請重試。",
+```
+
+### Test Coverage
+
+`apps/desktop/scripts/task171a-capture-smoke.js` — new static + dynamic tests:
+
+**Static (`testStaticSourceScopeChecks`):**
+- main.js must contain `display_id` (display_id matching attempted)
+- main.js must contain `primaryId` (derived from `screen.getPrimaryDisplay()`)
+- main.js must contain `primary-display-ambiguous` (safe multi-monitor fallback)
+- renderer.js must map `primary-display-ambiguous` to clean zh-TW message
+
+**Dynamic (`testCaptureAmbiguousDisplayShowsCleanMessage`):**
+- Simulates multi-monitor: `captureScreen()` returns `{ ok: false, error: "primary-display-ambiguous" }`
+- Asserts clean zh-TW message is shown (contains "螢幕", "稍後", or "無法")
+- Asserts raw error code `"ambiguous"` is not echoed in UI
+- Asserts analyze button remains disabled (no screenshot stored)
+
+### Files Changed
+
+| File | Change |
+|---|---|
+| `apps/desktop/src/main.js` | Safe multi-monitor fallback: `primary-display-ambiguous` for ambiguous source; `sources[0]` only for single-source systems |
+| `apps/desktop/src/renderer/renderer.js` | Map `primary-display-ambiguous` to clean zh-TW message |
+| `apps/desktop/scripts/task171a-capture-smoke.js` | Static + dynamic multi-monitor scope tests |
+
+### Validation Results
+
+- `node --check apps/desktop/src/main.js`: PASS
+- `node --check apps/desktop/src/renderer/renderer.js`: PASS
+- `node --check apps/desktop/scripts/task171a-capture-smoke.js`: PASS
+- `node apps/desktop/scripts/task171a-capture-smoke.js`: PASS
+- `node apps/desktop/scripts/renderer-chat-smoke.js`: PASS
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: PASS (226 checks)
+- `node apps/desktop/scripts/pet-window-smoke.js`: PASS (45 checks)
+- `.\backend\.venv\Scripts\python.exe -m pytest --basetemp=.pytest-tmp-run-multimonitor-fix -p no:cacheprovider`: 660 passed, 0 failed
+- `git diff --check`: CRLF line-ending warnings only (not errors)
+
+### Manual Windows Re-smoke Steps
+
+1. Start Electron with `PET_MODE_ENABLED=true` and backend running.
+2. **Single-monitor:** Click "擷取螢幕" — confirm clean success message and screenshot in memory.
+3. **Multi-monitor (dual-display required):** Place distinct text on each display (e.g. Notepad with "PRIMARY SCREEN ONLY" on primary monitor, "SECONDARY SCREEN" on secondary). Click "擷取螢幕". Expected outcome: either (a) success with only primary display text visible in OCR summary, or (b) "無法確認主要螢幕來源，請重試。" — never silently captures secondary monitor content.
+4. Confirm no raw error codes, Python tracebacks, or JSON in UI.
+5. Confirm `/chat` is not called.
+6. Confirm Pet Bubble does not receive screenshot or summary.
+7. Confirm existing chat / voice / TTS / Pet behavior does not regress.
+
+### Acceptance Criteria
+
+- [x] Root cause identified and documented.
+- [x] Fix applied: `main.js` fails safely with `primary-display-ambiguous` when multi-monitor `display_id` match fails.
+- [x] Single-monitor safe path preserved: `sources[0]` used only when exactly one source exists.
+- [x] `renderer.js` maps `primary-display-ambiguous` to clean zh-TW UI message.
+- [x] Static smoke assertions: `display_id`, `primaryId`, `primary-display-ambiguous` in main.js and renderer.js.
+- [x] Dynamic smoke test: `testCaptureAmbiguousDisplayShowsCleanMessage` passes.
+- [x] All automated checks pass: 660 pytest, 226 pet-renderer, 45 pet-window, renderer-chat-smoke.
+- [x] Windows manual smoke: dual-monitor capture does not silently include secondary display content.
+
+### TASK-171A-MULTIMONITOR-SCOPE-FIX Windows Manual Smoke Closeout (2026-05-30)
+
+**Result:** PASS
+
+- Dual-monitor setup confirmed on Windows.
+- Primary screen contained "PRIMARY SCREEN ONLY 111"; secondary screen contained "SECONDARY SCREEN 222".
+- After capture + OCR: "PRIMARY SCREEN ONLY 111" was present in the summary.
+- "SECONDARY SCREEN 222" was NOT present in the summary — secondary monitor content was not captured.
+- Capture scope is confirmed to the primary display only.
+- No "無法確認主要螢幕來源" error was shown — `display_id` matching succeeded on this system.
+- No raw error codes, tracebacks, or JSON in UI.
+- `/chat` not called. Pet Bubble did not receive screenshot or summary.
+- Full App chat, Pet direct input, voice/STT/TTS, Quiet Mode, click-through: no regression.

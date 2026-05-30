@@ -156,6 +156,7 @@ const CAPTURE_FAILURE_MESSAGES = {
   "permission-denied": "無法截圖，缺少螢幕擷取權限。",
   "no-source": "找不到可截圖的螢幕。",
   "capture-failed": "截圖失敗，請稍後再試。",
+  "primary-display-ambiguous": "無法確認主要螢幕來源，請重試。",
 };
 
 function setCaptureScreenStatus(message, isError) {

@@ -530,7 +530,16 @@ ipcMain.handle(SCREEN_CAPTURE_ONCE_CHANNEL, async () => {
     const primaryId = String(primary.id);
     let selected = sources.find((s) => String(s.display_id) === primaryId);
     if (!selected) {
-      selected = sources[0];
+      // TASK-171A multi-monitor scope fix: if display_id matching fails and
+      // there is more than one source, we cannot safely identify the primary
+      // display — fail with a clean error rather than silently capturing the
+      // wrong screen or a virtual desktop spanning multiple monitors.
+      // Single-monitor systems have exactly one source and are always safe.
+      if (sources.length === 1) {
+        selected = sources[0];
+      } else {
+        return { ok: false, error: "primary-display-ambiguous" };
+      }
     }
     const thumbnail = selected && selected.thumbnail;
     if (!thumbnail || thumbnail.isEmpty()) {
