@@ -18314,6 +18314,125 @@ New narrow IPC channel `pet:chat-mirror` (Pet Window → main → Full App rende
 
 ---
 
+## TASK-194 | Full App Chat History / Session Persistence
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-31
+
+### Goal
+
+Persist Full App chat messages to `userData/chat-history.json` and restore them on app restart. Bounded to 200 entries, 2000 chars/entry. No audio, no screenshot, no API key saved. No auto-/chat or TTS on restore.
+
+### Approach
+
+**A. main process — narrow IPC + file helpers**
+
+1. `getChatHistoryPath()` → `path.join(app.getPath("userData"), "chat-history.json")`
+2. `readChatHistoryEntries()` / `writeChatHistoryEntries()` / `appendChatHistoryEntry()` / `clearChatHistoryFile()` — same best-effort try/catch pattern as `pet-window-state.json`
+3. `ipcMain.handle("chat-history:append", ...)` — validates `role` ∈ {user, pet}, slices `text` to `CHAT_HISTORY_TEXT_MAX` (2000), slices `source` to 30 chars; invalid role or empty text returns `{ok:false}`; appends entry with `ts: Date.now()`, keeps last 200 entries
+4. `ipcMain.handle("chat-history:load", ...)` — reads file, filters to valid user/pet entries only, re-sanitizes lengths, returns array
+5. `ipcMain.handle("chat-history:clear", ...)` — writes empty array, returns `{ok:true}`
+
+**B. renderer/preload.js — narrow contextBridge additions**
+
+- 3 new channel constants (`chat-history:append/load/clear`)
+- `sanitizeChatHistoryEntry()` — role/text/source only; role must be "user"|"pet"; text ≤ 2000; source ≤ 30
+- `chatHistoryAppend`, `chatHistoryLoad`, `chatHistoryClear` added to `dragonPet` contextBridge
+
+**C. renderer.js — appendMessage + history functions**
+
+- `appendMessage(role, text, { autoScroll, noHistory, source })` — new `noHistory` (default false) and `source` (default "unknown") options; calls `saveChatHistoryEntry(role, text, source)` unless `noHistory:true` or role is not "user"/"pet"
+- `saveChatHistoryEntry(role, text, source)` — calls `window.dragonPet.chatHistoryAppend`; no-ops gracefully when API absent
+- `loadAndRenderChatHistory()` — async; calls `chatHistoryLoad`; renders entries via `appendMessage(..., {noHistory:true})`; no /chat, no TTS, no setMood; no-ops if API absent
+- `clearChatHistory()` — async; calls `chatHistoryClear`; clears chat DOM via `chatArea.replaceChildren()`
+- startup IIFE: `await loadAndRenderChatHistory()` called first; greeting uses `{noHistory:true}`
+- `sendMessage()`: user message → `source:"full_app"`, pet reply → `source:"full_app"`
+- `setupPetChatMirrorListener()`: user + pet → `source:"pet_input"`
+
+**D. UI — Clear Chat button**
+
+- `index.html`: `<button id="clear-chat-btn">清除對話記錄</button>` added to header
+- `renderer.js`: `clearChatBtn` DOM reference + click listener → `clearChatHistory()`
+
+### Safety / Privacy Boundaries
+
+| Constraint | Implementation |
+|---|---|
+| No audio/blob saved | `role` must be "user" or "pet"; no `arrayBuffer`, no `dataUrl` fields accepted |
+| No API key saved | `sanitizeChatHistoryEntry` only accepts `role`/`text`/`source` — all other fields dropped |
+| No screenshot/OCR image | text-only; no base64; main handler only accepts known fields |
+| No diagnostics/tracebacks | `role` guard rejects any entry that isn't user/pet |
+| No auto-/chat on restore | `loadAndRenderChatHistory` only calls `appendMessage(..., {noHistory:true})` — never `sendMessage` |
+| No TTS on restore | history load does not call `updatePetSpeech`, `speakPetReply`, or any TTS path |
+| Startup greeting not saved | greeting `appendMessage("pet", ..., {noHistory:true})` — not persisted |
+| Bounded | `CHAT_HISTORY_MAX_ENTRIES = 200`, `CHAT_HISTORY_TEXT_MAX = 2000`; hard-sliced at both preload and main |
+| contextIsolation maintained | all 3 channels go through contextBridge; no direct IPC in renderer |
+| Best-effort only | all file I/O wrapped in try/catch; failure never breaks runtime |
+
+### Files Modified
+
+| File | Change | Runtime? |
+|---|---|---|
+| `apps/desktop/src/main.js` | 6 constants + `getChatHistoryPath()` + 4 file helpers + 3 `ipcMain.handle` registrations | Yes |
+| `apps/desktop/src/renderer/preload.js` | 3 channel constants + `sanitizeChatHistoryEntry()` + 3 entries in contextBridge | Yes |
+| `apps/desktop/src/renderer/renderer.js` | Modified `appendMessage()` (noHistory/source); added `saveChatHistoryEntry`, `loadAndRenderChatHistory`, `clearChatHistory`, `clearChatBtn`; updated `sendMessage`, `setupPetChatMirrorListener`, startup | Yes |
+| `apps/desktop/src/renderer/index.html` | Added `clear-chat-btn` button to header | Yes |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | 6 TASK-194 tests | No |
+| `apps/desktop/scripts/pet-window-smoke.js` | 2 TASK-194 tests (IPC channel presence in main + renderer preload) | No |
+| `docs/TASKS.md` | TASK-194 section added | No |
+| `docs/ROADMAP.md` | TASK-194 entry added | No |
+
+### Test Coverage
+
+| Test | Suite | What it verifies |
+|---|---|---|
+| `testTask194AppendMessageSavesUserAndPetMessages` | renderer-chat-smoke | `chatHistoryAppend` called with user+pet entries, source="full_app" |
+| `testTask194NoHistoryFlagSkipsSave` | renderer-chat-smoke | `{noHistory:true}` does not call `chatHistoryAppend` |
+| `testTask194LoadHistoryRendersEntriesNoChatCall` | renderer-chat-smoke | `loadAndRenderChatHistory` renders messages; no /chat call |
+| `testTask194PetMirrorSavesWithPetInputSource` | renderer-chat-smoke | mirror callback saves entries with source="pet_input" |
+| `testTask194ClearChatClearsHistoryAndDom` | renderer-chat-smoke | `clearChatHistory` clears DOM + calls `chatHistoryClear` IPC |
+| `testTask194StartupGreetingNotSaved` | renderer-chat-smoke | startup greeting has `{noHistory:true}` |
+| `testTask194ChatHistoryChannelsInMain` | pet-window-smoke | all 3 channels + helpers + guards in main.js |
+| `testTask194ChatHistoryChannelsInRendererPreload` | pet-window-smoke | all 3 channels + sanitizer + bridge in renderer/preload.js |
+
+### Automated Suite Results
+
+| Suite | Result |
+|---|---|
+| `pet-renderer-smoke.js` | PASS — 232 checks (no new tests needed) |
+| `pet-window-smoke.js` | PASS — 51 checks (+2 new) |
+| `renderer-chat-smoke.js` | PASS (+6 new) |
+| `git diff --check` | CLEAN |
+
+### Acceptance Criteria
+
+- [x] Chat messages persisted to `userData/chat-history.json` on each `appendMessage("user"|"pet", ...)`
+- [x] Chat history restored and rendered on app restart (no /chat, no TTS)
+- [x] Startup greeting NOT saved to history (`{noHistory:true}`)
+- [x] Pet mirror messages saved with `source:"pet_input"`
+- [x] No audio, base64, API key, screenshot, OCR image, diagnostics saved
+- [x] Max 200 entries, 2000 chars/entry (hard cap at preload + main)
+- [x] `clearChatHistory()` clears both DOM and `chat-history.json`
+- [x] `清除對話記錄` button wired in UI
+- [x] `pet-renderer-smoke.js` — 232 checks PASS
+- [x] `pet-window-smoke.js` — 51 checks PASS
+- [x] `renderer-chat-smoke.js` — PASS
+- [x] `git diff --check` CLEAN
+- [x] Windows manual smoke — chat persists across restart; clear works ← **2026-05-31**
+
+### Windows Manual Smoke Results (2026-05-31)
+
+| # | Scenario | Expected | Result |
+|---|---|---|---|
+| 1 | Full App Chat history persistence | Messages appear; history restored after restart | PASS |
+| 2 | Pet direct input history persistence | Pet→Full App mirror saved; restored after restart | PASS |
+| 3 | Pet voice/STT history persistence | STT transcript + reply saved; restored after restart | PASS |
+| 4 | History restore safety | No auto-/chat, no Pet Bubble speech, no TTS on restore | PASS |
+| 5 | Clear chat history | UI clears; old messages absent after next restart | PASS |
+| 6 | Safety / privacy | Only role/text/timestamp/source saved; no audio/screenshot/OCR/dataUrl/API key/traceback | PASS |
+
+---
+
 ## TASK-192 | Voice / TTS Manual Smoke Closeout
 
 **Status:** IMPLEMENTED - NEEDS WINDOWS MANUAL SMOKE

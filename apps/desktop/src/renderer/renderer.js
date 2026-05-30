@@ -43,6 +43,7 @@ const clearScreenBtn = document.getElementById("clear-screen-btn");
 // TASK-172B: ask Christina about current OCR summary.
 const askScreenBtn    = document.getElementById("ask-screen-btn");
 const askScreenStatus = document.getElementById("ask-screen-status");
+const clearChatBtn    = document.getElementById("clear-chat-btn");  // TASK-194
 // TASK-179: gentle hint shown after OCR summary exists.
 const ocrAskHintEl = document.getElementById("ocr-ask-hint");
 const memoryForm  = document.getElementById("memory-form");
@@ -757,7 +758,7 @@ function setPetHint(text) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-function appendMessage(role, text, { autoScroll = false } = {}) {
+function appendMessage(role, text, { autoScroll = false, noHistory = false, source = "unknown" } = {}) {
   const wrap = document.createElement("div");
   wrap.className = `message ${role}`;
 
@@ -779,7 +780,46 @@ function appendMessage(role, text, { autoScroll = false } = {}) {
   // TASK-113: caller controls scroll via autoScroll flag.
   // User sends always pass { autoScroll: true }; AI replies use maybeScrollChatToBottom().
   if (autoScroll) scrollChatToBottom();
+  // TASK-194: persist user/pet messages only; skip ephemeral roles and history-load replay.
+  if (!noHistory && (role === "user" || role === "pet")) {
+    saveChatHistoryEntry(role, text, source);
+  }
   return wrap;
+}
+
+function saveChatHistoryEntry(role, text, source) {
+  const api = typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null;
+  if (!api || typeof api.chatHistoryAppend !== "function") return;
+  const result = api.chatHistoryAppend({ role, text, source });
+  if (result && typeof result.catch === "function") result.catch(() => {});
+}
+
+async function loadAndRenderChatHistory() {
+  const api = typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null;
+  if (!api || typeof api.chatHistoryLoad !== "function") return;
+  let entries;
+  try {
+    entries = await api.chatHistoryLoad();
+  } catch (_e) {
+    return;
+  }
+  if (!Array.isArray(entries) || entries.length === 0) return;
+  for (const entry of entries) {
+    if (!entry || !entry.role || !entry.text) continue;
+    appendMessage(entry.role, entry.text, { noHistory: true });
+  }
+  maybeScrollChatToBottom();
+}
+
+async function clearChatHistory() {
+  const api = typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null;
+  if (!api || typeof api.chatHistoryClear !== "function") return;
+  try {
+    await api.chatHistoryClear();
+  } catch (_e) {
+    return;
+  }
+  chatArea.replaceChildren();
 }
 
 function setMood(mood) {
@@ -1925,7 +1965,7 @@ async function sendMessage(text) {
   setSending(true);
 
   // Show user message immediately — always scroll so the user sees their own send.
-  appendMessage("user", text, { autoScroll: true });
+  appendMessage("user", text, { autoScroll: true, source: "full_app" });
   const loadingMessage = appendMessage(
     "status",
     isOllamaChatPath()
@@ -1960,7 +2000,7 @@ async function sendMessage(text) {
     }
 
     loadingMessage.remove();
-    appendMessage("pet", data.reply);
+    appendMessage("pet", data.reply, { source: "full_app" });
     maybeScrollChatToBottom(); // TASK-113: only scroll if user was near the bottom
     const source = data.source || "unknown";
     const isSourceError = source === "llm_local_error" || source === "llm_real_error";
@@ -2058,6 +2098,13 @@ if (clearScreenBtn) {
 if (askScreenBtn) {
   askScreenBtn.addEventListener("click", () => {
     askScreenFromFullApp();
+  });
+}
+
+// TASK-194: clear chat history and reset chat DOM.
+if (clearChatBtn) {
+  clearChatBtn.addEventListener("click", () => {
+    clearChatHistory();
   });
 }
 
@@ -2165,8 +2212,8 @@ function setupPetChatMirrorListener() {
   if (!api || typeof api.onChatMirrorFromPet !== "function") return;
   api.onChatMirrorFromPet(function (payload) {
     if (!payload.userMessage || !payload.reply) return;
-    appendMessage("user", payload.userMessage, { autoScroll: true });
-    appendMessage("pet", payload.reply);
+    appendMessage("user", payload.userMessage, { autoScroll: true, source: "pet_input" });
+    appendMessage("pet", payload.reply, { source: "pet_input" });
     maybeScrollChatToBottom();
     setMood(payload.mood);
   });
@@ -2191,6 +2238,7 @@ if (typeof document !== "undefined" && typeof document.addEventListener === "fun
 // Startup
 // ---------------------------------------------------------------------------
 (async function startup() {
+  await loadAndRenderChatHistory();  // TASK-194: restore history before greeting
   appendMessage("status", "Connecting to backend...");
 
   try {
@@ -2199,7 +2247,7 @@ if (typeof document !== "undefined" && typeof document.addEventListener === "fun
     if (data.status === "ok") {
       // Remove the connecting status
       chatArea.lastChild.remove();
-      appendMessage("pet", "Hey. I'm here. What's on your mind?");
+      appendMessage("pet", "Hey. I'm here. What's on your mind?", { noHistory: true });
       setMood("neutral"); // also initialises pet expression and friendly hint via setPetExpression / moodHintLabel
       // TASK-109: Startup greeting — static character line, no /chat call, no backend request.
       // setPetExpression("proud") overrides the neutral set above; currentMood stays "neutral"

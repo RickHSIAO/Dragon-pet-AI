@@ -27,6 +27,12 @@ const PET_CLICK_THROUGH_SET_CHANNEL = "pet:set-click-through";  // TASK-166D
 const PET_STT_TRANSCRIBE_CHANNEL = "stt:transcribe";           // TASK-167B
 const PET_CHAT_MIRROR_CHANNEL = "pet:chat-mirror";             // TASK-193: Pet → main → Full App
 const PET_CHAT_MIRROR_RECEIVED_CHANNEL = "pet:chat-mirror-received";  // TASK-193: main → Full App
+const CHAT_HISTORY_FILE = "chat-history.json";                 // TASK-194
+const CHAT_HISTORY_APPEND_CHANNEL = "chat-history:append";    // TASK-194
+const CHAT_HISTORY_LOAD_CHANNEL   = "chat-history:load";      // TASK-194
+const CHAT_HISTORY_CLEAR_CHANNEL  = "chat-history:clear";     // TASK-194
+const CHAT_HISTORY_MAX_ENTRIES    = 200;                      // TASK-194: bounded history cap
+const CHAT_HISTORY_TEXT_MAX       = 2000;                     // TASK-194: per-entry text cap
 const SCREEN_CAPTURE_ONCE_CHANNEL    = "screen:capture-once";      // TASK-171A
 const SCREEN_PICKER_SELECTED_CHANNEL = "screen-picker:selected";  // TASK-174
 const SCREEN_PICKER_CANCEL_CHANNEL   = "screen-picker:cancel";    // TASK-174
@@ -63,6 +69,10 @@ function getScaleDimensions(scaleName) {
 
 function getPetWindowStatePath() {
   return path.join(app.getPath("userData"), PET_WINDOW_STATE_FILE);
+}
+
+function getChatHistoryPath() {   // TASK-194
+  return path.join(app.getPath("userData"), CHAT_HISTORY_FILE);
 }
 
 // TASK-166B: accepts dims so reset and scale-change can use active scale dimensions
@@ -274,6 +284,36 @@ function savePetScale(scaleName) {  // TASK-166B
   } catch (_error) {
     // Best-effort persistence; do not affect runtime use.
   }
+}
+
+// TASK-194: bounded chat history persistence — text-only, best-effort.
+function readChatHistoryEntries() {
+  try {
+    const raw = fs.readFileSync(getChatHistoryPath(), "utf8");
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed;
+  } catch (_e) {
+    // Missing or corrupt file: return empty history.
+  }
+  return [];
+}
+
+function writeChatHistoryEntries(entries) {
+  try {
+    fs.writeFileSync(getChatHistoryPath(), `${JSON.stringify(entries, null, 2)}\n`, "utf8");
+  } catch (_error) {
+    // Best-effort persistence; do not affect runtime use.
+  }
+}
+
+function appendChatHistoryEntry(entry) {
+  const entries = readChatHistoryEntries();
+  entries.push(entry);
+  writeChatHistoryEntries(entries.slice(-CHAT_HISTORY_MAX_ENTRIES));
+}
+
+function clearChatHistoryFile() {
+  writeChatHistoryEntries([]);
 }
 
 function createWindow() {
@@ -975,6 +1015,33 @@ ipcMain.handle(PET_CHAT_MIRROR_CHANNEL, (_event, payload = {}) => {
   }
 
   fullAppWindow.webContents.send(PET_CHAT_MIRROR_RECEIVED_CHANNEL, { userMessage, reply, mood, source });
+  return { ok: true };
+});
+
+// TASK-194: chat history persistence — narrow IPC, text-only entries, no audio/screenshot/apikey.
+ipcMain.handle(CHAT_HISTORY_APPEND_CHANNEL, (_event, entry = {}) => {
+  const role = entry.role === "user" || entry.role === "pet" ? entry.role : null;
+  if (!role) return { ok: false, reason: "invalid_role" };
+  const text = typeof entry.text === "string" ? entry.text.slice(0, CHAT_HISTORY_TEXT_MAX) : "";
+  if (!text) return { ok: false, reason: "empty_text" };
+  const source = typeof entry.source === "string" ? entry.source.slice(0, 30) : "unknown";
+  appendChatHistoryEntry({ role, text, source, ts: Date.now() });
+  return { ok: true };
+});
+
+ipcMain.handle(CHAT_HISTORY_LOAD_CHANNEL, () => {
+  const entries = readChatHistoryEntries();
+  return entries
+    .filter((e) => (e.role === "user" || e.role === "pet") && typeof e.text === "string" && e.text)
+    .map((e) => ({
+      role: e.role,
+      text: typeof e.text === "string" ? e.text.slice(0, CHAT_HISTORY_TEXT_MAX) : "",
+      source: typeof e.source === "string" ? e.source.slice(0, 30) : "unknown",
+    }));
+});
+
+ipcMain.handle(CHAT_HISTORY_CLEAR_CHANNEL, () => {
+  clearChatHistoryFile();
   return { ok: true };
 });
 

@@ -692,6 +692,35 @@ function testTask193MainMirrorHandlerSanitizesPayload() {
   assertIncludes(main, "empty_payload", "main.js mirror handler must return ok:false for empty payload");
 }
 
+// ---------------------------------------------------------------------------
+// TASK-194: Chat History Persistence IPC channel checks
+// ---------------------------------------------------------------------------
+
+function testTask194ChatHistoryChannelsInMain() {
+  const main = readText(mainPath);
+  assertIncludes(main, 'CHAT_HISTORY_APPEND_CHANNEL = "chat-history:append"', "main.js");
+  assertIncludes(main, 'CHAT_HISTORY_LOAD_CHANNEL   = "chat-history:load"', "main.js");
+  assertIncludes(main, 'CHAT_HISTORY_CLEAR_CHANNEL  = "chat-history:clear"', "main.js");
+  assertIncludes(main, "ipcMain.handle(CHAT_HISTORY_APPEND_CHANNEL", "main.js");
+  assertIncludes(main, "ipcMain.handle(CHAT_HISTORY_LOAD_CHANNEL", "main.js");
+  assertIncludes(main, "ipcMain.handle(CHAT_HISTORY_CLEAR_CHANNEL", "main.js");
+  assertIncludes(main, "getChatHistoryPath", "main.js");
+  assertIncludes(main, "invalid_role", "main.js append handler must guard role");
+  assertIncludes(main, "CHAT_HISTORY_MAX_ENTRIES", "main.js must cap history length");
+  assertIncludes(main, "CHAT_HISTORY_TEXT_MAX", "main.js must cap text length");
+}
+
+function testTask194ChatHistoryChannelsInRendererPreload() {
+  const preload = readText(rendererPreloadPath);
+  assertIncludes(preload, 'CHAT_HISTORY_APPEND_CHANNEL = "chat-history:append"', "renderer/preload.js");
+  assertIncludes(preload, 'CHAT_HISTORY_LOAD_CHANNEL   = "chat-history:load"', "renderer/preload.js");
+  assertIncludes(preload, 'CHAT_HISTORY_CLEAR_CHANNEL  = "chat-history:clear"', "renderer/preload.js");
+  assertIncludes(preload, "chatHistoryAppend", "renderer/preload.js");
+  assertIncludes(preload, "chatHistoryLoad", "renderer/preload.js");
+  assertIncludes(preload, "chatHistoryClear", "renderer/preload.js");
+  assertIncludes(preload, "sanitizeChatHistoryEntry", "renderer/preload.js");
+}
+
 function run() {
   const tests = [
     testMainHasPetWindowPrototype,
@@ -752,6 +781,9 @@ function run() {
     testTask193ChatMirrorChannelInMain,
     testTask193ChatMirrorChannelInRendererPreload,
     testTask193MainMirrorHandlerSanitizesPayload,
+    // TASK-194
+    testTask194ChatHistoryChannelsInMain,
+    testTask194ChatHistoryChannelsInRendererPreload,
   ];
 
   for (const test of tests) {

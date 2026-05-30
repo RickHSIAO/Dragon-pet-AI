@@ -2056,6 +2056,154 @@ async function testTask193MirrorMissingApiIsNoOp() {
   assert(chatArea.children.length >= 1, "chat should have startup message");
 }
 
+// ---------------------------------------------------------------------------
+// TASK-194: Chat History Persistence tests
+// ---------------------------------------------------------------------------
+
+async function testTask194AppendMessageSavesUserAndPetMessages() {
+  const appended = [];
+  const { document } = await loadRenderer({
+    dragonPet: {
+      showPetWindow: async () => ({ ok: true }),
+      updatePetSpeech: async () => ({ ok: true }),
+      captureScreen: async () => ({ ok: false }),
+      captureWindow: async () => ({ ok: false }),
+      onChatMirrorFromPet: () => () => {},
+      chatHistoryAppend: (entry) => { appended.push(entry); return Promise.resolve({ ok: true }); },
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({ ok: true }),
+    },
+  });
+
+  await sendChat(document, "history persistence test");
+  await settle();
+
+  const userEntries = appended.filter((e) => e.role === "user");
+  const petEntries  = appended.filter((e) => e.role === "pet");
+  assert.ok(userEntries.length >= 1, "chatHistoryAppend must be called with role=user");
+  assert.ok(petEntries.length >= 1, "chatHistoryAppend must be called with role=pet");
+  assert.match(userEntries[0].text, /history persistence test/);
+  assert.equal(userEntries[0].source, "full_app");
+  assert.equal(petEntries[petEntries.length - 1].source, "full_app");
+}
+
+async function testTask194NoHistoryFlagSkipsSave() {
+  const appended = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      showPetWindow: async () => ({ ok: true }),
+      updatePetSpeech: async () => ({ ok: true }),
+      captureScreen: async () => ({ ok: false }),
+      captureWindow: async () => ({ ok: false }),
+      onChatMirrorFromPet: () => () => {},
+      chatHistoryAppend: (entry) => { appended.push(entry); return Promise.resolve({ ok: true }); },
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({ ok: true }),
+    },
+  });
+
+  // Clear accumulated entries from startup, then call appendMessage with noHistory:true
+  appended.length = 0;
+  sandbox.appendMessage("user", "should not be saved", { noHistory: true });
+  sandbox.appendMessage("pet", "also not saved", { noHistory: true });
+
+  assert.equal(appended.length, 0, "noHistory:true must not call chatHistoryAppend");
+}
+
+async function testTask194LoadHistoryRendersEntriesNoChatCall() {
+  const { document, state } = await loadRenderer({
+    dragonPet: {
+      showPetWindow: async () => ({ ok: true }),
+      updatePetSpeech: async () => ({ ok: true }),
+      captureScreen: async () => ({ ok: false }),
+      captureWindow: async () => ({ ok: false }),
+      onChatMirrorFromPet: () => () => {},
+      chatHistoryAppend: async () => ({ ok: true }),
+      chatHistoryLoad: async () => [
+        { role: "user", text: "old user message", source: "full_app" },
+        { role: "pet",  text: "old pet reply",    source: "full_app" },
+      ],
+      chatHistoryClear: async () => ({ ok: true }),
+    },
+  });
+
+  const chatArea = document.getElementById("chat-area");
+  const userMsgs = chatArea.children.filter((el) => el.className && el.className.includes("user"));
+  const petMsgs  = chatArea.children.filter((el) => el.className && el.className.includes("pet"));
+
+  assert.ok(userMsgs.some((el) => el.children.some((c) => c.textContent.includes("old user message"))),
+    "loaded user message must appear in chat area");
+  assert.ok(petMsgs.some((el) => el.children.some((c) => c.textContent.includes("old pet reply"))),
+    "loaded pet reply must appear in chat area");
+
+  const chatCalls = state.calls.filter((c) => c.url.endsWith("/chat"));
+  assert.equal(chatCalls.length, 0, "loadAndRenderChatHistory must not trigger a /chat call");
+}
+
+async function testTask194PetMirrorSavesWithPetInputSource() {
+  const appended = [];
+  let mirrorCallback = null;
+  await loadRenderer({
+    dragonPet: {
+      showPetWindow: async () => ({ ok: true }),
+      updatePetSpeech: async () => ({ ok: true }),
+      captureScreen: async () => ({ ok: false }),
+      captureWindow: async () => ({ ok: false }),
+      onChatMirrorFromPet: (cb) => { mirrorCallback = cb; return () => {}; },
+      chatHistoryAppend: (entry) => { appended.push(entry); return Promise.resolve({ ok: true }); },
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({ ok: true }),
+    },
+  });
+
+  appended.length = 0;
+  assert.ok(typeof mirrorCallback === "function", "onChatMirrorFromPet callback must be registered");
+  mirrorCallback({ userMessage: "pet direct input", reply: "Hi from Christina", mood: "happy", source: "llm_local" });
+  await settle();
+
+  const userEntries = appended.filter((e) => e.role === "user");
+  const petEntries  = appended.filter((e) => e.role === "pet");
+  assert.ok(userEntries.length >= 1, "pet mirror must save user entry");
+  assert.ok(petEntries.length >= 1, "pet mirror must save pet entry");
+  assert.equal(userEntries[0].source, "pet_input", "pet mirror user entry must have source=pet_input");
+  assert.equal(petEntries[0].source, "pet_input", "pet mirror pet entry must have source=pet_input");
+}
+
+async function testTask194ClearChatClearsHistoryAndDom() {
+  let cleared = false;
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      showPetWindow: async () => ({ ok: true }),
+      updatePetSpeech: async () => ({ ok: true }),
+      captureScreen: async () => ({ ok: false }),
+      captureWindow: async () => ({ ok: false }),
+      onChatMirrorFromPet: () => () => {},
+      chatHistoryAppend: async () => ({ ok: true }),
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => { cleared = true; return { ok: true }; },
+    },
+  });
+
+  // Send a chat message so we have something in the DOM
+  await sendChat(document, "message before clear");
+  const chatArea = document.getElementById("chat-area");
+  assert.ok(chatArea.children.length > 0, "chat area must have messages before clear");
+
+  await sandbox.clearChatHistory();
+
+  assert.ok(cleared, "chatHistoryClear IPC must be called");
+  assert.equal(chatArea.children.length, 0, "chat area must be empty after clearChatHistory");
+}
+
+function testTask194StartupGreetingNotSaved() {
+  const renderer = fs.readFileSync(rendererPath, "utf8");
+  // Startup greeting must have noHistory:true so it is not persisted
+  assert.match(renderer, /appendMessage\("pet",\s*"Hey\. I'm here/,
+    "startup greeting appendMessage must be present");
+  assert.match(renderer, /appendMessage\("pet",\s*"Hey\. I'm here[^)]*noHistory:\s*true/,
+    "startup greeting must pass noHistory:true to appendMessage");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -2145,6 +2293,13 @@ async function main() {
   await testTask193MirrorEmptyUserMessageIsNoOp();
   await testTask193MirrorEmptyReplyIsNoOp();
   await testTask193MirrorMissingApiIsNoOp();
+  // TASK-194: Chat history persistence tests
+  await testTask194AppendMessageSavesUserAndPetMessages();
+  await testTask194NoHistoryFlagSkipsSave();
+  await testTask194LoadHistoryRendersEntriesNoChatCall();
+  await testTask194PetMirrorSavesWithPetInputSource();
+  await testTask194ClearChatClearsHistoryAndDom();
+  testTask194StartupGreetingNotSaved();
   console.log("renderer chat smoke: PASS");
 }
 

@@ -5,6 +5,9 @@ const { contextBridge, ipcRenderer } = require("electron");
 const PET_SHOW_WINDOW_CHANNEL = "pet:show-window";
 const PET_SPEECH_UPDATE_CHANNEL = "pet:speech-update";
 const PET_CHAT_MIRROR_RECEIVED_CHANNEL = "pet:chat-mirror-received";  // TASK-193
+const CHAT_HISTORY_APPEND_CHANNEL = "chat-history:append";  // TASK-194
+const CHAT_HISTORY_LOAD_CHANNEL   = "chat-history:load";    // TASK-194
+const CHAT_HISTORY_CLEAR_CHANNEL  = "chat-history:clear";   // TASK-194
 const SCREEN_CAPTURE_ONCE_CHANNEL   = "screen:capture-once";    // TASK-171A
 const SCREEN_CAPTURE_WINDOW_CHANNEL = "screen:capture-window";  // TASK-176
 
@@ -32,6 +35,15 @@ function onChatMirrorFromPet(callback) {
   return () => ipcRenderer.removeListener(PET_CHAT_MIRROR_RECEIVED_CHANNEL, listener);
 }
 
+// TASK-194: validate entry before forwarding to main — only safe text fields accepted.
+function sanitizeChatHistoryEntry(entry = {}) {
+  return {
+    role: entry.role === "user" || entry.role === "pet" ? entry.role : "",
+    text: typeof entry.text === "string" ? entry.text.slice(0, 2000) : "",
+    source: typeof entry.source === "string" ? entry.source.slice(0, 30) : "unknown",
+  };
+}
+
 contextBridge.exposeInMainWorld(
   "dragonPet",
   Object.freeze({
@@ -44,5 +56,9 @@ contextBridge.exposeInMainWorld(
     captureWindow: () => ipcRenderer.invoke(SCREEN_CAPTURE_WINDOW_CHANNEL),
     // TASK-193: register listener for Pet chat mirror events.
     onChatMirrorFromPet,
+    // TASK-194: chat history persistence IPC.
+    chatHistoryAppend: (entry) => ipcRenderer.invoke(CHAT_HISTORY_APPEND_CHANNEL, sanitizeChatHistoryEntry(entry)),
+    chatHistoryLoad:   () => ipcRenderer.invoke(CHAT_HISTORY_LOAD_CHANNEL),
+    chatHistoryClear:  () => ipcRenderer.invoke(CHAT_HISTORY_CLEAR_CHANNEL),
   })
 );
