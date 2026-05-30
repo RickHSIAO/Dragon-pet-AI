@@ -16112,3 +16112,203 @@ Manual smoke passed. Backend OCR path confirmed working.
 **Known OCR quality limitation:** OCR output on complex UI screenshots is noisy (overlapping elements, icons, non-text regions). This is a known limitation of Tesseract on full-desktop screenshots. Future improvement options: pre-process image (crop, grayscale, upscale), tune Tesseract config, or add chi_tra language data for Traditional Chinese.
 
 **Next step:** TASK-172A-OCR-POLISH (OCR output quality improvement) or TASK-172B (user-confirmed summary → /chat context handoff), depending on roadmap priority.
+
+## TASK-172A-OCR-POLISH | OCR Image Preprocessing / Quality Improvement
+
+**Status:** DEFINED (docs-only)
+**Date:** 2026-05-30
+**Type:** Design — v0.4 Screen Context (slice 2A-OCR-POLISH, OCR quality)
+**Depends on:** TASK-172A-OCR-BACKEND DONE (backend pytesseract OCR confirmed working)
+
+### Context
+
+TASK-172A-OCR-BACKEND confirmed the end-to-end OCR pipeline: backend `POST /ocr/extract` → pytesseract → bounded text summary. However, Tesseract on raw full-desktop screenshots produces rough output: UI icons, window chrome, overlapping elements, and small text are read poorly. This task designs OCR quality improvements — image preprocessing, Tesseract config tuning, output cleanup — without changing privacy boundaries or adding `/chat` handoff.
+
+### Goal
+
+Design backend-side OCR quality improvements so that `POST /ocr/extract` returns cleaner, more useful text from typical desktop screenshots. No new endpoints. No frontend changes. No cloud OCR. No disk persistence.
+
+### §1 — Image Preprocessing
+
+All preprocessing is done in memory (`PIL.Image` in `io.BytesIO`) — no temp file, no disk write.
+
+**Recommended preprocessing pipeline (conservative default):**
+
+1. **Grayscale conversion** — `image.convert("L")`. Reduces colour noise; helps Tesseract focus on luminance contrast.
+2. **Upscaling** — resize to 2× using `Image.LANCZOS` if shortest dimension < 1000 px, or 1.5× if < 2000 px. Cap at max 6000 × 6000 px (see §8 Performance). Higher resolution significantly improves Tesseract accuracy on small text.
+3. **Contrast enhancement** — `ImageEnhance.Contrast(image).enhance(1.5)`. Increases separation between text and background.
+4. **Sharpening** — `ImageFilter.SHARPEN`. Reduces blur from scaling.
+5. **Binarization (optional, conservative)** — `image.point(lambda x: 0 if x < 128 else 255, '1')`. Helps on high-contrast screenshots; may hurt on screenshots with fine gradients. Apply only if contrast is sufficient (histogram analysis or fixed threshold).
+
+**Avoid:**
+- Destructive downscaling before OCR.
+- Aggressive thresholding that removes small text (e.g. code comments, file names).
+- Colour inversion unless background detection confirms it is needed.
+
+**Implementation note:** Apply preprocessing steps as a pipeline function `preprocess_for_ocr(pil_image) -> PIL.Image`. Each step is independently toggled by a constant in `ocr_service.py` (e.g. `OCR_PREPROCESS_GRAYSCALE = True`). No broad settings architecture — constants only.
+
+### §2 — Tesseract Configuration
+
+**Page Segmentation Mode (`--psm`):**
+
+| Mode | Description | Recommended for |
+|---|---|---|
+| `psm 6` | Assume uniform block of text | Text-heavy screenshots (terminals, editors, documents) |
+| `psm 11` | Sparse text — find as much text as possible | Mixed UI screenshots (default desktop, browser) |
+| `psm 12` | Sparse text with OSD | Screenshots with mixed orientations (rare) |
+
+**Recommended default:** `psm 11` (sparse text) for the first implementation — most general for desktop screenshots. Fall back to `psm 6` if the screenshot is identified as text-heavy (heuristic: tall narrow aspect ratio, or user-selectable in future).
+
+**OCR Engine Mode (`--oem`):** `oem 3` (default, uses LSTM neural network). Do not change unless Tesseract version does not support LSTM.
+
+**Other config:** `--dpi 150` (set explicitly to avoid Tesseract guessing from metadata). `tessedit_char_blacklist` is not recommended — it may drop valid characters.
+
+**Passing config:** `pytesseract.image_to_string(image, lang=lang, config="--psm 11 --oem 3 --dpi 150")`.
+
+### §3 — Language Strategy
+
+**Target languages:**
+- **English (`eng`)** — always required; first stable target; included in standard Tesseract install.
+- **Traditional Chinese (`chi_tra`)** — optional; significant improvement for zh-TW UI text; requires separate language data package.
+
+**Detection and fallback:**
+1. Try `lang="eng+chi_tra"` if `chi_tra` is installed.
+2. Detect missing language: catch `pytesseract.TesseractError` with message containing `"Failed loading language"` or `"chi_tra.traineddata"`.
+3. On missing `chi_tra`: retry with `lang="eng"` only — do not fail the entire OCR.
+4. Log detection result at DEBUG level only (not INFO, not returned to renderer).
+
+**Windows install expectation (document in runbook):**
+- `chi_tra.traineddata` must be copied to the Tesseract `tessdata/` directory.
+- Download from: `https://github.com/tesseract-ocr/tessdata` (chi_tra.traineddata).
+- Path: `C:\Program Files\Tesseract-OCR\tessdata\chi_tra.traineddata`.
+
+**Implementation:** `ocr_service.py` function `_get_ocr_lang() -> str` checks if `chi_tra` is available (attempt `pytesseract.image_to_string` on a 1×1 blank image with `lang="chi_tra"`) and caches the result at module load time. Returns `"eng+chi_tra"` or `"eng"`.
+
+### §4 — Output Cleanup
+
+Current `_clean_ocr_text()` trims, collapses blank lines, normalizes spaces, bounds to 800 chars. Add:
+
+1. **Drop symbol-only lines** — remove lines that contain only non-alphanumeric characters and whitespace (e.g. `"|||||||"`, `"- - - -"`, `"• • • •"`). Use regex: `re.sub(r'^[^\w一-鿿　-〿]+$', '', line, flags=re.MULTILINE)`.
+2. **Drop very short garbage lines** — remove lines with < 2 characters after stripping. Exception: preserve lines that look like numbers, file extensions, or error codes.
+3. **Collapse repeated symbols** — `re.sub(r'(.)\1{4,}', r'\1\1\1', text)` (max 3 repeats of any char).
+4. **Preserve code/technical content** — do not strip lines containing `://`, file paths (`/`, `\`), error codes, or numeric sequences. These are likely meaningful.
+5. **Re-bound** after cleanup to 800 chars.
+
+**Do not over-clean:** If cleanup removes more than 60% of the original line count, apply only basic cleanup (trim + collapse blank lines) as a safety fallback.
+
+### §5 — Quality Modes (Future)
+
+First implementation uses a single conservative default mode (auto). Future optional modes:
+
+| Mode | Target | Key change |
+|---|---|---|
+| `auto` | Default (first impl) | psm 11, grayscale+upscale+contrast |
+| `text-heavy` | Terminal, editor, document | psm 6, higher contrast, aggressive binarize |
+| `code/editor` | Code editor, IDE | psm 6, monospace-aware cleanup |
+| `browser/page` | Browser content area | psm 11, column-aware segmentation |
+
+Do not add UI mode selector in this task. Mode is a constant in `ocr_service.py`; future task may add user-selectable mode.
+
+### §6 — Privacy / Storage
+
+- Original screenshot `dataUrl` stays in renderer memory (TASK-171A boundary).
+- Backend decodes to `PIL.Image` in `io.BytesIO` — no disk write.
+- Preprocessed image stays in memory — not saved to temp file unless the provider absolutely requires it (and even then, cleaned up immediately in `finally`).
+- OCR raw output is not logged at INFO level.
+- OCR summary returned to renderer stays in `lastScreenSummary` (renderer memory only).
+- No screenshot history. No external upload. No `/chat` call.
+
+### §7 — Error Handling
+
+| Failure | Reason code | Clean UI message |
+|---|---|---|
+| Preprocessing failed | `ocr-failed` | "分析失敗，請稍後再試。" |
+| Image too large after scaling | `payload-too-large` | "截圖過大，無法分析。" |
+| Tesseract language data missing, retry succeeded | (transparent) | — continue with `eng` only |
+| Tesseract language data missing, retry also failed | `ocr-unavailable` | "分析功能目前不可用。" |
+| OCR timeout | `ocr-timeout` | "分析逾時，請稍後再試。" |
+| OCR failure | `ocr-failed` | "分析失敗，請稍後再試。" |
+| No useful text after cleanup | `no-text` | "未偵測到可用文字。" |
+
+UI must never show: raw base64, Python tracebacks, file paths, backend URLs, provider internals, raw JSON, PIL error messages, Tesseract error strings.
+
+### §8 — Performance
+
+- Upscaling 2× a 2560×1440 screenshot → 5120×2880 image (~44 MP). PIL operations at this resolution take ~1–3 s on a typical developer machine. This is acceptable given the 30 s timeout.
+- **Max dimension guard:** cap output width/height at 6000 px. If scaling would exceed this, scale to fit within 6000 px (preserving aspect ratio). If original is already > 6000 px, pass original to Tesseract without upscaling.
+- **Max pixel guard:** cap total pixels at 36 MP (6000×6000). If exceeded after scaling, return `payload-too-large`.
+- Backend enforces existing 30 s IPC timeout (TASK-172A-OCR-BACKEND). No additional timeout layer needed for preprocessing alone.
+- Renderer UI stays responsive — all preprocessing and OCR are async from renderer's perspective (existing `analyzeInFlight` guard).
+- Document expected latency in runbook: cold-start ~5–10 s first OCR; warm ~2–5 s typical.
+
+### §9 — Testing Plan
+
+**Backend pytest tests (`tests/test_ocr_routes.py` additions):**
+- `_clean_ocr_text` removes symbol-only lines (`|||||||`) while preserving `file.txt`.
+- `_clean_ocr_text` collapses repeated symbols (`aaaaaaa` → `aaa`).
+- `_clean_ocr_text` preserves lines with `://` (URLs/error codes).
+- `preprocess_for_ocr` keeps result in memory (no disk write).
+- `preprocess_for_ocr` caps output at max dimension guard.
+- Image too large after scaling returns `payload-too-large` cleanly.
+- Missing `chi_tra` falls back to `eng` only without raising.
+- No raw tracebacks in any API response.
+
+**Desktop smoke tests (no new desktop tests for preprocessing — existing tests still cover the full OCR flow):**
+- Confirm capture + analyze still works (existing `test172ABackendOcrSuccess`).
+- Confirm `/chat` not called (existing `test172ABackendOcrNeverPostsToChat`).
+- Confirm no screenshot persistence (existing static scope checks).
+- Confirm existing voice/TTS/Pet features do not regress (existing pet-renderer-smoke, pet-window-smoke).
+
+### §10 — Scope Limits (This Docs-Only Step)
+
+- Do **not** implement preprocessing in this docs-only step.
+- Do **not** implement `/chat` handoff (TASK-172B).
+- Do **not** implement Pet commentary.
+- Do **not** implement cloud OCR or cloud vision.
+- Do **not** implement background monitoring.
+- Do **not** persist screenshots or preprocessed images.
+- Do **not** add broad settings architecture (constants in `ocr_service.py` only).
+- Do **not** enable `nodeIntegration` or weaken Electron security.
+- Do **not** modify any runtime implementation file in this docs-only step.
+
+### §11 — Preserved Existing Behavior
+
+- TASK-171A: "擷取螢幕" button, in-memory screenshot, no disk save.
+- TASK-172A: "分析這張" confirmation flow, sensitive-content warning, "清除截圖".
+- TASK-172A-OCR-BACKEND: `POST /ocr/extract`, pytesseract, in-memory decode, clean fallback.
+- Full App chat: typing, Enter key, Send button, `/chat` pipeline.
+- Pet direct text input (TASK-166E).
+- Voice input / STT / voice-to-chat (TASK-167A–C).
+- TTS playback and voice controls (TASK-168B, TASK-169).
+- Quiet Mode idle suppression.
+- Click-through toggle and CT recovery strip.
+- Clean Pet Bubble speech rules.
+
+### Manual Windows Smoke Expectations (for future TASK-172A-OCR-POLISH implementation)
+
+- OCR still requires screenshot + user confirmation (no change to existing flow).
+- Preprocessing improves readability on text-heavy screenshots (terminals, editors).
+- English text is more accurately extracted after grayscale + upscale + contrast.
+- If `chi_tra` is installed, Traditional Chinese OCR improves; if missing, falls back cleanly to English-only.
+- Preprocessed image is not saved to disk.
+- No raw base64, Python traceback, JSON, provider details, or file paths appear in UI.
+- Screenshot is not saved to disk.
+- `/chat` is not called.
+- Pet Bubble does not receive screenshot or summary.
+- Existing chat / voice / TTS / Pet behavior does not regress.
+
+### Acceptance Criteria
+
+- [x] OCR preprocessing strategy documented (§1).
+- [x] Tesseract configuration strategy documented (§2).
+- [x] Language strategy documented (§3).
+- [x] Output cleanup strategy documented (§4).
+- [x] Quality modes documented (§5).
+- [x] Privacy/storage boundaries documented (§6).
+- [x] Error handling documented (§7).
+- [x] Performance constraints documented (§8).
+- [x] Testing plan documented (§9).
+- [x] Scope limits documented (§10).
+- [x] Preserved existing behavior documented (§11).
+- [x] Manual Windows smoke expectations documented.
+- [x] No runtime files modified in this docs-only step.
