@@ -1532,9 +1532,10 @@ async function undoClearChat() {
   if (!lastClearedChatEntries.length) return false;
   const entries = lastClearedChatEntries.map((entry) => ({ ...entry }));
   clearUndoClearState();
-  renderFormalChatEntries(entries);
   try {
-    await persistChatHistoryEntries(entries);
+    const rewritten = await rewritePersistedChatHistory(entries);
+    if (!rewritten) throw new Error("history unavailable");
+    renderFormalChatEntries(entries);
     setClearChatStatus("已復原對話紀錄", 2000);
     return true;
   } catch (_e) {

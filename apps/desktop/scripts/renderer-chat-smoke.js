@@ -5921,6 +5921,280 @@ async function testTask211ContextMenuCopyAndDeleteStillWork() {
   console.log("  testTask211ContextMenuCopyAndDeleteStillWork PASS");
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TASK-212: Chat History Integrity Refactor / Regression Hardening
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function testTask212CollectEntriesOnlyUserPet() {
+  const { document, sandbox } = await loadRenderer();
+  const chatArea = document.getElementById("chat-area");
+  // status, date-separator, startup message — must all be excluded
+  sandbox.appendMessage("status", "系統訊息 startup");
+  sandbox.appendMessage("user", "formal user", { noHistory: true, source: "full_app", ts: 1 });
+  sandbox.appendMessage("pet", "formal pet", { noHistory: true, source: "full_app", ts: 2 });
+  // inject a fake date-separator child directly
+  const sep = document.createElement("div");
+  sep.className = "message date-separator";
+  sep.dataset = { dateKey: "2026-01-01" };
+  chatArea.appendChild(sep);
+
+  const entries = sandbox.collectUndoableChatEntries();
+  assert.equal(entries.length, 2, "collector must return only user/pet formal entries");
+  assert.ok(entries.every((e) => e.role === "user" || e.role === "pet"),
+    "every collected entry must be user or pet");
+  console.log("  testTask212CollectEntriesOnlyUserPet PASS");
+}
+
+async function testTask212CollectedEntriesHaveRequiredFields() {
+  const TS = 1748693400000;
+  const { sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "field check", { noHistory: true, source: "full_app", ts: TS });
+  sandbox.appendMessage("pet", "field reply", { noHistory: true, source: "pet_text", ts: TS + 1 });
+
+  const entries = sandbox.collectUndoableChatEntries();
+  assert.equal(entries.length, 2, "must collect 2 entries");
+  for (const entry of entries) {
+    assert.ok(Object.prototype.hasOwnProperty.call(entry, "role"), "entry must have role");
+    assert.ok(Object.prototype.hasOwnProperty.call(entry, "text"), "entry must have text");
+    assert.ok(Object.prototype.hasOwnProperty.call(entry, "source"), "entry must have source");
+    assert.ok(Object.prototype.hasOwnProperty.call(entry, "ts"), "entry must have ts");
+    assert.ok(typeof entry.role === "string", "role must be string");
+    assert.ok(typeof entry.text === "string", "text must be string");
+    assert.ok(typeof entry.source === "string", "source must be string");
+    assert.ok(typeof entry.ts === "number", "ts must be number");
+  }
+  assert.equal(entries[0].source, "full_app");
+  assert.equal(entries[1].source, "pet_text");
+  assert.equal(entries[0].ts, TS);
+  console.log("  testTask212CollectedEntriesHaveRequiredFields PASS");
+}
+
+async function testTask212RenderFormalChatEntriesRebuildsDateSeparators() {
+  const TS1 = 1748693400000;
+  const TS2 = TS1 + 86400000;
+  const { document, sandbox } = await loadRenderer();
+  const entries = [
+    { role: "user", text: "day one msg", source: "full_app", ts: TS1 },
+    { role: "pet", text: "day two msg", source: "full_app", ts: TS2 },
+  ];
+  sandbox.renderFormalChatEntries(entries);
+  const seps = dateSeparators(document);
+  assert.ok(seps.length >= 2, "renderFormalChatEntries must insert date separators from entry timestamps");
+  console.log("  testTask212RenderFormalChatEntriesRebuildsDateSeparators PASS");
+}
+
+async function testTask212RenderFormalChatEntriesDoesNotWriteHistory() {
+  const appended = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryAppend: (entry) => { appended.push(entry); return Promise.resolve({}); },
+    },
+  });
+  const entries = [
+    { role: "user", text: "render no write", source: "full_app", ts: 1 },
+    { role: "pet", text: "render no write pet", source: "full_app", ts: 2 },
+  ];
+  const before = appended.length;
+  sandbox.renderFormalChatEntries(entries);
+  assert.equal(appended.length, before,
+    "renderFormalChatEntries must not call chatHistoryAppend");
+  console.log("  testTask212RenderFormalChatEntriesDoesNotWriteHistory PASS");
+}
+
+async function testTask212RewritePersistedChatHistoryClearsThenAppends() {
+  let clearCalls = 0;
+  const appended = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => { clearCalls += 1; return {}; },
+      chatHistoryAppend: (entry) => { appended.push(entry); return Promise.resolve({}); },
+    },
+  });
+  const entries = [
+    { role: "user", text: "rw user", source: "full_app", ts: 1 },
+    { role: "pet", text: "rw pet", source: "full_app", ts: 2 },
+  ];
+  await sandbox.rewritePersistedChatHistory(entries);
+  assert.equal(clearCalls, 1, "rewritePersistedChatHistory must call chatHistoryClear once");
+  assert.equal(appended.length, 2, "rewritePersistedChatHistory must append all entries");
+  console.log("  testTask212RewritePersistedChatHistoryClearsThenAppends PASS");
+}
+
+async function testTask212UndoClearUsesRewriteNotAppend() {
+  let clearCalls = 0;
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => { clearCalls += 1; return {}; },
+      chatHistoryAppend: async () => ({}),
+    },
+  });
+  sandbox.appendMessage("user", "undo rewrite user", { noHistory: true });
+  sandbox.appendMessage("pet", "undo rewrite pet", { noHistory: true, source: "full_app" });
+
+  await clearWithConfirm(document);
+  const clearCallsAfterClear = clearCalls;
+
+  undoButton(document).click();
+  await settle();
+
+  assert.ok(clearCalls > clearCallsAfterClear,
+    "undoClearChat must call rewritePersistedChatHistory (chatHistoryClear) during undo, not append-only");
+  assert.equal(formalMessages(document).length, 2, "undo must restore DOM via renderFormalChatEntries");
+  console.log("  testTask212UndoClearUsesRewriteNotAppend PASS");
+}
+
+async function testTask212DeleteUsesRewriteAndRender() {
+  let clearCalls = 0;
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => { clearCalls += 1; return {}; },
+      chatHistoryAppend: async () => ({}),
+    },
+  });
+  sandbox.appendMessage("user", "delete rewrite A", { noHistory: true });
+  sandbox.appendMessage("pet", "delete rewrite B", { noHistory: true, source: "full_app" });
+  sandbox.appendMessage("user", "delete rewrite C", { noHistory: true });
+
+  const clearCallsBefore = clearCalls;
+  await deleteFormalMessage(document, 2);
+
+  assert.ok(clearCalls > clearCallsBefore,
+    "deleteSingleChatMessage must use rewritePersistedChatHistory");
+  assert.equal(formalMessages(document).length, 2,
+    "deleteSingleChatMessage must rebuild DOM via renderFormalChatEntries");
+  console.log("  testTask212DeleteUsesRewriteAndRender PASS");
+}
+
+async function testTask212DeleteUndoUsesRewriteAndRender() {
+  let clearCalls = 0;
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => { clearCalls += 1; return {}; },
+      chatHistoryAppend: async () => ({}),
+    },
+  });
+  sandbox.appendMessage("user", "delete-undo rewrite msg", { noHistory: true });
+
+  await deleteFormalMessage(document, 0);
+  const clearCallsAfterDelete = clearCalls;
+
+  undoButton(document).click();
+  await settle();
+
+  assert.ok(clearCalls > clearCallsAfterDelete,
+    "undoSingleMessageDelete must use rewritePersistedChatHistory");
+  assert.equal(formalMessages(document).length, 1,
+    "undoSingleMessageDelete must rebuild DOM via renderFormalChatEntries");
+  console.log("  testTask212DeleteUndoUsesRewriteAndRender PASS");
+}
+
+async function testTask212EditSubmitUsesRewriteAndRender() {
+  let clearCalls = 0;
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => { clearCalls += 1; return {}; },
+      chatHistoryAppend: async () => ({}),
+    },
+  });
+  sandbox.appendMessage("user", "edit submit rewrite", { noHistory: true });
+  const clearCallsBefore = clearCalls;
+
+  const menu = await openContextMenuForMessage(document, 0);
+  contextMenuItem(menu, "編輯").click();
+  await settle();
+  document.getElementById("message-input").value = "edited rewrite text";
+  document.getElementById("send-btn").click();
+  await settle();
+
+  assert.ok(clearCalls > clearCallsBefore,
+    "submitEditedUserMessage must use rewritePersistedChatHistory");
+  const transcript = sandbox.buildChatTranscript();
+  assert.ok(transcript.includes("edited rewrite text"),
+    "submitEditedUserMessage must rebuild DOM via renderFormalChatEntries");
+  console.log("  testTask212EditSubmitUsesRewriteAndRender PASS");
+}
+
+async function testTask212TranscriptMatchesCollectedEntries() {
+  const TS = 1748693400000;
+  const { sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "transcript user text", { noHistory: true, source: "full_app", ts: TS });
+  sandbox.appendMessage("pet", "transcript pet text", { noHistory: true, source: "full_app", ts: TS + 1 });
+
+  const entries = sandbox.collectUndoableChatEntries();
+  const transcript = sandbox.buildChatTranscript();
+  for (const entry of entries) {
+    assert.ok(transcript.includes(entry.text),
+      `transcript must include text from collected entry: "${entry.text}"`);
+  }
+  console.log("  testTask212TranscriptMatchesCollectedEntries PASS");
+}
+
+async function testTask212SearchActiveUndoClearSafe() {
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({}),
+      chatHistoryAppend: async () => ({}),
+    },
+  });
+  sandbox.appendMessage("user", "search undo clear word", { noHistory: true });
+  searchChat(document, "word");
+  assert.ok(document.getElementById("chat-search-input").value, "search must be active before clear");
+
+  await clearWithConfirm(document);
+  undoButton(document).click();
+  await settle();
+
+  assert.equal(formalMessages(document).length, 1, "undo must restore messages after search+clear");
+  assert.equal(document.getElementById("chat-empty-state").hidden, true,
+    "empty state must be hidden after undo");
+  console.log("  testTask212SearchActiveUndoClearSafe PASS");
+}
+
+async function testTask212EmptyStateShowsOnlyWhenNoFormalEntries() {
+  const { document, sandbox } = await loadRenderer();
+  assert.equal(document.getElementById("chat-empty-state").hidden, false,
+    "empty state must be visible when chat has no formal entries");
+
+  sandbox.appendMessage("user", "formal appears", { noHistory: true });
+  assert.equal(document.getElementById("chat-empty-state").hidden, true,
+    "empty state must be hidden when a formal user entry exists");
+
+  sandbox.appendMessage("status", "non-formal status");
+  assert.equal(document.getElementById("chat-empty-state").hidden, true,
+    "status role must not count as formal for empty state");
+  console.log("  testTask212EmptyStateShowsOnlyWhenNoFormalEntries PASS");
+}
+
+async function testTask212DateSeparatorNotInHistory() {
+  const TS1 = 1748693400000;
+  const TS2 = TS1 + 86400000;
+  const appended = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({}),
+      chatHistoryAppend: (entry) => { appended.push(entry); return Promise.resolve({}); },
+    },
+  });
+  const entries = [
+    { role: "user", text: "sep hist user", source: "full_app", ts: TS1 },
+    { role: "pet", text: "sep hist pet", source: "full_app", ts: TS2 },
+  ];
+  await sandbox.rewritePersistedChatHistory(entries);
+  const badEntries = appended.filter((e) => e.role !== "user" && e.role !== "pet");
+  assert.equal(badEntries.length, 0,
+    "rewritePersistedChatHistory must never append date separators or non-formal roles to history");
+  assert.equal(appended.length, 2, "only user+pet entries must be appended");
+  console.log("  testTask212DateSeparatorNotInHistory PASS");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -6266,6 +6540,20 @@ async function main() {
   await testTask211EditAndCancelDoNotTriggerChatOrPet();
   await testTask211OldUserEditCannotTrigger();
   await testTask211ContextMenuCopyAndDeleteStillWork();
+  // TASK-212: Chat History Integrity Refactor / Regression Hardening
+  await testTask212CollectEntriesOnlyUserPet();
+  await testTask212CollectedEntriesHaveRequiredFields();
+  await testTask212RenderFormalChatEntriesRebuildsDateSeparators();
+  await testTask212RenderFormalChatEntriesDoesNotWriteHistory();
+  await testTask212RewritePersistedChatHistoryClearsThenAppends();
+  await testTask212UndoClearUsesRewriteNotAppend();
+  await testTask212DeleteUsesRewriteAndRender();
+  await testTask212DeleteUndoUsesRewriteAndRender();
+  await testTask212EditSubmitUsesRewriteAndRender();
+  await testTask212TranscriptMatchesCollectedEntries();
+  await testTask212SearchActiveUndoClearSafe();
+  await testTask212EmptyStateShowsOnlyWhenNoFormalEntries();
+  await testTask212DateSeparatorNotInHistory();
   console.log("renderer chat smoke: PASS");
 }
 

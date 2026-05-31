@@ -20925,15 +20925,119 @@ Let users access per-message actions through a lightweight right-click context m
 - [x] `git diff --check` CLEAN ✓
 - [x] Windows visual smoke PASS ✓
 
+---
+
+## TASK-212 | Chat History Integrity Refactor / Regression Hardening
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-06-01
+
+### Goal
+
+Tighten the consistency of the full-app chat history integrity flow after TASK-205–211 accumulated multiple paths that collect, render, and persist formal messages. No new UI features; only consistency alignment and regression test hardening.
+
+### Scope
+
+- `renderer.js`: align `undoClearChat` to the same persist-first shared-helper pattern used by `deleteSingleChatMessage`, `undoSingleMessageDelete`, and `submitEditedUserMessage`.
+- `renderer-chat-smoke.js`: +13 TASK-212 regression tests.
+- `docs/ROADMAP.md`, `docs/TASKS.md`: status/docs sync.
+- No backend, new IPC, chat API schema, history persistence format, Pet Window runtime, Ollama/provider runtime, Screen Context, vision, or multimodal change.
+
+### Design Decisions
+
+| Decision | Detail |
+|---|---|
+| Shared helper set | Four helpers identified: `collectUndoableChatEntries` (DOM→entries), `renderFormalChatEntries` (entries→DOM, no history write), `rewritePersistedChatHistory` (clear+append), `persistChatHistoryEntries` (append-only). Existing names kept. |
+| Entry schema | `{role, text, source, ts}` — confirmed consistent across all four mutation paths. |
+| `undoClearChat` fix | Was: render-first + append-only (`persistChatHistoryEntries`). Now: `rewritePersistedChatHistory` (clear+append) → `renderFormalChatEntries`. Aligns with delete/undo/edit-submit. |
+| Behavior change (undoClearChat) | If persistence fails during undo-clear, the DOM is no longer left in a restored-but-unpersisted state. Previously it would render the restored messages even when persistence threw. This is a correctness improvement; the visual result on the happy path is identical. |
+| Search on undo-clear | No change: `renderFormalChatEntries(entries)` without `preserveSearch` clears search — same as before. |
+| `buildChatTranscript` | Not changed; its own querySelectorAll path is well-tested and consistent with the DOM state managed by `renderFormalChatEntries`. |
+| No rename | Existing helper names match the task's intent; renaming would break all call sites and tests for no gain. |
+
+### Files Changed
+
+| File | Change |
+|---|---|
+| `apps/desktop/src/renderer/renderer.js` | `undoClearChat`: replaced render-first + `persistChatHistoryEntries` with `rewritePersistedChatHistory` + `renderFormalChatEntries` (persist-first) |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | +13 TASK-212 regression tests |
+| `docs/ROADMAP.md` | Added TASK-212 status |
+| `docs/TASKS.md` | Added this TASK-212 record |
+
+### Shared Helpers (Inventory)
+
+| Helper | Role |
+|---|---|
+| `collectUndoableChatEntries()` | Reads formal DOM entries → `{role, text, source, ts}[]`; skips status/date-separator/empty-state |
+| `collectFormalChatMessageElements()` | Returns formal DOM elements (for index lookup by delete/edit) |
+| `renderFormalChatEntries(entries, opts)` | Clears DOM, replays entries via `appendMessage(..., noHistory:true)`, rebuilds date separators, runs `filterChatMessages`, updates empty state; does NOT write history |
+| `rewritePersistedChatHistory(entries)` | `chatHistoryClear()` + `persistChatHistoryEntries(entries)`; returns `false` if API unavailable |
+| `persistChatHistoryEntries(entries)` | Appends entries one-by-one via `chatHistoryAppend`; used by `rewritePersistedChatHistory` internally |
+
+### Functions Using Shared Flow (after TASK-212)
+
+| Function | persist-first? | helpers used |
+|---|---|---|
+| `deleteSingleChatMessage` | ✓ | `rewritePersistedChatHistory` → `renderFormalChatEntries` |
+| `undoSingleMessageDelete` | ✓ | `rewritePersistedChatHistory` → `renderFormalChatEntries` |
+| `undoClearChat` | ✓ (fixed) | `rewritePersistedChatHistory` → `renderFormalChatEntries` |
+| `submitEditedUserMessage` | ✓ | `rewritePersistedChatHistory` × 2 → `renderFormalChatEntries` × 2 |
+
+### Test Coverage
+
+| Test | What it verifies |
+|---|---|
+| `testTask212CollectEntriesOnlyUserPet` | Collector skips status/separator/empty-state; returns only formal user/pet |
+| `testTask212CollectedEntriesHaveRequiredFields` | Every entry has `{role, text, source, ts}` with correct types |
+| `testTask212RenderFormalChatEntriesRebuildsDateSeparators` | `renderFormalChatEntries` inserts date separators from entry timestamps |
+| `testTask212RenderFormalChatEntriesDoesNotWriteHistory` | `renderFormalChatEntries` never calls `chatHistoryAppend` |
+| `testTask212RewritePersistedChatHistoryClearsThenAppends` | `rewritePersistedChatHistory` calls `chatHistoryClear` once then appends all entries |
+| `testTask212UndoClearUsesRewriteNotAppend` | `undoClearChat` now calls `chatHistoryClear` during undo (not append-only) |
+| `testTask212DeleteUsesRewriteAndRender` | `deleteSingleChatMessage` uses `rewritePersistedChatHistory` + `renderFormalChatEntries` |
+| `testTask212DeleteUndoUsesRewriteAndRender` | `undoSingleMessageDelete` uses `rewritePersistedChatHistory` + `renderFormalChatEntries` |
+| `testTask212EditSubmitUsesRewriteAndRender` | `submitEditedUserMessage` uses `rewritePersistedChatHistory` + `renderFormalChatEntries` |
+| `testTask212TranscriptMatchesCollectedEntries` | `buildChatTranscript` text is consistent with `collectUndoableChatEntries` entries |
+| `testTask212SearchActiveUndoClearSafe` | Undo-clear restores messages correctly when search was active before clear |
+| `testTask212EmptyStateShowsOnlyWhenNoFormalEntries` | Empty state shows when no formal entries; hides when at least one exists; status role ignored |
+| `testTask212DateSeparatorNotInHistory` | `rewritePersistedChatHistory` never appends non-formal roles (date separators cannot leak into history) |
+
+### Automated Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+13 TASK-212 tests) |
+| `pet-window-smoke.js` | PASS — 60 checks |
+| `pet-renderer-smoke.js` | PASS — 237 checks |
+| `git diff --check` | CLEAN (CRLF warnings only) |
+
+### Acceptance Criteria
+
+- [x] `undoClearChat` uses `rewritePersistedChatHistory` + persist-first ordering ✓
+- [x] All four mutation paths use the same `rewritePersistedChatHistory` → `renderFormalChatEntries` pattern ✓
+- [x] Entry schema `{role, text, source, ts}` confirmed consistent ✓
+- [x] `renderFormalChatEntries` confirmed no-write-to-history ✓
+- [x] Date separators rebuilt correctly by `renderFormalChatEntries` ✓
+- [x] Timestamp tooltip correct after rebuild ✓
+- [x] Empty state correct after rebuild ✓
+- [x] Search active state does not break after undo-clear ✓
+- [x] `buildChatTranscript` consistent with collected entries ✓
+- [x] Date separators cannot appear in history via `rewritePersistedChatHistory` ✓
+- [x] No new UI features added ✓
+- [x] No backend, new IPC, chat API schema, history format, Pet Window, provider, Screen Context, vision, or multimodal change ✓
+- [x] `renderer-chat-smoke.js` PASS ✓
+- [x] `pet-window-smoke.js` PASS ✓
+- [x] `pet-renderer-smoke.js` PASS ✓
+- [x] `git diff --check` CLEAN ✓
+- [x] Windows visual smoke PASS ✓
+
 ### Windows Visual Smoke Results (2026-06-01)
 
 | Scenario | Result |
 |---|---|
-| Hover actions removed: user/pet message hover no longer shows "複製", "刪除", or "編輯" | PASS |
-| Context menu: right-clicking formal user/pet messages shows the custom menu; both have "複製" and "刪除" | PASS |
-| Edit last user message only: only the last formal user message shows "編輯"; old user messages and pet messages do not | PASS |
-| Non-message boundaries: status messages, startup greeting, and date separators do not show the context menu | PASS |
-| Menu close: clicking outside the menu or pressing Esc closes the context menu | PASS |
-| Edit / resend: edit fills the input with original text, shows "正在編輯最後一則訊息", cancel does not call `/chat` or change history, submit updates the last user message, removes the adjacent old pet reply, and generates a new pet reply | PASS |
-| History persistence: after restart, edited user message and new pet reply remain; removed old pet reply does not return | PASS |
-| Regression: copy/delete, search/filter/highlight/navigation, copy/export transcript, date separator/timestamp tooltip, single-message delete/undo, clear chat/undo, Pet Window, Voice, STT, and TTS | PASS |
+| Undo clear: clear chat shows empty state; undo restores messages; date separators and timestamp/tooltips rebuild correctly | PASS |
+| Undo clear persistence: restored messages remain after app restart | PASS |
+| Single delete / undo regression: single-message delete and undo work; date separators stay stable | PASS |
+| Edit last user message regression: right-click edit on the final user message works; edited submit generates a new reply; restart keeps the edited conversation | PASS |
+| Copy/export: transcript content is correct and excludes empty state or abnormal DOM | PASS |
+| Search: filter/highlight/navigation work; delete, undo, and edit do not break search behavior | PASS |
+| Pet/Voice: Pet Window, Voice, STT, TTS, unread title badge, and Pet unread dot remain normal | PASS |
