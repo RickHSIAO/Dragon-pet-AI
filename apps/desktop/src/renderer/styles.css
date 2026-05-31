@@ -622,10 +622,10 @@ textarea {
   position: relative;
 }
 
-.msg-copy-btn {
+.msg-copy-btn,
+.msg-delete-btn {
   position: absolute;
   top: 8px;
-  right: 8px;
   background: transparent;
   border: none;
   color: var(--text-muted);
@@ -640,12 +640,23 @@ textarea {
   white-space: nowrap;
 }
 
+.msg-copy-btn {
+  right: 8px;
+}
+
+.msg-delete-btn {
+  right: 48px;
+}
+
 .message.user:hover .msg-copy-btn,
-.message.pet:hover .msg-copy-btn {
+.message.pet:hover .msg-copy-btn,
+.message.user:hover .msg-delete-btn,
+.message.pet:hover .msg-delete-btn {
   opacity: 1;
 }
 
-.msg-copy-btn:hover {
+.msg-copy-btn:hover,
+.msg-delete-btn:hover {
   background: rgba(255, 255, 255, 0.06);
   color: var(--text);
 }

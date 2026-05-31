@@ -20712,3 +20712,107 @@ After a confirmed clear, let the user restore the most recently cleared conversa
 | Empty clear: clearing with no formal user/pet conversation shows no undo and creates no empty restore state | PASS |
 | Snapshot boundaries: undo does not restore startup greeting/status messages/date separators; date separators are regenerated during restore render | PASS |
 | Regression: search/filter, search highlight/Enter navigation, copy/export clipboard, chat export file, unread title badge, Pet unread dot, smooth auto-scroll/`↓ 新訊息`, Pet Window, Voice, STT, and TTS | PASS |
+
+---
+
+## TASK-210 | Single Message Delete / Undo
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-31
+
+### Goal
+
+Let users delete one formal user/pet chat message without clearing the whole conversation, with a short undo window for accidental deletes.
+
+### Scope
+
+- `renderer.js`: add per-message delete action, formal DOM collection, single-message delete snapshot, 10-second undo state, DOM re-render, date separator refresh, empty-state update, and existing history clear+append rebuild.
+- `styles.css`: add low-key `.msg-delete-btn` hover affordance beside the existing copy action.
+- `renderer-chat-smoke.js`: +14 TASK-210 tests covering delete buttons, non-formal exclusions, history rewrite, date separators, empty state, undo expiry/restore, search, copy/export, and no `/chat` / Pet side effects.
+- `docs/ROADMAP.md`, `docs/TASKS.md`, `README.md`: status/docs sync.
+- No backend, new IPC, chat API schema, chat history persistence format, Pet Window runtime, Ollama/provider runtime, Screen Context, vision, or multimodal change.
+
+### Design Decisions
+
+| Decision | Detail |
+|---|---|
+| Delete only formal messages | Delete button is added only when `countsAsChat` is true on user/pet messages; startup greeting/status/date separators are excluded |
+| Dataset-only snapshot | Delete/undo reads `dataset.msgText`, `dataset.source`, `dataset.ts`, and role from DOM classes; it never reads raw HTML |
+| Existing persistence path | History is rewritten with existing `chatHistoryClear` + `chatHistoryAppend`; no new IPC or persistence format |
+| Re-render after mutation | Delete/undo rebuilds `#chat-area` via `appendMessage(..., noHistory:true)` so date separators and timestamp tooltips are regenerated |
+| 10-second undo window | `UNDO_DELETE_MESSAGE_MS = 10000`; expiry clears the undo state/status |
+| Search preserved | Single-message delete/undo preserves the active search query and reapplies filtering/highlight/navigation state |
+| No side effects | Delete/undo does not call `/chat`, does not update Pet Bubble, and does not trigger TTS |
+
+### Files Changed
+
+| File | Change |
+|---|---|
+| `apps/desktop/src/renderer/renderer.js` | Added single-message delete/undo state, formal message element collection, `rewritePersistedChatHistory()`, `renderFormalChatEntries()`, `deleteSingleChatMessage()`, `undoSingleMessageDelete()`, and delete action button wiring |
+| `apps/desktop/src/renderer/styles.css` | Added `.msg-delete-btn` styling and hover rules beside `.msg-copy-btn` |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | Added TASK-210 tests and fake click `stopPropagation()` support |
+| `docs/ROADMAP.md` | Added TASK-210 status and moved next planned task to TASK-211 after visual smoke |
+| `docs/TASKS.md` | Added this TASK-210 record |
+| `README.md` | Updated because README still named TASK-209 as latest and TASK-210 as next |
+
+### Test Coverage
+
+| Test | What it verifies |
+|---|---|
+| `testTask210FunctionsAndCssExist` | Delete/undo helpers, 10-second timeout, and CSS affordance exist |
+| `testTask210FormalMessagesHaveDeleteButton` | Formal user/pet messages get delete buttons |
+| `testTask210NonFormalMessagesHaveNoDeleteButton` | Startup greeting, status messages, and date separators get no delete action |
+| `testTask210DeleteOnlySelectedMessage` | Delete removes only the selected message |
+| `testTask210DeleteRewritesHistoryPersistence` | Delete rewrites persisted history through existing clear+append helpers |
+| `testTask210DeleteRefreshesDateSeparators` | Delete re-renders date separators and removes empty-day separators |
+| `testTask210DeletingLastMessageShowsEmptyState` | Empty state shows after deleting the final formal message |
+| `testTask210DeleteShowsUndoUi` | Delete status shows "已刪除 1 則訊息。" with "復原" |
+| `testTask210DeleteUndoExpiresAfterTenSeconds` | Undo UI expires after 10 seconds |
+| `testTask210UndoRestoresMessageAndPersistence` | Undo restores DOM order and persisted history |
+| `testTask210UndoRestoresTimestampTooltipAndDateSeparators` | Undo restores timestamp tooltip and date separators |
+| `testTask210SearchActiveDeleteKeepsHighlightNavigation` | Active search query/highlight/navigation remain usable after delete |
+| `testTask210CopyExportAfterDeleteAndUndo` | Copy/export work after delete and undo |
+| `testTask210DeleteUndoDoesNotTriggerChatOrPet` | Delete/undo do not call `/chat` or Pet speech bridge |
+
+### Automated Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+14 TASK-210 tests) |
+| `pet-window-smoke.js` | PASS — 60 checks |
+| `pet-renderer-smoke.js` | PASS — 237 checks |
+| `git diff --check` | CLEAN (CRLF warnings only, no whitespace errors) |
+
+### Acceptance Criteria
+
+- [x] Formal user/pet messages have delete action buttons ✓
+- [x] Startup greeting/status/date separators have no delete action ✓
+- [x] Delete removes only one selected formal message ✓
+- [x] Delete rewrites chat history persistence through existing IPC ✓
+- [x] Delete/undo re-render date separators and timestamp tooltips ✓
+- [x] Deleting the final formal message shows empty state ✓
+- [x] Undo UI appears and auto-expires after 10 seconds ✓
+- [x] Undo restores the most recent single-message delete only ✓
+- [x] Search/filter/highlight/navigation remain intact ✓
+- [x] Copy/export work after delete/undo ✓
+- [x] Delete/undo do not trigger `/chat`, Pet Bubble, or TTS ✓
+- [x] No backend, new IPC, history format, chat API schema, Pet Window, provider, Screen Context, vision, or multimodal change ✓
+- [x] `renderer-chat-smoke.js` PASS ✓
+- [x] `pet-window-smoke.js` PASS ✓
+- [x] `pet-renderer-smoke.js` PASS ✓
+- [x] `git diff --check` CLEAN ✓
+- [x] Windows visual smoke PASS ✓
+
+### Windows Visual Smoke Results (2026-05-31)
+
+| Scenario | Result |
+|---|---|
+| Hover delete action: user/pet message hover shows "刪除"; existing "複製" still works | PASS |
+| Delete single message: deleting removes only the selected user/pet message, keeps other messages, and shows "已刪除 1 則訊息。" with "復原" | PASS |
+| Undo restore: clicking "復原" within 10 seconds restores the deleted message; date separators, HH:mm timestamp, full tooltip, and copy/export inclusion are correct | PASS |
+| Undo expiry: after 10 seconds without undo, undo UI disappears and that delete can no longer be restored | PASS |
+| Delete last formal message: deleting the final formal user/pet message shows empty state and leaves no orphaned date separator | PASS |
+| Non-deletable boundaries: startup greeting, status messages, and date separators have no delete action | PASS |
+| Search interaction: deleting during active search does not break filter/highlight/navigation; after undo the message can be found again | PASS |
+| History persistence: non-undone deletes stay deleted after app restart; restored messages remain after app restart | PASS |
+| Regression: copy/export clipboard, chat export file, unread title badge, Pet unread dot, smooth auto-scroll/`↓ 新訊息`, Pet Window, Voice, STT, and TTS | PASS |

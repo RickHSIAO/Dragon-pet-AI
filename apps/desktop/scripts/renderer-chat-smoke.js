@@ -119,6 +119,7 @@ class FakeElement {
     this.dispatchEvent({
       type: "click",
       preventDefault() {},
+      stopPropagation() {},
     });
   }
 
@@ -5119,6 +5120,359 @@ async function testTask209CopyExportAfterUndo() {
   console.log("  testTask209CopyExportAfterUndo PASS");
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TASK-210: Single Message Delete / Undo
+// ─────────────────────────────────────────────────────────────────────────────
+
+function formalMessages(document) {
+  return document.getElementById("chat-area").children.filter((child) => {
+    const classes = child.className || "";
+    return classes.includes("message") &&
+      (classes.includes("user") || classes.includes("pet")) &&
+      child.dataset &&
+      child.dataset.formalChat === "true";
+  });
+}
+
+function dateSeparators(document) {
+  return document.getElementById("chat-area").children
+    .filter((child) => (child.className || "").includes("date-separator"));
+}
+
+function deleteButtonForMessage(message) {
+  return message.children.find((child) => (child.className || "").includes("msg-delete-btn"));
+}
+
+async function deleteFormalMessage(document, index = 0) {
+  const msg = formalMessages(document)[index];
+  const btn = deleteButtonForMessage(msg);
+  btn.click();
+  await settle();
+}
+
+function testTask210FunctionsAndCssExist() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const css = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "styles.css"), "utf8");
+  assert.ok(src.includes("const UNDO_DELETE_MESSAGE_MS = 10000"),
+    "single-message delete undo window must be 10 seconds");
+  assert.ok(src.includes("function collectFormalChatMessageElements"),
+    "renderer.js must define formal message DOM collector");
+  assert.ok(src.includes("async function deleteSingleChatMessage"),
+    "renderer.js must define deleteSingleChatMessage");
+  assert.ok(src.includes("async function undoSingleMessageDelete"),
+    "renderer.js must define undoSingleMessageDelete");
+  assert.ok(src.includes("rewritePersistedChatHistory(nextEntries)"),
+    "single-message delete/undo must rewrite persistence via existing history helpers");
+  assert.ok(css.includes(".msg-delete-btn"),
+    "styles.css must define .msg-delete-btn");
+  assert.ok(css.includes(".message.user:hover .msg-delete-btn") || css.includes(".message.pet:hover .msg-delete-btn"),
+    "delete action must remain a hover affordance");
+  console.log("  testTask210FunctionsAndCssExist PASS");
+}
+
+async function testTask210FormalMessagesHaveDeleteButton() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "delete action user", { noHistory: true });
+  sandbox.appendMessage("pet", "delete action pet", { noHistory: true, source: "pet_text" });
+
+  const messages = formalMessages(document);
+  assert.equal(messages.length, 2, "test setup must have two formal messages");
+  assert.ok(deleteButtonForMessage(messages[0]), "user message must have delete action");
+  assert.ok(deleteButtonForMessage(messages[1]), "pet message must have delete action");
+  assert.equal(deleteButtonForMessage(messages[0]).textContent, "刪除");
+  console.log("  testTask210FormalMessagesHaveDeleteButton PASS");
+}
+
+async function testTask210NonFormalMessagesHaveNoDeleteButton() {
+  const { document, sandbox } = await loadRenderer();
+  const chatArea = document.getElementById("chat-area");
+  const startup = chatArea.children.find((child) => (child.className || "").includes("pet"));
+  sandbox.appendMessage("status", "status delete skip", { noHistory: true });
+  const sep = document.createElement("div");
+  sep.className = "message date-separator";
+  chatArea.appendChild(sep);
+
+  assert.equal(startup && deleteButtonForMessage(startup), undefined,
+    "startup greeting must not have delete action");
+  const status = chatArea.children.find((child) => (child.className || "").includes("status"));
+  assert.equal(status && deleteButtonForMessage(status), undefined,
+    "status message must not have delete action");
+  assert.equal(deleteButtonForMessage(sep), undefined,
+    "date separator must not have delete action");
+  console.log("  testTask210NonFormalMessagesHaveNoDeleteButton PASS");
+}
+
+async function testTask210DeleteOnlySelectedMessage() {
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({}),
+      chatHistoryAppend: async () => ({}),
+    },
+  });
+  sandbox.appendMessage("user", "keep before", { noHistory: true });
+  sandbox.appendMessage("pet", "delete middle", { noHistory: true, source: "pet_text" });
+  sandbox.appendMessage("user", "keep after", { noHistory: true });
+
+  await deleteFormalMessage(document, 1);
+
+  const transcript = sandbox.buildChatTranscript();
+  assert.ok(transcript.includes("keep before"), "delete must keep earlier message");
+  assert.ok(!transcript.includes("delete middle"), "delete must remove selected message");
+  assert.ok(transcript.includes("keep after"), "delete must keep later message");
+  console.log("  testTask210DeleteOnlySelectedMessage PASS");
+}
+
+async function testTask210DeleteRewritesHistoryPersistence() {
+  let clearCalls = 0;
+  const appended = [];
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => { clearCalls += 1; return {}; },
+      chatHistoryAppend: (entry) => { appended.push(entry); return Promise.resolve({}); },
+    },
+  });
+  sandbox.appendMessage("user", "persist keep", { noHistory: true, source: "full_app", ts: 1748693400000 });
+  sandbox.appendMessage("pet", "persist delete", { noHistory: true, source: "pet_voice", ts: 1748693460000 });
+
+  await deleteFormalMessage(document, 1);
+
+  assert.equal(clearCalls, 1, "delete must clear persisted history before rebuilding it");
+  assert.equal(appended.length, 1, "delete must append only remaining formal entries");
+  assert.equal(appended[0].text, "persist keep");
+  assert.equal(appended[0].source, "full_app");
+  console.log("  testTask210DeleteRewritesHistoryPersistence PASS");
+}
+
+async function testTask210DeleteRefreshesDateSeparators() {
+  const TS1 = 1748693400000;
+  const TS2 = TS1 + 86400000;
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({}),
+      chatHistoryAppend: async () => ({}),
+    },
+  });
+  sandbox.appendMessage("user", "day one delete", { noHistory: true, ts: TS1 });
+  sandbox.appendMessage("pet", "day two keep", { noHistory: true, ts: TS2 });
+  assert.equal(dateSeparators(document).length, 2, "setup must have two date separators");
+
+  await deleteFormalMessage(document, 0);
+
+  assert.equal(dateSeparators(document).length, 1,
+    "delete re-render must remove date separator for empty day");
+  assert.ok(sandbox.buildChatTranscript().includes("day two keep"));
+  console.log("  testTask210DeleteRefreshesDateSeparators PASS");
+}
+
+async function testTask210DeletingLastMessageShowsEmptyState() {
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({}),
+      chatHistoryAppend: async () => ({}),
+    },
+  });
+  sandbox.appendMessage("user", "last formal", { noHistory: true });
+
+  await deleteFormalMessage(document, 0);
+
+  assert.equal(document.getElementById("chat-empty-state").hidden, false,
+    "empty state must show after deleting the last formal message");
+  console.log("  testTask210DeletingLastMessageShowsEmptyState PASS");
+}
+
+async function testTask210DeleteShowsUndoUi() {
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({}),
+      chatHistoryAppend: async () => ({}),
+    },
+  });
+  sandbox.appendMessage("user", "undo delete visible", { noHistory: true });
+
+  await deleteFormalMessage(document, 0);
+
+  assert.ok(textOf(document, "clear-chat-status").includes("已刪除 1 則訊息"),
+    "delete status must announce single-message deletion");
+  assert.ok(undoButton(document), "delete status must include undo button");
+  console.log("  testTask210DeleteShowsUndoUi PASS");
+}
+
+async function testTask210DeleteUndoExpiresAfterTenSeconds() {
+  const timers = [];
+  const fakeSetTimeout = (fn, ms) => {
+    timers.push({ fn, ms, cleared: false });
+    return timers.length;
+  };
+  const fakeClearTimeout = (id) => {
+    if (timers[id - 1]) timers[id - 1].cleared = true;
+  };
+  const { document, sandbox } = await loadRenderer({
+    setTimeout: fakeSetTimeout,
+    clearTimeout: fakeClearTimeout,
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({}),
+      chatHistoryAppend: async () => ({}),
+    },
+  });
+  sandbox.appendMessage("user", "single undo expiry", { noHistory: true });
+
+  await deleteFormalMessage(document, 0);
+  const timer = timers.find((item) => item.ms === 10000 && !item.cleared);
+  assert.ok(timer, "single-message undo must schedule a 10 second expiry timer");
+  timer.fn();
+
+  assert.equal(textOf(document, "clear-chat-status"), "",
+    "single-message undo expiry must clear status text");
+  assert.equal(undoButton(document), undefined,
+    "single-message undo expiry must remove undo button");
+  console.log("  testTask210DeleteUndoExpiresAfterTenSeconds PASS");
+}
+
+async function testTask210UndoRestoresMessageAndPersistence() {
+  let clearCalls = 0;
+  const appended = [];
+  const ts = 1748693400000;
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => { clearCalls += 1; return {}; },
+      chatHistoryAppend: (entry) => { appended.push(entry); return Promise.resolve({}); },
+    },
+  });
+  sandbox.appendMessage("user", "first keep", { noHistory: true, ts });
+  sandbox.appendMessage("pet", "restore deleted", { noHistory: true, source: "pet_text", ts: ts + 1000 });
+  sandbox.appendMessage("user", "last keep", { noHistory: true, ts: ts + 2000 });
+
+  await deleteFormalMessage(document, 1);
+  appended.length = 0;
+  undoButton(document).click();
+  await settle();
+
+  const transcript = sandbox.buildChatTranscript();
+  assert.ok(transcript.indexOf("first keep") < transcript.indexOf("restore deleted"),
+    "undo must restore message near its original position");
+  assert.ok(transcript.indexOf("restore deleted") < transcript.indexOf("last keep"),
+    "undo must restore before following messages");
+  assert.equal(clearCalls, 2, "undo must rewrite persisted history again");
+  assert.deepEqual(appended.map((entry) => entry.text), ["first keep", "restore deleted", "last keep"]);
+  console.log("  testTask210UndoRestoresMessageAndPersistence PASS");
+}
+
+async function testTask210UndoRestoresTimestampTooltipAndDateSeparators() {
+  const TS1 = 1748693400000;
+  const TS2 = TS1 + 86400000;
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({}),
+      chatHistoryAppend: async () => ({}),
+    },
+  });
+  sandbox.appendMessage("user", "day one keep", { noHistory: true, ts: TS1 });
+  sandbox.appendMessage("pet", "day two restore", { noHistory: true, ts: TS2, source: "pet_voice" });
+
+  await deleteFormalMessage(document, 1);
+  undoButton(document).click();
+  await settle();
+
+  assert.equal(dateSeparators(document).length, 2,
+    "undo must re-render date separators for restored timestamp day");
+  const restored = formalMessages(document).find((msg) => msg.dataset.msgText === "day two restore");
+  const meta = restored.children.find((child) => (child.className || "").includes("msg-meta"));
+  assert.ok(meta && meta.title && meta.title.includes("2025"),
+    "undo-restored message must keep full timestamp tooltip");
+  console.log("  testTask210UndoRestoresTimestampTooltipAndDateSeparators PASS");
+}
+
+async function testTask210SearchActiveDeleteKeepsHighlightNavigation() {
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({}),
+      chatHistoryAppend: async () => ({}),
+    },
+  });
+  sandbox.appendMessage("user", "task210 keyword remove", { noHistory: true });
+  sandbox.appendMessage("pet", "task210 keyword keep", { noHistory: true });
+  searchChat(document, "keyword");
+
+  await deleteFormalMessage(document, 0);
+  const input = document.getElementById("chat-search-input");
+  input.dispatchEvent({ type: "keydown", key: "Enter", preventDefault() {} });
+
+  assert.equal(input.value, "keyword", "delete must preserve active search query");
+  assert.ok(textOf(document, "chat-search-count").includes("找到 1 筆"),
+    "delete must refresh search result count");
+  const remaining = formalMessages(document)[0];
+  assert.ok((remaining.className || "").includes("search-active"),
+    "search navigation must still mark the remaining result active");
+  assert.ok(remaining.children.some((child) => (child.innerHTML || "").includes("search-highlight")),
+    "search highlighting must be re-applied after delete re-render");
+  console.log("  testTask210SearchActiveDeleteKeepsHighlightNavigation PASS");
+}
+
+async function testTask210CopyExportAfterDeleteAndUndo() {
+  const saveTextFileCalls = [];
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({}),
+      chatHistoryAppend: async () => ({}),
+      saveTextFile(payload) {
+        saveTextFileCalls.push(payload);
+        return Promise.resolve({ ok: true, canceled: false });
+      },
+    },
+  });
+  sandbox.appendMessage("user", "delete export keep", { noHistory: true });
+  sandbox.appendMessage("pet", "delete export restore", { noHistory: true, source: "pet_text" });
+
+  await deleteFormalMessage(document, 1);
+  assert.ok(!sandbox.buildChatTranscript().includes("delete export restore"),
+    "copy transcript must exclude deleted message before undo");
+  undoButton(document).click();
+  await settle();
+  document.getElementById("export-chat-btn").click();
+  await settle();
+
+  assert.ok(sandbox.buildChatTranscript().includes("delete export restore"),
+    "copy transcript must include restored message after undo");
+  assert.equal(saveTextFileCalls.length, 1, "export must work after single-message undo");
+  assert.ok(saveTextFileCalls[0].content.includes("delete export restore"),
+    "exported file content must include restored message");
+  console.log("  testTask210CopyExportAfterDeleteAndUndo PASS");
+}
+
+async function testTask210DeleteUndoDoesNotTriggerChatOrPet() {
+  const speechUpdates = [];
+  const { document, state, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({}),
+      chatHistoryAppend: async () => ({}),
+      updatePetSpeech(payload) { speechUpdates.push(payload); return Promise.resolve({ ok: true }); },
+    },
+  });
+  sandbox.appendMessage("user", "side effect delete", { noHistory: true });
+  state.calls.length = 0;
+
+  await deleteFormalMessage(document, 0);
+  undoButton(document).click();
+  await settle();
+
+  assert.equal(state.calls.filter((call) => call.url.endsWith("/chat")).length, 0,
+    "single-message delete/undo must not trigger /chat");
+  assert.equal(speechUpdates.length, 0,
+    "single-message delete/undo must not call updatePetSpeech / Pet Bubble");
+  console.log("  testTask210DeleteUndoDoesNotTriggerChatOrPet PASS");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -5426,6 +5780,21 @@ async function main() {
   await testTask209EmptyClearDoesNotShowUndo();
   await testTask209UndoDoesNotTriggerChatOrPet();
   await testTask209CopyExportAfterUndo();
+  // TASK-210: Single Message Delete / Undo
+  testTask210FunctionsAndCssExist();
+  await testTask210FormalMessagesHaveDeleteButton();
+  await testTask210NonFormalMessagesHaveNoDeleteButton();
+  await testTask210DeleteOnlySelectedMessage();
+  await testTask210DeleteRewritesHistoryPersistence();
+  await testTask210DeleteRefreshesDateSeparators();
+  await testTask210DeletingLastMessageShowsEmptyState();
+  await testTask210DeleteShowsUndoUi();
+  await testTask210DeleteUndoExpiresAfterTenSeconds();
+  await testTask210UndoRestoresMessageAndPersistence();
+  await testTask210UndoRestoresTimestampTooltipAndDateSeparators();
+  await testTask210SearchActiveDeleteKeepsHighlightNavigation();
+  await testTask210CopyExportAfterDeleteAndUndo();
+  await testTask210DeleteUndoDoesNotTriggerChatOrPet();
   console.log("renderer chat smoke: PASS");
 }
 

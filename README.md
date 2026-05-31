@@ -1,13 +1,13 @@
 # Dragon Pet AI
 
-> **Dragon Pet AI** 是一個本地優先的 Electron + FastAPI 桌面陪伴原型，具備手動記憶、記憶稽核日誌、BYOK 提供者設定、使用量計量、安全審查過的 Test Connection 端點、Anthropic/Ollama 提供者轉接層（隱藏在 feature flag 後）、本地 Ollama `/chat` 執行期 smoke 通過（`source=llm_local`，克莉絲蒂娜人格確認）、Ollama Provider Settings UI（無需 API Key，使用本機 GPU/CPU），以及 Full App 聊天搜尋、高亮、匯出、未讀提示、時間戳、LINE-style 日期分隔線、清除確認、empty state 與 Undo Clear Chat。以安全優先的增量開發方式建構，後端 mocked 測試套件共 **586 個測試通過**。
+> **Dragon Pet AI** 是一個本地優先的 Electron + FastAPI 桌面陪伴原型，具備手動記憶、記憶稽核日誌、BYOK 提供者設定、使用量計量、安全審查過的 Test Connection 端點、Anthropic/Ollama 提供者轉接層（隱藏在 feature flag 後）、本地 Ollama `/chat` 執行期 smoke 通過（`source=llm_local`，克莉絲蒂娜人格確認）、Ollama Provider Settings UI（無需 API Key，使用本機 GPU/CPU），以及 Full App 聊天搜尋、高亮、匯出、未讀提示、時間戳、LINE-style 日期分隔線、清除確認、empty state、Undo Clear Chat 與單則訊息刪除/復原。以安全優先的增量開發方式建構，後端 mocked 測試套件共 **586 個測試通過**。
 
 **非生產環境。** 尚未進行任何外部 provider 的真實呼叫，亦未使用任何真實 API Key。本專案為 portfolio / prototype 性質。
 
 📋 **[完整 Demo 腳本與面試重點](docs/PORTFOLIO_DEMO_SCRIPT.md)**
 📋 **[Phase 4 Provider Settings 摘要](docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md)**
 
-**最新本地狀態（2026-05-31）：** TASK-209 已完成 automated smoke 與 Windows visual smoke PASS。清除對話後會顯示 10 秒低調「復原」入口，可還原最近一次 clear 的正式 user/pet 對話並寫回既有 chat history persistence。未變更後端、IPC、聊天歷史格式、Pet Window、Ollama/provider runtime 或 Screen Context。
+**最新本地狀態（2026-05-31）：** TASK-210 已完成 automated smoke 與 Windows visual smoke PASS。正式 user/pet 訊息 hover 時可單則刪除，刪除後 10 秒內可「復原」最近一次單則刪除；DOM、date separators、timestamp tooltip、empty state、search 與既有 chat history persistence 會同步更新。未變更後端、IPC、聊天歷史格式、Pet Window、Ollama/provider runtime 或 Screen Context。
 
 ---
 
@@ -99,7 +99,7 @@ ollama serve
 | 本地 Ollama `/chat` smoke | ✅ 通過 — `qwen3:8b`，`source=llm_local`，克莉絲蒂娜人格確認 |
 | Provider Settings 持久化 | ✅ 通過 — 重啟後設定保留，partial PATCH 保留省略欄位 |
 | UI polish | ✅ 通過 — 情緒→表情對應、Christina expression system |
-| Full App chat UX | ✅ TASK-209 Windows visual smoke PASS — 搜尋/高亮、未讀提示、匯出、時間戳、日期分隔線、清除確認、empty state、Undo Clear Chat |
+| Full App chat UX | ✅ TASK-210 Windows visual smoke PASS — 搜尋/高亮、未讀提示、匯出、時間戳、日期分隔線、清除確認、empty state、Undo Clear Chat、單則訊息刪除/復原 |
 | 表情系統 | 7/10 real PNG（happy、focused、neutral、proud、annoyed、worried、sleepy）；pending/error/offline 為 SVG fallback |
 | pytest | **586 通過，0 失敗** |
 | Electron smoke | **renderer-chat PASS；pet-renderer 237 PASS；pet-window 60 PASS** |
@@ -107,7 +107,7 @@ ollama serve
 | 真實 API Key 使用 | ❌ 無 — 所有測試使用 mocked runner |
 | 生產就緒 | ❌ 尚未 — prototype / portfolio 階段 |
 | Demo 可用（本地 Ollama） | ✅ 是 |
-| 下一個任務 | TASK-210 — next UX polish |
+| 下一個任務 | TASK-211 — next UX polish |
 
 ---
 
@@ -123,6 +123,7 @@ ollama serve
 | 聊天時間戳與日期分隔線 | 新訊息保留 `ts`；跨日期插入今天/昨天/YYYY/MM/DD 分隔線；舊紀錄不偽造時間 |
 | 清除對話確認與 empty state | 清除前需二次點擊確認；無正式 user/pet 對話時顯示低調提示；不寫入 history、不觸發 `/chat` |
 | Undo Clear Chat | 清除後 10 秒內可復原最近一次 clear；恢復 DOM、日期分隔線與既有 chat history persistence |
+| 單則訊息刪除 / 復原 | 每則正式 user/pet 訊息可 hover 刪除；10 秒內可復原最近一次單則刪除；不新增 IPC、不改 history format |
 | Full App / Pet 未讀提示 | Full App title badge 與 Pet Window unread dot，僅傳遞窄化狀態、不傳訊息內容 |
 | 手動記憶 CRUD | `POST/GET/DELETE /memory` — SQLite 持久化 |
 | 記憶內容預覽 | `GET /memory/context-preview` — 安全，無注入 |
@@ -396,8 +397,8 @@ python -c "import json, urllib.request; data=json.dumps({'message':'你好！克
 | [docs/PROVIDER_TEST_CONNECTION_DESIGN.md](docs/PROVIDER_TEST_CONNECTION_DESIGN.md) | Test Connection 設計與強化測試結果 |
 | [docs/SECURE_KEY_STORAGE_DESIGN.md](docs/SECURE_KEY_STORAGE_DESIGN.md) | 金鑰儲存威脅模型、儲存選項、遮蔽規則 |
 | [docs/BYOK_PRODUCT_AND_SETTINGS.md](docs/BYOK_PRODUCT_AND_SETTINGS.md) | BYOK 產品設計與安全邊界 |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖；目前下一步為 TASK-210 |
-| [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄；最新記錄為 TASK-209 Undo Clear Chat renderer smoke 通過 |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖；目前下一步為 TASK-211 |
+| [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄；最新記錄為 TASK-210 Single Message Delete / Undo Windows visual smoke PASS |
 | [docs/STREAMER_COMPANION_MODE.md](docs/STREAMER_COMPANION_MODE.md) | 未來支線 — OBS overlay / Twitch 陪伴設計（尚未排程） |
 
 ---
@@ -497,7 +498,7 @@ dragon-pet-ai/
 > 內部任務更新日誌，記錄每個任務的變更內容。
 
 <details>
-<summary>展開任務更新歷史（TASK-054 — TASK-209 摘要）</summary>
+<summary>展開任務更新歷史（TASK-054 — TASK-210 摘要）</summary>
 
 > TASK-054：provider 金鑰儲存/清除端點已接線至安全金鑰儲存抽象層。執行期預設維持安全的不可用後端；測試使用記憶體假後端進行儲存/清除/冪等清除/取代行為；金鑰不寫入 SQLite 或純文字設定檔；正式 Test Connection 維持停用。無外部 provider 呼叫。pytest：449 通過。
 
@@ -532,5 +533,7 @@ dragon-pet-ai/
 > TASK-208：Clear Chat Confirmation / Empty Chat State 完成 automated smoke 與 Windows visual smoke PASS。清除對話改為二次點擊確認，6 秒後自動取消；成功清除後重置搜尋、日期分隔線狀態與新訊息跳轉按鈕，並顯示 empty state。empty state 不在 `#chat-area` 內，不寫入 history，不觸發 `/chat`、Pet Bubble 或 TTS，也不進入 copy/export。
 
 > TASK-209：Undo Clear Chat 完成 automated smoke 與 Windows visual smoke PASS。清除後 10 秒內顯示低調「復原」入口；復原只還原最近一次 clear 的正式 user/pet 對話，重建 DOM、日期分隔線、timestamp tooltip，並透過既有 `chatHistoryAppend` 寫回 persistence。Undo 不復原 startup greeting/status/date separator，不觸發 `/chat`、Pet Bubble 或 TTS。
+
+> TASK-210：Single Message Delete / Undo 完成 automated smoke 與 Windows visual smoke PASS。每則正式 user/pet 訊息新增低調 hover「刪除」action；刪除後 10 秒內可復原最近一次單則刪除。Delete/undo 透過既有 `chatHistoryClear` + `chatHistoryAppend` 重寫 persistence，重建 DOM、date separators、timestamp tooltip 與 empty state，並保留 search query/highlight/navigation。Startup greeting/status/date separator 不可刪除；不觸發 `/chat`、Pet Bubble 或 TTS。
 
 </details>

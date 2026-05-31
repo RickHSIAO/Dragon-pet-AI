@@ -590,6 +590,10 @@ let clearChatStatusTimer = null;
 const UNDO_CLEAR_MS = 10000;
 let lastClearedChatEntries = [];
 let undoClearTimer = null;
+// TASK-210: short-lived undo state for the most recent single-message delete.
+const UNDO_DELETE_MESSAGE_MS = 10000;
+let lastDeletedChatMessage = null;
+let undoDeleteMessageTimer = null;
 
 // TASK-113: smarter auto-scroll helpers — user sends always scroll,
 // AI replies only scroll when user is already near the bottom.
@@ -683,6 +687,15 @@ function collectUndoableChatEntries() {
     .filter((entry) => entry.text);
 }
 
+function collectFormalChatMessageElements() {
+  if (!chatArea) return [];
+  return Array.from(chatArea.children || []).filter((child) => {
+    const classes = typeof child.className === "string" ? child.className : "";
+    const isUserOrPet = classes.includes("user") || classes.includes("pet");
+    return isUserOrPet && child.dataset && child.dataset.formalChat === "true";
+  });
+}
+
 function clearUndoClearState({ clearStatus = false } = {}) {
   lastClearedChatEntries = [];
   if (undoClearTimer) {
@@ -692,8 +705,18 @@ function clearUndoClearState({ clearStatus = false } = {}) {
   if (clearStatus) setClearChatStatus("");
 }
 
+function clearUndoDeleteMessageState({ clearStatus = false } = {}) {
+  lastDeletedChatMessage = null;
+  if (undoDeleteMessageTimer) {
+    clearTimeout(undoDeleteMessageTimer);
+    undoDeleteMessageTimer = null;
+  }
+  if (clearStatus) setClearChatStatus("");
+}
+
 function showUndoClearState(entries) {
   clearUndoClearState();
+  clearUndoDeleteMessageState();
   lastClearedChatEntries = entries.map((entry) => ({ ...entry }));
   if (!clearChatStatus) return;
   if (clearChatStatusTimer) {
@@ -725,6 +748,61 @@ async function persistChatHistoryEntries(entries) {
       ts: entry.ts,
     });
   }
+}
+
+async function rewritePersistedChatHistory(entries) {
+  const api = typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null;
+  if (!api ||
+      typeof api.chatHistoryClear !== "function" ||
+      typeof api.chatHistoryAppend !== "function") {
+    return false;
+  }
+  await api.chatHistoryClear();
+  await persistChatHistoryEntries(entries);
+  return true;
+}
+
+function renderFormalChatEntries(entries, { preserveSearch = false } = {}) {
+  const searchQuery = preserveSearch && chatSearchInput ? chatSearchInput.value : "";
+  lastDateKey = null;
+  chatArea.replaceChildren();
+  for (const entry of entries) {
+    appendMessage(entry.role, entry.text, {
+      noHistory: true,
+      source: entry.source,
+      ts: entry.ts,
+    });
+  }
+  hideNewMessageBtn();
+  if (chatSearchInput && !preserveSearch) chatSearchInput.value = "";
+  filterChatMessages(searchQuery);
+  updateEmptyChatState();
+}
+
+function showUndoDeleteMessageState(deletedEntry, deletedIndex) {
+  clearUndoDeleteMessageState();
+  clearUndoClearState();
+  lastDeletedChatMessage = {
+    entry: { ...deletedEntry },
+    index: deletedIndex,
+  };
+  if (!clearChatStatus) return;
+  if (clearChatStatusTimer) {
+    clearTimeout(clearChatStatusTimer);
+    clearChatStatusTimer = null;
+  }
+  clearChatStatus.textContent = "已刪除 1 則訊息。";
+  const undoBtn = document.createElement("button");
+  undoBtn.type = "button";
+  undoBtn.className = "clear-chat-undo-btn single-message-undo-btn";
+  undoBtn.textContent = "復原";
+  undoBtn.addEventListener("click", () => {
+    undoSingleMessageDelete();
+  });
+  clearChatStatus.appendChild(undoBtn);
+  undoDeleteMessageTimer = setTimeout(() => {
+    clearUndoDeleteMessageState({ clearStatus: true });
+  }, UNDO_DELETE_MESSAGE_MS);
 }
 
 function resetClearChatConfirmation({ clearStatus = false } = {}) {
@@ -1208,7 +1286,10 @@ function appendMessage(role, text, {
     wrap.dataset.formalChat = countsAsChat ? "true" : "false";
     wrap.dataset.source = source;
     wrap.dataset.ts = String(typeof ts === "number" ? ts : 0);
-    if (countsAsChat && !noHistory) clearUndoClearState({ clearStatus: true });
+    if (countsAsChat && !noHistory) {
+      clearUndoClearState({ clearStatus: true });
+      clearUndoDeleteMessageState({ clearStatus: true });
+    }
     const copyBtn = document.createElement("button");
     copyBtn.className = "msg-copy-btn";
     copyBtn.type = "button";
@@ -1219,6 +1300,18 @@ function appendMessage(role, text, {
       copySingleMessage(text, copyBtn);
     });
     wrap.appendChild(copyBtn);
+    if (countsAsChat) {
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "msg-delete-btn";
+      deleteBtn.type = "button";
+      deleteBtn.title = "刪除訊息";
+      deleteBtn.textContent = "刪除";
+      deleteBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        deleteSingleChatMessage(wrap);
+      });
+      wrap.appendChild(deleteBtn);
+    }
   }
 
   // TASK-207: insert date divider before first message of a new day.
@@ -1241,24 +1334,57 @@ function appendMessage(role, text, {
   return wrap;
 }
 
+async function deleteSingleChatMessage(messageEl) {
+  const messageEls = collectFormalChatMessageElements();
+  const deletedIndex = messageEls.indexOf(messageEl);
+  if (deletedIndex < 0) return false;
+  const entries = collectUndoableChatEntries();
+  const deletedEntry = entries[deletedIndex];
+  if (!deletedEntry) return false;
+  const nextEntries = entries.filter((_, idx) => idx !== deletedIndex);
+  try {
+    const rewritten = await rewritePersistedChatHistory(nextEntries);
+    if (!rewritten) throw new Error("history unavailable");
+  } catch (_e) {
+    setClearChatStatus("刪除訊息失敗", 2000);
+    return false;
+  }
+  renderFormalChatEntries(nextEntries, { preserveSearch: true });
+  showUndoDeleteMessageState(deletedEntry, deletedIndex);
+  return true;
+}
+
+async function undoSingleMessageDelete() {
+  if (!lastDeletedChatMessage) return false;
+  const restore = {
+    entry: { ...lastDeletedChatMessage.entry },
+    index: lastDeletedChatMessage.index,
+  };
+  const entries = collectUndoableChatEntries();
+  const insertIndex = Math.max(0, Math.min(restore.index, entries.length));
+  const nextEntries = [
+    ...entries.slice(0, insertIndex),
+    restore.entry,
+    ...entries.slice(insertIndex),
+  ];
+  clearUndoDeleteMessageState();
+  try {
+    const rewritten = await rewritePersistedChatHistory(nextEntries);
+    if (!rewritten) throw new Error("history unavailable");
+  } catch (_e) {
+    setClearChatStatus("復原訊息失敗", 2000);
+    return false;
+  }
+  renderFormalChatEntries(nextEntries, { preserveSearch: true });
+  setClearChatStatus("已復原 1 則訊息", 2000);
+  return true;
+}
+
 async function undoClearChat() {
   if (!lastClearedChatEntries.length) return false;
   const entries = lastClearedChatEntries.map((entry) => ({ ...entry }));
   clearUndoClearState();
-  lastDateKey = null;
-  chatArea.replaceChildren();
-  hideNewMessageBtn();
-  if (chatSearchInput) chatSearchInput.value = "";
-  filterChatMessages("");
-  for (const entry of entries) {
-    appendMessage(entry.role, entry.text, {
-      noHistory: true,
-      source: entry.source,
-      ts: entry.ts,
-    });
-  }
-  hideNewMessageBtn();
-  updateEmptyChatState();
+  renderFormalChatEntries(entries);
   try {
     await persistChatHistoryEntries(entries);
     setClearChatStatus("已復原對話紀錄", 2000);
@@ -1310,6 +1436,7 @@ async function clearChatHistory() {
   const api = typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null;
   if (!api || typeof api.chatHistoryClear !== "function") return false;
   const undoEntries = collectUndoableChatEntries();
+  clearUndoDeleteMessageState();
   try {
     await api.chatHistoryClear();
   } catch (_e) {
