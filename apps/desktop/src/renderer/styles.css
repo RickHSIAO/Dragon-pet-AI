@@ -341,6 +341,57 @@ textarea {
 }
 
 /* ── Chat area ──────────────────────────────────────────── */
+/* TASK-198: Chat search / filter bar */
+#chat-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.chat-search-input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 4px 8px;
+  outline: none;
+  font-family: var(--font);
+}
+
+.chat-search-input:focus {
+  border-color: var(--accent-soft);
+}
+
+.chat-search-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  min-width: 72px;
+  text-align: right;
+}
+
+.chat-search-clear-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+
+.chat-search-clear-btn:hover {
+  color: var(--text);
+}
+
 #chat-area {
   flex: 1 1 260px;
   min-height: 240px;

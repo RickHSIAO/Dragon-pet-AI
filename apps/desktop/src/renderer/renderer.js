@@ -45,6 +45,9 @@ const askScreenBtn    = document.getElementById("ask-screen-btn");
 const askScreenStatus = document.getElementById("ask-screen-status");
 const clearChatBtn    = document.getElementById("clear-chat-btn");  // TASK-194
 const copyChatBtn     = document.getElementById("copy-chat-btn");   // TASK-196
+const chatSearchInput    = document.getElementById("chat-search-input");    // TASK-198
+const chatSearchCountEl  = document.getElementById("chat-search-count");    // TASK-198
+const chatSearchClearBtn = document.getElementById("chat-search-clear-btn"); // TASK-198
 // TASK-179: gentle hint shown after OCR summary exists.
 const ocrAskHintEl = document.getElementById("ocr-ask-hint");
 const memoryForm  = document.getElementById("memory-form");
@@ -940,6 +943,9 @@ async function clearChatHistory() {
     return;
   }
   chatArea.replaceChildren();
+  // TASK-198: reset search state after clearing so the empty chat shows cleanly.
+  if (chatSearchInput) chatSearchInput.value = "";
+  filterChatMessages("");
 }
 
 function setMood(mood) {
@@ -2244,6 +2250,19 @@ if (copyChatBtn) {
   });
 }
 
+// TASK-198: chat search / filter wiring.
+if (chatSearchInput) {
+  chatSearchInput.addEventListener("input", () => {
+    filterChatMessages(chatSearchInput.value);
+  });
+}
+if (chatSearchClearBtn) {
+  chatSearchClearBtn.addEventListener("click", () => {
+    if (chatSearchInput) chatSearchInput.value = "";
+    filterChatMessages("");
+  });
+}
+
 // TASK-172A/172B: initialise button states on load (no screenshot yet).
 updateAnalyzeButtonState();
 updateAskButtonState();
@@ -2373,6 +2392,43 @@ if (typeof document !== "undefined" && typeof document.addEventListener === "fun
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// TASK-198: Chat message search / filter — pure DOM visibility toggle.
+// No data mutation, no history write, no /chat call, no backend change.
+// ---------------------------------------------------------------------------
+function filterChatMessages(query) {
+  const q = (query || "").trim().toLowerCase();
+  let matchCount = 0;
+  for (const child of chatArea.children) {
+    if (!q) {
+      child.style.display = "";
+      continue;
+    }
+    const isUserOrPet = typeof child.className === "string" &&
+      (child.className.includes("user") || child.className.includes("pet"));
+    if (!isUserOrPet) {
+      child.style.display = "none";
+      continue;
+    }
+    const text = ((child.dataset && child.dataset.msgText) || "").toLowerCase();
+    if (text.includes(q)) {
+      child.style.display = "";
+      matchCount++;
+    } else {
+      child.style.display = "none";
+    }
+  }
+  if (chatSearchCountEl) {
+    if (!q) {
+      chatSearchCountEl.textContent = "";
+    } else if (matchCount > 0) {
+      chatSearchCountEl.textContent = `找到 ${matchCount} 筆`;
+    } else {
+      chatSearchCountEl.textContent = "沒有找到符合的對話";
+    }
+  }
+}
+
 // TASK-197: Non-blocking Ollama liveness probe run after startup settings load.
 // Updates the provider status chip only — no chat, no history, no Pet/TTS side effects.
 // ---------------------------------------------------------------------------

@@ -19456,3 +19456,119 @@ New `async function checkLocalProviderLiveness()` in renderer.js:
 | Ollama offline — no false "已就緒"; clean error message (no traceback / raw JSON); Send button restores | PASS |
 | Pet first chat — no permanent thinking; success → clean reply; failure → clean error; no Full App history pollution | PASS |
 | Regression — chat history restore, Pet mirror, copy/export, Provider Settings / Memory / 診斷紀錄 collapse all normal | PASS |
+
+---
+
+## TASK-198 | Chat Message Search / Filter UX
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-31
+
+### Goal
+
+Add a lightweight, always-visible search bar to the Full App Chat. Users can type a keyword to filter the visible conversation to only matching user/pet messages. No backend, no IPC, no data mutation.
+
+### Design
+
+**Search bar placement:** Between `#character-status` (mood/source row) and `#chat-area` (messages). Always visible — no toggle required.
+
+**Filter behavior:**
+- Matching user/pet messages: `display` unchanged (visible)
+- Non-matching user/pet messages: `display: none` (hidden)
+- Status separator messages: `display: none` during any search (they look orphaned when adjacent messages are hidden)
+- Error messages: hidden during search (same reason)
+- Result count chip: "找到 N 筆" or "沒有找到符合的對話"
+- Empty query: all messages restored, count cleared
+
+**Copy/export during search:** `copyAllChat()` uses `querySelectorAll(".message.user, .message.pet")` which returns elements regardless of their `display` style — copy-all always copies the full conversation, not just the filtered view. This is intentional and documented.
+
+**Clear chat resets search:** `clearChatHistory()` resets the search input and calls `filterChatMessages("")` so the empty chat area displays cleanly.
+
+### Implementation
+
+**`filterChatMessages(query)`** in renderer.js:
+- Iterates `chatArea.children` (FakeElement-compatible — no `querySelectorAll`)
+- Checks `child.className.includes("user") || child.className.includes("pet")` to identify filterable messages
+- Reads `child.dataset.msgText` (set by `appendMessage` in TASK-196) as the search corpus
+- Sets `child.style.display = "none"` on non-matching elements
+- Updates `#chat-search-count` text
+
+**Event wiring:**
+- `#chat-search-input` `input` event → `filterChatMessages(input.value)`
+- `#chat-search-clear-btn` `click` → clears input value + calls `filterChatMessages("")`
+
+### Files Modified
+
+| File | Change | Runtime? |
+|---|---|---|
+| `apps/desktop/src/renderer/index.html` | `#chat-search-bar` div with `#chat-search-input`, `#chat-search-count`, `#chat-search-clear-btn` between `#character-status` and `#chat-area` | Yes |
+| `apps/desktop/src/renderer/styles.css` | `#chat-search-bar`, `.chat-search-input`, `.chat-search-count`, `.chat-search-clear-btn` styles | CSS only |
+| `apps/desktop/src/renderer/renderer.js` | DOM refs; `filterChatMessages()` function; event listeners; `clearChatHistory()` resets search state | Yes |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | 11 TASK-198 tests (3 static + 8 dynamic); `searchChat()` + `clearSearch()` test helpers | No |
+
+### Test Coverage
+
+| Test | Type | What it verifies |
+|---|---|---|
+| `testTask198SearchHtmlElementsExist` | static | `#chat-search-input`, `#chat-search-clear-btn`, `#chat-search-count`, Chinese placeholder in HTML |
+| `testTask198FilterFunctionExists` | static | `filterChatMessages` defined; "找到" + "沒有找到符合的對話" strings present |
+| `testTask198SearchCssExists` | static | `#chat-search-bar`, `.chat-search-input`, `.chat-search-clear-btn` in CSS |
+| `testTask198SearchUserMessageFilters` | dynamic | Matching user message visible; non-matching pet message hidden |
+| `testTask198SearchPetMessageFilters` | dynamic | Matching pet message visible; non-matching user message hidden |
+| `testTask198SearchNoResultsShowsEmptyState` | dynamic | Count shows "沒有找到符合的對話" when no match |
+| `testTask198SearchCountDisplaysMatchCount` | dynamic | Count shows "找到 2 筆" when 2 messages match |
+| `testTask198ClearSearchRestoresAllMessages` | dynamic | After clear: hidden messages visible again; count empty |
+| `testTask198SearchDoesNotModifyChatHistory` | dynamic | `chatHistoryAppend` never called during search / clear |
+| `testTask198SearchDoesNotTriggerChat` | dynamic | No `/chat` fetch from typing in search or clearing |
+| `testTask198CopyAllUnaffectedBySearch` | static | `copyAllChat` uses `querySelectorAll` which ignores `display:none` — copies all regardless of filter |
+
+### Copy/Export Interaction Decision
+
+`copyAllChat()` copies the **full conversation** regardless of current search filter state. Rationale: the search is a transient view filter, not a selection tool. Copying only filtered results would surprise users who expect copy-all to mean "the whole conversation". If per-filter copy is desired in a future task, a separate "複製搜尋結果" button can be added.
+
+### Safety / Privacy Boundaries
+
+| Constraint | Implementation |
+|---|---|
+| No data mutation | `filterChatMessages` only sets `style.display` — no DOM removal, no text change |
+| No history write | Search never calls `appendMessage`, `saveChatHistoryEntry`, or `chatHistoryAppend` |
+| No /chat fetch | Search has no `fetch` call — pure DOM filter |
+| No new IPC | No new `ipcRenderer.invoke` or `ipcMain.handle` |
+| No backend change | No routes.py / service changes |
+| No history format change | `dataset.msgText` read-only — set by TASK-196, never overwritten by search |
+| No Pet Window impact | `filterChatMessages` only touches `chatArea.children` in Full App renderer |
+| Keyword not persisted | Search input not saved to localStorage, history, or IPC |
+
+### Automated Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+11 TASK-198 tests) |
+| `pet-renderer-smoke.js` | PASS — 233 checks (Pet Window untouched) |
+| `pet-window-smoke.js` | PASS — 55 checks (IPC/preload untouched) |
+
+### Acceptance Criteria
+
+- [x] Search bar present in HTML with Chinese placeholder "搜尋對話..." ✓
+- [x] Matching user/pet messages visible; non-matching hidden ✓
+- [x] Status separators hidden during search ✓
+- [x] Result count: "找到 N 筆" or "沒有找到符合的對話" ✓
+- [x] Clear button restores all messages; clears count ✓
+- [x] Search does not modify chat history ✓
+- [x] Search does not trigger `/chat` ✓
+- [x] copy/export copies full conversation regardless of search state ✓
+- [x] No backend change, no IPC, no new persistence ✓
+- [x] All three smoke suites PASS ✓
+- [x] Windows visual smoke PASS ✓
+
+### Windows Visual Smoke Results (2026-05-31)
+
+| # | Scenario | Result |
+|---|---|---|
+| 1 | Search bar visible on startup; placeholder "搜尋對話..." shown | PASS |
+| 2 | Keyword match: only matching user/pet messages visible; "找到 N 筆" count shown | PASS |
+| 3 | No match: all messages hidden; "沒有找到符合的對話" shown; UI intact | PASS |
+| 4 | Clear (✕): input cleared; all messages restored | PASS |
+| 5 | Copy/export during search: "複製對話" copies full conversation, not just filtered results | PASS |
+| 6 | Clear chat during search: chat clears; search state resets; no stale filter | PASS |
+| 7 | Regression: Pet Bubble / Voice / STT / TTS / History restore / Provider Settings / 記憶管理 / 診斷紀錄 | PASS |

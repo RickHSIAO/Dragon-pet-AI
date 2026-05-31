@@ -2838,6 +2838,196 @@ async function testTask197LivenessCheckOllamaUnreachableShowsWarning() {
     "provider-status-summary must warn '尚未回應' when Ollama is unreachable");
 }
 
+// ---------------------------------------------------------------------------
+// TASK-198: Chat Message Search / Filter tests
+// ---------------------------------------------------------------------------
+
+function searchChat(document, query) {
+  const input = document.getElementById("chat-search-input");
+  if (!input) return;
+  input.value = query;
+  input.dispatchEvent({ type: "input" });
+}
+
+function clearSearch(document) {
+  const btn = document.getElementById("chat-search-clear-btn");
+  if (btn) btn.click();
+}
+
+function testTask198SearchHtmlElementsExist() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes('id="chat-search-input"'),
+    "index.html must contain #chat-search-input");
+  assert.ok(html.includes('id="chat-search-clear-btn"'),
+    "index.html must contain #chat-search-clear-btn");
+  assert.ok(html.includes('id="chat-search-count"'),
+    "index.html must contain #chat-search-count");
+  assert.ok(html.includes('placeholder="搜尋對話..."'),
+    "search input must have Chinese placeholder");
+}
+
+function testTask198FilterFunctionExists() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("function filterChatMessages"),
+    "renderer.js must define filterChatMessages");
+  assert.ok(src.includes("找到"),
+    "filterChatMessages must produce '找到 N 筆' result text");
+  assert.ok(src.includes("沒有找到符合的對話"),
+    "filterChatMessages must produce empty-state text");
+}
+
+function testTask198SearchCssExists() {
+  const css = fs.readFileSync(
+    path.join(desktopRoot, "src", "renderer", "styles.css"), "utf8"
+  );
+  assert.ok(css.includes("#chat-search-bar"),
+    "CSS must define #chat-search-bar");
+  assert.ok(css.includes(".chat-search-input"),
+    "CSS must define .chat-search-input");
+  assert.ok(css.includes(".chat-search-clear-btn"),
+    "CSS must define .chat-search-clear-btn");
+}
+
+async function testTask198SearchUserMessageFilters() {
+  const { document, sandbox } = await loadRenderer();
+
+  sandbox.appendMessage("user", "special keyword abc", { noHistory: true });
+  sandbox.appendMessage("pet", "unrelated dragon reply xyz", { noHistory: true });
+
+  searchChat(document, "special keyword");
+
+  const chatArea = document.getElementById("chat-area");
+  const userMsg = chatArea.children.find(
+    (el) => el.className.includes("user") && el.dataset && el.dataset.msgText === "special keyword abc"
+  );
+  const petMsg = chatArea.children.find(
+    (el) => el.className.includes("pet") && el.dataset && el.dataset.msgText === "unrelated dragon reply xyz"
+  );
+
+  assert.ok(userMsg, "user message must exist in chat area");
+  assert.ok(petMsg, "pet message must exist in chat area");
+  assert.notEqual(userMsg.style.display, "none", "matching user message must be visible");
+  assert.equal(petMsg.style.display, "none", "non-matching pet message must be hidden");
+}
+
+async function testTask198SearchPetMessageFilters() {
+  const { document, sandbox } = await loadRenderer();
+
+  sandbox.appendMessage("user", "general user input here", { noHistory: true });
+  sandbox.appendMessage("pet", "dragon wisdom unique phrase", { noHistory: true });
+
+  searchChat(document, "dragon wisdom");
+
+  const chatArea = document.getElementById("chat-area");
+  const petMsg = chatArea.children.find(
+    (el) => el.className.includes("pet") && el.dataset && el.dataset.msgText === "dragon wisdom unique phrase"
+  );
+  const userMsg = chatArea.children.find(
+    (el) => el.className.includes("user") && el.dataset && el.dataset.msgText === "general user input here"
+  );
+
+  assert.ok(petMsg, "pet message must exist");
+  assert.notEqual(petMsg.style.display, "none", "matching pet message must be visible");
+  assert.equal(userMsg.style.display, "none", "non-matching user message must be hidden");
+}
+
+async function testTask198SearchNoResultsShowsEmptyState() {
+  const { document, sandbox } = await loadRenderer();
+
+  sandbox.appendMessage("user", "hello there", { noHistory: true });
+  sandbox.appendMessage("pet", "hi back", { noHistory: true });
+
+  searchChat(document, "zzz_no_match_xyz");
+
+  const count = textOf(document, "chat-search-count");
+  assert.match(count, /沒有找到符合的對話/,
+    "count element must show empty-state text when no results");
+}
+
+async function testTask198SearchCountDisplaysMatchCount() {
+  const { document, sandbox } = await loadRenderer();
+
+  sandbox.appendMessage("user", "unique token found here", { noHistory: true });
+  sandbox.appendMessage("pet", "also has unique token", { noHistory: true });
+
+  searchChat(document, "unique token");
+
+  const count = textOf(document, "chat-search-count");
+  assert.match(count, /找到 2 筆/,
+    "count element must show '找到 2 筆' when two messages match");
+}
+
+async function testTask198ClearSearchRestoresAllMessages() {
+  const { document, sandbox } = await loadRenderer();
+
+  sandbox.appendMessage("user", "message alpha", { noHistory: true });
+  sandbox.appendMessage("pet", "message beta", { noHistory: true });
+
+  searchChat(document, "alpha");
+
+  const chatArea = document.getElementById("chat-area");
+  const betaMsg = chatArea.children.find(
+    (el) => el.dataset && el.dataset.msgText === "message beta"
+  );
+  assert.equal(betaMsg.style.display, "none", "beta must be hidden after search");
+
+  clearSearch(document);
+
+  const afterClear = chatArea.children.find(
+    (el) => el.dataset && el.dataset.msgText === "message beta"
+  );
+  assert.notEqual(afterClear.style.display, "none", "beta must be visible after clear");
+
+  const count = textOf(document, "chat-search-count");
+  assert.equal(count, "", "count must be empty after clear");
+}
+
+async function testTask198SearchDoesNotModifyChatHistory() {
+  const appended = [];
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      showPetWindow: async () => ({ ok: true }),
+      updatePetSpeech: async () => ({ ok: true }),
+      onChatMirrorFromPet: () => () => {},
+      chatHistoryAppend: (entry) => { appended.push(entry); return Promise.resolve({ ok: true }); },
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({ ok: true }),
+    },
+  });
+
+  sandbox.appendMessage("user", "test search safe", { noHistory: true });
+  appended.length = 0;
+
+  searchChat(document, "test search");
+  clearSearch(document);
+  searchChat(document, "safe");
+
+  assert.equal(appended.length, 0,
+    "search / filter must never call chatHistoryAppend");
+}
+
+async function testTask198SearchDoesNotTriggerChat() {
+  const { document, state } = await loadRenderer();
+
+  const chatCallsBefore = state.calls.filter((c) => c.url.endsWith("/chat")).length;
+
+  searchChat(document, "local dragon");
+  clearSearch(document);
+
+  const chatCallsAfter = state.calls.filter((c) => c.url.endsWith("/chat")).length;
+  assert.equal(chatCallsAfter, chatCallsBefore,
+    "typing in search must never trigger a /chat fetch");
+}
+
+function testTask198CopyAllUnaffectedBySearch() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  // copyAllChat uses querySelectorAll which returns elements regardless of display:none
+  assert.ok(
+    src.includes('chatArea.querySelectorAll(".message.user, .message.pet")'),
+    "copyAllChat must use querySelectorAll (returns all elements regardless of search filter)"
+  );
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -2997,6 +3187,18 @@ async function main() {
   await testTask197LivenessCheckDoesNotWriteToChatHistory();
   await testTask197LivenessCheckOllamaReachableUpdatesChip();
   await testTask197LivenessCheckOllamaUnreachableShowsWarning();
+  // TASK-198: Chat Message Search / Filter
+  testTask198SearchHtmlElementsExist();
+  testTask198FilterFunctionExists();
+  testTask198SearchCssExists();
+  await testTask198SearchUserMessageFilters();
+  await testTask198SearchPetMessageFilters();
+  await testTask198SearchNoResultsShowsEmptyState();
+  await testTask198SearchCountDisplaysMatchCount();
+  await testTask198ClearSearchRestoresAllMessages();
+  await testTask198SearchDoesNotModifyChatHistory();
+  await testTask198SearchDoesNotTriggerChat();
+  testTask198CopyAllUnaffectedBySearch();
   console.log("renderer chat smoke: PASS");
 }
 

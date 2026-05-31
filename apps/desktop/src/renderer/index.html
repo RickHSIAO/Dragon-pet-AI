@@ -82,6 +82,14 @@
     <span id="chat-runtime-status" class="status-note">mock mode - no AI connected</span>
   </div>
 
+  <!-- ── Chat search bar (TASK-198) ───────────────────────── -->
+  <div id="chat-search-bar" class="chat-search-bar">
+    <input type="text" id="chat-search-input" class="chat-search-input"
+      placeholder="搜尋對話..." autocomplete="off" spellcheck="false" />
+    <span id="chat-search-count" class="chat-search-count" role="status" aria-live="polite"></span>
+    <button id="chat-search-clear-btn" class="chat-search-clear-btn" type="button" aria-label="清除搜尋">✕</button>
+  </div>
+
   <!-- ── Chat area ──────────────────────────────────────── -->
   <main id="chat-area">
     <!-- Messages are injected here by renderer.js -->
