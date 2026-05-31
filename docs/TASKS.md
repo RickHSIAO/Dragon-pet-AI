@@ -19572,3 +19572,108 @@ Add a lightweight, always-visible search bar to the Full App Chat. Users can typ
 | 5 | Copy/export during search: "複製對話" copies full conversation, not just filtered results | PASS |
 | 6 | Clear chat during search: chat clears; search state resets; no stale filter | PASS |
 | 7 | Regression: Pet Bubble / Voice / STT / TTS / History restore / Provider Settings / 記憶管理 / 診斷紀錄 | PASS |
+
+---
+
+## TASK-199 | Chat Search Keyboard Shortcuts
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-31
+
+### Goal
+
+Add keyboard shortcuts to make the TASK-198 chat search bar feel like a first-class app feature: `Ctrl+F` / `Cmd+F` to focus the search, `Esc` to clear or blur.
+
+### Design
+
+**Ctrl+F / Cmd+F (document-level `keydown` listener):**
+- `e.preventDefault()` — blocks Electron / browser native find dialog.
+- Focuses `#chat-search-input`.
+- Calls `.select()` so any existing query is selected; user can immediately type a new keyword.
+- Works on both Windows (`ctrlKey`) and macOS (`metaKey`).
+- Only intercepts the `f` key combined with modifier — all other keystrokes are unaffected.
+
+**Esc (`keydown` listener scoped to `#chat-search-input`):**
+- If input has a value: clears the value + calls `filterChatMessages("")` to restore all messages + empties result count.
+- If input is already empty: blurs the field (no other side effect).
+- Scoped to the search input only — Esc elsewhere (textarea, modals) is not affected.
+- Never clears chat history, never sends `/chat`.
+- No Pet Window impact.
+
+### Implementation
+
+**`apps/desktop/src/renderer/renderer.js`:**
+```
+document.addEventListener("keydown", fn) — Ctrl+F / Cmd+F handler
+chatSearchInput.addEventListener("keydown", fn) — Esc handler
+```
+
+No HTML or CSS changes required.
+
+### Files Modified
+
+| File | Change | Runtime? |
+|---|---|---|
+| `apps/desktop/src/renderer/renderer.js` | Ctrl+F / Cmd+F document keydown handler; Esc keydown handler on search input | Yes |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | `FakeDocument.dispatchEvent()`; `FakeElement.blur()` / `.select()`; `fireDocumentKeydown()` helper; 9 TASK-199 tests | No |
+
+### Test Coverage
+
+| Test | Type | What it verifies |
+|---|---|---|
+| `testTask199CtrlFHandlerExists` | static | `ctrlKey`, `metaKey`, `"f"`, `preventDefault`, `select()` all present in renderer.js source |
+| `testTask199CtrlFPreventDefault` | dynamic | Ctrl+F fires `e.preventDefault()` |
+| `testTask199CtrlFFocusesSearchInput` | dynamic | Ctrl+F sets `focused = true` on `#chat-search-input` |
+| `testTask199CtrlFSelectsExistingText` | dynamic | Ctrl+F calls `.select()` — `_selected = true` |
+| `testTask199MetaFFocusesSearchInput` | dynamic | Cmd+F (metaKey) also focuses search input |
+| `testTask199EscClearsSearchWhenFilled` | dynamic | Esc on filled input clears `input.value` |
+| `testTask199EscRestoresMessages` | dynamic | Esc restores all previously hidden messages |
+| `testTask199EscBlursWhenEmpty` | dynamic | Esc on empty input sets `focused = false` |
+| `testTask199EscNoChatFetch` | dynamic | Esc never triggers a `/chat` fetch |
+
+### Safety / Privacy Boundaries
+
+| Constraint | Implementation |
+|---|---|
+| No data mutation | Ctrl+F only focuses/selects; Esc only clears value + visibility |
+| No history write | Neither handler calls `appendMessage`, `saveChatHistoryEntry`, or `chatHistoryAppend` |
+| No /chat fetch | Neither handler has a `fetch` call |
+| No new IPC | No new `ipcRenderer.invoke` or `ipcMain.handle` |
+| No backend change | No routes.py / service changes |
+| No Pet Window impact | Handlers are scoped to Full App renderer only |
+| Keyword not persisted | Search value not saved to localStorage, history, or IPC |
+| Esc scoped to search only | Listener is on `#chat-search-input` element — no global Esc interception |
+
+### Automated Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+9 TASK-199 tests) |
+| `pet-renderer-smoke.js` | PASS — 233 checks (Pet Window untouched) |
+| `pet-window-smoke.js` | PASS — 55 checks (IPC/preload untouched) |
+
+### Acceptance Criteria
+
+- [x] Ctrl+F / Cmd+F focuses search input ✓
+- [x] Ctrl+F / Cmd+F selects existing text ✓
+- [x] Ctrl+F / Cmd+F calls preventDefault ✓
+- [x] Esc clears search and restores messages when input is non-empty ✓
+- [x] Esc blurs search input when already empty ✓
+- [x] Esc does not clear chat history ✓
+- [x] Esc does not send /chat ✓
+- [x] No backend, IPC, or persistence change ✓
+- [x] No Pet Window impact ✓
+- [x] All three smoke suites PASS ✓
+- [x] Windows visual smoke PASS ✓
+
+### Windows Visual Smoke Results (2026-05-31)
+
+| # | Scenario | Result |
+|---|---|---|
+| 1 | Ctrl+F: search bar focuses; cursor visible in input | PASS |
+| 2 | Ctrl+F with existing query: existing text selected; overwrite with new keyword works | PASS |
+| 3 | Esc with active search: input cleared; all messages restored; result count cleared | PASS |
+| 4 | Esc with empty search: search bar blurs; no UI anomaly | PASS |
+| 5 | Textarea + Ctrl+F: no chat sent; search bar focuses correctly | PASS |
+| 6 | Textarea + Esc: textarea not cleared; no /chat sent | PASS |
+| 7 | Regression: Pet Bubble / Voice / STT / TTS / History restore / Copy-export / Search-filter | PASS |

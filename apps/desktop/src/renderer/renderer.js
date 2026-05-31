@@ -2263,6 +2263,29 @@ if (chatSearchClearBtn) {
   });
 }
 
+// TASK-199: keyboard shortcuts — Ctrl+F / Cmd+F focuses chat search; Esc clears or blurs.
+document.addEventListener("keydown", function (e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === "f") {
+    e.preventDefault();
+    if (chatSearchInput) {
+      chatSearchInput.focus();
+      chatSearchInput.select();
+    }
+  }
+});
+if (chatSearchInput) {
+  chatSearchInput.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") {
+      if (chatSearchInput.value) {
+        chatSearchInput.value = "";
+        filterChatMessages("");
+      } else {
+        chatSearchInput.blur();
+      }
+    }
+  });
+}
+
 // TASK-172A/172B: initialise button states on load (no screenshot yet).
 updateAnalyzeButtonState();
 updateAskButtonState();

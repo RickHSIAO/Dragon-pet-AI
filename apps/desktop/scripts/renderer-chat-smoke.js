@@ -109,6 +109,14 @@ class FakeElement {
     this.focused = true;
   }
 
+  blur() {
+    this.focused = false;
+  }
+
+  select() {
+    this._selected = true;
+  }
+
   remove() {
     if (!this.parentNode) return;
     this.parentNode.children = this.parentNode.children.filter((child) => child !== this);
@@ -144,6 +152,12 @@ class FakeDocument {
   addEventListener(type, fn) {
     if (!this._docListeners[type]) this._docListeners[type] = [];
     this._docListeners[type].push(fn);
+  }
+
+  // TASK-199: dispatch document-level events (e.g. keydown for Ctrl+F)
+  dispatchEvent(event) {
+    const listeners = this._docListeners[event.type] || [];
+    for (const fn of listeners) fn(event);
   }
 
   getElementById(id) {
@@ -3028,6 +3042,113 @@ function testTask198CopyAllUnaffectedBySearch() {
   );
 }
 
+// ─── TASK-199: Chat Search Keyboard Shortcuts ───────────────────────────────
+
+function fireDocumentKeydown(document, key, { ctrlKey = false, metaKey = false } = {}) {
+  let prevented = false;
+  document.dispatchEvent({
+    type: "keydown",
+    key,
+    ctrlKey,
+    metaKey,
+    preventDefault() { prevented = true; },
+  });
+  return { prevented };
+}
+
+function testTask199CtrlFHandlerExists() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes('"keydown"') || src.includes("'keydown'"),
+    "renderer.js must register a document keydown listener");
+  assert.ok(src.includes("ctrlKey") && src.includes("metaKey"),
+    "renderer.js must handle both ctrlKey and metaKey for cross-platform Ctrl+F / Cmd+F");
+  assert.ok(src.includes('"f"') || src.includes("'f'"),
+    "renderer.js must check key === 'f'");
+  assert.ok(src.includes("preventDefault"),
+    "Ctrl+F handler must call preventDefault");
+  assert.ok(src.includes("select()"),
+    "Ctrl+F handler must call select() on search input");
+}
+
+async function testTask199CtrlFPreventDefault() {
+  const { document } = await loadRenderer();
+  const { prevented } = fireDocumentKeydown(document, "f", { ctrlKey: true });
+  assert.ok(prevented, "Ctrl+F must call e.preventDefault()");
+}
+
+async function testTask199CtrlFFocusesSearchInput() {
+  const { document } = await loadRenderer();
+  const input = document.getElementById("chat-search-input");
+  input.focused = false;
+  fireDocumentKeydown(document, "f", { ctrlKey: true });
+  assert.ok(input.focused, "Ctrl+F must focus #chat-search-input");
+}
+
+async function testTask199CtrlFSelectsExistingText() {
+  const { document } = await loadRenderer();
+  const input = document.getElementById("chat-search-input");
+  input.value = "existing query";
+  input._selected = false;
+  fireDocumentKeydown(document, "f", { ctrlKey: true });
+  assert.ok(input._selected, "Ctrl+F must call select() so existing text is selected");
+}
+
+async function testTask199MetaFFocusesSearchInput() {
+  const { document } = await loadRenderer();
+  const input = document.getElementById("chat-search-input");
+  input.focused = false;
+  fireDocumentKeydown(document, "f", { metaKey: true });
+  assert.ok(input.focused, "Cmd+F (metaKey) must also focus #chat-search-input");
+}
+
+async function testTask199EscClearsSearchWhenFilled() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "escape test message", { noHistory: true });
+  const input = document.getElementById("chat-search-input");
+  input.value = "escape test";
+  input.dispatchEvent({ type: "input" });
+  // Value set — now press Esc
+  input.dispatchEvent({ type: "keydown", key: "Escape", preventDefault() {} });
+  assert.equal(input.value, "", "Esc must clear search input value");
+}
+
+async function testTask199EscRestoresMessages() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "esc restore alpha", { noHistory: true });
+  sandbox.appendMessage("pet",  "esc restore beta",  { noHistory: true });
+  searchChat(document, "alpha");
+  const chatArea = document.getElementById("chat-area");
+  const allMsgs = chatArea.children.filter(
+    (el) => typeof el.className === "string" &&
+      (el.className.includes("user") || el.className.includes("pet"))
+  );
+  const hiddenBefore = allMsgs.filter((m) => m.style.display === "none");
+  assert.ok(hiddenBefore.length > 0, "at least one message must be hidden before Esc");
+  const input = document.getElementById("chat-search-input");
+  input.dispatchEvent({ type: "keydown", key: "Escape", preventDefault() {} });
+  const hiddenAfter = allMsgs.filter((m) => m.style.display === "none");
+  assert.equal(hiddenAfter.length, 0, "Esc must restore all hidden messages");
+}
+
+async function testTask199EscBlursWhenEmpty() {
+  const { document } = await loadRenderer();
+  const input = document.getElementById("chat-search-input");
+  input.value = "";
+  input.focused = true;
+  input.dispatchEvent({ type: "keydown", key: "Escape", preventDefault() {} });
+  assert.ok(!input.focused, "Esc on empty search input must blur the field");
+}
+
+async function testTask199EscNoChatFetch() {
+  const { document, state } = await loadRenderer();
+  const input = document.getElementById("chat-search-input");
+  input.value = "some keyword";
+  input.dispatchEvent({ type: "keydown", key: "Escape", preventDefault() {} });
+  await settle();
+  const chatCalls = state.calls.filter((c) => c.url && c.url.endsWith("/chat"));
+  assert.equal(chatCalls.length, 0, "Esc must never trigger a /chat fetch");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -3199,6 +3320,16 @@ async function main() {
   await testTask198SearchDoesNotModifyChatHistory();
   await testTask198SearchDoesNotTriggerChat();
   testTask198CopyAllUnaffectedBySearch();
+  // TASK-199: Chat Search Keyboard Shortcuts
+  testTask199CtrlFHandlerExists();
+  await testTask199CtrlFPreventDefault();
+  await testTask199CtrlFFocusesSearchInput();
+  await testTask199CtrlFSelectsExistingText();
+  await testTask199MetaFFocusesSearchInput();
+  await testTask199EscClearsSearchWhenFilled();
+  await testTask199EscRestoresMessages();
+  await testTask199EscBlursWhenEmpty();
+  await testTask199EscNoChatFetch();
   console.log("renderer chat smoke: PASS");
 }
 
