@@ -1073,7 +1073,7 @@ function resetTtsControls(documentRef) {
 // Only fires on successful /chat completion; STT failures and empty audio never reach this path.
 // Payload is text-only — no audio blob, no base64, no raw diagnostics.
 // No-op if window.dragonPet.mirrorChatToFullApp is unavailable (smoke env, Full App closed).
-function mirrorPetChatToFullApp(userMessage, data) {
+function mirrorPetChatToFullApp(userMessage, data, inputMethod) {
   const api = typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null;
   if (!api || typeof api.mirrorChatToFullApp !== "function") return;
   if (!userMessage || typeof userMessage !== "string") return;
@@ -1083,6 +1083,7 @@ function mirrorPetChatToFullApp(userMessage, data) {
     reply: data.reply,
     mood: typeof data.mood === "string" ? data.mood : "neutral",
     source: typeof data.source === "string" ? data.source : "unknown",
+    inputMethod: inputMethod === "voice" ? "voice" : "text",  // TASK-195
   });
   if (result && typeof result.catch === "function") result.catch(() => {});
 }
@@ -1108,8 +1109,8 @@ async function handlePetVoiceChatSend(documentRef, transcript, options) {
     rememberRecentPetReply(documentRef, nextState, bubbleOptions, options || {});
     // TASK-168B: speak final reply if TTS enabled
     speakPetReply(documentRef, data.reply, nextState);
-    // TASK-193: mirror transcript + reply to Full App chat
-    mirrorPetChatToFullApp(transcript, data);
+    // TASK-193/195: mirror transcript + reply to Full App chat with voice input method
+    mirrorPetChatToFullApp(transcript, data, "voice");
     return data;
   } catch (error) {
     var errorState = "llm_local_error";
@@ -1418,8 +1419,8 @@ async function handlePetDirectSend(event, documentRef, options) {
     rememberRecentPetReply(documentRef, nextState, bubbleOptions, options || {});
     // TASK-168B: speak final reply if TTS enabled
     speakPetReply(documentRef, data.reply, nextState);
-    // TASK-193: mirror user text + reply to Full App chat
-    mirrorPetChatToFullApp(value, data);
+    // TASK-193/195: mirror user text + reply to Full App chat with text input method
+    mirrorPetChatToFullApp(value, data, "text");
     return data;
   } catch (error) {
     var errorState = "llm_local_error";

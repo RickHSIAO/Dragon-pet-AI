@@ -28,44 +28,39 @@
 
   <!-- ── Header ─────────────────────────────────────────── -->
   <header id="header">
-    <h1>Dragon Pet AI</h1>
-    <span class="version-tag">dev</span>
-    <button id="show-pet-window-btn" class="header-action-btn" type="button">Show Pet</button>
-    <span id="show-pet-window-status" class="header-action-status" role="status"></span>
-    <!-- TASK-171A: user-triggered primary-display screenshot capture.
-         In-memory dataUrl only. No disk save, no /chat send, no OCR, no vision. -->
-    <button id="capture-screen-btn" class="header-action-btn" type="button">擷取螢幕</button>
-    <span id="capture-screen-status" class="header-action-status" role="status"></span>
-    <!-- TASK-176: explicit window picker capture.
-         No auto-detection; user selects window from list. No disk save, no /chat. -->
-    <button id="capture-window-btn" class="header-action-btn" type="button">擷取視窗</button>
-    <span id="capture-window-status" class="header-action-status" role="status"></span>
-    <!-- TASK-172A: user-confirmed OCR analysis. Disabled until screenshot exists in memory.
-         No cloud vision. No /chat. No background analysis. Explicit confirmation required. -->
-    <button id="analyze-screen-btn" class="header-action-btn" type="button" disabled>分析這張</button>
-    <span id="analyze-screen-status" class="header-action-status" role="status"></span>
-    <button id="clear-screen-btn" class="header-action-btn header-action-btn--secondary" type="button" hidden>清除截圖</button>
-    <!-- TASK-172B: ask Christina about the screen. Hidden until OCR summary exists. -->
-    <button id="ask-screen-btn" class="header-action-btn" type="button" hidden>問克莉絲蒂娜這個畫面</button>
-    <span id="ask-screen-status" class="header-action-status" role="status"></span>
-    <!-- TASK-194: clear persisted chat history and reset chat area. -->
-    <button id="clear-chat-btn" class="header-action-btn header-action-btn--secondary" type="button">清除對話記錄</button>
+    <div class="header-title">
+      <h1>Dragon Pet AI</h1>
+      <span class="version-tag">dev</span>
+    </div>
+    <div class="header-actions">
+      <!-- Primary: open Pet Window -->
+      <button id="show-pet-window-btn" class="header-action-btn header-action-btn--primary" type="button">Show Pet</button>
+      <!-- TASK-171A/176/172A: screen context group (capture + analyse) -->
+      <div class="header-btn-group">
+        <button id="capture-screen-btn" class="header-action-btn" type="button">擷取螢幕</button>
+        <button id="capture-window-btn" class="header-action-btn" type="button">擷取視窗</button>
+        <button id="analyze-screen-btn" class="header-action-btn" type="button" disabled>分析這張</button>
+        <button id="clear-screen-btn" class="header-action-btn header-action-btn--ghost" type="button" hidden>清除截圖</button>
+        <!-- TASK-172B: ask Christina. Hidden until OCR summary exists. -->
+        <button id="ask-screen-btn" class="header-action-btn" type="button" hidden>問克莉絲蒂娜這個畫面</button>
+      </div>
+      <!-- TASK-194: low-key destructive action -->
+      <button id="clear-chat-btn" class="header-action-btn header-action-btn--ghost" type="button">清除對話記錄</button>
+    </div>
+    <!-- Status messages — shown below buttons, collapse when empty -->
+    <div class="header-status-row">
+      <span id="show-pet-window-status" class="header-action-status" role="status"></span>
+      <span id="capture-screen-status" class="header-action-status" role="status"></span>
+      <span id="capture-window-status" class="header-action-status" role="status"></span>
+      <span id="analyze-screen-status" class="header-action-status" role="status"></span>
+      <span id="ask-screen-status" class="header-action-status" role="status"></span>
+    </div>
   </header>
 
   <!-- TASK-172A: screen summary panel. Hidden until analysis produces output. -->
   <div id="analyze-screen-summary" class="analyze-screen-summary" hidden></div>
   <!-- TASK-179: gentle hint after OCR summary exists. Hidden until summary available. -->
   <div id="ocr-ask-hint" class="ocr-ask-hint" hidden>已產生螢幕摘要。點「問克莉絲蒂娜這個畫面」讓她根據文字摘要回覆（不傳送圖片）。</div>
-
-  <!-- ── Character status ───────────────────────────────── -->
-  <div id="character-status">
-    <div class="mood-indicator"></div>
-    <span>Mood:</span>
-    <span id="mood-label">neutral</span>
-    <span id="chat-source-status" class="chat-runtime-pill">—</span>
-    <span id="chat-provider-status" class="chat-runtime-pill">provider: mock</span>
-    <span id="chat-runtime-status" class="status-note">mock mode - no AI connected</span>
-  </div>
 
   <!-- ── Pet Avatar (TASK-083) ────────────────────────── -->
   <!-- Expression is updated by renderer.js via setPetExpression(mood).       -->
@@ -75,6 +70,15 @@
     <div id="pet-face" class="pet-face" data-mood="neutral" role="img" aria-label="Christina expression: neutral"></div>
     <p class="pet-display-hint" id="pet-display-hint">connecting…</p>
   </section>
+
+  <!-- ── Character status (below avatar for natural visual flow) ── -->
+  <div id="character-status">
+    <div class="mood-indicator"></div>
+    <span id="mood-label">neutral</span>
+    <span id="chat-source-status" class="chat-runtime-pill">—</span>
+    <span id="chat-provider-status" class="chat-runtime-pill">Ollama</span>
+    <span id="chat-runtime-status" class="status-note">mock mode - no AI connected</span>
+  </div>
 
   <!-- ── Chat area ──────────────────────────────────────── -->
   <main id="chat-area">
@@ -89,11 +93,10 @@
   <div id="memory-toggle-bar">
     <label id="memory-toggle-label" for="use-memory-toggle">
       <input type="checkbox" id="use-memory-toggle" />
-      Use approved memories
+      使用已核準的記憶
     </label>
-    <span id="memory-toggle-hint">
-      Requires backend <code>MEMORY_INJECTION_ENABLED=true</code>.
-      Only active approved memories may be used.
+    <span id="memory-toggle-hint" title="技術細節：需後端設定 MEMORY_INJECTION_ENABLED=true，且記憶已核准方可注入">
+      啟用後，克莉絲蒂娜會參考已核准的記憶回覆。
     </span>
   </div>
 
@@ -112,254 +115,271 @@
   </footer>
 
   <!-- ── Settings sections (below the fold) ────────────────── -->
-  <!-- Memory management placeholder -->
+  <!-- Memory management — collapsed by default; expand to manage -->
   <section id="memory-section" aria-labelledby="memory-title">
-    <div class="section-header">
-      <div>
-        <h2 id="memory-title">Memory</h2>
-        <p>Manual records</p>
-      </div>
-      <button id="refresh-memory-btn" type="button">Refresh Memories</button>
-    </div>
+    <details id="memory-details">
+      <summary class="memory-summary">
+        <h2 id="memory-title" class="memory-summary-title">記憶管理</h2>
+        <span class="memory-summary-hint">管理克莉絲蒂娜記得的事情</span>
+      </summary>
 
-    <form id="memory-form" class="memory-form">
-      <label>
-        Type
-        <select id="memory-type">
-          <option value="user_preference" selected>user_preference</option>
-          <option value="project_context">project_context</option>
-          <option value="task_memory">task_memory</option>
-          <option value="character_note">character_note</option>
-          <option value="system_event">system_event</option>
-        </select>
-      </label>
-
-      <label>
-        Importance
-        <input id="memory-importance" type="number" min="0" max="100" value="50" />
-      </label>
-
-      <label>
-        Confidence
-        <select id="memory-confidence">
-          <option value="explicit" selected>explicit</option>
-          <option value="inferred">inferred</option>
-          <option value="temporary">temporary</option>
-          <option value="stale">stale</option>
-          <option value="user_corrected">user_corrected</option>
-        </select>
-      </label>
-
-      <label class="memory-content-field">
-        Content
-        <textarea
-          id="memory-content"
-          rows="2"
-          placeholder="Write an explicit memory..."
-          spellcheck="true"
-        ></textarea>
-      </label>
-
-      <button id="save-memory-btn" type="submit">Save Memory</button>
-    </form>
-
-    <div id="memory-status" role="status"></div>
-
-    <div id="memory-list" class="memory-list">
-      <!-- Active memories are injected here by renderer.js -->
-    </div>
-
-    <div class="context-preview">
-      <div class="section-header compact">
+      <div class="section-header">
         <div>
-          <h3>Context Preview</h3>
-          <p id="memory-preview-meta">count: 0 - source: manual_memory_preview</p>
+          <p>手動記憶</p>
         </div>
-        <button id="refresh-preview-btn" type="button">Refresh Context Preview</button>
+        <button id="refresh-memory-btn" type="button">重新整理記憶</button>
       </div>
-      <pre id="memory-context-text">Memory Context Preview:
 
-No active memories.</pre>
-    </div>
+      <form id="memory-form" class="memory-form">
+        <label>
+          類型
+          <select id="memory-type">
+            <option value="user_preference" selected>使用者偏好</option>
+            <option value="project_context">專案背景</option>
+            <option value="task_memory">任務記憶</option>
+            <option value="character_note">角色備忘</option>
+            <option value="system_event">系統事件</option>
+          </select>
+        </label>
+
+        <label>
+          重要度
+          <input id="memory-importance" type="number" min="0" max="100" value="50" />
+        </label>
+
+        <label>
+          可信度
+          <select id="memory-confidence">
+            <option value="explicit" selected>明確</option>
+            <option value="inferred">推斷</option>
+            <option value="temporary">暫時</option>
+            <option value="stale">過時</option>
+            <option value="user_corrected">使用者修正</option>
+          </select>
+        </label>
+
+        <label class="memory-content-field">
+          內容
+          <textarea
+            id="memory-content"
+            rows="2"
+            placeholder="輸入記憶內容..."
+            spellcheck="true"
+          ></textarea>
+        </label>
+
+        <button id="save-memory-btn" type="submit">儲存記憶</button>
+      </form>
+
+      <div id="memory-status" role="status"></div>
+
+      <div id="memory-list" class="memory-list">
+        <!-- Active memories are injected here by renderer.js -->
+      </div>
+
+      <div class="context-preview">
+        <div class="section-header compact">
+          <div>
+            <h3>情境預覽</h3>
+            <p id="memory-preview-meta">count: 0 - source: manual_memory_preview</p>
+          </div>
+          <button id="refresh-preview-btn" type="button">重新整理預覽</button>
+        </div>
+        <pre id="memory-context-text">情境預覽：
+
+目前無記憶。</pre>
+      </div>
+    </details>
   </section>
 
-  <!-- ── Audit Logs section (TASK-027) ───────────────────────── -->
+  <!-- ── Audit Logs section (TASK-027) — collapsed by default ── -->
   <!-- Shows safe metadata for memory injection events. Raw memory content,  -->
   <!-- prompt text, and approved context text are never displayed here.       -->
   <section id="audit-section" aria-labelledby="audit-title">
-    <div class="section-header">
-      <div>
-        <h2 id="audit-title">Audit Logs</h2>
-        <p>Memory injection event metadata — raw memory content is not displayed.</p>
+    <details id="audit-details">
+      <summary class="audit-summary-row">
+        <h2 id="audit-title" class="audit-summary-title">診斷紀錄</h2>
+        <span class="audit-summary-hint">查看記憶注入事件</span>
+      </summary>
+
+      <div class="section-header">
+        <div>
+          <p>記錄記憶注入事件的狀態，不顯示原始記憶內容。</p>
+        </div>
+        <button id="refresh-audit-btn" type="button">重新整理紀錄</button>
       </div>
-      <button id="refresh-audit-btn" type="button">Refresh Audit Logs</button>
-    </div>
 
-    <div class="audit-controls">
-      <label class="audit-control-label">
-        Limit
-        <input id="audit-limit" type="number" min="1" max="100" value="20" />
-      </label>
-      <label class="audit-control-label">
-        Offset
-        <input id="audit-offset" type="number" min="0" value="0" />
-      </label>
-    </div>
+      <div class="audit-controls">
+        <label class="audit-control-label">
+          筆數
+          <input id="audit-limit" type="number" min="1" max="100" value="20" />
+        </label>
+        <label class="audit-control-label">
+          起始位置
+          <input id="audit-offset" type="number" min="0" value="0" />
+        </label>
+      </div>
 
-    <div id="audit-status" role="status" class="audit-status"></div>
+      <div id="audit-status" role="status" class="audit-status"></div>
 
-    <div id="audit-list" class="audit-list">
-      <!-- Audit cards are injected here by renderer.js -->
-    </div>
+      <div id="audit-list" class="audit-list">
+        <!-- Audit cards are injected here by renderer.js -->
+      </div>
+    </details>
   </section>
 
   <!-- Provider Settings section (TASK-052) -->
   <section id="provider-settings-section" aria-labelledby="provider-settings-title">
-    <div class="section-header">
-      <div>
-        <h2 id="provider-settings-title">Provider Settings</h2>
-        <p>Configure your AI provider, model, and API key.</p>
-      </div>
-      <button id="refresh-provider-settings-btn" type="button">Refresh Settings</button>
-    </div>
+    <details id="provider-details">
+      <summary class="provider-summary-row">
+        <h2 id="provider-settings-title" class="provider-summary-title">AI 設定</h2>
+        <span class="provider-summary-hint">設定克莉絲蒂娜使用的 AI 模型與連線方式。</span>
+      </summary>
 
-    <!-- TASK-189: plain-English summary of current provider state, updated on settings load -->
-    <div id="provider-status-summary" class="provider-status-summary" aria-live="polite"></div>
-
-    <form id="provider-settings-form" class="provider-settings-form">
-      <label>
-        Provider
-        <select id="provider-settings-provider">
-          <option value="mock" selected>mock</option>
-          <option value="anthropic">anthropic</option>
-          <option value="ollama">ollama — local, no key</option>
-        </select>
-      </label>
-
-      <label>
-        Model
-        <input
-          id="provider-settings-model"
-          type="text"
-          autocomplete="off"
-          spellcheck="false"
-          placeholder="Optional model name"
-        />
-      </label>
-
-      <label class="provider-settings-checkbox">
-        <input id="provider-real-enabled" type="checkbox" />
-        Use real AI
-      </label>
-
-      <label class="provider-settings-checkbox">
-        <input id="provider-llm-chat-enabled" type="checkbox" />
-        Enable AI chat
-      </label>
-
-      <label class="provider-settings-checkbox">
-        <input id="provider-fallback-to-mock" type="checkbox" checked />
-        Fall back to mock if AI fails
-      </label>
-
-      <button id="save-provider-settings-btn" type="submit">Save Provider Settings</button>
-      <p class="provider-save-note">Provider, model, and toggle settings only. API key is stored separately using the controls below.</p>
-    </form>
-
-    <div id="provider-warning" class="provider-warning">
-      Using a real provider may incur charges from your API provider.
-    </div>
-
-    <div class="provider-status-grid" aria-live="polite">
-      <div>
-        <span>Provider</span>
-        <strong id="provider-current-provider">mock</strong>
-      </div>
-      <div>
-        <span>Model</span>
-        <strong id="provider-current-model">default</strong>
-      </div>
-      <div>
-        <span>API key</span>
-        <strong id="provider-key-status">not_configured</strong>
-      </div>
-      <div>
-        <span>Last test</span>
-        <strong id="provider-last-test-status">not_tested</strong>
-      </div>
-      <div>
-        <span>Active provider</span>
-        <strong id="provider-resolved-provider">mock</strong>
-      </div>
-      <div>
-        <span>Real AI</span>
-        <strong id="provider-real-enabled-status">false</strong>
-      </div>
-      <div>
-        <span>AI chat</span>
-        <strong id="provider-llm-chat-enabled-status">false</strong>
-      </div>
-      <div>
-        <span>Mock fallback</span>
-        <strong id="provider-fallback-status">true</strong>
-      </div>
-    </div>
-
-    <!-- TASK-056 / TASK-060: API key save/clear/test controls.
-         Security rules:
-         - Input is type="password" — browser masks the value.
-         - Value is cleared by renderer.js immediately after every save attempt.
-         - Key value is never logged to console.
-         - Key value is never stored in localStorage or sessionStorage.
-         - Only calls local backend (http://127.0.0.1:8000).
-         - Test Connection requires explicit cost acknowledgement per click.
-         - Test Connection only calls local backend POST /provider/settings/test.
-         - No api_key, prompt, memory_context, or chat history is sent to test endpoint.
-         - No automatic test after Save Key.
-    -->
-    <div class="provider-key-section">
-      <label>
-        API key
-        <input
-          id="provider-api-key-placeholder"
-          type="password"
-          autocomplete="off"
-          spellcheck="false"
-          placeholder="Enter provider API key"
-        />
-      </label>
-      <div class="provider-key-actions">
-        <button id="save-provider-key-btn" type="button" disabled>Save API Key</button>
-        <button id="clear-provider-key-btn" type="button" disabled style="display:none">Clear API Key</button>
-        <button
-          id="test-provider-connection-btn"
-          type="button"
-          disabled
-          title="Requires a real provider, saved key, and real_provider_enabled. Sends exactly one minimal request to your provider via local backend."
-        >Test Connection</button>
-      </div>
-      <div id="provider-key-msg" class="provider-key-msg" role="status"></div>
-      <div id="provider-test-msg" class="provider-test-msg" role="status"></div>
-      <p class="provider-key-note">
-        Test Connection sends one minimal request to your provider via the local backend.
-        Explicit cost acknowledgement is required on every click. No memory or chat history is sent.
-        If key storage is unavailable, set <code>ANTHROPIC_API_KEY</code> as an environment variable and restart the backend.
-      </p>
-    </div>
-
-    <div id="provider-settings-status" role="status" class="provider-settings-status"></div>
-
-    <div class="usage-summary-block">
-      <div class="section-header compact">
+      <div class="section-header">
         <div>
-          <h3>Usage Summary</h3>
-          <p>Safe aggregate counters only.</p>
+          <p>設定克莉絲蒂娜使用的 AI 模型與連線方式。</p>
+        </div>
+        <button id="refresh-provider-settings-btn" type="button">重新整理設定</button>
+      </div>
+
+      <!-- TASK-189: status summary of current provider state, updated on settings load -->
+      <div id="provider-status-summary" class="provider-status-summary" aria-live="polite"></div>
+
+      <form id="provider-settings-form" class="provider-settings-form">
+        <label>
+          AI 來源
+          <select id="provider-settings-provider">
+            <option value="mock" selected>mock</option>
+            <option value="anthropic">anthropic</option>
+            <option value="ollama">ollama — 本地，無需金鑰</option>
+          </select>
+        </label>
+
+        <label>
+          模型
+          <input
+            id="provider-settings-model"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="選填模型名稱"
+          />
+        </label>
+
+        <label class="provider-settings-checkbox">
+          <input id="provider-real-enabled" type="checkbox" />
+          啟用真實 AI
+        </label>
+
+        <label class="provider-settings-checkbox">
+          <input id="provider-llm-chat-enabled" type="checkbox" />
+          啟用 AI 聊天
+        </label>
+
+        <label class="provider-settings-checkbox">
+          <input id="provider-fallback-to-mock" type="checkbox" checked />
+          AI 失敗時改用模擬模式
+        </label>
+
+        <button id="save-provider-settings-btn" type="submit">儲存 AI 設定</button>
+        <p class="provider-save-note">僅限 AI 來源、模型與開關設定。API 金鑰請使用下方控制項分開儲存。</p>
+      </form>
+
+      <div id="provider-warning" class="provider-warning">
+        使用真實 AI 服務可能向您的 API 提供商收費。
+      </div>
+
+      <div class="provider-status-grid" aria-live="polite">
+        <div>
+          <span>AI 來源</span>
+          <strong id="provider-current-provider">mock</strong>
+        </div>
+        <div>
+          <span>模型</span>
+          <strong id="provider-current-model">default</strong>
+        </div>
+        <div>
+          <span>API 金鑰</span>
+          <strong id="provider-key-status">not_configured</strong>
+        </div>
+        <div>
+          <span>最近測試</span>
+          <strong id="provider-last-test-status">not_tested</strong>
+        </div>
+        <div>
+          <span>實際使用</span>
+          <strong id="provider-resolved-provider">mock</strong>
+        </div>
+        <div>
+          <span>真實 AI</span>
+          <strong id="provider-real-enabled-status">false</strong>
+        </div>
+        <div>
+          <span>AI 聊天</span>
+          <strong id="provider-llm-chat-enabled-status">false</strong>
+        </div>
+        <div>
+          <span>模擬備援</span>
+          <strong id="provider-fallback-status">true</strong>
         </div>
       </div>
-      <dl id="provider-usage-summary" class="usage-summary-list">
-        <!-- Safe usage counters are injected here by renderer.js -->
-      </dl>
-    </div>
+
+      <!-- TASK-056 / TASK-060: API key save/clear/test controls.
+           Security rules:
+           - Input is type="password" — browser masks the value.
+           - Value is cleared by renderer.js immediately after every save attempt.
+           - Key value is never logged to console.
+           - Key value is never stored in localStorage or sessionStorage.
+           - Only calls local backend (http://127.0.0.1:8000).
+           - Test Connection requires explicit cost acknowledgement per click.
+           - Test Connection only calls local backend POST /provider/settings/test.
+           - No api_key, prompt, memory_context, or chat history is sent to test endpoint.
+           - No automatic test after Save Key.
+      -->
+      <div class="provider-key-section">
+        <label>
+          API 金鑰
+          <input
+            id="provider-api-key-placeholder"
+            type="password"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="輸入 API 金鑰"
+          />
+        </label>
+        <div class="provider-key-actions">
+          <button id="save-provider-key-btn" type="button" disabled>儲存 API 金鑰</button>
+          <button id="clear-provider-key-btn" type="button" disabled style="display:none">清除 API 金鑰</button>
+          <button
+            id="test-provider-connection-btn"
+            type="button"
+            disabled
+            title="需要真實 AI 來源、已儲存金鑰，且已啟用真實 AI。透過本地後端向您的 AI 服務傳送一筆最小請求。"
+          >測試連線</button>
+        </div>
+        <div id="provider-key-msg" class="provider-key-msg" role="status"></div>
+        <div id="provider-test-msg" class="provider-test-msg" role="status"></div>
+        <p class="provider-key-note">
+          測試連線透過本地後端向您的 AI 服務傳送一筆最小請求。每次點擊需明確確認費用。不傳送記憶或對話記錄。
+          若金鑰儲存不可用，請將 <code>ANTHROPIC_API_KEY</code> 設為環境變數並重新啟動後端。
+        </p>
+      </div>
+
+      <div id="provider-settings-status" role="status" class="provider-settings-status"></div>
+
+      <div class="usage-summary-block">
+        <div class="section-header compact">
+          <div>
+            <h3>使用量統計</h3>
+            <p>僅顯示安全的彙總計數。</p>
+          </div>
+        </div>
+        <dl id="provider-usage-summary" class="usage-summary-list">
+          <!-- Safe usage counters are injected here by renderer.js -->
+        </dl>
+      </div>
+    </details>
   </section>
 
   <script src="renderer.js"></script>

@@ -8,7 +8,7 @@
  * - No shell execution, no file system access, no live2D
  */
 
-const { app, BrowserWindow, desktopCapturer, ipcMain, screen } = require("electron");
+const { app, BrowserWindow, desktopCapturer, ipcMain, Menu, screen } = require("electron");
 const fs = require("fs");
 const http = require("http");  // TASK-167B: used by stt:transcribe IPC handler
 const path = require("path");
@@ -1005,6 +1005,7 @@ ipcMain.handle(PET_CHAT_MIRROR_CHANNEL, (_event, payload = {}) => {
     ? payload.reply.slice(0, PET_SPEECH_REPLY_MAX_LENGTH) : "";
   const mood = typeof payload.mood === "string" ? payload.mood.slice(0, 30) : "neutral";
   const source = typeof payload.source === "string" ? payload.source.slice(0, 30) : "unknown";
+  const inputMethod = payload.inputMethod === "voice" ? "voice" : "text";  // TASK-195
 
   if (!userMessage || !reply) {
     return { ok: false, reason: "empty_payload" };
@@ -1014,7 +1015,7 @@ ipcMain.handle(PET_CHAT_MIRROR_CHANNEL, (_event, payload = {}) => {
     return { ok: false, reason: "full_app_unavailable" };
   }
 
-  fullAppWindow.webContents.send(PET_CHAT_MIRROR_RECEIVED_CHANNEL, { userMessage, reply, mood, source });
+  fullAppWindow.webContents.send(PET_CHAT_MIRROR_RECEIVED_CHANNEL, { userMessage, reply, mood, source, inputMethod });
   return { ok: true };
 });
 
@@ -1046,6 +1047,7 @@ ipcMain.handle(CHAT_HISTORY_CLEAR_CHANNEL, () => {
 });
 
 app.whenReady().then(() => {
+  Menu.setApplicationMenu(null);  // TASK-195: hide native File/Edit/View/Window/Help menu bar
   createWindow();
   if (PET_MODE_ENABLED) {
     createPetWindow();

@@ -29,6 +29,7 @@ function onChatMirrorFromPet(callback) {
       reply: typeof payload.reply === "string" ? payload.reply : "",
       mood: typeof payload.mood === "string" ? payload.mood : "neutral",
       source: typeof payload.source === "string" ? payload.source : "unknown",
+      inputMethod: payload.inputMethod === "voice" ? "voice" : "text",  // TASK-195
     });
   };
   ipcRenderer.on(PET_CHAT_MIRROR_RECEIVED_CHANNEL, listener);

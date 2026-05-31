@@ -1884,7 +1884,7 @@ async function testUpdatePetThinkingStateHandlesNoPetBridge() {
 
 function testTask189ProviderSettingsButtonText() {
   const html = fs.readFileSync(indexPath, "utf8");
-  assert.match(html, /Save Provider Settings/);
+  assert.match(html, /儲存 AI 設定/);
   assert.doesNotMatch(html, /Save Non-secret Settings/);
 }
 
@@ -1893,14 +1893,14 @@ async function testTask189ProviderStatusSummaryMockMode() {
     providerSettings: { provider: "mock", real_provider_enabled: false, llm_chat_enabled: false },
   });
   const summary = textOf(document, "provider-status-summary");
-  assert.match(summary, /Mock mode/i);
+  assert.match(summary, /模擬模式/);
 }
 
 async function testTask189ProviderStatusSummaryOllamaActive() {
   // default settings: ollama, real_provider_enabled: true, llm_chat_enabled: true, fallback_to_mock: false
   const { document } = await loadRenderer();
   const summary = textOf(document, "provider-status-summary");
-  assert.match(summary, /Ollama active/i);
+  assert.match(summary, /Ollama.*已連線/);
 }
 
 async function testTask189ProviderStatusSummaryFallbackWarning() {
@@ -1913,7 +1913,7 @@ async function testTask189ProviderStatusSummaryFallbackWarning() {
     },
   });
   const summary = textOf(document, "provider-status-summary");
-  assert.match(summary, /fallback/i);
+  assert.match(summary, /備援/);
 }
 
 function testTask189SourceStatusMessagesNotRaw() {
@@ -1938,8 +1938,8 @@ async function testTask190ProviderStatusSummaryInvalidKey() {
     },
   });
   const summary = textOf(document, "provider-status-summary");
-  assert.match(summary, /invalid or connection test failed/i);
-  assert.doesNotMatch(summary, /not configured/i);
+  assert.match(summary, /無效或連線測試失敗/);
+  assert.doesNotMatch(summary, /未設定/);
 }
 
 async function testTask190ProviderStatusSummaryCloudActive() {
@@ -1954,7 +1954,7 @@ async function testTask190ProviderStatusSummaryCloudActive() {
     },
   });
   const summary = textOf(document, "provider-status-summary");
-  assert.match(summary, /anthropic active/i);
+  assert.match(summary, /anthropic.*已連線/);
 }
 
 
@@ -2165,8 +2165,9 @@ async function testTask194PetMirrorSavesWithPetInputSource() {
   const petEntries  = appended.filter((e) => e.role === "pet");
   assert.ok(userEntries.length >= 1, "pet mirror must save user entry");
   assert.ok(petEntries.length >= 1, "pet mirror must save pet entry");
-  assert.equal(userEntries[0].source, "pet_input", "pet mirror user entry must have source=pet_input");
-  assert.equal(petEntries[0].source, "pet_input", "pet mirror pet entry must have source=pet_input");
+  // TASK-195: no inputMethod → defaults to text → source becomes "pet_text"
+  assert.equal(userEntries[0].source, "pet_text", "pet mirror user entry must have source=pet_text");
+  assert.equal(petEntries[0].source, "pet_text", "pet mirror pet entry must have source=pet_text");
 }
 
 async function testTask194ClearChatClearsHistoryAndDom() {
@@ -2198,10 +2199,393 @@ async function testTask194ClearChatClearsHistoryAndDom() {
 function testTask194StartupGreetingNotSaved() {
   const renderer = fs.readFileSync(rendererPath, "utf8");
   // Startup greeting must have noHistory:true so it is not persisted
-  assert.match(renderer, /appendMessage\("pet",\s*"Hey\. I'm here/,
-    "startup greeting appendMessage must be present");
-  assert.match(renderer, /appendMessage\("pet",\s*"Hey\. I'm here[^)]*noHistory:\s*true/,
+  // TASK-195: greeting text updated to Chinese character voice
+  assert.match(renderer, /appendMessage\("pet",\s*"哼，吾在這裡/,
+    "startup greeting appendMessage must be present (Chinese character voice)");
+  assert.match(renderer, /appendMessage\("pet",\s*"哼，吾在這裡[^)]*noHistory:\s*true/,
     "startup greeting must pass noHistory:true to appendMessage");
+}
+
+// ---------------------------------------------------------------------------
+// TASK-195: Chat History UX Polish tests
+// ---------------------------------------------------------------------------
+
+async function testTask195AppendMessageShowsTimestampMeta() {
+  const { sandbox } = await loadRenderer();
+
+  const wrap = sandbox.appendMessage("user", "test ts", { ts: 1609459200000, source: "full_app" });
+  const meta = wrap.children.find((c) => c.className === "msg-meta");
+  assert.ok(meta, "appendMessage with ts > 0 must create .msg-meta element");
+  assert.match(meta.textContent, /\d\d:\d\d/, ".msg-meta must contain HH:mm time string");
+}
+
+async function testTask195AppendMessageNoMetaWithoutTsOrLabel() {
+  const { sandbox } = await loadRenderer();
+
+  // ts = 0, source = "full_app" → no source label, no time → no meta element
+  const wrap = sandbox.appendMessage("user", "no meta test", { ts: 0, source: "full_app" });
+  const meta = wrap.children.find((c) => c.className === "msg-meta");
+  assert.equal(meta, undefined, "appendMessage with ts=0 and unlabelled source must not create .msg-meta");
+}
+
+async function testTask195PetTextSourceShowsPetLabel() {
+  const { sandbox } = await loadRenderer();
+
+  const wrap = sandbox.appendMessage("user", "pet text msg", { source: "pet_text", ts: 0 });
+  const meta = wrap.children.find((c) => c.className === "msg-meta");
+  assert.ok(meta, "pet_text source must create .msg-meta even without timestamp");
+  assert.match(meta.textContent, /Pet/, "pet_text source must display 'Pet' label");
+}
+
+async function testTask195PetVoiceSourceShowsVoiceLabel() {
+  const { sandbox } = await loadRenderer();
+
+  const wrap = sandbox.appendMessage("user", "voice msg", { source: "pet_voice", ts: 0 });
+  const meta = wrap.children.find((c) => c.className === "msg-meta");
+  assert.ok(meta, "pet_voice source must create .msg-meta even without timestamp");
+  assert.match(meta.textContent, /Voice/, "pet_voice source must display 'Voice' label");
+}
+
+async function testTask195LoadHistoryPassesTsAndSource() {
+  const TS = 1609459200000;
+  const { document } = await loadRenderer({
+    dragonPet: {
+      showPetWindow: async () => ({ ok: true }),
+      updatePetSpeech: async () => ({ ok: true }),
+      captureScreen: async () => ({ ok: false }),
+      captureWindow: async () => ({ ok: false }),
+      onChatMirrorFromPet: () => () => {},
+      chatHistoryAppend: async () => ({ ok: true }),
+      chatHistoryLoad: async () => [
+        { role: "user", text: "voice history msg", source: "pet_voice", ts: TS },
+      ],
+      chatHistoryClear: async () => ({ ok: true }),
+    },
+  });
+
+  const chatArea = document.getElementById("chat-area");
+  const userMsgs = chatArea.children.filter((el) => el.className && el.className.includes("user"));
+  assert.ok(userMsgs.length >= 1, "loaded user message must be rendered");
+  const meta = userMsgs[0].children.find((c) => c.className === "msg-meta");
+  assert.ok(meta, "loaded entry with ts + pet_voice source must have .msg-meta");
+  assert.match(meta.textContent, /Voice/, "loaded pet_voice history must display 'Voice' label");
+}
+
+async function testTask195RestoreStatusAppearsAfterHistoryLoad() {
+  const { document } = await loadRenderer({
+    dragonPet: {
+      showPetWindow: async () => ({ ok: true }),
+      updatePetSpeech: async () => ({ ok: true }),
+      captureScreen: async () => ({ ok: false }),
+      captureWindow: async () => ({ ok: false }),
+      onChatMirrorFromPet: () => () => {},
+      chatHistoryAppend: async () => ({ ok: true }),
+      chatHistoryLoad: async () => [
+        { role: "user", text: "old msg", source: "full_app", ts: 0 },
+      ],
+      chatHistoryClear: async () => ({ ok: true }),
+    },
+  });
+
+  const chatArea = document.getElementById("chat-area");
+  const statusMsgs = chatArea.children.filter((el) => el.className && el.className.includes("status"));
+  assert.ok(
+    statusMsgs.some((el) => el.children.some((c) => c.textContent.includes("已還原"))),
+    "loadAndRenderChatHistory must append a '已還原 N 筆' restore status message"
+  );
+}
+
+async function testTask195MirrorVoiceInputMethodShowsVoiceLabel() {
+  let mirrorCallback = null;
+  const { document } = await loadRenderer({
+    dragonPet: {
+      showPetWindow: async () => ({ ok: true }),
+      updatePetSpeech: async () => ({ ok: true }),
+      captureScreen: async () => ({ ok: false }),
+      captureWindow: async () => ({ ok: false }),
+      onChatMirrorFromPet: (cb) => { mirrorCallback = cb; return () => {}; },
+      chatHistoryAppend: async () => ({ ok: true }),
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({ ok: true }),
+    },
+  });
+
+  assert.ok(typeof mirrorCallback === "function", "onChatMirrorFromPet callback must be registered");
+  mirrorCallback({ userMessage: "voice input", reply: "reply", mood: "happy", source: "llm_local", inputMethod: "voice" });
+  await settle();
+
+  const chatArea = document.getElementById("chat-area");
+  const lastMsgs = chatArea.children.slice(-2);
+  const userWrap = lastMsgs[0];
+  const meta = userWrap.children.find((c) => c.className === "msg-meta");
+  assert.ok(meta, "voice mirror message must have .msg-meta");
+  assert.match(meta.textContent, /Voice/, "voice mirror message must display 'Voice' label");
+}
+
+// TASK-195 Visual Polish: static file-reading tests
+// ---------------------------------------------------------------------------
+
+const cssPath  = path.join(desktopRoot, "src", "renderer", "styles.css");
+
+function testTask195VisHeaderTitleWrapperExists() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes('class="header-title"'), "index.html must contain .header-title wrapper");
+  assert.ok(html.includes('class="header-actions"'), "index.html must contain .header-actions wrapper");
+  assert.ok(html.includes('class="header-btn-group"'), "index.html must contain .header-btn-group for screen context buttons");
+}
+
+function testTask195VisShowPetHasPrimaryClass() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(
+    html.includes('id="show-pet-window-btn"') && html.includes("header-action-btn--primary"),
+    "show-pet-window-btn must have header-action-btn--primary class"
+  );
+  const btnLine = html.split("\n").find((l) => l.includes("show-pet-window-btn"));
+  assert.ok(btnLine && btnLine.includes("--primary"), "show-pet-window-btn line must include --primary");
+}
+
+function testTask195VisClearChatHasGhostClass() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  const btnLine = html.split("\n").find((l) => l.includes("clear-chat-btn"));
+  assert.ok(btnLine && btnLine.includes("--ghost"), "clear-chat-btn must use header-action-btn--ghost (not --secondary)");
+}
+
+function testTask195VisPrimaryButtonCssExists() {
+  const css = fs.readFileSync(cssPath, "utf8");
+  assert.ok(css.includes("header-action-btn--primary"), "styles.css must define .header-action-btn--primary");
+  assert.ok(css.includes("var(--accent)"), "primary button must use accent color as background");
+}
+
+function testTask195VisGhostButtonCssExists() {
+  const css = fs.readFileSync(cssPath, "utf8");
+  assert.ok(css.includes("header-action-btn--ghost"), "styles.css must define .header-action-btn--ghost");
+  assert.ok(css.includes("header-action-btn--ghost") && css.includes("transparent"), "ghost button must have transparent background");
+}
+
+function testTask195VisMoodIndicatorNotAccentRed() {
+  const css = fs.readFileSync(cssPath, "utf8");
+  const moodBlock = css.slice(css.indexOf(".mood-indicator"), css.indexOf(".mood-indicator") + 200);
+  assert.ok(!moodBlock.includes("var(--accent)"), "mood-indicator must not use accent red — should use a softer colour");
+  assert.ok(moodBlock.includes("#5b9fd6"), "mood-indicator must use calm blue #5b9fd6");
+}
+
+function testTask195VisPetDisplayGradient() {
+  const css = fs.readFileSync(cssPath, "utf8");
+  assert.ok(css.includes("linear-gradient") && css.includes("pet-display"),
+    "#pet-display must use a linear-gradient background");
+}
+
+function testTask195VisPetDisplayHintSpeechBubble() {
+  const css = fs.readFileSync(cssPath, "utf8");
+  assert.ok(css.includes("pet-display-hint") && css.includes("12px 12px 12px 3px"),
+    ".pet-display-hint must have speech-bubble border-radius (12px 12px 12px 3px)");
+}
+
+function testTask195VisChatAreaEmptyPlaceholder() {
+  const css = fs.readFileSync(cssPath, "utf8");
+  assert.ok(css.includes("#chat-area:empty::before"),
+    "styles.css must define #chat-area:empty::before placeholder for empty chat state");
+}
+
+function testTask195VisNoMoodLabelInHtml() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  const statusBlock = html.slice(html.indexOf("character-status"), html.indexOf("mood-label") + 50);
+  assert.ok(!statusBlock.includes(">Mood:<"), "character-status must not contain redundant 'Mood:' span");
+}
+
+function testTask195VisFriendlyProviderName() {
+  const renderer = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(renderer.includes("friendlyProviderName"),
+    "renderer.js must define friendlyProviderName helper");
+  assert.ok(!renderer.includes("`provider: ${p}`"),
+    "provider chip must not use raw 'provider: X' format before first chat");
+}
+
+function testTask195VisCharacterStatusBelowAvatar() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  const petDisplayPos = html.indexOf("id=\"pet-display\"");
+  const charStatusPos = html.indexOf("id=\"character-status\"");
+  assert.ok(charStatusPos > petDisplayPos,
+    "character-status must appear after pet-display in HTML (below the avatar)");
+}
+
+function testTask195VisMenuHiddenInRenderer() {
+  const renderer = fs.readFileSync(rendererPath, "utf8");
+  // Chinese character voice greeting (not English)
+  assert.ok(!renderer.includes("Hey. I'm here"),
+    "startup greeting must not be English — should be Chinese character voice");
+  assert.ok(renderer.includes("哼，吾在這裡"),
+    "startup greeting must use Chinese character voice");
+}
+
+// TASK-195 Visual Polish Follow-up 3
+
+function testTask195VisF3StatusSeparatorStyle() {
+  const css = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "styles.css"), "utf8");
+  assert.ok(!css.includes("dashed var(--border)"),
+    "CSS .message.status must not use dashed border (separator style, not bubble)");
+  assert.ok(css.includes(".message.status::before") || css.includes(".message.status::after"),
+    "CSS .message.status must have ::before/::after pseudo-elements for separator lines");
+  assert.ok(css.includes(".message.status .sender"),
+    "CSS must hide .sender inside .message.status");
+}
+
+function testTask195VisF3MemoryToggleChinese() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes("使用已核準的記憶"),
+    "memory toggle label must use Chinese text");
+  assert.ok(!html.includes("Use approved memories"),
+    "memory toggle must not use English 'Use approved memories'");
+}
+
+function testTask195VisF3NoRawEnvVarVisible() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(!html.includes("<code>MEMORY_INJECTION_ENABLED"),
+    "MEMORY_INJECTION_ENABLED must not be displayed inside a <code> tag");
+  assert.ok(/title="[^"]*MEMORY_INJECTION_ENABLED/.test(html),
+    "MEMORY_INJECTION_ENABLED should be in a title tooltip attribute, not visible text");
+}
+
+function testTask195VisF3InputBarNowrap() {
+  const css = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "styles.css"), "utf8");
+  assert.ok(css.includes("flex-wrap: nowrap"),
+    "CSS #input-bar must use flex-wrap: nowrap so input+Send stay on one row");
+}
+
+function testTask195VisF3HistoryStatusUpdates() {
+  const renderer = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(renderer.includes("已載入最近對話"),
+    "renderer.js must update status to '已載入最近對話' after history restore");
+  assert.ok(renderer.includes("lastChatStatusMessage = \"已載入最近對話\""),
+    "renderer.js must assign lastChatStatusMessage after loadAndRenderChatHistory");
+}
+
+// TASK-195 Visual Polish Follow-up 4
+
+function testTask195VisF4MemorySectionCollapsible() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes('id="memory-details"'),
+    "memory-section must use <details id='memory-details'> for collapse");
+  assert.ok(html.includes('class="memory-summary"'),
+    "memory summary must have memory-summary class");
+  assert.ok(!html.includes('<details id="memory-details" open'),
+    "memory-details must NOT have the 'open' attribute — closed by default");
+}
+
+function testTask195VisF4MemoryTitleChinese() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes("記憶管理"),
+    "memory summary title must be '記憶管理'");
+  assert.ok(html.includes("管理克莉絲蒂娜記得的事情"),
+    "memory summary hint must be Chinese");
+  assert.ok(html.includes("重新整理記憶"),
+    "Refresh Memories button must say '重新整理記憶'");
+  assert.ok(!html.includes(">Memory<"),
+    "memory h2 must not contain English 'Memory'");
+}
+
+function testTask195VisF4MemoryFormLabelsChinese() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes("類型") && html.includes("重要度") && html.includes("可信度"),
+    "memory form labels must be Chinese: 類型, 重要度, 可信度");
+  assert.ok(html.includes("儲存記憶"),
+    "Save Memory button must say '儲存記憶'");
+  assert.ok(html.includes('value="user_preference"'),
+    "memory type option values must remain unchanged (user_preference)");
+  assert.ok(html.includes('value="explicit"'),
+    "memory confidence option values must remain unchanged (explicit)");
+}
+
+function testTask195VisF4MemorySummaryCssExists() {
+  const css = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "styles.css"), "utf8");
+  assert.ok(css.includes(".memory-summary"),
+    "CSS must define .memory-summary styles");
+  assert.ok(css.includes("#memory-details[open]"),
+    "CSS must have #memory-details[open] rule for expanded state");
+  assert.ok(css.includes(".memory-summary-title"),
+    "CSS must have .memory-summary-title rule");
+}
+
+// TASK-195 Visual Polish Follow-up 5
+
+function testTask195VisF5AuditSectionCollapsible() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes('id="audit-details"'),
+    "audit-section must use <details id='audit-details'> for collapse");
+  assert.ok(html.includes('class="audit-summary-row"'),
+    "audit summary must have audit-summary-row class");
+  assert.ok(!html.includes('<details id="audit-details" open'),
+    "audit-details must NOT have the 'open' attribute — closed by default");
+}
+
+function testTask195VisF5AuditTitleChinese() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes("診斷紀錄"),
+    "audit summary title must be '診斷紀錄'");
+  assert.ok(html.includes("查看記憶注入事件"),
+    "audit summary hint must be Chinese");
+  assert.ok(!html.includes(">Audit Logs<"),
+    "audit h2 must not contain English 'Audit Logs'");
+}
+
+function testTask195VisF5AuditLabelsChinese() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes("重新整理紀錄"),
+    "Refresh Audit Logs button must say '重新整理紀錄'");
+  assert.ok(html.includes("筆數"),
+    "Limit label must be '筆數'");
+  assert.ok(html.includes("起始位置"),
+    "Offset label must be '起始位置'");
+  assert.ok(!html.includes(">Refresh Audit Logs<"),
+    "Refresh Audit Logs must not appear in English");
+}
+
+function testTask195VisF5AuditSummaryCssExists() {
+  const css = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "styles.css"), "utf8");
+  assert.ok(css.includes(".audit-summary-row"),
+    "CSS must define .audit-summary-row styles");
+  assert.ok(css.includes("#audit-details[open]"),
+    "CSS must have #audit-details[open] rule for expanded state");
+  assert.ok(css.includes(".audit-summary-title"),
+    "CSS must have .audit-summary-title rule");
+}
+
+// TASK-195 Visual Polish Follow-up 6
+
+function testTask195VisF6ProviderSectionCollapsible() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes('id="provider-details"'),
+    "Provider Settings section must have <details id='provider-details'> for default-collapsed behaviour");
+  assert.ok(html.includes('class="provider-summary-row"'),
+    "Provider Settings summary must have class provider-summary-row");
+}
+
+function testTask195VisF6ProviderTitleChinese() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes("AI 設定"),
+    "Provider Settings title must be Chinese 'AI 設定'");
+  assert.ok(html.includes("設定克莉絲蒂娜使用的 AI 模型與連線方式"),
+    "Provider Settings hint must be Chinese summary text");
+}
+
+function testTask195VisF6ProviderLabelsChinese() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes("AI 來源"), "Provider label must be Chinese 'AI 來源'");
+  assert.ok(html.includes("啟用真實 AI"), "Real AI checkbox must be Chinese");
+  assert.ok(html.includes("啟用 AI 聊天"), "LLM chat checkbox must be Chinese");
+  assert.ok(html.includes("儲存 AI 設定"), "Save button must be Chinese");
+  assert.ok(html.includes("API 金鑰"), "API key label must be Chinese");
+  assert.ok(html.includes("重新整理設定"), "Refresh button must be Chinese");
+}
+
+function testTask195VisF6ProviderSummaryCssExists() {
+  const css = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "styles.css"), "utf8");
+  assert.ok(css.includes(".provider-summary-row"),
+    "CSS must define .provider-summary-row styles");
+  assert.ok(css.includes("#provider-details[open]"),
+    "CSS must have #provider-details[open] rule for expanded state");
+  assert.ok(css.includes(".provider-summary-title"),
+    "CSS must have .provider-summary-title rule");
 }
 
 async function main() {
@@ -2300,6 +2684,49 @@ async function main() {
   await testTask194PetMirrorSavesWithPetInputSource();
   await testTask194ClearChatClearsHistoryAndDom();
   testTask194StartupGreetingNotSaved();
+  // TASK-195: Chat History UX Polish tests
+  await testTask195AppendMessageShowsTimestampMeta();
+  await testTask195AppendMessageNoMetaWithoutTsOrLabel();
+  await testTask195PetTextSourceShowsPetLabel();
+  await testTask195PetVoiceSourceShowsVoiceLabel();
+  await testTask195LoadHistoryPassesTsAndSource();
+  await testTask195RestoreStatusAppearsAfterHistoryLoad();
+  await testTask195MirrorVoiceInputMethodShowsVoiceLabel();
+  // TASK-195 Visual Polish tests
+  testTask195VisHeaderTitleWrapperExists();
+  testTask195VisShowPetHasPrimaryClass();
+  testTask195VisClearChatHasGhostClass();
+  testTask195VisPrimaryButtonCssExists();
+  testTask195VisGhostButtonCssExists();
+  testTask195VisMoodIndicatorNotAccentRed();
+  testTask195VisPetDisplayGradient();
+  testTask195VisPetDisplayHintSpeechBubble();
+  testTask195VisChatAreaEmptyPlaceholder();
+  testTask195VisNoMoodLabelInHtml();
+  testTask195VisFriendlyProviderName();
+  testTask195VisCharacterStatusBelowAvatar();
+  testTask195VisMenuHiddenInRenderer();
+  // TASK-195 Visual Polish Follow-up 3
+  testTask195VisF3StatusSeparatorStyle();
+  testTask195VisF3MemoryToggleChinese();
+  testTask195VisF3NoRawEnvVarVisible();
+  testTask195VisF3InputBarNowrap();
+  testTask195VisF3HistoryStatusUpdates();
+  // TASK-195 Visual Polish Follow-up 4
+  testTask195VisF4MemorySectionCollapsible();
+  testTask195VisF4MemoryTitleChinese();
+  testTask195VisF4MemoryFormLabelsChinese();
+  testTask195VisF4MemorySummaryCssExists();
+  // TASK-195 Visual Polish Follow-up 5
+  testTask195VisF5AuditSectionCollapsible();
+  testTask195VisF5AuditTitleChinese();
+  testTask195VisF5AuditLabelsChinese();
+  testTask195VisF5AuditSummaryCssExists();
+  // TASK-195 Visual Polish Follow-up 6
+  testTask195VisF6ProviderSectionCollapsible();
+  testTask195VisF6ProviderTitleChinese();
+  testTask195VisF6ProviderLabelsChinese();
+  testTask195VisF6ProviderSummaryCssExists();
   console.log("renderer chat smoke: PASS");
 }
 

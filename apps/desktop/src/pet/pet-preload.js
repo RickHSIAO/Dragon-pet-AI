@@ -27,6 +27,7 @@ function sanitizeMirrorPayload(payload = {}) {
     reply: typeof payload.reply === "string" ? payload.reply.slice(0, 800) : "",
     mood: typeof payload.mood === "string" ? payload.mood.slice(0, 30) : "neutral",
     source: typeof payload.source === "string" ? payload.source.slice(0, 30) : "unknown",
+    inputMethod: payload.inputMethod === "voice" ? "voice" : "text",  // TASK-195
   };
 }
 

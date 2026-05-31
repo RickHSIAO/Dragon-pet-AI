@@ -758,7 +758,25 @@ function setPetHint(text) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-function appendMessage(role, text, { autoScroll = false, noHistory = false, source = "unknown" } = {}) {
+
+// TASK-195: format Unix ms timestamp as HH:mm local time.
+function formatMsgTime(ts) {
+  try {
+    const d = new Date(ts);
+    return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+  } catch (_e) {
+    return "";
+  }
+}
+
+// TASK-195: map stored source value to a visible label; "" means no label shown.
+function sourceLabelFor(source) {
+  if (source === "pet_text" || source === "pet_input") return "Pet";
+  if (source === "pet_voice") return "Voice";
+  return "";  // "full_app", "unknown" and others are unlabelled — native Full App chat
+}
+
+function appendMessage(role, text, { autoScroll = false, noHistory = false, source = "unknown", ts = 0 } = {}) {
   const wrap = document.createElement("div");
   wrap.className = `message ${role}`;
 
@@ -775,6 +793,17 @@ function appendMessage(role, text, { autoScroll = false, noHistory = false, sour
 
   wrap.appendChild(sender);
   wrap.appendChild(body);
+
+  // TASK-195: source label + timestamp metadata line — small, muted, non-intrusive.
+  const srcLabel = sourceLabelFor(source);
+  const timeStr  = ts > 0 ? formatMsgTime(ts) : "";
+  if (srcLabel || timeStr) {
+    const meta = document.createElement("div");
+    meta.className = "msg-meta";
+    meta.textContent = srcLabel && timeStr ? `${srcLabel} · ${timeStr}` : srcLabel || timeStr;
+    wrap.appendChild(meta);
+  }
+
   chatArea.appendChild(wrap);
 
   // TASK-113: caller controls scroll via autoScroll flag.
@@ -804,10 +833,21 @@ async function loadAndRenderChatHistory() {
     return;
   }
   if (!Array.isArray(entries) || entries.length === 0) return;
+  let renderedCount = 0;
   for (const entry of entries) {
     if (!entry || !entry.role || !entry.text) continue;
-    appendMessage(entry.role, entry.text, { noHistory: true });
+    appendMessage(entry.role, entry.text, {
+      noHistory: true,
+      source: typeof entry.source === "string" ? entry.source : "unknown",
+      ts: typeof entry.ts === "number" ? entry.ts : 0,
+    });
+    renderedCount++;
   }
+  // TASK-195: low-profile restore separator — not saved to history (role="status").
+  appendMessage("status", `已還原 ${renderedCount} 筆對話紀錄。`);
+  // TASK-195 follow-up 3: clear "No chat response yet." once history is present.
+  lastChatStatusMessage = "已載入最近對話";
+  syncChatRuntimeProviderStatus();
   maybeScrollChatToBottom();
 }
 
@@ -860,30 +900,30 @@ function calcProviderStatusSummary(settings) {
   const keyStatus = settings.key_status || "not_configured";
 
   if (!realEnabled || provider === "mock") {
-    return { text: "Current: Mock mode — no real AI connected.", state: "mock" };
+    return { text: "目前：模擬模式 — 未連線真實 AI。", state: "mock" };
   }
   if (provider === "ollama") {
     if (!llmEnabled) {
-      return { text: "Current: Ollama selected — AI chat is disabled. Enable 'AI chat' to use it.", state: "warning" };
+      return { text: "目前：已選擇 Ollama — AI 聊天已停用。請啟用「AI 聊天」以使用。", state: "warning" };
     }
     if (fallback) {
-      return { text: "Current: Ollama with fallback — real AI when available, mock on failure.", state: "warning" };
+      return { text: "目前：Ollama 含備援 — 有真實 AI 時優先使用，失敗時改用模擬。", state: "warning" };
     }
-    return { text: "Current: Ollama active — local AI connected.", state: "active" };
+    return { text: "目前：Ollama 本地 AI 已連線。", state: "active" };
   }
   // Cloud provider
   const keyActive = ["configured", "not_tested", "test_success"].includes(keyStatus);
   const keyBad = ["invalid", "test_failed"].includes(keyStatus);
   if (keyBad) {
-    return { text: `Current: ${provider} selected — API key invalid or connection test failed.`, state: "error" };
+    return { text: `目前：已選擇 ${provider} — API 金鑰無效或連線測試失敗。`, state: "error" };
   }
   if (!keyActive) {
-    return { text: `Current: ${provider} selected — API key not configured.`, state: "error" };
+    return { text: `目前：已選擇 ${provider} — API 金鑰未設定。`, state: "error" };
   }
   if (!llmEnabled) {
-    return { text: `Current: ${provider} selected — AI chat is disabled. Enable 'AI chat' to use it.`, state: "warning" };
+    return { text: `目前：已選擇 ${provider} — AI 聊天已停用。請啟用「AI 聊天」以使用。`, state: "warning" };
   }
-  return { text: `Current: ${provider} active — cloud AI connected.`, state: "active" };
+  return { text: `目前：${provider} 雲端 AI 已連線。`, state: "active" };
 }
 
 function isOllamaChatPath(settings = currentProviderSettings) {
@@ -1094,11 +1134,20 @@ function setChatRuntimeStatus(source, message = "", state = "normal") {
   chatRuntimeStatus.className = state === "error" ? "status-note error" : "status-note";
 }
 
+// TASK-195: human-readable provider label shown before first chat
+function friendlyProviderName(p) {
+  if (p === "ollama")    return "Ollama";
+  if (p === "anthropic") return "Anthropic";
+  if (p === "mock")      return "Mock";
+  if (typeof p === "string" && p.length > 0) return p.charAt(0).toUpperCase() + p.slice(1);
+  return "—";
+}
+
 function syncChatRuntimeProviderStatus() {
   if (lastChatSource === "not_checked") {
-    // Before first chat: show short provider name instead of raw source label
+    // Before first chat: show friendly provider name
     const p = currentProviderSettings.provider || "mock";
-    chatProviderStatus.textContent = `provider: ${p}`;
+    chatProviderStatus.textContent = friendlyProviderName(p);
     chatProviderStatus.className = "chat-runtime-pill";
     chatRuntimeStatus.textContent = lastChatStatusMessage;
   } else {
@@ -1163,7 +1212,7 @@ function renderMemoryList(memories) {
   if (!memories.length) {
     const empty = document.createElement("div");
     empty.className = "memory-empty";
-    empty.textContent = "No active memories.";
+    empty.textContent = "目前無記憶。";
     memoryList.appendChild(empty);
     return;
   }
@@ -1304,14 +1353,14 @@ function renderAuditList(items, meta) {
     const summary = document.createElement("div");
     summary.className = "audit-summary";
     summary.textContent =
-      `Showing ${items.length} of ${meta.count} records  |  limit: ${meta.limit}  offset: ${meta.offset}`;
+      `顯示 ${items.length} / ${meta.count} 筆  |  筆數: ${meta.limit}  位移: ${meta.offset}`;
     auditList.appendChild(summary);
   }
 
   if (!items.length) {
     const empty = document.createElement("div");
     empty.className = "audit-empty";
-    empty.textContent = "No audit records found.";
+    empty.textContent = "目前無診斷紀錄。";
     auditList.appendChild(empty);
     return;
   }
@@ -1323,7 +1372,7 @@ function renderAuditList(items, meta) {
     // Title row
     const title = document.createElement("div");
     title.className = "audit-card-title";
-    title.textContent = `Audit #${item.id}`;
+    title.textContent = `診斷 #${item.id}`;
     card.appendChild(title);
 
     // Metadata rows — safe fields only, no memory content
@@ -1369,7 +1418,7 @@ async function loadAuditLogs() {
   const limit  = Math.max(1, Math.min(100, Number(auditLimitInput.value)  || 20));
   const offset = Math.max(0,              Number(auditOffsetInput.value) || 0);
 
-  setAuditStatus("Loading audit logs...");
+  setAuditStatus("載入診斷紀錄中...");
 
   try {
     const res = await fetch(
@@ -1383,7 +1432,7 @@ async function loadAuditLogs() {
       offset: data.offset,
     });
     setAuditStatus(
-      `Loaded ${data.items.length} record(s). Total in DB: ${data.count}.`
+      `已載入 ${data.items.length} 筆紀錄。資料庫共 ${data.count} 筆。`
     );
   } catch (err) {
     renderAuditList([], null);
@@ -1965,7 +2014,7 @@ async function sendMessage(text) {
   setSending(true);
 
   // Show user message immediately — always scroll so the user sees their own send.
-  appendMessage("user", text, { autoScroll: true, source: "full_app" });
+  appendMessage("user", text, { autoScroll: true, source: "full_app", ts: Date.now() });
   const loadingMessage = appendMessage(
     "status",
     isOllamaChatPath()
@@ -2000,7 +2049,7 @@ async function sendMessage(text) {
     }
 
     loadingMessage.remove();
-    appendMessage("pet", data.reply, { source: "full_app" });
+    appendMessage("pet", data.reply, { source: "full_app", ts: Date.now() });
     maybeScrollChatToBottom(); // TASK-113: only scroll if user was near the bottom
     const source = data.source || "unknown";
     const isSourceError = source === "llm_local_error" || source === "llm_real_error";
@@ -2212,8 +2261,10 @@ function setupPetChatMirrorListener() {
   if (!api || typeof api.onChatMirrorFromPet !== "function") return;
   api.onChatMirrorFromPet(function (payload) {
     if (!payload.userMessage || !payload.reply) return;
-    appendMessage("user", payload.userMessage, { autoScroll: true, source: "pet_input" });
-    appendMessage("pet", payload.reply, { source: "pet_input" });
+    // TASK-195: map inputMethod to source so voice vs text are visually distinguished.
+    const userSource = payload.inputMethod === "voice" ? "pet_voice" : "pet_text";
+    appendMessage("user", payload.userMessage, { autoScroll: true, source: userSource, ts: Date.now() });
+    appendMessage("pet", payload.reply, { source: userSource, ts: Date.now() });
     maybeScrollChatToBottom();
     setMood(payload.mood);
   });
@@ -2247,7 +2298,7 @@ if (typeof document !== "undefined" && typeof document.addEventListener === "fun
     if (data.status === "ok") {
       // Remove the connecting status
       chatArea.lastChild.remove();
-      appendMessage("pet", "Hey. I'm here. What's on your mind?", { noHistory: true });
+      appendMessage("pet", "哼，吾在這裡。汝有何事就直說吧。", { noHistory: true });
       setMood("neutral"); // also initialises pet expression and friendly hint via setPetExpression / moodHintLabel
       // TASK-109: Startup greeting — static character line, no /chat call, no backend request.
       // setPetExpression("proud") overrides the neutral set above; currentMood stays "neutral"

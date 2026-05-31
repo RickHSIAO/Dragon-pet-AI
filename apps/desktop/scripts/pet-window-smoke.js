@@ -710,6 +710,24 @@ function testTask194ChatHistoryChannelsInMain() {
   assertIncludes(main, "CHAT_HISTORY_TEXT_MAX", "main.js must cap text length");
 }
 
+// ---------------------------------------------------------------------------
+// TASK-195: inputMethod mirror pipeline checks
+// ---------------------------------------------------------------------------
+
+function testTask195InputMethodInMirrorPipeline() {
+  // pet-preload.js sanitizeMirrorPayload must include inputMethod
+  const petPreload = readText(petPreloadPath);
+  assertIncludes(petPreload, "inputMethod:", "pet-preload.js sanitizeMirrorPayload must include inputMethod field");
+  assertIncludes(petPreload, '"voice"', "pet-preload.js must validate inputMethod voice value");
+  // main.js mirror handler must forward inputMethod
+  const main = readText(mainPath);
+  assertIncludes(main, "inputMethod", "main.js mirror handler must forward inputMethod");
+  assertRegex(main, /inputMethod.*voice.*text|voice.*inputMethod/, "main.js must guard inputMethod to voice|text");
+  // renderer/preload.js listener must include inputMethod
+  const preload = readText(rendererPreloadPath);
+  assertIncludes(preload, "inputMethod:", "renderer/preload.js listener must include inputMethod field");
+}
+
 function testTask194ChatHistoryChannelsInRendererPreload() {
   const preload = readText(rendererPreloadPath);
   assertIncludes(preload, 'CHAT_HISTORY_APPEND_CHANNEL = "chat-history:append"', "renderer/preload.js");
@@ -719,6 +737,12 @@ function testTask194ChatHistoryChannelsInRendererPreload() {
   assertIncludes(preload, "chatHistoryLoad", "renderer/preload.js");
   assertIncludes(preload, "chatHistoryClear", "renderer/preload.js");
   assertIncludes(preload, "sanitizeChatHistoryEntry", "renderer/preload.js");
+}
+
+function testTask195VisMenuHiddenInMain() {
+  const main = readText(mainPath);
+  assertIncludes(main, "Menu", "main.js must import Menu from electron");
+  assertIncludes(main, "Menu.setApplicationMenu(null)", "main.js must remove native application menu");
 }
 
 function run() {
@@ -784,6 +808,9 @@ function run() {
     // TASK-194
     testTask194ChatHistoryChannelsInMain,
     testTask194ChatHistoryChannelsInRendererPreload,
+    // TASK-195
+    testTask195InputMethodInMirrorPipeline,
+    testTask195VisMenuHiddenInMain,
   ];
 
   for (const test of tests) {

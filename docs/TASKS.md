@@ -18314,6 +18314,534 @@ New narrow IPC channel `pet:chat-mirror` (Pet Window → main → Full App rende
 
 ---
 
+## TASK-195 | Chat History UX Polish / Source & Timestamp Display
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-31
+
+### Goal
+
+Small UX polish pass on the TASK-194 chat history feature (Phase A — chat history metadata), plus Full App visual layout polish (Phase B — follow-up):
+1. Show a subdued `HH:mm` timestamp on each chat message bubble
+2. Show a source label ("Pet" or "Voice") on pet-originated messages
+3. Append a low-key restore status line ("已還原 N 筆對話紀錄。") after history is loaded
+4. Distinguish pet voice input from pet text input via `inputMethod` in the mirror pipeline
+
+No large new features, no backend/schema changes, no new IPC channels. contextIsolation maintained.
+
+### Approach
+
+**A. `inputMethod` through the mirror pipeline**
+
+Added `inputMethod: "voice" | "text"` field through 5 files in the pet→full-app mirror path:
+- `pet-renderer.js`: `mirrorPetChatToFullApp(text, data, inputMethod)` — callers pass `"voice"` or `"text"`
+- `pet-preload.js`: `sanitizeMirrorPayload` normalises `inputMethod` to `"voice" | "text"`
+- `main.js`: extracts and forwards `inputMethod` in the mirror IPC handler
+- `renderer/preload.js`: `onChatMirrorFromPet` listener forwards `inputMethod` in callback payload
+- `renderer.js`: `setupPetChatMirrorListener` maps `inputMethod` → `userSource` (`"pet_voice"` | `"pet_text"`)
+
+**B. `appendMessage` — meta line**
+
+New helpers:
+- `formatMsgTime(ts)` — converts Unix ms → `HH:mm` local string
+- `sourceLabelFor(source)` — `"pet_text"/"pet_input"` → `"Pet"`, `"pet_voice"` → `"Voice"`, others → `""`
+
+`appendMessage` signature extended with `ts` (default 0). When `srcLabel || timeStr`, appends a `.msg-meta` `<div>` child. Format: `"Voice · 14:32"` or just `"Pet"` or just `"14:32"`.
+
+**C. `loadAndRenderChatHistory` — pass ts + source, append restore status**
+
+- Each history entry rendered with `{source: entry.source, ts: entry.ts}` so labels/timestamps are shown
+- After rendering, `appendMessage("status", "已還原 N 筆對話紀錄。")` added as permanent visual separator (not saved to history — role "status" skips `saveChatHistoryEntry` guard)
+
+**D. `sendMessage` and `setupPetChatMirrorListener` — ts at message time**
+
+- `sendMessage`: user message + pet reply both get `ts: Date.now()`
+- Mirror listener: user + pet both get `ts: Date.now()`; `inputMethod` mapped to source
+
+**E. CSS — `.msg-meta`**
+
+```css
+.msg-meta { font-size: 10px; color: var(--text-muted); opacity: 0.5; margin-top: 4px; text-align: right; }
+.message.pet .msg-meta { text-align: left; }
+```
+
+### Source Label Logic
+
+| `source` value | Label shown |
+|---|---|
+| `"pet_text"` | Pet |
+| `"pet_input"` (legacy history) | Pet |
+| `"pet_voice"` | Voice |
+| `"full_app"` | _(unlabelled)_ |
+| `"unknown"` | _(unlabelled)_ |
+
+### Files Modified
+
+| File | Change | Runtime? |
+|---|---|---|
+| `apps/desktop/src/pet/pet-renderer.js` | `mirrorPetChatToFullApp` accepts `inputMethod` 3rd arg; voice + text callers updated | Yes |
+| `apps/desktop/src/pet/pet-preload.js` | `sanitizeMirrorPayload` normalises `inputMethod` field | Yes |
+| `apps/desktop/src/main.js` | Mirror IPC handler extracts + forwards `inputMethod` | Yes |
+| `apps/desktop/src/renderer/preload.js` | `onChatMirrorFromPet` forwards `inputMethod` in callback payload | Yes |
+| `apps/desktop/src/renderer/renderer.js` | `formatMsgTime`, `sourceLabelFor`; `appendMessage` extended with `ts`; `.msg-meta` creation; `loadAndRenderChatHistory` restore status; `sendMessage` + mirror listener ts/source | Yes |
+| `apps/desktop/src/renderer/styles.css` | `.msg-meta` + `.message.pet .msg-meta` styles | Yes |
+| `apps/desktop/scripts/pet-renderer-smoke.js` | 1 TASK-195 test; updated 2 TASK-193 mirror-caller needles; widened 1 slice | No |
+| `apps/desktop/scripts/pet-window-smoke.js` | 1 TASK-195 test (`inputMethod` in mirror pipeline) | No |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | 7 TASK-195 tests; updated 1 TASK-194 assertion (`pet_input` → `pet_text`) | No |
+| `docs/TASKS.md` | TASK-195 section added | No |
+| `docs/ROADMAP.md` | TASK-195 entry added | No |
+
+### Test Coverage
+
+| Test | Suite | What it verifies |
+|---|---|---|
+| `testTask195AppendMessageShowsTimestampMeta` | renderer-chat-smoke | `ts > 0` creates `.msg-meta` with `HH:mm` time |
+| `testTask195AppendMessageNoMetaWithoutTsOrLabel` | renderer-chat-smoke | `ts=0` + unlabelled source → no `.msg-meta` |
+| `testTask195PetTextSourceShowsPetLabel` | renderer-chat-smoke | `source:"pet_text"` → "Pet" label in `.msg-meta` |
+| `testTask195PetVoiceSourceShowsVoiceLabel` | renderer-chat-smoke | `source:"pet_voice"` → "Voice" label in `.msg-meta` |
+| `testTask195LoadHistoryPassesTsAndSource` | renderer-chat-smoke | loaded entry with ts + pet_voice → `.msg-meta` with "Voice" |
+| `testTask195RestoreStatusAppearsAfterHistoryLoad` | renderer-chat-smoke | "已還原" status message appended after history render |
+| `testTask195MirrorVoiceInputMethodShowsVoiceLabel` | renderer-chat-smoke | mirror callback `inputMethod:"voice"` → "Voice" `.msg-meta` |
+| `testTask195MirrorPayloadIncludesInputMethod` | pet-renderer-smoke | `sanitizeMirrorPayload` normalises `inputMethod` |
+| `testTask195InputMethodInMirrorPipeline` | pet-window-smoke | `inputMethod` present in pet-preload, main, renderer-preload |
+
+### Automated Suite Results
+
+| Suite | Result |
+|---|---|
+| `pet-renderer-smoke.js` | PASS — 233 checks |
+| `pet-window-smoke.js` | PASS — 53 checks |
+| `renderer-chat-smoke.js` | PASS |
+| `git diff --check` | CLEAN (CRLF warnings only, not errors) |
+
+### Acceptance Criteria
+
+- [x] `HH:mm` timestamp shown on each chat message
+- [x] "Pet" label shown on pet-text mirror messages
+- [x] "Voice" label shown on pet-voice mirror messages
+- [x] Full App messages show no source label (only timestamp)
+- [x] Restore status "已還原 N 筆對話紀錄。" appears after history load
+- [x] Labels/timestamps shown on restored history entries
+- [x] Restore status not saved to history file
+- [x] No regression in existing features
+- [x] `pet-renderer-smoke.js` — 233 checks PASS ✓
+- [x] `pet-window-smoke.js` — 52 checks PASS ✓
+- [x] `renderer-chat-smoke.js` — PASS ✓
+- [x] `git diff --check` CLEAN ✓
+- [x] Windows manual smoke PASS ← **2026-05-31**
+
+### Windows Manual Smoke Results (2026-05-31)
+
+| # | Scenario | Expected | Result |
+|---|---|---|---|
+| 1 | Full App chat | User message + Christina reply show `HH:mm` timestamp; no source label | PASS |
+| 2 | Pet direct text input mirror | Full App shows user text + reply with `Pet · HH:mm` metadata | PASS |
+| 3 | Pet voice/STT mirror | Full App shows STT transcript + reply with `Voice · HH:mm` metadata | PASS |
+| 4 | History restore | Restored messages retain timestamp/source metadata; "已還原 N 筆對話紀錄。" separator shown | PASS |
+| 5 | Startup greeting | No timestamp, no source label on greeting bubble | PASS |
+| 6 | Restore status not persisted | After second restart, "已還原" count reflects actual messages only (status not saved as history entry) | PASS |
+| 7 | Regression | Full App chat, Pet direct input, Pet voice/STT/TTS, Clear Chat — all normal | PASS |
+
+### Phase B — Full App Visual Layout Polish (follow-up, 2026-05-31)
+
+**Problem:** Full App UI resembled an engineering test panel — buttons piled in a flat row, red mood dot, plain dark character area.
+
+**Changes (CSS + HTML only, no runtime logic):**
+
+| Area | Before | After |
+|---|---|---|
+| Header | Flat flex row: title + all buttons mixed | Two-row layout: `.header-title` (app name + version tag) + `.header-actions` (button row) + `.header-status-row` (status messages below, collapse when empty) |
+| Button hierarchy | All identical `surface-alt` rectangles | `--primary` variant (accent fill) for Show Pet; `--ghost` variant (transparent, muted text) for 清除對話記錄 and 清除截圖; regular for screen capture group |
+| Screen capture group | Individual buttons in flat row | `.header-btn-group` with left-divider separator |
+| dev tag | `surface-alt` filled chip | Transparent with border, 60% opacity — unobtrusive |
+| Mood indicator | Alarming `var(--accent)` red dot | Calm `#5b9fd6` blue, 75% opacity |
+| Status bar | `<span>Mood:</span>` redundant label | Removed — mood value is self-explanatory |
+| Pet display | Plain `var(--pet-bubble)` background | `linear-gradient(170deg, surface-alt → pet-bubble)` with larger padding |
+| Pet avatar | No shadow | `drop-shadow(0 2px 14px rgba(233,69,96,0.18))` — soft glow |
+| Pet hint text | Plain small muted text | Speech-bubble card: `surface-alt` bg, border, `12px 12px 12px 3px` radius |
+| Empty chat area | Blank — looked broken | CSS `::before` placeholder "和克莉絲蒂娜開始對話 ♪" (disappears once messages exist) |
+| Narrow (434px) | Buttons overflow | `.header-btn-group` drops left-border divider at `≤700px`; title always on own row |
+
+**Files modified (Phase B):**
+
+| File | Change |
+|---|---|
+| `apps/desktop/src/renderer/index.html` | Header restructured; "Mood:" label removed |
+| `apps/desktop/src/renderer/styles.css` | Header, button variants, mood indicator, pet display, chat empty state, responsive |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | +10 static file-reading tests (`testTask195Vis*`) |
+
+**Runtime behavior changes:** None. All changes are CSS/HTML structural only. IDs unchanged. No JS logic touched.
+
+**Phase B automated tests:**
+
+| Test | Verifies |
+|---|---|
+| `testTask195VisHeaderTitleWrapperExists` | `.header-title`, `.header-actions`, `.header-btn-group` in HTML |
+| `testTask195VisShowPetHasPrimaryClass` | show-pet-window-btn has `--primary` |
+| `testTask195VisClearChatHasGhostClass` | clear-chat-btn has `--ghost` |
+| `testTask195VisPrimaryButtonCssExists` | CSS defines `--primary` with accent fill |
+| `testTask195VisGhostButtonCssExists` | CSS defines `--ghost` with transparent background |
+| `testTask195VisMoodIndicatorNotAccentRed` | mood-indicator uses `#5b9fd6`, not `var(--accent)` |
+| `testTask195VisPetDisplayGradient` | `#pet-display` uses `linear-gradient` |
+| `testTask195VisPetDisplayHintSpeechBubble` | `.pet-display-hint` has speech-bubble border-radius |
+| `testTask195VisChatAreaEmptyPlaceholder` | `#chat-area:empty::before` exists |
+| `testTask195VisNoMoodLabelInHtml` | redundant `<span>Mood:</span>` removed |
+
+**Phase B suite results:**
+
+| Suite | Result | Notes |
+|---|---|---|
+| `renderer-chat-smoke.js` | PASS (+10 new) | Static file-reading tests only |
+| `pet-renderer-smoke.js` | PASS — 233 checks | Pet Window not touched — no new tests needed |
+| `pet-window-smoke.js` | PASS — 52 checks | IPC/preload/main not touched — no new tests needed |
+| `git diff --check` | CLEAN | CRLF warnings only |
+
+**Phase B acceptance criteria:**
+
+- [ ] Header layout: title row + action row visible at 434px — no overflow
+- [ ] Show Pet button visually primary (accent fill)
+- [ ] 清除對話記錄 visually low-key (ghost/transparent)
+- [ ] Mood indicator dot is calm blue, not alarming red
+- [ ] Pet display area has gradient background and avatar glow
+- [ ] Pet hint text looks like speech-bubble card
+- [ ] Empty chat area shows placeholder instead of blank space
+- [x] No regression in chat, history, voice, mirror features ✓
+- [x] Windows visual smoke PASS ← **2026-05-31** ✓
+
+### Phase B Follow-up 2 — Second Screenshot UX Polish (2026-05-31)
+
+**Problem:** Second screenshot review revealed 6 more issues: Electron native menu bar (File/Edit/View/Window/Help) visible; 清除對話記錄 button not pushed far right; provider chip showed raw "provider: ollama"; character status pills looked interactive/clickable; chat area spacing too tight; startup greeting was English.
+
+**Changes:**
+
+| Area | Before | After |
+|---|---|---|
+| Electron native menu bar | File/Edit/View/Window/Help bar visible | `Menu.setApplicationMenu(null)` in `main.js` — bar hidden globally on app ready |
+| 清除對話記錄 position | Adjacent to other header buttons | `#clear-chat-btn { margin-left: auto }` — pushed to far right of flex row |
+| Provider chip text | "provider: ollama" (raw engineering string) | `friendlyProviderName(p)` helper: "ollama" → "Ollama", "anthropic" → "Anthropic", "mock" → "Mock" |
+| Character status pills | Button-like border + background — looked clickable | Transparent background, `cursor: default`, `user-select: none`, `pointer-events: none` — plain non-interactive badge |
+| `#character-status` position | Above `#pet-display` (avatar section) | Moved below `#pet-display` in DOM — status naturally under avatar |
+| Chat area spacing | Default/cramped | `padding: 14px 18px 16px`, `gap: 8px`; `.msg-meta` opacity 0.4, smaller margin |
+| Pet hint speech bubble | Could appear interactive | `cursor: default`, `pointer-events: none`, `user-select: none` |
+| Startup greeting | "Hey. I'm here. What's on your mind?" (English) | "哼，吾在這裡。汝有何事就直說吧。" (Christina's character voice; `noHistory: true` preserved) |
+
+**Files modified (Phase B follow-up 2):**
+
+| File | Change | Runtime? |
+|---|---|---|
+| `apps/desktop/src/main.js` | Added `Menu` import; `Menu.setApplicationMenu(null)` before `createWindow()` | Yes (startup only) |
+| `apps/desktop/src/renderer/renderer.js` | Added `friendlyProviderName(p)` helper; pre-chat provider chip uses it; startup greeting → Chinese | Yes |
+| `apps/desktop/src/renderer/styles.css` | `.chat-runtime-pill` rewritten (transparent, non-interactive); `#clear-chat-btn { margin-left: auto }`; chat area spacing; `.pet-display-hint` pointer-events/cursor | CSS only |
+| `apps/desktop/src/renderer/index.html` | `#character-status` moved after `#pet-display`; initial provider chip text "Ollama" | HTML only |
+| `apps/desktop/scripts/pet-window-smoke.js` | +1 `testTask195VisMenuHiddenInMain` (registered in `run()`) | No |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | +3 tests: `testTask195VisFriendlyProviderName`, `testTask195VisCharacterStatusBelowAvatar`, `testTask195VisMenuHiddenInRenderer` | No |
+
+**Runtime behavior changes:** `Menu.setApplicationMenu(null)` (startup, main process only). `friendlyProviderName()` changes pre-chat provider display string. Startup greeting text changed. All other changes are CSS/HTML only.
+
+**Phase B follow-up 2 automated tests:**
+
+| Test | Suite | Verifies |
+|---|---|---|
+| `testTask195VisMenuHiddenInMain` | pet-window-smoke | `Menu` imported; `Menu.setApplicationMenu(null)` present in main.js |
+| `testTask195VisFriendlyProviderName` | renderer-chat-smoke | `friendlyProviderName` defined; no raw `provider: ${p}` string |
+| `testTask195VisCharacterStatusBelowAvatar` | renderer-chat-smoke | `#character-status` appears after `#pet-display` in HTML |
+| `testTask195VisMenuHiddenInRenderer` | renderer-chat-smoke | Startup greeting is Chinese character voice |
+
+**Phase B follow-up 2 suite results:**
+
+| Suite | Result | Notes |
+|---|---|---|
+| `pet-window-smoke.js` | PASS — 53 checks (+1 new) | +`testTask195VisMenuHiddenInMain` |
+| `pet-renderer-smoke.js` | PASS — 233 checks | No changes needed |
+| `renderer-chat-smoke.js` | PASS | +3 new static tests |
+| `git diff --check` | CLEAN | CRLF warnings only |
+
+**Phase B follow-up 2 acceptance criteria:**
+
+- [x] Electron native menu bar (File/Edit/View/...) not visible — `Menu.setApplicationMenu(null)` ✓
+- [x] 清除對話記錄 pushed far right of header action row ✓
+- [x] Provider chip shows "Ollama" / "Anthropic" / "Mock" — not raw engineering text ✓
+- [x] Character status pills are non-interactive badges (no pointer, no select, transparent) ✓
+- [x] `#character-status` positioned below avatar in DOM ✓
+- [x] Chat area spacing improved; `.msg-meta` softer ✓
+- [x] Startup greeting uses Christina's Chinese character voice ✓
+- [x] All three smoke suites PASS ✓
+- [x] Windows visual smoke PASS ← **2026-05-31** ✓
+
+### Phase B Follow-up 3 — Third Screenshot UX Polish (2026-05-31)
+
+**Problem:** Third screenshot review revealed 4 more issues: memory toggle still engineering-facing (raw env var `MEMORY_INJECTION_ENABLED=true` visible); SYSTEM message shows as a dashed-border bubble (looks broken); status bar still shows "No chat response yet." even when history is already loaded; input/Send layout wraps to two rows at 434px (giant full-width red button).
+
+**Changes:**
+
+| Area | Before | After |
+|---|---|---|
+| Memory toggle label | "Use approved memories" (English) | "使用已核準的記憶" (繁中) |
+| Memory toggle hint | Shows `<code>MEMORY_INJECTION_ENABLED=true</code>` as visible text | Friendly description "啟用後，克莉絲蒂娜會參考已核准的記憶回覆。"; env var moved to `title` tooltip |
+| SYSTEM status bubble | `border: 1px dashed var(--border)` — large dashed box | Separator-line style: `display: flex` with `::before`/`::after` rule lines; `.sender` hidden; no border/background |
+| "No chat response yet." | `lastChatStatusMessage` initial value shown after history restore | After `loadAndRenderChatHistory` with entries, sets `lastChatStatusMessage = "已載入最近對話"` and calls `syncChatRuntimeProviderStatus()` |
+| Input/Send layout | `flex-wrap: wrap` → Send wraps to full-width row on 434px | `flex-wrap: nowrap` → input + Send always on same row; `padding: 10px 18px; gap: 8px`; Send removed from `width: 100%` narrow override |
+
+**Files modified (Phase B follow-up 3):**
+
+| File | Change | Runtime? |
+|---|---|---|
+| `apps/desktop/src/renderer/index.html` | Memory toggle text → Chinese; hint text cleaned; env var in title attr | HTML only |
+| `apps/desktop/src/renderer/styles.css` | `.message.status` separator style; `#input-bar` nowrap; Send removed from narrow full-width | CSS only |
+| `apps/desktop/src/renderer/renderer.js` | After history load, set `lastChatStatusMessage = "已載入最近對話"` + `syncChatRuntimeProviderStatus()` | Yes (UI state update) |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | +5 static tests (`testTask195VisF3*`) | No |
+
+**Runtime behavior changes:** `lastChatStatusMessage` is updated after history restore (UI state only, no API call). All other changes are CSS/HTML.
+
+**Phase B follow-up 3 automated tests:**
+
+| Test | Verifies |
+|---|---|
+| `testTask195VisF3StatusSeparatorStyle` | `.message.status` has no dashed border; has `::before`/`::after`; hides `.sender` |
+| `testTask195VisF3MemoryToggleChinese` | Memory toggle label is Chinese; not English |
+| `testTask195VisF3NoRawEnvVarVisible` | `MEMORY_INJECTION_ENABLED` not in `<code>` tag; present only in `title` attr |
+| `testTask195VisF3InputBarNowrap` | `#input-bar` uses `flex-wrap: nowrap` |
+| `testTask195VisF3HistoryStatusUpdates` | `lastChatStatusMessage = "已載入最近對話"` assigned in renderer.js |
+
+**Phase B follow-up 3 suite results:**
+
+| Suite | Result | Notes |
+|---|---|---|
+| `renderer-chat-smoke.js` | PASS | +5 new static tests |
+| `pet-renderer-smoke.js` | PASS — 233 checks | No changes needed |
+| `pet-window-smoke.js` | PASS — 53 checks | No changes needed |
+| `git diff --check` | CLEAN | CRLF warnings only |
+
+**Phase B follow-up 3 acceptance criteria:**
+
+- [x] Memory toggle uses Chinese "使用已核準的記憶" — no English text ✓
+- [x] `MEMORY_INJECTION_ENABLED=true` not displayed as visible text — moved to tooltip ✓
+- [x] SYSTEM/status message renders as separator line, not dashed bubble ✓
+- [x] Status bar shows "已載入最近對話" after history restore, not "No chat response yet." ✓
+- [x] Input + Send on same row at 434px — no full-width Send button ✓
+- [x] All three smoke suites PASS ✓
+- [x] Windows visual smoke PASS ← **2026-05-31** ✓
+
+### Phase B Follow-up 4 — Fourth Screenshot UX Polish (2026-05-31)
+
+**Problem:** Fourth screenshot showed Memory management section occupying large screen real estate by default with engineering labels (English "Memory", raw option values like `user_preference`, `explicit`). Main chat focus was lost behind a full database-form panel.
+
+**Changes:**
+
+| Area | Before | After |
+|---|---|---|
+| Memory section default state | Full form always visible (h2 + type/importance/confidence + button grid) | Collapsed to single toggle row "記憶管理 — 管理克莉絲蒂娜記得的事情" with `›` chevron |
+| Memory section expanded state | Same as before — form fully visible | Expands with divider, same form (now Chinese labels) |
+| Memory h2 title | "Memory" (English) | "記憶管理" (Chinese, inside summary) |
+| Subtitle | "Manual records" | "手動記憶" |
+| Refresh button | "Refresh Memories" | "重新整理記憶" |
+| Type label / options | "Type" / raw `user_preference`, `project_context`, etc. | "類型" / "使用者偏好", "專案背景", "任務記憶", "角色備忘", "系統事件" (values unchanged) |
+| Importance label | "Importance" | "重要度" |
+| Confidence label / options | "Confidence" / raw `explicit`, `inferred`, etc. | "可信度" / "明確", "推斷", "暫時", "過時", "使用者修正" (values unchanged) |
+| Content label | "Content" / "Write an explicit memory..." | "內容" / "輸入記憶內容..." |
+| Save button | "Save Memory" | "儲存記憶" |
+| Context Preview h3 | "Context Preview" | "情境預覽" |
+| Refresh Preview button | "Refresh Context Preview" | "重新整理預覽" |
+| Memory context pre content | "Memory Context Preview:\n\nNo active memories." | "情境預覽：\n\n目前無記憶。" |
+| Empty memory list | "No active memories." (JS) | "目前無記憶。" |
+
+**Technical approach:** Native `<details>/<summary>` element — no JavaScript toggle, no new IPC. All option `value` attributes unchanged (backend schema unaffected). All element IDs unchanged (renderer.js wiring unaffected).
+
+**Files modified (Phase B follow-up 4):**
+
+| File | Change | Runtime? |
+|---|---|---|
+| `apps/desktop/src/renderer/index.html` | `#memory-section` wrapped in `<details id="memory-details">`; `<summary class="memory-summary">` with Chinese h2; all form labels + options → Chinese | HTML only |
+| `apps/desktop/src/renderer/styles.css` | `#memory-section padding: 0 18px`; `.memory-summary`, `.memory-summary-title`, `.memory-summary-hint`, `#memory-details[open]`, chevron `::after` | CSS only |
+| `apps/desktop/src/renderer/renderer.js` | `renderMemoryList` empty state "No active memories." → "目前無記憶。" | Yes (UI text) |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | +4 static tests (`testTask195VisF4*`) | No |
+
+**Runtime behavior changes:** `renderMemoryList` empty text changed (UI only). No API calls, no IPC changes, no option values changed.
+
+**Phase B follow-up 4 automated tests:**
+
+| Test | Verifies |
+|---|---|
+| `testTask195VisF4MemorySectionCollapsible` | `<details id="memory-details">` present; not open by default |
+| `testTask195VisF4MemoryTitleChinese` | "記憶管理" in HTML; no English "Memory" h2 |
+| `testTask195VisF4MemoryFormLabelsChinese` | 類型/重要度/可信度 present; values `user_preference`/`explicit` unchanged |
+| `testTask195VisF4MemorySummaryCssExists` | `.memory-summary`, `#memory-details[open]`, `.memory-summary-title` in CSS |
+
+**Phase B follow-up 4 suite results:**
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+4 new static tests) |
+| `pet-renderer-smoke.js` | PASS — 233 checks |
+| `pet-window-smoke.js` | PASS — 53 checks |
+| `git diff --check` | CLEAN |
+
+**Phase B follow-up 4 acceptance criteria:**
+
+- [x] Memory section collapsed by default — single toggle row visible ✓
+- [x] All memory labels in Chinese; option values unchanged ✓
+- [x] Expanded form shows same functionality as before ✓
+- [x] No option values changed (backend schema safe) ✓
+- [x] All element IDs unchanged (renderer.js wiring safe) ✓
+- [x] All three smoke suites PASS ✓
+- [x] Windows visual smoke PASS ← **2026-05-31** ✓
+
+### Phase B Follow-up 5 — Fifth Screenshot UX Polish (2026-05-31)
+
+**Problem:** Fifth screenshot showed Audit Logs section still fully expanded with engineering labels (Limit, Offset, "Loaded 3 records...", "Showing 3 of 3 records..."). User bubble also crowded against right scrollbar edge.
+
+**Changes:**
+
+| Area | Before | After |
+|---|---|---|
+| Audit section default state | Fully expanded with controls | `<details id="audit-details">` — collapsed to one row "診斷紀錄 — 查看記憶注入事件" |
+| Audit h2 title | "Audit Logs" | "診斷紀錄" |
+| Audit subtitle | "Memory injection event metadata — raw memory content is not displayed." | "記錄記憶注入事件的狀態，不顯示原始記憶內容。" |
+| Refresh button | "Refresh Audit Logs" | "重新整理紀錄" |
+| Limit label | "Limit" | "筆數" |
+| Offset label | "Offset" | "起始位置" |
+| Loading status | "Loading audit logs..." | "載入診斷紀錄中..." |
+| Loaded status | "Loaded N record(s). Total in DB: X." | "已載入 N 筆紀錄。資料庫共 X 筆。" |
+| Showing summary | "Showing N of X records \| limit: Y offset: Z" | "顯示 N / X 筆  \| 筆數: Y  位移: Z" |
+| Empty list | "No audit records found." | "目前無診斷紀錄。" |
+| Audit card title | "Audit #N" | "診斷 #N" |
+| User bubble right edge | No right margin — crowded against scrollbar | `margin-right: 4px` on `.message.user` |
+
+**Files modified (Phase B follow-up 5):**
+
+| File | Change | Runtime? |
+|---|---|---|
+| `apps/desktop/src/renderer/index.html` | `#audit-section` wrapped in `<details id="audit-details">`; all labels → Chinese | HTML only |
+| `apps/desktop/src/renderer/styles.css` | `#audit-section padding: 0 18px`; `.audit-summary-row`, `.audit-summary-title`, `.audit-summary-hint`, `#audit-details[open]`, chevron `::after`; `.message.user { margin-right: 4px }` | CSS only |
+| `apps/desktop/src/renderer/renderer.js` | Audit status/summary strings → Chinese; card title → "診斷 #N" | Yes (UI text) |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | +4 static tests (`testTask195VisF5*`) | No |
+
+**Runtime behavior changes:** Audit status messages and card titles changed (UI text only). No API calls, no IPC changes, no audit IDs changed.
+
+**Phase B follow-up 5 suite results:**
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+4 new static tests) |
+| `pet-renderer-smoke.js` | PASS — 233 checks |
+| `pet-window-smoke.js` | PASS — 53 checks |
+| `git diff --check` | CLEAN |
+
+**Phase B follow-up 5 acceptance criteria:**
+
+- [x] Audit Logs section collapsed by default — single toggle row visible ✓
+- [x] All audit labels in Chinese; IDs unchanged ✓
+- [x] "Loading…" / "Loaded…" / "Showing…" / empty state all Chinese ✓
+- [x] User bubble has right margin to clear scrollbar ✓
+- [x] All three smoke suites PASS ✓
+- [x] Windows visual smoke PASS ← **2026-05-31** ✓
+
+### Phase B Follow-up 6 — Sixth Screenshot UX Polish (2026-05-31)
+
+**Problem:** Sixth screenshot showed Provider Settings section still fully expanded — the most engineering-heavy panel in the app (provider selection, model input, API key, status grid). It dominated screen space and looked like a system configuration panel.
+
+**Changes:**
+
+| Area | Before | After |
+|---|---|---|
+| Provider Settings default state | Fully expanded — all controls visible | `<details id="provider-details">` collapsed to "AI 設定 — 設定克莉絲蒂娜使用的 AI 模型與連線方式。" |
+| Section title | "Provider Settings" (English h2) | "AI 設定" (Chinese, inside summary) |
+| Section subtitle | "Configure your AI provider, model, and API key." | "設定克莉絲蒂娜使用的 AI 模型與連線方式。" |
+| Refresh button | "Refresh Settings" | "重新整理設定" |
+| Provider label | "Provider" | "AI 來源" |
+| Ollama option display | "ollama — local, no key" | "ollama — 本地，無需金鑰" (value "ollama" unchanged) |
+| Model label | "Model" | "模型" |
+| Model placeholder | "Optional model name" | "選填模型名稱" |
+| Real AI checkbox | "Use real AI" | "啟用真實 AI" |
+| LLM chat checkbox | "Enable AI chat" | "啟用 AI 聊天" |
+| Fallback checkbox | "Fall back to mock if AI fails" | "AI 失敗時改用模擬模式" |
+| Save button | "Save Provider Settings" | "儲存 AI 設定" |
+| Save note | "Provider, model, and toggle settings only…" | "僅限 AI 來源、模型與開關設定。API 金鑰請使用下方控制項分開儲存。" |
+| Provider warning | "Using a real provider may incur charges…" | "使用真實 AI 服務可能向您的 API 提供商收費。" |
+| Status grid: Provider | "Provider" | "AI 來源" |
+| Status grid: Model | "Model" | "模型" |
+| Status grid: API key | "API key" | "API 金鑰" |
+| Status grid: Last test | "Last test" | "最近測試" |
+| Status grid: Active provider | "Active provider" | "實際使用" |
+| Status grid: Real AI | "Real AI" | "真實 AI" |
+| Status grid: AI chat | "AI chat" | "AI 聊天" |
+| Status grid: Mock fallback | "Mock fallback" | "模擬備援" |
+| API key label | "API key" | "API 金鑰" |
+| API key placeholder | "Enter provider API key" | "輸入 API 金鑰" |
+| Save Key button | "Save API Key" | "儲存 API 金鑰" |
+| Clear Key button | "Clear API Key" | "清除 API 金鑰" |
+| Test Connection button | "Test Connection" | "測試連線" |
+| Key note paragraph | English description | Chinese translation |
+| Usage Summary h3 | "Usage Summary" | "使用量統計" |
+| Usage Summary subtitle | "Safe aggregate counters only." | "僅顯示安全的彙總計數。" |
+| `calcProviderStatusSummary` strings | English ("Current: Mock mode…", "Ollama active…") | Chinese ("目前：模擬模式…", "Ollama 本地 AI 已連線。" etc.) |
+
+**Technical approach:** Same `<details>/<summary>` pattern as Memory/診斷紀錄. No JavaScript toggle. All option `value` attributes, element IDs, and IPC channels unchanged. `calcProviderStatusSummary` strings translated — corresponding TASK-189/190 smoke test patterns updated to Chinese regex.
+
+**Files modified (Phase B follow-up 6):**
+
+| File | Change | Runtime? |
+|---|---|---|
+| `apps/desktop/src/renderer/index.html` | `#provider-settings-section` wrapped in `<details id="provider-details">`; `<summary class="provider-summary-row">`; all visible labels → Chinese | HTML only |
+| `apps/desktop/src/renderer/styles.css` | `#provider-settings-section padding: 0 18px`; `.provider-summary-row`, `.provider-summary-title`, `.provider-summary-hint`, `#provider-details[open]`, chevron `::after` | CSS only |
+| `apps/desktop/src/renderer/renderer.js` | `calcProviderStatusSummary` output strings → Chinese | Yes (UI text) |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | +4 static F6 tests; updated TASK-189/190 test patterns to Chinese | No |
+
+**Runtime behavior changes:** `calcProviderStatusSummary` output strings changed (UI display only). Provider logic, option values, IDs, IPC channels unchanged.
+
+**Phase B follow-up 6 automated tests:**
+
+| Test | Verifies |
+|---|---|
+| `testTask195VisF6ProviderSectionCollapsible` | `<details id="provider-details">` present; `class="provider-summary-row"` present |
+| `testTask195VisF6ProviderTitleChinese` | "AI 設定" in HTML; Chinese summary hint text |
+| `testTask195VisF6ProviderLabelsChinese` | AI 來源 / 啟用真實 AI / 啟用 AI 聊天 / 儲存 AI 設定 / API 金鑰 / 重新整理設定 |
+| `testTask195VisF6ProviderSummaryCssExists` | `.provider-summary-row`, `#provider-details[open]`, `.provider-summary-title` in CSS |
+
+**Updated TASK-189/190 test patterns:**
+
+| Test | Old pattern | New pattern |
+|---|---|---|
+| `testTask189ProviderSettingsButtonText` | `/Save Provider Settings/` | `/儲存 AI 設定/` |
+| `testTask189ProviderStatusSummaryMockMode` | `/Mock mode/i` | `/模擬模式/` |
+| `testTask189ProviderStatusSummaryOllamaActive` | `/Ollama active/i` | `/Ollama.*已連線/` |
+| `testTask189ProviderStatusSummaryFallbackWarning` | `/fallback/i` | `/備援/` |
+| `testTask190ProviderStatusSummaryInvalidKey` | `/invalid or connection test failed/i` | `/無效或連線測試失敗/` |
+| `testTask190ProviderStatusSummaryCloudActive` | `/anthropic active/i` | `/anthropic.*已連線/` |
+
+**Phase B follow-up 6 suite results:**
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+4 new static tests; 6 updated patterns) |
+| `pet-renderer-smoke.js` | PASS — 233 checks |
+| `pet-window-smoke.js` | PASS — 53 checks |
+| `git diff --check` | CLEAN |
+
+**Phase B follow-up 6 acceptance criteria:**
+
+- [x] Provider Settings section collapsed by default — single "AI 設定" toggle row ✓
+- [x] All provider labels in Chinese; option values, IDs, IPC channels unchanged ✓
+- [x] `calcProviderStatusSummary` strings in Chinese ✓
+- [x] TASK-189/190 smoke tests updated to match Chinese strings ✓
+- [x] All three smoke suites PASS ✓
+- [x] Windows visual smoke PASS ← **2026-05-31** ✓
+
+### Windows Visual Smoke Results — Phase B (2026-05-31)
+
+| # | Area | Scenario | Result |
+|---|---|---|---|
+| 1 | Electron native menu | File / Edit / View / Window / Help not visible | PASS |
+| 2 | Header layout | Title / dev tag / action buttons acceptable; Show Pet primary; 擷取螢幕/擷取視窗/分析這張 grouped; 清除對話記錄 far right | PASS |
+| 3 | Character / welcome area | Avatar area has visual weight; welcome hint natural | PASS |
+| 4 | Status row | Mood indicator calm (not red error); provider chip low-key; "已載入最近對話" normal | PASS |
+| 5 | Chat area | Bubble spacing acceptable; HH:mm / Pet / Voice metadata unobtrusive; restore separator not broken SYSTEM bubble | PASS |
+| 6 | Input / Send | Input + Send on same row; Send not full-width giant button | PASS |
+| 7 | Memory / Audit / Provider | 記憶管理 collapsed by default; 診斷紀錄 collapsed by default; AI 設定 collapsed by default; main screen no longer looks like engineering backend | PASS |
+| 8 | Regression | Full App chat normal; Chat history restore normal; Clear Chat normal; Pet direct input / Pet voice/STT/TTS no obvious regression | PASS |
+
+---
+
 ## TASK-194 | Full App Chat History / Session Persistence
 
 **Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
