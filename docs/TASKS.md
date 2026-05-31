@@ -21041,3 +21041,105 @@ Tighten the consistency of the full-app chat history integrity flow after TASK-2
 | Copy/export: transcript content is correct and excludes empty state or abnormal DOM | PASS |
 | Search: filter/highlight/navigation work; delete, undo, and edit do not break search behavior | PASS |
 | Pet/Voice: Pet Window, Voice, STT, TTS, unread title badge, and Pet unread dot remain normal | PASS |
+
+---
+
+## TASK-213 | Context Menu Viewport / Accessibility Polish
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-06-01
+
+### Goal
+
+Harden the Full App chat message context menu so it behaves more like a finished desktop app: viewport-safe positioning, reliable close triggers, and keyboard-accessible actions.
+
+### Scope
+
+- `renderer.js`: context-menu viewport clamping, first-action focus, keyboard action handling, and close-on-scroll/blur/visibility.
+- `styles.css`: focus-visible styling and viewport-width constraint for the custom context menu.
+- `renderer-chat-smoke.js`: +13 TASK-213 context-menu positioning/accessibility/regression tests.
+- `docs/ROADMAP.md`, `docs/TASKS.md`, `README.md`: status/docs sync.
+- No backend, new IPC, chat API schema, history persistence format, Pet Window runtime, Ollama/provider runtime, Screen Context, vision, or multimodal change.
+
+### Design Summary
+
+| Area | Detail |
+|---|---|
+| Viewport clamp | `positionChatContextMenu(menu, pointerX, pointerY)` clamps the menu to an 8px viewport margin. If the pointer is near the right or bottom edge, the menu moves left/up instead of overflowing. |
+| Size fallback | Real DOM uses `getBoundingClientRect()` when available; smoke tests and narrow environments use a conservative fallback width/item-height estimate. |
+| Focus | After opening, the first enabled menu item receives focus. Edit is not rendered unless the selected message is the last editable user message, so unavailable actions cannot be focused. |
+| Keyboard | Menu buttons expose `role="menuitem"` and support Enter/Space activation. The menu container exposes `role="menu"` and `aria-label="訊息操作"`. |
+| Close triggers | Existing outside click and Esc close remain; new close triggers cover opening another menu, chat-area scroll, `window.blur`, and `visibilitychange`. |
+| Action logic | Copy/delete/edit still call the existing helpers. No hover actions were restored. |
+
+### Files Changed
+
+| File | Change |
+|---|---|
+| `apps/desktop/src/renderer/renderer.js` | Added menu viewport clamp helpers, role/menuitem attributes, first action focus, Enter/Space activation, and scroll/blur/visibility close triggers |
+| `apps/desktop/src/renderer/styles.css` | Added max viewport width and focus-visible styling for context-menu items |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | Added TASK-213 smoke coverage and testable fake window listeners/viewport sizing |
+| `docs/ROADMAP.md` | Added TASK-213 status |
+| `docs/TASKS.md` | Added this TASK-213 record |
+| `README.md` | Updated latest task / next smoke status because README still pointed to TASK-212 as the latest record |
+
+### Test Coverage
+
+| Test | What it verifies |
+|---|---|
+| `testTask213FunctionsAndCssExist` | Static helpers/listeners/role/focus CSS exist; no hover-action regression |
+| `testTask213MenuFixedPositionAndInitialFocus` | Menu has `role="menu"`, first `menuitem`, pointer x/y positioning, and first-action focus |
+| `testTask213MenuClampsRightEdge` | Menu moves left near the right viewport edge |
+| `testTask213MenuClampsBottomEdge` | Menu moves upward near the bottom viewport edge |
+| `testTask213OpeningNewMenuClosesOldMenu` | Opening a new menu removes the old one |
+| `testTask213OutsideAndEscCloseMenu` | Outside pointerdown and Esc close the menu |
+| `testTask213ScrollClosesContextMenu` | Chat-area scroll closes the menu |
+| `testTask213WindowBlurClosesContextMenu` | Window blur closes the menu |
+| `testTask213VisibilityChangeClosesContextMenu` | Page visibility change closes the menu |
+| `testTask213KeyboardEnterAndSpaceTriggerActions` | Space triggers copy; Enter triggers delete |
+| `testTask213EditOptionStillLastUserOnly` | Edit appears only on the last formal user message |
+| `testTask213HoverActionsStillAbsent` | Hover copy/delete/edit buttons are not appended |
+| `testTask213ContextMenuCopyDeleteEditStillWork` | Existing copy/delete/edit behavior still works through the context menu |
+
+### Automated Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+13 TASK-213 tests) |
+| `pet-window-smoke.js` | PASS — 60 checks |
+| `pet-renderer-smoke.js` | PASS — 237 checks |
+| `git diff --check` | CLEAN (CRLF warnings only) |
+
+### Acceptance Criteria
+
+- [x] Context menu opens near pointer and sets x/y position ✓
+- [x] Menu clamps away from viewport right/bottom edges ✓
+- [x] Opening a new menu closes the old menu ✓
+- [x] Outside click and Esc close the menu ✓
+- [x] Chat-area scroll closes the menu ✓
+- [x] `window.blur` and `visibilitychange` close the menu ✓
+- [x] `role="menu"` and `role="menuitem"` are present ✓
+- [x] First enabled action receives focus after opening ✓
+- [x] Enter/Space activate menu items ✓
+- [x] Copy/delete/edit existing behavior remains intact ✓
+- [x] Edit remains last-formal-user-message only ✓
+- [x] Hover action buttons were not restored ✓
+- [x] No backend, new IPC, chat API schema, history format, Pet Window, provider, Screen Context, vision, or multimodal change ✓
+- [x] `renderer-chat-smoke.js` PASS ✓
+- [x] `pet-window-smoke.js` PASS ✓
+- [x] `pet-renderer-smoke.js` PASS ✓
+- [x] `git diff --check` CLEAN ✓
+- [x] Windows visual smoke PASS ✓
+
+### Windows Visual Smoke Results (2026-06-01)
+
+| Scenario | Result |
+|---|---|
+| Context menu basic: right-click user/pet shows menu; user/pet have 複製 + 刪除; only last user has 編輯 | PASS |
+| Viewport clamp: near right edge menu moves left; near bottom edge menu moves up; does not overflow | PASS |
+| Single menu: opening new menu closes old; only one menu in DOM at a time | PASS |
+| Close behavior: outside click, Esc, chat-area scroll, window blur, visibilitychange all close menu | PASS |
+| Keyboard / accessibility: first action focused on open; Enter / Space activate; no-edit message skipped | PASS |
+| Hover actions: no hover copy/delete/edit buttons on user or pet bubbles | PASS |
+| Copy/delete/edit regression: context menu copy/delete/edit still work correctly | PASS |
+| General regression: search/highlight/navigation, copy/export, date separator, timestamp, clear undo, single delete undo, Pet Window, Voice, STT, TTS all normal | PASS |

@@ -459,6 +459,7 @@ async function loadRenderer(options = {}) {
   const intervalCallbacks = [];
   const timeoutFn = typeof options.setTimeout === "function" ? options.setTimeout : setTimeout;
   const clearTimeoutFn = typeof options.clearTimeout === "function" ? options.clearTimeout : clearTimeout;
+  const windowListeners = {};
 
   const state = {
     calls: [],
@@ -486,6 +487,8 @@ async function loadRenderer(options = {}) {
     console,
     document,
     window: {
+      innerWidth: options.innerWidth || 1024,
+      innerHeight: options.innerHeight || 768,
       location: {
         search: "?backend=http%3A%2F%2Flocalhost%3A8000",
       },
@@ -494,8 +497,15 @@ async function loadRenderer(options = {}) {
       confirm: typeof options.confirmOverride === "function"
         ? options.confirmOverride
         : () => true,
-      // TASK-108: idle timer registers window.addEventListener("focus", ...) — stub it
-      addEventListener() {},
+      // TASK-108/TASK-213: renderer registers focus/blur listeners — keep them testable.
+      addEventListener(type, fn) {
+        if (!windowListeners[type]) windowListeners[type] = [];
+        windowListeners[type].push(fn);
+      },
+      dispatchEvent(event) {
+        const listeners = windowListeners[event.type] || [];
+        for (const fn of listeners) fn(event);
+      },
     },
     URLSearchParams,
     fetch: createFetchStub(state),
@@ -5470,13 +5480,13 @@ function contextMenuItem(menu, label) {
   return (menu ? menu.children : []).find((child) => child.textContent === label);
 }
 
-async function openContextMenuForMessage(document, index = 0) {
+async function openContextMenuForMessage(document, index = 0, coords = {}) {
   const msg = formalMessages(document)[index];
   msg.dispatchEvent({
     type: "contextmenu",
     target: msg,
-    clientX: 44,
-    clientY: 88,
+    clientX: coords.clientX ?? 44,
+    clientY: coords.clientY ?? 88,
     preventDefault() { this.prevented = true; },
     stopPropagation() {},
   });
@@ -6195,6 +6205,242 @@ async function testTask212DateSeparatorNotInHistory() {
   console.log("  testTask212DateSeparatorNotInHistory PASS");
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TASK-213: Context Menu Viewport / Accessibility Polish
+// ─────────────────────────────────────────────────────────────────────────────
+
+function parsePx(value) {
+  return Number(String(value || "0").replace("px", ""));
+}
+
+function testTask213FunctionsAndCssExist() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const css = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "styles.css"), "utf8");
+  assert.ok(src.includes("CHAT_CONTEXT_MENU_MARGIN"),
+    "renderer.js must define a context-menu viewport margin");
+  assert.ok(src.includes("function positionChatContextMenu"),
+    "renderer.js must define context menu viewport positioning helper");
+  assert.ok(src.includes("getChatContextViewportSize"),
+    "renderer.js must read viewport dimensions for menu clamping");
+  assert.ok(src.includes("window.addEventListener(\"blur\", closeChatContextMenu)"),
+    "window blur must close context menu");
+  assert.ok(src.includes("chatArea.addEventListener(\"scroll\""),
+    "chat area scroll listener must exist");
+  assert.ok(src.includes("btn.setAttribute(\"role\", \"menuitem\")"),
+    "context menu items must expose role=menuitem");
+  assert.ok(src.includes("btn.addEventListener(\"keydown\""),
+    "context menu items must support keyboard activation");
+  assert.ok(css.includes(".chat-context-menu") && css.includes("position: fixed"),
+    "context menu CSS must use fixed positioning");
+  assert.ok(css.includes(":focus-visible"),
+    "context menu items must have a visible focus style");
+  console.log("  testTask213FunctionsAndCssExist PASS");
+}
+
+async function testTask213MenuFixedPositionAndInitialFocus() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "focused menu", { noHistory: true });
+
+  const menu = await openContextMenuForMessage(document, 0);
+  const first = menu.children[0];
+
+  assert.equal(menu.getAttribute("role"), "menu", "context menu must expose role=menu");
+  assert.equal(first.getAttribute("role"), "menuitem", "first menu item must expose role=menuitem");
+  assert.equal(menu.style.left, "44px", "menu x should be set from pointer when no clamp is needed");
+  assert.equal(menu.style.top, "88px", "menu y should be set from pointer when no clamp is needed");
+  assert.equal(first.focused, true, "first action should be focused after menu opens");
+  console.log("  testTask213MenuFixedPositionAndInitialFocus PASS");
+}
+
+async function testTask213MenuClampsRightEdge() {
+  const { document, sandbox } = await loadRenderer({ innerWidth: 160, innerHeight: 500 });
+  sandbox.appendMessage("user", "right edge", { noHistory: true });
+
+  const menu = await openContextMenuForMessage(document, 0, { clientX: 155, clientY: 40 });
+
+  assert.ok(parsePx(menu.style.left) <= 32,
+    "menu must move left when pointer is near the right viewport edge");
+  console.log("  testTask213MenuClampsRightEdge PASS");
+}
+
+async function testTask213MenuClampsBottomEdge() {
+  const { document, sandbox } = await loadRenderer({ innerWidth: 500, innerHeight: 120 });
+  sandbox.appendMessage("user", "bottom edge", { noHistory: true });
+
+  const menu = await openContextMenuForMessage(document, 0, { clientX: 40, clientY: 118 });
+
+  assert.ok(parsePx(menu.style.top) <= 12,
+    "menu must move upward when pointer is near the bottom viewport edge");
+  console.log("  testTask213MenuClampsBottomEdge PASS");
+}
+
+async function testTask213OpeningNewMenuClosesOldMenu() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "first menu", { noHistory: true });
+  sandbox.appendMessage("pet", "second menu", { noHistory: true, source: "full_app" });
+  const firstMenu = await openContextMenuForMessage(document, 0);
+
+  const secondMenu = await openContextMenuForMessage(document, 1);
+
+  assert.notEqual(firstMenu, secondMenu, "opening a new context menu should create a new menu");
+  assert.equal(firstMenu.parentNode, null, "opening a new menu must remove the old one");
+  assert.equal(document.getElementById("chat-area").children.filter((child) =>
+    (child.className || "").includes("chat-context-menu")).length, 1,
+    "only one context menu may remain in the DOM");
+  console.log("  testTask213OpeningNewMenuClosesOldMenu PASS");
+}
+
+async function testTask213OutsideAndEscCloseMenu() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "outside esc close", { noHistory: true });
+  await openContextMenuForMessage(document, 0);
+
+  document.dispatchEvent({ type: "pointerdown", target: document.getElementById("message-input") });
+  await settle();
+  assert.equal(contextMenu(document), undefined, "outside pointerdown must close context menu");
+
+  await openContextMenuForMessage(document, 0);
+  document.dispatchEvent({ type: "keydown", key: "Escape" });
+  await settle();
+  assert.equal(contextMenu(document), undefined, "Esc must close context menu");
+  console.log("  testTask213OutsideAndEscCloseMenu PASS");
+}
+
+async function testTask213ScrollClosesContextMenu() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "scroll close", { noHistory: true });
+  await openContextMenuForMessage(document, 0);
+
+  document.getElementById("chat-area").dispatchEvent({ type: "scroll" });
+  await settle();
+
+  assert.equal(contextMenu(document), undefined, "chat area scroll must close context menu");
+  console.log("  testTask213ScrollClosesContextMenu PASS");
+}
+
+async function testTask213WindowBlurClosesContextMenu() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "blur close", { noHistory: true });
+  await openContextMenuForMessage(document, 0);
+
+  sandbox.window.dispatchEvent({ type: "blur" });
+  await settle();
+
+  assert.equal(contextMenu(document), undefined, "window blur must close context menu");
+  console.log("  testTask213WindowBlurClosesContextMenu PASS");
+}
+
+async function testTask213VisibilityChangeClosesContextMenu() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "visibility close", { noHistory: true });
+  await openContextMenuForMessage(document, 0);
+
+  document.hidden = true;
+  document.dispatchEvent({ type: "visibilitychange" });
+  await settle();
+
+  assert.equal(contextMenu(document), undefined, "visibilitychange must close context menu");
+  console.log("  testTask213VisibilityChangeClosesContextMenu PASS");
+}
+
+async function testTask213KeyboardEnterAndSpaceTriggerActions() {
+  const copied = [];
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({}),
+      chatHistoryAppend: async () => ({}),
+      writeClipboardText(text) { copied.push(text); return true; },
+    },
+  });
+  sandbox.appendMessage("user", "keyboard copy", { noHistory: true });
+  let menu = await openContextMenuForMessage(document, 0);
+  contextMenuItem(menu, "複製").dispatchEvent({
+    type: "keydown",
+    key: " ",
+    preventDefault() {},
+    stopPropagation() {},
+  });
+  await settle();
+  assert.deepEqual(copied, ["keyboard copy"], "Space on copy menu item must copy plain text");
+
+  sandbox.appendMessage("user", "keyboard delete", { noHistory: true });
+  menu = await openContextMenuForMessage(document, 1);
+  contextMenuItem(menu, "刪除").dispatchEvent({
+    type: "keydown",
+    key: "Enter",
+    preventDefault() {},
+    stopPropagation() {},
+  });
+  await settle();
+  assert.ok(!sandbox.buildChatTranscript().includes("keyboard delete"),
+    "Enter on delete menu item must delete the selected message");
+  console.log("  testTask213KeyboardEnterAndSpaceTriggerActions PASS");
+}
+
+async function testTask213EditOptionStillLastUserOnly() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "old user no edit", { noHistory: true });
+  sandbox.appendMessage("pet", "pet no edit", { noHistory: true, source: "full_app" });
+  sandbox.appendMessage("user", "last user edit", { noHistory: true });
+
+  let menu = await openContextMenuForMessage(document, 0);
+  assert.equal(contextMenuItem(menu, "編輯"), undefined,
+    "older user message must not expose edit");
+  menu = await openContextMenuForMessage(document, 1);
+  assert.equal(contextMenuItem(menu, "編輯"), undefined,
+    "pet message must not expose edit");
+  menu = await openContextMenuForMessage(document, 2);
+  assert.ok(contextMenuItem(menu, "編輯"),
+    "last formal user message must expose edit");
+  console.log("  testTask213EditOptionStillLastUserOnly PASS");
+}
+
+async function testTask213HoverActionsStillAbsent() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "hover absent", { noHistory: true });
+  sandbox.appendMessage("pet", "hover absent pet", { noHistory: true, source: "full_app" });
+
+  for (const msg of formalMessages(document)) {
+    assert.equal(msg.children.some((child) => /msg-(copy|delete|edit)-btn/.test(child.className || "")), false,
+      "hover action buttons must not be appended to formal messages");
+  }
+  console.log("  testTask213HoverActionsStillAbsent PASS");
+}
+
+async function testTask213ContextMenuCopyDeleteEditStillWork() {
+  const copied = [];
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({}),
+      chatHistoryAppend: async () => ({}),
+      writeClipboardText(text) { copied.push(text); return true; },
+    },
+  });
+  sandbox.appendMessage("user", "copy still works", { noHistory: true });
+  let menu = await openContextMenuForMessage(document, 0);
+  contextMenuItem(menu, "複製").click();
+  await settle();
+  assert.deepEqual(copied, ["copy still works"], "copy action must still use plain message text");
+
+  sandbox.appendMessage("user", "edit still works", { noHistory: true });
+  menu = await openContextMenuForMessage(document, 1);
+  contextMenuItem(menu, "編輯").click();
+  await settle();
+  assert.equal(document.getElementById("message-input").value, "edit still works",
+    "edit action must still populate composer for the last user message");
+  sandbox.cancelEditUserMessage();
+
+  sandbox.appendMessage("user", "delete still works", { noHistory: true });
+  menu = await openContextMenuForMessage(document, 2);
+  contextMenuItem(menu, "刪除").click();
+  await settle();
+  assert.ok(!sandbox.buildChatTranscript().includes("delete still works"),
+    "delete action must still remove the selected message");
+  console.log("  testTask213ContextMenuCopyDeleteEditStillWork PASS");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -6554,6 +6800,20 @@ async function main() {
   await testTask212SearchActiveUndoClearSafe();
   await testTask212EmptyStateShowsOnlyWhenNoFormalEntries();
   await testTask212DateSeparatorNotInHistory();
+  // TASK-213: Context Menu Viewport / Accessibility Polish
+  testTask213FunctionsAndCssExist();
+  await testTask213MenuFixedPositionAndInitialFocus();
+  await testTask213MenuClampsRightEdge();
+  await testTask213MenuClampsBottomEdge();
+  await testTask213OpeningNewMenuClosesOldMenu();
+  await testTask213OutsideAndEscCloseMenu();
+  await testTask213ScrollClosesContextMenu();
+  await testTask213WindowBlurClosesContextMenu();
+  await testTask213VisibilityChangeClosesContextMenu();
+  await testTask213KeyboardEnterAndSpaceTriggerActions();
+  await testTask213EditOptionStillLastUserOnly();
+  await testTask213HoverActionsStillAbsent();
+  await testTask213ContextMenuCopyDeleteEditStillWork();
   console.log("renderer chat smoke: PASS");
 }
 

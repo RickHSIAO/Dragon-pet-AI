@@ -641,6 +641,7 @@ textarea {
   position: fixed;
   z-index: 50;
   min-width: 96px;
+  max-width: min(220px, calc(100vw - 16px));
   padding: 4px;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -661,8 +662,11 @@ textarea {
   text-align: left;
 }
 
-.chat-context-menu-item:hover {
+.chat-context-menu-item:hover,
+.chat-context-menu-item:focus-visible {
   background: rgba(255, 255, 255, 0.08);
+  outline: 1px solid rgba(255, 255, 255, 0.22);
+  outline-offset: -1px;
 }
 
 /* ── Memory section (collapsible) ─────────────────────── */

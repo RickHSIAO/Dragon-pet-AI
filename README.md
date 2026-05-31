@@ -107,7 +107,7 @@ ollama serve
 | 真實 API Key 使用 | ❌ 無 — 所有測試使用 mocked runner |
 | 生產就緒 | ❌ 尚未 — prototype / portfolio 階段 |
 | Demo 可用（本地 Ollama） | ✅ 是 |
-| 下一個任務 | TASK-213 — next UX polish |
+| 下一個任務 | TASK-213 Windows visual smoke |
 
 ---
 
@@ -397,8 +397,8 @@ python -c "import json, urllib.request; data=json.dumps({'message':'你好！克
 | [docs/PROVIDER_TEST_CONNECTION_DESIGN.md](docs/PROVIDER_TEST_CONNECTION_DESIGN.md) | Test Connection 設計與強化測試結果 |
 | [docs/SECURE_KEY_STORAGE_DESIGN.md](docs/SECURE_KEY_STORAGE_DESIGN.md) | 金鑰儲存威脅模型、儲存選項、遮蔽規則 |
 | [docs/BYOK_PRODUCT_AND_SETTINGS.md](docs/BYOK_PRODUCT_AND_SETTINGS.md) | BYOK 產品設計與安全邊界 |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖；目前下一步為 TASK-213 |
-| [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄；最新記錄為 TASK-212 Chat History Integrity Refactor / Regression Hardening Windows visual smoke PASS |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖；目前下一步為 TASK-213 Windows visual smoke |
+| [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄；最新記錄為 TASK-213 Context Menu Viewport / Accessibility Polish automated smoke PASS，Windows visual smoke pending |
 | [docs/STREAMER_COMPANION_MODE.md](docs/STREAMER_COMPANION_MODE.md) | 未來支線 — OBS overlay / Twitch 陪伴設計（尚未排程） |
 
 ---

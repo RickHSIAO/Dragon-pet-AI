@@ -599,6 +599,9 @@ let undoDeleteMessageTimer = null;
 // TASK-211: edit state for one formal user message at a time.
 let editingMessageState = null;
 let chatContextMenu = null;
+const CHAT_CONTEXT_MENU_MARGIN = 8;
+const CHAT_CONTEXT_MENU_FALLBACK_WIDTH = 128;
+const CHAT_CONTEXT_MENU_ITEM_HEIGHT = 34;
 
 // TASK-113: smarter auto-scroll helpers — user sends always scroll,
 // AI replies only scroll when user is already near the bottom.
@@ -852,12 +855,55 @@ function createContextMenuButton(label, className, onClick) {
   btn.type = "button";
   btn.className = className;
   btn.textContent = label;
+  btn.setAttribute("role", "menuitem");
+  btn.tabIndex = 0;
   btn.addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
     onClick();
   });
+  btn.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    e.stopPropagation();
+    onClick();
+  });
   return btn;
+}
+
+function getChatContextViewportSize() {
+  const docEl = typeof document !== "undefined" ? document.documentElement : null;
+  const body = typeof document !== "undefined" ? document.body : null;
+  return {
+    width: Number(window.innerWidth || (docEl && docEl.clientWidth) || (body && body.clientWidth) || 1024),
+    height: Number(window.innerHeight || (docEl && docEl.clientHeight) || (body && body.clientHeight) || 768),
+  };
+}
+
+function getChatContextMenuSize(menu) {
+  if (menu && typeof menu.getBoundingClientRect === "function") {
+    const rect = menu.getBoundingClientRect();
+    if (rect && rect.width > 0 && rect.height > 0) {
+      return { width: rect.width, height: rect.height };
+    }
+  }
+  const childCount = menu && menu.children ? menu.children.length : 2;
+  return {
+    width: menu && menu.offsetWidth ? menu.offsetWidth : CHAT_CONTEXT_MENU_FALLBACK_WIDTH,
+    height: menu && menu.offsetHeight ? menu.offsetHeight : (childCount * CHAT_CONTEXT_MENU_ITEM_HEIGHT) + 8,
+  };
+}
+
+function positionChatContextMenu(menu, pointerX, pointerY) {
+  if (!menu) return;
+  const viewport = getChatContextViewportSize();
+  const size = getChatContextMenuSize(menu);
+  const maxLeft = Math.max(CHAT_CONTEXT_MENU_MARGIN, viewport.width - size.width - CHAT_CONTEXT_MENU_MARGIN);
+  const maxTop = Math.max(CHAT_CONTEXT_MENU_MARGIN, viewport.height - size.height - CHAT_CONTEXT_MENU_MARGIN);
+  const left = Math.min(Math.max(CHAT_CONTEXT_MENU_MARGIN, Number(pointerX) || 0), maxLeft);
+  const top = Math.min(Math.max(CHAT_CONTEXT_MENU_MARGIN, Number(pointerY) || 0), maxTop);
+  menu.style.left = `${Math.round(left)}px`;
+  menu.style.top = `${Math.round(top)}px`;
 }
 
 function showChatMessageContextMenu(messageEl, event) {
@@ -872,13 +918,13 @@ function showChatMessageContextMenu(messageEl, event) {
   const menu = document.createElement("div");
   menu.className = "chat-context-menu";
   menu.setAttribute("role", "menu");
-  menu.style.left = `${event && typeof event.clientX === "number" ? event.clientX : 0}px`;
-  menu.style.top = `${event && typeof event.clientY === "number" ? event.clientY : 0}px`;
+  menu.setAttribute("aria-label", "訊息操作");
 
-  menu.appendChild(createContextMenuButton("複製", "chat-context-menu-item", () => {
-    copySingleMessage(messageEl.dataset.msgText || "", menu);
+  const copyItem = createContextMenuButton("複製", "chat-context-menu-item", () => {
+    copySingleMessage(messageEl.dataset.msgText || "", copyItem);
     closeChatContextMenu();
-  }));
+  });
+  menu.appendChild(copyItem);
   menu.appendChild(createContextMenuButton("刪除", "chat-context-menu-item", () => {
     closeChatContextMenu();
     deleteSingleChatMessage(messageEl);
@@ -892,6 +938,13 @@ function showChatMessageContextMenu(messageEl, event) {
 
   chatArea.appendChild(menu);
   chatContextMenu = menu;
+  positionChatContextMenu(
+    menu,
+    event && typeof event.clientX === "number" ? event.clientX : 0,
+    event && typeof event.clientY === "number" ? event.clientY : 0
+  );
+  const firstAction = Array.from(menu.children || []).find((child) => !child.disabled && typeof child.focus === "function");
+  if (firstAction) firstAction.focus();
   return true;
 }
 
@@ -3101,6 +3154,7 @@ if (chatSearchInput) {
 // TASK-202: auto-hide jump button when user scrolls near bottom.
 if (chatArea) {
   chatArea.addEventListener("scroll", () => {
+    closeChatContextMenu();
     if (isChatNearBottom()) hideNewMessageBtn();
   });
 }
@@ -3250,10 +3304,12 @@ if (typeof document !== "undefined" && typeof document.addEventListener === "fun
 
 // TASK-200: clear unread indicator when Full App regains focus or becomes visible.
 document.addEventListener("visibilitychange", () => {
+  closeChatContextMenu();
   if (!document.hidden) clearUnread();
 });
 if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
   window.addEventListener("focus", clearUnread);
+  window.addEventListener("blur", closeChatContextMenu);
 }
 
 // ---------------------------------------------------------------------------
