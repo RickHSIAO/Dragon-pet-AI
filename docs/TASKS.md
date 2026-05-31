@@ -20518,3 +20518,100 @@ Insert a LINE-style horizontal date divider (今天 / 昨天 / YYYY/MM/DD) betwe
 | Search/filter — highlight / Enter / Shift+Enter navigation unaffected, separators no visual weirdness | PASS |
 | Copy/export — `── 今天 ──` separator lines included; plain text only, no HTML/markup/tooltip/debug | PASS |
 | Regression: Ctrl+F / Esc, auto-scroll / ↓ badge, unread title badge, Pet unread dot, Pet Window / Voice / STT / TTS | PASS |
+
+---
+
+## TASK-208 | Clear Chat Confirmation / Empty Chat State
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-31
+
+### Goal
+
+Add a safe, lightweight confirmation step before clearing chat history, and show a subdued empty chat state when there is no formal user/pet conversation.
+
+### Scope
+
+- `renderer.js`: two-click clear confirmation state, 6-second auto-cancel timer, safe clear status text, explicit empty-state visibility tracking, formal-chat marker for user/pet messages, transcript/search guards for non-formal startup content
+- `index.html`: `#clear-chat-status`, `#chat-empty-state`
+- `styles.css`: low-key `.chat-empty-state`; `#clear-chat-btn.confirm-pending`; removed the old `#chat-area:empty::before` placeholder
+- `renderer-chat-smoke.js`: +14 TASK-208 tests; updated old TASK-195/TASK-202 assumptions for explicit empty-state DOM and two-click clear
+- No backend, IPC, chat history persistence format, Pet Window runtime, Ollama/provider runtime, Screen Context, vision, or multimodal change
+
+### Design Decisions
+
+| Decision | Detail |
+|---|---|
+| Two-click destructive action | First click only arms confirmation; second click executes the existing clear-history path |
+| 6-second auto-cancel | Confirmation state resets button text/status/class if the user does not confirm |
+| Empty state outside `#chat-area` | `#chat-empty-state` is in `#chat-area-wrap`, so copy/export/search selectors never include it |
+| Formal conversation marker | User/pet messages get `dataset.formalChat="true"` unless explicitly excluded; startup greeting uses `countsAsChat:false` |
+| Non-formal entries | Startup greeting, status messages, and date separators do not hide empty state and do not make transcript/export non-empty |
+| Search interaction | Active search hides the empty state; no-match/search count behavior stays unchanged |
+
+### Files Changed
+
+| File | Change |
+|---|---|
+| `apps/desktop/src/renderer/renderer.js` | Added `clearChatConfirmPending`, `clearChatConfirmTimer`, `beginClearChatConfirmation()`, `resetClearChatConfirmation()`, `handleClearChatClick()`, `updateEmptyChatState()`, formal-chat tracking, safe clear success/failure status |
+| `apps/desktop/src/renderer/index.html` | Added `#clear-chat-status` and `#chat-empty-state` |
+| `apps/desktop/src/renderer/styles.css` | Added clear-confirm pending style and low-key empty-state layout; removed old `#chat-area:empty::before` placeholder |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | Added TASK-208 tests; FakeElement classList support; configurable fake timers for timeout verification |
+| `docs/ROADMAP.md` | Added TASK-208 status and updated next planned task |
+| `docs/TASKS.md` | Added this TASK-208 record |
+| `README.md` | Updated because the README previously named TASK-207 as latest and TASK-208 as next |
+
+### Test Coverage
+
+| Test | What it verifies |
+|---|---|
+| `testTask208HtmlAndCssExist` | Explicit clear status and empty-state DOM/CSS exist; old pseudo-placeholder removed |
+| `testTask208FunctionsExist` | Clear confirmation and empty-state helpers exist; timeout is 6000 ms |
+| `testTask208FirstClearClickDoesNotClearDomOrHistory` | First click does not clear DOM and does not call history clear |
+| `testTask208FirstClearClickShowsConfirmationState` | First click changes button/status to confirmation state |
+| `testTask208SecondClearClickClearsDomAndHistory` | Second click clears DOM/history and shows success status + empty state |
+| `testTask208ConfirmationTimeoutResetsState` | 6-second timer resets button/status/class |
+| `testTask208ClearResetsSearchInputAndCount` | Clear resets search input and result count |
+| `testTask208ClearResetsDateSeparatorState` | Clear resets `lastDateKey` so same-day messages get a fresh separator |
+| `testTask208EmptyStateInitialVisibleAndNotHistory` | Empty state starts visible with only startup/status content and writes no history |
+| `testTask208EmptyStateHidesWhenFormalMessageExists` | Formal user/pet messages hide empty state |
+| `testTask208StatusAndDateSeparatorDoNotCountAsConversation` | Status and date separators alone keep empty state visible |
+| `testTask208SearchActiveHidesEmptyStateWithoutBreakingResults` | Search no-match state works without empty-state interference |
+| `testTask208CopyAndExportIgnoreEmptyState` | Transcript/export ignore empty state and startup greeting |
+| `testTask208SearchHighlightNavigationStillWorks` | Search highlight and Enter navigation still work |
+
+### Automated Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+14 TASK-208 tests) |
+| `pet-window-smoke.js` | PASS — 60 checks |
+| `pet-renderer-smoke.js` | PASS — 237 checks |
+
+### Acceptance Criteria
+
+- [x] First clear click does not delete chat DOM/history ✓
+- [x] First clear click shows explicit confirmation button/status ✓
+- [x] Second clear click clears DOM and chat history ✓
+- [x] Confirmation auto-cancels after 6 seconds ✓
+- [x] Clear success shows safe user-facing status ✓
+- [x] Clear resets search, date separator state, and `↓ 新訊息` button ✓
+- [x] Empty state shows when there is no formal user/pet conversation ✓
+- [x] Startup greeting/status/date separators do not count as formal conversation ✓
+- [x] Empty state is not persisted and does not trigger `/chat`, Pet Bubble, or TTS ✓
+- [x] Copy/export do not include empty state ✓
+- [x] Search/highlight/navigation remain intact ✓
+- [x] No backend, IPC, chat history format, Pet Window, provider, Screen Context, vision, or multimodal change ✓
+- [x] All automated smoke suites PASS ✓
+- [x] Windows visual smoke PASS ✓
+
+### Windows Visual Smoke Results (2026-05-31)
+
+| Scenario | Result |
+|---|---|
+| Clear confirmation first click: first click does not clear immediately; button changes to "再次點擊確認"; status shows "再次點擊將清除所有對話紀錄" | PASS |
+| Confirmation timeout: confirmation state auto-cancels after 6 seconds and button returns to normal | PASS |
+| Confirmed clear: second click clears DOM and chat history, clears search input/count, resets date separator state, hides `↓ 新訊息`, and shows "對話紀錄已清除" | PASS |
+| Empty state: after clear shows "還沒有對話，和克莉絲蒂娜說句話吧。"; startup greeting/status/date separator do not count; user/pet messages hide it | PASS |
+| Copy/export interaction: copy/export exclude empty state; empty export creates no file and shows clean status | PASS |
+| Regression: search/filter, search highlight/Enter navigation, LINE-style date separator, chat export, unread title badge, Pet unread dot, smooth auto-scroll/`↓ 新訊息`, Pet Window, Voice, STT, and TTS | PASS |

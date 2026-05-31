@@ -47,10 +47,12 @@ const clearChatBtn    = document.getElementById("clear-chat-btn");  // TASK-194
 const copyChatBtn     = document.getElementById("copy-chat-btn");   // TASK-196
 const exportChatBtn    = document.getElementById("export-chat-btn");    // TASK-205
 const exportChatStatus = document.getElementById("export-chat-status"); // TASK-205
+const clearChatStatus = document.getElementById("clear-chat-status");   // TASK-208
 const chatSearchInput    = document.getElementById("chat-search-input");    // TASK-198
 const chatSearchCountEl  = document.getElementById("chat-search-count");    // TASK-198
 const chatSearchClearBtn = document.getElementById("chat-search-clear-btn"); // TASK-198
 const chatNewMsgBtn      = document.getElementById("chat-new-message-btn");  // TASK-202
+const chatEmptyState     = document.getElementById("chat-empty-state");      // TASK-208
 // TASK-179: gentle hint shown after OCR summary exists.
 const ocrAskHintEl = document.getElementById("ocr-ask-hint");
 const memoryForm  = document.getElementById("memory-form");
@@ -576,6 +578,15 @@ const UNREAD_BASE_TITLE = "Dragon Pet AI";
 // TASK-207: tracks last-inserted date key so same-day duplicates are skipped.
 let lastDateKey = null;
 
+// TASK-208: two-step clear confirmation to prevent accidental chat-history deletion.
+const CLEAR_CHAT_CONFIRM_MS = 6000;
+const CLEAR_CHAT_DEFAULT_TEXT = clearChatBtn
+  ? (clearChatBtn.textContent || "清除對話記錄")
+  : "清除對話記錄";
+let clearChatConfirmPending = false;
+let clearChatConfirmTimer = null;
+let clearChatStatusTimer = null;
+
 // TASK-113: smarter auto-scroll helpers — user sends always scroll,
 // AI replies only scroll when user is already near the bottom.
 const CHAT_NEAR_BOTTOM_THRESHOLD_PX = 80;
@@ -599,8 +610,7 @@ function maybeScrollChatToBottom() {
   } else {
     // TASK-202: don't force scroll while user reads history; show jump button instead.
     // Suppressed while search is active to avoid disrupting highlighted results.
-    const searchActive = chatSearchInput && (chatSearchInput.value || "").trim().length > 0;
-    if (!searchActive) showNewMessageBtn();
+    if (!isChatSearchActive()) showNewMessageBtn();
   }
 }
 
@@ -610,6 +620,76 @@ function showNewMessageBtn() {
 }
 function hideNewMessageBtn() {
   if (chatNewMsgBtn) chatNewMsgBtn.hidden = true;
+}
+
+function isChatSearchActive() {
+  return chatSearchInput && (chatSearchInput.value || "").trim().length > 0;
+}
+
+function hasFormalChatMessage() {
+  if (!chatArea) return false;
+  return Array.from(chatArea.children || []).some((child) => {
+    const classes = typeof child.className === "string" ? child.className : "";
+    const isUserOrPet = classes.includes("user") || classes.includes("pet");
+    return isUserOrPet && child.dataset && child.dataset.formalChat === "true";
+  });
+}
+
+function updateEmptyChatState() {
+  if (!chatEmptyState) return;
+  const shouldShow = !hasFormalChatMessage() && !isChatSearchActive();
+  chatEmptyState.hidden = !shouldShow;
+  chatEmptyState.setAttribute("aria-hidden", shouldShow ? "false" : "true");
+}
+
+function setClearChatStatus(message, timeoutMs = 0) {
+  if (!clearChatStatus) return;
+  if (clearChatStatusTimer) {
+    clearTimeout(clearChatStatusTimer);
+    clearChatStatusTimer = null;
+  }
+  clearChatStatus.textContent = message || "";
+  if (message && timeoutMs > 0) {
+    clearChatStatusTimer = setTimeout(() => {
+      clearChatStatus.textContent = "";
+      clearChatStatusTimer = null;
+    }, timeoutMs);
+  }
+}
+
+function resetClearChatConfirmation({ clearStatus = false } = {}) {
+  clearChatConfirmPending = false;
+  if (clearChatConfirmTimer) {
+    clearTimeout(clearChatConfirmTimer);
+    clearChatConfirmTimer = null;
+  }
+  if (clearChatBtn) {
+    clearChatBtn.textContent = CLEAR_CHAT_DEFAULT_TEXT;
+    clearChatBtn.classList.remove("confirm-pending");
+  }
+  if (clearStatus) setClearChatStatus("");
+}
+
+function beginClearChatConfirmation() {
+  clearChatConfirmPending = true;
+  if (clearChatBtn) {
+    clearChatBtn.textContent = "再次點擊確認";
+    clearChatBtn.classList.add("confirm-pending");
+  }
+  setClearChatStatus("再次點擊將清除所有對話紀錄");
+  if (clearChatConfirmTimer) clearTimeout(clearChatConfirmTimer);
+  clearChatConfirmTimer = setTimeout(() => {
+    resetClearChatConfirmation({ clearStatus: true });
+  }, CLEAR_CHAT_CONFIRM_MS);
+}
+
+async function handleClearChatClick() {
+  if (!clearChatConfirmPending) {
+    beginClearChatConfirmation();
+    return;
+  }
+  resetClearChatConfirmation();
+  await clearChatHistory();
 }
 
 // Avoid persisting default form values before the backend settings snapshot has
@@ -902,6 +982,7 @@ function buildChatTranscript() {
       if (lbl) lines.push(`── ${lbl} ──`);
       continue;
     }
+    if (!el.dataset || el.dataset.formalChat !== "true") continue;
     hasUserOrPet = true;
     const name = classes.includes("user") ? "你" : "克莉絲蒂娜";
     const text = el.dataset.msgText || "";
@@ -1009,7 +1090,13 @@ function clearUnread() {
   }
 }
 
-function appendMessage(role, text, { autoScroll = false, noHistory = false, source = "unknown", ts = 0 } = {}) {
+function appendMessage(role, text, {
+  autoScroll = false,
+  noHistory = false,
+  source = "unknown",
+  ts = 0,
+  countsAsChat = true,
+} = {}) {
   const wrap = document.createElement("div");
   wrap.className = `message ${role}`;
 
@@ -1048,6 +1135,7 @@ function appendMessage(role, text, { autoScroll = false, noHistory = false, sour
   // TASK-196: per-bubble copy affordance — stores raw text for safe clipboard export.
   if (role === "user" || role === "pet") {
     wrap.dataset.msgText = text;
+    wrap.dataset.formalChat = countsAsChat ? "true" : "false";
     const copyBtn = document.createElement("button");
     copyBtn.className = "msg-copy-btn";
     copyBtn.type = "button";
@@ -1064,6 +1152,7 @@ function appendMessage(role, text, { autoScroll = false, noHistory = false, sour
   if ((role === "user" || role === "pet") && ts > 0) maybeInsertDateSeparator(ts);
 
   chatArea.appendChild(wrap);
+  updateEmptyChatState();
 
   // TASK-113: caller controls scroll via autoScroll flag.
   // User sends always pass { autoScroll: true }; AI replies use maybeScrollChatToBottom().
@@ -1113,15 +1202,17 @@ async function loadAndRenderChatHistory() {
   lastChatStatusMessage = "已載入最近對話";
   syncChatRuntimeProviderStatus();
   maybeScrollChatToBottom();
+  updateEmptyChatState();
 }
 
 async function clearChatHistory() {
   const api = typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null;
-  if (!api || typeof api.chatHistoryClear !== "function") return;
+  if (!api || typeof api.chatHistoryClear !== "function") return false;
   try {
     await api.chatHistoryClear();
   } catch (_e) {
-    return;
+    setClearChatStatus("清除對話失敗", 2000);
+    return false;
   }
   lastDateKey = null; // TASK-207: reset so next messages start fresh.
   chatArea.replaceChildren();
@@ -1129,6 +1220,9 @@ async function clearChatHistory() {
   // TASK-198: reset search state after clearing so the empty chat shows cleanly.
   if (chatSearchInput) chatSearchInput.value = "";
   filterChatMessages("");
+  updateEmptyChatState();
+  setClearChatStatus("對話紀錄已清除", 2000);
+  return true;
 }
 
 function setMood(mood) {
@@ -2422,7 +2516,7 @@ if (askScreenBtn) {
 // TASK-194: clear chat history and reset chat DOM.
 if (clearChatBtn) {
   clearChatBtn.addEventListener("click", () => {
-    clearChatHistory();
+    handleClearChatClick();
   });
 }
 
@@ -2693,7 +2787,8 @@ function filterChatMessages(query) {
   let matchCount = 0;
   for (const child of chatArea.children) {
     const isUserOrPet = typeof child.className === "string" &&
-      (child.className.includes("user") || child.className.includes("pet"));
+      (child.className.includes("user") || child.className.includes("pet")) &&
+      child.dataset && child.dataset.formalChat === "true";
     // Find the msg-body div (set in appendMessage — TASK-201)
     const childrenArr = Array.from(child.children || []);
     const body = childrenArr.find(c => typeof c.className === "string" && c.className === "msg-body");
@@ -2733,6 +2828,7 @@ function filterChatMessages(query) {
       chatSearchCountEl.textContent = "沒有找到符合的對話";
     }
   }
+  updateEmptyChatState();
 }
 
 // TASK-197: Non-blocking Ollama liveness probe run after startup settings load.
@@ -2792,7 +2888,7 @@ async function checkLocalProviderLiveness() {
     if (data.status === "ok") {
       // Remove the connecting status
       chatArea.lastChild.remove();
-      appendMessage("pet", "哼，吾在這裡。汝有何事就直說吧。", { noHistory: true });
+      appendMessage("pet", "哼，吾在這裡。汝有何事就直說吧。", { noHistory: true, countsAsChat: false });
       setMood("neutral"); // also initialises pet expression and friendly hint via setPetExpression / moodHintLabel
       // TASK-109: Startup greeting — static character line, no /chat call, no backend request.
       // setPetExpression("proud") overrides the neutral set above; currentMood stays "neutral"

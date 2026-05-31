@@ -28,6 +28,21 @@ class FakeElement {
     this.style = {};
     this.listeners = {};
     this.className = "";
+    this.classList = {
+      add: (...classes) => {
+        const current = new Set((this.className || "").split(/\s+/).filter(Boolean));
+        for (const cls of classes) current.add(cls);
+        this.className = Array.from(current).join(" ");
+      },
+      remove: (...classes) => {
+        const removeSet = new Set(classes);
+        this.className = (this.className || "")
+          .split(/\s+/)
+          .filter((cls) => cls && !removeSet.has(cls))
+          .join(" ");
+      },
+      contains: (cls) => (this.className || "").split(/\s+/).includes(cls),
+    };
     this.textContent = "";
     this.value = "";
     this.checked = false;
@@ -441,6 +456,8 @@ async function loadRenderer(options = {}) {
   // TASK-108: fake setInterval — stores callbacks without firing them.
   // Tests call sandbox.idleTick() directly to avoid real-time waits.
   const intervalCallbacks = [];
+  const timeoutFn = typeof options.setTimeout === "function" ? options.setTimeout : setTimeout;
+  const clearTimeoutFn = typeof options.clearTimeout === "function" ? options.clearTimeout : clearTimeout;
 
   const state = {
     calls: [],
@@ -460,7 +477,7 @@ async function loadRenderer(options = {}) {
     set src(val) {
       this._src = val;
       const cb = availableImages.has(val) ? this.onload : this.onerror;
-      if (typeof cb === "function") setTimeout(cb, 0);
+      if (typeof cb === "function") timeoutFn(cb, 0);
     }
   }
 
@@ -481,8 +498,8 @@ async function loadRenderer(options = {}) {
     },
     URLSearchParams,
     fetch: createFetchStub(state),
-    setTimeout,
-    clearTimeout,
+    setTimeout: timeoutFn,
+    clearTimeout: clearTimeoutFn,
     // TASK-108: fake setInterval/clearInterval — stores callbacks, never fires them.
     // Tests invoke sandbox.idleTick() directly.
     setInterval(fn, ms) {
@@ -2451,8 +2468,11 @@ function testTask195VisPetDisplayHintSpeechBubble() {
 
 function testTask195VisChatAreaEmptyPlaceholder() {
   const css = fs.readFileSync(cssPath, "utf8");
-  assert.ok(css.includes("#chat-area:empty::before"),
-    "styles.css must define #chat-area:empty::before placeholder for empty chat state");
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes('id="chat-empty-state"'),
+    "index.html must define explicit #chat-empty-state placeholder for empty chat state");
+  assert.ok(css.includes(".chat-empty-state"),
+    "styles.css must define explicit .chat-empty-state placeholder styling");
 }
 
 function testTask195VisNoMoodLabelInHtml() {
@@ -3592,7 +3612,8 @@ async function testTask202ClearChatHidesButton() {
   const btn = document.getElementById("chat-new-message-btn");
   // Show button to simulate pending new-message state
   btn.hidden = false;
-  // Trigger clear chat button
+  // TASK-208: clear chat now requires two clicks (confirm, then execute).
+  document.getElementById("clear-chat-btn").click();
   document.getElementById("clear-chat-btn").click();
   await settle();
   assert.ok(btn.hidden, "button must be hidden after clearChatHistory");
@@ -4544,6 +4565,276 @@ function testTask207CssSeparatorExists() {
   console.log("  testTask207CssSeparatorExists PASS");
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TASK-208: Clear Chat Confirmation / Empty Chat State
+// ─────────────────────────────────────────────────────────────────────────────
+
+function testTask208HtmlAndCssExist() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  const css = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "styles.css"), "utf8");
+  assert.ok(html.includes('id="clear-chat-status"'), "index.html must contain #clear-chat-status");
+  assert.ok(html.includes('id="chat-empty-state"'), "index.html must contain #chat-empty-state");
+  assert.ok(css.includes(".chat-empty-state"), "styles.css must define .chat-empty-state");
+  assert.ok(!css.includes("#chat-area:empty::before"),
+    "old #chat-area:empty placeholder must not coexist with explicit empty-state DOM");
+  console.log("  testTask208HtmlAndCssExist PASS");
+}
+
+function testTask208FunctionsExist() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("let clearChatConfirmPending = false"),
+    "renderer.js must define clearChatConfirmPending");
+  assert.ok(src.includes("function beginClearChatConfirmation"),
+    "renderer.js must define beginClearChatConfirmation");
+  assert.ok(src.includes("function resetClearChatConfirmation"),
+    "renderer.js must define resetClearChatConfirmation");
+  assert.ok(src.includes("function updateEmptyChatState"),
+    "renderer.js must define updateEmptyChatState");
+  assert.ok(src.includes("CLEAR_CHAT_CONFIRM_MS = 6000"),
+    "clear confirmation timeout must be 6 seconds");
+  console.log("  testTask208FunctionsExist PASS");
+}
+
+async function testTask208FirstClearClickDoesNotClearDomOrHistory() {
+  let clearCalls = 0;
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => { clearCalls += 1; return { ok: true }; },
+    },
+  });
+  const chatArea = document.getElementById("chat-area");
+  sandbox.appendMessage("user", "do not delete yet", { noHistory: true });
+  const before = chatArea.children.length;
+
+  document.getElementById("clear-chat-btn").click();
+
+  assert.equal(clearCalls, 0, "first clear click must not call chatHistoryClear");
+  assert.equal(chatArea.children.length, before, "first clear click must not clear chatArea");
+  console.log("  testTask208FirstClearClickDoesNotClearDomOrHistory PASS");
+}
+
+async function testTask208FirstClearClickShowsConfirmationState() {
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({ ok: true }),
+    },
+  });
+  sandbox.appendMessage("user", "confirm test", { noHistory: true });
+  const btn = document.getElementById("clear-chat-btn");
+
+  btn.click();
+
+  assert.ok(btn.textContent.includes("再次點擊確認"),
+    "clear button text must change to confirmation copy");
+  assert.ok((btn.className || "").includes("confirm-pending"),
+    "clear button must get confirm-pending class");
+  assert.ok(textOf(document, "clear-chat-status").includes("再次點擊將清除"),
+    "clear status must explain that second click clears all chat history");
+  console.log("  testTask208FirstClearClickShowsConfirmationState PASS");
+}
+
+async function testTask208SecondClearClickClearsDomAndHistory() {
+  let clearCalls = 0;
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => { clearCalls += 1; return { ok: true }; },
+    },
+  });
+  const chatArea = document.getElementById("chat-area");
+  sandbox.appendMessage("user", "delete on second click", { noHistory: true });
+  const btn = document.getElementById("clear-chat-btn");
+
+  btn.click();
+  btn.click();
+  await settle();
+
+  assert.equal(clearCalls, 1, "second clear click must call chatHistoryClear once");
+  assert.equal(chatArea.children.length, 0, "second clear click must clear chatArea");
+  assert.ok(textOf(document, "clear-chat-status").includes("對話紀錄已清除"),
+    "clear success status must be safe and user-facing");
+  assert.equal(document.getElementById("chat-empty-state").hidden, false,
+    "empty state must show after successful clear");
+  console.log("  testTask208SecondClearClickClearsDomAndHistory PASS");
+}
+
+async function testTask208ConfirmationTimeoutResetsState() {
+  const timers = [];
+  const fakeSetTimeout = (fn, ms) => {
+    timers.push({ fn, ms, cleared: false });
+    return timers.length;
+  };
+  const fakeClearTimeout = (id) => {
+    if (timers[id - 1]) timers[id - 1].cleared = true;
+  };
+  const { document, sandbox } = await loadRenderer({
+    setTimeout: fakeSetTimeout,
+    clearTimeout: fakeClearTimeout,
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({ ok: true }),
+    },
+  });
+  sandbox.appendMessage("user", "timeout reset", { noHistory: true });
+  const btn = document.getElementById("clear-chat-btn");
+
+  btn.click();
+  const confirmTimer = timers.find((t) => t.ms === 6000 && !t.cleared);
+  assert.ok(confirmTimer, "first click must schedule a 6 second confirmation timeout");
+  confirmTimer.fn();
+
+  assert.equal(btn.textContent, "清除對話記錄", "timeout must restore clear button text");
+  assert.ok(!(btn.className || "").includes("confirm-pending"),
+    "timeout must remove confirm-pending class");
+  assert.equal(textOf(document, "clear-chat-status"), "",
+    "timeout must clear confirmation status text");
+  console.log("  testTask208ConfirmationTimeoutResetsState PASS");
+}
+
+async function testTask208ClearResetsSearchInputAndCount() {
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({ ok: true }),
+    },
+  });
+  sandbox.appendMessage("user", "alpha searchable", { noHistory: true });
+  searchChat(document, "alpha");
+  assert.ok(textOf(document, "chat-search-count").includes("找到"), "search count must be populated before clear");
+
+  const btn = document.getElementById("clear-chat-btn");
+  btn.click();
+  btn.click();
+  await settle();
+
+  assert.equal(document.getElementById("chat-search-input").value, "",
+    "clear must reset search input");
+  assert.equal(textOf(document, "chat-search-count"), "",
+    "clear must reset search count");
+  console.log("  testTask208ClearResetsSearchInputAndCount PASS");
+}
+
+async function testTask208ClearResetsDateSeparatorState() {
+  const TS = 1748693400000;
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({ ok: true }),
+    },
+  });
+  const chatArea = document.getElementById("chat-area");
+  sandbox.appendMessage("user", "before clear", { noHistory: true, ts: TS });
+  assert.equal(chatArea.children.filter((c) => (c.className || "").includes("date-separator")).length, 1,
+    "date separator must exist before clear");
+
+  const btn = document.getElementById("clear-chat-btn");
+  btn.click();
+  btn.click();
+  await settle();
+  sandbox.appendMessage("user", "after clear same day", { noHistory: true, ts: TS });
+
+  assert.equal(chatArea.children.filter((c) => (c.className || "").includes("date-separator")).length, 1,
+    "same-day message after clear must insert a fresh separator because lastDateKey reset");
+  console.log("  testTask208ClearResetsDateSeparatorState PASS");
+}
+
+async function testTask208EmptyStateInitialVisibleAndNotHistory() {
+  const appended = [];
+  const { document } = await loadRenderer({
+    dragonPet: {
+      chatHistoryAppend: (entry) => { appended.push(entry); return Promise.resolve({ ok: true }); },
+      chatHistoryLoad: async () => [],
+    },
+  });
+
+  assert.equal(document.getElementById("chat-empty-state").hidden, false,
+    "empty state must be visible when only startup/status messages exist");
+  assert.equal(appended.length, 0, "empty state and startup greeting must not write chat history");
+  console.log("  testTask208EmptyStateInitialVisibleAndNotHistory PASS");
+}
+
+async function testTask208EmptyStateHidesWhenFormalMessageExists() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "real conversation", { noHistory: true });
+  assert.equal(document.getElementById("chat-empty-state").hidden, true,
+    "empty state must hide when a formal user/pet message exists");
+  console.log("  testTask208EmptyStateHidesWhenFormalMessageExists PASS");
+}
+
+async function testTask208StatusAndDateSeparatorDoNotCountAsConversation() {
+  const { document, sandbox } = await loadRenderer();
+  const chatArea = document.getElementById("chat-area");
+  chatArea.replaceChildren();
+  sandbox.appendMessage("status", "status only", { noHistory: true });
+  const sep = document.createElement("div");
+  sep.className = "message date-separator";
+  sep.dataset.dateKey = "2026-05-31";
+  const label = document.createElement("span");
+  label.className = "date-separator-label";
+  label.textContent = "今天";
+  sep.appendChild(label);
+  chatArea.appendChild(sep);
+  sandbox.updateEmptyChatState();
+
+  assert.equal(document.getElementById("chat-empty-state").hidden, false,
+    "status/date-separator-only chatArea must still show empty state");
+  console.log("  testTask208StatusAndDateSeparatorDoNotCountAsConversation PASS");
+}
+
+async function testTask208SearchActiveHidesEmptyStateWithoutBreakingResults() {
+  const { document } = await loadRenderer();
+  assert.equal(document.getElementById("chat-empty-state").hidden, false,
+    "empty state must start visible with no formal messages");
+  searchChat(document, "nothing");
+  assert.equal(document.getElementById("chat-empty-state").hidden, true,
+    "empty state must hide while search is active");
+  assert.ok(textOf(document, "chat-search-count").includes("沒有找到"),
+    "search no-match status must still work");
+  console.log("  testTask208SearchActiveHidesEmptyStateWithoutBreakingResults PASS");
+}
+
+async function testTask208CopyAndExportIgnoreEmptyState() {
+  const saveTextFileCalls = [];
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      saveTextFile(payload) {
+        saveTextFileCalls.push(payload);
+        return Promise.resolve({ ok: true, canceled: false });
+      },
+      chatHistoryLoad: async () => [],
+    },
+  });
+
+  assert.equal(sandbox.buildChatTranscript(), "",
+    "empty state and startup greeting must not appear in transcript");
+  document.getElementById("export-chat-btn").click();
+  await settle();
+
+  assert.equal(saveTextFileCalls.length, 0, "export must not run when only empty state/startup exists");
+  assert.ok(textOf(document, "export-chat-status").includes("沒有可匯出"),
+    "export empty status must still show");
+  console.log("  testTask208CopyAndExportIgnoreEmptyState PASS");
+}
+
+async function testTask208SearchHighlightNavigationStillWorks() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "task208 keyword one", { noHistory: true });
+  sandbox.appendMessage("pet", "task208 keyword two", { noHistory: true });
+  searchChat(document, "keyword");
+  const input = document.getElementById("chat-search-input");
+  input.dispatchEvent({ type: "keydown", key: "Enter", preventDefault() {} });
+
+  const messages = document.getElementById("chat-area").children
+    .filter((m) => (m.className || "").includes("message") && ((m.className || "").includes("user") || (m.className || "").includes("pet")));
+  assert.ok(messages.some((m) => (m.className || "").includes("search-active")),
+    "search navigation must still mark one result active");
+  assert.ok(messages.some((m) => m.children.some((c) => (c.innerHTML || "").includes("search-highlight"))),
+    "search highlighting must still work");
+  console.log("  testTask208SearchHighlightNavigationStillWorks PASS");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -4823,6 +5114,21 @@ async function main() {
   await testTask207TranscriptIncludesSeparatorLine();
   await testTask207TranscriptOnlySeparatorsReturnsEmpty();
   testTask207CssSeparatorExists();
+  // TASK-208: Clear Chat Confirmation / Empty Chat State
+  testTask208HtmlAndCssExist();
+  testTask208FunctionsExist();
+  await testTask208FirstClearClickDoesNotClearDomOrHistory();
+  await testTask208FirstClearClickShowsConfirmationState();
+  await testTask208SecondClearClickClearsDomAndHistory();
+  await testTask208ConfirmationTimeoutResetsState();
+  await testTask208ClearResetsSearchInputAndCount();
+  await testTask208ClearResetsDateSeparatorState();
+  await testTask208EmptyStateInitialVisibleAndNotHistory();
+  await testTask208EmptyStateHidesWhenFormalMessageExists();
+  await testTask208StatusAndDateSeparatorDoNotCountAsConversation();
+  await testTask208SearchActiveHidesEmptyStateWithoutBreakingResults();
+  await testTask208CopyAndExportIgnoreEmptyState();
+  await testTask208SearchHighlightNavigationStillWorks();
   console.log("renderer chat smoke: PASS");
 }
 

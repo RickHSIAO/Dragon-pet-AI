@@ -59,6 +59,7 @@
       <span id="analyze-screen-status" class="header-action-status" role="status"></span>
       <span id="ask-screen-status" class="header-action-status" role="status"></span>
       <span id="export-chat-status" class="header-action-status" role="status"></span>
+      <span id="clear-chat-status" class="header-action-status" role="status"></span>
     </div>
   </header>
 
@@ -96,6 +97,7 @@
   <!-- ── Chat area ──────────────────────────────────────── -->
   <!-- TASK-202: wrap provides position:relative anchor for the jump-to-bottom button -->
   <div id="chat-area-wrap">
+    <div id="chat-empty-state" class="chat-empty-state" hidden>還沒有對話，和克莉絲蒂娜說句話吧。</div>
     <main id="chat-area">
       <!-- Messages are injected here by renderer.js -->
     </main>
