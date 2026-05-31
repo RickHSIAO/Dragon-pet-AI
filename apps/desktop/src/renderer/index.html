@@ -91,9 +91,14 @@
   </div>
 
   <!-- ── Chat area ──────────────────────────────────────── -->
-  <main id="chat-area">
-    <!-- Messages are injected here by renderer.js -->
-  </main>
+  <!-- TASK-202: wrap provides position:relative anchor for the jump-to-bottom button -->
+  <div id="chat-area-wrap">
+    <main id="chat-area">
+      <!-- Messages are injected here by renderer.js -->
+    </main>
+    <!-- TASK-202: shown when new messages arrive while user is scrolled up -->
+    <button id="chat-new-message-btn" class="chat-new-message-btn" type="button" hidden aria-label="跳到最新訊息">↓ 新訊息</button>
+  </div>
 
   <!-- ── Memory-aware chat toggle ──────────────────────────── -->
   <!-- Placed here (above input bar) so the toggle is always visible alongside -->

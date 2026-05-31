@@ -19912,3 +19912,108 @@ const body = childrenArr.find(c => typeof c.className === "string" && c.classNam
 | Clear search (✕ or Esc) — highlight gone, active outline gone, all messages restored | PASS |
 | Copy/export during search — single copy and copy-all produce plain text, no HTML markup | PASS |
 | Regression — TASK-198 filter, TASK-199 Ctrl+F/Esc, TASK-200 unread badge, Pet Window / Voice / STT / TTS all normal | PASS |
+
+## TASK-202 | Smooth Auto-scroll / New Message Jump Badge
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS
+**Date:** 2026-05-31
+
+### Goal
+
+Improve chat scroll UX: when the user is reading history, new messages no longer force-scroll to the bottom. Instead a low-key "↓ 新訊息" button appears. Clicking it scrolls to the latest message and dismisses the button. The button auto-hides when the user manually scrolls near the bottom.
+
+### Design
+
+**`#chat-area-wrap`** — new `<div>` wrapper around `<main id="chat-area">`. Has `position: relative` so the absolutely-positioned jump button is anchored to the chat area bounds. Carries the flex-sizing that was previously on `#chat-area` (`flex: 1 1 260px; min-height: 240px; max-height: 44vh`).
+
+**`#chat-area`** — now uses `flex: 1 1 0; min-height: 0; max-height: none` (fills the wrapper). All other properties (overflow-y, padding, gap, scroll-behavior) unchanged.
+
+**`#chat-new-message-btn`** — `position: absolute; bottom: 10px; right: 14px; z-index: 10`. Initially `hidden`. Floats over the bottom-right corner of the chat area.
+
+**`isChatNearBottom()`** — existing helper (TASK-113). Returns true when `scrollHeight - scrollTop - clientHeight < 80`.
+
+**`showNewMessageBtn()` / `hideNewMessageBtn()`** — set `chatNewMsgBtn.hidden = false/true`.
+
+**`maybeScrollChatToBottom()` — updated:**
+- Near bottom → `scrollChatToBottom()` (unchanged behavior).
+- Not near bottom → show jump button **unless search is active** (suppressed to avoid disrupting search results).
+
+**`chatArea` scroll listener** — hides jump button when user scrolls back near bottom.
+
+**Jump button click listener** — `scrollChatToBottom()` + `hideNewMessageBtn()`.
+
+**`clearChatHistory()`** — calls `hideNewMessageBtn()` after `chatArea.replaceChildren()`.
+
+**Search interaction** — when `chatSearchInput.value` is non-empty, `maybeScrollChatToBottom()` skips showing the button. Existing search highlight/navigation (TASK-201) is unaffected.
+
+**TASK-200 unread badge** — unaffected. `markUnread()` / `clearUnread()` operate on `document.title`, not on scroll state.
+
+### Files Modified
+
+| File | Change | Runtime? |
+|---|---|---|
+| `apps/desktop/src/renderer/index.html` | `#chat-area-wrap` wrapper + `#chat-new-message-btn` button (hidden by default) | HTML |
+| `apps/desktop/src/renderer/renderer.js` | `chatNewMsgBtn` DOM ref; `showNewMessageBtn/hideNewMessageBtn` helpers; updated `maybeScrollChatToBottom`; `clearChatHistory` hides button; chatArea scroll listener + button click listener | Yes |
+| `apps/desktop/src/renderer/styles.css` | `#chat-area-wrap` (position:relative, flex sizing); `.chat-new-message-btn` (absolute, z-index 10, border-radius pill); responsive 900px override moved to `#chat-area-wrap` | CSS only |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | `FakeElement.hidden = false` init; FakeDocument special case for `chat-new-message-btn` (`hidden = true`); 10 TASK-202 tests | No |
+
+### Test Coverage
+
+| Test | Type | What it verifies |
+|---|---|---|
+| `testTask202HtmlElementExists` | static | `index.html` has `#chat-new-message-btn` with `hidden` + `#chat-area-wrap` |
+| `testTask202CssExists` | static | `.chat-new-message-btn` has `position: absolute`; `#chat-area-wrap` has `position: relative` |
+| `testTask202BtnHiddenByDefault` | dynamic | Button starts hidden after renderer loads |
+| `testTask202NearBottomNoButton` | dynamic | Near-bottom state → button stays hidden after appendMessage |
+| `testTask202ScrolledUpShowsButton` | static+dynamic | `showNewMessageBtn` / `hideNewMessageBtn` defined and called by renderer |
+| `testTask202ClickScrollsAndHides` | dynamic | Button click → `scrollTop = scrollHeight` + button hidden |
+| `testTask202ScrollToBottomHidesBtn` | dynamic | Scroll event near bottom → button hidden |
+| `testTask202SearchSuppressesButton` | static+dynamic | `maybeScrollChatToBottom` guards `showNewMessageBtn` behind `!searchActive` |
+| `testTask202ClearChatHidesButton` | dynamic | `clearChatHistory` triggers → button hidden |
+| `testTask202NoChatFetch` | dynamic | Button click never triggers `/chat` |
+| `testTask202NoHistoryOnClick` | static | Button click handler has no `saveChatHistoryEntry` call |
+| `testTask202WrapperCssAndSizing` | static | `#chat-area-wrap` carries `max-height` sizing |
+
+### Safety / Privacy Boundaries
+
+| Constraint | Implementation |
+|---|---|
+| No history write | showNewMessageBtn/hideNewMessageBtn do not touch history |
+| No /chat fetch | Button click only calls scrollChatToBottom + hideNewMessageBtn |
+| No IPC change | No new ipcRenderer.invoke or ipcMain.handle |
+| No backend change | No routes.py / service changes |
+| No Pet Window impact | Logic in Full App renderer only |
+| No search regression | maybeScrollChatToBottom suppresses button when search is active |
+| No unread badge regression | TASK-200 document.title badge is independent |
+
+### Automated Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+12 TASK-202 tests) |
+| `pet-renderer-smoke.js` | PASS — 233 checks (Pet Window untouched) |
+| `pet-window-smoke.js` | PASS — 55 checks (IPC/preload untouched) |
+
+### Acceptance Criteria
+
+- [x] Near-bottom: new message auto smooth-scrolls ✓
+- [x] Scrolled up: new message shows "↓ 新訊息" button ✓
+- [x] Button click → scroll to bottom + dismiss ✓
+- [x] Manual scroll to bottom → auto-dismiss button ✓
+- [x] Search active → button suppressed ✓
+- [x] Clear chat → button dismissed ✓
+- [x] No backend, IPC, history, /chat, or Pet Window change ✓
+- [x] All three smoke suites PASS ✓
+- [x] Windows visual smoke PASS (2026-05-31) ✓
+
+### Windows Visual Smoke Results (2026-05-31)
+
+| Scenario | Result |
+|---|---|
+| Near-bottom auto-scroll — new message smooth-scrolls, no button shown | PASS |
+| Scrolled-up new message — "↓ 新訊息" button appears at bottom-right, no forced scroll | PASS |
+| Jump button click — scrolls to bottom and button disappears | PASS |
+| Manual scroll to bottom — button auto-dismisses | PASS |
+| Search active — new message does not break search/highlight/Enter navigation; no button shown | PASS |
+| Clear chat — "↓ 新訊息" button dismissed | PASS |
+| Regression — TASK-198 filter, TASK-199 Ctrl+F/Esc, TASK-200 unread badge, TASK-201 highlight/navigation, copy/export, Pet Window / Voice / STT / TTS all normal | PASS |

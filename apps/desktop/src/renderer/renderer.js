@@ -48,6 +48,7 @@ const copyChatBtn     = document.getElementById("copy-chat-btn");   // TASK-196
 const chatSearchInput    = document.getElementById("chat-search-input");    // TASK-198
 const chatSearchCountEl  = document.getElementById("chat-search-count");    // TASK-198
 const chatSearchClearBtn = document.getElementById("chat-search-clear-btn"); // TASK-198
+const chatNewMsgBtn      = document.getElementById("chat-new-message-btn");  // TASK-202
 // TASK-179: gentle hint shown after OCR summary exists.
 const ocrAskHintEl = document.getElementById("ocr-ask-hint");
 const memoryForm  = document.getElementById("memory-form");
@@ -588,7 +589,22 @@ function scrollChatToBottom() {
 }
 
 function maybeScrollChatToBottom() {
-  if (isChatNearBottom()) scrollChatToBottom();
+  if (isChatNearBottom()) {
+    scrollChatToBottom();
+  } else {
+    // TASK-202: don't force scroll while user reads history; show jump button instead.
+    // Suppressed while search is active to avoid disrupting highlighted results.
+    const searchActive = chatSearchInput && (chatSearchInput.value || "").trim().length > 0;
+    if (!searchActive) showNewMessageBtn();
+  }
+}
+
+// TASK-202: show/hide "↓ 新訊息" jump-to-bottom button.
+function showNewMessageBtn() {
+  if (chatNewMsgBtn) chatNewMsgBtn.hidden = false;
+}
+function hideNewMessageBtn() {
+  if (chatNewMsgBtn) chatNewMsgBtn.hidden = true;
 }
 
 // Avoid persisting default form values before the backend settings snapshot has
@@ -963,6 +979,7 @@ async function clearChatHistory() {
     return;
   }
   chatArea.replaceChildren();
+  hideNewMessageBtn(); // TASK-202: no messages — dismiss jump button
   // TASK-198: reset search state after clearing so the empty chat shows cleanly.
   if (chatSearchInput) chatSearchInput.value = "";
   filterChatMessages("");
@@ -2307,6 +2324,20 @@ if (chatSearchInput) {
       e.preventDefault();
       navigateToSearchResult(e.shiftKey ? -1 : 1);
     }
+  });
+}
+
+// TASK-202: auto-hide jump button when user scrolls near bottom.
+if (chatArea) {
+  chatArea.addEventListener("scroll", () => {
+    if (isChatNearBottom()) hideNewMessageBtn();
+  });
+}
+// TASK-202: jump button click — scroll to bottom and dismiss badge.
+if (chatNewMsgBtn) {
+  chatNewMsgBtn.addEventListener("click", () => {
+    scrollChatToBottom();
+    hideNewMessageBtn();
   });
 }
 
