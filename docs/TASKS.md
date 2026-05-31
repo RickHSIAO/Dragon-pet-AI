@@ -20220,3 +20220,214 @@ renderer.js markUnread/clearUnread
 - [x] No backend, /chat, history, or existing IPC channel change ✓
 - [x] All three smoke suites PASS ✓
 - [ ] Windows visual smoke PENDING
+
+---
+
+## TASK-205 | Chat Export to File
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-31
+
+### Goal
+
+New "匯出對話" ghost button in the Full App header opens a system Save Dialog. The current user/pet conversation is exported as a plain-text file with a timestamped default filename. Empty chat, cancel, success, and error states all show low-key status messages.
+
+### Scope
+
+- New `<button id="export-chat-btn">匯出對話</button>` (ghost) after `copy-chat-btn` in header
+- New `<span id="export-chat-status">` in header status row
+- `buildChatTranscript()` shared by `copyAllChat()` and `exportChatToFile()` — collects `.message.user` / `.message.pet` bubbles, reads `dataset.msgText` and meta time, formats as `你 HH:MM:\ntext\n` blocks
+- `generateExportFilename()` returns `dragon-pet-chat-YYYYMMDD-HHmm.txt`
+- `exportChatToFile()` calls `window.dragonPet.saveTextFile({ defaultPath, content })` via narrow IPC
+- New `chat:export-transcript` IPC channel: renderer preload → main → `dialog.showSaveDialog` + `fs.promises.writeFile`
+- Content capped at 200000 chars in both preload and main
+- `dialog` added to main.js electron destructure
+- `FakeElement` gains `querySelectorAll` + `querySelector` (class-selector support for smoke tests)
+- All three smoke suites PASS
+
+### Out of Scope
+
+- No backend change
+- No chat history change (no history entry for export action)
+- No Pet Window runtime change
+- No existing IPC channel modification
+- No raw error details exposed to renderer (only `{ ok, canceled, error }` shape)
+
+### IPC Architecture
+
+```
+exportChatToFile()
+  → window.dragonPet.saveTextFile({ defaultPath, content })  [renderer/preload.js]
+    → ipcRenderer.invoke("chat:export-transcript", { defaultPath, content })
+      → ipcMain.handle("chat:export-transcript")              [main.js]
+        → dialog.showSaveDialog(...)
+        → fs.promises.writeFile(filePath, content, "utf8")
+        → return { ok, canceled }
+```
+
+### Files Modified
+
+| File | Change | Runtime? |
+|---|---|---|
+| `apps/desktop/src/renderer/index.html` | `#export-chat-btn` button; `#export-chat-status` span | Yes |
+| `apps/desktop/src/renderer/renderer.js` | `buildChatTranscript()`; `generateExportFilename()`; `exportChatToFile()`; `copyAllChat()` refactored; DOM refs; event listener | Yes |
+| `apps/desktop/src/renderer/preload.js` | `CHAT_EXPORT_CHANNEL`; `saveTextFile` exposed via contextBridge | Yes |
+| `apps/desktop/src/main.js` | `dialog` added to destructure; `CHAT_EXPORT_CHANNEL` constant; `ipcMain.handle(CHAT_EXPORT_CHANNEL)` handler | Yes |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | `querySelectorAll`/`querySelector` added to `FakeElement`; 16 TASK-205 tests | No |
+
+### Test Coverage
+
+| Test | Suite | What it verifies |
+|---|---|---|
+| `testTask205HtmlElementsExist` | renderer-chat | `#export-chat-btn` and `#export-chat-status` in index.html |
+| `testTask205FunctionsExist` | renderer-chat | `buildChatTranscript`, `generateExportFilename`, `exportChatToFile` defined |
+| `testTask205CopyAllChatUsesBuildTranscript` | renderer-chat | `buildChatTranscript` present; `chatArea.querySelectorAll` still used |
+| `testTask205BuildTranscriptReturnsFormattedText` | renderer-chat | User+pet messages → correct 你/克莉絲蒂娜 format with text |
+| `testTask205BuildTranscriptEmptyReturnsEmpty` | renderer-chat | Empty chatArea → `""` |
+| `testTask205GenerateExportFilenameFormat` | renderer-chat | Filename uses `dragon-pet-chat-` prefix and `.txt` extension |
+| `testTask205ExportCallsSaveTextFile` | renderer-chat | Click export → `saveTextFile` called with `defaultPath` + `content` |
+| `testTask205ExportEmptyShowsNoExportMessage` | renderer-chat | Empty chatArea → no `saveTextFile` call; status shows "沒有可匯出" |
+| `testTask205ExportSuccessShowsConfirmation` | renderer-chat | `ok: true` → status shows "已匯出對話" |
+| `testTask205ExportCanceledShowsCanceled` | renderer-chat | `canceled: true` → status shows "已取消匯出" |
+| `testTask205ExportFailureShowsError` | renderer-chat | `ok: false` → status shows "匯出失敗" |
+| `testTask205ExportBtnDisabledDuringExport` | renderer-chat | Button disabled during in-flight export; re-enabled after |
+| `testTask205ExportNoBridgeIsNoOp` | renderer-chat | No dragonPet bridge → no throw |
+| `testTask205PreloadExposedSaveTextFile` | renderer-chat | `saveTextFile` exposed in preload; channel + 200000 cap present |
+| `testTask205MainIpcHandlerExists` | renderer-chat | `CHAT_EXPORT_CHANNEL`, `dialog.showSaveDialog`, `fs.promises.writeFile`, `{ ok, canceled }` shape, 200000 cap all in main.js |
+| `testTask205NoFsExposedToRenderer` | renderer-chat | Renderer preload.js does NOT require fs |
+
+### Safety / Privacy Boundaries
+
+| Constraint | Implementation |
+|---|---|
+| No raw error details | `{ ok, canceled, error }` shape — no stack traces, no file paths leaked back |
+| No fs in renderer | Preload does not `require("fs")`; all file ops in main.js |
+| Content capped | 200000 char limit in both preload (before IPC) and main (after IPC) |
+| defaultPath stripped | `path.basename()` in main.js prevents path traversal |
+| No message content in IPC beyond transcript | Only plain text; no metadata, no audio, no API keys |
+| No backend | No routes.py / service changes |
+| No history mutation | Export is read-only; no `chatHistoryAppend` call |
+
+### Automated Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+16 TASK-205 tests) |
+| `pet-renderer-smoke.js` | PASS — 237 checks (no change) |
+| `pet-window-smoke.js` | PASS — 60 checks (no change) |
+
+### Acceptance Criteria
+
+- [x] "匯出對話" button appears in header ✓ (pending visual)
+- [x] Click opens Save Dialog with default filename `dragon-pet-chat-YYYYMMDD-HHmm.txt` ✓ (pending visual)
+- [x] Exported file has correct format (你/克莉絲蒂娜 HH:MM: + text blocks) ✓
+- [x] Empty chat → "沒有可匯出的對話", no file created ✓
+- [x] Cancel → "已取消匯出" (low-key) ✓
+- [x] Success → "已匯出對話" ✓
+- [x] Failure → "匯出失敗", no raw exception ✓
+- [x] No backend, history, Pet Window runtime, or existing IPC change ✓
+- [x] All three smoke suites PASS ✓
+- [x] Windows visual smoke PASS ✓
+
+### Windows Visual Smoke Results (2026-05-31)
+
+| Scenario | Result |
+|---|---|
+| Save Dialog opens on button click | PASS |
+| Default filename `dragon-pet-chat-YYYYMMDD-HHmm.txt` | PASS |
+| .txt file written successfully; UI shows "已匯出對話" | PASS |
+| Content: 你/克莉絲蒂娜 + time format, plain text only | PASS |
+| Content excludes status / provider / debug / memory / audit / HTML / highlight / API key / audio / base64 / dataUrl | PASS |
+| Search active → export still exports full conversation | PASS |
+| Cancel dialog → no crash, no file, UI shows "已取消匯出" | PASS |
+| Empty chat → no file, UI shows "沒有可匯出的對話" | PASS |
+| Regression: Copy/export clipboard, Search/filter, Search highlight/navigation, Unread title badge, Pet unread dot, Auto-scroll/↓ badge, Pet Window / Voice / STT / TTS | PASS |
+
+---
+
+## TASK-206 | Timestamp Persistence Fix
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-31
+
+### Goal
+
+Fix a bug where messages generated after TASK-195 still show no timestamp after history restore, displaying "舊紀錄沒有時間資料" fallback instead of the real HH:mm. The root cause is that `ts` was written to disk but stripped when reading back.
+
+### Root Cause Analysis
+
+| Layer | Bug |
+|---|---|
+| `renderer.js:1022` | `saveChatHistoryEntry(role, text, source)` — `ts` not passed (Bug A) |
+| `renderer.js:1034` | `api.chatHistoryAppend({ role, text, source })` — no `ts` in payload (Bug B) |
+| `preload.js:sanitizeChatHistoryEntry` | `ts` not forwarded even if present in entry (Bug C) |
+| **`main.js:CHAT_HISTORY_LOAD_CHANNEL`** | **`.map()` omits `ts` from returned entries** ← **root cause (Bug D)** |
+
+`ts` was correctly written to disk by `appendChatHistoryEntry({ ..., ts: Date.now() })`, but was stripped on the way out of the load handler. Result: renderer received `entry.ts = undefined` → `ts = 0` → no time shown, "舊紀錄沒有時間資料" fallback even for new records.
+
+### Scope
+
+- Thread `ts` through the entire write path (Bugs A–C): renderer `saveChatHistoryEntry(ts)` → preload `sanitizeChatHistoryEntry` forwards ts → main.js uses `entry.ts` with `Date.now()` fallback
+- Fix load path (Bug D): main.js load handler `.map()` now includes `ts: typeof e.ts === "number" ? e.ts : 0`
+- Old records with `ts=0` in history still show "舊紀錄沒有時間資料" fallback — no fabricated time, no migration
+
+### Out of Scope
+
+- No chat API schema change
+- No backend change
+- No Pet Window change
+- No IPC channel name change
+- No migration of existing history files
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `apps/desktop/src/renderer/renderer.js` | `saveChatHistoryEntry(role, text, source, ts)` — ts param added; `chatHistoryAppend` payload includes ts; call site in `appendMessage` passes ts |
+| `apps/desktop/src/renderer/preload.js` | `sanitizeChatHistoryEntry` forwards `ts` field |
+| `apps/desktop/src/main.js` | Append handler uses `entry.ts` with `Date.now()` fallback; **load handler `.map()` adds `ts`** (root cause fix) |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | 9 TASK-206 tests |
+
+### Test Coverage
+
+| Test | Suite | What it verifies |
+|---|---|---|
+| `testTask206SaveChatHistoryEntryPassesTs` | renderer-chat | `saveChatHistoryEntry` signature includes ts; payload includes ts |
+| `testTask206PreloadSanitizeIncludesTs` | renderer-chat | `sanitizeChatHistoryEntry` forwards ts field |
+| `testTask206MainAppendHandlerUsesPayloadTs` | renderer-chat | main.js uses `entry.ts` with `Date.now()` fallback |
+| `testTask206MainLoadHandlerReturnsTs` | renderer-chat | main.js load `.map()` includes ts |
+| `testTask206AppendPayloadIncludesTs` | renderer-chat | `chatHistoryAppend` payload has `ts > 0` when message has ts |
+| `testTask206HistoryRestoreShowsTime` | renderer-chat | Loaded entry with ts → rendered meta shows HH:mm; tooltip is YYYY-MM-DD |
+| `testTask206PetTextSourceSavesTs` | renderer-chat | Mirror path (pet_voice/pet_text) also saves ts > 0 |
+| `testTask206OldRecordNoTsFallbackPreserved` | renderer-chat | ts=0 in loaded entry → "舊紀錄沒有時間資料", no fabricated time |
+| `testTask206ExportNewMessageIncludesTime` | renderer-chat | Export content for messages with ts includes HH:mm |
+
+### Automated Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+9 TASK-206 tests) |
+| `pet-renderer-smoke.js` | PASS — 237 checks (no change) |
+| `pet-window-smoke.js` | PASS — 60 checks (no change) |
+
+### Acceptance Criteria
+
+- [x] New user/pet messages save ts ✓
+- [x] History restore shows HH:mm for messages with ts ✓
+- [x] Tooltip shows YYYY-MM-DD HH:MM:SS for messages with ts ✓
+- [x] Copy/export includes time for new messages ✓
+- [x] Old records without ts show "舊紀錄沒有時間資料" fallback, no fabricated time ✓
+- [x] No migration, no history schema change, no backend, no Pet Window change ✓
+- [x] All three smoke suites PASS ✓
+- [x] Windows visual smoke PASS ✓
+
+### Windows Visual Smoke Results (2026-05-31)
+
+| Scenario | Result |
+|---|---|
+| New Full App / Pet / Voice messages restore with HH:mm after app restart | PASS |
+| Pet · HH:mm and Voice · HH:mm labels visible in restored history | PASS |
+| Hover tooltip shows full YYYY-MM-DD HH:MM:SS | PASS |
+| Old records without ts show "舊紀錄沒有時間資料" — no fabricated time | PASS |
+| TASK-205 export: content includes time for new messages | PASS |
+| Regression: Search/filter, highlight/navigation, copy/export clipboard, unread badge, Pet unread dot, auto-scroll, Pet Window / Voice / STT / TTS | PASS |

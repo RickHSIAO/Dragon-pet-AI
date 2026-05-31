@@ -12,6 +12,7 @@ const SCREEN_CAPTURE_ONCE_CHANNEL   = "screen:capture-once";    // TASK-171A
 const SCREEN_CAPTURE_WINDOW_CHANNEL = "screen:capture-window";  // TASK-176
 const CLIPBOARD_WRITE_TEXT_CHANNEL  = "clipboard:write-text";   // TASK-196
 const PET_UNREAD_DOT_CHANNEL = "pet:unread-dot";                // TASK-204
+const CHAT_EXPORT_CHANNEL    = "chat:export-transcript";        // TASK-205
 
 function sanitizePetSpeechPayload(payload = {}) {
   return {
@@ -39,11 +40,13 @@ function onChatMirrorFromPet(callback) {
 }
 
 // TASK-194: validate entry before forwarding to main — only safe text fields accepted.
+// TASK-206: ts is now forwarded so stored timestamps match display time.
 function sanitizeChatHistoryEntry(entry = {}) {
   return {
     role: entry.role === "user" || entry.role === "pet" ? entry.role : "",
     text: typeof entry.text === "string" ? entry.text.slice(0, 2000) : "",
     source: typeof entry.source === "string" ? entry.source.slice(0, 30) : "unknown",
+    ts: typeof entry.ts === "number" && entry.ts > 0 ? entry.ts : 0,
   };
 }
 
@@ -74,6 +77,14 @@ contextBridge.exposeInMainWorld(
     notifyUnreadDot: (count) => {
       const safe = typeof count === "number" && count >= 0 ? count : 0;
       return ipcRenderer.invoke(PET_UNREAD_DOT_CHANNEL, { unreadCount: safe });
+    },
+    // TASK-205: narrow file save IPC — opens Save Dialog via main, writes plain text only.
+    // Content capped at 200000 chars; defaultPath capped at 255 chars.
+    saveTextFile: ({ defaultPath, content } = {}) => {
+      if (typeof content !== "string") return Promise.resolve({ ok: false, error: "invalid_content" });
+      const safeContent  = content.slice(0, 200000);
+      const safePath     = typeof defaultPath === "string" ? defaultPath.slice(0, 255) : "dragon-pet-chat.txt";
+      return ipcRenderer.invoke(CHAT_EXPORT_CHANNEL, { defaultPath: safePath, content: safeContent });
     },
   })
 );

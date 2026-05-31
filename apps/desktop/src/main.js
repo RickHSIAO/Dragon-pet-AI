@@ -8,7 +8,7 @@
  * - No shell execution, no file system access, no live2D
  */
 
-const { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, Menu, screen } = require("electron");
+const { app, BrowserWindow, clipboard, desktopCapturer, dialog, ipcMain, Menu, screen } = require("electron");
 const fs = require("fs");
 const http = require("http");  // TASK-167B: used by stt:transcribe IPC handler
 const path = require("path");
@@ -34,6 +34,7 @@ const CHAT_HISTORY_CLEAR_CHANNEL  = "chat-history:clear";     // TASK-194
 const CLIPBOARD_WRITE_TEXT_CHANNEL = "clipboard:write-text";  // TASK-196
 const PET_UNREAD_DOT_CHANNEL = "pet:unread-dot";              // TASK-204: Full App → main
 const PET_UNREAD_DOT_RECEIVED_CHANNEL = "pet:unread-dot-received";  // TASK-204: main → Pet Window
+const CHAT_EXPORT_CHANNEL    = "chat:export-transcript";      // TASK-205: Full App → main
 const CHAT_HISTORY_MAX_ENTRIES    = 200;                      // TASK-194: bounded history cap
 const CHAT_HISTORY_TEXT_MAX       = 2000;                     // TASK-194: per-entry text cap
 const SCREEN_CAPTURE_ONCE_CHANNEL    = "screen:capture-once";      // TASK-171A
@@ -1029,7 +1030,9 @@ ipcMain.handle(CHAT_HISTORY_APPEND_CHANNEL, (_event, entry = {}) => {
   const text = typeof entry.text === "string" ? entry.text.slice(0, CHAT_HISTORY_TEXT_MAX) : "";
   if (!text) return { ok: false, reason: "empty_text" };
   const source = typeof entry.source === "string" ? entry.source.slice(0, 30) : "unknown";
-  appendChatHistoryEntry({ role, text, source, ts: Date.now() });
+  // TASK-206: use renderer-provided ts so stored time matches displayed time; fallback to now.
+  const ts = typeof entry.ts === "number" && entry.ts > 0 ? entry.ts : Date.now();
+  appendChatHistoryEntry({ role, text, source, ts });
   return { ok: true };
 });
 
@@ -1041,6 +1044,7 @@ ipcMain.handle(CHAT_HISTORY_LOAD_CHANNEL, () => {
       role: e.role,
       text: typeof e.text === "string" ? e.text.slice(0, CHAT_HISTORY_TEXT_MAX) : "",
       source: typeof e.source === "string" ? e.source.slice(0, 30) : "unknown",
+      ts: typeof e.ts === "number" ? e.ts : 0,  // TASK-206: was missing — root cause of lost timestamps
     }));
 });
 
@@ -1059,6 +1063,30 @@ ipcMain.handle(CLIPBOARD_WRITE_TEXT_CHANNEL, (_event, text) => {
     return true;
   } catch (_) {
     return false;
+  }
+});
+
+// TASK-205: export conversation — opens system Save Dialog and writes plain text.
+// Content is capped; no raw error details returned to renderer.
+ipcMain.handle(CHAT_EXPORT_CHANNEL, async (_event, payload = {}) => {
+  const content     = typeof payload.content === "string" ? payload.content.slice(0, 200000) : "";
+  const defaultPath = typeof payload.defaultPath === "string"
+    ? path.basename(payload.defaultPath).slice(0, 255) : "dragon-pet-chat.txt";
+  let saveResult;
+  try {
+    saveResult = await dialog.showSaveDialog({
+      defaultPath,
+      filters: [{ name: "Text Files", extensions: ["txt"] }],
+    });
+  } catch (_) {
+    return { ok: false, canceled: false, error: "dialog_failed" };
+  }
+  if (saveResult.canceled || !saveResult.filePath) return { ok: false, canceled: true };
+  try {
+    await fs.promises.writeFile(saveResult.filePath, content, "utf8");
+    return { ok: true, canceled: false };
+  } catch (_) {
+    return { ok: false, canceled: false, error: "write_failed" };
   }
 });
 

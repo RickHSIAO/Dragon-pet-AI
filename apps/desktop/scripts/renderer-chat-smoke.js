@@ -129,6 +129,30 @@ class FakeElement {
     this.parentNode.lastChild = this.parentNode.children.at(-1) || null;
     this.parentNode = null;
   }
+
+  // TASK-205: support querySelectorAll for class-based selectors (.a, .a.b, .a, .b)
+  querySelectorAll(selector) {
+    const parts = selector.split(",").map((s) => s.trim());
+    const matches = (el) => parts.some((part) => {
+      const classes = part.split(".").filter(Boolean);
+      const elClasses = (el.className || "").split(" ");
+      return classes.every((cls) => elClasses.includes(cls));
+    });
+    const results = [];
+    const traverse = (nodes) => {
+      for (const node of nodes) {
+        if (matches(node)) results.push(node);
+        if (node.children && node.children.length) traverse(node.children);
+      }
+    };
+    traverse(this.children);
+    return results;
+  }
+
+  querySelector(selector) {
+    const all = this.querySelectorAll(selector);
+    return all.length ? all[0] : null;
+  }
 }
 
 // TASK-086: FakeImage — simulates browser Image() probe for PNG asset fallback tests.
@@ -3928,6 +3952,413 @@ async function testTask204NoPetBridgeNoCrash() {
   console.log("  testTask204NoPetBridgeNoCrash PASS");
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TASK-205: Chat Export to File
+// ─────────────────────────────────────────────────────────────────────────────
+
+function testTask205HtmlElementsExist() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes('id="export-chat-btn"'), "index.html must contain #export-chat-btn");
+  assert.ok(html.includes('id="export-chat-status"'), "index.html must contain #export-chat-status");
+  console.log("  testTask205HtmlElementsExist PASS");
+}
+
+function testTask205FunctionsExist() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("function buildChatTranscript"), "renderer.js must define buildChatTranscript");
+  assert.ok(src.includes("function generateExportFilename"), "renderer.js must define generateExportFilename");
+  assert.ok(src.includes("function exportChatToFile") || src.includes("async function exportChatToFile"),
+    "renderer.js must define exportChatToFile");
+  console.log("  testTask205FunctionsExist PASS");
+}
+
+function testTask205CopyAllChatUsesBuildTranscript() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("buildChatTranscript"),
+    "renderer.js must define and call buildChatTranscript");
+  // buildChatTranscript must still use querySelectorAll on chatArea (TASK-198 contract)
+  assert.ok(
+    src.includes('chatArea.querySelectorAll(".message.user, .message.pet")'),
+    "buildChatTranscript must use chatArea.querySelectorAll"
+  );
+  console.log("  testTask205CopyAllChatUsesBuildTranscript PASS");
+}
+
+async function testTask205BuildTranscriptReturnsFormattedText() {
+  const { document, sandbox } = await loadRenderer();
+  const chatArea = document.getElementById("chat-area");
+
+  // Add user message with timestamp-like meta
+  sandbox.appendMessage("user", "你好龍", { noHistory: true, ts: 1748693400000 });
+  // Add pet message
+  sandbox.appendMessage("pet", "嗨！我是克莉絲蒂娜。", { noHistory: true, ts: 1748693460000, source: "pet_text" });
+
+  // buildChatTranscript is exposed on sandbox (renderer.js runs in vm context)
+  const transcript = sandbox.buildChatTranscript();
+
+  assert.ok(typeof transcript === "string", "buildChatTranscript must return a string");
+  assert.ok(transcript.length > 0, "buildChatTranscript must return non-empty string when messages exist");
+  assert.ok(transcript.includes("你"), "transcript must include user label 你");
+  assert.ok(transcript.includes("克莉絲蒂娜"), "transcript must include pet label 克莉絲蒂娜");
+  assert.ok(transcript.includes("你好龍"), "transcript must include user message text");
+  assert.ok(transcript.includes("嗨！我是克莉絲蒂娜。"), "transcript must include pet message text");
+  console.log("  testTask205BuildTranscriptReturnsFormattedText PASS");
+}
+
+async function testTask205BuildTranscriptEmptyReturnsEmpty() {
+  const { document, sandbox } = await loadRenderer();
+  // Clear chatArea (including startup greeting) to test truly empty state
+  const chatAreaEl = document.getElementById("chat-area");
+  chatAreaEl.children = [];
+  chatAreaEl.lastChild = null;
+  const transcript = sandbox.buildChatTranscript();
+  assert.equal(transcript, "", "buildChatTranscript must return empty string when chatArea has no messages");
+  console.log("  testTask205BuildTranscriptEmptyReturnsEmpty PASS");
+}
+
+function testTask205GenerateExportFilenameFormat() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("dragon-pet-chat-"), "generateExportFilename must use dragon-pet-chat- prefix");
+  assert.ok(src.includes(".txt"), "generateExportFilename must use .txt extension");
+  console.log("  testTask205GenerateExportFilenameFormat PASS");
+}
+
+async function testTask205ExportCallsSaveTextFile() {
+  const saveTextFileCalls = [];
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      saveTextFile(payload) {
+        saveTextFileCalls.push(payload);
+        return Promise.resolve({ ok: true, canceled: false });
+      },
+    },
+  });
+  sandbox.appendMessage("user", "export test message", { noHistory: true });
+  sandbox.appendMessage("pet", "export pet reply", { noHistory: true, source: "pet_text" });
+
+  document.getElementById("export-chat-btn").click();
+  await settle();
+
+  assert.equal(saveTextFileCalls.length, 1, "saveTextFile must be called exactly once when export button is clicked");
+  assert.ok(typeof saveTextFileCalls[0].defaultPath === "string", "saveTextFile payload must include defaultPath");
+  assert.ok(saveTextFileCalls[0].defaultPath.startsWith("dragon-pet-chat-"), "defaultPath must start with dragon-pet-chat-");
+  assert.ok(typeof saveTextFileCalls[0].content === "string", "saveTextFile payload must include content string");
+  assert.ok(saveTextFileCalls[0].content.includes("export test message"), "content must include user message text");
+  assert.ok(saveTextFileCalls[0].content.includes("export pet reply"), "content must include pet message text");
+  console.log("  testTask205ExportCallsSaveTextFile PASS");
+}
+
+async function testTask205ExportEmptyShowsNoExportMessage() {
+  const saveTextFileCalls = [];
+  const { document } = await loadRenderer({
+    dragonPet: {
+      saveTextFile(payload) {
+        saveTextFileCalls.push(payload);
+        return Promise.resolve({ ok: true, canceled: false });
+      },
+    },
+  });
+  // Clear chatArea including startup greeting to test truly empty state
+  const chatAreaEl = document.getElementById("chat-area");
+  chatAreaEl.children = [];
+  chatAreaEl.lastChild = null;
+  document.getElementById("export-chat-btn").click();
+  await settle();
+
+  assert.equal(saveTextFileCalls.length, 0, "saveTextFile must NOT be called when chatArea is empty");
+  const statusEl = document.getElementById("export-chat-status");
+  assert.ok(statusEl.textContent.includes("沒有可匯出"), "status must show 沒有可匯出的對話 when no messages");
+  console.log("  testTask205ExportEmptyShowsNoExportMessage PASS");
+}
+
+async function testTask205ExportSuccessShowsConfirmation() {
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      saveTextFile() { return Promise.resolve({ ok: true, canceled: false }); },
+    },
+  });
+  sandbox.appendMessage("user", "success test", { noHistory: true });
+
+  document.getElementById("export-chat-btn").click();
+  await settle();
+
+  const statusEl = document.getElementById("export-chat-status");
+  assert.ok(statusEl.textContent.includes("已匯出"), "status must show 已匯出對話 on success");
+  console.log("  testTask205ExportSuccessShowsConfirmation PASS");
+}
+
+async function testTask205ExportCanceledShowsCanceled() {
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      saveTextFile() { return Promise.resolve({ ok: false, canceled: true }); },
+    },
+  });
+  sandbox.appendMessage("user", "cancel test", { noHistory: true });
+
+  document.getElementById("export-chat-btn").click();
+  await settle();
+
+  const statusEl = document.getElementById("export-chat-status");
+  assert.ok(statusEl.textContent.includes("已取消"), "status must show 已取消匯出 when dialog is canceled");
+  console.log("  testTask205ExportCanceledShowsCanceled PASS");
+}
+
+async function testTask205ExportFailureShowsError() {
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      saveTextFile() { return Promise.resolve({ ok: false, canceled: false, error: "write_failed" }); },
+    },
+  });
+  sandbox.appendMessage("user", "fail test", { noHistory: true });
+
+  document.getElementById("export-chat-btn").click();
+  await settle();
+
+  const statusEl = document.getElementById("export-chat-status");
+  assert.ok(statusEl.textContent.includes("匯出失敗"), "status must show 匯出失敗 on write failure");
+  console.log("  testTask205ExportFailureShowsError PASS");
+}
+
+async function testTask205ExportBtnDisabledDuringExport() {
+  let resolveExport;
+  const exportPromise = new Promise((resolve) => { resolveExport = resolve; });
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      saveTextFile() { return exportPromise; },
+    },
+  });
+  sandbox.appendMessage("user", "disable test", { noHistory: true });
+
+  const btn = document.getElementById("export-chat-btn");
+  btn.click();
+  // Export is in-flight (promise not resolved yet) — button must be disabled
+  assert.ok(btn.disabled, "export-chat-btn must be disabled while export is in progress");
+  // Resolve and verify re-enabled
+  resolveExport({ ok: true, canceled: false });
+  await settle();
+  assert.ok(!btn.disabled, "export-chat-btn must be re-enabled after export completes");
+  console.log("  testTask205ExportBtnDisabledDuringExport PASS");
+}
+
+async function testTask205ExportNoBridgeIsNoOp() {
+  // No dragonPet bridge — exportChatToFile must not throw
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "no bridge", { noHistory: true });
+  let threw = false;
+  try {
+    document.getElementById("export-chat-btn").click();
+    await settle();
+  } catch (_e) {
+    threw = true;
+  }
+  assert.equal(threw, false, "exportChatToFile must not throw when dragonPet bridge is absent");
+  console.log("  testTask205ExportNoBridgeIsNoOp PASS");
+}
+
+function testTask205PreloadExposedSaveTextFile() {
+  const preload = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "preload.js"), "utf8");
+  assert.ok(preload.includes("saveTextFile"), "preload.js must expose saveTextFile");
+  assert.ok(preload.includes("CHAT_EXPORT_CHANNEL") || preload.includes("chat:export-transcript"),
+    "preload.js must reference CHAT_EXPORT_CHANNEL or chat:export-transcript");
+  assert.ok(preload.includes("200000"), "preload.js must cap content at 200000 chars");
+  console.log("  testTask205PreloadExposedSaveTextFile PASS");
+}
+
+function testTask205MainIpcHandlerExists() {
+  const main = fs.readFileSync(path.join(desktopRoot, "src", "main.js"), "utf8");
+  assert.ok(main.includes("CHAT_EXPORT_CHANNEL") || main.includes("chat:export-transcript"),
+    "main.js must define CHAT_EXPORT_CHANNEL");
+  assert.ok(main.includes("dialog.showSaveDialog"), "main.js must call dialog.showSaveDialog");
+  assert.ok(main.includes("fs.promises.writeFile") || main.includes("fs.writeFile"),
+    "main.js must write file with fs");
+  assert.ok(main.includes("{ ok: true, canceled: false }") || (main.includes("ok: true") && main.includes("canceled:")),
+    "main.js IPC handler must return { ok, canceled } shape");
+  assert.ok(main.includes("200000"), "main.js must cap content at 200000 chars");
+  console.log("  testTask205MainIpcHandlerExists PASS");
+}
+
+function testTask205NoFsExposedToRenderer() {
+  const preload = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "preload.js"), "utf8");
+  assert.ok(!preload.includes("require(\"fs\")") && !preload.includes("require('fs')"),
+    "renderer preload.js must NOT require fs directly");
+  console.log("  testTask205NoFsExposedToRenderer PASS");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TASK-206: Timestamp Persistence Fix
+// ─────────────────────────────────────────────────────────────────────────────
+
+function testTask206SaveChatHistoryEntryPassesTs() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  // saveChatHistoryEntry must accept ts parameter and pass it to chatHistoryAppend
+  assert.ok(src.includes("function saveChatHistoryEntry(role, text, source, ts)"),
+    "saveChatHistoryEntry must accept ts parameter");
+  assert.ok(src.includes("chatHistoryAppend({ role, text, source, ts })"),
+    "saveChatHistoryEntry must include ts in chatHistoryAppend payload");
+  console.log("  testTask206SaveChatHistoryEntryPassesTs PASS");
+}
+
+function testTask206PreloadSanitizeIncludesTs() {
+  const preload = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "preload.js"), "utf8");
+  assert.ok(preload.includes("ts:") && preload.includes("entry.ts"),
+    "sanitizeChatHistoryEntry must forward ts field");
+  console.log("  testTask206PreloadSanitizeIncludesTs PASS");
+}
+
+function testTask206MainAppendHandlerUsesPayloadTs() {
+  const main = fs.readFileSync(path.join(desktopRoot, "src", "main.js"), "utf8");
+  assert.ok(main.includes("entry.ts") && main.includes("Date.now()"),
+    "main.js append handler must use payload ts with Date.now() fallback");
+  console.log("  testTask206MainAppendHandlerUsesPayloadTs PASS");
+}
+
+function testTask206MainLoadHandlerReturnsTs() {
+  const main = fs.readFileSync(path.join(desktopRoot, "src", "main.js"), "utf8");
+  // Load handler .map() must include ts field
+  assert.ok(main.includes("ts: typeof e.ts"),
+    "main.js CHAT_HISTORY_LOAD handler must include ts in the returned map");
+  console.log("  testTask206MainLoadHandlerReturnsTs PASS");
+}
+
+async function testTask206AppendPayloadIncludesTs() {
+  const appended = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryAppend: (entry) => { appended.push(entry); return Promise.resolve({ ok: true }); },
+      chatHistoryLoad: async () => [],
+      onChatMirrorFromPet: () => () => {},
+    },
+  });
+  appended.length = 0;
+  const ts = Date.now();
+  sandbox.appendMessage("user", "ts persistence test", { noHistory: false, ts });
+  assert.ok(appended.length >= 1, "chatHistoryAppend must be called for user message");
+  const entry = appended[appended.length - 1];
+  assert.ok(typeof entry.ts === "number" && entry.ts > 0,
+    "chatHistoryAppend payload must include ts > 0");
+  assert.ok(Math.abs(entry.ts - ts) < 5000,
+    "chatHistoryAppend ts must be close to the time appendMessage was called");
+  console.log("  testTask206AppendPayloadIncludesTs PASS");
+}
+
+async function testTask206HistoryRestoreShowsTime() {
+  const TS = 1748693400000;  // 2025-05-31 ~09:30 UTC
+  const { document } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [
+        { role: "user", text: "restored with ts", source: "full_app", ts: TS },
+        { role: "pet",  text: "restored pet with ts", source: "pet_text", ts: TS + 5000 },
+      ],
+      chatHistoryAppend: async () => ({}),
+      onChatMirrorFromPet: () => () => {},
+    },
+  });
+  await settle();
+  const chatArea = document.getElementById("chat-area");
+
+  const userWrap = chatArea.children.find(
+    (el) => el.dataset && el.dataset.msgText === "restored with ts"
+  );
+  assert.ok(userWrap, "restored user message must exist");
+  const userMeta = userWrap.children.find((c) => c.className === "msg-meta");
+  assert.ok(userMeta, "restored user message with ts must have .msg-meta");
+  // timeStr must be present (contains ":" — HH:mm format)
+  assert.ok(userMeta.textContent.includes(":"),
+    "restored user message meta must show HH:mm time, got: " + userMeta.textContent);
+  assert.notEqual(userMeta.title, "舊紀錄沒有時間資料",
+    "restored message with real ts must NOT show fallback title");
+  assert.ok(userMeta.title.match(/\d{4}-\d{2}-\d{2}/),
+    "restored message tooltip must include YYYY-MM-DD");
+
+  const petWrap = chatArea.children.find(
+    (el) => el.dataset && el.dataset.msgText === "restored pet with ts"
+  );
+  assert.ok(petWrap, "restored pet message must exist");
+  const petMeta = petWrap.children.find((c) => c.className === "msg-meta");
+  assert.ok(petMeta, "restored pet message with ts must have .msg-meta");
+  assert.ok(petMeta.textContent.includes(":"),
+    "restored pet message meta must show HH:mm time");
+  console.log("  testTask206HistoryRestoreShowsTime PASS");
+}
+
+async function testTask206PetTextSourceSavesTs() {
+  const appended = [];
+  let mirrorCallback = null;
+  await loadRenderer({
+    dragonPet: {
+      chatHistoryAppend: (entry) => { appended.push(entry); return Promise.resolve({ ok: true }); },
+      chatHistoryLoad: async () => [],
+      onChatMirrorFromPet: (cb) => { mirrorCallback = cb; return () => {}; },
+    },
+  });
+  appended.length = 0;
+  assert.ok(typeof mirrorCallback === "function", "onChatMirrorFromPet must register callback");
+  mirrorCallback({ userMessage: "voice input", reply: "pet reply", mood: "happy", source: "llm_local", inputMethod: "voice" });
+  await settle();
+
+  const petTextEntries = appended.filter((e) => e.source === "pet_voice" || e.source === "pet_text");
+  assert.ok(petTextEntries.length >= 1, "mirror callback must append at least one pet_voice/pet_text entry");
+  for (const entry of petTextEntries) {
+    assert.ok(typeof entry.ts === "number" && entry.ts > 0,
+      `chatHistoryAppend payload must have ts > 0 for source "${entry.source}"`);
+  }
+  console.log("  testTask206PetTextSourceSavesTs PASS");
+}
+
+async function testTask206OldRecordNoTsFallbackPreserved() {
+  // ts=0 in loaded entry → "舊紀錄沒有時間資料" fallback must still work
+  const { document } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [
+        { role: "pet", text: "old record no ts", source: "pet_text", ts: 0 },
+      ],
+      chatHistoryAppend: async () => ({}),
+      onChatMirrorFromPet: () => () => {},
+    },
+  });
+  await settle();
+  const chatArea = document.getElementById("chat-area");
+  const wrap = chatArea.children.find(
+    (el) => el.dataset && el.dataset.msgText === "old record no ts"
+  );
+  assert.ok(wrap, "old record must exist in chat area");
+  const meta = wrap.children.find((c) => c.className === "msg-meta");
+  assert.ok(meta, "old pet_text record must have .msg-meta even without ts");
+  assert.equal(meta.title, "舊紀錄沒有時間資料",
+    "old record with ts=0 must show fallback title, not real timestamp");
+  assert.ok(!meta.textContent.includes(":"),
+    "old record meta must NOT show fabricated HH:mm time");
+  console.log("  testTask206OldRecordNoTsFallbackPreserved PASS");
+}
+
+async function testTask206ExportNewMessageIncludesTime() {
+  const saveTextFileCalls = [];
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      saveTextFile(payload) {
+        saveTextFileCalls.push(payload);
+        return Promise.resolve({ ok: true, canceled: false });
+      },
+      chatHistoryLoad: async () => [],
+      onChatMirrorFromPet: () => () => {},
+    },
+  });
+  // Append messages with real ts so meta shows time
+  const ts = new Date(2026, 4, 31, 14, 30, 0).getTime(); // 2026-05-31 14:30
+  sandbox.appendMessage("user", "export time test", { noHistory: true, ts });
+  sandbox.appendMessage("pet",  "pet time reply",   { noHistory: true, ts: ts + 5000, source: "pet_text" });
+
+  document.getElementById("export-chat-btn").click();
+  await settle();
+
+  assert.equal(saveTextFileCalls.length, 1, "saveTextFile must be called");
+  const content = saveTextFileCalls[0].content;
+  assert.ok(content.includes(":"), "exported content must include HH:mm time from message meta");
+  assert.ok(content.includes("14:30") || content.includes("14:"),
+    "exported content must reflect the message timestamp");
+  console.log("  testTask206ExportNewMessageIncludesTime PASS");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -4166,6 +4597,33 @@ async function main() {
   await testTask204ClearUnreadCallsNotifyWithZero();
   await testTask204UserMessageNoUnreadDotNotify();
   await testTask204NoPetBridgeNoCrash();
+  // TASK-205: Chat Export to File
+  testTask205HtmlElementsExist();
+  testTask205FunctionsExist();
+  testTask205CopyAllChatUsesBuildTranscript();
+  await testTask205BuildTranscriptReturnsFormattedText();
+  await testTask205BuildTranscriptEmptyReturnsEmpty();
+  testTask205GenerateExportFilenameFormat();
+  await testTask205ExportCallsSaveTextFile();
+  await testTask205ExportEmptyShowsNoExportMessage();
+  await testTask205ExportSuccessShowsConfirmation();
+  await testTask205ExportCanceledShowsCanceled();
+  await testTask205ExportFailureShowsError();
+  await testTask205ExportBtnDisabledDuringExport();
+  await testTask205ExportNoBridgeIsNoOp();
+  testTask205PreloadExposedSaveTextFile();
+  testTask205MainIpcHandlerExists();
+  testTask205NoFsExposedToRenderer();
+  // TASK-206: Timestamp Persistence Fix
+  testTask206SaveChatHistoryEntryPassesTs();
+  testTask206PreloadSanitizeIncludesTs();
+  testTask206MainAppendHandlerUsesPayloadTs();
+  testTask206MainLoadHandlerReturnsTs();
+  await testTask206AppendPayloadIncludesTs();
+  await testTask206HistoryRestoreShowsTime();
+  await testTask206PetTextSourceSavesTs();
+  await testTask206OldRecordNoTsFallbackPreserved();
+  await testTask206ExportNewMessageIncludesTime();
   console.log("renderer chat smoke: PASS");
 }
 

@@ -45,6 +45,8 @@ const askScreenBtn    = document.getElementById("ask-screen-btn");
 const askScreenStatus = document.getElementById("ask-screen-status");
 const clearChatBtn    = document.getElementById("clear-chat-btn");  // TASK-194
 const copyChatBtn     = document.getElementById("copy-chat-btn");   // TASK-196
+const exportChatBtn    = document.getElementById("export-chat-btn");    // TASK-205
+const exportChatStatus = document.getElementById("export-chat-status"); // TASK-205
 const chatSearchInput    = document.getElementById("chat-search-input");    // TASK-198
 const chatSearchCountEl  = document.getElementById("chat-search-count");    // TASK-198
 const chatSearchClearBtn = document.getElementById("chat-search-clear-btn"); // TASK-198
@@ -848,13 +850,13 @@ function copySingleMessage(text, btn) {
   });
 }
 
-// TASK-196: format and copy all user/pet messages as plain text.
-function copyAllChat() {
+// TASK-205: shared transcript builder — used by copyAllChat and exportChatToFile.
+function buildChatTranscript() {
   const messages = Array.from(chatArea.querySelectorAll(".message.user, .message.pet"));
-  if (!messages.length) return;
+  if (!messages.length) return "";
   const lines = [];
   for (const el of messages) {
-    const name = el.classList.contains("user") ? "你" : "克莉絲蒂娜";
+    const name = el.className.split(" ").includes("user") ? "你" : "克莉絲蒂娜";
     const text = el.dataset.msgText || "";
     if (!text) continue;
     const meta = el.querySelector(".msg-meta");
@@ -864,7 +866,12 @@ function copyAllChat() {
     lines.push(text);
     lines.push("");
   }
-  const output = lines.join("\n").trimEnd();
+  return lines.join("\n").trimEnd();
+}
+
+// TASK-196: format and copy all user/pet messages as plain text.
+function copyAllChat() {
+  const output = buildChatTranscript();
   if (!output) return;
   writeToClipboard(output).then(() => {
     if (!copyChatBtn) return;
@@ -878,6 +885,61 @@ function copyAllChat() {
       setTimeout(() => { copyChatBtn.textContent = prev; }, 1500);
     }
   });
+}
+
+// TASK-205: generate default export filename as dragon-pet-chat-YYYYMMDD-HHmm.txt
+function generateExportFilename() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const ymd = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
+  const hm  = `${pad(d.getHours())}${pad(d.getMinutes())}`;
+  return `dragon-pet-chat-${ymd}-${hm}.txt`;
+}
+
+// TASK-205: export full conversation to a user-chosen file via Save Dialog.
+async function exportChatToFile() {
+  if (!exportChatBtn) return;
+  const transcript = buildChatTranscript();
+  if (!transcript) {
+    if (exportChatStatus) {
+      exportChatStatus.textContent = "沒有可匯出的對話";
+      setTimeout(() => { exportChatStatus.textContent = ""; }, 2000);
+    }
+    return;
+  }
+  if (!window.dragonPet || typeof window.dragonPet.saveTextFile !== "function") return;
+  exportChatBtn.disabled = true;
+  try {
+    const result = await window.dragonPet.saveTextFile({
+      defaultPath: generateExportFilename(),
+      content: transcript,
+    });
+    if (result && result.canceled) {
+      if (exportChatStatus) {
+        exportChatStatus.textContent = "已取消匯出";
+        setTimeout(() => { exportChatStatus.textContent = ""; }, 1500);
+      }
+      return;
+    }
+    if (result && result.ok) {
+      if (exportChatStatus) {
+        exportChatStatus.textContent = "已匯出對話";
+        setTimeout(() => { exportChatStatus.textContent = ""; }, 2000);
+      }
+    } else {
+      if (exportChatStatus) {
+        exportChatStatus.textContent = "匯出失敗";
+        setTimeout(() => { exportChatStatus.textContent = ""; }, 2000);
+      }
+    }
+  } catch (_) {
+    if (exportChatStatus) {
+      exportChatStatus.textContent = "匯出失敗";
+      setTimeout(() => { exportChatStatus.textContent = ""; }, 2000);
+    }
+  } finally {
+    exportChatBtn.disabled = false;
+  }
 }
 
 // TASK-200: title-based unread indicator for background pet replies.
@@ -957,7 +1019,7 @@ function appendMessage(role, text, { autoScroll = false, noHistory = false, sour
   if (autoScroll) scrollChatToBottom();
   // TASK-194: persist user/pet messages only; skip ephemeral roles and history-load replay.
   if (!noHistory && (role === "user" || role === "pet")) {
-    saveChatHistoryEntry(role, text, source);
+    saveChatHistoryEntry(role, text, source, ts);
   }
   // TASK-200: badge real pet replies while Full App is hidden / not focused.
   if (role === "pet" && !noHistory && document.hidden) {
@@ -966,10 +1028,10 @@ function appendMessage(role, text, { autoScroll = false, noHistory = false, sour
   return wrap;
 }
 
-function saveChatHistoryEntry(role, text, source) {
+function saveChatHistoryEntry(role, text, source, ts) {
   const api = typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null;
   if (!api || typeof api.chatHistoryAppend !== "function") return;
-  const result = api.chatHistoryAppend({ role, text, source });
+  const result = api.chatHistoryAppend({ role, text, source, ts });
   if (result && typeof result.catch === "function") result.catch(() => {});
 }
 
@@ -2315,6 +2377,13 @@ if (clearChatBtn) {
 if (copyChatBtn) {
   copyChatBtn.addEventListener("click", () => {
     copyAllChat();
+  });
+}
+
+// TASK-205: export conversation to file via Save Dialog.
+if (exportChatBtn) {
+  exportChatBtn.addEventListener("click", () => {
+    exportChatToFile();
   });
 }
 
