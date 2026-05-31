@@ -616,54 +616,53 @@ textarea {
   text-align: left;
 }
 
-/* TASK-196: per-bubble copy affordance — visible only on hover */
+/* TASK-211: message actions use the custom right-click context menu only. */
 .message.user,
 .message.pet {
   position: relative;
 }
 
-.msg-copy-btn,
-.msg-delete-btn {
-  position: absolute;
-  top: 8px;
+.chat-edit-cancel-btn {
   background: transparent;
   border: none;
-  color: var(--text-muted);
-  font-size: 10px;
-  line-height: 1;
-  padding: 2px 5px;
-  border-radius: 3px;
+  color: var(--accent-soft);
   cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-  user-select: none;
-  white-space: nowrap;
+  font-size: 11px;
+  margin-left: 8px;
+  padding: 0;
 }
 
-.msg-copy-btn {
-  right: 8px;
-}
-
-.msg-delete-btn {
-  right: 48px;
-}
-
-.message.user:hover .msg-copy-btn,
-.message.pet:hover .msg-copy-btn,
-.message.user:hover .msg-delete-btn,
-.message.pet:hover .msg-delete-btn {
-  opacity: 1;
-}
-
-.msg-copy-btn:hover,
-.msg-delete-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
+.chat-edit-cancel-btn:hover {
   color: var(--text);
+  text-decoration: underline;
 }
 
-.msg-copy-btn.copied {
-  color: #5b9fd6;
-  opacity: 1;
+.chat-context-menu {
+  position: fixed;
+  z-index: 50;
+  min-width: 96px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(18, 20, 24, 0.96);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+
+.chat-context-menu-item {
+  display: block;
+  width: 100%;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 7px 10px;
+  text-align: left;
+}
+
+.chat-context-menu-item:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 /* ── Memory section (collapsible) ─────────────────────── */

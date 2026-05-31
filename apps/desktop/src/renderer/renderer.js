@@ -53,6 +53,8 @@ const chatSearchCountEl  = document.getElementById("chat-search-count");    // T
 const chatSearchClearBtn = document.getElementById("chat-search-clear-btn"); // TASK-198
 const chatNewMsgBtn      = document.getElementById("chat-new-message-btn");  // TASK-202
 const chatEmptyState     = document.getElementById("chat-empty-state");      // TASK-208
+const SEND_BUTTON_DEFAULT_TEXT = sendBtn ? (sendBtn.textContent || "Send") : "Send";
+const EDIT_SEND_BUTTON_TEXT = "送出修改";
 // TASK-179: gentle hint shown after OCR summary exists.
 const ocrAskHintEl = document.getElementById("ocr-ask-hint");
 const memoryForm  = document.getElementById("memory-form");
@@ -594,6 +596,9 @@ let undoClearTimer = null;
 const UNDO_DELETE_MESSAGE_MS = 10000;
 let lastDeletedChatMessage = null;
 let undoDeleteMessageTimer = null;
+// TASK-211: edit state for one formal user message at a time.
+let editingMessageState = null;
+let chatContextMenu = null;
 
 // TASK-113: smarter auto-scroll helpers — user sends always scroll,
 // AI replies only scroll when user is already near the bottom.
@@ -714,9 +719,42 @@ function clearUndoDeleteMessageState({ clearStatus = false } = {}) {
   if (clearStatus) setClearChatStatus("");
 }
 
+function setComposerValue(value) {
+  if (!msgInput) return;
+  msgInput.value = value || "";
+  msgInput.style.height = "auto";
+  msgInput.style.height = Math.min(msgInput.scrollHeight || 40, 100) + "px";
+}
+
+function clearEditingMessageState({ restoreInput = false, clearStatus = false } = {}) {
+  const prev = editingMessageState;
+  editingMessageState = null;
+  if (restoreInput && prev) setComposerValue(prev.inputBeforeEdit || "");
+  if (!isSending && sendBtn) sendBtn.textContent = SEND_BUTTON_DEFAULT_TEXT;
+  if (clearStatus) setClearChatStatus("");
+}
+
+function showEditMessageState() {
+  if (!clearChatStatus) return;
+  if (clearChatStatusTimer) {
+    clearTimeout(clearChatStatusTimer);
+    clearChatStatusTimer = null;
+  }
+  clearChatStatus.textContent = "正在編輯最後一則訊息";
+  const cancelBtn = document.createElement("button");
+  cancelBtn.type = "button";
+  cancelBtn.className = "chat-edit-cancel-btn";
+  cancelBtn.textContent = "取消";
+  cancelBtn.addEventListener("click", () => {
+    cancelEditUserMessage();
+  });
+  clearChatStatus.appendChild(cancelBtn);
+}
+
 function showUndoClearState(entries) {
   clearUndoClearState();
   clearUndoDeleteMessageState();
+  clearEditingMessageState();
   lastClearedChatEntries = entries.map((entry) => ({ ...entry }));
   if (!clearChatStatus) return;
   if (clearChatStatusTimer) {
@@ -763,6 +801,7 @@ async function rewritePersistedChatHistory(entries) {
 }
 
 function renderFormalChatEntries(entries, { preserveSearch = false } = {}) {
+  closeChatContextMenu();
   const searchQuery = preserveSearch && chatSearchInput ? chatSearchInput.value : "";
   lastDateKey = null;
   chatArea.replaceChildren();
@@ -779,9 +818,96 @@ function renderFormalChatEntries(entries, { preserveSearch = false } = {}) {
   updateEmptyChatState();
 }
 
+function isEditableUserEntryAtIndex(entries, index) {
+  if (!Array.isArray(entries) || index < 0 || index >= entries.length) return false;
+  const entry = entries[index];
+  if (!entry || entry.role !== "user") return false;
+  let lastUserIndex = -1;
+  entries.forEach((item, idx) => {
+    if (item && item.role === "user") lastUserIndex = idx;
+  });
+  if (index !== lastUserIndex) return false;
+  const trailing = entries.slice(index + 1);
+  return trailing.length <= 1 && trailing.every((item) => item && item.role === "pet");
+}
+
+function isLastEditableUserMessage(messageEl) {
+  if (!messageEl || !messageEl.dataset) return false;
+  const classes = typeof messageEl.className === "string" ? messageEl.className.split(" ") : [];
+  if (!classes.includes("user") || messageEl.dataset.formalChat !== "true") return false;
+  const messageEls = collectFormalChatMessageElements();
+  const index = messageEls.indexOf(messageEl);
+  return isEditableUserEntryAtIndex(collectUndoableChatEntries(), index);
+}
+
+function closeChatContextMenu() {
+  if (chatContextMenu && typeof chatContextMenu.remove === "function") {
+    chatContextMenu.remove();
+  }
+  chatContextMenu = null;
+}
+
+function createContextMenuButton(label, className, onClick) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = className;
+  btn.textContent = label;
+  btn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onClick();
+  });
+  return btn;
+}
+
+function showChatMessageContextMenu(messageEl, event) {
+  if (!messageEl || !messageEl.dataset || messageEl.dataset.formalChat !== "true") return false;
+  const classes = typeof messageEl.className === "string" ? messageEl.className.split(" ") : [];
+  const isUserOrPet = classes.includes("user") || classes.includes("pet");
+  if (!isUserOrPet) return false;
+  if (event && typeof event.preventDefault === "function") event.preventDefault();
+  if (event && typeof event.stopPropagation === "function") event.stopPropagation();
+  closeChatContextMenu();
+
+  const menu = document.createElement("div");
+  menu.className = "chat-context-menu";
+  menu.setAttribute("role", "menu");
+  menu.style.left = `${event && typeof event.clientX === "number" ? event.clientX : 0}px`;
+  menu.style.top = `${event && typeof event.clientY === "number" ? event.clientY : 0}px`;
+
+  menu.appendChild(createContextMenuButton("複製", "chat-context-menu-item", () => {
+    copySingleMessage(messageEl.dataset.msgText || "", menu);
+    closeChatContextMenu();
+  }));
+  menu.appendChild(createContextMenuButton("刪除", "chat-context-menu-item", () => {
+    closeChatContextMenu();
+    deleteSingleChatMessage(messageEl);
+  }));
+  if (classes.includes("user") && isLastEditableUserMessage(messageEl)) {
+    menu.appendChild(createContextMenuButton("編輯", "chat-context-menu-item", () => {
+      closeChatContextMenu();
+      startEditUserMessage(messageEl);
+    }));
+  }
+
+  chatArea.appendChild(menu);
+  chatContextMenu = menu;
+  return true;
+}
+
+function isInsideChatContextMenu(target) {
+  let node = target;
+  while (node) {
+    if (node === chatContextMenu) return true;
+    node = node.parentNode;
+  }
+  return false;
+}
+
 function showUndoDeleteMessageState(deletedEntry, deletedIndex) {
   clearUndoDeleteMessageState();
   clearUndoClearState();
+  clearEditingMessageState();
   lastDeletedChatMessage = {
     entry: { ...deletedEntry },
     index: deletedIndex,
@@ -1280,7 +1406,7 @@ function appendMessage(role, text, {
     wrap.appendChild(meta);
   }
 
-  // TASK-196: per-bubble copy affordance — stores raw text for safe clipboard export.
+  // TASK-211: message operations are exposed only through the custom context menu.
   if (role === "user" || role === "pet") {
     wrap.dataset.msgText = text;
     wrap.dataset.formalChat = countsAsChat ? "true" : "false";
@@ -1289,28 +1415,12 @@ function appendMessage(role, text, {
     if (countsAsChat && !noHistory) {
       clearUndoClearState({ clearStatus: true });
       clearUndoDeleteMessageState({ clearStatus: true });
+      clearEditingMessageState({ clearStatus: true });
     }
-    const copyBtn = document.createElement("button");
-    copyBtn.className = "msg-copy-btn";
-    copyBtn.type = "button";
-    copyBtn.title = "複製訊息";
-    copyBtn.textContent = "複製";
-    copyBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      copySingleMessage(text, copyBtn);
-    });
-    wrap.appendChild(copyBtn);
     if (countsAsChat) {
-      const deleteBtn = document.createElement("button");
-      deleteBtn.className = "msg-delete-btn";
-      deleteBtn.type = "button";
-      deleteBtn.title = "刪除訊息";
-      deleteBtn.textContent = "刪除";
-      deleteBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        deleteSingleChatMessage(wrap);
+      wrap.addEventListener("contextmenu", (e) => {
+        showChatMessageContextMenu(wrap, e);
       });
-      wrap.appendChild(deleteBtn);
     }
   }
 
@@ -1380,6 +1490,44 @@ async function undoSingleMessageDelete() {
   return true;
 }
 
+function startEditUserMessage(messageEl) {
+  if (isSending || !messageEl || !messageEl.dataset) return false;
+  const classes = typeof messageEl.className === "string" ? messageEl.className.split(" ") : [];
+  if (!classes.includes("user") || messageEl.dataset.formalChat !== "true") return false;
+  const messageEls = collectFormalChatMessageElements();
+  const editIndex = messageEls.indexOf(messageEl);
+  if (editIndex < 0) return false;
+  if (!isEditableUserEntryAtIndex(collectUndoableChatEntries(), editIndex)) return false;
+  const originalText = messageEl.dataset.msgText || "";
+  if (!originalText) return false;
+
+  const existingDraft = editingMessageState
+    ? editingMessageState.inputBeforeEdit
+    : (msgInput ? msgInput.value : "");
+  clearUndoClearState();
+  clearUndoDeleteMessageState();
+  editingMessageState = {
+    index: editIndex,
+    originalText,
+    source: messageEl.dataset.source || "unknown",
+    ts: Number(messageEl.dataset.ts || 0) || 0,
+    inputBeforeEdit: existingDraft || "",
+  };
+  setComposerValue(originalText);
+  if (sendBtn) sendBtn.textContent = EDIT_SEND_BUTTON_TEXT;
+  showEditMessageState();
+  if (msgInput && typeof msgInput.focus === "function") msgInput.focus();
+  return true;
+}
+
+function cancelEditUserMessage() {
+  if (!editingMessageState) return false;
+  clearEditingMessageState({ restoreInput: true });
+  setClearChatStatus("已取消編輯", 1500);
+  if (msgInput && typeof msgInput.focus === "function") msgInput.focus();
+  return true;
+}
+
 async function undoClearChat() {
   if (!lastClearedChatEntries.length) return false;
   const entries = lastClearedChatEntries.map((entry) => ({ ...entry }));
@@ -1437,6 +1585,7 @@ async function clearChatHistory() {
   if (!api || typeof api.chatHistoryClear !== "function") return false;
   const undoEntries = collectUndoableChatEntries();
   clearUndoDeleteMessageState();
+  clearEditingMessageState();
   try {
     await api.chatHistoryClear();
   } catch (_e) {
@@ -1472,7 +1621,9 @@ function setSending(state) {
   isSending = state;
   sendBtn.disabled = state;
   msgInput.disabled = state;
-  sendBtn.textContent = state ? "Sending..." : "Send";
+  sendBtn.textContent = state
+    ? "Sending..."
+    : (editingMessageState ? EDIT_SEND_BUTTON_TEXT : SEND_BUTTON_DEFAULT_TEXT);
 }
 
 function isFetchNetworkError(err) {
@@ -2606,7 +2757,141 @@ async function runTestConnection() {
 // ---------------------------------------------------------------------------
 // Backend call
 // ---------------------------------------------------------------------------
+async function submitEditedUserMessage(text) {
+  if (isSending || !editingMessageState) return false;
+  const editedText = (text || "").trim();
+  if (!editedText) return false;
+
+  const editState = { ...editingMessageState };
+  const entries = collectUndoableChatEntries();
+  const target = entries[editState.index];
+  if (!target || target.role !== "user" ||
+      !isEditableUserEntryAtIndex(entries, editState.index)) {
+    setClearChatStatus("編輯訊息失敗", 2000);
+    return false;
+  }
+
+  const editedEntry = {
+    ...target,
+    text: editedText,
+    source: editState.source || target.source || "unknown",
+    ts: Date.now(),
+  };
+  const entriesWithoutOldReply = entries.map((entry, idx) =>
+    idx === editState.index ? editedEntry : { ...entry }
+  );
+  if (entriesWithoutOldReply[editState.index + 1] &&
+      entriesWithoutOldReply[editState.index + 1].role === "pet") {
+    entriesWithoutOldReply.splice(editState.index + 1, 1);
+  }
+
+  setSending(true);
+  try {
+    const rewritten = await rewritePersistedChatHistory(entriesWithoutOldReply);
+    if (!rewritten) throw new Error("history unavailable");
+    clearEditingMessageState({ restoreInput: false, clearStatus: true });
+    if (chatSearchInput) chatSearchInput.value = "";
+    renderFormalChatEntries(entriesWithoutOldReply);
+    const loadingMessage = appendMessage(
+      "status",
+      isOllamaChatPath()
+        ? "本地 AI 喚醒中，第一次回覆可能需要較久..."
+        : "等待後端回覆中...",
+      { autoScroll: true }
+    );
+    setChatRuntimeStatus("pending", sourceStatusMessage("pending"), "pending");
+    setPetExpression("pending");
+    setPetHint("thinking…");
+    updatePetThinkingState();
+    setComposerValue("");
+
+    try {
+      const useMemory = useMemoryToggle ? useMemoryToggle.checked : false;
+      const res = await fetch(`${BACKEND_URL}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: editedText, use_memory: useMemory }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        const detail = data && data.detail ? data.detail : "";
+        throw new Error(safeChatErrorMessage(res.status, detail));
+      }
+
+      const replyEntry = {
+        role: "pet",
+        text: data.reply,
+        source: "full_app",
+        ts: Date.now(),
+      };
+      const finalEntries = [
+        ...entriesWithoutOldReply.slice(0, editState.index + 1),
+        replyEntry,
+        ...entriesWithoutOldReply.slice(editState.index + 1),
+      ];
+      const finalRewrite = await rewritePersistedChatHistory(finalEntries);
+      if (!finalRewrite) throw new Error("history unavailable");
+      loadingMessage.remove();
+      renderFormalChatEntries(finalEntries);
+      if (document.hidden) markUnread();
+      maybeScrollChatToBottom();
+
+      const source = data.source || "unknown";
+      const isSourceError = source === "llm_local_error" || source === "llm_real_error";
+      updatePetSpeechFromChatResponse({
+        reply: data.reply,
+        mood: data.mood,
+        source,
+      });
+      setMood(data.mood);
+      if (isSourceError) {
+        setPetExpression("error");
+        setPetHint(moodHintLabel("error"));
+      }
+      setChatRuntimeStatus(
+        source,
+        sourceStatusMessage(source),
+        isSourceError ? "error" : "normal"
+      );
+      await loadProviderSettings();
+      return true;
+    } catch (err) {
+      const isNetworkError = isFetchNetworkError(err);
+      const errText = isNetworkError
+        ? `Cannot reach backend at ${BACKEND_URL}.\nMake sure the backend is running:\n  cd backend && uvicorn app.main:app --reload`
+        : `Something went wrong: ${err.message}`;
+      loadingMessage.remove();
+      if (isNetworkError) {
+        setPetExpression("offline");
+        setPetHint(moodHintLabel("offline"));
+      } else {
+        setPetExpression("error");
+        setPetHint(moodHintLabel("error"));
+      }
+      setChatRuntimeStatus(
+        isNetworkError ? "backend_offline" : "error",
+        isNetworkError ? sourceStatusMessage("backend_offline") : err.message,
+        "error"
+      );
+      updatePetSpeechFromChatResponse({ reply: "", mood: "worried", source: "llm_local_error" });
+      appendMessage("error", errText);
+      maybeScrollChatToBottom();
+      return false;
+    }
+  } catch (_e) {
+    setClearChatStatus("編輯訊息失敗", 2000);
+    return false;
+  } finally {
+    setSending(false);
+    if (msgInput && typeof msgInput.focus === "function") msgInput.focus();
+  }
+}
+
 async function sendMessage(text) {
+  if (editingMessageState) {
+    await submitEditedUserMessage(text);
+    return;
+  }
   if (isSending || !text.trim()) return;
   setSending(true);
 
@@ -2783,6 +3068,10 @@ if (chatSearchClearBtn) {
 
 // TASK-199: keyboard shortcuts — Ctrl+F / Cmd+F focuses chat search; Esc clears or blurs.
 document.addEventListener("keydown", function (e) {
+  if (e.key === "Escape" && chatContextMenu) {
+    closeChatContextMenu();
+    return;
+  }
   if ((e.ctrlKey || e.metaKey) && e.key === "f") {
     e.preventDefault();
     if (chatSearchInput) {
@@ -2814,6 +3103,11 @@ if (chatArea) {
     if (isChatNearBottom()) hideNewMessageBtn();
   });
 }
+document.addEventListener("pointerdown", (e) => {
+  if (chatContextMenu && !isInsideChatContextMenu(e.target)) {
+    closeChatContextMenu();
+  }
+});
 // TASK-202: jump button click — scroll to bottom and dismiss badge.
 if (chatNewMsgBtn) {
   chatNewMsgBtn.addEventListener("click", () => {
@@ -2905,7 +3199,10 @@ providerSettingsProvider.addEventListener("change", () => {
 });
 
 msgInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && !e.shiftKey) {
+  if (e.key === "Escape" && editingMessageState) {
+    e.preventDefault();
+    cancelEditUserMessage();
+  } else if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
     sendMessage(msgInput.value);
   }

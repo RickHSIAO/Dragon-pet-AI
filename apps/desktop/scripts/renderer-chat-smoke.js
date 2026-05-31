@@ -2715,52 +2715,40 @@ function testTask196CopyAllSelectorOnlyUserPet() {
   );
 }
 
-function testTask196MsgCopyBtnCssExists() {
+function testTask196MessageActionsUseContextMenuCss() {
   const css = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "styles.css"), "utf8");
-  assert.ok(css.includes(".msg-copy-btn"),
-    "CSS must define .msg-copy-btn");
-  assert.ok(css.includes(".msg-copy-btn.copied"),
-    "CSS must define .msg-copy-btn.copied feedback state");
-  assert.ok(css.includes(".message.user:hover .msg-copy-btn") || css.includes(".message.pet:hover .msg-copy-btn"),
-    "CSS must show .msg-copy-btn on hover only");
+  assert.ok(css.includes(".chat-context-menu"),
+    "CSS must define .chat-context-menu");
+  assert.ok(css.includes(".chat-context-menu-item"),
+    "CSS must define .chat-context-menu-item");
+  assert.ok(!css.includes(".msg-copy-btn") && !css.includes(".msg-delete-btn") && !css.includes(".msg-edit-btn"),
+    "CSS must not define hover message action buttons");
 }
 
-async function testTask196CopyBtnAppendedToPetBubble() {
-  // Startup greeting appends a pet message — verify it carries .msg-copy-btn.
-  // Uses FakeElement.children (no querySelectorAll in the fake DOM).
+async function testTask196NoHoverActionButtonsAppendedToPetBubble() {
   const { document } = await loadRenderer({});
   const chatArea = document.getElementById("chat-area");
   const petMsg = chatArea.children.find(
     (c) => typeof c.className === "string" && c.className.includes("pet")
   );
   assert.ok(petMsg, "At least one pet message element must exist after startup (greeting)");
-  const copyBtn = petMsg.children.find(
-    (c) => typeof c.className === "string" && c.className.includes("msg-copy-btn")
-  );
-  assert.ok(copyBtn, "Pet message bubble must contain a .msg-copy-btn child");
-  assert.strictEqual(copyBtn.type, "button", ".msg-copy-btn must be type=button");
   assert.ok(petMsg.dataset && petMsg.dataset.msgText, "Pet message must have dataset.msgText populated");
+  assert.equal(petMsg.children.some((c) => /msg-(copy|delete|edit)-btn/.test(c.className || "")), false,
+    "Pet message bubble must not contain hover action buttons");
 }
 
 async function testTask196ClipboardUnavailableNocrash() {
-  // VM sandbox has no navigator and no dragonPet — clicking .msg-copy-btn must not throw.
-  const { document } = await loadRenderer({});
-  const chatArea = document.getElementById("chat-area");
-  const petMsg = chatArea.children.find(
-    (c) => typeof c.className === "string" && c.className.includes("pet")
-  );
-  assert.ok(petMsg, "Pet message must exist for clipboard no-crash test");
-  const copyBtn = petMsg.children.find(
-    (c) => typeof c.className === "string" && c.className.includes("msg-copy-btn")
-  );
-  assert.ok(copyBtn, "Pet message must have .msg-copy-btn for clipboard no-crash test");
+  const { document, sandbox } = await loadRenderer({});
+  sandbox.appendMessage("pet", "copy unavailable via context menu", { noHistory: true, source: "pet_text" });
   let threw = false;
   try {
-    copyBtn.dispatchEvent({ type: "click", stopPropagation: () => {} });
+    const menu = await openContextMenuForMessage(document, 0);
+    contextMenuItem(menu, "複製").click();
+    await settle();
   } catch (_) {
     threw = true;
   }
-  assert.ok(!threw, "Clicking .msg-copy-btn without navigator must not throw");
+  assert.ok(!threw, "Context-menu copy without navigator must not throw");
 }
 
 function testTask196CopyPrefersBridge() {
@@ -2786,19 +2774,13 @@ function testTask196NavigatorFallbackExists() {
 async function testTask196BridgeCalledWhenAvailable() {
   let bridgeCalled = false;
   let bridgeText = null;
-  const { document } = await loadRenderer({
+  const { document, sandbox } = await loadRenderer({
     dragonPet: { writeClipboardText: (text) => { bridgeCalled = true; bridgeText = text; return true; } },
   });
-  const chatArea = document.getElementById("chat-area");
-  const petMsg = chatArea.children.find(
-    (c) => typeof c.className === "string" && c.className.includes("pet")
-  );
-  assert.ok(petMsg, "Pet message must exist for bridge-call test");
-  const copyBtn = petMsg.children.find(
-    (c) => typeof c.className === "string" && c.className.includes("msg-copy-btn")
-  );
-  assert.ok(copyBtn, "Pet message must have .msg-copy-btn for bridge-call test");
-  copyBtn.dispatchEvent({ type: "click", stopPropagation: () => {} });
+  sandbox.appendMessage("pet", "bridge copy via context menu", { noHistory: true, source: "pet_text" });
+  const menu = await openContextMenuForMessage(document, 0);
+  contextMenuItem(menu, "複製").click();
+  await settle();
   assert.ok(bridgeCalled, "writeClipboardText bridge must be called when dragonPet provides it");
   assert.strictEqual(typeof bridgeText, "string", "bridge must receive message text as string");
 }
@@ -5139,14 +5121,9 @@ function dateSeparators(document) {
     .filter((child) => (child.className || "").includes("date-separator"));
 }
 
-function deleteButtonForMessage(message) {
-  return message.children.find((child) => (child.className || "").includes("msg-delete-btn"));
-}
-
 async function deleteFormalMessage(document, index = 0) {
-  const msg = formalMessages(document)[index];
-  const btn = deleteButtonForMessage(msg);
-  btn.click();
+  const menu = await openContextMenuForMessage(document, index);
+  contextMenuItem(menu, "刪除").click();
   await settle();
 }
 
@@ -5163,27 +5140,30 @@ function testTask210FunctionsAndCssExist() {
     "renderer.js must define undoSingleMessageDelete");
   assert.ok(src.includes("rewritePersistedChatHistory(nextEntries)"),
     "single-message delete/undo must rewrite persistence via existing history helpers");
-  assert.ok(css.includes(".msg-delete-btn"),
-    "styles.css must define .msg-delete-btn");
-  assert.ok(css.includes(".message.user:hover .msg-delete-btn") || css.includes(".message.pet:hover .msg-delete-btn"),
-    "delete action must remain a hover affordance");
+  assert.ok(src.includes("showChatMessageContextMenu"),
+    "single-message delete must be reachable through context menu");
+  assert.ok(css.includes(".chat-context-menu"),
+    "styles.css must define context menu");
+  assert.ok(!css.includes(".msg-delete-btn"),
+    "styles.css must not define hover delete buttons");
   console.log("  testTask210FunctionsAndCssExist PASS");
 }
 
-async function testTask210FormalMessagesHaveDeleteButton() {
+async function testTask210FormalMessagesHaveContextDelete() {
   const { document, sandbox } = await loadRenderer();
   sandbox.appendMessage("user", "delete action user", { noHistory: true });
   sandbox.appendMessage("pet", "delete action pet", { noHistory: true, source: "pet_text" });
 
   const messages = formalMessages(document);
   assert.equal(messages.length, 2, "test setup must have two formal messages");
-  assert.ok(deleteButtonForMessage(messages[0]), "user message must have delete action");
-  assert.ok(deleteButtonForMessage(messages[1]), "pet message must have delete action");
-  assert.equal(deleteButtonForMessage(messages[0]).textContent, "刪除");
-  console.log("  testTask210FormalMessagesHaveDeleteButton PASS");
+  let menu = await openContextMenuForMessage(document, 0);
+  assert.ok(contextMenuItem(menu, "刪除"), "user context menu must have delete action");
+  menu = await openContextMenuForMessage(document, 1);
+  assert.ok(contextMenuItem(menu, "刪除"), "pet context menu must have delete action");
+  console.log("  testTask210FormalMessagesHaveContextDelete PASS");
 }
 
-async function testTask210NonFormalMessagesHaveNoDeleteButton() {
+async function testTask210NonFormalMessagesHaveNoContextDelete() {
   const { document, sandbox } = await loadRenderer();
   const chatArea = document.getElementById("chat-area");
   const startup = chatArea.children.find((child) => (child.className || "").includes("pet"));
@@ -5192,14 +5172,14 @@ async function testTask210NonFormalMessagesHaveNoDeleteButton() {
   sep.className = "message date-separator";
   chatArea.appendChild(sep);
 
-  assert.equal(startup && deleteButtonForMessage(startup), undefined,
-    "startup greeting must not have delete action");
   const status = chatArea.children.find((child) => (child.className || "").includes("status"));
-  assert.equal(status && deleteButtonForMessage(status), undefined,
-    "status message must not have delete action");
-  assert.equal(deleteButtonForMessage(sep), undefined,
-    "date separator must not have delete action");
-  console.log("  testTask210NonFormalMessagesHaveNoDeleteButton PASS");
+  for (const el of [startup, status, sep]) {
+    el.dispatchEvent({ type: "contextmenu", target: el, preventDefault() {}, stopPropagation() {} });
+    await settle();
+    assert.equal(contextMenu(document), undefined,
+      "startup/status/date separator must not open context menu");
+  }
+  console.log("  testTask210NonFormalMessagesHaveNoContextDelete PASS");
 }
 
 async function testTask210DeleteOnlySelectedMessage() {
@@ -5473,6 +5453,474 @@ async function testTask210DeleteUndoDoesNotTriggerChatOrPet() {
   console.log("  testTask210DeleteUndoDoesNotTriggerChatOrPet PASS");
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TASK-211: Message Context Menu + Edit Last User Message Only
+// ─────────────────────────────────────────────────────────────────────────────
+
+function contextMenu(document) {
+  return document.getElementById("chat-area").children
+    .find((child) => (child.className || "").includes("chat-context-menu"));
+}
+
+function contextMenuLabels(menu) {
+  return (menu ? menu.children : []).map((child) => child.textContent);
+}
+
+function contextMenuItem(menu, label) {
+  return (menu ? menu.children : []).find((child) => child.textContent === label);
+}
+
+async function openContextMenuForMessage(document, index = 0) {
+  const msg = formalMessages(document)[index];
+  msg.dispatchEvent({
+    type: "contextmenu",
+    target: msg,
+    clientX: 44,
+    clientY: 88,
+    preventDefault() { this.prevented = true; },
+    stopPropagation() {},
+  });
+  await settle();
+  return contextMenu(document);
+}
+
+async function startEditLastUserMessage(document) {
+  const menu = await openContextMenuForMessage(document, formalMessages(document).length - 2);
+  const edit = contextMenuItem(menu, "編輯");
+  edit.click();
+  await settle();
+}
+
+function testTask211FunctionsAndCssExist() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const css = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "styles.css"), "utf8");
+  assert.ok(src.includes("let editingMessageState = null"),
+    "renderer.js must define editingMessageState");
+  assert.ok(src.includes("let chatContextMenu = null"),
+    "renderer.js must define chatContextMenu state");
+  assert.ok(src.includes("function showChatMessageContextMenu"),
+    "renderer.js must define context menu helper");
+  assert.ok(src.includes("function isLastEditableUserMessage"),
+    "renderer.js must define last-user edit guard");
+  assert.ok(src.includes("function startEditUserMessage"),
+    "renderer.js must define startEditUserMessage");
+  assert.ok(src.includes("async function submitEditedUserMessage"),
+    "renderer.js must define submitEditedUserMessage");
+  assert.ok(!src.includes("msg-edit-btn"),
+    "renderer.js must not add hover edit buttons");
+  assert.ok(!src.includes("msg-copy-btn") && !src.includes("msg-delete-btn"),
+    "renderer.js must not add hover copy/delete buttons");
+  assert.ok(css.includes(".chat-context-menu"),
+    "styles.css must define .chat-context-menu");
+  assert.ok(!css.includes(".msg-copy-btn") && !css.includes(".msg-delete-btn") && !css.includes(".msg-edit-btn"),
+    "styles.css must not define hover action button styling");
+  console.log("  testTask211FunctionsAndCssExist PASS");
+}
+
+async function testTask211UserMessageHasNoHoverButtons() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "no hover user", { noHistory: true });
+
+  const userMsg = formalMessages(document)[0];
+  assert.equal(userMsg.children.some((child) => /msg-(copy|delete|edit)-btn/.test(child.className || "")), false,
+    "user message must not append hover copy/delete/edit buttons");
+  console.log("  testTask211UserMessageHasNoHoverButtons PASS");
+}
+
+async function testTask211PetMessageHasNoHoverButtons() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("pet", "no hover pet", { noHistory: true, source: "pet_text" });
+
+  const petMsg = formalMessages(document)[0];
+  assert.equal(petMsg.children.some((child) => /msg-(copy|delete|edit)-btn/.test(child.className || "")), false,
+    "pet message must not append hover copy/delete/edit buttons");
+  console.log("  testTask211PetMessageHasNoHoverButtons PASS");
+}
+
+async function testTask211RightClickUserShowsContextMenu() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "context user", { noHistory: true });
+
+  const menu = await openContextMenuForMessage(document, 0);
+
+  assert.ok(menu, "right-clicking a formal user message must show context menu");
+  assert.deepEqual(contextMenuLabels(menu), ["複製", "刪除", "編輯"]);
+  assert.equal(menu.style.left, "44px", "menu should be positioned near pointer x");
+  assert.equal(menu.style.top, "88px", "menu should be positioned near pointer y");
+  console.log("  testTask211RightClickUserShowsContextMenu PASS");
+}
+
+async function testTask211RightClickPetHasNoEdit() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("pet", "context pet", { noHistory: true, source: "pet_text" });
+
+  const menu = await openContextMenuForMessage(document, 0);
+
+  assert.ok(menu, "right-clicking a formal pet message must show context menu");
+  assert.deepEqual(contextMenuLabels(menu), ["複製", "刪除"]);
+  console.log("  testTask211RightClickPetHasNoEdit PASS");
+}
+
+async function testTask211LastUserMessageHasEditOption() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "older user", { noHistory: true });
+  sandbox.appendMessage("pet", "older pet", { noHistory: true, source: "full_app" });
+  sandbox.appendMessage("user", "last editable user", { noHistory: true });
+
+  const menu = await openContextMenuForMessage(document, 2);
+
+  assert.ok(contextMenuItem(menu, "編輯"), "last formal user message must have edit option");
+  console.log("  testTask211LastUserMessageHasEditOption PASS");
+}
+
+async function testTask211NonLastUserMessageHasNoEditOption() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "old user cannot edit", { noHistory: true });
+  sandbox.appendMessage("pet", "old pet", { noHistory: true, source: "full_app" });
+  sandbox.appendMessage("user", "new user can edit", { noHistory: true });
+
+  const menu = await openContextMenuForMessage(document, 0);
+
+  assert.deepEqual(contextMenuLabels(menu), ["複製", "刪除"],
+    "non-last user message must not show edit option");
+  console.log("  testTask211NonLastUserMessageHasNoEditOption PASS");
+}
+
+async function testTask211NonFormalMessagesHaveNoContextMenu() {
+  const { document, sandbox } = await loadRenderer();
+  const chatArea = document.getElementById("chat-area");
+  const startup = chatArea.children.find((child) => (child.className || "").includes("pet"));
+  sandbox.appendMessage("status", "status no context", { noHistory: true });
+  const status = chatArea.children.find((child) => (child.className || "").includes("status"));
+  const sep = document.createElement("div");
+  sep.className = "message date-separator";
+  chatArea.appendChild(sep);
+
+  for (const el of [startup, status, sep]) {
+    el.dispatchEvent({ type: "contextmenu", target: el, preventDefault() {}, stopPropagation() {} });
+    await settle();
+    assert.equal(contextMenu(document), undefined, "non-formal entries must not show context menu");
+  }
+  console.log("  testTask211NonFormalMessagesHaveNoContextMenu PASS");
+}
+
+async function testTask211ClickOutsideClosesContextMenu() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "outside close", { noHistory: true });
+  await openContextMenuForMessage(document, 0);
+
+  document.dispatchEvent({ type: "pointerdown", target: document.getElementById("message-input") });
+  await settle();
+
+  assert.equal(contextMenu(document), undefined, "outside click must close context menu");
+  console.log("  testTask211ClickOutsideClosesContextMenu PASS");
+}
+
+async function testTask211EscClosesContextMenu() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "esc close menu", { noHistory: true });
+  await openContextMenuForMessage(document, 0);
+
+  document.dispatchEvent({ type: "keydown", key: "Escape" });
+  await settle();
+
+  assert.equal(contextMenu(document), undefined, "Esc must close context menu");
+  console.log("  testTask211EscClosesContextMenu PASS");
+}
+
+async function testTask211EditLastUserFillsInputAndFocuses() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "old user", { noHistory: true });
+  sandbox.appendMessage("pet", "old pet", { noHistory: true, source: "full_app" });
+  sandbox.appendMessage("user", "last typo text", { noHistory: true });
+  sandbox.appendMessage("pet", "last answer", { noHistory: true, source: "full_app" });
+
+  await startEditLastUserMessage(document);
+
+  assert.equal(document.getElementById("message-input").value, "last typo text",
+    "edit must copy last user message text into composer");
+  assert.equal(document.getElementById("message-input").focused, true,
+    "edit must focus composer");
+  assert.ok(textOf(document, "clear-chat-status").includes("正在編輯最後一則訊息"),
+    "edit status must identify last-message editing");
+  console.log("  testTask211EditLastUserFillsInputAndFocuses PASS");
+}
+
+async function testTask211CancelEditRestoresDraft() {
+  const { document, sandbox } = await loadRenderer();
+  const input = document.getElementById("message-input");
+  input.value = "draft before edit";
+  sandbox.appendMessage("user", "cancel source text", { noHistory: true });
+
+  const menu = await openContextMenuForMessage(document, 0);
+  contextMenuItem(menu, "編輯").click();
+  await settle();
+  const cancelBtn = document.getElementById("clear-chat-status").children
+    .find((child) => (child.className || "").includes("chat-edit-cancel-btn"));
+  cancelBtn.click();
+  await settle();
+
+  assert.equal(input.value, "draft before edit",
+    "cancel edit must restore the previous composer draft");
+  assert.equal(document.getElementById("send-btn").textContent, "Send",
+    "cancel edit must restore normal send button text");
+  console.log("  testTask211CancelEditRestoresDraft PASS");
+}
+
+async function testTask211EscCancelsEdit() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "esc editable", { noHistory: true });
+  const menu = await openContextMenuForMessage(document, 0);
+  contextMenuItem(menu, "編輯").click();
+  await settle();
+
+  document.getElementById("message-input").dispatchEvent({
+    type: "keydown",
+    key: "Escape",
+    preventDefault() {},
+  });
+  await settle();
+
+  assert.equal(document.getElementById("send-btn").textContent, "Send",
+    "Esc must leave edit mode");
+  assert.ok(textOf(document, "clear-chat-status").includes("已取消編輯"),
+    "Esc cancel must show clean cancel status");
+  console.log("  testTask211EscCancelsEdit PASS");
+}
+
+async function testTask211SubmitReplacesOnlyLastUserAndAdjacentPet() {
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({}),
+      chatHistoryAppend: async () => ({}),
+    },
+  });
+  sandbox.appendMessage("user", "old user stays", { noHistory: true });
+  sandbox.appendMessage("pet", "old pet stays", { noHistory: true, source: "full_app" });
+  sandbox.appendMessage("user", "last typo question", { noHistory: true });
+  sandbox.appendMessage("pet", "last answer should go", { noHistory: true, source: "full_app" });
+  await startEditLastUserMessage(document);
+  document.getElementById("message-input").value = "edited question";
+
+  document.getElementById("send-btn").click();
+  await settle();
+
+  const transcript = sandbox.buildChatTranscript();
+  assert.ok(transcript.includes("old user stays"), "older user message must remain");
+  assert.ok(transcript.includes("old pet stays"), "older pet reply must remain");
+  assert.ok(transcript.includes("edited question"), "edited user message must appear");
+  assert.ok(!transcript.includes("last typo question"), "last old user text must be replaced");
+  assert.ok(!transcript.includes("last answer should go"), "old adjacent pet reply must be removed");
+  assert.ok(transcript.includes("Hmph, local dragon reply."), "new pet reply must be rendered");
+  console.log("  testTask211SubmitReplacesOnlyLastUserAndAdjacentPet PASS");
+}
+
+async function testTask211SubmitCallsChatOnceWithEditedText() {
+  const { document, state, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({}),
+      chatHistoryAppend: async () => ({}),
+    },
+  });
+  sandbox.appendMessage("user", "before edit", { noHistory: true });
+  const menu = await openContextMenuForMessage(document, 0);
+  contextMenuItem(menu, "編輯").click();
+  await settle();
+  state.calls.length = 0;
+  document.getElementById("message-input").value = "after edit";
+
+  document.getElementById("send-btn").click();
+  await settle();
+
+  const chatCalls = state.calls.filter((call) => call.url.endsWith("/chat"));
+  assert.equal(chatCalls.length, 1, "submit edit must call /chat exactly once");
+  assert.equal(JSON.parse(chatCalls[0].body).message, "after edit",
+    "submit edit must send edited text to /chat");
+  console.log("  testTask211SubmitCallsChatOnceWithEditedText PASS");
+}
+
+async function testTask211HistoryPersistenceRewrittenWithEditedUserAndNewReply() {
+  let clearCalls = 0;
+  const appended = [];
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => { clearCalls += 1; return {}; },
+      chatHistoryAppend: (entry) => { appended.push(entry); return Promise.resolve({}); },
+    },
+  });
+  sandbox.appendMessage("user", "history old user", { noHistory: true });
+  sandbox.appendMessage("pet", "history old pet", { noHistory: true, source: "full_app" });
+  await startEditLastUserMessage(document);
+  document.getElementById("message-input").value = "history edited user";
+
+  document.getElementById("send-btn").click();
+  await settle();
+
+  assert.equal(clearCalls, 2, "edit submit must rewrite history before and after new reply");
+  const finalEntries = appended.slice(-2);
+  assert.deepEqual(finalEntries.map((entry) => entry.role), ["user", "pet"]);
+  assert.equal(finalEntries[0].text, "history edited user");
+  assert.equal(finalEntries[1].text, "Hmph, local dragon reply.");
+  console.log("  testTask211HistoryPersistenceRewrittenWithEditedUserAndNewReply PASS");
+}
+
+async function testTask211DateSeparatorsAndTimestampTooltipAfterEdit() {
+  const TS1 = 1748693400000;
+  const TS2 = TS1 + 86400000;
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({}),
+      chatHistoryAppend: async () => ({}),
+    },
+  });
+  sandbox.appendMessage("user", "day one edit", { noHistory: true, ts: TS1 });
+  sandbox.appendMessage("pet", "day two old reply", { noHistory: true, ts: TS2, source: "full_app" });
+  await startEditLastUserMessage(document);
+  document.getElementById("message-input").value = "day one edited";
+
+  document.getElementById("send-btn").click();
+  await settle();
+
+  assert.ok(dateSeparators(document).length >= 1,
+    "edit submit must re-render date separators");
+  const edited = formalMessages(document).find((msg) => msg.dataset.msgText === "day one edited");
+  const meta = edited.children.find((child) => (child.className || "").includes("msg-meta"));
+  assert.ok(meta && meta.title && /\d{4}-\d{2}-\d{2}/.test(meta.title),
+    "edited user message must have full timestamp tooltip");
+  console.log("  testTask211DateSeparatorsAndTimestampTooltipAfterEdit PASS");
+}
+
+async function testTask211CopyExportUseEditedContent() {
+  const saveTextFileCalls = [];
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({}),
+      chatHistoryAppend: async () => ({}),
+      saveTextFile(payload) {
+        saveTextFileCalls.push(payload);
+        return Promise.resolve({ ok: true, canceled: false });
+      },
+    },
+  });
+  sandbox.appendMessage("user", "copy old user", { noHistory: true });
+  sandbox.appendMessage("pet", "copy old pet", { noHistory: true, source: "full_app" });
+  await startEditLastUserMessage(document);
+  document.getElementById("message-input").value = "copy edited user";
+
+  document.getElementById("send-btn").click();
+  await settle();
+  document.getElementById("export-chat-btn").click();
+  await settle();
+
+  const transcript = sandbox.buildChatTranscript();
+  assert.ok(transcript.includes("copy edited user"), "copy transcript must include edited user text");
+  assert.ok(!transcript.includes("copy old user"), "copy transcript must exclude old user text");
+  assert.equal(saveTextFileCalls.length, 1, "export must run after edit submit");
+  assert.ok(saveTextFileCalls[0].content.includes("copy edited user"),
+    "export content must include edited user text");
+  console.log("  testTask211CopyExportUseEditedContent PASS");
+}
+
+async function testTask211SearchActiveContextMenuAndSubmitClearsSearch() {
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({}),
+      chatHistoryAppend: async () => ({}),
+    },
+  });
+  sandbox.appendMessage("user", "search edit keyword", { noHistory: true });
+  searchChat(document, "keyword");
+  const menu = await openContextMenuForMessage(document, 0);
+  assert.ok(contextMenuItem(menu, "編輯"),
+    "edit option must exist for last user while search is active");
+
+  contextMenuItem(menu, "編輯").click();
+  await settle();
+  document.getElementById("message-input").value = "search edited replacement";
+  document.getElementById("send-btn").click();
+  await settle();
+
+  assert.equal(document.getElementById("chat-search-input").value, "",
+    "submit edit may clear search to avoid stale filter state");
+  assert.equal(textOf(document, "chat-search-count"), "",
+    "submit edit must clear search count");
+  assert.ok(sandbox.buildChatTranscript().includes("search edited replacement"));
+  console.log("  testTask211SearchActiveContextMenuAndSubmitClearsSearch PASS");
+}
+
+async function testTask211EditAndCancelDoNotTriggerChatOrPet() {
+  const speechUpdates = [];
+  const { document, state, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({}),
+      chatHistoryAppend: async () => ({}),
+      updatePetSpeech(payload) { speechUpdates.push(payload); return Promise.resolve({ ok: true }); },
+    },
+  });
+  sandbox.appendMessage("user", "no side effect edit", { noHistory: true });
+  state.calls.length = 0;
+  speechUpdates.length = 0;
+
+  const menu = await openContextMenuForMessage(document, 0);
+  contextMenuItem(menu, "編輯").click();
+  await settle();
+  sandbox.cancelEditUserMessage();
+  await settle();
+
+  assert.equal(state.calls.filter((call) => call.url.endsWith("/chat")).length, 0,
+    "edit/cancel must not trigger /chat");
+  assert.equal(speechUpdates.length, 0,
+    "edit/cancel must not call updatePetSpeech / Pet Bubble");
+  console.log("  testTask211EditAndCancelDoNotTriggerChatOrPet PASS");
+}
+
+async function testTask211OldUserEditCannotTrigger() {
+  const { document, state, sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "old impossible edit", { noHistory: true });
+  sandbox.appendMessage("pet", "old reply", { noHistory: true, source: "full_app" });
+  sandbox.appendMessage("user", "latest user", { noHistory: true });
+
+  const oldUser = formalMessages(document)[0];
+  const started = sandbox.startEditUserMessage(oldUser);
+  await settle();
+
+  assert.equal(started, false, "old user message must not enter edit state");
+  assert.equal(document.getElementById("message-input").value, "",
+    "old user edit attempt must not populate composer");
+  assert.equal(state.calls.filter((call) => call.url.endsWith("/chat")).length, 0,
+    "old user edit attempt must not trigger /chat");
+  console.log("  testTask211OldUserEditCannotTrigger PASS");
+}
+
+async function testTask211ContextMenuCopyAndDeleteStillWork() {
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({}),
+      chatHistoryAppend: async () => ({}),
+    },
+  });
+  sandbox.appendMessage("user", "context copy delete", { noHistory: true });
+  let menu = await openContextMenuForMessage(document, 0);
+  contextMenuItem(menu, "複製").click();
+  await settle();
+  assert.equal(contextMenu(document), undefined, "copy action must close context menu");
+
+  menu = await openContextMenuForMessage(document, 0);
+  contextMenuItem(menu, "刪除").click();
+  await settle();
+  assert.ok(!sandbox.buildChatTranscript().includes("context copy delete"),
+    "delete action from context menu must remove selected message");
+  console.log("  testTask211ContextMenuCopyAndDeleteStillWork PASS");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -5616,8 +6064,8 @@ async function main() {
   testTask196CopyChatButtonInHtml();
   testTask196CopyFunctionsExist();
   testTask196CopyAllSelectorOnlyUserPet();
-  testTask196MsgCopyBtnCssExists();
-  await testTask196CopyBtnAppendedToPetBubble();
+  testTask196MessageActionsUseContextMenuCss();
+  await testTask196NoHoverActionButtonsAppendedToPetBubble();
   await testTask196ClipboardUnavailableNocrash();
   testTask196CopyPrefersBridge();
   testTask196NavigatorFallbackExists();
@@ -5782,8 +6230,8 @@ async function main() {
   await testTask209CopyExportAfterUndo();
   // TASK-210: Single Message Delete / Undo
   testTask210FunctionsAndCssExist();
-  await testTask210FormalMessagesHaveDeleteButton();
-  await testTask210NonFormalMessagesHaveNoDeleteButton();
+  await testTask210FormalMessagesHaveContextDelete();
+  await testTask210NonFormalMessagesHaveNoContextDelete();
   await testTask210DeleteOnlySelectedMessage();
   await testTask210DeleteRewritesHistoryPersistence();
   await testTask210DeleteRefreshesDateSeparators();
@@ -5795,6 +6243,29 @@ async function main() {
   await testTask210SearchActiveDeleteKeepsHighlightNavigation();
   await testTask210CopyExportAfterDeleteAndUndo();
   await testTask210DeleteUndoDoesNotTriggerChatOrPet();
+  // TASK-211: Message Context Menu + Edit Last User Message Only
+  testTask211FunctionsAndCssExist();
+  await testTask211UserMessageHasNoHoverButtons();
+  await testTask211PetMessageHasNoHoverButtons();
+  await testTask211RightClickUserShowsContextMenu();
+  await testTask211RightClickPetHasNoEdit();
+  await testTask211LastUserMessageHasEditOption();
+  await testTask211NonLastUserMessageHasNoEditOption();
+  await testTask211NonFormalMessagesHaveNoContextMenu();
+  await testTask211ClickOutsideClosesContextMenu();
+  await testTask211EscClosesContextMenu();
+  await testTask211EditLastUserFillsInputAndFocuses();
+  await testTask211CancelEditRestoresDraft();
+  await testTask211EscCancelsEdit();
+  await testTask211SubmitReplacesOnlyLastUserAndAdjacentPet();
+  await testTask211SubmitCallsChatOnceWithEditedText();
+  await testTask211HistoryPersistenceRewrittenWithEditedUserAndNewReply();
+  await testTask211DateSeparatorsAndTimestampTooltipAfterEdit();
+  await testTask211CopyExportUseEditedContent();
+  await testTask211SearchActiveContextMenuAndSubmitClearsSearch();
+  await testTask211EditAndCancelDoNotTriggerChatOrPet();
+  await testTask211OldUserEditCannotTrigger();
+  await testTask211ContextMenuCopyAndDeleteStillWork();
   console.log("renderer chat smoke: PASS");
 }
 

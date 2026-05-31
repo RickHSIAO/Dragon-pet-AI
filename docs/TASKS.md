@@ -20816,3 +20816,124 @@ Let users delete one formal user/pet chat message without clearing the whole con
 | Search interaction: deleting during active search does not break filter/highlight/navigation; after undo the message can be found again | PASS |
 | History persistence: non-undone deletes stay deleted after app restart; restored messages remain after app restart | PASS |
 | Regression: copy/export clipboard, chat export file, unread title badge, Pet unread dot, smooth auto-scroll/`↓ 新訊息`, Pet Window, Voice, STT, and TTS | PASS |
+
+---
+
+## TASK-211 | Message Context Menu + Edit Last User Message Only
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-31
+
+### Goal
+
+Let users access per-message actions through a lightweight right-click context menu, while limiting edit/resend to the last formal user message only so older conversation history cannot be rewritten out of order.
+
+### Scope
+
+- `renderer.js`: add custom message context menu, remove all hover message action buttons, restrict edit composer state to the last formal user message, replace only its adjacent pet reply, re-render chat entries, rewrite history through existing chat-history IPC, and resend to `/chat` only on edited submit.
+- `styles.css`: add low-key `.chat-context-menu` / `.chat-context-menu-item` styling and compact cancel-edit button styling.
+- `renderer-chat-smoke.js`: +22 TASK-211 tests covering no hover action buttons, right-click menu, user/pet options, last-user-only edit gating, non-formal exclusions, menu outside/Esc close, focus/cancel/Esc, submit/resend, history rewrite, date separators, timestamp tooltip, search reset, copy/delete/export, and no edit/cancel side effects.
+- `docs/ROADMAP.md`, `docs/TASKS.md`, `README.md`: status/docs sync.
+- No backend, new IPC, chat API schema, chat history persistence format, Pet Window runtime, Ollama/provider runtime, Screen Context, vision, or multimodal change.
+
+### Design Decisions
+
+| Decision | Detail |
+|---|---|
+| Context menu entry point | Formal user/pet messages open a custom right-click menu; browser native context menu is prevented for these messages |
+| Hover actions removed | No `複製` / `刪除` / `編輯` buttons are appended to message bubbles; all per-message actions go through the context menu |
+| Last-user-only edit | `編輯` appears only for the last formal `role === "user"` entry, with at most one trailing adjacent pet reply |
+| Non-editable entries | Pet/status/startup/date separators never show edit, and non-formal entries do not open the context menu |
+| Dataset-only source | Edit reads `dataset.msgText`, `dataset.source`, `dataset.ts`, and formal DOM order; it never reads raw HTML |
+| Draft-safe cancel | Starting edit stores the current composer draft; cancel/Esc restores that draft and does not persist edit state |
+| Replace adjacent stale reply | Edited submit updates the last user entry and removes only the immediately following pet entry before resending |
+| Existing persistence path | History is rewritten with existing `chatHistoryClear` + `chatHistoryAppend`; no new IPC or persistence format |
+| Re-render after mutation | Edit submit rebuilds `#chat-area` with `appendMessage(..., noHistory:true)` so date separators and timestamp tooltips are regenerated |
+| Search reset on submit | Active search is cleared after edited submit to avoid stale hidden/highlight state during resend |
+| No extra side effects | Edit/cancel do not call `/chat`, Pet Bubble, or TTS; only edited submit calls `/chat` once |
+
+### Files Changed
+
+| File | Change |
+|---|---|
+| `apps/desktop/src/renderer/renderer.js` | Added custom context menu state/helpers, last-user edit guard, edit composer state, cancel helpers, edited submit/resend flow, adjacent pet reply replacement, history rewrite, and final pet reply re-render/persist |
+| `apps/desktop/src/renderer/styles.css` | Added `.chat-context-menu`, `.chat-context-menu-item`, and `.chat-edit-cancel-btn` styling; removed hover edit styling |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | Replaced hover-action tests with TASK-211 no-hover-buttons, context-menu, and last-user-only edit coverage |
+| `docs/ROADMAP.md` | Added TASK-211 status and moved next planned task to TASK-212 after visual smoke |
+| `docs/TASKS.md` | Added this TASK-211 record |
+| `README.md` | Updated because README still named TASK-210 as latest and TASK-211 as next |
+
+### Test Coverage
+
+| Test | What it verifies |
+|---|---|
+| `testTask211FunctionsAndCssExist` | Context-menu helpers, last-user edit guard, edit state, and CSS affordance exist; hover edit button is absent |
+| `testTask211UserMessageHasNoHoverButtons` | User messages do not append hover copy/delete/edit buttons |
+| `testTask211PetMessageHasNoHoverButtons` | Pet messages do not append hover copy/delete/edit buttons |
+| `testTask211RightClickUserShowsContextMenu` | Right-clicking a formal user message shows copy/delete/edit when it is editable |
+| `testTask211RightClickPetHasNoEdit` | Right-clicking a formal pet message shows copy/delete but no edit |
+| `testTask211LastUserMessageHasEditOption` | The last formal user message has edit option |
+| `testTask211NonLastUserMessageHasNoEditOption` | Older user messages do not show edit option |
+| `testTask211NonFormalMessagesHaveNoContextMenu` | Startup greeting, status messages, and date separators do not open the menu |
+| `testTask211ClickOutsideClosesContextMenu` | Outside click closes the context menu |
+| `testTask211EscClosesContextMenu` | Esc closes the context menu |
+| `testTask211EditLastUserFillsInputAndFocuses` | Editing the last user message fills/focuses the composer and shows last-message status |
+| `testTask211CancelEditRestoresDraft` | Cancel restores the previous composer draft |
+| `testTask211EscCancelsEdit` | Esc cancels edit state from the composer |
+| `testTask211SubmitReplacesOnlyLastUserAndAdjacentPet` | Edited submit updates only the last user text and removes only its adjacent old pet reply |
+| `testTask211SubmitCallsChatOnceWithEditedText` | Edited submit calls `/chat` once with the corrected text |
+| `testTask211HistoryPersistenceRewrittenWithEditedUserAndNewReply` | History persistence is rewritten with edited user entry and new pet reply |
+| `testTask211DateSeparatorsAndTimestampTooltipAfterEdit` | Date separators and timestamp tooltip remain correct after edit/resend |
+| `testTask211CopyExportUseEditedContent` | Copy/export use edited text and new reply |
+| `testTask211SearchActiveContextMenuAndSubmitClearsSearch` | Context menu edit works while search is active; submit clears search state |
+| `testTask211EditAndCancelDoNotTriggerChatOrPet` | Edit/cancel do not call `/chat` or Pet speech bridge |
+| `testTask211OldUserEditCannotTrigger` | Older user messages cannot enter edit state even if helper is called directly |
+| `testTask211ContextMenuCopyAndDeleteStillWork` | Context menu copy/delete actions work and close the menu |
+
+### Automated Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+22 TASK-211 tests) |
+| `pet-window-smoke.js` | PASS — 60 checks |
+| `pet-renderer-smoke.js` | PASS — 237 checks |
+| `git diff --check` | CLEAN (CRLF warnings only, no whitespace errors) |
+
+### Acceptance Criteria
+
+- [x] Formal user/pet messages open a custom context menu on right-click ✓
+- [x] Hover copy/delete/edit action buttons removed ✓
+- [x] Pet messages show copy/delete but no edit ✓
+- [x] Only the last formal user message shows edit ✓
+- [x] Older user messages cannot enter edit state ✓
+- [x] Status/startup/date separator entries do not open context menu ✓
+- [x] Outside click and Esc close context menu ✓
+- [x] Editing the last user fills and focuses the composer ✓
+- [x] Edit state can be cancelled by button or Esc ✓
+- [x] Edited submit updates last user text and removes adjacent old pet reply ✓
+- [x] Edited submit calls `/chat` once for a new pet reply ✓
+- [x] History persistence is rewritten through existing IPC ✓
+- [x] Date separators and timestamp tooltips are rebuilt correctly ✓
+- [x] Empty state updates from the re-rendered formal conversation ✓
+- [x] Search remains usable and is cleared on edited submit ✓
+- [x] Copy/export use the edited conversation state ✓
+- [x] Edit/cancel do not trigger `/chat`, Pet Bubble, or TTS ✓
+- [x] No backend, new IPC, history format, chat API schema, Pet Window, provider, Screen Context, vision, or multimodal change ✓
+- [x] `renderer-chat-smoke.js` PASS ✓
+- [x] `pet-window-smoke.js` PASS ✓
+- [x] `pet-renderer-smoke.js` PASS ✓
+- [x] `git diff --check` CLEAN ✓
+- [x] Windows visual smoke PASS ✓
+
+### Windows Visual Smoke Results (2026-06-01)
+
+| Scenario | Result |
+|---|---|
+| Hover actions removed: user/pet message hover no longer shows "複製", "刪除", or "編輯" | PASS |
+| Context menu: right-clicking formal user/pet messages shows the custom menu; both have "複製" and "刪除" | PASS |
+| Edit last user message only: only the last formal user message shows "編輯"; old user messages and pet messages do not | PASS |
+| Non-message boundaries: status messages, startup greeting, and date separators do not show the context menu | PASS |
+| Menu close: clicking outside the menu or pressing Esc closes the context menu | PASS |
+| Edit / resend: edit fills the input with original text, shows "正在編輯最後一則訊息", cancel does not call `/chat` or change history, submit updates the last user message, removes the adjacent old pet reply, and generates a new pet reply | PASS |
+| History persistence: after restart, edited user message and new pet reply remain; removed old pet reply does not return | PASS |
+| Regression: copy/delete, search/filter/highlight/navigation, copy/export transcript, date separator/timestamp tooltip, single-message delete/undo, clear chat/undo, Pet Window, Voice, STT, and TTS | PASS |
