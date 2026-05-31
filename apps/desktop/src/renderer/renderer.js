@@ -566,6 +566,10 @@ let awayGreetingFired    = false;
 const HINT_LOCK_MS = 8 * 1000; // 8 seconds
 let hintLockedUntil = 0;       // epoch ms; 0 = always unlocked
 
+// TASK-200: unread indicator — counts new pet replies while Full App is not focused.
+let unreadChatCount = 0;
+const UNREAD_BASE_TITLE = "Dragon Pet AI";
+
 // TASK-113: smarter auto-scroll helpers — user sends always scroll,
 // AI replies only scroll when user is already near the bottom.
 const CHAT_NEAR_BOTTOM_THRESHOLD_PX = 80;
@@ -844,6 +848,17 @@ function copyAllChat() {
   });
 }
 
+// TASK-200: title-based unread indicator for background pet replies.
+function markUnread() {
+  unreadChatCount += 1;
+  document.title = `(${unreadChatCount}) Dragon Pet AI`;
+}
+function clearUnread() {
+  if (unreadChatCount === 0) return;
+  unreadChatCount = 0;
+  document.title = UNREAD_BASE_TITLE;
+}
+
 function appendMessage(role, text, { autoScroll = false, noHistory = false, source = "unknown", ts = 0 } = {}) {
   const wrap = document.createElement("div");
   wrap.className = `message ${role}`;
@@ -895,6 +910,10 @@ function appendMessage(role, text, { autoScroll = false, noHistory = false, sour
   // TASK-194: persist user/pet messages only; skip ephemeral roles and history-load replay.
   if (!noHistory && (role === "user" || role === "pet")) {
     saveChatHistoryEntry(role, text, source);
+  }
+  // TASK-200: badge real pet replies while Full App is hidden / not focused.
+  if (role === "pet" && !noHistory && document.hidden) {
+    markUnread();
   }
   return wrap;
 }
@@ -2412,6 +2431,14 @@ if (typeof window !== "undefined" && typeof window.addEventListener === "functio
 }
 if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
   document.addEventListener("pointerdown", resetActivity);
+}
+
+// TASK-200: clear unread indicator when Full App regains focus or becomes visible.
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) clearUnread();
+});
+if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+  window.addEventListener("focus", clearUnread);
 }
 
 // ---------------------------------------------------------------------------

@@ -146,6 +146,10 @@ class FakeDocument {
     this.elements = new Map();
     // TASK-108: support document.addEventListener (used by idle timer pointerdown guard)
     this._docListeners = {};
+    // TASK-200: Page Visibility API stub (default: window is visible / focused)
+    this.hidden = false;
+    // TASK-200: document.title stub (matches the <title> in index.html)
+    this.title = "Dragon Pet AI";
   }
 
   // TASK-108: document-level event listener registration (idle timer guard)
@@ -3149,6 +3153,99 @@ async function testTask199EscNoChatFetch() {
   assert.equal(chatCalls.length, 0, "Esc must never trigger a /chat fetch");
 }
 
+// ─── TASK-200: Full App Unread / Attention Badge for Pet Replies ─────────────
+
+function testTask200UnreadStateExists() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("unreadChatCount"), "renderer.js must define unreadChatCount");
+  assert.ok(src.includes("UNREAD_BASE_TITLE"), "renderer.js must define UNREAD_BASE_TITLE");
+  assert.ok(src.includes("function markUnread"), "renderer.js must define markUnread()");
+  assert.ok(src.includes("function clearUnread"), "renderer.js must define clearUnread()");
+  assert.ok(src.includes("visibilitychange"), "renderer.js must listen for visibilitychange");
+  assert.ok(src.includes("document.hidden"), "renderer.js must check document.hidden");
+}
+
+async function testTask200PetMessageWhileHiddenIncrementsTitle() {
+  const { document, sandbox } = await loadRenderer();
+  document.hidden = true;
+  sandbox.appendMessage("pet", "reply while hidden", { noHistory: false });
+  assert.match(document.title, /^\(\d+\)/, "title must show unread count badge when pet message arrives while hidden");
+}
+
+async function testTask200PetMessageWhileFocusedNoUnread() {
+  const { document, sandbox } = await loadRenderer();
+  document.hidden = false;
+  const titleBefore = document.title;
+  sandbox.appendMessage("pet", "reply while focused", { noHistory: false });
+  assert.equal(document.title, titleBefore, "title must not change when window is focused/visible");
+}
+
+async function testTask200NoHistoryPetNoUnread() {
+  const { document, sandbox } = await loadRenderer();
+  document.hidden = true;
+  const titleBefore = document.title;
+  sandbox.appendMessage("pet", "startup greeting", { noHistory: true });
+  assert.equal(document.title, titleBefore, "noHistory pet message (startup/restore) must not trigger unread badge");
+}
+
+async function testTask200StatusMessageNoUnread() {
+  const { document, sandbox } = await loadRenderer();
+  document.hidden = true;
+  const titleBefore = document.title;
+  sandbox.appendMessage("status", "some status text");
+  assert.equal(document.title, titleBefore, "status message must not trigger unread badge");
+}
+
+async function testTask200UserMessageNoUnread() {
+  const { document, sandbox } = await loadRenderer();
+  document.hidden = true;
+  const titleBefore = document.title;
+  sandbox.appendMessage("user", "user message while hidden", { noHistory: false });
+  assert.equal(document.title, titleBefore, "user message must not trigger unread badge (only pet replies do)");
+}
+
+async function testTask200MultipleRepliesAccumulateCount() {
+  const { document, sandbox } = await loadRenderer();
+  document.hidden = true;
+  sandbox.appendMessage("pet", "reply one",   { noHistory: false });
+  sandbox.appendMessage("pet", "reply two",   { noHistory: false });
+  sandbox.appendMessage("pet", "reply three", { noHistory: false });
+  assert.match(document.title, /^\(3\)/, "three background pet replies must accumulate to (3) badge");
+}
+
+async function testTask200VisibilityChangeClearsUnread() {
+  const { document, sandbox } = await loadRenderer();
+  document.hidden = true;
+  sandbox.appendMessage("pet", "reply while hidden", { noHistory: false });
+  assert.match(document.title, /^\(\d+\)/, "unread badge must be set before clear");
+  // Simulate page becoming visible
+  document.hidden = false;
+  document.dispatchEvent({ type: "visibilitychange" });
+  assert.equal(document.title, "Dragon Pet AI", "visibilitychange must clear unread badge and restore original title");
+}
+
+async function testTask200ClearUnreadNoChatFetch() {
+  const { document, sandbox, state } = await loadRenderer();
+  document.hidden = true;
+  sandbox.appendMessage("pet", "badge reply", { noHistory: false });
+  document.hidden = false;
+  document.dispatchEvent({ type: "visibilitychange" });
+  await settle();
+  const chatCalls = state.calls.filter((c) => c.url && c.url.endsWith("/chat"));
+  assert.equal(chatCalls.length, 0, "clearing unread must never trigger a /chat fetch");
+}
+
+async function testTask200FullAppChatPetReplyAlsoUnread() {
+  // Full App /chat response also goes through appendMessage("pet") — should also badge.
+  const { document, state } = await loadRenderer();
+  document.hidden = true;
+  // Trigger a full app chat while window is hidden
+  document.getElementById("message-input").value = "test while hidden";
+  document.getElementById("send-btn").click();
+  await settle();
+  assert.match(document.title, /^\(\d+\)/, "Full App chat pet reply while window is hidden must also badge");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -3330,6 +3427,17 @@ async function main() {
   await testTask199EscRestoresMessages();
   await testTask199EscBlursWhenEmpty();
   await testTask199EscNoChatFetch();
+  // TASK-200: Full App Unread / Attention Badge for Pet Replies
+  testTask200UnreadStateExists();
+  await testTask200PetMessageWhileHiddenIncrementsTitle();
+  await testTask200PetMessageWhileFocusedNoUnread();
+  await testTask200NoHistoryPetNoUnread();
+  await testTask200StatusMessageNoUnread();
+  await testTask200UserMessageNoUnread();
+  await testTask200MultipleRepliesAccumulateCount();
+  await testTask200VisibilityChangeClearsUnread();
+  await testTask200ClearUnreadNoChatFetch();
+  await testTask200FullAppChatPetReplyAlsoUnread();
   console.log("renderer chat smoke: PASS");
 }
 

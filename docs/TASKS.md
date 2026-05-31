@@ -19677,3 +19677,112 @@ No HTML or CSS changes required.
 | 5 | Textarea + Ctrl+F: no chat sent; search bar focuses correctly | PASS |
 | 6 | Textarea + Esc: textarea not cleared; no /chat sent | PASS |
 | 7 | Regression: Pet Bubble / Voice / STT / TTS / History restore / Copy-export / Search-filter | PASS |
+
+---
+
+## TASK-200 | Full App Unread / Attention Badge for Pet Replies
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-31
+
+### Goal
+
+When Full App is hidden or unfocused and a new Pet reply (from Full App `/chat` or Pet mirror) arrives, update the window title with an unread count badge. Clear the badge when the user returns to Full App.
+
+### Design
+
+**Unread state:**
+- `let unreadChatCount = 0` — counts unread pet replies.
+- `const UNREAD_BASE_TITLE = "Dragon Pet AI"` — restored on clear.
+
+**`markUnread()`:**
+- Increments `unreadChatCount`.
+- Sets `document.title = `(${unreadChatCount}) Dragon Pet AI``.
+
+**`clearUnread()`:**
+- Guard: no-op if `unreadChatCount === 0`.
+- Resets count to 0 and restores `document.title = UNREAD_BASE_TITLE`.
+
+**Trigger in `appendMessage()`:**
+- Condition: `role === "pet" && !noHistory && document.hidden`.
+- `noHistory: true` excludes: startup greeting, history restore replay.
+- `role !== "pet"` excludes: user, status, error, loading messages.
+- Both Full App `/chat` replies and Pet mirror replies pass through `appendMessage("pet", ...)` and both badge when the window is hidden — intentional.
+
+**Clear on visibility / focus:**
+- `document.addEventListener("visibilitychange", ...)` — clears when `document.hidden` becomes `false`.
+- `window.addEventListener("focus", clearUnread)` — clears on window focus (Belt-and-suspenders alongside visibilitychange).
+
+**Scope:**
+- `document.title` only — no new DOM element, no CSS, no notification API, no IPC, no tray badge.
+- No HTML or CSS changes.
+- Full App only — Pet Window, TTS, history are all unaffected.
+
+### Files Modified
+
+| File | Change | Runtime? |
+|---|---|---|
+| `apps/desktop/src/renderer/renderer.js` | `unreadChatCount` + `UNREAD_BASE_TITLE` state; `markUnread()` / `clearUnread()` functions; unread check in `appendMessage()`; visibilitychange + focus clear listeners | Yes |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | `FakeDocument.hidden = false` + `FakeDocument.title = "Dragon Pet AI"` stubs; 10 TASK-200 tests | No |
+
+### Test Coverage
+
+| Test | Type | What it verifies |
+|---|---|---|
+| `testTask200UnreadStateExists` | static | `unreadChatCount`, `UNREAD_BASE_TITLE`, `markUnread`, `clearUnread`, `visibilitychange`, `document.hidden` all in renderer.js |
+| `testTask200PetMessageWhileHiddenIncrementsTitle` | dynamic | Pet message with `document.hidden=true` → title shows `(N)` badge |
+| `testTask200PetMessageWhileFocusedNoUnread` | dynamic | Pet message with `document.hidden=false` → title unchanged |
+| `testTask200NoHistoryPetNoUnread` | dynamic | `noHistory:true` pet message (startup/restore) → no badge |
+| `testTask200StatusMessageNoUnread` | dynamic | `role="status"` → no badge |
+| `testTask200UserMessageNoUnread` | dynamic | `role="user"` while hidden → no badge |
+| `testTask200MultipleRepliesAccumulateCount` | dynamic | 3 hidden pet replies → title shows `(3)` |
+| `testTask200VisibilityChangeClearsUnread` | dynamic | Firing `visibilitychange` with `hidden=false` restores title to "Dragon Pet AI" |
+| `testTask200ClearUnreadNoChatFetch` | dynamic | Clearing unread never triggers `/chat` |
+| `testTask200FullAppChatPetReplyAlsoUnread` | dynamic | Full App `/chat` pet reply while hidden also badges title |
+
+### Safety / Privacy Boundaries
+
+| Constraint | Implementation |
+|---|---|
+| No data mutation | `markUnread` only increments counter + sets `document.title` |
+| No history write | Neither `markUnread` nor `clearUnread` call `appendMessage` or `saveChatHistoryEntry` |
+| No /chat fetch | Neither function has a `fetch` call |
+| No new IPC | No new `ipcRenderer.invoke` or `ipcMain.handle` |
+| No backend change | No routes.py / service changes |
+| No Pet Window impact | Logic is in Full App renderer only |
+| No notification API | Only `document.title` — no OS notifications, no tray badge |
+| Startup greeting excluded | `{ noHistory: true }` flag prevents startup/restore messages from badging |
+
+### Automated Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+10 TASK-200 tests) |
+| `pet-renderer-smoke.js` | PASS — 233 checks (Pet Window untouched) |
+| `pet-window-smoke.js` | PASS — 55 checks (IPC/preload untouched) |
+
+### Acceptance Criteria
+
+- [x] `unreadChatCount` / `markUnread()` / `clearUnread()` implemented ✓
+- [x] Pet reply while hidden → title shows `(N) Dragon Pet AI` ✓
+- [x] Pet reply while focused → title unchanged ✓
+- [x] `noHistory:true` pet messages excluded ✓
+- [x] Status / user / error messages excluded ✓
+- [x] Multiple replies accumulate count ✓
+- [x] visibilitychange clears badge and restores title ✓
+- [x] window focus also clears badge ✓
+- [x] clearUnread is a no-op when count is already 0 ✓
+- [x] No backend, IPC, history, /chat, or Pet Window change ✓
+- [x] All three smoke suites PASS ✓
+- [x] Windows visual smoke PASS ✓
+
+### Windows Visual Smoke Results (2026-05-31)
+
+| # | Scenario | Result |
+|---|---|---|
+| 1 | Full App focused: normal chat; title stays "Dragon Pet AI"; no badge | PASS |
+| 2 | Full App minimized → Pet Window reply → cut back: title shows "(1) Dragon Pet AI"; restores on focus | PASS |
+| 3 | Full App in background (not minimized): AI reply badges title | PASS |
+| 4 | Multiple hidden replies accumulate unread count | PASS |
+| 5 | Startup / history restore: no unread badge triggered | PASS |
+| 6 | Regression: Chat search / Ctrl+F / Esc / copy-export / Pet Window / Voice / STT / TTS | PASS |
