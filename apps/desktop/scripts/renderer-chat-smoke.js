@@ -2056,7 +2056,9 @@ async function testTask193MirrorFromPetAppendsUserAndReply() {
   mirrorCallback({ userMessage: "Hello via Pet", reply: "Hi from Christina", mood: "happy", source: "llm_local" });
   await settle();
 
-  const messages = chatArea.children.slice(beforeCount);
+  const all = chatArea.children.slice(beforeCount);
+  // TASK-207: a date-separator may be inserted before user — filter to user/pet only
+  const messages = all.filter((m) => !(m.className || "").includes("date-separator"));
   assert.equal(messages.length, 2, "mirror should append exactly 2 messages (user + pet)");
   const userMsg = messages[0].children.map((c) => c.textContent).join(" ");
   const petMsg  = messages[1].children.map((c) => c.textContent).join(" ");
@@ -2680,10 +2682,15 @@ function testTask196CopyFunctionsExist() {
 
 function testTask196CopyAllSelectorOnlyUserPet() {
   const src = fs.readFileSync(rendererPath, "utf8");
+  // TASK-207: selector now includes date-separator; user/pet must still be included, status/error excluded
   assert.ok(
-    src.includes('".message.user, .message.pet"') ||
-    src.includes("'.message.user, .message.pet'"),
-    "copyAllChat must query only .message.user and .message.pet — not status/error"
+    src.includes(".message.user") && src.includes(".message.pet"),
+    "buildChatTranscript must query .message.user and .message.pet"
+  );
+  assert.ok(
+    !src.includes('".message.user, .message.pet, .message.status"') &&
+    !src.includes('".message.user, .message.pet, .message.error"'),
+    "buildChatTranscript must not query status/error message types"
   );
 }
 
@@ -3071,10 +3078,10 @@ async function testTask198SearchDoesNotTriggerChat() {
 
 function testTask198CopyAllUnaffectedBySearch() {
   const src = fs.readFileSync(rendererPath, "utf8");
-  // copyAllChat uses querySelectorAll which returns elements regardless of display:none
+  // copyAllChat (via buildChatTranscript) uses querySelectorAll — returns all elements regardless of display:none
   assert.ok(
-    src.includes('chatArea.querySelectorAll(".message.user, .message.pet")'),
-    "copyAllChat must use querySelectorAll (returns all elements regardless of search filter)"
+    src.includes('chatArea.querySelectorAll(".message.user, .message.pet, .message.date-separator")'),
+    "buildChatTranscript must use querySelectorAll with date-separator (returns all elements regardless of search filter)"
   );
 }
 
@@ -3976,10 +3983,10 @@ function testTask205CopyAllChatUsesBuildTranscript() {
   const src = fs.readFileSync(rendererPath, "utf8");
   assert.ok(src.includes("buildChatTranscript"),
     "renderer.js must define and call buildChatTranscript");
-  // buildChatTranscript must still use querySelectorAll on chatArea (TASK-198 contract)
+  // buildChatTranscript must use querySelectorAll on chatArea including date-separator (TASK-207)
   assert.ok(
-    src.includes('chatArea.querySelectorAll(".message.user, .message.pet")'),
-    "buildChatTranscript must use chatArea.querySelectorAll"
+    src.includes('chatArea.querySelectorAll(".message.user, .message.pet, .message.date-separator")'),
+    "buildChatTranscript must use chatArea.querySelectorAll with date-separator"
   );
   console.log("  testTask205CopyAllChatUsesBuildTranscript PASS");
 }
@@ -4359,6 +4366,184 @@ async function testTask206ExportNewMessageIncludesTime() {
   console.log("  testTask206ExportNewMessageIncludesTime PASS");
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TASK-207: LINE-style Chat Date Separators
+// ─────────────────────────────────────────────────────────────────────────────
+
+function testTask207HelperFunctionsExist() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("function getMessageDateKey"), "renderer.js must define getMessageDateKey");
+  assert.ok(src.includes("function formatDateSeparatorLabel"), "renderer.js must define formatDateSeparatorLabel");
+  assert.ok(src.includes("function maybeInsertDateSeparator"), "renderer.js must define maybeInsertDateSeparator");
+  assert.ok(src.includes("let lastDateKey = null"), "renderer.js must declare lastDateKey state variable");
+  console.log("  testTask207HelperFunctionsExist PASS");
+}
+
+function testTask207GetMessageDateKeyTs0ReturnsNull() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  // ts=0 must return null (no separator for old/startup messages)
+  assert.ok(src.includes("if (!ts || ts <= 0) return null"), "getMessageDateKey must return null for ts=0");
+  console.log("  testTask207GetMessageDateKeyTs0ReturnsNull PASS");
+}
+
+async function testTask207DateSeparatorInsertedOnFirstMessage() {
+  const TS = 1748693400000; // 2025-05-31
+  const { document } = await loadRenderer();
+  const chatArea = document.getElementById("chat-area");
+  const initialCount = chatArea.children.length;
+
+  // appendMessage with ts > 0 must insert a separator div before the message
+  const { sandbox } = await loadRenderer();
+  const chatArea2 = document.getElementById("chat-area");
+  sandbox.appendMessage("user", "Hello", { noHistory: true, ts: TS });
+
+  const sepCandidates = chatArea.children.filter
+    ? chatArea.children.filter((c) => c.className && c.className.includes("date-separator"))
+    : Array.from({ length: chatArea.children.length }, (_, i) => chatArea.children[i])
+        .filter((c) => c.className && c.className.includes("date-separator"));
+
+  // Use a fresh renderer for clean test
+  const { document: doc2, sandbox: sb2 } = await loadRenderer();
+  const ca2 = doc2.getElementById("chat-area");
+  sb2.appendMessage("user", "Hello", { noHistory: true, ts: TS });
+  const seps = ca2.children.filter((c) => (c.className || "").includes("date-separator"));
+  assert.equal(seps.length, 1, "one date separator must be inserted before first message of the day");
+  console.log("  testTask207DateSeparatorInsertedOnFirstMessage PASS");
+}
+
+async function testTask207DateSeparatorNotDuplicatedSameDay() {
+  const TS1 = 1748693400000; // 2025-05-31 09:30
+  const TS2 = TS1 + 3600000; // same day, one hour later
+  const { document, sandbox } = await loadRenderer();
+  const chatArea = document.getElementById("chat-area");
+  sandbox.appendMessage("user", "First", { noHistory: true, ts: TS1 });
+  sandbox.appendMessage("pet", "Reply", { noHistory: true, ts: TS2 });
+  const seps = chatArea.children.filter((c) => (c.className || "").includes("date-separator"));
+  assert.equal(seps.length, 1, "same-day messages must share one date separator, not two");
+  console.log("  testTask207DateSeparatorNotDuplicatedSameDay PASS");
+}
+
+async function testTask207DateSeparatorInsertedForNewDay() {
+  const TS_DAY1 = 1748693400000; // 2025-05-31
+  const TS_DAY2 = TS_DAY1 + 86400000; // 2025-06-01
+  const { document, sandbox } = await loadRenderer();
+  const chatArea = document.getElementById("chat-area");
+  sandbox.appendMessage("user", "Day1", { noHistory: true, ts: TS_DAY1 });
+  sandbox.appendMessage("pet", "Day2", { noHistory: true, ts: TS_DAY2 });
+  const seps = chatArea.children.filter((c) => (c.className || "").includes("date-separator"));
+  assert.equal(seps.length, 2, "two different days must produce two date separators");
+  console.log("  testTask207DateSeparatorInsertedForNewDay PASS");
+}
+
+async function testTask207Ts0MessageNoSeparator() {
+  const { document, sandbox } = await loadRenderer();
+  const chatArea = document.getElementById("chat-area");
+  sandbox.appendMessage("user", "No timestamp", { noHistory: true, ts: 0 });
+  sandbox.appendMessage("pet", "No ts either", { noHistory: true });
+  const seps = chatArea.children.filter((c) => (c.className || "").includes("date-separator"));
+  assert.equal(seps.length, 0, "messages with ts=0 must not insert any date separator");
+  console.log("  testTask207Ts0MessageNoSeparator PASS");
+}
+
+async function testTask207StatusRoleNoSeparator() {
+  const TS = 1748693400000;
+  const { document, sandbox } = await loadRenderer();
+  const chatArea = document.getElementById("chat-area");
+  sandbox.appendMessage("status", "System message", { noHistory: true, ts: TS });
+  const seps = chatArea.children.filter((c) => (c.className || "").includes("date-separator"));
+  assert.equal(seps.length, 0, "status role messages must not trigger date separator");
+  console.log("  testTask207StatusRoleNoSeparator PASS");
+}
+
+async function testTask207SeparatorHasDivWithLabel() {
+  const TS = 1748693400000;
+  const { document, sandbox } = await loadRenderer();
+  const chatArea = document.getElementById("chat-area");
+  sandbox.appendMessage("user", "Hello", { noHistory: true, ts: TS });
+  const sep = chatArea.children.find((c) => (c.className || "").includes("date-separator"));
+  assert.ok(sep, "date separator element must exist");
+  assert.ok(sep.dataset && sep.dataset.dateKey, "separator must have dataset.dateKey");
+  const labelEl = sep.children.find((c) => (c.className || "").includes("date-separator-label"));
+  assert.ok(labelEl, "separator must contain a .date-separator-label child");
+  assert.ok(labelEl.textContent && labelEl.textContent.length > 0, "label must have non-empty text");
+  console.log("  testTask207SeparatorHasDivWithLabel PASS");
+}
+
+async function testTask207ClearHistoryResetsLastDateKey() {
+  const TS = 1748693400000;
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryClear: async () => {},
+      chatHistoryLoad: async () => [],
+    },
+  });
+  const chatArea = document.getElementById("chat-area");
+  sandbox.appendMessage("user", "Before clear", { noHistory: true, ts: TS });
+  const before = chatArea.children.filter((c) => (c.className || "").includes("date-separator")).length;
+  assert.equal(before, 1, "separator must exist before clear");
+
+  await sandbox.clearChatHistory();
+  // After clear, same-day message should produce a new separator (lastDateKey was reset)
+  sandbox.appendMessage("user", "After clear", { noHistory: true, ts: TS });
+  const after = chatArea.children.filter((c) => (c.className || "").includes("date-separator")).length;
+  assert.equal(after, 1, "separator must appear again after clearChatHistory (lastDateKey reset)");
+  console.log("  testTask207ClearHistoryResetsLastDateKey PASS");
+}
+
+async function testTask207HistoryRestoreInsertsDateSeparators() {
+  const TS = 1748693400000;
+  const { document } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [
+        { role: "user", text: "Msg1", source: "fullapp", ts: TS },
+        { role: "pet", text: "Msg2", source: "local", ts: TS + 60000 },
+        { role: "user", text: "Msg3", source: "fullapp", ts: TS + 86400000 },
+      ],
+    },
+  });
+  const chatArea = document.getElementById("chat-area");
+  const seps = chatArea.children.filter((c) => (c.className || "").includes("date-separator"));
+  assert.equal(seps.length, 2, "history restore must insert date separators: one per new day");
+  console.log("  testTask207HistoryRestoreInsertsDateSeparators PASS");
+}
+
+async function testTask207TranscriptIncludesSeparatorLine() {
+  const TS = 1748693400000;
+  const { sandbox } = await loadRenderer();
+  const { document, sandbox: sb2 } = await loadRenderer();
+  const chatArea = document.getElementById("chat-area");
+  sb2.appendMessage("user", "Hello world", { noHistory: true, ts: TS });
+  const transcript = sb2.buildChatTranscript();
+  assert.ok(transcript.includes("──"), "transcript must include ── date separator lines");
+  assert.ok(transcript.includes("你"), "transcript must still include user lines");
+  console.log("  testTask207TranscriptIncludesSeparatorLine PASS");
+}
+
+async function testTask207TranscriptOnlySeparatorsReturnsEmpty() {
+  // If chatArea only has separator elements (no user/pet messages), transcript must be ""
+  const { document, sandbox } = await loadRenderer();
+  const chatArea = document.getElementById("chat-area");
+  chatArea.children = [];
+  chatArea.lastChild = null;
+  // Insert a fake separator manually
+  const sep = { className: "message date-separator", dataset: { dateKey: "2025-05-31" }, children: [
+    { className: "date-separator-label", textContent: "今天", children: [] }
+  ], querySelectorAll: () => [], querySelector: (sel) => sel.includes("date-separator-label") ? { textContent: "今天" } : null };
+  chatArea.children.push(sep);
+  const transcript = sandbox.buildChatTranscript();
+  assert.equal(transcript, "", "transcript with only separators must return empty string");
+  console.log("  testTask207TranscriptOnlySeparatorsReturnsEmpty PASS");
+}
+
+function testTask207CssSeparatorExists() {
+  const css = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "styles.css"), "utf8");
+  assert.ok(css.includes(".message.date-separator"), "styles.css must define .message.date-separator");
+  assert.ok(css.includes(".date-separator-label"), "styles.css must define .date-separator-label");
+  assert.ok(css.includes(".message.date-separator::before") || css.includes(".message.date-separator::after"),
+    "date separator must have ::before/::after pseudo-elements for the rule lines");
+  console.log("  testTask207CssSeparatorExists PASS");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -4624,6 +4809,20 @@ async function main() {
   await testTask206PetTextSourceSavesTs();
   await testTask206OldRecordNoTsFallbackPreserved();
   await testTask206ExportNewMessageIncludesTime();
+  // TASK-207: LINE-style Chat Date Separators
+  testTask207HelperFunctionsExist();
+  testTask207GetMessageDateKeyTs0ReturnsNull();
+  await testTask207DateSeparatorInsertedOnFirstMessage();
+  await testTask207DateSeparatorNotDuplicatedSameDay();
+  await testTask207DateSeparatorInsertedForNewDay();
+  await testTask207Ts0MessageNoSeparator();
+  await testTask207StatusRoleNoSeparator();
+  await testTask207SeparatorHasDivWithLabel();
+  await testTask207ClearHistoryResetsLastDateKey();
+  await testTask207HistoryRestoreInsertsDateSeparators();
+  await testTask207TranscriptIncludesSeparatorLine();
+  await testTask207TranscriptOnlySeparatorsReturnsEmpty();
+  testTask207CssSeparatorExists();
   console.log("renderer chat smoke: PASS");
 }
 

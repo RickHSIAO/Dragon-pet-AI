@@ -20431,3 +20431,90 @@ Fix a bug where messages generated after TASK-195 still show no timestamp after 
 | Old records without ts show "舊紀錄沒有時間資料" — no fabricated time | PASS |
 | TASK-205 export: content includes time for new messages | PASS |
 | Regression: Search/filter, highlight/navigation, copy/export clipboard, unread badge, Pet unread dot, auto-scroll, Pet Window / Voice / STT / TTS | PASS |
+
+---
+
+## TASK-207 | LINE-style Chat Date Separators
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-31
+
+### Goal
+
+Insert a LINE-style horizontal date divider (今天 / 昨天 / YYYY/MM/DD) between message groups when the date changes, in the Full App chat panel only.
+
+### Scope
+
+- `renderer.js`: `getMessageDateKey(ts)`, `formatDateSeparatorLabel(dateKey)`, `maybeInsertDateSeparator(ts)`, wire into `appendMessage`, reset `lastDateKey` in `clearChatHistory` + `loadAndRenderChatHistory`, extend `buildChatTranscript`
+- `styles.css`: `.message.date-separator` + `.date-separator-label` + `::before`/`::after` rule lines
+- `renderer-chat-smoke.js`: 13 TASK-207 tests + update 3 existing tests for new selector
+- No backend, IPC, history format, or Pet Window change
+
+### Design Decisions
+
+| Decision | Detail |
+|---|---|
+| ts=0 → no separator | Startup greeting and old history records get no separator; avoids special-casing |
+| Label computed at render time | `formatDateSeparatorLabel` always computes today/昨天 dynamically — not stored in DOM |
+| Search: no change needed | `filterChatMessages` already hides non-user/pet elements during search |
+| transcript: `── label ──` format | Mirrors visual separator in plain text; `hasUserOrPet` guard prevents empty string for separator-only chatArea |
+
+### Files Changed
+
+| File | Change |
+|---|---|
+| `apps/desktop/src/renderer/renderer.js` | `getMessageDateKey`, `formatDateSeparatorLabel`, `maybeInsertDateSeparator` helpers; `appendMessage` wired; `clearChatHistory` + `loadAndRenderChatHistory` reset `lastDateKey`; `buildChatTranscript` extended selector + separator output |
+| `apps/desktop/src/renderer/styles.css` | `.message.date-separator` + `.date-separator-label` + `::before`/`::after` rules |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | 13 new TASK-207 tests; updated `testTask193MirrorFromPetAppendsUserAndReply`, `testTask196CopyAllSelectorOnlyUserPet`, `testTask198CopyAllUnaffectedBySearch`, `testTask205CopyAllChatUsesBuildTranscript` |
+
+### Test Coverage
+
+| Test | What it verifies |
+|---|---|
+| `testTask207HelperFunctionsExist` | All three helpers + `lastDateKey` declared in renderer.js |
+| `testTask207GetMessageDateKeyTs0ReturnsNull` | ts=0 returns null (no separator) |
+| `testTask207DateSeparatorInsertedOnFirstMessage` | First message of the day inserts one separator |
+| `testTask207DateSeparatorNotDuplicatedSameDay` | Same-day messages share one separator |
+| `testTask207DateSeparatorInsertedForNewDay` | Two different days produce two separators |
+| `testTask207Ts0MessageNoSeparator` | ts=0 messages produce no separator |
+| `testTask207StatusRoleNoSeparator` | status role never triggers separator |
+| `testTask207SeparatorHasDivWithLabel` | Separator has `dataset.dateKey` + `.date-separator-label` child with text |
+| `testTask207ClearHistoryResetsLastDateKey` | `clearChatHistory` resets `lastDateKey` so next message gets a fresh separator |
+| `testTask207HistoryRestoreInsertsDateSeparators` | History replay inserts date separators correctly |
+| `testTask207TranscriptIncludesSeparatorLine` | `buildChatTranscript` includes `──` lines for separators |
+| `testTask207TranscriptOnlySeparatorsReturnsEmpty` | Separator-only chatArea returns `""` from `buildChatTranscript` |
+| `testTask207CssSeparatorExists` | CSS defines `.message.date-separator` + `.date-separator-label` + pseudo-elements |
+
+### Automated Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+13 TASK-207 tests, 3 existing tests updated) |
+| `pet-renderer-smoke.js` | PASS — 237 checks (no change) |
+| `pet-window-smoke.js` | PASS — 60 checks (no change) |
+
+### Acceptance Criteria
+
+- [x] Date divider inserted before first message of each new day ✓
+- [x] ts=0 messages (old records, startup greeting) get no separator ✓
+- [x] Same-day messages share one separator (no duplicates) ✓
+- [x] Label: 今天 / 昨天 / YYYY/MM/DD, computed at render time ✓
+- [x] History restore inserts separators via `appendMessage` ✓
+- [x] `clearChatHistory` resets `lastDateKey` ✓
+- [x] Search: separators auto-hidden (no code change needed) ✓
+- [x] Copy/export includes `── label ──` separator lines ✓
+- [x] No backend, IPC, history format, or Pet Window change ✓
+- [x] All three smoke suites PASS ✓
+- [x] Windows visual smoke PASS ✓
+
+### Windows Visual Smoke Results (2026-05-31)
+
+| Scenario | Result |
+|---|---|
+| History restore — 今天/昨天/YYYY/MM/DD separators per day group | PASS |
+| Same-day grouping — multiple messages share one separator, no duplicates | PASS |
+| New message append — separator only on day change, no spurious re-insert | PASS |
+| ts=0 old records — no fabricated date, no 今天/昨天 shown | PASS |
+| Search/filter — highlight / Enter / Shift+Enter navigation unaffected, separators no visual weirdness | PASS |
+| Copy/export — `── 今天 ──` separator lines included; plain text only, no HTML/markup/tooltip/debug | PASS |
+| Regression: Ctrl+F / Esc, auto-scroll / ↓ badge, unread title badge, Pet unread dot, Pet Window / Voice / STT / TTS | PASS |

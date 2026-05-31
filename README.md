@@ -1,11 +1,13 @@
 # Dragon Pet AI
 
-> **Dragon Pet AI** 是一個本地優先的 Electron + FastAPI 桌面陪伴原型，具備手動記憶、記憶稽核日誌、BYOK 提供者設定、使用量計量、安全審查過的 Test Connection 端點、Anthropic/Ollama 提供者轉接層（隱藏在 feature flag 後）、本地 Ollama `/chat` 執行期 smoke 通過（`source=llm_local`，克莉絲蒂娜人格確認），以及 Ollama Provider Settings UI（無需 API Key，使用本機 GPU/CPU）。以安全優先的增量開發方式建構，後端 mocked 測試套件共 **586 個測試通過**。
+> **Dragon Pet AI** 是一個本地優先的 Electron + FastAPI 桌面陪伴原型，具備手動記憶、記憶稽核日誌、BYOK 提供者設定、使用量計量、安全審查過的 Test Connection 端點、Anthropic/Ollama 提供者轉接層（隱藏在 feature flag 後）、本地 Ollama `/chat` 執行期 smoke 通過（`source=llm_local`，克莉絲蒂娜人格確認）、Ollama Provider Settings UI（無需 API Key，使用本機 GPU/CPU），以及 Full App 聊天搜尋、高亮、匯出、未讀提示、時間戳與 LINE-style 日期分隔線。以安全優先的增量開發方式建構，後端 mocked 測試套件共 **586 個測試通過**。
 
 **非生產環境。** 尚未進行任何外部 provider 的真實呼叫，亦未使用任何真實 API Key。本專案為 portfolio / prototype 性質。
 
 📋 **[完整 Demo 腳本與面試重點](docs/PORTFOLIO_DEMO_SCRIPT.md)**
 📋 **[Phase 4 Provider Settings 摘要](docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md)**
+
+**最新本地狀態（2026-05-31）：** TASK-207 已完成並通過自動 smoke。Full App 聊天面板會在跨日期訊息間插入日期分隔線（今天 / 昨天 / YYYY/MM/DD），copy/export transcript 也會輸出 `── label ──` 分隔行。未變更後端、IPC、聊天歷史格式或 Pet Window。
 
 ---
 
@@ -97,13 +99,15 @@ ollama serve
 | 本地 Ollama `/chat` smoke | ✅ 通過 — `qwen3:8b`，`source=llm_local`，克莉絲蒂娜人格確認 |
 | Provider Settings 持久化 | ✅ 通過 — 重啟後設定保留，partial PATCH 保留省略欄位 |
 | UI polish | ✅ 通過 — 情緒→表情對應、Christina expression system |
+| Full App chat UX | ✅ TASK-207 通過 — 搜尋/高亮、未讀提示、匯出、時間戳、日期分隔線 |
 | 表情系統 | 7/10 real PNG（happy、focused、neutral、proud、annoyed、worried、sleepy）；pending/error/offline 為 SVG fallback |
 | pytest | **586 通過，0 失敗** |
-| renderer smoke | **24 tests PASS** |
+| Electron smoke | **renderer-chat PASS；pet-renderer 237 PASS；pet-window 60 PASS** |
 | 外部 provider 呼叫 | ❌ 無 — 刻意封鎖 |
 | 真實 API Key 使用 | ❌ 無 — 所有測試使用 mocked runner |
 | 生產就緒 | ❌ 尚未 — prototype / portfolio 階段 |
 | Demo 可用（本地 Ollama） | ✅ 是 |
+| 下一個任務 | TASK-208 — next UX polish |
 
 ---
 
@@ -114,6 +118,10 @@ ollama serve
 | `GET /health` | 後端存活確認 |
 | `POST /chat` | Mock 角色回應；LLM 轉接層隱藏在 feature flag 後 |
 | Electron 桌面 UI | 聊天、記憶、稽核日誌、Provider Settings 各區塊 |
+| 聊天搜尋與高亮 | Full App 內建搜尋列、結果計數、Enter/Shift+Enter 導覽與 Ctrl+F 快捷鍵 |
+| 聊天匯出與 copy transcript | 匯出 `.txt`、copy 全部對話，搜尋期間仍輸出完整對話 |
+| 聊天時間戳與日期分隔線 | 新訊息保留 `ts`；跨日期插入今天/昨天/YYYY/MM/DD 分隔線；舊紀錄不偽造時間 |
+| Full App / Pet 未讀提示 | Full App title badge 與 Pet Window unread dot，僅傳遞窄化狀態、不傳訊息內容 |
 | 手動記憶 CRUD | `POST/GET/DELETE /memory` — SQLite 持久化 |
 | 記憶內容預覽 | `GET /memory/context-preview` — 安全，無注入 |
 | 已審核記憶內容建構器 | 類型允許清單、信心度過濾、5 條記憶 / 1500 字元上限 |
@@ -386,8 +394,8 @@ python -c "import json, urllib.request; data=json.dumps({'message':'你好！克
 | [docs/PROVIDER_TEST_CONNECTION_DESIGN.md](docs/PROVIDER_TEST_CONNECTION_DESIGN.md) | Test Connection 設計與強化測試結果 |
 | [docs/SECURE_KEY_STORAGE_DESIGN.md](docs/SECURE_KEY_STORAGE_DESIGN.md) | 金鑰儲存威脅模型、儲存選項、遮蔽規則 |
 | [docs/BYOK_PRODUCT_AND_SETTINGS.md](docs/BYOK_PRODUCT_AND_SETTINGS.md) | BYOK 產品設計與安全邊界 |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖 |
-| [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄 |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖；目前下一步為 TASK-208 |
+| [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄；最新記錄為 TASK-207 日期分隔線 smoke 通過 |
 | [docs/STREAMER_COMPANION_MODE.md](docs/STREAMER_COMPANION_MODE.md) | 未來支線 — OBS overlay / Twitch 陪伴設計（尚未排程） |
 
 ---
@@ -487,7 +495,7 @@ dragon-pet-ai/
 > 內部任務更新日誌，記錄每個任務的變更內容。
 
 <details>
-<summary>展開任務更新歷史（TASK-054 — TASK-067D）</summary>
+<summary>展開任務更新歷史（TASK-054 — TASK-207 摘要）</summary>
 
 > TASK-054：provider 金鑰儲存/清除端點已接線至安全金鑰儲存抽象層。執行期預設維持安全的不可用後端；測試使用記憶體假後端進行儲存/清除/冪等清除/取代行為；金鑰不寫入 SQLite 或純文字設定檔；正式 Test Connection 維持停用。無外部 provider 呼叫。pytest：449 通過。
 
@@ -516,5 +524,7 @@ dragon-pet-ai/
 > TASK-066D：Portfolio Demo 腳本完成。建立 docs/PORTFOLIO_DEMO_SCRIPT.md，含專案一句話介紹、30 秒 pitch、2 分鐘 demo 腳本（10 步）、架構重點、已完成功能表（21 項）、安全/BYOK 說明、截圖清單（9 項）、不應宣稱的事項（8 項）、面試重點（8 個主題）及 PowerShell demo 指令。專案已達 demo 就緒（本地 mock）。無真實外部 provider 呼叫。未使用真實 API Key。未修改後端/應用程式程式碼。
 
 > TASK-067D：README 整理為 portfolio 友善的進入點。新增專案一句話介紹、目前狀態表、已完成功能表（21 項）、含關鍵設計決策的架構圖、安全/BYOK 摘要表、PowerShell 快速啟動、demo & portfolio 連結、目前限制表、更新目錄結構、更新文件表。將任務更新歷史移至可折疊的開發日誌區塊。未修改後端/應用程式程式碼。無外部 API 呼叫。
+
+> TASK-198 — TASK-207：Full App 聊天 UX polish 已連續完成搜尋/篩選、Ctrl+F/Esc 快捷鍵、搜尋高亮與結果導覽、未讀 title badge、平滑 auto-scroll 與新訊息跳轉、完整時間戳 tooltip、Pet unread dot、聊天匯出、時間戳持久化修正，以及 LINE-style 日期分隔線。最新 TASK-207 通過 renderer-chat / pet-renderer / pet-window 三個 smoke suite；未修改後端、IPC、聊天歷史格式或 Pet Window。
 
 </details>

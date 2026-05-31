@@ -573,6 +573,9 @@ let hintLockedUntil = 0;       // epoch ms; 0 = always unlocked
 let unreadChatCount = 0;
 const UNREAD_BASE_TITLE = "Dragon Pet AI";
 
+// TASK-207: tracks last-inserted date key so same-day duplicates are skipped.
+let lastDateKey = null;
+
 // TASK-113: smarter auto-scroll helpers — user sends always scroll,
 // AI replies only scroll when user is already near the bottom.
 const CHAT_NEAR_BOTTOM_THRESHOLD_PX = 80;
@@ -850,13 +853,57 @@ function copySingleMessage(text, btn) {
   });
 }
 
+// TASK-207: returns "YYYY-MM-DD" string for a valid ts, null for ts=0 (no-timestamp entries).
+function getMessageDateKey(ts) {
+  if (!ts || ts <= 0) return null;
+  const d = new Date(ts);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+// TASK-207: computes today/昨天/YYYY/MM/DD label at render time (not stored).
+function formatDateSeparatorLabel(dateKey) {
+  if (!dateKey) return "";
+  const todayKey = getMessageDateKey(Date.now());
+  if (dateKey === todayKey) return "今天";
+  const yesterday = new Date(Date.now() - 86400000);
+  const pad = (n) => String(n).padStart(2, "0");
+  const yestKey = `${yesterday.getFullYear()}-${pad(yesterday.getMonth() + 1)}-${pad(yesterday.getDate())}`;
+  if (dateKey === yestKey) return "昨天";
+  return dateKey.replace(/-/g, "/");
+}
+
+// TASK-207: insert a date divider row if dateKey changed since last insert.
+function maybeInsertDateSeparator(ts) {
+  const dateKey = getMessageDateKey(ts);
+  if (!dateKey || dateKey === lastDateKey) return;
+  lastDateKey = dateKey;
+  const sep = document.createElement("div");
+  sep.className = "message date-separator";
+  sep.dataset.dateKey = dateKey;
+  const label = document.createElement("span");
+  label.className = "date-separator-label";
+  label.textContent = formatDateSeparatorLabel(dateKey);
+  sep.appendChild(label);
+  chatArea.appendChild(sep);
+}
+
 // TASK-205: shared transcript builder — used by copyAllChat and exportChatToFile.
 function buildChatTranscript() {
-  const messages = Array.from(chatArea.querySelectorAll(".message.user, .message.pet"));
+  const messages = Array.from(chatArea.querySelectorAll(".message.user, .message.pet, .message.date-separator"));
   if (!messages.length) return "";
   const lines = [];
+  let hasUserOrPet = false;
   for (const el of messages) {
-    const name = el.className.split(" ").includes("user") ? "你" : "克莉絲蒂娜";
+    const classes = el.className.split(" ");
+    if (classes.includes("date-separator")) {
+      const labelEl = el.querySelector(".date-separator-label");
+      const lbl = labelEl ? labelEl.textContent.trim() : (el.dataset.dateKey || "");
+      if (lbl) lines.push(`── ${lbl} ──`);
+      continue;
+    }
+    hasUserOrPet = true;
+    const name = classes.includes("user") ? "你" : "克莉絲蒂娜";
     const text = el.dataset.msgText || "";
     if (!text) continue;
     const meta = el.querySelector(".msg-meta");
@@ -866,6 +913,7 @@ function buildChatTranscript() {
     lines.push(text);
     lines.push("");
   }
+  if (!hasUserOrPet) return "";
   return lines.join("\n").trimEnd();
 }
 
@@ -1012,6 +1060,9 @@ function appendMessage(role, text, { autoScroll = false, noHistory = false, sour
     wrap.appendChild(copyBtn);
   }
 
+  // TASK-207: insert date divider before first message of a new day.
+  if ((role === "user" || role === "pet") && ts > 0) maybeInsertDateSeparator(ts);
+
   chatArea.appendChild(wrap);
 
   // TASK-113: caller controls scroll via autoScroll flag.
@@ -1045,6 +1096,7 @@ async function loadAndRenderChatHistory() {
     return;
   }
   if (!Array.isArray(entries) || entries.length === 0) return;
+  lastDateKey = null; // TASK-207: reset so history replay inserts separators fresh.
   let renderedCount = 0;
   for (const entry of entries) {
     if (!entry || !entry.role || !entry.text) continue;
@@ -1071,6 +1123,7 @@ async function clearChatHistory() {
   } catch (_e) {
     return;
   }
+  lastDateKey = null; // TASK-207: reset so next messages start fresh.
   chatArea.replaceChildren();
   hideNewMessageBtn(); // TASK-202: no messages — dismiss jump button
   // TASK-198: reset search state after clearing so the empty chat shows cleanly.
