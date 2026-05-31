@@ -19786,3 +19786,129 @@ When Full App is hidden or unfocused and a new Pet reply (from Full App `/chat` 
 | 4 | Multiple hidden replies accumulate unread count | PASS |
 | 5 | Startup / history restore: no unread badge triggered | PASS |
 | 6 | Regression: Chat search / Ctrl+F / Esc / copy-export / Pet Window / Voice / STT / TTS | PASS |
+
+---
+
+## TASK-201 | Chat Search Highlight / Result Navigation
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS
+**Date:** 2026-05-31
+
+### Goal
+
+Upgrade TASK-198 chat search with keyword highlight and Enter/Shift+Enter navigation so it feels like a first-class in-app search.
+
+### Design
+
+**`body.className = "msg-body"`** — added in `appendMessage()` so `filterChatMessages` can locate and mutate the body div without fragile index-based access.
+
+**`escapeHtml(str)`** — escapes `&`, `<`, `>` before inserting user text into innerHTML. Prevents malformed HTML from raw message text.
+
+**`highlightText(rawText, query)`** — escapes rawText, then wraps each case-insensitive match in `<span class="search-highlight">$1</span>` using a RegExp with the `gi` flag. Regex special chars in query are escaped.
+
+**`filterChatMessages(query)` — updated:**
+- Resets `searchResults` array and `searchActiveIndex = -1` on every call (clears navigation state).
+- Removes `search-active` class from all previous results.
+- For matching messages: sets `body.innerHTML = highlightText(rawText, q)`.
+- For non-matching: sets `body.innerHTML = escapeHtml(rawText)` (restores plain text without HTML artefacts).
+- For empty query (clear): sets `body.innerHTML = escapeHtml(rawText)` for all user/pet messages (removes spans).
+- Count chip: "找到 N 筆" on filter; "找到 N 筆，第 M 筆" when navigating; "沒有找到符合的對話" on no match.
+
+**`navigateToSearchResult(delta)`** — removes `search-active` from current, advances index (wraps modulo `searchResults.length`), adds `search-active` to new result, calls `scrollIntoView({ block: "nearest" })`, updates count chip to "第 M 筆".
+
+**Enter / Shift+Enter** — added inside the existing `chatSearchInput` keydown listener (TASK-199):
+- `e.key === "Enter"` + non-empty query → `e.preventDefault()` + `navigateToSearchResult(shiftKey ? -1 : 1)`.
+
+**`dataset.msgText`** — never modified. `copySingleMessage` uses the raw `text` from closure; `copyAllChat` uses `el.dataset.msgText`. Both are immune to highlight spans.
+
+### Files Modified
+
+| File | Change | Runtime? |
+|---|---|---|
+| `apps/desktop/src/renderer/renderer.js` | `body.className = "msg-body"` in appendMessage; `escapeHtml` / `highlightText` / `navigateToSearchResult` helpers; rewritten `filterChatMessages` with highlight + navigation state; Enter/Shift+Enter in chatSearchInput keydown listener | Yes |
+| `apps/desktop/src/renderer/styles.css` | `.search-highlight` (amber background); `.message.search-active` (accent outline) | CSS only |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | `FakeElement.scrollIntoView()`; 10 TASK-201 tests + 3 defensive tests (ArrayFrom static, MsgBodyAbsent, NavigateNoop) | No |
+
+### Test Coverage
+
+| Test | Type | What it verifies |
+|---|---|---|
+| `testTask201HighlightFunctionsExist` | static | `escapeHtml`, `highlightText`, `navigateToSearchResult`, `search-highlight`, `search-active` in renderer.js + CSS |
+| `testTask201UserMessageHighlighted` | dynamic | After search, user message `msg-body.innerHTML` contains `search-highlight` span |
+| `testTask201PetMessageHighlighted` | dynamic | After search, pet message `msg-body.innerHTML` contains `search-highlight` span |
+| `testTask201ClearRemovesHighlight` | dynamic | After clear, `msg-body.innerHTML` no longer contains `search-highlight` |
+| `testTask201HighlightDoesNotChangeMsgText` | dynamic | `dataset.msgText` unchanged after highlight is applied |
+| `testTask201EnterNavigatesToNextResult` | dynamic | Enter advances active result; exactly one element has `search-active` |
+| `testTask201ShiftEnterNavigatesToPrevResult` | dynamic | Enter then Shift+Enter wraps to last result |
+| `testTask201ActiveClassOnlyOnCurrentResult` | dynamic | Only one result has `search-active` at any time |
+| `testTask201EnterNoChatFetch` | dynamic | Enter in search never triggers `/chat` |
+| `testTask201CopyUsesRawText` | static | `copySingleMessage(text,...)` uses raw text; `copyAllChat` uses `dataset.msgText` |
+| `testTask201FilterUsesArrayFrom` | static | `filterChatMessages` uses `Array.from(child.children)` — guards against real-DOM `HTMLCollection` having no `.find()` |
+| `testTask201FilterWorksWhenMsgBodyAbsent` | dynamic | `filterChatMessages` does not crash when a `.message` element has no `.msg-body` child |
+| `testTask201NavigateNoopWhenNoResults` | dynamic | Enter / Shift+Enter on search input with zero results is a no-op (no crash) |
+
+### Root Cause of Windows Visual Smoke Failure (2026-05-31)
+
+**Symptom:** Search completely broken ("搜尋系統壞掉了") in real Electron app immediately after TASK-201 implementation.
+
+**Root cause:** `filterChatMessages()` called `child.children.find(...)` directly. In the real DOM, `element.children` returns an `HTMLCollection` — an array-like object that is iterable but has **no `.find()` method**. The call threw `TypeError: child.children.find is not a function` on the very first message processed, silently killing the entire search handler.
+
+**Why smoke tests passed:** `FakeElement.children` is a plain JavaScript `Array` (set as `this.children = []` in the constructor), which has `.find()`. The fake/real DOM mismatch was invisible to the VM sandbox.
+
+**Fix applied:** Replaced the two-line direct access with `Array.from()`:
+```js
+// BEFORE (broken in real DOM):
+const body = child.children &&
+  child.children.find(c => typeof c.className === "string" && c.className === "msg-body");
+
+// AFTER (works for both HTMLCollection and plain Array):
+const childrenArr = Array.from(child.children || []);
+const body = childrenArr.find(c => typeof c.className === "string" && c.className === "msg-body");
+```
+
+### Safety / Privacy Boundaries
+
+| Constraint | Implementation |
+|---|---|
+| No data mutation | `dataset.msgText` never modified; only `body.innerHTML` (display only) |
+| No history write | Neither highlight nor navigate calls `appendMessage`, `saveChatHistoryEntry` |
+| No /chat fetch | No fetch call in highlight or navigation code |
+| No new IPC | No new `ipcRenderer.invoke` or `ipcMain.handle` |
+| No backend change | No routes.py / service changes |
+| No Pet Window impact | Logic in Full App renderer only |
+| XSS-safe | `escapeHtml` escapes all user text before injecting into innerHTML |
+| Copy immune to highlight | Single copy uses raw text closure; copy-all uses `dataset.msgText` |
+
+### Automated Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+13 TASK-201 tests incl. 3 defensive) |
+| `pet-renderer-smoke.js` | PASS — 233 checks (Pet Window untouched) |
+| `pet-window-smoke.js` | PASS — 55 checks (IPC/preload untouched) |
+
+### Acceptance Criteria
+
+- [x] Matching keyword highlighted in message body ✓
+- [x] Highlight uses `<span class="search-highlight">` — display only, not in dataset.msgText ✓
+- [x] Non-matching messages filtered out (TASK-198 behavior preserved) ✓
+- [x] Clear removes all highlight markup and restores messages ✓
+- [x] Enter → next result; Shift+Enter → previous result ✓
+- [x] Active result marked with `search-active` class (one at a time) ✓
+- [x] Count chip shows "找到 N 筆，第 M 筆" during navigation ✓
+- [x] copy/export unaffected (raw text, not innerHTML) ✓
+- [x] No backend, IPC, history, /chat, or Pet Window change ✓
+- [x] All three smoke suites PASS ✓
+- [x] Windows visual smoke PASS (2026-05-31) ✓
+
+### Windows Visual Smoke Results (2026-05-31)
+
+| Scenario | Result |
+|---|---|
+| Search filter — keyword match shows, non-match hides | PASS |
+| Search highlight — matched keyword amber background in bubble | PASS |
+| Enter navigation — jumps to next result, active outline, "找到 N 筆，第 M 筆" | PASS |
+| Shift+Enter navigation — jumps to previous result | PASS |
+| Clear search (✕ or Esc) — highlight gone, active outline gone, all messages restored | PASS |
+| Copy/export during search — single copy and copy-all produce plain text, no HTML markup | PASS |
+| Regression — TASK-198 filter, TASK-199 Ctrl+F/Esc, TASK-200 unread badge, Pet Window / Voice / STT / TTS all normal | PASS |

@@ -872,6 +872,7 @@ function appendMessage(role, text, { autoScroll = false, noHistory = false, sour
     "System";
 
   const body = document.createElement("div");
+  body.className = "msg-body"; // TASK-201: identify body div for search highlight
   body.textContent = text;
 
   wrap.appendChild(sender);
@@ -2301,6 +2302,10 @@ if (chatSearchInput) {
       } else {
         chatSearchInput.blur();
       }
+    } else if (e.key === "Enter" && (chatSearchInput.value || "").trim()) {
+      // TASK-201: Enter = next result, Shift+Enter = previous result.
+      e.preventDefault();
+      navigateToSearchResult(e.shiftKey ? -1 : 1);
     }
   });
 }
@@ -2446,28 +2451,95 @@ if (typeof window !== "undefined" && typeof window.addEventListener === "functio
 // TASK-198: Chat message search / filter — pure DOM visibility toggle.
 // No data mutation, no history write, no /chat call, no backend change.
 // ---------------------------------------------------------------------------
+// TASK-201: search result navigation state.
+let searchResults = [];     // matching wrap elements, populated by filterChatMessages
+let searchActiveIndex = -1; // -1 = no active result
+
+// TASK-201: escape HTML special chars before inserting raw text into innerHTML.
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+// TASK-201: wrap each case-insensitive match in a highlight span.
+// Operates on already-escaped HTML so the span tags are safe.
+function highlightText(rawText, query) {
+  const safe = escapeHtml(rawText);
+  const escapedQ = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`(${escapedQ})`, "gi");
+  return safe.replace(re, '<span class="search-highlight">$1</span>');
+}
+
+// TASK-201: advance the active search result by delta (+1 forward, -1 backward).
+function navigateToSearchResult(delta) {
+  if (!searchResults.length) return;
+  // Remove active class from previous result
+  if (searchActiveIndex >= 0 && searchActiveIndex < searchResults.length) {
+    const prev = searchResults[searchActiveIndex];
+    prev.className = prev.className.replace(/\s*search-active/g, "").trim();
+  }
+  searchActiveIndex = (searchActiveIndex + delta + searchResults.length) % searchResults.length;
+  const active = searchResults[searchActiveIndex];
+  if (!active.className.includes("search-active")) {
+    active.className = active.className + " search-active";
+  }
+  if (typeof active.scrollIntoView === "function") {
+    active.scrollIntoView({ block: "nearest" });
+  }
+  // Update count chip to show position
+  if (chatSearchCountEl && chatSearchInput) {
+    const q = (chatSearchInput.value || "").trim();
+    if (q) {
+      chatSearchCountEl.textContent = `找到 ${searchResults.length} 筆，第 ${searchActiveIndex + 1} 筆`;
+    }
+  }
+}
+
 function filterChatMessages(query) {
   const q = (query || "").trim().toLowerCase();
+  // Reset navigation — remove active class from all previous results
+  for (const el of searchResults) {
+    el.className = el.className.replace(/\s*search-active/g, "").trim();
+  }
+  searchResults = [];
+  searchActiveIndex = -1;
+
   let matchCount = 0;
   for (const child of chatArea.children) {
-    if (!q) {
-      child.style.display = "";
-      continue;
-    }
     const isUserOrPet = typeof child.className === "string" &&
       (child.className.includes("user") || child.className.includes("pet"));
+    // Find the msg-body div (set in appendMessage — TASK-201)
+    const childrenArr = Array.from(child.children || []);
+    const body = childrenArr.find(c => typeof c.className === "string" && c.className === "msg-body");
+
+    if (!q) {
+      child.style.display = "";
+      // Restore plain text (remove any highlight spans)
+      if (body && child.dataset && child.dataset.msgText !== undefined) {
+        body.innerHTML = escapeHtml(child.dataset.msgText);
+      }
+      continue;
+    }
+
     if (!isUserOrPet) {
       child.style.display = "none";
       continue;
     }
-    const text = ((child.dataset && child.dataset.msgText) || "").toLowerCase();
-    if (text.includes(q)) {
+
+    const rawText = (child.dataset && child.dataset.msgText) || "";
+    if (rawText.toLowerCase().includes(q)) {
       child.style.display = "";
       matchCount++;
+      searchResults.push(child);
+      if (body) body.innerHTML = highlightText(rawText, q);
     } else {
       child.style.display = "none";
+      if (body) body.innerHTML = escapeHtml(rawText);
     }
   }
+
   if (chatSearchCountEl) {
     if (!q) {
       chatSearchCountEl.textContent = "";

@@ -117,6 +117,10 @@ class FakeElement {
     this._selected = true;
   }
 
+  scrollIntoView() {
+    this._scrolledIntoView = true;
+  }
+
   remove() {
     if (!this.parentNode) return;
     this.parentNode.children = this.parentNode.children.filter((child) => child !== this);
@@ -3246,6 +3250,196 @@ async function testTask200FullAppChatPetReplyAlsoUnread() {
   assert.match(document.title, /^\(\d+\)/, "Full App chat pet reply while window is hidden must also badge");
 }
 
+// ─── TASK-201: Chat Search Highlight / Result Navigation ─────────────────────
+
+function testTask201HighlightFunctionsExist() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const css = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "styles.css"), "utf8");
+  assert.ok(src.includes("function escapeHtml"),     "renderer.js must define escapeHtml()");
+  assert.ok(src.includes("function highlightText"),  "renderer.js must define highlightText()");
+  assert.ok(src.includes("function navigateToSearchResult"), "renderer.js must define navigateToSearchResult()");
+  assert.ok(src.includes("search-highlight"),        "renderer.js must reference search-highlight class");
+  assert.ok(src.includes("search-active"),           "renderer.js must reference search-active class");
+  assert.ok(css.includes(".search-highlight"),       "styles.css must define .search-highlight");
+  assert.ok(css.includes(".message.search-active"),  "styles.css must define .message.search-active");
+}
+
+async function testTask201UserMessageHighlighted() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "highlight this keyword here", { noHistory: true });
+  searchChat(document, "keyword");
+  const chatArea = document.getElementById("chat-area");
+  const userMsg = chatArea.children.find(
+    (el) => el.className.includes("user") && el.dataset && el.dataset.msgText === "highlight this keyword here"
+  );
+  assert.ok(userMsg, "user message must exist");
+  const body = userMsg.children && userMsg.children.find(c => c.className === "msg-body");
+  assert.ok(body, "user message must have .msg-body child");
+  assert.ok(body.innerHTML.includes("search-highlight"),
+    "msg-body innerHTML must contain search-highlight span when keyword matches");
+}
+
+async function testTask201PetMessageHighlighted() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("pet", "dragon keyword wisdom", { noHistory: true });
+  searchChat(document, "keyword");
+  const chatArea = document.getElementById("chat-area");
+  const petMsg = chatArea.children.find(
+    (el) => el.className.includes("pet") && el.dataset && el.dataset.msgText === "dragon keyword wisdom"
+  );
+  assert.ok(petMsg, "pet message must exist");
+  const body = petMsg.children && petMsg.children.find(c => c.className === "msg-body");
+  assert.ok(body, "pet message must have .msg-body child");
+  assert.ok(body.innerHTML.includes("search-highlight"), "pet msg-body must be highlighted");
+}
+
+async function testTask201ClearRemovesHighlight() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "remove this highlight", { noHistory: true });
+  searchChat(document, "highlight");
+  const chatArea = document.getElementById("chat-area");
+  const msg = chatArea.children.find(
+    (el) => el.className.includes("user") && el.dataset && el.dataset.msgText === "remove this highlight"
+  );
+  const body = msg && msg.children.find(c => c.className === "msg-body");
+  assert.ok(body && body.innerHTML.includes("search-highlight"), "highlight must exist before clear");
+  clearSearch(document);
+  assert.ok(!body.innerHTML.includes("search-highlight"), "highlight must be removed after clear");
+}
+
+async function testTask201HighlightDoesNotChangeMsgText() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("pet", "original msgtext value", { noHistory: true });
+  searchChat(document, "original");
+  const chatArea = document.getElementById("chat-area");
+  const msg = chatArea.children.find(
+    (el) => el.className.includes("pet") && el.dataset && el.dataset.msgText === "original msgtext value"
+  );
+  assert.ok(msg, "pet message must exist");
+  assert.equal(msg.dataset.msgText, "original msgtext value",
+    "dataset.msgText must not be modified by search highlight");
+}
+
+async function testTask201EnterNavigatesToNextResult() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("pet", "nav target alpha", { noHistory: true });
+  sandbox.appendMessage("pet", "nav target beta",  { noHistory: true });
+  searchChat(document, "nav target");
+  // First Enter: active index moves to 0
+  const input = document.getElementById("chat-search-input");
+  input.dispatchEvent({ type: "keydown", key: "Enter", shiftKey: false, preventDefault() {} });
+  const chatArea = document.getElementById("chat-area");
+  const msgs = chatArea.children.filter(
+    (el) => el.className.includes("pet") &&
+      el.dataset && (el.dataset.msgText || "").includes("nav target")
+  );
+  assert.ok(msgs.length >= 1, "at least one matching result must exist");
+  const activeCount = msgs.filter(m => m.className.includes("search-active")).length;
+  assert.equal(activeCount, 1, "exactly one result must be search-active after Enter");
+}
+
+async function testTask201ShiftEnterNavigatesToPrevResult() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("pet", "prev target one",   { noHistory: true });
+  sandbox.appendMessage("pet", "prev target two",   { noHistory: true });
+  sandbox.appendMessage("pet", "prev target three", { noHistory: true });
+  searchChat(document, "prev target");
+  const input = document.getElementById("chat-search-input");
+  // Enter → active = 0
+  input.dispatchEvent({ type: "keydown", key: "Enter", shiftKey: false, preventDefault() {} });
+  // Shift+Enter → wraps to last (index 2)
+  input.dispatchEvent({ type: "keydown", key: "Enter", shiftKey: true, preventDefault() {} });
+  const chatArea = document.getElementById("chat-area");
+  const msgs = chatArea.children.filter(
+    (el) => el.className.includes("pet") &&
+      el.dataset && (el.dataset.msgText || "").includes("prev target")
+  );
+  // After Enter then Shift+Enter: last result should be active
+  const lastMsg = msgs[msgs.length - 1];
+  assert.ok(lastMsg && lastMsg.className.includes("search-active"),
+    "Shift+Enter from first result must wrap to last result");
+}
+
+async function testTask201ActiveClassOnlyOnCurrentResult() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("pet", "active test one",   { noHistory: true });
+  sandbox.appendMessage("pet", "active test two",   { noHistory: true });
+  sandbox.appendMessage("pet", "active test three", { noHistory: true });
+  searchChat(document, "active test");
+  const input = document.getElementById("chat-search-input");
+  input.dispatchEvent({ type: "keydown", key: "Enter", shiftKey: false, preventDefault() {} });
+  const chatArea = document.getElementById("chat-area");
+  const msgs = chatArea.children.filter(
+    (el) => el.className.includes("pet") &&
+      el.dataset && (el.dataset.msgText || "").includes("active test")
+  );
+  const activeCount = msgs.filter(m => m.className.includes("search-active")).length;
+  assert.equal(activeCount, 1, "only exactly one result must have search-active class at a time");
+}
+
+async function testTask201EnterNoChatFetch() {
+  const { document, sandbox, state } = await loadRenderer();
+  sandbox.appendMessage("pet", "fetch test reply", { noHistory: true });
+  searchChat(document, "fetch test");
+  const input = document.getElementById("chat-search-input");
+  input.dispatchEvent({ type: "keydown", key: "Enter", shiftKey: false, preventDefault() {} });
+  await settle();
+  const chatCalls = state.calls.filter((c) => c.url && c.url.endsWith("/chat"));
+  assert.equal(chatCalls.length, 0, "Enter in search input must never trigger /chat");
+}
+
+function testTask201CopyUsesRawText() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  // copySingleMessage receives `text` (raw string from closure at append time)
+  // and never reads innerHTML — highlight spans do not appear in clipboard
+  assert.ok(
+    src.includes("copySingleMessage(text,"),
+    "copy button handler must pass raw `text` (not innerHTML) to copySingleMessage"
+  );
+  // copyAllChat reads dataset.msgText, not innerHTML
+  assert.ok(
+    src.includes("el.dataset.msgText"),
+    "copyAllChat must use dataset.msgText (not innerHTML) for full conversation copy"
+  );
+}
+
+// TASK-201 defensive: static check that Array.from is used in filterChatMessages
+function testTask201FilterUsesArrayFrom() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(
+    src.includes("Array.from(child.children"),
+    "filterChatMessages must use Array.from(child.children) to support real HTMLCollection"
+  );
+}
+
+// TASK-201 defensive: filterChatMessages must not crash when a message has no .msg-body child
+async function testTask201FilterWorksWhenMsgBodyAbsent() {
+  const { document, sandbox } = await loadRenderer();
+  // Manually insert a .message element that has NO .msg-body child into the chat-area
+  const chatArea = document.getElementById("chat-area");
+  const orphan = document.createElement("div");
+  orphan.className = "message user";
+  orphan.dataset = { msgText: "orphan text" };
+  // no children — children is an empty array, body lookup returns undefined
+  chatArea.appendChild(orphan);
+  // searchChat triggers filterChatMessages — must not throw
+  searchChat(document, "orphan");
+  clearSearch(document);
+  console.log("  testTask201FilterWorksWhenMsgBodyAbsent PASS");
+}
+
+// TASK-201 defensive: Enter in search input with no matching results must be a no-op
+async function testTask201NavigateNoopWhenNoResults() {
+  const { document, sandbox } = await loadRenderer();
+  // No messages added — search produces zero results
+  searchChat(document, "no-such-keyword-xyz");
+  const input = document.getElementById("chat-search-input");
+  // Both directions must not throw
+  input.dispatchEvent({ type: "keydown", key: "Enter", shiftKey: false, preventDefault() {} });
+  input.dispatchEvent({ type: "keydown", key: "Enter", shiftKey: true,  preventDefault() {} });
+  console.log("  testTask201NavigateNoopWhenNoResults PASS");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -3438,6 +3632,20 @@ async function main() {
   await testTask200VisibilityChangeClearsUnread();
   await testTask200ClearUnreadNoChatFetch();
   await testTask200FullAppChatPetReplyAlsoUnread();
+  // TASK-201: Chat Search Highlight / Result Navigation
+  testTask201HighlightFunctionsExist();
+  await testTask201UserMessageHighlighted();
+  await testTask201PetMessageHighlighted();
+  await testTask201ClearRemovesHighlight();
+  await testTask201HighlightDoesNotChangeMsgText();
+  await testTask201EnterNavigatesToNextResult();
+  await testTask201ShiftEnterNavigatesToPrevResult();
+  await testTask201ActiveClassOnlyOnCurrentResult();
+  await testTask201EnterNoChatFetch();
+  testTask201CopyUsesRawText();
+  testTask201FilterUsesArrayFrom();
+  await testTask201FilterWorksWhenMsgBodyAbsent();
+  await testTask201NavigateNoopWhenNoResults();
   console.log("renderer chat smoke: PASS");
 }
 

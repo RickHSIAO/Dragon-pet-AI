@@ -392,6 +392,19 @@ textarea {
   color: var(--text);
 }
 
+/* TASK-201: keyword highlight span inside message body */
+.search-highlight {
+  background: rgba(255, 195, 0, 0.35);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* TASK-201: currently active (navigated-to) search result */
+.message.search-active {
+  outline: 2px solid var(--accent-soft);
+  border-radius: 6px;
+}
+
 #chat-area {
   flex: 1 1 260px;
   min-height: 240px;
