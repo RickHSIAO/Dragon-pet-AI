@@ -44,6 +44,7 @@ const clearScreenBtn = document.getElementById("clear-screen-btn");
 const askScreenBtn    = document.getElementById("ask-screen-btn");
 const askScreenStatus = document.getElementById("ask-screen-status");
 const clearChatBtn    = document.getElementById("clear-chat-btn");  // TASK-194
+const copyChatBtn     = document.getElementById("copy-chat-btn");   // TASK-196
 // TASK-179: gentle hint shown after OCR summary exists.
 const ocrAskHintEl = document.getElementById("ocr-ask-hint");
 const memoryForm  = document.getElementById("memory-form");
@@ -776,6 +777,70 @@ function sourceLabelFor(source) {
   return "";  // "full_app", "unknown" and others are unlabelled — native Full App chat
 }
 
+// TASK-196: prefer preload IPC bridge; fall back to navigator.clipboard.
+// Bridge returns a Promise (ipcRenderer.invoke) so we wrap in Promise.resolve to handle both
+// sync mocks (tests) and the real async IPC path uniformly.
+function writeToClipboard(text) {
+  const api = typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null;
+  if (api && typeof api.writeClipboardText === "function") {
+    return Promise.resolve(api.writeClipboardText(text)).then((ok) => {
+      if (ok === false) throw new Error("clipboard write failed");
+    });
+  }
+  const clip = typeof navigator !== "undefined" ? navigator.clipboard : null;
+  if (!clip || typeof clip.writeText !== "function") {
+    return Promise.reject(new Error("clipboard unavailable"));
+  }
+  return clip.writeText(text);
+}
+
+// TASK-196: copy single message text to clipboard with brief button feedback.
+function copySingleMessage(text, btn) {
+  writeToClipboard(text).then(() => {
+    if (!btn) return;
+    btn.classList.add("copied");
+    btn.textContent = "已複製";
+    setTimeout(() => { btn.textContent = "複製"; btn.classList.remove("copied"); }, 1500);
+  }).catch(() => {
+    if (btn) {
+      btn.textContent = "複製失敗";
+      setTimeout(() => { btn.textContent = "複製"; }, 1500);
+    }
+  });
+}
+
+// TASK-196: format and copy all user/pet messages as plain text.
+function copyAllChat() {
+  const messages = Array.from(chatArea.querySelectorAll(".message.user, .message.pet"));
+  if (!messages.length) return;
+  const lines = [];
+  for (const el of messages) {
+    const name = el.classList.contains("user") ? "你" : "克莉絲蒂娜";
+    const text = el.dataset.msgText || "";
+    if (!text) continue;
+    const meta = el.querySelector(".msg-meta");
+    const rawMeta = meta ? meta.textContent.trim() : "";
+    const time = rawMeta.includes("·") ? rawMeta.split("·").pop().trim() : rawMeta;
+    lines.push(time ? `${name} ${time}:` : `${name}:`);
+    lines.push(text);
+    lines.push("");
+  }
+  const output = lines.join("\n").trimEnd();
+  if (!output) return;
+  writeToClipboard(output).then(() => {
+    if (!copyChatBtn) return;
+    const prev = copyChatBtn.textContent;
+    copyChatBtn.textContent = "已複製！";
+    setTimeout(() => { copyChatBtn.textContent = prev; }, 1500);
+  }).catch(() => {
+    if (copyChatBtn) {
+      const prev = copyChatBtn.textContent;
+      copyChatBtn.textContent = "複製失敗";
+      setTimeout(() => { copyChatBtn.textContent = prev; }, 1500);
+    }
+  });
+}
+
 function appendMessage(role, text, { autoScroll = false, noHistory = false, source = "unknown", ts = 0 } = {}) {
   const wrap = document.createElement("div");
   wrap.className = `message ${role}`;
@@ -802,6 +867,21 @@ function appendMessage(role, text, { autoScroll = false, noHistory = false, sour
     meta.className = "msg-meta";
     meta.textContent = srcLabel && timeStr ? `${srcLabel} · ${timeStr}` : srcLabel || timeStr;
     wrap.appendChild(meta);
+  }
+
+  // TASK-196: per-bubble copy affordance — stores raw text for safe clipboard export.
+  if (role === "user" || role === "pet") {
+    wrap.dataset.msgText = text;
+    const copyBtn = document.createElement("button");
+    copyBtn.className = "msg-copy-btn";
+    copyBtn.type = "button";
+    copyBtn.title = "複製訊息";
+    copyBtn.textContent = "複製";
+    copyBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      copySingleMessage(text, copyBtn);
+    });
+    wrap.appendChild(copyBtn);
   }
 
   chatArea.appendChild(wrap);
@@ -2154,6 +2234,13 @@ if (askScreenBtn) {
 if (clearChatBtn) {
   clearChatBtn.addEventListener("click", () => {
     clearChatHistory();
+  });
+}
+
+// TASK-196: copy all user/pet messages to clipboard.
+if (copyChatBtn) {
+  copyChatBtn.addEventListener("click", () => {
+    copyAllChat();
   });
 }
 

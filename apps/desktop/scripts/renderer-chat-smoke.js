@@ -2588,6 +2588,127 @@ function testTask195VisF6ProviderSummaryCssExists() {
     "CSS must have .provider-summary-title rule");
 }
 
+// ---------------------------------------------------------------------------
+// TASK-196: Chat Message Copy / Export tests
+// ---------------------------------------------------------------------------
+
+function testTask196CopyChatButtonInHtml() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes('id="copy-chat-btn"'),
+    "Header must contain #copy-chat-btn button");
+  assert.ok(html.includes("複製對話"),
+    "#copy-chat-btn must have Chinese label '複製對話'");
+}
+
+function testTask196CopyFunctionsExist() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("function copyAllChat"),
+    "renderer.js must define copyAllChat");
+  assert.ok(src.includes("function copySingleMessage"),
+    "renderer.js must define copySingleMessage");
+  assert.ok(src.includes("function writeToClipboard"),
+    "renderer.js must define writeToClipboard bridge-first helper");
+  assert.ok(src.includes("dataset.msgText"),
+    "appendMessage must store text in dataset.msgText (no innerHTML)");
+}
+
+function testTask196CopyAllSelectorOnlyUserPet() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(
+    src.includes('".message.user, .message.pet"') ||
+    src.includes("'.message.user, .message.pet'"),
+    "copyAllChat must query only .message.user and .message.pet — not status/error"
+  );
+}
+
+function testTask196MsgCopyBtnCssExists() {
+  const css = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "styles.css"), "utf8");
+  assert.ok(css.includes(".msg-copy-btn"),
+    "CSS must define .msg-copy-btn");
+  assert.ok(css.includes(".msg-copy-btn.copied"),
+    "CSS must define .msg-copy-btn.copied feedback state");
+  assert.ok(css.includes(".message.user:hover .msg-copy-btn") || css.includes(".message.pet:hover .msg-copy-btn"),
+    "CSS must show .msg-copy-btn on hover only");
+}
+
+async function testTask196CopyBtnAppendedToPetBubble() {
+  // Startup greeting appends a pet message — verify it carries .msg-copy-btn.
+  // Uses FakeElement.children (no querySelectorAll in the fake DOM).
+  const { document } = await loadRenderer({});
+  const chatArea = document.getElementById("chat-area");
+  const petMsg = chatArea.children.find(
+    (c) => typeof c.className === "string" && c.className.includes("pet")
+  );
+  assert.ok(petMsg, "At least one pet message element must exist after startup (greeting)");
+  const copyBtn = petMsg.children.find(
+    (c) => typeof c.className === "string" && c.className.includes("msg-copy-btn")
+  );
+  assert.ok(copyBtn, "Pet message bubble must contain a .msg-copy-btn child");
+  assert.strictEqual(copyBtn.type, "button", ".msg-copy-btn must be type=button");
+  assert.ok(petMsg.dataset && petMsg.dataset.msgText, "Pet message must have dataset.msgText populated");
+}
+
+async function testTask196ClipboardUnavailableNocrash() {
+  // VM sandbox has no navigator and no dragonPet — clicking .msg-copy-btn must not throw.
+  const { document } = await loadRenderer({});
+  const chatArea = document.getElementById("chat-area");
+  const petMsg = chatArea.children.find(
+    (c) => typeof c.className === "string" && c.className.includes("pet")
+  );
+  assert.ok(petMsg, "Pet message must exist for clipboard no-crash test");
+  const copyBtn = petMsg.children.find(
+    (c) => typeof c.className === "string" && c.className.includes("msg-copy-btn")
+  );
+  assert.ok(copyBtn, "Pet message must have .msg-copy-btn for clipboard no-crash test");
+  let threw = false;
+  try {
+    copyBtn.dispatchEvent({ type: "click", stopPropagation: () => {} });
+  } catch (_) {
+    threw = true;
+  }
+  assert.ok(!threw, "Clicking .msg-copy-btn without navigator must not throw");
+}
+
+function testTask196CopyPrefersBridge() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("writeClipboardText"),
+    "renderer.js must reference writeClipboardText bridge");
+  assert.ok(src.includes("function writeToClipboard"),
+    "renderer.js must define writeToClipboard helper");
+  assert.ok(src.includes("api.writeClipboardText"),
+    "writeToClipboard must call api.writeClipboardText when available");
+  assert.ok(src.includes("Promise.resolve(api.writeClipboardText"),
+    "writeToClipboard must wrap async IPC bridge in Promise.resolve");
+}
+
+function testTask196NavigatorFallbackExists() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("navigator.clipboard"),
+    "renderer.js must still reference navigator.clipboard as fallback");
+  assert.ok(src.includes("clipboard unavailable"),
+    "renderer.js must reject with 'clipboard unavailable' when no API exists");
+}
+
+async function testTask196BridgeCalledWhenAvailable() {
+  let bridgeCalled = false;
+  let bridgeText = null;
+  const { document } = await loadRenderer({
+    dragonPet: { writeClipboardText: (text) => { bridgeCalled = true; bridgeText = text; return true; } },
+  });
+  const chatArea = document.getElementById("chat-area");
+  const petMsg = chatArea.children.find(
+    (c) => typeof c.className === "string" && c.className.includes("pet")
+  );
+  assert.ok(petMsg, "Pet message must exist for bridge-call test");
+  const copyBtn = petMsg.children.find(
+    (c) => typeof c.className === "string" && c.className.includes("msg-copy-btn")
+  );
+  assert.ok(copyBtn, "Pet message must have .msg-copy-btn for bridge-call test");
+  copyBtn.dispatchEvent({ type: "click", stopPropagation: () => {} });
+  assert.ok(bridgeCalled, "writeClipboardText bridge must be called when dragonPet provides it");
+  assert.strictEqual(typeof bridgeText, "string", "bridge must receive message text as string");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -2727,6 +2848,16 @@ async function main() {
   testTask195VisF6ProviderTitleChinese();
   testTask195VisF6ProviderLabelsChinese();
   testTask195VisF6ProviderSummaryCssExists();
+  // TASK-196: Chat Message Copy / Export
+  testTask196CopyChatButtonInHtml();
+  testTask196CopyFunctionsExist();
+  testTask196CopyAllSelectorOnlyUserPet();
+  testTask196MsgCopyBtnCssExists();
+  await testTask196CopyBtnAppendedToPetBubble();
+  await testTask196ClipboardUnavailableNocrash();
+  testTask196CopyPrefersBridge();
+  testTask196NavigatorFallbackExists();
+  await testTask196BridgeCalledWhenAvailable();
   console.log("renderer chat smoke: PASS");
 }
 

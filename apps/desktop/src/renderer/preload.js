@@ -10,6 +10,7 @@ const CHAT_HISTORY_LOAD_CHANNEL   = "chat-history:load";    // TASK-194
 const CHAT_HISTORY_CLEAR_CHANNEL  = "chat-history:clear";   // TASK-194
 const SCREEN_CAPTURE_ONCE_CHANNEL   = "screen:capture-once";    // TASK-171A
 const SCREEN_CAPTURE_WINDOW_CHANNEL = "screen:capture-window";  // TASK-176
+const CLIPBOARD_WRITE_TEXT_CHANNEL  = "clipboard:write-text";   // TASK-196
 
 function sanitizePetSpeechPayload(payload = {}) {
   return {
@@ -61,5 +62,12 @@ contextBridge.exposeInMainWorld(
     chatHistoryAppend: (entry) => ipcRenderer.invoke(CHAT_HISTORY_APPEND_CHANNEL, sanitizeChatHistoryEntry(entry)),
     chatHistoryLoad:   () => ipcRenderer.invoke(CHAT_HISTORY_LOAD_CHANNEL),
     chatHistoryClear:  () => ipcRenderer.invoke(CHAT_HISTORY_CLEAR_CHANNEL),
+    // TASK-196: narrow clipboard IPC bridge — routes via main IPC to avoid file:// secure-context restriction.
+    writeClipboardText: (text) => {
+      if (typeof text !== "string") return Promise.resolve(false);
+      const safe = text.slice(0, 20000);
+      if (!safe) return Promise.resolve(false);
+      return ipcRenderer.invoke(CLIPBOARD_WRITE_TEXT_CHANNEL, safe);
+    },
   })
 );

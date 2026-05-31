@@ -466,6 +466,45 @@ textarea {
   text-align: left;
 }
 
+/* TASK-196: per-bubble copy affordance — visible only on hover */
+.message.user,
+.message.pet {
+  position: relative;
+}
+
+.msg-copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 3px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.message.user:hover .msg-copy-btn,
+.message.pet:hover .msg-copy-btn {
+  opacity: 1;
+}
+
+.msg-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+
+.msg-copy-btn.copied {
+  color: #5b9fd6;
+  opacity: 1;
+}
+
 /* ── Memory section (collapsible) ─────────────────────── */
 #memory-section {
   background: var(--surface);

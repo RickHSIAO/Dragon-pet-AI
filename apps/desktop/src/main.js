@@ -8,7 +8,7 @@
  * - No shell execution, no file system access, no live2D
  */
 
-const { app, BrowserWindow, desktopCapturer, ipcMain, Menu, screen } = require("electron");
+const { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, Menu, screen } = require("electron");
 const fs = require("fs");
 const http = require("http");  // TASK-167B: used by stt:transcribe IPC handler
 const path = require("path");
@@ -31,6 +31,7 @@ const CHAT_HISTORY_FILE = "chat-history.json";                 // TASK-194
 const CHAT_HISTORY_APPEND_CHANNEL = "chat-history:append";    // TASK-194
 const CHAT_HISTORY_LOAD_CHANNEL   = "chat-history:load";      // TASK-194
 const CHAT_HISTORY_CLEAR_CHANNEL  = "chat-history:clear";     // TASK-194
+const CLIPBOARD_WRITE_TEXT_CHANNEL = "clipboard:write-text";  // TASK-196
 const CHAT_HISTORY_MAX_ENTRIES    = 200;                      // TASK-194: bounded history cap
 const CHAT_HISTORY_TEXT_MAX       = 2000;                     // TASK-194: per-entry text cap
 const SCREEN_CAPTURE_ONCE_CHANNEL    = "screen:capture-once";      // TASK-171A
@@ -1044,6 +1045,19 @@ ipcMain.handle(CHAT_HISTORY_LOAD_CHANNEL, () => {
 ipcMain.handle(CHAT_HISTORY_CLEAR_CHANNEL, () => {
   clearChatHistoryFile();
   return { ok: true };
+});
+
+// TASK-196: clipboard write from main process — avoids file:// secure-context restriction in renderer.
+ipcMain.handle(CLIPBOARD_WRITE_TEXT_CHANNEL, (_event, text) => {
+  if (typeof text !== "string") return false;
+  const safe = text.slice(0, 20000);
+  if (!safe) return false;
+  try {
+    clipboard.writeText(safe);
+    return true;
+  } catch (_) {
+    return false;
+  }
 });
 
 app.whenReady().then(() => {

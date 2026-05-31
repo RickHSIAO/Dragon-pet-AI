@@ -18314,6 +18314,178 @@ New narrow IPC channel `pet:chat-mirror` (Pet Window → main → Full App rende
 
 ---
 
+## TASK-196 | Chat Message Copy / Export
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-31
+
+### Goal
+
+Add lightweight clipboard copy to the Full App Chat:
+1. Per-bubble "複製" affordance — hover over any user/pet message to reveal a small copy button
+2. "複製對話" header button — copies the full visible conversation as formatted plain text
+
+No new IPC, no backend changes, no new data saved, no chat API schema changes.
+
+### Approach
+
+**A. Per-bubble copy button**
+
+`appendMessage` now, for `role === "user"` or `"pet"`:
+- Sets `wrap.dataset.msgText = text` — raw string, no HTML tags
+- Creates `<button class="msg-copy-btn" type="button" title="複製訊息">複製</button>`
+- Registers `click` listener → `e.stopPropagation(); copySingleMessage(text, btn)`
+- Button is `position: absolute; top: 8px; right: 8px; opacity: 0` — invisible until hover
+
+**B. `writeToClipboard(text)` helper — IPC bridge-first, navigator fallback**
+
+```javascript
+function writeToClipboard(text) {
+  const api = typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null;
+  if (api && typeof api.writeClipboardText === "function") {
+    return Promise.resolve(api.writeClipboardText(text)).then((ok) => {
+      if (ok === false) throw new Error("clipboard write failed");
+    });
+  }
+  const clip = typeof navigator !== "undefined" ? navigator.clipboard : null;
+  if (!clip || typeof clip.writeText !== "function")
+    return Promise.reject(new Error("clipboard unavailable"));
+  return clip.writeText(text);
+}
+```
+
+Electron loads pages from `file://` which is not a secure context, so `navigator.clipboard` fails. Root cause of first fix attempt failure: calling `clipboard.writeText` directly in the preload script (renderer process) also fails — the clipboard module must run in the **main process**. The full chain is now:
+
+```
+renderer.js  →  window.dragonPet.writeClipboardText(text)
+             →  renderer/preload.js ipcRenderer.invoke("clipboard:write-text", text)
+             →  main.js ipcMain.handle("clipboard:write-text", ...) clipboard.writeText(safe)
+```
+
+`Promise.resolve(api.writeClipboardText(...))` handles both the real async IPC path and sync mocks in tests uniformly. `navigator.clipboard` remains as a web-environment fallback.
+
+**C. `copySingleMessage(text, btn)` function**
+
+Uses `writeToClipboard(text)` — `.then` sets "已複製" + `copied` CSS; `.catch` sets "複製失敗". No early-return on clipboard unavailable.
+
+**D. "複製對話" header button (`#copy-chat-btn`)**
+
+Ghost button added between screen-capture group and `#clear-chat-btn` in `header-actions`. Click → `copyAllChat()`.
+
+**E. `copyAllChat()` function**
+
+```javascript
+chatArea.querySelectorAll(".message.user, .message.pet")   // excludes status/error
+```
+
+For each element: reads `el.dataset.msgText` (never `innerHTML`), extracts time from `.msg-meta` (strips source label like "Pet ·"), formats as:
+
+```
+你 10:30:
+message text
+
+克莉絲蒂娜 10:31:
+reply text
+```
+
+Same `typeof navigator` guard. Button text feedback: "已複製！" / "無法複製" / "複製失敗".
+
+### Safety / Privacy Boundaries
+
+| Constraint | Implementation |
+|---|---|
+| No diagnostics / traceback | Only `.message.user` and `.message.pet` queried — `.message.status`, `.message.error` excluded |
+| No raw HTML | `dataset.msgText` stores the raw string; `innerHTML` never read |
+| No API key | Only `text` parameter from `appendMessage` — API key never passes through chat messages |
+| No audio / base64 / screenshot | Chat messages are plain text only; no blobs |
+| No new persistence | Clipboard write only; nothing saved to disk or IPC |
+| Narrow IPC channel | `clipboard:write-text` in main.js: string-only, max 20000 chars, returns bool. No shell/fs/process exposure. No arbitrary channel forwarding. |
+| Clipboard unavailable = safe | `typeof navigator !== "undefined"` guard + `.catch()` — no throw in any environment |
+| status/system messages not copied | `copyAllChat` selector excludes `.message.status` — restore separators, SYSTEM lines, errors not exported |
+
+### Files Modified
+
+| File | Change | Runtime? |
+|---|---|---|
+| `apps/desktop/src/renderer/index.html` | Added `#copy-chat-btn` ghost button before `#clear-chat-btn` | Yes (new button) |
+| `apps/desktop/src/renderer/styles.css` | `.message.user/.pet { position: relative }`; `.msg-copy-btn` absolute-positioned hover affordance; `.msg-copy-btn.copied` feedback state | CSS only |
+| `apps/desktop/src/main.js` | `clipboard` imported from electron; `CLIPBOARD_WRITE_TEXT_CHANNEL = "clipboard:write-text"`; `ipcMain.handle` handler (string-only, max 20000, try/catch → bool) | Main only |
+| `apps/desktop/src/renderer/preload.js` | `CLIPBOARD_WRITE_TEXT_CHANNEL` constant; `writeClipboardText(text)` in `dragonPet` contextBridge routes to `ipcRenderer.invoke("clipboard:write-text", safe)` | Preload only |
+| `apps/desktop/src/renderer/renderer.js` | `writeToClipboard(text)` IPC-bridge-first helper (Promise.resolve wraps async IPC); `copySingleMessage()` + `copyAllChat()` updated to use it; `appendMessage` adds `dataset.msgText` + `.msg-copy-btn`; `copyChatBtn` DOM ref + event listener | Yes |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | 9 TASK-196 tests (6 original + 3 bridge tests) | No |
+| `apps/desktop/scripts/pet-window-smoke.js` | `testTask196ClipboardBridgeInRendererPreload` + `testTask196ClipboardIpcHandlerInMain` | No |
+
+### Test Coverage
+
+| Test | Type | What it verifies |
+|---|---|---|
+| `testTask196CopyChatButtonInHtml` | static | `id="copy-chat-btn"` in HTML; label "複製對話" |
+| `testTask196CopyFunctionsExist` | static | `copyAllChat` + `copySingleMessage` + `writeToClipboard` defined; `dataset.msgText` used (not innerHTML) |
+| `testTask196CopyAllSelectorOnlyUserPet` | static | `querySelectorAll(".message.user, .message.pet")` — excludes status/error |
+| `testTask196MsgCopyBtnCssExists` | static | `.msg-copy-btn`, `.msg-copy-btn.copied`, hover opacity rule in CSS |
+| `testTask196CopyBtnAppendedToPetBubble` | dynamic | Startup greeting pet message has `.msg-copy-btn` child; `dataset.msgText` populated |
+| `testTask196ClipboardUnavailableNocrash` | dynamic | Click `.msg-copy-btn` with no `navigator` and no `dragonPet` in VM — no throw |
+| `testTask196CopyPrefersBridge` | static | `writeClipboardText` referenced; `api.writeClipboardText` called in helper |
+| `testTask196NavigatorFallbackExists` | static | `navigator.clipboard` fallback still present; "clipboard unavailable" rejection path exists |
+| `testTask196BridgeCalledWhenAvailable` | dynamic | Mock `dragonPet.writeClipboardText` injected; verify it is called + receives string text on button click |
+| `testTask196ClipboardBridgeInRendererPreload` (pet-window-smoke) | static | `writeClipboardText` + `"clipboard:write-text"` channel + `ipcRenderer.invoke` + `20000` cap in preload.js; no direct `clipboard.writeText` call |
+| `testTask196ClipboardIpcHandlerInMain` (pet-window-smoke) | static | `CLIPBOARD_WRITE_TEXT_CHANNEL` constant + `ipcMain.handle` + `clipboard.writeText` in main.js; `clipboard` imported from electron |
+
+### Copy Format
+
+```
+你 10:30:
+早安
+
+克莉絲蒂娜 10:31:
+哼，吾在這裡。汝有何事就直說吧。
+```
+
+- Time extracted from `.msg-meta`: strips source label ("Pet ·" / "Voice ·") leaving only HH:mm
+- Messages with no timestamp: `你:` / `克莉絲蒂娜:` (no time suffix)
+- Empty messages (no `dataset.msgText`) skipped
+- `status` / `error` / `system` messages never included
+
+### Automated Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+9 TASK-196 tests total) |
+| `pet-renderer-smoke.js` | PASS — 233 checks (Pet Window untouched) |
+| `pet-window-smoke.js` | PASS — 55 checks (+2 IPC bridge tests) |
+
+### Acceptance Criteria
+
+- [x] "複製" button appears on hover over user/pet messages ✓
+- [x] Clicking "複製" copies only the message text (no HTML, no metadata) ✓
+- [x] "複製對話" header button copies full conversation as plain text ✓
+- [x] Copy format: `名稱 HH:mm:\ntext` separated by blank lines ✓
+- [x] `status` / `error` / `system` messages excluded from copy-all ✓
+- [x] Clipboard unavailable → no crash, brief "無法複製" feedback ✓
+- [x] No new IPC channel, no backend, no new data saved ✓
+- [x] `clipboard:write-text` IPC handler in main.js (Electron `clipboard.writeText`, string-only, max 20000, try/catch → bool) ✓
+- [x] `writeClipboardText` in renderer/preload.js routes to `ipcRenderer.invoke("clipboard:write-text", ...)` ✓
+- [x] `writeToClipboard` helper in renderer.js prefers IPC bridge, falls back to navigator.clipboard ✓
+- [x] All three smoke suites PASS (renderer-chat +9, pet-window 55, pet-renderer 233) ✓
+- [x] Windows visual smoke PASS ✓ (2026-05-31)
+
+### Windows Visual Smoke Results (2026-05-31)
+
+| Scenario | Result |
+|---|---|
+| Per-bubble hover → "複製" 按鈕出現 | PASS |
+| 點擊 "複製" → 顯示 "已複製"；貼到記事本內容正確（純文字，只含該則訊息） | PASS |
+| "複製對話" → 完整對話可貼上；格式 "你/克莉絲蒂娜 HH:mm:\ntext" | PASS |
+| 貼上內容不含 status separator / provider / debug / memory / audit / raw HTML | PASS |
+| Full App chat 正常 | PASS |
+| Pet direct input 正常 | PASS |
+| Pet voice/STT/TTS 正常 | PASS |
+| Chat history restore 正常 | PASS |
+
+Root cause of initial failure: `navigator.clipboard` rejected in Electron `file://` renderer (not a secure context). First fix attempt (`clipboard.writeText` in preload) also failed — renderer-process clipboard access is restricted. Final fix: main-process IPC chain (`clipboard:write-text` → `ipcMain.handle` → `clipboard.writeText`).
+
+---
+
 ## TASK-195 | Chat History UX Polish / Source & Timestamp Display
 
 **Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS

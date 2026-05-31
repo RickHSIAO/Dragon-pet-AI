@@ -745,6 +745,28 @@ function testTask195VisMenuHiddenInMain() {
   assertIncludes(main, "Menu.setApplicationMenu(null)", "main.js must remove native application menu");
 }
 
+// ---------------------------------------------------------------------------
+// TASK-196: Clipboard bridge surface checks
+// ---------------------------------------------------------------------------
+
+function testTask196ClipboardBridgeInRendererPreload() {
+  const preload = readText(rendererPreloadPath);
+  assertIncludes(preload, "writeClipboardText", "renderer/preload.js must expose writeClipboardText");
+  assertIncludes(preload, '"clipboard:write-text"', "renderer/preload.js must define clipboard:write-text IPC channel");
+  assertIncludes(preload, "ipcRenderer.invoke(CLIPBOARD_WRITE_TEXT_CHANNEL", "renderer/preload.js must route clipboard write via ipcRenderer.invoke");
+  assertIncludes(preload, "20000", "renderer/preload.js writeClipboardText must cap text at 20000 chars");
+  assertNotIncludes(preload, 'exposeInMainWorld("clipboard"', "renderer/preload.js must not expose raw clipboard API");
+  assertNotIncludes(preload, "clipboard.writeText", "renderer/preload.js must not call clipboard.writeText directly — routes via main IPC");
+}
+
+function testTask196ClipboardIpcHandlerInMain() {
+  const main = readText(mainPath);
+  assertIncludes(main, 'CLIPBOARD_WRITE_TEXT_CHANNEL = "clipboard:write-text"', "main.js must define clipboard:write-text channel constant");
+  assertIncludes(main, "ipcMain.handle(CLIPBOARD_WRITE_TEXT_CHANNEL", "main.js must register clipboard:write-text IPC handler");
+  assertIncludes(main, "clipboard.writeText", "main.js clipboard handler must call clipboard.writeText");
+  assertRegex(main, /clipboard\s*[,}]/, "main.js must import clipboard from electron");
+}
+
 function run() {
   const tests = [
     testMainHasPetWindowPrototype,
@@ -811,6 +833,9 @@ function run() {
     // TASK-195
     testTask195InputMethodInMirrorPipeline,
     testTask195VisMenuHiddenInMain,
+    // TASK-196
+    testTask196ClipboardBridgeInRendererPreload,
+    testTask196ClipboardIpcHandlerInMain,
   ];
 
   for (const test of tests) {
