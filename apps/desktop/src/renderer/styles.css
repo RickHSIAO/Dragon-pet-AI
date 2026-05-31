@@ -185,6 +185,21 @@ textarea {
   color: #ff8a8a;
 }
 
+.clear-chat-undo-btn {
+  background: transparent;
+  border: 0;
+  color: var(--accent-soft);
+  cursor: pointer;
+  font: inherit;
+  margin-left: 6px;
+  padding: 0 2px;
+  text-decoration: underline;
+}
+
+.clear-chat-undo-btn:hover {
+  color: var(--text);
+}
+
 /* TASK-172A: screen analysis summary panel */
 .analyze-screen-summary {
   background: var(--surface-alt);

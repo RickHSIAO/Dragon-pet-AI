@@ -4835,6 +4835,290 @@ async function testTask208SearchHighlightNavigationStillWorks() {
   console.log("  testTask208SearchHighlightNavigationStillWorks PASS");
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TASK-209: Undo Clear Chat
+// ─────────────────────────────────────────────────────────────────────────────
+
+function undoButton(document) {
+  const status = document.getElementById("clear-chat-status");
+  return status.children.find((child) => (child.className || "").includes("clear-chat-undo-btn"));
+}
+
+async function clearWithConfirm(document) {
+  const btn = document.getElementById("clear-chat-btn");
+  btn.click();
+  btn.click();
+  await settle();
+}
+
+function testTask209FunctionsExist() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const css = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "styles.css"), "utf8");
+  assert.ok(src.includes("let lastClearedChatEntries = []"),
+    "renderer.js must define lastClearedChatEntries");
+  assert.ok(src.includes("const UNDO_CLEAR_MS = 10000"),
+    "undo clear window must be 10 seconds");
+  assert.ok(src.includes("function collectUndoableChatEntries"),
+    "renderer.js must define collectUndoableChatEntries");
+  assert.ok(src.includes("function showUndoClearState"),
+    "renderer.js must define showUndoClearState");
+  assert.ok(src.includes("async function undoClearChat"),
+    "renderer.js must define undoClearChat");
+  assert.ok(css.includes(".clear-chat-undo-btn"),
+    "styles.css must define .clear-chat-undo-btn");
+  console.log("  testTask209FunctionsExist PASS");
+}
+
+async function testTask209ClearSnapshotsUserPetEntries() {
+  const { sandbox } = await loadRenderer();
+  const ts = 1748693400000;
+  sandbox.appendMessage("user", "undo user", { noHistory: true, source: "full_app", ts });
+  sandbox.appendMessage("pet", "undo pet", { noHistory: true, source: "pet_text", ts: ts + 1000 });
+
+  const entries = sandbox.collectUndoableChatEntries();
+
+  assert.equal(entries.length, 2, "undo snapshot must include user and pet entries");
+  assert.equal(JSON.stringify(entries.map((entry) => entry.role)), JSON.stringify(["user", "pet"]));
+  assert.equal(entries[0].text, "undo user");
+  assert.equal(entries[1].source, "pet_text");
+  assert.equal(entries[0].ts, ts);
+  console.log("  testTask209ClearSnapshotsUserPetEntries PASS");
+}
+
+async function testTask209SnapshotSkipsStatusSeparatorStartup() {
+  const { document, sandbox } = await loadRenderer();
+  const chatArea = document.getElementById("chat-area");
+  sandbox.appendMessage("status", "status should skip", { noHistory: true });
+  const sep = document.createElement("div");
+  sep.className = "message date-separator";
+  sep.dataset.dateKey = "2026-05-31";
+  chatArea.appendChild(sep);
+  sandbox.appendMessage("user", "only formal", { noHistory: true, source: "full_app", ts: 1748693400000 });
+
+  const entries = sandbox.collectUndoableChatEntries();
+
+  assert.equal(entries.length, 1, "undo snapshot must skip startup/status/date separator entries");
+  assert.equal(entries[0].text, "only formal");
+  console.log("  testTask209SnapshotSkipsStatusSeparatorStartup PASS");
+}
+
+async function testTask209ClearShowsUndoUi() {
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({ ok: true }),
+    },
+  });
+  sandbox.appendMessage("user", "undo visible", { noHistory: true });
+
+  await clearWithConfirm(document);
+
+  assert.ok(textOf(document, "clear-chat-status").includes("對話紀錄已清除"),
+    "clear status must announce clear before undo");
+  const btn = undoButton(document);
+  assert.ok(btn, "clear status must include undo button after clearing formal messages");
+  assert.equal(btn.textContent, "復原", "undo button text must be 復原");
+  console.log("  testTask209ClearShowsUndoUi PASS");
+}
+
+async function testTask209UndoExpiresAfterTenSeconds() {
+  const timers = [];
+  const fakeSetTimeout = (fn, ms) => {
+    timers.push({ fn, ms, cleared: false });
+    return timers.length;
+  };
+  const fakeClearTimeout = (id) => {
+    if (timers[id - 1]) timers[id - 1].cleared = true;
+  };
+  const { document, sandbox } = await loadRenderer({
+    setTimeout: fakeSetTimeout,
+    clearTimeout: fakeClearTimeout,
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({ ok: true }),
+    },
+  });
+  sandbox.appendMessage("user", "undo expiry", { noHistory: true });
+
+  await clearWithConfirm(document);
+  const undoTimer = timers.find((timer) => timer.ms === 10000 && !timer.cleared);
+  assert.ok(undoTimer, "undo UI must schedule a 10 second expiry timer");
+  undoTimer.fn();
+
+  assert.equal(textOf(document, "clear-chat-status"), "",
+    "undo expiry must clear undo status text");
+  assert.equal(undoButton(document), undefined,
+    "undo expiry must remove the undo button");
+  console.log("  testTask209UndoExpiresAfterTenSeconds PASS");
+}
+
+async function testTask209UndoRestoresDomMessages() {
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({ ok: true }),
+      chatHistoryAppend: async () => ({ ok: true }),
+    },
+  });
+  sandbox.appendMessage("user", "restore user", { noHistory: true });
+  sandbox.appendMessage("pet", "restore pet", { noHistory: true, source: "pet_text" });
+
+  await clearWithConfirm(document);
+  undoButton(document).click();
+  await settle();
+
+  const transcript = sandbox.buildChatTranscript();
+  assert.ok(transcript.includes("restore user"), "undo must restore user message into DOM");
+  assert.ok(transcript.includes("restore pet"), "undo must restore pet message into DOM");
+  console.log("  testTask209UndoRestoresDomMessages PASS");
+}
+
+async function testTask209UndoRestoresPersistence() {
+  const appended = [];
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({ ok: true }),
+      chatHistoryAppend: (entry) => { appended.push(entry); return Promise.resolve({ ok: true }); },
+    },
+  });
+  const ts = 1748693400000;
+  sandbox.appendMessage("user", "persist user", { noHistory: true, source: "full_app", ts });
+  sandbox.appendMessage("pet", "persist pet", { noHistory: true, source: "pet_voice", ts: ts + 1000 });
+
+  await clearWithConfirm(document);
+  undoButton(document).click();
+  await settle();
+
+  assert.equal(appended.length, 2, "undo must write restored entries back to chat history");
+  assert.deepEqual(appended.map((entry) => entry.role), ["user", "pet"]);
+  assert.equal(appended[1].source, "pet_voice", "undo persistence must preserve source");
+  assert.equal(appended[0].ts, ts, "undo persistence must preserve timestamp");
+  console.log("  testTask209UndoRestoresPersistence PASS");
+}
+
+async function testTask209UndoReinsertsDateSeparators() {
+  const TS1 = 1748693400000;
+  const TS2 = TS1 + 86400000;
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({ ok: true }),
+      chatHistoryAppend: async () => ({ ok: true }),
+    },
+  });
+  const chatArea = document.getElementById("chat-area");
+  sandbox.appendMessage("user", "day one", { noHistory: true, ts: TS1 });
+  sandbox.appendMessage("pet", "day two", { noHistory: true, ts: TS2 });
+
+  await clearWithConfirm(document);
+  undoButton(document).click();
+  await settle();
+
+  const seps = chatArea.children.filter((child) => (child.className || "").includes("date-separator"));
+  assert.equal(seps.length, 2, "undo must re-render date separators from restored timestamps");
+  console.log("  testTask209UndoReinsertsDateSeparators PASS");
+}
+
+async function testTask209UndoHidesEmptyStateAndResetsSearchAndJump() {
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({ ok: true }),
+      chatHistoryAppend: async () => ({ ok: true }),
+    },
+  });
+  sandbox.appendMessage("user", "search restore", { noHistory: true });
+  searchChat(document, "search");
+  document.getElementById("chat-new-message-btn").hidden = false;
+
+  await clearWithConfirm(document);
+  undoButton(document).click();
+  await settle();
+
+  assert.equal(document.getElementById("chat-empty-state").hidden, true,
+    "undo must hide empty state after restoring formal messages");
+  assert.equal(document.getElementById("chat-search-input").value, "",
+    "undo must keep search input cleared");
+  assert.equal(textOf(document, "chat-search-count"), "",
+    "undo must keep search count cleared");
+  assert.equal(document.getElementById("chat-new-message-btn").hidden, true,
+    "undo must keep jump button hidden");
+  console.log("  testTask209UndoHidesEmptyStateAndResetsSearchAndJump PASS");
+}
+
+async function testTask209EmptyClearDoesNotShowUndo() {
+  const { document } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({ ok: true }),
+    },
+  });
+
+  await clearWithConfirm(document);
+
+  assert.equal(undoButton(document), undefined,
+    "clear with no formal user/pet messages must not show undo UI");
+  assert.ok(textOf(document, "clear-chat-status").includes("對話紀錄已清除"),
+    "empty clear should still show clean clear confirmation");
+  console.log("  testTask209EmptyClearDoesNotShowUndo PASS");
+}
+
+async function testTask209UndoDoesNotTriggerChatOrPet() {
+  const speechUpdates = [];
+  const { document, state, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({ ok: true }),
+      chatHistoryAppend: async () => ({ ok: true }),
+      updatePetSpeech(payload) { speechUpdates.push(payload); return Promise.resolve({ ok: true }); },
+    },
+  });
+  sandbox.appendMessage("user", "safe undo", { noHistory: true });
+
+  await clearWithConfirm(document);
+  state.calls.length = 0;
+  speechUpdates.length = 0;
+  undoButton(document).click();
+  await settle();
+
+  assert.equal(state.calls.filter((call) => call.url.endsWith("/chat")).length, 0,
+    "undo must not trigger /chat");
+  assert.equal(speechUpdates.length, 0,
+    "undo must not call updatePetSpeech / Pet Bubble");
+  console.log("  testTask209UndoDoesNotTriggerChatOrPet PASS");
+}
+
+async function testTask209CopyExportAfterUndo() {
+  const saveTextFileCalls = [];
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({ ok: true }),
+      chatHistoryAppend: async () => ({ ok: true }),
+      saveTextFile(payload) {
+        saveTextFileCalls.push(payload);
+        return Promise.resolve({ ok: true, canceled: false });
+      },
+    },
+  });
+  sandbox.appendMessage("user", "copy export undo", { noHistory: true });
+  sandbox.appendMessage("pet", "undo export reply", { noHistory: true, source: "pet_text" });
+
+  await clearWithConfirm(document);
+  undoButton(document).click();
+  await settle();
+  document.getElementById("export-chat-btn").click();
+  await settle();
+
+  const transcript = sandbox.buildChatTranscript();
+  assert.ok(transcript.includes("copy export undo"), "copy transcript must include restored user text");
+  assert.equal(saveTextFileCalls.length, 1, "export must work after undo");
+  assert.ok(saveTextFileCalls[0].content.includes("undo export reply"),
+    "exported content must include restored pet reply");
+  console.log("  testTask209CopyExportAfterUndo PASS");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -5129,6 +5413,19 @@ async function main() {
   await testTask208SearchActiveHidesEmptyStateWithoutBreakingResults();
   await testTask208CopyAndExportIgnoreEmptyState();
   await testTask208SearchHighlightNavigationStillWorks();
+  // TASK-209: Undo Clear Chat
+  testTask209FunctionsExist();
+  await testTask209ClearSnapshotsUserPetEntries();
+  await testTask209SnapshotSkipsStatusSeparatorStartup();
+  await testTask209ClearShowsUndoUi();
+  await testTask209UndoExpiresAfterTenSeconds();
+  await testTask209UndoRestoresDomMessages();
+  await testTask209UndoRestoresPersistence();
+  await testTask209UndoReinsertsDateSeparators();
+  await testTask209UndoHidesEmptyStateAndResetsSearchAndJump();
+  await testTask209EmptyClearDoesNotShowUndo();
+  await testTask209UndoDoesNotTriggerChatOrPet();
+  await testTask209CopyExportAfterUndo();
   console.log("renderer chat smoke: PASS");
 }
 

@@ -586,6 +586,10 @@ const CLEAR_CHAT_DEFAULT_TEXT = clearChatBtn
 let clearChatConfirmPending = false;
 let clearChatConfirmTimer = null;
 let clearChatStatusTimer = null;
+// TASK-209: short-lived undo state for the most recent successful clear.
+const UNDO_CLEAR_MS = 10000;
+let lastClearedChatEntries = [];
+let undoClearTimer = null;
 
 // TASK-113: smarter auto-scroll helpers — user sends always scroll,
 // AI replies only scroll when user is already near the bottom.
@@ -648,12 +652,78 @@ function setClearChatStatus(message, timeoutMs = 0) {
     clearTimeout(clearChatStatusTimer);
     clearChatStatusTimer = null;
   }
+  clearChatStatus.replaceChildren();
   clearChatStatus.textContent = message || "";
   if (message && timeoutMs > 0) {
     clearChatStatusTimer = setTimeout(() => {
       clearChatStatus.textContent = "";
       clearChatStatusTimer = null;
     }, timeoutMs);
+  }
+}
+
+function collectUndoableChatEntries() {
+  if (!chatArea) return [];
+  return Array.from(chatArea.children || [])
+    .filter((child) => {
+      const classes = typeof child.className === "string" ? child.className : "";
+      const isUserOrPet = classes.includes("user") || classes.includes("pet");
+      return isUserOrPet && child.dataset && child.dataset.formalChat === "true";
+    })
+    .map((child) => {
+      const classes = child.className.split(" ");
+      const ts = Number(child.dataset.ts || 0);
+      return {
+        role: classes.includes("user") ? "user" : "pet",
+        text: child.dataset.msgText || "",
+        source: child.dataset.source || "unknown",
+        ts: Number.isFinite(ts) ? ts : 0,
+      };
+    })
+    .filter((entry) => entry.text);
+}
+
+function clearUndoClearState({ clearStatus = false } = {}) {
+  lastClearedChatEntries = [];
+  if (undoClearTimer) {
+    clearTimeout(undoClearTimer);
+    undoClearTimer = null;
+  }
+  if (clearStatus) setClearChatStatus("");
+}
+
+function showUndoClearState(entries) {
+  clearUndoClearState();
+  lastClearedChatEntries = entries.map((entry) => ({ ...entry }));
+  if (!clearChatStatus) return;
+  if (clearChatStatusTimer) {
+    clearTimeout(clearChatStatusTimer);
+    clearChatStatusTimer = null;
+  }
+  clearChatStatus.textContent = "對話紀錄已清除。";
+  const undoBtn = document.createElement("button");
+  undoBtn.type = "button";
+  undoBtn.className = "clear-chat-undo-btn";
+  undoBtn.textContent = "復原";
+  undoBtn.addEventListener("click", () => {
+    undoClearChat();
+  });
+  clearChatStatus.appendChild(undoBtn);
+  undoClearTimer = setTimeout(() => {
+    clearUndoClearState({ clearStatus: true });
+  }, UNDO_CLEAR_MS);
+}
+
+async function persistChatHistoryEntries(entries) {
+  const api = typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null;
+  if (!api || typeof api.chatHistoryAppend !== "function") return;
+  for (const entry of entries) {
+    await api.chatHistoryAppend({
+      role: entry.role,
+      text: entry.text,
+      source: entry.source,
+      ts: entry.ts,
+    });
   }
 }
 
@@ -1136,6 +1206,9 @@ function appendMessage(role, text, {
   if (role === "user" || role === "pet") {
     wrap.dataset.msgText = text;
     wrap.dataset.formalChat = countsAsChat ? "true" : "false";
+    wrap.dataset.source = source;
+    wrap.dataset.ts = String(typeof ts === "number" ? ts : 0);
+    if (countsAsChat && !noHistory) clearUndoClearState({ clearStatus: true });
     const copyBtn = document.createElement("button");
     copyBtn.className = "msg-copy-btn";
     copyBtn.type = "button";
@@ -1166,6 +1239,34 @@ function appendMessage(role, text, {
     markUnread();
   }
   return wrap;
+}
+
+async function undoClearChat() {
+  if (!lastClearedChatEntries.length) return false;
+  const entries = lastClearedChatEntries.map((entry) => ({ ...entry }));
+  clearUndoClearState();
+  lastDateKey = null;
+  chatArea.replaceChildren();
+  hideNewMessageBtn();
+  if (chatSearchInput) chatSearchInput.value = "";
+  filterChatMessages("");
+  for (const entry of entries) {
+    appendMessage(entry.role, entry.text, {
+      noHistory: true,
+      source: entry.source,
+      ts: entry.ts,
+    });
+  }
+  hideNewMessageBtn();
+  updateEmptyChatState();
+  try {
+    await persistChatHistoryEntries(entries);
+    setClearChatStatus("已復原對話紀錄", 2000);
+    return true;
+  } catch (_e) {
+    setClearChatStatus("復原對話失敗", 2000);
+    return false;
+  }
 }
 
 function saveChatHistoryEntry(role, text, source, ts) {
@@ -1208,6 +1309,7 @@ async function loadAndRenderChatHistory() {
 async function clearChatHistory() {
   const api = typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null;
   if (!api || typeof api.chatHistoryClear !== "function") return false;
+  const undoEntries = collectUndoableChatEntries();
   try {
     await api.chatHistoryClear();
   } catch (_e) {
@@ -1221,7 +1323,12 @@ async function clearChatHistory() {
   if (chatSearchInput) chatSearchInput.value = "";
   filterChatMessages("");
   updateEmptyChatState();
-  setClearChatStatus("對話紀錄已清除", 2000);
+  if (undoEntries.length) {
+    showUndoClearState(undoEntries);
+  } else {
+    clearUndoClearState();
+    setClearChatStatus("對話紀錄已清除", 2000);
+  }
   return true;
 }
 

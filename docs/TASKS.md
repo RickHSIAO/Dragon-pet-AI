@@ -20615,3 +20615,100 @@ Add a safe, lightweight confirmation step before clearing chat history, and show
 | Empty state: after clear shows "還沒有對話，和克莉絲蒂娜說句話吧。"; startup greeting/status/date separator do not count; user/pet messages hide it | PASS |
 | Copy/export interaction: copy/export exclude empty state; empty export creates no file and shows clean status | PASS |
 | Regression: search/filter, search highlight/Enter navigation, LINE-style date separator, chat export, unread title badge, Pet unread dot, smooth auto-scroll/`↓ 新訊息`, Pet Window, Voice, STT, and TTS | PASS |
+
+---
+
+## TASK-209 | Undo Clear Chat
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-31
+
+### Goal
+
+After a confirmed clear, let the user restore the most recently cleared conversation for a short time so accidental deletion can be recovered.
+
+### Scope
+
+- `renderer.js`: snapshot formal user/pet messages before clear, show undo status/button for 10 seconds, restore DOM and persistence through existing chat history IPC, rebuild date separators and timestamp metadata
+- `styles.css`: low-key `.clear-chat-undo-btn` styling inside the existing clear status area
+- `renderer-chat-smoke.js`: +12 TASK-209 tests covering snapshot filtering, undo UI/expiry, DOM restore, persistence restore, date separators, empty state, no `/chat` / Pet side effects, and copy/export after undo
+- `docs/ROADMAP.md`, `docs/TASKS.md`, `README.md`: status/docs sync
+- No backend, IPC, chat history persistence format, chat API schema, Pet Window runtime, Ollama/provider runtime, Screen Context, vision, or multimodal change
+
+### Design Decisions
+
+| Decision | Detail |
+|---|---|
+| Snapshot from DOM | Undo captures current formal `.message.user` / `.message.pet` elements with `role`, `text`, `source`, and `ts` before `chatHistoryClear` runs |
+| Formal entries only | Startup greeting, status messages, and date separators are excluded from undo snapshot |
+| 10-second undo window | `UNDO_CLEAR_MS = 10000`; expiry clears the undo UI and snapshot |
+| Existing persistence path | Restore writes entries back with existing `chatHistoryAppend`; no new backend or IPC |
+| Render first with `noHistory:true` | Undo rebuilds the DOM without duplicate side effects, then writes persistence explicitly |
+| No side effects | Undo does not call `/chat`, does not update Pet Bubble, and does not trigger TTS |
+
+### Files Changed
+
+| File | Change |
+|---|---|
+| `apps/desktop/src/renderer/renderer.js` | Added `lastClearedChatEntries`, `undoClearTimer`, `collectUndoableChatEntries()`, `showUndoClearState()`, `clearUndoClearState()`, `persistChatHistoryEntries()`, `undoClearChat()`, and `source`/`ts` dataset storage |
+| `apps/desktop/src/renderer/styles.css` | Added `.clear-chat-undo-btn` low-key link-button styling |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | Added TASK-209 tests and helpers |
+| `docs/ROADMAP.md` | Added TASK-209 status and moved next planned task to TASK-210 |
+| `docs/TASKS.md` | Added this TASK-209 record |
+| `README.md` | Updated because README still named TASK-208 as latest and TASK-209 as next |
+
+### Test Coverage
+
+| Test | What it verifies |
+|---|---|
+| `testTask209FunctionsExist` | Undo state/helpers exist and timeout is 10 seconds |
+| `testTask209ClearSnapshotsUserPetEntries` | Undo snapshot captures formal user/pet entries with source and timestamp |
+| `testTask209SnapshotSkipsStatusSeparatorStartup` | Startup/status/date separator content is excluded from snapshot |
+| `testTask209ClearShowsUndoUi` | Clear with formal entries shows undo UI |
+| `testTask209UndoExpiresAfterTenSeconds` | Undo UI expires after 10 seconds |
+| `testTask209UndoRestoresDomMessages` | Undo restores user/pet messages into DOM |
+| `testTask209UndoRestoresPersistence` | Undo writes restored messages back to chat history via existing append IPC |
+| `testTask209UndoReinsertsDateSeparators` | Undo rebuilds date separators from restored timestamps |
+| `testTask209UndoHidesEmptyStateAndResetsSearchAndJump` | Undo hides empty state and keeps search/jump button reset |
+| `testTask209EmptyClearDoesNotShowUndo` | Clearing without formal messages does not show undo |
+| `testTask209UndoDoesNotTriggerChatOrPet` | Undo does not call `/chat` or `updatePetSpeech` |
+| `testTask209CopyExportAfterUndo` | Copy/export transcript works after undo |
+
+### Automated Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+12 TASK-209 tests) |
+| `pet-window-smoke.js` | PASS — 60 checks |
+| `pet-renderer-smoke.js` | PASS — 237 checks |
+
+### Acceptance Criteria
+
+- [x] Clear snapshots only formal user/pet entries before deletion ✓
+- [x] Status/date separator/startup greeting are excluded from undo snapshot ✓
+- [x] Clear with snapshot shows low-key undo UI ✓
+- [x] Undo auto-expires after 10 seconds ✓
+- [x] Undo restores DOM user/pet messages ✓
+- [x] Undo restores chat history persistence through existing `chatHistoryAppend` ✓
+- [x] Undo re-renders date separators and preserves timestamps/tooltips ✓
+- [x] Undo hides empty state and resets search / `↓ 新訊息` state ✓
+- [x] Empty clear does not show undo and does not create empty undo state ✓
+- [x] Undo does not trigger `/chat`, Pet Bubble, or TTS ✓
+- [x] Copy/export works after undo ✓
+- [x] No backend, IPC, chat history format, chat API schema, Pet Window, provider, Screen Context, vision, or multimodal change ✓
+- [x] `renderer-chat-smoke.js` PASS ✓
+- [x] `pet-window-smoke.js` PASS ✓
+- [x] `pet-renderer-smoke.js` PASS ✓
+- [x] Windows visual smoke PASS ✓
+
+### Windows Visual Smoke Results (2026-05-31)
+
+| Scenario | Result |
+|---|---|
+| Clear + undo UI: second confirmed clear empties chat, shows empty state, and shows "對話紀錄已清除。" with "復原" button | PASS |
+| Undo restore: clicking "復原" within 10 seconds restores formal user/pet messages, re-inserts date separators, preserves HH:mm timestamps and full tooltips, and hides empty state | PASS |
+| History persistence: after undo, restarting the app keeps the restored conversation | PASS |
+| Undo expiry: after 10 seconds without undo, undo UI disappears and that clear can no longer be restored | PASS |
+| Empty clear: clearing with no formal user/pet conversation shows no undo and creates no empty restore state | PASS |
+| Snapshot boundaries: undo does not restore startup greeting/status messages/date separators; date separators are regenerated during restore render | PASS |
+| Regression: search/filter, search highlight/Enter navigation, copy/export clipboard, chat export file, unread title badge, Pet unread dot, smooth auto-scroll/`↓ 新訊息`, Pet Window, Voice, STT, and TTS | PASS |
