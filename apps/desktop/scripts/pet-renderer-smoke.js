@@ -5081,6 +5081,11 @@ function testTask169ScopeChecks() {
     testTask193MirrorPayloadStructure,
     // TASK-195
     testTask195MirrorPayloadIncludesInputMethod,
+    // TASK-204
+    testTask204RenderUnreadDotExported,
+    testTask204RenderUnreadDotShowsWhenNonZero,
+    testTask204RenderUnreadDotHidesWhenZero,
+    testTask204UnreadDotListenerWiredInInit,
   ];
 
   for (const test of tests) {
@@ -5157,6 +5162,43 @@ function testTask195MirrorPayloadIncludesInputMethod() {
   const fnText = renderer.slice(fnIdx, fnIdx + 700);
   assertIncludes(fnText, "inputMethod:", "mirrorPetChatToFullApp payload must include inputMethod field");
   assertIncludes(fnText, '"voice"', "mirrorPetChatToFullApp must handle voice inputMethod");
+}
+
+// ---------------------------------------------------------------------------
+// TASK-204: Pet Window Unread Dot Badge tests
+// ---------------------------------------------------------------------------
+
+function testTask204RenderUnreadDotExported() {
+  const { renderUnreadDot } = require(petRendererPath);
+  assert(typeof renderUnreadDot === "function", "renderUnreadDot must be exported");
+}
+
+function testTask204RenderUnreadDotShowsWhenNonZero() {
+  const { renderUnreadDot } = require(petRendererPath);
+  const dot = new FakeElement("pet-unread-dot");
+  dot.hidden = true;
+  const fakeDoc = { getElementById: (id) => id === "pet-unread-dot" ? dot : null };
+  renderUnreadDot(fakeDoc, 1);
+  assert(dot.hidden === false, "renderUnreadDot must show dot when unreadCount > 0");
+  renderUnreadDot(fakeDoc, 5);
+  assert(dot.hidden === false, "renderUnreadDot must show dot when unreadCount = 5");
+}
+
+function testTask204RenderUnreadDotHidesWhenZero() {
+  const { renderUnreadDot } = require(petRendererPath);
+  const dot = new FakeElement("pet-unread-dot");
+  dot.hidden = false;
+  const fakeDoc = { getElementById: (id) => id === "pet-unread-dot" ? dot : null };
+  renderUnreadDot(fakeDoc, 0);
+  assert(dot.hidden === true, "renderUnreadDot must hide dot when unreadCount = 0");
+  renderUnreadDot(fakeDoc, -1);
+  assert(dot.hidden === true, "renderUnreadDot must hide dot when unreadCount <= 0");
+}
+
+function testTask204UnreadDotListenerWiredInInit() {
+  const renderer = readText(petRendererPath);
+  assertIncludes(renderer, "api.onUnreadUpdate", "initializePetMode must register onUnreadUpdate listener");
+  assertIncludes(renderer, "renderUnreadDot(documentRef", "initializePetMode must call renderUnreadDot");
 }
 
 run().catch((error) => {

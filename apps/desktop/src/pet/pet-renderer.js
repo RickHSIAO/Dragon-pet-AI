@@ -2232,6 +2232,13 @@ function applyScalePreset(documentRef, scale, dragonPetApi) {
   }
 }
 
+function renderUnreadDot(documentRef, unreadCount) {  // TASK-204
+  var dot = documentRef ? documentRef.getElementById("pet-unread-dot") : null;
+  if (dot) {
+    dot.hidden = unreadCount <= 0;
+  }
+}
+
 function initializePetMode(documentRef = document) {
   const root = documentRef.getElementById("pet-mode-root");
   const dragRegion = documentRef.getElementById("pet-drag-region");
@@ -2617,6 +2624,12 @@ function initializePetMode(documentRef = document) {
       renderPetSpeechUpdate(documentRef, payload);
     });
   }
+  // TASK-204: show/hide unread dot when Full App sends unread count
+  if (api && typeof api.onUnreadUpdate === "function") {
+    api.onUnreadUpdate(({ unreadCount }) => {
+      renderUnreadDot(documentRef, unreadCount);
+    });
+  }
 }
 
 if (typeof document !== "undefined") {
@@ -2771,5 +2784,7 @@ if (typeof module !== "undefined") {
     populatePetVoiceSelector,
     syncTtsControlDisplays,
     resetTtsControls,
+    // TASK-204
+    renderUnreadDot,
   };
 }

@@ -3839,6 +3839,95 @@ async function testTask201NavigateNoopWhenNoResults() {
   console.log("  testTask201NavigateNoopWhenNoResults PASS");
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TASK-204: Pet Window Unread Dot Badge
+// ─────────────────────────────────────────────────────────────────────────────
+
+function testTask204StaticSourceCheck() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const preload = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "preload.js"), "utf8");
+  assert.ok(src.includes("notifyUnreadDot"), "renderer.js must call notifyUnreadDot");
+  assert.ok(preload.includes("notifyUnreadDot"), "renderer preload.js must expose notifyUnreadDot");
+  console.log("  testTask204StaticSourceCheck PASS");
+}
+
+async function testTask204MarkUnreadCallsNotifyUnreadDot() {
+  const dotCalls = [];
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      notifyUnreadDot(count) { dotCalls.push(count); return Promise.resolve({ ok: true }); },
+    },
+  });
+  document.hidden = true;
+  sandbox.appendMessage("pet", "unread dot test reply", { noHistory: false });
+  assert.ok(dotCalls.length >= 1, "notifyUnreadDot must be called when pet message arrives while hidden");
+  assert.equal(dotCalls[dotCalls.length - 1], 1, "first unread notify must pass count = 1");
+  console.log("  testTask204MarkUnreadCallsNotifyUnreadDot PASS");
+}
+
+async function testTask204MultipleRepliesAccumulateDotCount() {
+  const dotCalls = [];
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      notifyUnreadDot(count) { dotCalls.push(count); return Promise.resolve({ ok: true }); },
+    },
+  });
+  document.hidden = true;
+  sandbox.appendMessage("pet", "reply one",   { noHistory: false });
+  sandbox.appendMessage("pet", "reply two",   { noHistory: false });
+  sandbox.appendMessage("pet", "reply three", { noHistory: false });
+  assert.ok(dotCalls.length >= 3, "notifyUnreadDot must be called for each unread pet reply");
+  assert.equal(dotCalls[dotCalls.length - 1], 3, "third unread notify must pass count = 3");
+  console.log("  testTask204MultipleRepliesAccumulateDotCount PASS");
+}
+
+async function testTask204ClearUnreadCallsNotifyWithZero() {
+  const dotCalls = [];
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      notifyUnreadDot(count) { dotCalls.push(count); return Promise.resolve({ ok: true }); },
+    },
+  });
+  document.hidden = true;
+  sandbox.appendMessage("pet", "unread while hidden", { noHistory: false });
+  const countBefore = dotCalls.length;
+  // Simulate Full App regaining focus (visibilitychange)
+  document.hidden = false;
+  document.dispatchEvent({ type: "visibilitychange" });
+  assert.ok(dotCalls.length > countBefore, "clearUnread must call notifyUnreadDot after focus");
+  assert.equal(dotCalls[dotCalls.length - 1], 0, "clearUnread must notify with count = 0");
+  console.log("  testTask204ClearUnreadCallsNotifyWithZero PASS");
+}
+
+async function testTask204UserMessageNoUnreadDotNotify() {
+  const dotCalls = [];
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      notifyUnreadDot(count) { dotCalls.push(count); return Promise.resolve({ ok: true }); },
+    },
+  });
+  document.hidden = true;
+  sandbox.appendMessage("user", "user message while hidden", { noHistory: false });
+  assert.equal(dotCalls.length, 0, "notifyUnreadDot must NOT be called for user messages");
+  console.log("  testTask204UserMessageNoUnreadDotNotify PASS");
+}
+
+async function testTask204NoPetBridgeNoCrash() {
+  // No dragonPet bridge — markUnread/clearUnread must not throw
+  const { document, sandbox } = await loadRenderer();
+  document.hidden = true;
+  let threw = false;
+  try {
+    sandbox.appendMessage("pet", "no bridge reply", { noHistory: false });
+    document.hidden = false;
+    document.dispatchEvent({ type: "visibilitychange" });
+  } catch (_e) {
+    threw = true;
+  }
+  assert.equal(threw, false, "markUnread/clearUnread must not throw when dragonPet bridge is absent");
+  console.log("  testTask204NoPetBridgeNoCrash PASS");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -4070,6 +4159,13 @@ async function main() {
   await testTask203CopyUnaffected();
   await testTask203SearchPreservesTitle();
   await testTask203TitleFormatHasSeconds();
+  // TASK-204: Pet Window Unread Dot Badge
+  testTask204StaticSourceCheck();
+  await testTask204MarkUnreadCallsNotifyUnreadDot();
+  await testTask204MultipleRepliesAccumulateDotCount();
+  await testTask204ClearUnreadCallsNotifyWithZero();
+  await testTask204UserMessageNoUnreadDotNotify();
+  await testTask204NoPetBridgeNoCrash();
   console.log("renderer chat smoke: PASS");
 }
 

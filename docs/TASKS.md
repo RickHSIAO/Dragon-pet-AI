@@ -20111,3 +20111,112 @@ The visible `meta.textContent` (`HH:mm` / `Pet · HH:mm` / `Voice · HH:mm`) is 
 | Startup greeting / status separator — no time tooltip | PASS |
 | Copy/export — plain text only, no tooltip/HTML | PASS |
 | Regression — search/filter, highlight/navigation, copy/export, unread badge, smooth auto-scroll, Pet/Voice/STT/TTS | PASS |
+
+---
+
+## TASK-204 | Pet Window Unread Dot Badge
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PENDING
+**Date:** 2026-05-31
+
+### Goal
+
+When Full App is hidden/unfocused and receives new pet/mirrored replies, Pet Window shows a small red unread dot on the avatar. The dot is cleared when the user focuses Full App.
+
+### Scope
+
+- New narrow IPC channel `pet:unread-dot` (Full App renderer → main) and `pet:unread-dot-received` (main → Pet Window)
+- `markUnread()` and `clearUnread()` in `renderer.js` call `window.dragonPet.notifyUnreadDot(count)` (added in TASK-200)
+- Payload is count-only: `{ unreadCount: number }` — no message text, no content
+- `renderUnreadDot(documentRef, unreadCount)` shows/hides `#pet-unread-dot` in Pet Window
+- `#pet-unread-dot` — small red dot (14px circle, `position: absolute; top: 6px; right: 6px`) inside `#pet-avatar-container`
+- Dot hidden (`hidden` attribute) by default; shown when `unreadCount > 0`
+- All three smoke suites PASS
+
+### Out of Scope
+
+- No unread count label (digit display)
+- No OS notification, no tray badge
+- No backend, no `/chat`, no history mutation
+- No Full App layout change
+- No speech bubble change
+- No existing IPC channel modification
+
+### IPC Architecture
+
+```
+renderer.js markUnread/clearUnread
+  → window.dragonPet.notifyUnreadDot(count)        [renderer/preload.js]
+    → ipcRenderer.invoke("pet:unread-dot", { unreadCount })
+      → ipcMain.handle("pet:unread-dot")             [main.js]
+        → petWindow.webContents.send("pet:unread-dot-received", { unreadCount })
+          → ipcRenderer.on(PET_UNREAD_DOT_RECEIVED_CHANNEL)  [pet-preload.js]
+            → onUnreadUpdate(callback)
+              → renderUnreadDot(documentRef, unreadCount)    [pet-renderer.js]
+                → dot.hidden = unreadCount <= 0
+```
+
+### Files Modified
+
+| File | Change | Runtime? |
+|---|---|---|
+| `apps/desktop/src/renderer/renderer.js` | `markUnread()` and `clearUnread()` call `window.dragonPet.notifyUnreadDot()` | Yes |
+| `apps/desktop/src/renderer/preload.js` | `PET_UNREAD_DOT_CHANNEL`; `notifyUnreadDot` exposed via contextBridge | Yes |
+| `apps/desktop/src/main.js` | `PET_UNREAD_DOT_CHANNEL` / `PET_UNREAD_DOT_RECEIVED_CHANNEL` constants; `ipcMain.handle` forwards to petWindow | Yes |
+| `apps/desktop/src/pet/pet-preload.js` | `PET_UNREAD_DOT_RECEIVED_CHANNEL`; `sanitizeUnreadPayload`; `onUnreadUpdate`; exposed in contextBridge | Yes |
+| `apps/desktop/src/pet/pet-renderer.js` | `renderUnreadDot(documentRef, unreadCount)`; registered in `initializePetMode()`; exported | Yes |
+| `apps/desktop/src/pet/pet.html` | `#pet-unread-dot` element inside `#pet-avatar-container` | Yes |
+| `apps/desktop/src/pet/pet.css` | `.pet-unread-dot` styles; `position: relative` on `.pet-avatar-container`; scale variants | Yes |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | 6 TASK-204 tests | No |
+| `apps/desktop/scripts/pet-window-smoke.js` | 5 TASK-204 tests | No |
+| `apps/desktop/scripts/pet-renderer-smoke.js` | 4 TASK-204 tests | No |
+
+### Test Coverage
+
+| Test | Suite | What it verifies |
+|---|---|---|
+| `testTask204StaticSourceCheck` | renderer-chat | `renderer.js` calls `notifyUnreadDot`; `preload.js` exposes it |
+| `testTask204MarkUnreadCallsNotifyUnreadDot` | renderer-chat | Pet reply while hidden → `notifyUnreadDot(1)` called |
+| `testTask204MultipleRepliesAccumulateDotCount` | renderer-chat | 3 pet replies → `notifyUnreadDot(3)` |
+| `testTask204ClearUnreadCallsNotifyWithZero` | renderer-chat | Focus clears unread → `notifyUnreadDot(0)` called |
+| `testTask204UserMessageNoUnreadDotNotify` | renderer-chat | User message while hidden → no `notifyUnreadDot` call |
+| `testTask204NoPetBridgeNoCrash` | renderer-chat | No dragonPet bridge → no crash |
+| `testTask204UnreadDotChannelsInMain` | pet-window | Both IPC constants defined; handler registered; petWindow forwarded |
+| `testTask204UnreadDotPayloadSanitizedInMain` | pet-window | Handler validates `unreadCount` type; guards petWindow availability |
+| `testTask204UnreadDotChannelInRendererPreload` | pet-window | `notifyUnreadDot` exposed; correct channel used |
+| `testTask204UnreadDotChannelInPetPreload` | pet-window | `onUnreadUpdate` exposed; correct channel listened |
+| `testTask204UnreadDotHtmlAndCssExist` | pet-window | `#pet-unread-dot` in HTML (hidden by default); `.pet-unread-dot` in CSS |
+| `testTask204RenderUnreadDotExported` | pet-renderer | `renderUnreadDot` exported from pet-renderer.js |
+| `testTask204RenderUnreadDotShowsWhenNonZero` | pet-renderer | `unreadCount = 1/5` → `dot.hidden = false` |
+| `testTask204RenderUnreadDotHidesWhenZero` | pet-renderer | `unreadCount = 0/-1` → `dot.hidden = true` |
+| `testTask204UnreadDotListenerWiredInInit` | pet-renderer | `initializePetMode` registers `onUnreadUpdate`; calls `renderUnreadDot` |
+
+### Safety / Privacy Boundaries
+
+| Constraint | Implementation |
+|---|---|
+| Count-only payload | `{ unreadCount: number }` — no message text, no timestamps, no user data |
+| No backend | No routes.py / service changes |
+| No history mutation | `notifyUnreadDot` not called from history load/restore |
+| No new OS notification | Dot is a DOM element only |
+| No new IPC surface | Only 2 new narrow channels, count-only payload |
+| Sanitized at each layer | main.js validates `typeof payload.unreadCount === "number"` before forwarding |
+| petWindow guard | main.js returns `pet_window_unavailable` if petWindow missing/destroyed |
+
+### Automated Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+6 TASK-204 tests) |
+| `pet-renderer-smoke.js` | PASS — 237 checks (+4 TASK-204 tests) |
+| `pet-window-smoke.js` | PASS — 60 checks (+5 TASK-204 tests) |
+
+### Acceptance Criteria
+
+- [x] Pet Window shows red dot when Full App is hidden and new pet reply arrives ✓ (pending visual)
+- [x] Dot clears when Full App regains focus ✓ (pending visual)
+- [x] No dot shown for user messages, startup greeting, or history restore ✓
+- [x] No message content in IPC payload ✓
+- [x] No backend, /chat, history, or existing IPC channel change ✓
+- [x] All three smoke suites PASS ✓
+- [ ] Windows visual smoke PENDING

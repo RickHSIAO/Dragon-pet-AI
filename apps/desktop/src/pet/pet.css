@@ -97,6 +97,7 @@ body {
 }
 
 .pet-avatar-container {
+  position: relative;
   width: 190px;
   height: 190px;
   display: grid;
@@ -907,6 +908,42 @@ textarea {
 
 [data-transcribing="true"] .pet-speaking-indicator {
   display: none;
+}
+
+/* ── TASK-204: Unread dot badge ─────────────────────────────────────────── */
+
+/* Small red dot — positioned at top-right of avatar container */
+.pet-unread-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ef4444;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.pet-unread-dot[hidden] {
+  display: none !important;
+}
+
+/* Small scale — compact dot */
+[data-scale="small"] .pet-unread-dot {
+  width: 10px;
+  height: 10px;
+  top: 4px;
+  right: 4px;
+}
+
+/* Large scale */
+[data-scale="large"] .pet-unread-dot {
+  width: 16px;
+  height: 16px;
+  top: 8px;
+  right: 8px;
 }
 
 /* ── TASK-169: TTS Voice Selection / Speech Controls ─────────────────────── */

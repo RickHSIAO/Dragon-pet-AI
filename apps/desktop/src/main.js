@@ -32,6 +32,8 @@ const CHAT_HISTORY_APPEND_CHANNEL = "chat-history:append";    // TASK-194
 const CHAT_HISTORY_LOAD_CHANNEL   = "chat-history:load";      // TASK-194
 const CHAT_HISTORY_CLEAR_CHANNEL  = "chat-history:clear";     // TASK-194
 const CLIPBOARD_WRITE_TEXT_CHANNEL = "clipboard:write-text";  // TASK-196
+const PET_UNREAD_DOT_CHANNEL = "pet:unread-dot";              // TASK-204: Full App → main
+const PET_UNREAD_DOT_RECEIVED_CHANNEL = "pet:unread-dot-received";  // TASK-204: main → Pet Window
 const CHAT_HISTORY_MAX_ENTRIES    = 200;                      // TASK-194: bounded history cap
 const CHAT_HISTORY_TEXT_MAX       = 2000;                     // TASK-194: per-entry text cap
 const SCREEN_CAPTURE_ONCE_CHANNEL    = "screen:capture-once";      // TASK-171A
@@ -1058,6 +1060,18 @@ ipcMain.handle(CLIPBOARD_WRITE_TEXT_CHANNEL, (_event, text) => {
   } catch (_) {
     return false;
   }
+});
+
+// TASK-204: receive unread count from Full App and forward to Pet Window.
+// Payload is count-only — no message content. Pet Window shows/hides unread dot.
+ipcMain.handle(PET_UNREAD_DOT_CHANNEL, (_event, payload = {}) => {
+  const unreadCount = typeof payload.unreadCount === "number" && payload.unreadCount >= 0
+    ? payload.unreadCount : 0;
+  if (!petWindow || petWindow.isDestroyed()) {
+    return { ok: false, reason: "pet_window_unavailable" };
+  }
+  petWindow.webContents.send(PET_UNREAD_DOT_RECEIVED_CHANNEL, { unreadCount });
+  return { ok: true };
 });
 
 app.whenReady().then(() => {

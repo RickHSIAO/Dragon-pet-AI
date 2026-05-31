@@ -767,6 +767,49 @@ function testTask196ClipboardIpcHandlerInMain() {
   assertRegex(main, /clipboard\s*[,}]/, "main.js must import clipboard from electron");
 }
 
+// ── TASK-204: Pet Window Unread Dot Badge ─────────────────────────────────────
+
+function testTask204UnreadDotChannelsInMain() {
+  const main = readText(mainPath);
+  assertIncludes(main, 'PET_UNREAD_DOT_CHANNEL = "pet:unread-dot"', "main.js must define PET_UNREAD_DOT_CHANNEL");
+  assertIncludes(main, 'PET_UNREAD_DOT_RECEIVED_CHANNEL = "pet:unread-dot-received"', "main.js must define PET_UNREAD_DOT_RECEIVED_CHANNEL");
+  assertIncludes(main, "ipcMain.handle(PET_UNREAD_DOT_CHANNEL", "main.js must register unread-dot IPC handler");
+  assertIncludes(main, "petWindow.webContents.send(PET_UNREAD_DOT_RECEIVED_CHANNEL", "main.js must forward unread count to petWindow");
+}
+
+function testTask204UnreadDotPayloadSanitizedInMain() {
+  const main = readText(mainPath);
+  const fnIdx = main.indexOf("ipcMain.handle(PET_UNREAD_DOT_CHANNEL");
+  const fnText = main.slice(fnIdx, fnIdx + 400);
+  assertIncludes(fnText, "unreadCount", "unread-dot IPC handler must use unreadCount field");
+  assertIncludes(fnText, "typeof payload.unreadCount", "unread-dot handler must validate unreadCount type");
+  assertIncludes(fnText, "pet_window_unavailable", "unread-dot handler must guard petWindow availability");
+}
+
+function testTask204UnreadDotChannelInRendererPreload() {
+  const preload = readText(rendererPreloadPath);
+  assertIncludes(preload, 'PET_UNREAD_DOT_CHANNEL = "pet:unread-dot"', "renderer preload.js must define PET_UNREAD_DOT_CHANNEL");
+  assertIncludes(preload, "notifyUnreadDot", "renderer preload.js must expose notifyUnreadDot");
+  assertIncludes(preload, "ipcRenderer.invoke(PET_UNREAD_DOT_CHANNEL", "renderer preload.js must invoke unread-dot IPC channel");
+}
+
+function testTask204UnreadDotChannelInPetPreload() {
+  const preload = readText(petPreloadPath);
+  assertIncludes(preload, 'PET_UNREAD_DOT_RECEIVED_CHANNEL = "pet:unread-dot-received"', "pet-preload.js must define PET_UNREAD_DOT_RECEIVED_CHANNEL");
+  assertIncludes(preload, "onUnreadUpdate", "pet-preload.js must expose onUnreadUpdate");
+  assertIncludes(preload, "ipcRenderer.on(PET_UNREAD_DOT_RECEIVED_CHANNEL", "pet-preload.js must listen on unread-dot-received channel");
+}
+
+function testTask204UnreadDotHtmlAndCssExist() {
+  const html = readText(petHtmlPath);
+  const css = readText(path.join(desktopRoot, "src", "pet", "pet.css"));
+  assertIncludes(html, 'id="pet-unread-dot"', "pet.html must contain #pet-unread-dot");
+  assertIncludes(html, 'class="pet-unread-dot', "pet.html must give pet-unread-dot the CSS class");
+  assertRegex(html, /id="pet-unread-dot"[\s\S]*hidden/, "pet.html #pet-unread-dot must start hidden");
+  assertIncludes(css, ".pet-unread-dot", "pet.css must define .pet-unread-dot");
+  assertIncludes(css, ".pet-unread-dot[hidden]", "pet.css must override [hidden] to display:none");
+}
+
 function run() {
   const tests = [
     testMainHasPetWindowPrototype,
@@ -836,6 +879,12 @@ function run() {
     // TASK-196
     testTask196ClipboardBridgeInRendererPreload,
     testTask196ClipboardIpcHandlerInMain,
+    // TASK-204
+    testTask204UnreadDotChannelsInMain,
+    testTask204UnreadDotPayloadSanitizedInMain,
+    testTask204UnreadDotChannelInRendererPreload,
+    testTask204UnreadDotChannelInPetPreload,
+    testTask204UnreadDotHtmlAndCssExist,
   ];
 
   for (const test of tests) {

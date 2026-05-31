@@ -11,6 +11,7 @@ const PET_SCALE_SET_CHANNEL = "pet:set-scale";            // TASK-166B
 const PET_CLICK_THROUGH_SET_CHANNEL = "pet:set-click-through";  // TASK-166D
 const PET_STT_TRANSCRIBE_CHANNEL = "stt:transcribe";           // TASK-167B
 const PET_CHAT_MIRROR_CHANNEL = "pet:chat-mirror";             // TASK-193
+const PET_UNREAD_DOT_RECEIVED_CHANNEL = "pet:unread-dot-received";  // TASK-204
 
 function sanitizePetSpeechPayload(payload = {}) {
   return {
@@ -28,6 +29,26 @@ function sanitizeMirrorPayload(payload = {}) {
     mood: typeof payload.mood === "string" ? payload.mood.slice(0, 30) : "neutral",
     source: typeof payload.source === "string" ? payload.source.slice(0, 30) : "unknown",
     inputMethod: payload.inputMethod === "voice" ? "voice" : "text",  // TASK-195
+  };
+}
+
+function sanitizeUnreadPayload(payload = {}) {  // TASK-204
+  return {
+    unreadCount: typeof payload.unreadCount === "number" && payload.unreadCount >= 0
+      ? payload.unreadCount : 0,
+  };
+}
+
+function onUnreadUpdate(callback) {  // TASK-204
+  if (typeof callback !== "function") {
+    return () => {};
+  }
+  const listener = (_event, payload) => {
+    callback(sanitizeUnreadPayload(payload));
+  };
+  ipcRenderer.on(PET_UNREAD_DOT_RECEIVED_CHANNEL, listener);
+  return () => {
+    ipcRenderer.removeListener(PET_UNREAD_DOT_RECEIVED_CHANNEL, listener);
   };
 }
 
@@ -53,6 +74,7 @@ contextBridge.exposeInMainWorld(
     resetPetPosition: () => ipcRenderer.invoke(PET_RESET_POSITION_CHANNEL),
     hidePetWindow: () => ipcRenderer.invoke(PET_HIDE_WINDOW_CHANNEL),
     onSpeechUpdate,
+    onUnreadUpdate,  // TASK-204
     setQuietMode: (value) => ipcRenderer.invoke(PET_QUIET_MODE_SET_CHANNEL, value === true),  // TASK-162
     setScale: (value) => ipcRenderer.invoke(PET_SCALE_SET_CHANNEL, value),  // TASK-166B
     setClickThrough: (enabled) => ipcRenderer.invoke(PET_CLICK_THROUGH_SET_CHANNEL, enabled === true),  // TASK-166D

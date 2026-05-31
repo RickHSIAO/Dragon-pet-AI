@@ -884,11 +884,19 @@ function copyAllChat() {
 function markUnread() {
   unreadChatCount += 1;
   document.title = `(${unreadChatCount}) Dragon Pet AI`;
+  // TASK-204: notify Pet Window to show unread dot
+  if (window.dragonPet && typeof window.dragonPet.notifyUnreadDot === "function") {
+    window.dragonPet.notifyUnreadDot(unreadChatCount);
+  }
 }
 function clearUnread() {
   if (unreadChatCount === 0) return;
   unreadChatCount = 0;
   document.title = UNREAD_BASE_TITLE;
+  // TASK-204: notify Pet Window to hide unread dot
+  if (window.dragonPet && typeof window.dragonPet.notifyUnreadDot === "function") {
+    window.dragonPet.notifyUnreadDot(0);
+  }
 }
 
 function appendMessage(role, text, { autoScroll = false, noHistory = false, source = "unknown", ts = 0 } = {}) {
