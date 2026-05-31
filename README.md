@@ -7,7 +7,7 @@
 📋 **[完整 Demo 腳本與面試重點](docs/PORTFOLIO_DEMO_SCRIPT.md)**
 📋 **[Phase 4 Provider Settings 摘要](docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md)**
 
-**最新本地狀態（2026-06-01）：** TASK-211 已完成 automated smoke 與 Windows visual smoke PASS。正式 user/pet 訊息可右鍵開啟低調 context menu；「編輯」只提供給最後一則正式 user message。送出修改後會更新最後 user message、移除緊接的舊 pet reply、重寫 chat history persistence，並以修改後內容重新呼叫 `/chat` 產生新回覆；hover action buttons 已移除，date separators、timestamp tooltip、empty state、search、copy/export/delete 會同步更新。未變更後端、IPC、聊天歷史格式、Pet Window、Ollama/provider runtime 或 Screen Context。
+**最新本地狀態（2026-06-01）：** TASK-214 已完成 automated smoke 與 Windows visual smoke PASS。新增 `recordInteractionEvent(type, payload)` helper，含 6 種事件類型 allowlist、payload 僅允許 `source/role/messageLength/count`（無原始文字），本地環形 buffer 最多 20 筆。Hook 已接入 `sendMessage`、`clearChatHistory`、`deleteSingleChatMessage`、`submitEditedUserMessage`、`window.focus`。嚴格邊界：不呼叫 `/chat`、不觸發 Pet Bubble/TTS、不寫 chat history、不新增 IPC/後端。
 
 ---
 
@@ -99,7 +99,7 @@ ollama serve
 | 本地 Ollama `/chat` smoke | ✅ 通過 — `qwen3:8b`，`source=llm_local`，克莉絲蒂娜人格確認 |
 | Provider Settings 持久化 | ✅ 通過 — 重啟後設定保留，partial PATCH 保留省略欄位 |
 | UI polish | ✅ 通過 — 情緒→表情對應、Christina expression system |
-| Full App chat UX | ✅ TASK-211 Windows visual smoke PASS — 搜尋/高亮、未讀提示、匯出、時間戳、日期分隔線、清除確認、empty state、Undo Clear Chat、單則訊息刪除/復原、右鍵訊息操作、最後 user message 編輯/重新送出 |
+| Full App chat UX | ✅ TASK-214 Windows visual smoke PASS — 搜尋/高亮、未讀提示、匯出、時間戳、日期分隔線、清除確認、empty state、Undo Clear Chat、單則訊息刪除/復原、右鍵訊息操作 (viewport clamp + a11y)、最後 user message 編輯/重新送出、互動事件 log (recordInteractionEvent) |
 | 表情系統 | 7/10 real PNG（happy、focused、neutral、proud、annoyed、worried、sleepy）；pending/error/offline 為 SVG fallback |
 | pytest | **586 通過，0 失敗** |
 | Electron smoke | **renderer-chat PASS；pet-renderer 237 PASS；pet-window 60 PASS** |
@@ -107,7 +107,7 @@ ollama serve
 | 真實 API Key 使用 | ❌ 無 — 所有測試使用 mocked runner |
 | 生產就緒 | ❌ 尚未 — prototype / portfolio 階段 |
 | Demo 可用（本地 Ollama） | ✅ 是 |
-| 下一個任務 | TASK-213 Windows visual smoke |
+| 下一個任務 | TASK-215 — TBD，等待使用者指示 |
 
 ---
 
@@ -397,8 +397,8 @@ python -c "import json, urllib.request; data=json.dumps({'message':'你好！克
 | [docs/PROVIDER_TEST_CONNECTION_DESIGN.md](docs/PROVIDER_TEST_CONNECTION_DESIGN.md) | Test Connection 設計與強化測試結果 |
 | [docs/SECURE_KEY_STORAGE_DESIGN.md](docs/SECURE_KEY_STORAGE_DESIGN.md) | 金鑰儲存威脅模型、儲存選項、遮蔽規則 |
 | [docs/BYOK_PRODUCT_AND_SETTINGS.md](docs/BYOK_PRODUCT_AND_SETTINGS.md) | BYOK 產品設計與安全邊界 |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖；目前下一步為 TASK-213 Windows visual smoke |
-| [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄；最新記錄為 TASK-213 Context Menu Viewport / Accessibility Polish automated smoke PASS，Windows visual smoke pending |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖；目前下一步為 TASK-215（TBD） |
+| [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄；最新記錄為 TASK-214 Interactive Pet Event / Reaction Foundation automated smoke PASS，Windows visual smoke pending |
 | [docs/STREAMER_COMPANION_MODE.md](docs/STREAMER_COMPANION_MODE.md) | 未來支線 — OBS overlay / Twitch 陪伴設計（尚未排程） |
 
 ---
@@ -498,7 +498,7 @@ dragon-pet-ai/
 > 內部任務更新日誌，記錄每個任務的變更內容。
 
 <details>
-<summary>展開任務更新歷史（TASK-054 — TASK-211 摘要）</summary>
+<summary>展開任務更新歷史（TASK-054 — TASK-214 摘要）</summary>
 
 > TASK-054：provider 金鑰儲存/清除端點已接線至安全金鑰儲存抽象層。執行期預設維持安全的不可用後端；測試使用記憶體假後端進行儲存/清除/冪等清除/取代行為；金鑰不寫入 SQLite 或純文字設定檔；正式 Test Connection 維持停用。無外部 provider 呼叫。pytest：449 通過。
 
@@ -537,5 +537,11 @@ dragon-pet-ai/
 > TASK-210：Single Message Delete / Undo 完成 automated smoke 與 Windows visual smoke PASS。單則刪除/復原能力仍保留；TASK-211 後操作入口改為右鍵 context menu，不再使用 hover action buttons。Delete/undo 透過既有 `chatHistoryClear` + `chatHistoryAppend` 重寫 persistence，重建 DOM、date separators、timestamp tooltip 與 empty state，並保留 search query/highlight/navigation。Startup greeting/status/date separator 不可刪除；不觸發 `/chat`、Pet Bubble 或 TTS。
 >
 > TASK-211：Message Context Menu + Edit Last User Message Only 完成 automated smoke 與 Windows visual smoke PASS。正式 user/pet 訊息可右鍵開啟低調 context menu；選單提供「複製」「刪除」，且只有最後一則正式 user message 顯示「編輯」。hover action buttons 已移除；舊 user message、pet/status/startup/date separator 不可編輯。編輯會把原文字放回輸入框並可用「取消」或 Esc 取消；送出修改後只更新最後 user message、移除緊接的舊 pet reply、清空 search、重寫 persistence，並只在送出修改時呼叫 `/chat` 取得新 pet reply。不新增後端、IPC、聊天歷史格式、Pet Window 或 provider/runtime 變更。
+
+> TASK-212：Chat History Integrity Refactor / Regression Hardening 完成 automated smoke 與 Windows visual smoke PASS。`undoClearChat` 改為與其他三個 mutation path 相同的 persist-first 模式：先 `rewritePersistedChatHistory` 再 `renderFormalChatEntries`，消除了 render-first + append-only 的不一致。四個共用 helper（`collectUndoableChatEntries`、`renderFormalChatEntries`、`rewritePersistedChatHistory`、`persistChatHistoryEntries`）已識別並文件化。+13 regression tests。
+
+> TASK-213：Context Menu Viewport / Accessibility Polish 完成 automated smoke 與 Windows visual smoke PASS。context menu 新增 `positionChatContextMenu` 8px 邊距 clamp（右/下邊緣自動向左/上移），開啟時 focus 第一個 action，`role="menu"` / `role="menuitem"` / `aria-label="訊息操作"`，Enter/Space 鍵盤觸發，新增 scroll/blur/visibilitychange 關閉觸發。+13 tests。
+
+> TASK-214：Interactive Pet Event / Reaction Foundation 完成 automated smoke 與 Windows visual smoke PASS。取消原 TASK-214 Regenerate Last Pet Reply — 產品方向為互動式 AI 桌面寵物，非 ChatGPT 工具。新增 `recordInteractionEvent(type, payload)` helper，6 種事件類型 allowlist，payload 只允許 `source/role/messageLength/count`（無原始文字），本地環形 buffer max 20。Hook 接入 sendMessage / clearChatHistory / deleteSingleChatMessage / submitEditedUserMessage / window.focus。不呼叫 `/chat`，不觸發 Pet Bubble/TTS，不寫 history，不新增 IPC/後端。+12 tests。Windows visual smoke PASS (8 groups, 2026-06-01)。
 
 </details>

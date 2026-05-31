@@ -603,6 +603,32 @@ const CHAT_CONTEXT_MENU_MARGIN = 8;
 const CHAT_CONTEXT_MENU_FALLBACK_WIDTH = 128;
 const CHAT_CONTEXT_MENU_ITEM_HEIGHT = 34;
 
+// TASK-214: Interaction event log — pure local memory, max 20 entries.
+// Records sanitized metadata only; no raw text, no API keys, no media.
+const INTERACTION_EVENT_ALLOWLIST = new Set([
+  "chat_message_sent",
+  "pet_window_opened",
+  "full_app_focused",
+  "chat_history_cleared",
+  "message_deleted",
+  "message_edited",
+]);
+const INTERACTION_EVENT_MAX = 20;
+var recentInteractionEvents = []; // var: exposed to vm sandbox for smoke tests
+
+function recordInteractionEvent(type, payload = {}) {
+  if (!INTERACTION_EVENT_ALLOWLIST.has(type)) return;
+  const SAFE_KEYS = new Set(["source", "role", "messageLength", "count"]);
+  const safe = {};
+  for (const [k, v] of Object.entries(payload)) {
+    if (SAFE_KEYS.has(k)) safe[k] = v;
+  }
+  recentInteractionEvents.push({ type, ts: Date.now(), ...safe });
+  if (recentInteractionEvents.length > INTERACTION_EVENT_MAX) {
+    recentInteractionEvents.shift();
+  }
+}
+
 // TASK-113: smarter auto-scroll helpers — user sends always scroll,
 // AI replies only scroll when user is already near the bottom.
 const CHAT_NEAR_BOTTOM_THRESHOLD_PX = 80;
@@ -1514,6 +1540,7 @@ async function deleteSingleChatMessage(messageEl) {
   }
   renderFormalChatEntries(nextEntries, { preserveSearch: true });
   showUndoDeleteMessageState(deletedEntry, deletedIndex);
+  recordInteractionEvent("message_deleted", { role: deletedEntry.role, source: deletedEntry.source });
   return true;
 }
 
@@ -1659,6 +1686,7 @@ async function clearChatHistory() {
     clearUndoClearState();
     setClearChatStatus("對話紀錄已清除", 2000);
   }
+  recordInteractionEvent("chat_history_cleared", { count: undoEntries.length });
   return true;
 }
 
@@ -2908,6 +2936,7 @@ async function submitEditedUserMessage(text) {
         isSourceError ? "error" : "normal"
       );
       await loadProviderSettings();
+      recordInteractionEvent("message_edited", { source: editState.source || "full_app", role: "user", messageLength: editedText.length });
       return true;
     } catch (err) {
       const isNetworkError = isFetchNetworkError(err);
@@ -2951,6 +2980,7 @@ async function sendMessage(text) {
 
   // Show user message immediately — always scroll so the user sees their own send.
   appendMessage("user", text, { autoScroll: true, source: "full_app", ts: Date.now() });
+  recordInteractionEvent("chat_message_sent", { source: "full_app", role: "user", messageLength: text.length });
   const loadingMessage = appendMessage(
     "status",
     isOllamaChatPath()
@@ -3310,6 +3340,7 @@ document.addEventListener("visibilitychange", () => {
 if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
   window.addEventListener("focus", clearUnread);
   window.addEventListener("blur", closeChatContextMenu);
+  window.addEventListener("focus", () => recordInteractionEvent("full_app_focused")); // TASK-214
 }
 
 // ---------------------------------------------------------------------------

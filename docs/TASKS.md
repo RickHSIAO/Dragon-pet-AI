@@ -21143,3 +21143,98 @@ Harden the Full App chat message context menu so it behaves more like a finished
 | Hover actions: no hover copy/delete/edit buttons on user or pet bubbles | PASS |
 | Copy/delete/edit regression: context menu copy/delete/edit still work correctly | PASS |
 | General regression: search/highlight/navigation, copy/export, date separator, timestamp, clear undo, single delete undo, Pet Window, Voice, STT, TTS all normal | PASS |
+
+## TASK-214 | Interactive Pet Event / Reaction Foundation
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-06-01
+
+### Note on Cancelled Original TASK-214
+
+The original TASK-214 (Regenerate Last Pet Reply) was cancelled. Product direction is an **interactive AI desktop pet**, not a ChatGPT-style chat tool. Regenerate-last-reply is a pure LLM tool feature that conflicts with that direction. Replaced by the new TASK-214 below.
+
+### Goal
+
+Establish a lightweight, privacy-safe interaction event log that records sanitized metadata about user actions — foundation for future reactive pet behaviour. No new UI. No chat calls. No Pet Window side effects.
+
+### Scope
+
+- `renderer.js`: `INTERACTION_EVENT_ALLOWLIST`, `INTERACTION_EVENT_MAX`, `recentInteractionEvents` ring buffer, `recordInteractionEvent()` helper, and 5 hook points.
+- `renderer-chat-smoke.js`: +12 TASK-214 tests.
+- `docs/ROADMAP.md`, `docs/TASKS.md`: status sync.
+- Strict safety boundary: no `/chat`, no Pet Bubble, no TTS, no history write, no IPC, no backend.
+
+### Design Summary
+
+| Area | Detail |
+|---|---|
+| Event allowlist | `INTERACTION_EVENT_ALLOWLIST` — Set of 6 known types: `chat_message_sent`, `pet_window_opened`, `full_app_focused`, `chat_history_cleared`, `message_deleted`, `message_edited`. Unknown types are silently dropped. |
+| Payload sanitization | `SAFE_KEYS = { source, role, messageLength, count }`. All other payload keys (message text, body, API data) are stripped before storage. No raw text ever enters the log. |
+| Ring buffer | `var recentInteractionEvents = []` — max 20 entries. When full, oldest entry is shifted off. |
+| Hook points | `sendMessage` (after user message appended), `clearChatHistory` (before `return true`), `deleteSingleChatMessage` (before `return true`), `submitEditedUserMessage` (before inner `return true`), `window.focus` listener (alongside existing `clearUnread` and `closeChatContextMenu`). |
+| Smoke test access | `recentInteractionEvents` declared with `var` (not `const`) so `vm.runInNewContext` exposes it on the sandbox object for test verification. |
+
+### Files Changed
+
+| File | Change |
+|---|---|
+| `apps/desktop/src/renderer/renderer.js` | Added `INTERACTION_EVENT_ALLOWLIST`, `INTERACTION_EVENT_MAX`, `var recentInteractionEvents`, `recordInteractionEvent()`, and 5 hook calls |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | Added 12 TASK-214 tests and TASK-214 calls in `main()` |
+| `docs/ROADMAP.md` | Added TASK-214 status |
+| `docs/TASKS.md` | Added this TASK-214 record |
+
+### Test Coverage
+
+| Test | What it verifies |
+|---|---|
+| `testTask214StaticSourceCheck` | Static: helper function, allowlist, ring buffer, max constant, and all 6 event type strings present in renderer.js |
+| `testTask214AllowlistEnforcesKnownTypes` | Unknown types (`unknown_type`, `regenerate`) are rejected; allowlisted type is accepted |
+| `testTask214PayloadDropsRawText` | `message`, `text`, `body` keys are stripped; `source`, `role`, `messageLength` are kept |
+| `testTask214ChatMessageSentRecordsLengthNotText` | `sendMessage` hook records `messageLength`, not raw text |
+| `testTask214ClearChatRecordsEvent` | `clearChatHistory` hook records `chat_history_cleared` with entry count |
+| `testTask214DeleteRecordsEvent` | `deleteSingleChatMessage` hook records `message_deleted` with role/source |
+| `testTask214EditSubmitRecordsEvent` | `submitEditedUserMessage` hook records `message_edited` with messageLength |
+| `testTask214WindowFocusRecordsEvent` | `window.focus` listener records `full_app_focused` |
+| `testTask214EventLogCapsAt20` | Pushing 25 events keeps the buffer at ≤ 20 |
+| `testTask214EventsDoNotCallChat` | `recordInteractionEvent` makes no `/chat` fetch |
+| `testTask214EventsDoNotWriteHistory` | `recordInteractionEvent` does not call `chatHistoryAppend` or `chatHistoryClear` |
+| `testTask214EventsDoNotTriggerPetOrTts` | `recordInteractionEvent` does not call `updatePetSpeech` or any TTS |
+
+### Automated Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+12 TASK-214 tests) |
+| `pet-window-smoke.js` | PASS — 60 checks |
+| `pet-renderer-smoke.js` | PASS — 237 checks |
+
+### Acceptance Criteria
+
+- [x] `recordInteractionEvent(type, payload)` helper defined ✓
+- [x] `INTERACTION_EVENT_ALLOWLIST` with 6 known event types ✓
+- [x] Unknown types silently dropped ✓
+- [x] Payload sanitization: only `source`, `role`, `messageLength`, `count` pass through ✓
+- [x] `recentInteractionEvents` ring buffer, max 20 entries ✓
+- [x] Hook in `sendMessage` — records `chat_message_sent` ✓
+- [x] Hook in `clearChatHistory` — records `chat_history_cleared` ✓
+- [x] Hook in `deleteSingleChatMessage` — records `message_deleted` ✓
+- [x] Hook in `submitEditedUserMessage` — records `message_edited` ✓
+- [x] Hook in `window.focus` — records `full_app_focused` ✓
+- [x] No `/chat` call, no Pet Bubble, no TTS, no history write, no IPC, no backend ✓
+- [x] `renderer-chat-smoke.js` PASS ✓
+- [x] `pet-window-smoke.js` PASS ✓
+- [x] `pet-renderer-smoke.js` PASS ✓
+- [x] Windows visual smoke PASS ✓
+
+### Windows Visual Smoke Results (2026-06-01)
+
+| Scenario | Result |
+|---|---|
+| 基本啟動：App 啟動正常，chat area 空白，empty state 顯示正常 | PASS |
+| 送出訊息：user 訊息送出，pet reply 正常顯示，`recordInteractionEvent` 不干擾正常聊天流程 | PASS |
+| 右鍵 context menu regression：複製、刪除、編輯（最後 user message only）皆正常 | PASS |
+| Delete / Undo regression：單則刪除、10 秒復原、history persistence 正常 | PASS |
+| Edit last user message regression：最後 user message 編輯送出、pet reply 更新、history rewrite 正常 | PASS |
+| Clear Chat regression：二次點擊確認、Undo Clear 復原、empty state 正常 | PASS |
+| Focus regression：window focus 觸發事件記錄，不影響 chat UI 或 pet bubble | PASS |
+| 一般回歸：search/highlight/navigation、copy/export、date separator、timestamp tooltip、Pet Window、Voice、STT、TTS 皆正常 | PASS |

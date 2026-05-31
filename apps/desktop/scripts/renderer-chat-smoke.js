@@ -6441,6 +6441,198 @@ async function testTask213ContextMenuCopyDeleteEditStillWork() {
   console.log("  testTask213ContextMenuCopyDeleteEditStillWork PASS");
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TASK-214: Interactive Pet Event / Reaction Foundation
+// ─────────────────────────────────────────────────────────────────────────────
+
+function testTask214StaticSourceCheck() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("function recordInteractionEvent"),
+    "renderer.js must define recordInteractionEvent");
+  assert.ok(src.includes("const INTERACTION_EVENT_ALLOWLIST"),
+    "renderer.js must define INTERACTION_EVENT_ALLOWLIST");
+  assert.ok(src.includes("recentInteractionEvents = []"),
+    "renderer.js must define recentInteractionEvents");
+  assert.ok(src.includes("const INTERACTION_EVENT_MAX = 20"),
+    "renderer.js must define INTERACTION_EVENT_MAX with cap 20");
+  assert.ok(src.includes("\"chat_message_sent\"") && src.includes("\"message_deleted\"") &&
+    src.includes("\"message_edited\"") && src.includes("\"chat_history_cleared\"") &&
+    src.includes("\"full_app_focused\""),
+    "renderer.js must include all required event types in the allowlist");
+  console.log("  testTask214StaticSourceCheck PASS");
+}
+
+async function testTask214AllowlistEnforcesKnownTypes() {
+  const { sandbox } = await loadRenderer();
+  const before = sandbox.recentInteractionEvents.length;
+  sandbox.recordInteractionEvent("unknown_type");
+  sandbox.recordInteractionEvent("regenerate"); // cancelled TASK-214 original
+  assert.equal(sandbox.recentInteractionEvents.length, before,
+    "recordInteractionEvent must reject unknown event types");
+  sandbox.recordInteractionEvent("chat_message_sent");
+  assert.equal(sandbox.recentInteractionEvents.length, before + 1,
+    "recordInteractionEvent must accept allowlisted types");
+  console.log("  testTask214AllowlistEnforcesKnownTypes PASS");
+}
+
+async function testTask214PayloadDropsRawText() {
+  const { sandbox } = await loadRenderer();
+  sandbox.recordInteractionEvent("chat_message_sent", {
+    message: "DO NOT STORE THIS",
+    text: "ALSO NOT",
+    body: "NOPE",
+    source: "full_app",
+    role: "user",
+    messageLength: 42,
+  });
+  const ev = sandbox.recentInteractionEvents.at(-1);
+  assert.ok(!Object.prototype.hasOwnProperty.call(ev, "message"), "event must not store raw message field");
+  assert.ok(!Object.prototype.hasOwnProperty.call(ev, "text"), "event must not store text field");
+  assert.ok(!Object.prototype.hasOwnProperty.call(ev, "body"), "event must not store body field");
+  assert.equal(ev.messageLength, 42, "event must store messageLength");
+  assert.equal(ev.source, "full_app", "event must store source");
+  assert.equal(ev.role, "user", "event must store role");
+  console.log("  testTask214PayloadDropsRawText PASS");
+}
+
+async function testTask214ChatMessageSentRecordsLengthNotText() {
+  const { document, sandbox } = await loadRenderer();
+  const msg = "TASK-214 sent event check";
+  await sendChat(document, msg);
+  const events = sandbox.recentInteractionEvents.filter((e) => e.type === "chat_message_sent");
+  assert.ok(events.length >= 1, "chat_message_sent must be recorded on sendMessage");
+  const ev = events[0];
+  assert.equal(ev.messageLength, msg.length, "chat_message_sent must record text length");
+  assert.ok(!Object.prototype.hasOwnProperty.call(ev, "message"), "chat_message_sent must not store raw message");
+  assert.ok(!Object.prototype.hasOwnProperty.call(ev, "text"), "chat_message_sent must not store raw text");
+  console.log("  testTask214ChatMessageSentRecordsLengthNotText PASS");
+}
+
+async function testTask214ClearChatRecordsEvent() {
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({}),
+    },
+  });
+  sandbox.appendMessage("user", "will be cleared", { noHistory: true });
+  await clearWithConfirm(document);
+  const events = sandbox.recentInteractionEvents.filter((e) => e.type === "chat_history_cleared");
+  assert.ok(events.length >= 1, "chat_history_cleared must be recorded after clear");
+  assert.equal(typeof events[0].count, "number", "chat_history_cleared must record message count");
+  console.log("  testTask214ClearChatRecordsEvent PASS");
+}
+
+async function testTask214DeleteRecordsEvent() {
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({}),
+      chatHistoryAppend: async () => ({}),
+    },
+  });
+  sandbox.appendMessage("user", "delete event target", { noHistory: true });
+  await deleteFormalMessage(document, 0);
+  const events = sandbox.recentInteractionEvents.filter((e) => e.type === "message_deleted");
+  assert.ok(events.length >= 1, "message_deleted must be recorded after single-message delete");
+  assert.ok(Object.prototype.hasOwnProperty.call(events[0], "role"), "message_deleted must record role");
+  console.log("  testTask214DeleteRecordsEvent PASS");
+}
+
+async function testTask214EditSubmitRecordsEvent() {
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({}),
+      chatHistoryAppend: async () => ({}),
+    },
+  });
+  sandbox.appendMessage("user", "pre-edit source", { noHistory: true });
+  const menu = await openContextMenuForMessage(document, 0);
+  contextMenuItem(menu, "編輯").click();
+  await settle();
+  const editedText = "post-edit result text";
+  document.getElementById("message-input").value = editedText;
+  document.getElementById("send-btn").click();
+  await settle();
+  const events = sandbox.recentInteractionEvents.filter((e) => e.type === "message_edited");
+  assert.ok(events.length >= 1, "message_edited must be recorded after edit submit");
+  assert.equal(events[0].messageLength, editedText.length,
+    "message_edited must record the edited text length");
+  assert.ok(!Object.prototype.hasOwnProperty.call(events[0], "text"),
+    "message_edited must not store raw text");
+  console.log("  testTask214EditSubmitRecordsEvent PASS");
+}
+
+async function testTask214WindowFocusRecordsEvent() {
+  const { sandbox } = await loadRenderer();
+  const before = sandbox.recentInteractionEvents.filter((e) => e.type === "full_app_focused").length;
+  sandbox.window.dispatchEvent({ type: "focus" });
+  await settle();
+  const after = sandbox.recentInteractionEvents.filter((e) => e.type === "full_app_focused").length;
+  assert.ok(after > before, "window focus event must record full_app_focused");
+  console.log("  testTask214WindowFocusRecordsEvent PASS");
+}
+
+async function testTask214EventLogCapsAt20() {
+  const { sandbox } = await loadRenderer();
+  for (let i = 0; i < 25; i++) {
+    sandbox.recordInteractionEvent("chat_message_sent", { messageLength: i });
+  }
+  assert.ok(sandbox.recentInteractionEvents.length <= 20,
+    "recentInteractionEvents must not exceed 20 entries");
+  console.log("  testTask214EventLogCapsAt20 PASS");
+}
+
+async function testTask214EventsDoNotCallChat() {
+  const { state, sandbox } = await loadRenderer();
+  state.calls.length = 0;
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 5 });
+  sandbox.recordInteractionEvent("chat_history_cleared", { count: 0 });
+  sandbox.recordInteractionEvent("message_deleted", { role: "user", source: "full_app" });
+  sandbox.recordInteractionEvent("full_app_focused");
+  await settle();
+  const chatCalls = state.calls.filter((c) => c.url.endsWith("/chat"));
+  assert.equal(chatCalls.length, 0, "recordInteractionEvent must not call /chat");
+  console.log("  testTask214EventsDoNotCallChat PASS");
+}
+
+async function testTask214EventsDoNotWriteHistory() {
+  const appended = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryAppend: (entry) => { appended.push(entry); return Promise.resolve({}); },
+    },
+  });
+  const before = appended.length;
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 10 });
+  sandbox.recordInteractionEvent("message_deleted", { role: "user", source: "full_app" });
+  await settle();
+  assert.equal(appended.length, before, "recordInteractionEvent must not write to chat history");
+  console.log("  testTask214EventsDoNotWriteHistory PASS");
+}
+
+async function testTask214EventsDoNotTriggerPetOrTts() {
+  const speechUpdates = [];
+  const { state, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      updatePetSpeech(payload) { speechUpdates.push(payload); return Promise.resolve({ ok: true }); },
+    },
+  });
+  state.calls.length = 0;
+  speechUpdates.length = 0;
+  sandbox.recordInteractionEvent("chat_history_cleared", { count: 0 });
+  sandbox.recordInteractionEvent("full_app_focused");
+  sandbox.recordInteractionEvent("message_edited", { messageLength: 5 });
+  await settle();
+  assert.equal(speechUpdates.length, 0, "recordInteractionEvent must not call updatePetSpeech");
+  assert.equal(state.calls.filter((c) => c.url.endsWith("/chat")).length, 0,
+    "recordInteractionEvent must not call /chat");
+  console.log("  testTask214EventsDoNotTriggerPetOrTts PASS");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -6814,6 +7006,19 @@ async function main() {
   await testTask213EditOptionStillLastUserOnly();
   await testTask213HoverActionsStillAbsent();
   await testTask213ContextMenuCopyDeleteEditStillWork();
+  // TASK-214: Interactive Pet Event / Reaction Foundation
+  testTask214StaticSourceCheck();
+  await testTask214AllowlistEnforcesKnownTypes();
+  await testTask214PayloadDropsRawText();
+  await testTask214ChatMessageSentRecordsLengthNotText();
+  await testTask214ClearChatRecordsEvent();
+  await testTask214DeleteRecordsEvent();
+  await testTask214EditSubmitRecordsEvent();
+  await testTask214WindowFocusRecordsEvent();
+  await testTask214EventLogCapsAt20();
+  await testTask214EventsDoNotCallChat();
+  await testTask214EventsDoNotWriteHistory();
+  await testTask214EventsDoNotTriggerPetOrTts();
   console.log("renderer chat smoke: PASS");
 }
 
