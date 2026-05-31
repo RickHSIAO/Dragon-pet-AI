@@ -2,7 +2,7 @@
 
 > dragon-pet-ai
 > Status: LIVING DOCUMENT
-> Last Updated: 2026-05-24
+> Last Updated: 2026-05-31
 > Owner: TASK-001
 
 ---
@@ -444,7 +444,9 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 **Screen Context v0.4 COMPLETE** — see `docs/SCREEN_CONTEXT_V04_RELEASE_SUMMARY.md`
 
-**Next planned task:** TASK-197 — (Suggested: Chat message search / filter — find messages by keyword in the current Full App session; or unread-badge / notification dot on Full App window title when Pet replies while the window is not focused)
+**Next planned task:** TASK-198 — (Suggested: Chat message search / filter — find messages by keyword in the current Full App session; or unread-badge / notification dot on Full App window title when Pet replies while the window is not focused)
+
+- TASK-197 DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS (2026-05-31): Ollama Wake-up / First Chat Reliability. Four targeted fixes: (1) Startup `/health` fetch now has 8-second `AbortController` timeout — no more indefinite hang on slow/offline backend. (2) `sourceStatusMessage()` fully Chinese — all 8 source branches translated. (3) `sendMessage()` loading text Chinese — Ollama path: "本地 AI 喚醒中，第一次回覆可能需要較久..."; non-Ollama: "等待後端回覆中...". (4) Non-blocking `checkLocalProviderLiveness()` runs after startup settings load: fetches new `GET /provider/health` backend endpoint, updates `#provider-status-summary` chip only (no chat, no history, no Pet/TTS). Backend: `check_ollama_server_liveness()` in service layer (GET `/api/tags` reachability check, no model load); `/provider/health` route returns `{provider, ollama_reachable, status}`. Liveness chip: reachable → "Ollama 本地 AI 已就緒。"; reachable + fallback → preserves fallback warning; unreachable → "Ollama 尚未回應。第一次聊天可能需要較久，請確認 Ollama 已啟動。"; error → restores previous text. Smoke tests: `AbortController` added to renderer sandbox; `/provider/health` handler added to fetch stub; `ollamaReachable` option added; +9 TASK-197 renderer-chat tests; English test patterns updated to Chinese. Suites: 233/55/renderer-chat PASS. Backend pytest: 54 PASS. git diff --check CLEAN.
 
 - TASK-196 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-05-31): Chat Message Copy / Export. Per-bubble "複製" button (hover-only, opacity 0 → 1) on every user/pet message; "複製對話" ghost header button copies full conversation as plain text. Two rounds of fix before smoke PASS: (1) `navigator.clipboard` failed — Electron `file://` not a secure context; (2) preload-direct `clipboard.writeText` also failed — renderer-process clipboard restricted; (3) final fix: IPC chain renderer.js → `window.dragonPet.writeClipboardText` → preload `ipcRenderer.invoke("clipboard:write-text", text)` → main.js `ipcMain.handle` → `clipboard.writeText(safe)`. `writeToClipboard(text)` helper wraps bridge in `Promise.resolve` to handle async IPC + sync test mocks. `copyAllChat()` collects `.message.user` and `.message.pet` only, formats "你/克莉絲蒂娜 HH:mm:\ntext\n". No backend/schema/history change. +9 renderer-chat-smoke tests, +2 pet-window-smoke tests. Suites: 233/55/renderer-chat PASS. git diff --check CLEAN. Windows visual smoke: all 8 scenarios PASS (2026-05-31).
 

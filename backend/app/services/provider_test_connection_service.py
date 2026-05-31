@@ -496,6 +496,29 @@ def _safe_error_category(error: str) -> str:
     return error if error in SAFE_PROVIDER_ERRORS else "provider_error"
 
 
+# ---------------------------------------------------------------------------
+# TASK-197: Lightweight Ollama server liveness check (startup warmup probe)
+# ---------------------------------------------------------------------------
+
+def check_ollama_server_liveness() -> bool:
+    """
+    Return True if the local Ollama server responds to GET /api/tags.
+
+    This is a narrow liveness probe used by the /provider/health endpoint on
+    Full App startup.  It does NOT load a model, does NOT call /api/chat, and
+    does NOT write any data.  Uses a 5-second timeout (hardcoded in
+    OllamaLocalProvider._ollama_server_reachable).
+    """
+    local_provider = OllamaLocalProvider(
+        model="",
+        base_url=get_ollama_base_url(),
+        keep_alive=get_ollama_keep_alive(),
+        timeout_seconds=get_ollama_timeout_seconds(),
+        test_timeout_seconds=get_local_test_timeout_seconds(),
+    )
+    return local_provider._ollama_server_reachable()
+
+
 def _usage_estimate(
     response: LLMResponse | None,
     *,

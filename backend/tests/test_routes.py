@@ -22,6 +22,75 @@ def test_health_returns_ok_status_and_service():
     }
 
 
+# ---------------------------------------------------------------------------
+# TASK-197: /provider/health endpoint
+# ---------------------------------------------------------------------------
+
+def test_provider_health_returns_not_applicable_for_mock_provider():
+    # Default test environment uses mock provider (real_provider_enabled=False).
+    with TestClient(app) as client:
+        response = client.get("/provider/health")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "not_applicable"
+    assert data["ollama_reachable"] is None
+    assert "provider" in data
+
+
+def test_provider_health_returns_not_applicable_when_real_provider_disabled(monkeypatch):
+    monkeypatch.setattr(
+        "app.api.routes.get_provider_settings",
+        lambda: {"provider": "ollama", "real_provider_enabled": False},
+    )
+    with TestClient(app) as client:
+        response = client.get("/provider/health")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "not_applicable"
+    assert data["provider"] == "ollama"
+    assert data["ollama_reachable"] is None
+
+
+def test_provider_health_ollama_reachable_returns_ok(monkeypatch):
+    monkeypatch.setattr(
+        "app.api.routes.get_provider_settings",
+        lambda: {"provider": "ollama", "real_provider_enabled": True},
+    )
+    monkeypatch.setattr(
+        "app.api.routes.check_ollama_server_liveness",
+        lambda: True,
+    )
+    with TestClient(app) as client:
+        response = client.get("/provider/health")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["ollama_reachable"] is True
+    assert data["provider"] == "ollama"
+
+
+def test_provider_health_ollama_unreachable_returns_unavailable(monkeypatch):
+    monkeypatch.setattr(
+        "app.api.routes.get_provider_settings",
+        lambda: {"provider": "ollama", "real_provider_enabled": True},
+    )
+    monkeypatch.setattr(
+        "app.api.routes.check_ollama_server_liveness",
+        lambda: False,
+    )
+    with TestClient(app) as client:
+        response = client.get("/provider/health")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "unavailable"
+    assert data["ollama_reachable"] is False
+    assert data["provider"] == "ollama"
+
+
 def test_chat_valid_message_returns_mock_response():
     with TestClient(app) as client:
         response = client.post("/chat", json={"message": "Hello!"})

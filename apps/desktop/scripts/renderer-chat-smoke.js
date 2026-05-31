@@ -221,6 +221,16 @@ function createFetchStub(state) {
     });
 
     const target = String(url);
+    // TASK-197: provider health must be checked before the plain /health handler
+    // because "/provider/health".endsWith("/health") is also true.
+    if (target.endsWith("/provider/health")) {
+      const reachable = state.ollamaReachable === true;
+      return new FakeResponse(200, {
+        provider: "ollama",
+        ollama_reachable: reachable,
+        status: reachable ? "ok" : "unavailable",
+      });
+    }
     if (target.endsWith("/health")) {
       return new FakeResponse(200, { status: "ok" });
     }
@@ -391,6 +401,8 @@ async function loadRenderer(options = {}) {
     providerSettings: defaultProviderSettings(options.providerSettings || {}),
     availableImages,
     intervalCallbacks,  // exposed for verification if needed
+    // TASK-197: default true so liveness check sets "已就緒" and doesn't break status-summary tests.
+    ollamaReachable: options.ollamaReachable !== undefined ? options.ollamaReachable : true,
   };
 
   // FakeImage closes over availableImages so each test run is isolated.
@@ -429,6 +441,8 @@ async function loadRenderer(options = {}) {
     },
     clearInterval() {},
     Image: FakeImage,
+    // TASK-197: startup health check uses AbortController for an 8-second timeout.
+    AbortController,
     Event: class Event {
       constructor(type, init = {}) {
         this.type = type;
@@ -542,7 +556,7 @@ async function testSuccessfulLocalChatUpdatesMoodAndSourceStatus() {
 
   assert.equal(textOf(document, "mood-label"), "focused");
   assert.equal(textOf(document, "chat-source-status"), "source: llm_local");
-  assert.match(textOf(document, "chat-runtime-status"), /Ollama response received/i);
+  assert.match(textOf(document, "chat-runtime-status"), /Ollama 已回覆/);
 
   const usageText = document
     .getElementById("provider-usage-summary")
@@ -562,7 +576,7 @@ async function testLoadingColdStartStatusIsVisible() {
   assert.equal(document.getElementById("send-btn").disabled, true);
   assert.equal(textOf(document, "send-btn"), "Sending...");
   assert.equal(textOf(document, "chat-source-status"), "source: pending");
-  assert.match(textOf(document, "chat-runtime-status"), /first response can take longer/i);
+  assert.match(textOf(document, "chat-runtime-status"), /第一次回覆可能需要較久/);
 
   state.resolveChat();
   await settle();
@@ -617,8 +631,8 @@ async function testLocalProviderFailureWithoutFallbackIsVisible() {
   await sendChat(document, "local fail");
 
   assert.equal(textOf(document, "chat-source-status"), "source: llm_local_error");
-  assert.match(textOf(document, "chat-runtime-status"), /Local AI failed/i);
-  assert.match(textOf(document, "chat-runtime-status"), /model may still be loading/i);
+  assert.match(textOf(document, "chat-runtime-status"), /本地 AI 失敗/);
+  assert.match(textOf(document, "chat-runtime-status"), /模型可能仍在載入中/);
 }
 
 async function testMockFallbackStateIsDistinguishable() {
@@ -630,7 +644,7 @@ async function testMockFallbackStateIsDistinguishable() {
   await sendChat(document, "fallback");
 
   assert.equal(textOf(document, "chat-source-status"), "source: mock");
-  assert.match(textOf(document, "chat-runtime-status"), /Using mock fallback/i);
+  assert.match(textOf(document, "chat-runtime-status"), /使用模擬備援/);
 
   const usageText = document
     .getElementById("provider-usage-summary")
@@ -1898,9 +1912,11 @@ async function testTask189ProviderStatusSummaryMockMode() {
 
 async function testTask189ProviderStatusSummaryOllamaActive() {
   // default settings: ollama, real_provider_enabled: true, llm_chat_enabled: true, fallback_to_mock: false
+  // TASK-197: after liveness check runs at startup (ollamaReachable=true by default),
+  // the summary updates from "已連線" to "已就緒" — accept both states.
   const { document } = await loadRenderer();
   const summary = textOf(document, "provider-status-summary");
-  assert.match(summary, /Ollama.*已連線/);
+  assert.match(summary, /Ollama.*(已連線|已就緒)/);
 }
 
 async function testTask189ProviderStatusSummaryFallbackWarning() {
@@ -2709,6 +2725,119 @@ async function testTask196BridgeCalledWhenAvailable() {
   assert.strictEqual(typeof bridgeText, "string", "bridge must receive message text as string");
 }
 
+// ---------------------------------------------------------------------------
+// TASK-197: Ollama Wake-up / First Chat Reliability tests
+// ---------------------------------------------------------------------------
+
+const backendRoutesPath = path.join(desktopRoot, "..", "..", "backend", "app", "api", "routes.py");
+
+function testTask197ProviderHealthEndpointInBackend() {
+  const routes = fs.readFileSync(backendRoutesPath, "utf8");
+  assert.match(routes, /\/provider\/health/,
+    "routes.py must define /provider/health endpoint");
+  assert.match(routes, /check_ollama_server_liveness/,
+    "routes.py must call check_ollama_server_liveness");
+  assert.match(routes, /ollama_reachable/,
+    "routes.py must include ollama_reachable in response");
+}
+
+function testTask197SourceStatusMessagesChinese() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.match(src, /Ollama 已回覆/,
+    "sourceStatusMessage for llm_local must be Chinese");
+  assert.match(src, /本地 AI 失敗/,
+    "sourceStatusMessage for llm_local_error must be Chinese");
+  assert.match(src, /等待本地 Ollama 回應中/,
+    "sourceStatusMessage for pending (Ollama path) must be Chinese");
+  assert.doesNotMatch(src, /Ollama response received/,
+    "sourceStatusMessage must not contain English 'Ollama response received'");
+  assert.doesNotMatch(src, /"Local AI failed/,
+    "sourceStatusMessage must not contain English 'Local AI failed'");
+}
+
+function testTask197StartupLoadingTextChinese() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.match(src, /本地 AI 喚醒中/,
+    "sendMessage Ollama loading text must be Chinese");
+  assert.match(src, /等待後端回覆中/,
+    "sendMessage non-Ollama loading text must be Chinese");
+  assert.doesNotMatch(src, /Waking up local AI/,
+    "sendMessage loading text must not contain English 'Waking up local AI'");
+}
+
+function testTask197StartupHealthFetchHasTimeout() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.match(src, /new AbortController\(\)/,
+    "startup must create AbortController for health check timeout");
+  assert.match(src, /_healthCtrl/,
+    "startup must use _healthCtrl for the AbortController instance");
+  assert.match(src, /signal: _healthCtrl\.signal/,
+    "startup fetch must pass signal: _healthCtrl.signal");
+  assert.match(src, /8000/,
+    "startup timeout must be 8000 ms");
+}
+
+function testTask197LivenessCheckFunctionExists() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.match(src, /async function checkLocalProviderLiveness/,
+    "renderer.js must define checkLocalProviderLiveness as an async function");
+}
+
+function testTask197LivenessCheckUsesProviderHealthPath() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.match(src, /\/provider\/health/,
+    "checkLocalProviderLiveness must fetch /provider/health");
+}
+
+async function testTask197LivenessCheckDoesNotWriteToChatHistory() {
+  const appended = [];
+  const { document, state } = await loadRenderer({
+    dragonPet: {
+      showPetWindow: async () => ({ ok: true }),
+      updatePetSpeech: async () => ({ ok: true }),
+      onChatMirrorFromPet: () => () => {},
+      chatHistoryAppend: (entry) => { appended.push(entry); return Promise.resolve({ ok: true }); },
+      chatHistoryLoad: async () => [],
+      chatHistoryClear: async () => ({ ok: true }),
+    },
+  });
+
+  // Clear any startup entries, then allow background tasks to complete
+  appended.length = 0;
+  await settle();
+
+  assert.equal(appended.length, 0,
+    "checkLocalProviderLiveness must not call chatHistoryAppend");
+
+  // Liveness result must not appear as a chat-area message
+  const chatArea = document.getElementById("chat-area");
+  const livenessInChat = chatArea.children.some((el) =>
+    el.children.some((c) =>
+      c.textContent.includes("正在檢查本地 AI") ||
+      c.textContent.includes("Ollama 本地 AI 已就緒") ||
+      c.textContent.includes("Ollama 尚未回應")
+    )
+  );
+  assert.ok(!livenessInChat,
+    "liveness check result must not appear in chat area — only in provider-status-summary");
+
+  void state;
+}
+
+async function testTask197LivenessCheckOllamaReachableUpdatesChip() {
+  const { document } = await loadRenderer({ ollamaReachable: true });
+  const summary = textOf(document, "provider-status-summary");
+  assert.match(summary, /Ollama 本地 AI 已就緒/,
+    "provider-status-summary must show '已就緒' when Ollama is reachable");
+}
+
+async function testTask197LivenessCheckOllamaUnreachableShowsWarning() {
+  const { document } = await loadRenderer({ ollamaReachable: false });
+  const summary = textOf(document, "provider-status-summary");
+  assert.match(summary, /Ollama 尚未回應/,
+    "provider-status-summary must warn '尚未回應' when Ollama is unreachable");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -2858,6 +2987,16 @@ async function main() {
   testTask196CopyPrefersBridge();
   testTask196NavigatorFallbackExists();
   await testTask196BridgeCalledWhenAvailable();
+  // TASK-197: Ollama Wake-up / First Chat Reliability
+  testTask197ProviderHealthEndpointInBackend();
+  testTask197SourceStatusMessagesChinese();
+  testTask197StartupLoadingTextChinese();
+  testTask197StartupHealthFetchHasTimeout();
+  testTask197LivenessCheckFunctionExists();
+  testTask197LivenessCheckUsesProviderHealthPath();
+  await testTask197LivenessCheckDoesNotWriteToChatHistory();
+  await testTask197LivenessCheckOllamaReachableUpdatesChip();
+  await testTask197LivenessCheckOllamaUnreachableShowsWarning();
   console.log("renderer chat smoke: PASS");
 }
 

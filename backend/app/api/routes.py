@@ -54,6 +54,7 @@ from app.services.memory_service import (
 from app.services.prompt_service import format_approved_memory_context, normalize_chat_mode
 from app.services.provider_test_connection_service import (
     ProviderTestConnectionRequestError,
+    check_ollama_server_liveness,
     run_provider_test_connection,
 )
 from app.services.provider_settings_service import (
@@ -151,6 +152,39 @@ def health_check():
     Returns ok status if the backend is running.
     """
     return {"status": "ok", "service": "dragon-pet-ai"}
+
+
+@router.get("/provider/health")
+def provider_health_check():
+    """
+    TASK-197: Narrow local provider liveness check for Full App startup.
+
+    For Ollama (when real_provider_enabled=True): performs a single
+    GET /api/tags to confirm the local server is reachable.  Does NOT load
+    a model, does NOT call /api/chat, does NOT write any data.
+
+    Returns:
+      provider      — configured provider name
+      ollama_reachable — True/False for Ollama; null for non-Ollama providers
+      status        — "ok" | "unavailable" | "not_applicable"
+    """
+    settings = get_provider_settings()
+    provider = settings.get("provider", "mock")
+    real_enabled = bool(settings.get("real_provider_enabled", False))
+
+    if provider != "ollama" or not real_enabled:
+        return {
+            "provider": provider,
+            "ollama_reachable": None,
+            "status": "not_applicable",
+        }
+
+    reachable = check_ollama_server_liveness()
+    return {
+        "provider": "ollama",
+        "ollama_reachable": reachable,
+        "status": "ok" if reachable else "unavailable",
+    }
 
 
 @router.post("/chat", response_model=ChatResponse)

@@ -1016,38 +1016,38 @@ function isOllamaChatPath(settings = currentProviderSettings) {
 
 function sourceStatusMessage(source, settings = currentProviderSettings) {
   if (source === "llm_local") {
-    return "Ollama response received. Local AI is active.";
+    return "Ollama 已回覆。本地 AI 正常運作。";
   }
   if (source === "llm_local_error") {
-    return "Local AI failed — the model may still be loading. Check that Ollama is running and the model name is correct.";
+    return "本地 AI 失敗 — 模型可能仍在載入中。請確認 Ollama 正在執行且模型名稱正確。";
   }
   if (source === "mock") {
     if (settings.resolved_provider === "ollama" && !settings.llm_chat_enabled) {
-      return "Using mock — AI chat is disabled. Enable 'AI chat' in Provider Settings to use Ollama.";
+      return "使用模擬模式 — AI 聊天已停用。請在 AI 設定中啟用「啟用 AI 聊天」。";
     }
     if (settings.resolved_provider === "ollama" && settings.fallback_to_mock !== false) {
-      return "Using mock fallback — Ollama is configured but a provider error occurred and fallback is on.";
+      return "使用模擬備援 — 已設定 Ollama，但發生錯誤且已啟用備援模式。";
     }
     if (settings.provider === "ollama" || settings.resolved_provider === "ollama") {
-      return "Using mock — Ollama is selected but not responding. Refresh Provider Settings.";
+      return "使用模擬模式 — 已選擇 Ollama 但未回應。請確認 Ollama 是否已啟動。";
     }
-    return "Using mock provider.";
+    return "使用模擬 provider。";
   }
   if (source === "llm_real") {
-    return "Cloud AI response received.";
+    return "雲端 AI 已回覆。";
   }
   if (source === "llm_real_error") {
-    return "Cloud AI failed. Check your API key and provider settings.";
+    return "雲端 AI 失敗。請確認 API 金鑰與 provider 設定。";
   }
   if (source === "pending") {
     return isOllamaChatPath(settings)
-      ? "Waiting for local Ollama. The first response can take longer while the model wakes up."
-      : "Waiting for backend chat response.";
+      ? "等待本地 Ollama 回應中。第一次回覆可能需要較久，模型可能正在喚醒。"
+      : "等待後端回覆中。";
   }
   if (source === "backend_offline") {
-    return "Backend is not reachable. Make sure the backend is running.";
+    return "後端無法連線。請確認後端服務正在執行。";
   }
-  return "Chat source will appear after the next response.";
+  return "將在下一次回覆後顯示狀態。";
 }
 
 // TASK-098: friendly user-facing label for chat source
@@ -2098,8 +2098,8 @@ async function sendMessage(text) {
   const loadingMessage = appendMessage(
     "status",
     isOllamaChatPath()
-      ? "Local model is waking up. First Ollama responses can take longer..."
-      : "Waiting for backend reply...",
+      ? "本地 AI 喚醒中，第一次回覆可能需要較久..."
+      : "等待後端回覆中...",
     { autoScroll: true }
   );
   setChatRuntimeStatus("pending", sourceStatusMessage("pending"), "pending");
@@ -2373,14 +2373,59 @@ if (typeof document !== "undefined" && typeof document.addEventListener === "fun
 }
 
 // ---------------------------------------------------------------------------
+// TASK-197: Non-blocking Ollama liveness probe run after startup settings load.
+// Updates the provider status chip only — no chat, no history, no Pet/TTS side effects.
+// ---------------------------------------------------------------------------
+async function checkLocalProviderLiveness() {
+  if (!isOllamaChatPath()) return;
+  const el = typeof providerStatusSummaryEl !== "undefined" ? providerStatusSummaryEl : null;
+  if (!el) return;
+  const prevText = el.textContent;
+  const prevClass = el.className;
+  el.textContent = "正在檢查本地 AI...";
+  el.className = "provider-status-summary pending";
+  try {
+    const res = await fetch(`${BACKEND_URL}/provider/health`);
+    if (!res.ok) {
+      el.textContent = prevText;
+      el.className = prevClass;
+      return;
+    }
+    const data = await res.json();
+    if (data.ollama_reachable === true) {
+      // If fallback mode is active, keep the fallback warning — it's more important
+      // than the "ready" status and tells the user about the configuration risk.
+      if (!currentProviderSettings.fallback_to_mock) {
+        el.textContent = "Ollama 本地 AI 已就緒。";
+        el.className = "provider-status-summary active";
+      } else {
+        el.textContent = prevText;
+        el.className = prevClass;
+      }
+    } else {
+      el.textContent = "Ollama 尚未回應。第一次聊天可能需要較久，請確認 Ollama 已啟動。";
+      el.className = "provider-status-summary warning";
+    }
+  } catch {
+    // Restore settings-based summary on error — liveness check is non-critical.
+    el.textContent = prevText;
+    el.className = prevClass;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Startup
 // ---------------------------------------------------------------------------
 (async function startup() {
   await loadAndRenderChatHistory();  // TASK-194: restore history before greeting
   appendMessage("status", "Connecting to backend...");
 
+  // TASK-197: 8-second timeout on startup health check to prevent indefinite hang.
+  const _healthCtrl = new AbortController();
+  const _healthTimer = setTimeout(() => _healthCtrl.abort(), 8000);
   try {
-    const res = await fetch(`${BACKEND_URL}/health`);
+    const res = await fetch(`${BACKEND_URL}/health`, { signal: _healthCtrl.signal });
+    clearTimeout(_healthTimer);
     const data = await res.json();
     if (data.status === "ok") {
       // Remove the connecting status
@@ -2398,10 +2443,14 @@ if (typeof document !== "undefined" && typeof document.addEventListener === "fun
       await loadMemoryContextPreview();
       await loadAuditLogs();
       await loadProviderSettings();
+      // TASK-197: async Ollama liveness probe — runs in background, no await.
+      // Does not write chat history, does not trigger Pet, does not call /chat.
+      checkLocalProviderLiveness();
     } else {
       throw new Error("Unexpected health response");
     }
   } catch {
+    clearTimeout(_healthTimer);
     chatArea.lastChild.remove();
     appendMessage(
       "error",

@@ -19338,3 +19338,121 @@ Fix only small, safe issues; document others as deferred.
 - [x] Safety boundaries unchanged — no auto-capture, no auto-OCR, no auto-/chat.
 - [x] No Provider/Ollama runtime behavior changed.
 - [x] `docs/DESKTOP_UX_POLISH_NOTES.md` created with full findings.
+
+---
+
+## TASK-197 | Ollama Wake-up / First Chat Reliability
+
+**Status:** DONE - WINDOWS MANUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-05-31
+
+### Goal
+
+Improve reliability of the first chat after app restart when Ollama is used as the local AI provider. After restart, Ollama may be unresponsive for 5–60 seconds while the model loads into VRAM. Address four problems:
+
+1. No startup check of Ollama liveness — user sees no warning until the first chat hangs/times out
+2. Status messages in `sourceStatusMessage()` were English — inconsistent with Chinese UI
+3. No timeout on the startup `/health` fetch — could hang indefinitely if backend is unreachable
+4. Loading spinner text during Ollama chat was English
+
+### Approach
+
+**A. Startup AbortController timeout**
+
+Added `AbortController` + 8-second `setTimeout` around the startup `/health` fetch. If the backend doesn't respond in 8 seconds, the fetch aborts and the error path runs. `clearTimeout` called on success.
+
+**B. `sourceStatusMessage()` — Chinese translations**
+
+All English source status strings replaced with Chinese equivalents:
+- `"llm_local"` → `"Ollama 已回覆。本地 AI 正常運作。"`
+- `"llm_local_error"` → `"本地 AI 失敗 — 模型可能仍在載入中。請確認 Ollama 正在執行且模型名稱正確。"`
+- `"pending"` (Ollama path) → `"等待本地 Ollama 回應中。第一次回覆可能需要較久，模型可能正在喚醒。"`
+- All other branches → Chinese equivalents
+
+**C. `sendMessage()` loading text — Chinese**
+
+During an Ollama chat, the loading status message now shows:
+- Ollama path: `"本地 AI 喚醒中，第一次回覆可能需要較久..."`
+- Non-Ollama path: `"等待後端回覆中..."`
+
+**D. `/provider/health` backend endpoint**
+
+New `GET /provider/health` route in `routes.py`:
+- If provider is not Ollama or real AI is disabled → `{provider, ollama_reachable: null, status: "not_applicable"}`
+- Otherwise → calls `check_ollama_server_liveness()` → `{provider: "ollama", ollama_reachable: bool, status: "ok"|"unavailable"}`
+
+`check_ollama_server_liveness()` added to `provider_test_connection_service.py`:
+- Instantiates `OllamaLocalProvider(model="", ...)` and calls `_ollama_server_reachable()`
+- Returns `True` if GET `/api/tags` returns 200 within timeout
+- No model load, no `/api/chat`, no data write
+
+**E. `checkLocalProviderLiveness()` — non-blocking startup probe**
+
+New `async function checkLocalProviderLiveness()` in renderer.js:
+- Runs unawaited after `loadProviderSettings()` at startup
+- Only runs when `isOllamaChatPath()` is true
+- Updates `#provider-status-summary` chip only — no chat, no history, no Pet/TTS
+- Shows "正在檢查本地 AI..." while probe is in flight
+- Reachable + no fallback → "Ollama 本地 AI 已就緒。" (active)
+- Reachable + fallback enabled → restores previous chip text (fallback warning is more important)
+- Unreachable → "Ollama 尚未回應。第一次聊天可能需要較久，請確認 Ollama 已啟動。" (warning)
+- Error (fetch throws) → restores previous chip text
+
+### Files Modified
+
+| File | Change | Runtime? |
+|---|---|---|
+| `apps/desktop/src/renderer/renderer.js` | `sourceStatusMessage()` → Chinese; `sendMessage()` loading text → Chinese; `checkLocalProviderLiveness()` async function; startup AbortController timeout; startup calls `checkLocalProviderLiveness()` after settings load | Yes |
+| `backend/app/api/routes.py` | `GET /provider/health` endpoint; imports `check_ollama_server_liveness` | Yes (new endpoint) |
+| `backend/app/services/provider_test_connection_service.py` | `check_ollama_server_liveness()` public function | Yes |
+| `backend/tests/test_routes.py` | 4 new tests for `/provider/health`: not_applicable (mock), not_applicable (real disabled), reachable, unreachable | No |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | 9 TASK-197 tests (6 static + 3 dynamic); `AbortController` added to sandbox; `/provider/health` handler added to `createFetchStub`; `ollamaReachable` state option added; English test patterns updated to Chinese | No |
+| `docs/OLLAMA_WAKEUP_RELIABILITY_NOTES.md` | Notes on Ollama wake-up behavior and reliability design | No |
+
+### Test Coverage
+
+| Test | Type | What it verifies |
+|---|---|---|
+| `testTask197ProviderHealthEndpointInBackend` | static | `routes.py` has `/provider/health`, calls `check_ollama_server_liveness`, returns `ollama_reachable` |
+| `testTask197SourceStatusMessagesChinese` | static | `sourceStatusMessage` uses Chinese; no English "Ollama response received" / "Local AI failed" |
+| `testTask197StartupLoadingTextChinese` | static | `sendMessage` loading text uses Chinese; no English "Waking up local AI" |
+| `testTask197StartupHealthFetchHasTimeout` | static | `AbortController` + `_healthCtrl` + `signal: _healthCtrl.signal` + 8000 ms in renderer.js |
+| `testTask197LivenessCheckFunctionExists` | static | `async function checkLocalProviderLiveness` defined in renderer.js |
+| `testTask197LivenessCheckUsesProviderHealthPath` | static | `/provider/health` string present in renderer.js |
+| `testTask197LivenessCheckDoesNotWriteToChatHistory` | dynamic | After startup + settle, no `chatHistoryAppend` called; liveness result not in chat area |
+| `testTask197LivenessCheckOllamaReachableUpdatesChip` | dynamic | With `ollamaReachable: true`, `#provider-status-summary` shows "Ollama 本地 AI 已就緒" |
+| `testTask197LivenessCheckOllamaUnreachableShowsWarning` | dynamic | With `ollamaReachable: false`, `#provider-status-summary` shows "Ollama 尚未回應" |
+
+### Automated Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+9 TASK-197 tests; English regex updated to Chinese) |
+| `pet-renderer-smoke.js` | PASS — 233 checks |
+| `pet-window-smoke.js` | PASS — 55 checks |
+| `backend pytest test_routes.py` | PASS — 54 tests |
+
+### Acceptance Criteria
+
+- [x] Startup `/health` fetch has 8-second AbortController timeout ✓
+- [x] `sourceStatusMessage()` fully Chinese ✓
+- [x] `sendMessage()` Ollama loading text Chinese ✓
+- [x] `GET /provider/health` backend endpoint returns `{provider, ollama_reachable, status}` ✓
+- [x] `check_ollama_server_liveness()` in service layer — no model load, no `/api/chat`, no data write ✓
+- [x] `checkLocalProviderLiveness()` runs non-blocking at startup ✓
+- [x] Liveness check: no auto-send chat, no chat history write, no Pet/TTS ✓
+- [x] Liveness check: fallback warning preserved when `fallback_to_mock: true` ✓
+- [x] All three smoke suites PASS ✓
+- [x] Backend pytest 54 tests PASS ✓
+- [x] `git diff --check` CLEAN ✓
+- [x] Windows manual smoke PASS ✓ (2026-05-31)
+
+### Windows Manual Smoke Results (2026-05-31)
+
+| Scenario | Result |
+|---|---|
+| Ollama running / App restart — startup shows liveness check / 就緒 status, no auto-/chat, no history write, no Pet/TTS | PASS |
+| First Full App chat — sends normally; loading text shows clean 喚醒 hint; Send button restores; no indefinite hang | PASS |
+| Ollama offline — no false "已就緒"; clean error message (no traceback / raw JSON); Send button restores | PASS |
+| Pet first chat — no permanent thinking; success → clean reply; failure → clean error; no Full App history pollution | PASS |
+| Regression — chat history restore, Pet mirror, copy/export, Provider Settings / Memory / 診斷紀錄 collapse all normal | PASS |
