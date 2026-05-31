@@ -3605,6 +3605,203 @@ async function testTask202WrapperCssAndSizing() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// TASK-203: Message Timestamp Full Tooltip
+// ─────────────────────────────────────────────────────────────────────────────
+
+function testTask203FormatFullTimestampExists() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("function formatFullTimestamp"), "renderer.js must define formatFullTimestamp");
+  assert.ok(src.includes("meta.title = formatFullTimestamp"), "appendMessage must set meta.title via formatFullTimestamp");
+}
+
+async function testTask203UserMessageMetaTitle() {
+  const { document, sandbox } = await loadRenderer();
+  const ts = Date.now();
+  sandbox.appendMessage("user", "tooltip test user", { ts, noHistory: true });
+  const chatArea = document.getElementById("chat-area");
+  const wrap = chatArea.children.find(
+    (el) => el.className.includes("user") && el.dataset && el.dataset.msgText === "tooltip test user"
+  );
+  assert.ok(wrap, "user message must exist");
+  const meta = wrap.children.find((c) => c.className === "msg-meta");
+  assert.ok(meta, "user message with ts must have .msg-meta");
+  assert.ok(meta.title && meta.title.length > 0, "meta.title must be set when ts > 0");
+  assert.ok(meta.title.includes(String(new Date(ts).getFullYear())), "meta.title must include year");
+}
+
+async function testTask203PetMessageMetaTitle() {
+  const { document, sandbox } = await loadRenderer();
+  const ts = 1748693400000;
+  sandbox.appendMessage("pet", "tooltip test pet", { ts, noHistory: true });
+  const chatArea = document.getElementById("chat-area");
+  const wrap = chatArea.children.find(
+    (el) => el.className.includes("pet") && el.dataset && el.dataset.msgText === "tooltip test pet"
+  );
+  assert.ok(wrap, "pet message must exist");
+  const meta = wrap.children.find((c) => c.className === "msg-meta");
+  assert.ok(meta, "pet message with ts must have .msg-meta");
+  assert.ok(meta.title && meta.title.length > 0, "meta.title must be set for pet message");
+  const d = new Date(ts);
+  assert.ok(meta.title.includes(String(d.getFullYear())), "meta.title must include year");
+}
+
+async function testTask203SourceLabelPreserved() {
+  const { document, sandbox } = await loadRenderer();
+  const ts = 1748693400000;
+  sandbox.appendMessage("pet", "source label check", { ts, source: "pet_text", noHistory: true });
+  const chatArea = document.getElementById("chat-area");
+  const wrap = chatArea.children.find(
+    (el) => el.className.includes("pet") && el.dataset && el.dataset.msgText === "source label check"
+  );
+  const meta = wrap && wrap.children.find((c) => c.className === "msg-meta");
+  assert.ok(meta, "pet_text message must have .msg-meta");
+  assert.ok(meta.textContent.startsWith("Pet"), "meta text must start with 'Pet' source label");
+  assert.ok(meta.textContent.includes("·"), "meta text must include separator");
+  assert.ok(meta.title && meta.title.length > 0, "meta.title must be set");
+}
+
+async function testTask203NoTsNoTitle() {
+  const { document, sandbox } = await loadRenderer();
+  // ts=0 + source="full_app" → no meta element at all (srcLabel="" timeStr="")
+  sandbox.appendMessage("user", "no ts no title", { ts: 0, source: "full_app", noHistory: true });
+  const chatArea = document.getElementById("chat-area");
+  const wrap = chatArea.children.find(
+    (el) => el.className.includes("user") && el.dataset && el.dataset.msgText === "no ts no title"
+  );
+  assert.ok(wrap, "user message must exist");
+  const meta = wrap.children.find((c) => c.className === "msg-meta");
+  assert.ok(!meta, "message with ts=0 and no source label must have no .msg-meta");
+
+  // ts=0 + source="pet_text" → meta exists with label + fallback title (no fabricated time)
+  sandbox.appendMessage("pet", "pet no ts", { ts: 0, source: "pet_text", noHistory: true });
+  const wrap2 = chatArea.children.find(
+    (el) => el.className.includes("pet") && el.dataset && el.dataset.msgText === "pet no ts"
+  );
+  const meta2 = wrap2 && wrap2.children.find((c) => c.className === "msg-meta");
+  assert.ok(meta2, "pet_text message must have .msg-meta even without ts");
+  assert.equal(meta2.textContent, "Pet", "meta.textContent must show source label only (no fabricated time)");
+  assert.equal(meta2.title, "舊紀錄沒有時間資料", "meta.title must be fallback text when ts=0 and source label present");
+}
+
+// TASK-203 follow-up: ts=0 + pet_voice → "Voice" visible + fallback title
+async function testTask203VoiceFallbackTitle() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.appendMessage("pet", "voice no ts", { ts: 0, source: "pet_voice", noHistory: true });
+  const chatArea = document.getElementById("chat-area");
+  const wrap = chatArea.children.find(
+    (el) => el.className.includes("pet") && el.dataset && el.dataset.msgText === "voice no ts"
+  );
+  assert.ok(wrap, "pet message must exist");
+  const meta = wrap.children.find((c) => c.className === "msg-meta");
+  assert.ok(meta, "pet_voice message must have .msg-meta even without ts");
+  assert.equal(meta.textContent, "Voice", "visible label must be 'Voice' (no fabricated time)");
+  assert.equal(meta.title, "舊紀錄沒有時間資料", "meta.title must be fallback for old pet_voice record");
+}
+
+// TASK-203 follow-up: history restore entry with no ts → fallback title, no crash
+async function testTask203HistoryRestoreNoTsFallback() {
+  const { document } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [
+        { role: "pet", text: "old voice msg", source: "pet_voice" },  // no ts field
+        { role: "user", text: "old user msg", source: "full_app" },   // no ts, no label
+      ],
+      chatHistoryAppend: async () => ({}),
+      onChatMirrorFromPet() {},
+    },
+  });
+  await settle();
+  const chatArea = document.getElementById("chat-area");
+
+  // pet_voice without ts → meta with "Voice" label + fallback title
+  const petWrap = chatArea.children.find(
+    (el) => el.dataset && el.dataset.msgText === "old voice msg"
+  );
+  assert.ok(petWrap, "restored pet message must exist");
+  const petMeta = petWrap.children.find((c) => c.className === "msg-meta");
+  assert.ok(petMeta, "restored pet_voice message must have .msg-meta");
+  assert.equal(petMeta.title, "舊紀錄沒有時間資料", "restored message without ts must have fallback title");
+
+  // full_app user without ts → no meta (no label, no time)
+  const userWrap = chatArea.children.find(
+    (el) => el.dataset && el.dataset.msgText === "old user msg"
+  );
+  assert.ok(userWrap, "restored user message must exist");
+  const userMeta = userWrap.children.find((c) => c.className === "msg-meta");
+  assert.ok(!userMeta, "restored full_app user without ts must have no meta");
+}
+
+async function testTask203HistoryRestoreHasTitle() {
+  const ts = 1748693400000;
+  const { document } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [
+        { role: "user", text: "restored msg", source: "full_app", ts },
+      ],
+      chatHistoryAppend: async () => ({}),
+      onChatMirrorFromPet() {},
+    },
+  });
+  await settle();
+  const chatArea = document.getElementById("chat-area");
+  const wrap = chatArea.children.find(
+    (el) => el.dataset && el.dataset.msgText === "restored msg"
+  );
+  assert.ok(wrap, "restored message must appear in chat area");
+  const meta = wrap.children.find((c) => c.className === "msg-meta");
+  assert.ok(meta, "restored message with ts must have .msg-meta");
+  assert.ok(meta.title && meta.title.length > 0, "restored message meta.title must be set");
+  assert.ok(meta.title.includes(String(new Date(ts).getFullYear())), "restored meta.title must include year");
+}
+
+async function testTask203CopyUnaffected() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  // copySingleMessage uses raw `text` closure; copyAllChat uses dataset.msgText — neither reads meta.title
+  assert.ok(src.includes("copySingleMessage(text,"), "copySingleMessage must use raw text closure");
+  assert.ok(src.includes("el.dataset.msgText"), "copyAllChat must use dataset.msgText");
+  // Neither should reference meta.title
+  const copyAllIdx = src.indexOf("function copyAllChat");
+  const copyAllSection = src.slice(copyAllIdx, copyAllIdx + 500);
+  assert.ok(!copyAllSection.includes("meta.title"), "copyAllChat must not include meta.title");
+}
+
+async function testTask203SearchPreservesTitle() {
+  const { document, sandbox } = await loadRenderer();
+  const ts = 1748693400000;
+  sandbox.appendMessage("pet", "search preserve tooltip", { ts, noHistory: true });
+  const chatArea = document.getElementById("chat-area");
+  const wrap = chatArea.children.find(
+    (el) => el.dataset && el.dataset.msgText === "search preserve tooltip"
+  );
+  const meta = wrap && wrap.children.find((c) => c.className === "msg-meta");
+  const titleBefore = meta && meta.title;
+  assert.ok(titleBefore, "meta.title must be set before search");
+  // Perform search then clear
+  searchChat(document, "preserve");
+  clearSearch(document);
+  const metaAfter = wrap.children.find((c) => c.className === "msg-meta");
+  assert.equal(metaAfter.title, titleBefore, "meta.title must be unchanged after search+clear");
+}
+
+async function testTask203TitleFormatHasSeconds() {
+  const { document, sandbox } = await loadRenderer();
+  // Use a ts where seconds are non-zero so we can verify they appear
+  const d = new Date();
+  d.setSeconds(42);
+  const ts = d.getTime();
+  sandbox.appendMessage("user", "seconds check", { ts, noHistory: true });
+  const chatArea = document.getElementById("chat-area");
+  const wrap = chatArea.children.find(
+    (el) => el.dataset && el.dataset.msgText === "seconds check"
+  );
+  const meta = wrap && wrap.children.find((c) => c.className === "msg-meta");
+  assert.ok(meta && meta.title, "meta.title must be set");
+  // Format must be YYYY-MM-DD HH:MM:SS — contains ":42" or similar seconds portion
+  assert.ok(meta.title.match(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/),
+    `meta.title must match YYYY-MM-DD HH:MM:SS format, got: ${meta.title}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // TASK-201 defensive: static check that Array.from is used in filterChatMessages
 function testTask201FilterUsesArrayFrom() {
   const src = fs.readFileSync(rendererPath, "utf8");
@@ -3861,6 +4058,18 @@ async function main() {
   await testTask202NoChatFetch();
   await testTask202NoHistoryOnClick();
   testTask202WrapperCssAndSizing();
+  // TASK-203: Message Timestamp Full Tooltip
+  testTask203FormatFullTimestampExists();
+  await testTask203UserMessageMetaTitle();
+  await testTask203PetMessageMetaTitle();
+  await testTask203SourceLabelPreserved();
+  await testTask203NoTsNoTitle();
+  await testTask203VoiceFallbackTitle();
+  await testTask203HistoryRestoreNoTsFallback();
+  await testTask203HistoryRestoreHasTitle();
+  await testTask203CopyUnaffected();
+  await testTask203SearchPreservesTitle();
+  await testTask203TitleFormatHasSeconds();
   console.log("renderer chat smoke: PASS");
 }
 

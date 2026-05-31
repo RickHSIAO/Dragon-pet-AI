@@ -793,6 +793,22 @@ function formatMsgTime(ts) {
   }
 }
 
+// TASK-203: full date+time string for the title/tooltip on message metadata.
+function formatFullTimestamp(ts) {
+  try {
+    const d = new Date(ts);
+    const date = d.getFullYear() + "-" +
+      String(d.getMonth() + 1).padStart(2, "0") + "-" +
+      String(d.getDate()).padStart(2, "0");
+    const time = String(d.getHours()).padStart(2, "0") + ":" +
+      String(d.getMinutes()).padStart(2, "0") + ":" +
+      String(d.getSeconds()).padStart(2, "0");
+    return `${date} ${time}`;
+  } catch (_e) {
+    return "";
+  }
+}
+
 // TASK-195: map stored source value to a visible label; "" means no label shown.
 function sourceLabelFor(source) {
   if (source === "pet_text" || source === "pet_input") return "Pet";
@@ -901,6 +917,13 @@ function appendMessage(role, text, { autoScroll = false, noHistory = false, sour
     const meta = document.createElement("div");
     meta.className = "msg-meta";
     meta.textContent = srcLabel && timeStr ? `${srcLabel} · ${timeStr}` : srcLabel || timeStr;
+    // TASK-203: full date+time tooltip if available; honest fallback for old records.
+    if (ts > 0) {
+      meta.title = formatFullTimestamp(ts);
+    } else if (srcLabel && (role === "user" || role === "pet")) {
+      // Old history entry written before TASK-195 ts persistence — no fabricated time.
+      meta.title = "舊紀錄沒有時間資料";
+    }
     wrap.appendChild(meta);
   }
 

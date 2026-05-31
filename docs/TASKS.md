@@ -20017,3 +20017,97 @@ Improve chat scroll UX: when the user is reading history, new messages no longer
 | Search active — new message does not break search/highlight/Enter navigation; no button shown | PASS |
 | Clear chat — "↓ 新訊息" button dismissed | PASS |
 | Regression — TASK-198 filter, TASK-199 Ctrl+F/Esc, TASK-200 unread badge, TASK-201 highlight/navigation, copy/export, Pet Window / Voice / STT / TTS all normal | PASS |
+
+## TASK-203 | Message Timestamp Full Tooltip
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS
+**Date:** 2026-05-31
+
+### Goal
+
+Each user/pet message metadata already shows a compact `HH:mm` timestamp (TASK-195). This task adds a native OS tooltip (`title` attribute) so hovering the metadata reveals the full `YYYY-MM-DD HH:MM:SS` date and time without cluttering the visible UI.
+
+### Design
+
+**`formatFullTimestamp(ts)`** — new helper next to `formatMsgTime`. Builds `YYYY-MM-DD HH:MM:SS` from a Unix ms timestamp using local time. Returns `""` on any error.
+
+**`appendMessage()` — updated tooltip logic:**
+- `ts > 0` → `meta.title = formatFullTimestamp(ts)` (full YYYY-MM-DD HH:MM:SS tooltip)
+- `ts = 0` + `srcLabel` present + `role = user/pet` → `meta.title = "舊紀錄沒有時間資料"` (honest fallback, no fabricated time)
+- `ts = 0` + no `srcLabel` (e.g. Full App messages before TASK-195) → no meta created at all (clean, no label, no tooltip)
+
+The visible `meta.textContent` (`HH:mm` / `Pet · HH:mm` / `Voice · HH:mm`) is unchanged.
+
+**No HTML change.** No CSS change. No IPC change. No backend change. No history migration. The `title` attribute is rendered as a native OS tooltip by the browser engine.
+
+**History-restored messages** pass their `entry.ts` into `appendMessage()` so tooltips appear on restored messages. Old entries written before TASK-195 `ts` persistence have no `ts` field → treated as `ts = 0` → fallback tooltip for Pet/Voice messages, no meta for Full App user messages.
+
+**Follow-up fix context:** initial visual smoke found old history entries showing "Pet" / "Voice" labels without any time, no tooltip — looked broken. Root cause: pre-TASK-195 entries have no `ts`. Cannot fabricate or backfill real time. Solution: show `"舊紀錄沒有時間資料"` as tooltip for labelled messages with no ts.
+
+### Files Modified
+
+| File | Change | Runtime? |
+|---|---|---|
+| `apps/desktop/src/renderer/renderer.js` | `formatFullTimestamp(ts)` helper; `meta.title = formatFullTimestamp(ts)` in `appendMessage()` when `ts > 0` | Yes |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | 11 TASK-203 tests (incl. 2 follow-up for old-record fallback) | No |
+
+### Test Coverage
+
+| Test | Type | What it verifies |
+|---|---|---|
+| `testTask203FormatFullTimestampExists` | static | `formatFullTimestamp` defined; `meta.title = formatFullTimestamp` present in `appendMessage` |
+| `testTask203UserMessageMetaTitle` | dynamic | User message with ts → `meta.title` set, includes year |
+| `testTask203PetMessageMetaTitle` | dynamic | Pet message with ts → `meta.title` set, includes year |
+| `testTask203SourceLabelPreserved` | dynamic | `pet_text` source → "Pet · HH:mm" text unchanged + `meta.title` set |
+| `testTask203NoTsNoTitle` | dynamic | `ts=0` + no label → no meta; `ts=0` + `pet_text` → meta label "Pet" + `meta.title = "舊紀錄沒有時間資料"` |
+| `testTask203VoiceFallbackTitle` | dynamic | `ts=0` + `pet_voice` → visible "Voice" + `meta.title = "舊紀錄沒有時間資料"` |
+| `testTask203HistoryRestoreNoTsFallback` | dynamic | Restored entry without ts → fallback title; full_app user without ts → no meta |
+| `testTask203HistoryRestoreHasTitle` | dynamic | History-restored message with ts → full `meta.title` set |
+| `testTask203CopyUnaffected` | static | `copySingleMessage` uses raw text; `copyAllChat` uses `dataset.msgText`; neither reads `meta.title` |
+| `testTask203SearchPreservesTitle` | dynamic | After search + clear, `meta.title` is unchanged |
+| `testTask203TitleFormatHasSeconds` | dynamic | Title matches `YYYY-MM-DD HH:MM:SS` pattern |
+
+### Safety / Privacy Boundaries
+
+| Constraint | Implementation |
+|---|---|
+| No data mutation | `meta.title` is display-only; `dataset.msgText` unchanged |
+| No history write | `formatFullTimestamp` and `meta.title` not referenced in `saveChatHistoryEntry` |
+| No /chat fetch | No fetch in tooltip code path |
+| No new IPC | `title` attribute is a browser-native feature |
+| No backend change | No routes.py / service changes |
+| No Pet Window impact | Logic in Full App renderer only |
+| Copy immune | `copySingleMessage` uses raw `text` closure; `copyAllChat` uses `dataset.msgText` |
+| Search immune | `filterChatMessages` touches `body.innerHTML` only; `meta.title` is untouched |
+
+### Automated Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+11 TASK-203 tests incl. 2 follow-up) |
+| `pet-renderer-smoke.js` | PASS — 233 checks (Pet Window untouched) |
+| `pet-window-smoke.js` | PASS — 55 checks (IPC/preload untouched) |
+
+### Acceptance Criteria
+
+- [x] `HH:mm` visible text unchanged ✓
+- [x] Hovering metadata shows `YYYY-MM-DD HH:MM:SS` tooltip ✓
+- [x] History-restored messages have tooltip ✓
+- [x] `ts=0` + source label → `"舊紀錄沒有時間資料"` tooltip (no fabricated time) ✓
+- [x] `ts=0` + no source label → no meta (clean) ✓
+- [x] Copy/export unaffected ✓
+- [x] Search/highlight/navigation unaffected ✓
+- [x] No backend, IPC, history format, or Pet Window change ✓
+- [x] All three smoke suites PASS ✓
+- [x] Windows visual smoke PASS (2026-05-31) ✓
+
+### Windows Visual Smoke Results (2026-05-31)
+
+| Scenario | Result |
+|---|---|
+| New message — `HH:mm` visible, hover shows `YYYY-MM-DD HH:MM:SS` | PASS |
+| Old Pet/Voice messages (no ts) — hover shows `舊紀錄沒有時間資料`, no fabricated time | PASS |
+| Old Full App user messages (no ts, no label) — no tooltip, no erroneous meta | PASS |
+| Startup greeting / status separator — no time tooltip | PASS |
+| Copy/export — plain text only, no tooltip/HTML | PASS |
+| Regression — search/filter, highlight/navigation, copy/export, unread badge, smooth auto-scroll, Pet/Voice/STT/TTS | PASS |
