@@ -22905,3 +22905,74 @@ Updated `docs/INTERACTIVE_COMPANION_ARCHITECTURE.md` to include TASK-224:
 | Focus：Preview `attention_returned/happy` + State `happy/returned/lively` + Level 合法 | PASS |
 | Diagnostics 格式：沒有 `undefined` / `null` / `[object Object]` / `NaN` / raw JSON / user text | PASS |
 | 一般回歸：沒有新增 IPC side-effect，沒有額外 TTS，沒有額外 `/chat`，沒有 history/copy/export 污染，Pet Window 表情與 reaction bubble 行為維持正常 | PASS |
+
+---
+
+## TASK-225 | Christina Persona Context Pack
+
+**Status:** IMPLEMENTED - DOCS ONLY / NO WINDOWS SMOKE REQUIRED
+**Date:** 2026-06-01
+**Phase:** Phase 5 - Companion Persona Content Layer
+**Depends on:** TASK-224
+
+### Goal
+
+Create a canonical Christina persona context pack for future companion behavior
+work. The pack records user-provided source material and converts it into
+runtime-safe guidance without wiring it into prompts, TTS, reaction bubbles, or
+Pet Window behavior.
+
+### Summary
+
+Added:
+
+- `docs/CHRISTINA_PERSONA_CONTEXT_PACK.md`
+
+The context pack contains:
+
+- Canonical Extracted Persona Source.
+- Runtime-Safe Persona Adaptation.
+- Suggested Persona Strength Levels.
+- Runtime Integration Boundary.
+
+### Persona Context Pack Role
+
+The persona pack is a content/persona layer for future work. It may support:
+
+- LLM prompt style.
+- Reaction bubble style.
+- TTS-safe scripts.
+- Idle reaction content.
+- Character state expression style.
+
+It is not a side-effect execution layer and currently controls no runtime
+behavior.
+
+### Runtime Boundary
+
+TASK-225 is docs-only:
+
+- No runtime prompt wiring.
+- No TTS wiring.
+- No STT wiring.
+- No IPC added.
+- No `/chat` change.
+- No renderer change.
+- No Pet Window change.
+- No backend/provider/Ollama runtime change.
+- No automatic speech.
+- No monitoring, OCR, screenshots, or background capture.
+- No persistence format change.
+
+### Acceptance Criteria
+
+- [x] `docs/CHRISTINA_PERSONA_CONTEXT_PACK.md` created.
+- [x] Canonical extracted persona source recorded.
+- [x] Runtime-safe adaptation rules recorded.
+- [x] Persona strength levels recorded.
+- [x] Runtime integration boundary recorded.
+- [x] README links the persona context pack.
+- [x] ROADMAP records TASK-225 as docs-only.
+- [x] Interactive companion architecture doc records persona pack as content layer.
+- [x] No code/runtime/prompt/TTS/STT/IPC/`/chat` change.
+- [x] No Windows visual smoke required.

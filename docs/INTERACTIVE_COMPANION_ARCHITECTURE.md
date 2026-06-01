@@ -1,11 +1,11 @@
 # Interactive Companion Architecture Checkpoint
 
-**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-224 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-225 IMPLEMENTED - DOCS ONLY / NO WINDOWS SMOKE REQUIRED
 **Date:** 2026-06-01
-**Scope:** Architecture checkpoint for TASK-214 through TASK-224.
+**Scope:** Architecture checkpoint for TASK-214 through TASK-225.
 
 This document records the current interactive companion architecture after the
-TASK-214 through TASK-224 chain.
+TASK-214 through TASK-225 chain.
 
 ---
 
@@ -54,6 +54,7 @@ user interaction
 | TASK-222 | Architecture checkpoint | Records the interactive companion architecture. |
 | TASK-223 | Character state layer | Summarizes mood, attention, energy, and recent interaction level. DONE - Windows visual smoke PASS. |
 | TASK-224 | Character state preview diagnostics | Formats local reaction, decision, state, and level preview. DONE - Windows visual smoke PASS. |
+| TASK-225 | Persona context pack | Adds Christina persona source, safe adaptation, strength levels, and runtime boundary. DOCS ONLY. |
 
 ---
 
@@ -225,7 +226,33 @@ diagnostics, or Pet Window payload data.
 
 ---
 
-## 8. Smoke Coverage Summary
+## 8. Persona Content Layer
+
+TASK-225 adds `docs/CHRISTINA_PERSONA_CONTEXT_PACK.md` as the Christina persona
+content pack for the interactive companion system. It records canonical
+extracted persona source material, runtime-safe adaptation rules, persona
+strength levels, and runtime integration boundaries.
+
+The persona context pack is currently documentation only. It does not connect to
+runtime prompts, reaction bubble generation, TTS, idle reactions, Pet Window
+handlers, IPC, `/chat`, or provider execution. It also does not create any
+automatic speech, monitoring, OCR, screenshot capture, or proactive LLM
+behavior.
+
+Future tasks may use it as content guidance for:
+
+- LLM prompt style.
+- Reaction bubble style.
+- TTS-safe script text.
+- Idle reaction content.
+- Character state expression style.
+
+Important: the persona pack is a content/persona layer, not an execution
+controller. It does not control side effects.
+
+---
+
+## 9. Smoke Coverage Summary
 
 The completed stack is covered by:
 
@@ -258,7 +285,7 @@ raw JSON, or user text, and no Pet Window expression/reaction bubble regression.
 
 ---
 
-## 9. Known Boundaries / Not Yet Implemented
+## 10. Known Boundaries / Not Yet Implemented
 
 The current system does not yet implement:
 
@@ -277,7 +304,7 @@ actions directly.
 
 ---
 
-## 10. Recommended Next Phase
+## 11. Recommended Next Phase
 
 Recommended next architecture phase:
 
