@@ -1114,34 +1114,59 @@ function mirrorInteractionReactionBubble(bubble) {
   return true;
 }
 
-// TASK-216/217: Reaction hint + expression suggestion debug preview.
-// Uses textContent (not innerHTML); only displays allowlisted strings.
+// TASK-224: Local diagnostics preview formatters.
+// Uses textContent (not innerHTML); only displays allowlisted summary tokens.
+function formatCharacterStatePreview(state = currentCharacterState) {
+  const source = state && typeof state === "object" ? state : {};
+  const safeMood = CHARACTER_MOOD_STATE_ALLOWLIST.has(source.mood)
+    ? source.mood
+    : "neutral";
+  const safeAttention = CHARACTER_ATTENTION_STATE_ALLOWLIST.has(source.attention)
+    ? source.attention
+    : "idle";
+  const safeEnergy = CHARACTER_ENERGY_STATE_ALLOWLIST.has(source.energy)
+    ? source.energy
+    : "calm";
+  const safeLevel = CHARACTER_INTERACTION_LEVEL_ALLOWLIST.has(source.recentInteractionLevel)
+    ? source.recentInteractionLevel
+    : "none";
+  return "State: " + safeMood + "/" + safeAttention + "/" + safeEnergy
+    + " · Level: " + safeLevel;
+}
+
+function formatInteractionDiagnosticsPreview(context = {}) {
+  const source = context && typeof context === "object" ? context : {};
+  const rawHint = typeof source.reactionHint === "string"
+    ? source.reactionHint
+    : currentInteractionReactionHint;
+  const rawExpression = typeof source.expression === "string"
+    ? source.expression
+    : currentInteractionExpressionSuggestion;
+  const decision = source.behaviorDecision && typeof source.behaviorDecision === "object"
+    ? source.behaviorDecision
+    : currentCompanionBehaviorDecision;
+  const safeHint = INTERACTION_REACTION_HINT_ALLOWLIST.has(rawHint)
+    ? rawHint
+    : "none";
+  const safeExpression = INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST.has(rawExpression)
+    ? rawExpression
+    : "neutral";
+  const safeAction = decision && COMPANION_BEHAVIOR_ACTION_ALLOWLIST.has(decision.action)
+    ? decision.action
+    : "none";
+  const state = source.characterState && typeof source.characterState === "object"
+    ? source.characterState
+    : currentCharacterState;
+  return "Reaction: " + safeHint
+    + " · Suggestion: " + safeExpression
+    + "\nDecision: " + safeAction
+    + " · " + formatCharacterStatePreview(state);
+}
+
 function renderInteractionReactionPreview() {
   const el = document.getElementById("interaction-reaction-preview");
   if (!el) return;
-  const safeHint = INTERACTION_REACTION_HINT_ALLOWLIST.has(currentInteractionReactionHint)
-    ? currentInteractionReactionHint
-    : "none";
-  const safeExpression = INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST.has(currentInteractionExpressionSuggestion)
-    ? currentInteractionExpressionSuggestion
-    : "neutral";
-  const safeAction = currentCompanionBehaviorDecision
-    && COMPANION_BEHAVIOR_ACTION_ALLOWLIST.has(currentCompanionBehaviorDecision.action)
-    ? currentCompanionBehaviorDecision.action
-    : "none";
-  const safeMood = currentCharacterState && CHARACTER_MOOD_STATE_ALLOWLIST.has(currentCharacterState.mood)
-    ? currentCharacterState.mood
-    : "neutral";
-  const safeAttention = currentCharacterState && CHARACTER_ATTENTION_STATE_ALLOWLIST.has(currentCharacterState.attention)
-    ? currentCharacterState.attention
-    : "idle";
-  const safeEnergy = currentCharacterState && CHARACTER_ENERGY_STATE_ALLOWLIST.has(currentCharacterState.energy)
-    ? currentCharacterState.energy
-    : "calm";
-  el.textContent = "Reaction: " + safeHint
-    + " · Suggestion: " + safeExpression
-    + " · Decision: " + safeAction
-    + " · State: " + safeMood + "/" + safeAttention + "/" + safeEnergy;
+  el.textContent = formatInteractionDiagnosticsPreview();
 }
 
 function recordInteractionEvent(type, payload = {}) {

@@ -1,11 +1,11 @@
 # Interactive Companion Architecture Checkpoint
 
-**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-223 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-224 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
 **Date:** 2026-06-01
-**Scope:** Architecture checkpoint for TASK-214 through TASK-223.
+**Scope:** Architecture checkpoint for TASK-214 through TASK-224.
 
 This document records the current interactive companion architecture after the
-TASK-214 through TASK-223 chain.
+TASK-214 through TASK-224 chain.
 
 ---
 
@@ -53,6 +53,7 @@ user interaction
 | TASK-221 | Behavior policy | Summarizes hint/expression/bubble into a local decision object. |
 | TASK-222 | Architecture checkpoint | Records the interactive companion architecture. |
 | TASK-223 | Character state layer | Summarizes mood, attention, energy, and recent interaction level. DONE - Windows visual smoke PASS. |
+| TASK-224 | Character state preview diagnostics | Formats local reaction, decision, state, and level preview. DONE - Windows visual smoke PASS. |
 
 ---
 
@@ -71,6 +72,7 @@ flowchart TD
   H --> I[recordCompanionBehaviorDecision]
   I --> R[deriveCharacterState]
   R --> S[recordCharacterState]
+  S --> T[formatInteractionDiagnosticsPreview]
   F --> J[mirrorInteractionExpressionSuggestion]
   J --> K[pet:expression-suggestion]
   K --> L[pet:expression-suggestion-received]
@@ -91,12 +93,13 @@ User interaction
 -> deriveInteractionReactionBubble
 -> deriveCompanionBehaviorDecision
 -> deriveCharacterState
+-> formatInteractionDiagnosticsPreview
 -> mirrorExpression / mirrorReactionBubble
 -> Pet Window expression / fixed bubble
 ```
 
-The behavior decision and character state are local-only. They are not sent to
-the Pet Window and do not drive the mirror calls.
+The behavior decision, character state, and diagnostics preview are local-only.
+They are not sent to the Pet Window and do not drive the mirror calls.
 
 ---
 
@@ -109,6 +112,7 @@ the Pet Window and do not drive the mirror calls.
 | Expression suggestion layer | Reaction hint | Allowlisted expression | Local expression state; existing mirror path | Expressions restricted to allowlist. |
 | Behavior policy layer | Hint, expression, bubble id | Decision object | Local preview/summary only | No IPC, no Pet Window payload, no raw text. |
 | Character state layer | Behavior decision, hint, expression, recent events | `attention/energy/mood/recentInteractionLevel/source/reason/ts` | Local preview/summary only | No IPC, no Pet Window payload, no raw text, no timers. |
+| Preview diagnostics layer | Hint, expression, decision, character state | `Reaction/Suggestion/Decision/State/Level` text | Local Full App display only | `textContent`; allowlisted tokens only; no raw JSON or message text. |
 | Expression mirror layer | Expression suggestion | `expression/source/ts` payload | Narrow IPC to Pet Window | No message text; no bubble/TTS/chat. |
 | Expression debounce layer | Expression mirror requests | Latest pending expression | Coalesced mirror timing | 300ms cooldown; latest wins. |
 | Reaction bubble mirror layer | Reaction bubble id | `id/text/source/ts/ttlMs` payload | Narrow IPC to Pet Window | Text comes from fixed allowlist mapping. |
@@ -206,6 +210,19 @@ Character state fields:
 | `reason` | The allowlisted reaction hint driving the state. |
 | `ts` | Local timestamp for the state record. |
 
+TASK-224 preview diagnostics format:
+
+```text
+Reaction: <hint> · Suggestion: <expression>
+Decision: <action> · State: <mood>/<attention>/<energy> · Level: <recentInteractionLevel>
+```
+
+Fallback diagnostics values are fixed to `Reaction: none`,
+`Suggestion: neutral`, `Decision: none`, `State: neutral/idle/calm`, and
+`Level: none`. The preview is local Full App text only and must never include
+raw JSON, raw event payloads, raw user message text, backend/provider
+diagnostics, or Pet Window payload data.
+
 ---
 
 ## 8. Smoke Coverage Summary
@@ -215,8 +232,9 @@ The completed stack is covered by:
 - `renderer-chat-smoke.js`
 - `pet-window-smoke.js`
 - `pet-renderer-smoke.js`
-- Windows visual smoke for TASK-214 through TASK-223
+- Windows visual smoke for TASK-214 through TASK-224
 - Automated smoke for TASK-223
+- Automated smoke for TASK-224
 - history/copy/export boundary checks
 - no TTS side-effect checks
 - no `/chat` side-effect checks
@@ -229,6 +247,14 @@ states: startup `neutral/idle/calm`, send `focused/active/attentive`,
 delete/undo `neutral/managing/calm`, edit `annoyed/correcting/attentive`,
 clear `neutral/reset/calm`, and focus `happy/returned/lively`. Continuous
 interactions showed no `undefined`, `null`, `[object Object]`, or raw JSON.
+
+TASK-224 automated smoke and Windows visual smoke PASS confirmed on 2026-06-01.
+Confirmed diagnostics preview fallback, `Level` display, event mappings, raw
+text/raw JSON exclusion, history/copy/export boundary, no `/chat`/TTS/Pet
+Bubble side effects, and no new IPC. Windows visual smoke confirmed startup
+Reaction/Suggestion plus Decision/State/Level display, valid Level values for
+send/delete/edit/clear/focus, no `undefined`, `null`, `[object Object]`, `NaN`,
+raw JSON, or user text, and no Pet Window expression/reaction bubble regression.
 
 ---
 
@@ -245,8 +271,9 @@ The current system does not yet implement:
 - User-configurable behavior policy.
 - Behavior decision controlling execution.
 
-Important: TASK-221 behavior decisions and TASK-223 character states are
-currently summary/preview only. They do not execute actions directly.
+Important: TASK-221 behavior decisions, TASK-223 character states, and TASK-224
+diagnostics previews are currently summary/preview only. They do not execute
+actions directly.
 
 ---
 

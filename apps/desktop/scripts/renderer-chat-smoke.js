@@ -8010,6 +8010,223 @@ function testTask223RegressionGuards() {
   console.log("  testTask223RegressionGuards PASS");
 }
 
+// ─── TASK-224: Character State Preview Polish / Diagnostics ─────────────────
+
+function testTask224RendererHasDiagnosticsFormatters() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("function formatInteractionDiagnosticsPreview"),
+    "renderer.js must define formatInteractionDiagnosticsPreview");
+  assert.ok(src.includes("function formatCharacterStatePreview"),
+    "renderer.js must define formatCharacterStatePreview");
+  assert.ok(src.includes("formatInteractionDiagnosticsPreview()"),
+    "renderInteractionReactionPreview must use the diagnostics formatter");
+  console.log("  testTask224RendererHasDiagnosticsFormatters PASS");
+}
+
+function testTask224PreviewStyleKeepsDiagnosticsMuted() {
+  const css = fs.readFileSync(cssPath, "utf8");
+  const ruleStart = css.indexOf("#interaction-reaction-preview");
+  const ruleEnd = css.indexOf("}", ruleStart);
+  const previewRule = ruleStart >= 0 && ruleEnd > ruleStart ? css.slice(ruleStart, ruleEnd) : "";
+  assert.ok(css.includes("#interaction-reaction-preview"),
+    "styles.css must keep the interaction preview style");
+  assert.ok(previewRule.includes("white-space: pre-wrap"),
+    "diagnostics preview must allow safe line wrapping");
+  assert.ok(!previewRule.includes("position: fixed"),
+    "diagnostics preview must not use fixed positioning");
+  console.log("  testTask224PreviewStyleKeepsDiagnosticsMuted PASS");
+}
+
+async function testTask224FormatterFallbacks() {
+  const { sandbox } = await loadRenderer();
+  const text = sandbox.formatInteractionDiagnosticsPreview({
+    reactionHint: "BAD_HINT",
+    expression: "BAD_EXPRESSION",
+    behaviorDecision: { action: "BAD_ACTION" },
+    characterState: {
+      mood: "BAD_MOOD",
+      attention: "BAD_ATTENTION",
+      energy: "BAD_ENERGY",
+      recentInteractionLevel: "BAD_LEVEL",
+    },
+  });
+  assert.ok(text.includes("Reaction: none"), "fallback preview must include Reaction: none");
+  assert.ok(text.includes("Suggestion: neutral"), "fallback preview must include Suggestion: neutral");
+  assert.ok(text.includes("Decision: none"), "fallback preview must include Decision: none");
+  assert.ok(text.includes("State: neutral/idle/calm"), "fallback preview must include neutral state");
+  assert.ok(text.includes("Level: none"), "fallback preview must include Level: none");
+  assert.ok(!text.includes("BAD_"), "fallback preview must not leak unknown tokens");
+  console.log("  testTask224FormatterFallbacks PASS");
+}
+
+async function testTask224StartupPreviewIncludesAllDiagnostics() {
+  const { document } = await loadRenderer();
+  const el = document.getElementById("interaction-reaction-preview");
+  assert.ok(el.textContent.includes("Reaction: none"), "startup preview must include Reaction");
+  assert.ok(el.textContent.includes("Suggestion: neutral"), "startup preview must include Suggestion");
+  assert.ok(el.textContent.includes("Decision: none"), "startup preview must include Decision");
+  assert.ok(el.textContent.includes("State: neutral/idle/calm"), "startup preview must include State");
+  assert.ok(el.textContent.includes("Level: none"), "startup preview must include Level");
+  console.log("  testTask224StartupPreviewIncludesAllDiagnostics PASS");
+}
+
+async function testTask224UserActivePreviewIncludesLevel() {
+  const { document, sandbox } = await loadRenderer();
+  const el = document.getElementById("interaction-reaction-preview");
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 7, source: "full_app" });
+  assert.ok(el.textContent.includes("Reaction: user_active"), "user_active preview must include Reaction");
+  assert.ok(el.textContent.includes("Suggestion: focused"), "user_active preview must include Suggestion");
+  assert.ok(el.textContent.includes("Decision: mirror_expression_and_bubble"),
+    "user_active preview must include Decision");
+  assert.ok(el.textContent.includes("State: focused/active/attentive"),
+    "user_active preview must include State");
+  assert.ok(el.textContent.includes("Level: low"), "single event preview must include Level: low");
+  console.log("  testTask224UserActivePreviewIncludesLevel PASS");
+}
+
+async function testTask224PreviewMappings() {
+  const cases = [
+    ["message_edited", "correction", "annoyed", "State: annoyed/correcting/attentive"],
+    ["chat_history_cleared", "reset", "neutral", "State: neutral/reset/calm"],
+    ["full_app_focused", "attention_returned", "happy", "State: happy/returned/lively"],
+  ];
+  for (const [eventType, hint, expression, stateText] of cases) {
+    const { document, sandbox } = await loadRenderer();
+    const el = document.getElementById("interaction-reaction-preview");
+    sandbox.recordInteractionEvent(eventType, { messageLength: 5, count: 1 });
+    assert.ok(el.textContent.includes(`Reaction: ${hint}`), `${eventType} preview reaction mismatch`);
+    assert.ok(el.textContent.includes(`Suggestion: ${expression}`), `${eventType} preview suggestion mismatch`);
+    assert.ok(el.textContent.includes("Decision: mirror_expression_and_bubble"),
+      `${eventType} preview decision mismatch`);
+    assert.ok(el.textContent.includes(stateText), `${eventType} preview state mismatch`);
+  }
+  console.log("  testTask224PreviewMappings PASS");
+}
+
+async function testTask224PreviewNoRawTextOrRawJson() {
+  const { document, sandbox } = await loadRenderer();
+  const el = document.getElementById("interaction-reaction-preview");
+  sandbox.recordInteractionEvent("chat_message_sent", {
+    messageLength: 12,
+    message: "RAW_USER_TEXT_FORBIDDEN",
+    text: "RAW_USER_TEXT_FORBIDDEN",
+    body: "RAW_USER_TEXT_FORBIDDEN",
+    rawText: "RAW_USER_TEXT_FORBIDDEN",
+    content: "RAW_USER_TEXT_FORBIDDEN",
+    reply: "RAW_USER_TEXT_FORBIDDEN",
+  });
+  const preview = el.textContent;
+  for (const token of [
+    "RAW_USER_TEXT_FORBIDDEN",
+    "message",
+    "text",
+    "body",
+    "rawText",
+    "content",
+    "reply",
+    "[object Object]",
+    "undefined",
+    "null",
+    "NaN",
+  ]) {
+    assert.ok(!preview.includes(token), `preview must not include ${token}`);
+  }
+  console.log("  testTask224PreviewNoRawTextOrRawJson PASS");
+}
+
+async function testTask224PreviewNotInHistoryOrTranscript() {
+  const appendCalls = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryAppend(entry) { appendCalls.push(entry); return Promise.resolve({ ok: true }); },
+    },
+  });
+  await settle();
+  appendCalls.length = 0;
+  sandbox.appendMessage("user", "TASK224 transcript user", { noHistory: true });
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 9 });
+  await settle();
+  const transcript = sandbox.buildChatTranscript();
+  assert.equal(appendCalls.length, 0, "diagnostics preview must not write chat history");
+  assert.ok(!transcript.includes("Reaction:"), "diagnostics preview must not enter transcript");
+  assert.ok(!transcript.includes("Suggestion:"), "diagnostics suggestion must not enter transcript");
+  assert.ok(!transcript.includes("Decision:"), "diagnostics decision must not enter transcript");
+  assert.ok(!transcript.includes("State:"), "diagnostics state must not enter transcript");
+  assert.ok(!transcript.includes("Level:"), "diagnostics level must not enter transcript");
+  console.log("  testTask224PreviewNotInHistoryOrTranscript PASS");
+}
+
+async function testTask224PreviewNoChatSpeechTtsOrIpcSideEffects() {
+  const chatCalls = [];
+  const appendCalls = [];
+  const speechCalls = [];
+  const expressionCalls = [];
+  const bubbleCalls = [];
+  const { sandbox } = await loadRenderer({
+    fetch: async (url) => { chatCalls.push(url); return { ok: true, json: async () => ({}) }; },
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryAppend(entry) { appendCalls.push(entry); return Promise.resolve({ ok: true }); },
+      updatePetSpeech(payload) { speechCalls.push(payload); return Promise.resolve({ ok: true }); },
+      sendPetExpressionSuggestion(payload) { expressionCalls.push(payload); return Promise.resolve({ ok: true }); },
+      sendPetReactionBubble(payload) { bubbleCalls.push(payload); return Promise.resolve({ ok: true }); },
+    },
+  });
+  await settle();
+  chatCalls.length = 0;
+  appendCalls.length = 0;
+  speechCalls.length = 0;
+  expressionCalls.length = 0;
+  bubbleCalls.length = 0;
+  sandbox.renderInteractionReactionPreview();
+  await settle();
+  assert.equal(chatCalls.filter((url) => String(url).endsWith("/chat")).length, 0,
+    "diagnostics preview render must not call /chat");
+  assert.equal(appendCalls.length, 0, "diagnostics preview render must not write chat history");
+  assert.equal(speechCalls.length, 0, "diagnostics preview render must not call updatePetSpeech/TTS path");
+  assert.equal(expressionCalls.length, 0, "diagnostics preview render must not mirror expression");
+  assert.equal(bubbleCalls.length, 0, "diagnostics preview render must not mirror reaction bubble");
+  console.log("  testTask224PreviewNoChatSpeechTtsOrIpcSideEffects PASS");
+}
+
+function testTask224NoNewIpcChannelsAndPreservesExisting() {
+  const rendererPreload = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "preload.js"), "utf8");
+  const mainSrc = fs.readFileSync(path.join(desktopRoot, "src", "main.js"), "utf8");
+  const petPreload = fs.readFileSync(path.join(desktopRoot, "src", "pet", "pet-preload.js"), "utf8");
+  for (const src of [rendererPreload, mainSrc, petPreload]) {
+    assert.ok(!src.includes("task-224"), "TASK-224 must not add task-specific IPC");
+    assert.ok(!src.includes("preview-diagnostics"), "TASK-224 must not add diagnostics IPC");
+    assert.ok(!src.includes("character-state"), "TASK-224 must not add character state IPC");
+    assert.ok(!src.includes("character:state"), "TASK-224 must not add broad character IPC");
+  }
+  assert.ok(rendererPreload.includes('PET_EXPRESSION_SUGGESTION_CHANNEL = "pet:expression-suggestion"'),
+    "TASK-218 narrow renderer invoke channel must remain");
+  assert.ok(mainSrc.includes('PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL = "pet:expression-suggestion-received"'),
+    "TASK-218 narrow main send channel must remain");
+  assert.ok(rendererPreload.includes('PET_REACTION_BUBBLE_CHANNEL = "pet:reaction-bubble"'),
+    "TASK-220 narrow renderer invoke channel must remain");
+  assert.ok(mainSrc.includes('PET_REACTION_BUBBLE_RECEIVED_CHANNEL = "pet:reaction-bubble-received"'),
+    "TASK-220 narrow main send channel must remain");
+  assert.ok(!rendererPreload.includes('PET_EXPRESSION_SUGGESTION_CHANNEL = "pet"'),
+    "TASK-218 expression channel must not be generic pet");
+  assert.ok(!rendererPreload.includes('PET_REACTION_BUBBLE_CHANNEL = "pet"'),
+    "TASK-220 reaction bubble channel must not be generic pet");
+  console.log("  testTask224NoNewIpcChannelsAndPreservesExisting PASS");
+}
+
+function testTask224RegressionGuards() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(!src.includes("hover-action"), "TASK-224 must not restore hover action buttons");
+  assert.ok(src.includes("chat-context-menu"), "TASK-224 must keep context menu");
+  assert.ok(src.includes("複製") && src.includes("刪除") && src.includes("編輯"),
+    "TASK-224 must keep context menu copy/delete/edit actions");
+  assert.ok(src.includes("function isLastEditableUserMessage") && src.includes("entry.role !== \"user\""),
+    "TASK-224 must keep edit limited to last formal user message");
+  assert.ok(src.includes("showPetWindow"), "TASK-224 must not remove Pet Window entry point");
+  console.log("  testTask224RegressionGuards PASS");
+}
+
 // ─── TASK-218: Safe Pet Expression Suggestion Mirror ─────────────────────────
 
 function testTask218RendererHasMirrorFunction() {
@@ -8865,6 +9082,19 @@ async function main() {
   await testTask223NoChatHistorySpeechOrTts();
   testTask223NoNewIpcChannelsAndPreservesExisting();
   testTask223RegressionGuards();
+
+  // TASK-224: Character State Preview Polish / Diagnostics
+  testTask224RendererHasDiagnosticsFormatters();
+  testTask224PreviewStyleKeepsDiagnosticsMuted();
+  await testTask224FormatterFallbacks();
+  await testTask224StartupPreviewIncludesAllDiagnostics();
+  await testTask224UserActivePreviewIncludesLevel();
+  await testTask224PreviewMappings();
+  await testTask224PreviewNoRawTextOrRawJson();
+  await testTask224PreviewNotInHistoryOrTranscript();
+  await testTask224PreviewNoChatSpeechTtsOrIpcSideEffects();
+  testTask224NoNewIpcChannelsAndPreservesExisting();
+  testTask224RegressionGuards();
 
   // TASK-218: Safe Pet Expression Suggestion Mirror
   testTask218RendererHasMirrorFunction();

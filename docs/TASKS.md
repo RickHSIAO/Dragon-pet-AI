@@ -22713,3 +22713,195 @@ Updated `docs/INTERACTIVE_COMPANION_ARCHITECTURE.md` to include TASK-223:
 | Focus：Preview `attention_returned/happy/mirror_expression_and_bubble/state happy/returned/lively` | PASS |
 | 連續互動：State preview 沒有 `undefined` / `null` / `[object Object]` / raw JSON | PASS |
 | 一般回歸：沒有新增 IPC side-effect，沒有額外 TTS，沒有額外 `/chat`，沒有 history/copy/export 污染，Pet Window 表情與 reaction bubble 行為維持正常 | PASS |
+
+## TASK-224 | Character State Preview Polish / Diagnostics
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-06-01
+**Phase:** Phase 5 - Companion Behavior Loop (Character State Diagnostics Track)
+**Depends on:** TASK-214 through TASK-223
+
+### Goal
+
+Polish the Full App interaction reaction preview so the existing character
+state summary is easier to read and safer to validate. This task adds local
+diagnostics formatting only. It does not introduce a new runtime behavior
+channel and does not send diagnostics to the Pet Window.
+
+### Runtime Scope
+
+Changed:
+
+- `apps/desktop/src/renderer/renderer.js`
+- `apps/desktop/src/renderer/index.html`
+- `apps/desktop/src/renderer/styles.css`
+- `apps/desktop/scripts/renderer-chat-smoke.js`
+
+Not changed:
+
+- Backend.
+- `/chat` API schema.
+- Chat history persistence format.
+- IPC channels.
+- Pet Window runtime.
+- Pet Window preload.
+- Main process relay.
+- Pet Bubble behavior.
+- Pet expression mirror behavior.
+- Reaction bubble mirror behavior.
+- TTS behavior.
+- Ollama / Provider runtime.
+- Assets.
+- Persistence.
+
+### Preview / Diagnostics Format
+
+The Full App preview is now formatted through allowlisted helpers:
+
+- `formatInteractionDiagnosticsPreview()`
+- `formatCharacterStatePreview()`
+
+Display format:
+
+```text
+Reaction: <hint> · Suggestion: <expression>
+Decision: <action> · State: <mood>/<attention>/<energy> · Level: <recentInteractionLevel>
+```
+
+Default fallback:
+
+```text
+Reaction: none · Suggestion: neutral
+Decision: none · State: neutral/idle/calm · Level: none
+```
+
+The preview remains inside `#character-status`, uses `textContent`, and is
+styled as a muted low-profile diagnostics line with safe wrapping. It does not
+use `innerHTML`, `position: fixed`, animation, or Pet Window UI.
+
+### Fallback Behavior
+
+Unknown or invalid values are sanitized before display:
+
+| Field | Fallback |
+|---|---|
+| reaction hint | `none` |
+| expression suggestion | `neutral` |
+| decision action | `none` |
+| mood | `neutral` |
+| attention | `idle` |
+| energy | `calm` |
+| recentInteractionLevel | `none` |
+
+The preview does not display raw JSON, `[object Object]`, `undefined`, `null`,
+`NaN`, event payloads, raw user message text, backend/provider diagnostics, or
+`message` / `text` / `body` / `rawText` / `content` / `reply` fields.
+
+### Expected Interaction Preview Examples
+
+| Interaction | Preview summary |
+|---|---|
+| Startup | `Reaction: none`, `Suggestion: neutral`, `Decision: none`, `State: neutral/idle/calm`, `Level: none` |
+| Send message | `Reaction: user_active`, `Suggestion: focused`, `Decision: mirror_expression_and_bubble`, `State: focused/active/attentive`, `Level: low` for the first local event |
+| Edit last user | `Reaction: correction`, `Suggestion: annoyed`, `Decision: mirror_expression_and_bubble`, `State: annoyed/correcting/attentive` |
+| Clear Chat | `Reaction: reset`, `Suggestion: neutral`, `Decision: mirror_expression_and_bubble`, `State: neutral/reset/calm` |
+| Focus | `Reaction: attention_returned`, `Suggestion: happy`, `Decision: mirror_expression_and_bubble`, `State: happy/returned/lively` |
+
+### Safety Boundary Confirmation
+
+- No backend change.
+- No `/chat` API schema change.
+- No chat history persistence format change.
+- No `/chat` call.
+- No chat history write.
+- No IPC added.
+- No broad/generic IPC channel added.
+- No Pet Window side effect.
+- No Pet Window runtime change.
+- No Pet Bubble behavior change.
+- No Pet expression mirror behavior change.
+- No reaction bubble mirror behavior change.
+- No TTS.
+- No proactive Pet speech.
+- No LLM reaction generation.
+- No user message text sent to Pet Window.
+- No raw message text stored.
+- No `innerHTML` rendering for diagnostics preview.
+- No background monitoring.
+- No always-listening behavior.
+- No screenshot capture.
+- No OCR.
+- No Ollama / Provider runtime change.
+- No hover action buttons restored.
+- No user message edit broadening.
+- No pet message edit broadening.
+- No persistence added.
+- No assets changed.
+
+### Automated Smoke Test Coverage
+
+| Suite | Coverage |
+|---|---|
+| `renderer-chat-smoke.js` | TASK-224 formatter/static checks; CSS low-profile wrap check; startup fallback; `user_active` preview with `Level`; correction/reset/focus mappings; raw text/raw JSON exclusion; history/transcript boundary; no `/chat`/history/speech/mirror side effects; no new IPC; TASK-218/TASK-220 narrow channel regression; hover/context menu/edit/Pet Window guards |
+| `pet-window-smoke.js` | Existing TASK-218/TASK-220 Pet Window relay coverage retained; no TASK-224 runtime change |
+| `pet-renderer-smoke.js` | Existing TASK-218/TASK-220 Pet preload/Pet renderer handler coverage retained; no TASK-224 runtime change |
+
+### Automated Smoke Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+11 TASK-224 checks) |
+| `pet-window-smoke.js` | PASS |
+| `pet-renderer-smoke.js` | PASS |
+| `git diff --check` | CLEAN |
+
+### Architecture Docs Update
+
+Updated `docs/INTERACTIVE_COMPANION_ARCHITECTURE.md` to include TASK-224:
+
+- Completed task chain includes Character State Preview Diagnostics.
+- Data flow notes the local diagnostics formatter after character state.
+- Layer responsibility table includes preview diagnostics as local display only.
+- IPC inventory explicitly remains unchanged.
+- Smoke coverage includes automated TASK-224 checks.
+- Known boundaries clarify diagnostics are not execution control.
+
+### Acceptance Criteria
+
+- [x] `formatInteractionDiagnosticsPreview()` implemented.
+- [x] `formatCharacterStatePreview()` implemented.
+- [x] Preview includes `Reaction`.
+- [x] Preview includes `Suggestion`.
+- [x] Preview includes `Decision`.
+- [x] Preview includes `State: <mood>/<attention>/<energy>`.
+- [x] Preview includes `Level: <recentInteractionLevel>`.
+- [x] Fallbacks produce `none/neutral/none/neutral/idle/calm/none`.
+- [x] `user_active`, `correction`, `reset`, and `attention_returned` preview mappings covered.
+- [x] Preview excludes raw message text and raw JSON-like values.
+- [x] Preview remains outside chat history and copy/export transcript.
+- [x] Preview render does not call `/chat`.
+- [x] Preview render does not write history.
+- [x] Preview render does not trigger Pet Bubble, TTS, expression mirror, or reaction bubble mirror.
+- [x] No new IPC channel.
+- [x] TASK-218 / TASK-220 narrow channels retained.
+- [x] Hover action buttons remain absent.
+- [x] Context menu copy/delete/edit remains present.
+- [x] User-message edit scope remains last formal user message only.
+- [x] `renderer-chat-smoke.js` PASS.
+- [x] `pet-window-smoke.js` PASS.
+- [x] `pet-renderer-smoke.js` PASS.
+- [x] `git diff --check` CLEAN.
+- [x] Windows visual smoke PASS (2026-06-01).
+
+### Windows Visual Smoke Results (2026-06-01)
+
+| Scenario | Result |
+|---|---|
+| 基本啟動：Preview 顯示 Reaction/Suggestion 與 Decision/State/Level，Pet Window 正常 | PASS |
+| 送出訊息：Preview `user_active/focused` + State `focused/active/attentive` + Level 合法 | PASS |
+| Delete / Undo：Preview `message_management/neutral` + State `neutral/managing/calm` + Level 合法 | PASS |
+| Edit last user：Preview `correction/annoyed` + State `annoyed/correcting/attentive` + Level 合法 | PASS |
+| Clear Chat：Preview `reset/neutral` + State `neutral/reset/calm` + Level 合法 | PASS |
+| Focus：Preview `attention_returned/happy` + State `happy/returned/lively` + Level 合法 | PASS |
+| Diagnostics 格式：沒有 `undefined` / `null` / `[object Object]` / `NaN` / raw JSON / user text | PASS |
+| 一般回歸：沒有新增 IPC side-effect，沒有額外 TTS，沒有額外 `/chat`，沒有 history/copy/export 污染，Pet Window 表情與 reaction bubble 行為維持正常 | PASS |
