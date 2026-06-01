@@ -506,6 +506,7 @@ function createPetPresenceState() {
     quietMode: false,           // TASK-160
     clickThrough: false,        // TASK-166D
     expressionOverride: null,   // TASK-218 fix: {mood, gen} from last interaction expression suggestion
+    reactionBubbleTimer: null,   // TASK-220: short-lived local reaction bubble restore timer
   };
 }
 
@@ -2275,6 +2276,61 @@ function handleInteractionExpressionSuggestion(documentRef, payload) {
   setPetExpression(documentRef, safeExpression);
 }
 
+// TASK-220: fixed reaction bubble text from Full App interaction hints.
+// Does NOT call /chat, TTS, direct input, speech update, or rememberRecentPetReply.
+const INTERACTION_REACTION_BUBBLE_TEXT_BY_ID_PET = Object.freeze({
+  user_active: "哼，總算肯理吾了。",
+  message_management: "整理好了？手腳還算俐落。",
+  correction: "又改？下次可要想清楚。",
+  reset: "清空了。重新開始也無妨。",
+  attention_returned: "回來了？吾才沒有等汝。",
+  none: "",
+});
+const INTERACTION_REACTION_BUBBLE_ALLOWLIST_PET = new Set(Object.keys(INTERACTION_REACTION_BUBBLE_TEXT_BY_ID_PET));
+const INTERACTION_REACTION_BUBBLE_SOURCE = "interaction_reaction_bubble";
+const INTERACTION_REACTION_BUBBLE_TTL_MS = 3000;
+
+function sanitizeInteractionReactionBubblePayload(payload = {}) {
+  const rawId = typeof payload.id === "string" ? payload.id : "";
+  const safeId = INTERACTION_REACTION_BUBBLE_ALLOWLIST_PET.has(rawId) ? rawId : "none";
+  return {
+    id: safeId,
+    text: INTERACTION_REACTION_BUBBLE_TEXT_BY_ID_PET[safeId] || "",
+    source: INTERACTION_REACTION_BUBBLE_SOURCE,
+    ts: typeof payload.ts === "number" && payload.ts > 0 ? payload.ts : Date.now(),
+    ttlMs: INTERACTION_REACTION_BUBBLE_TTL_MS,
+  };
+}
+
+function handleInteractionReactionBubble(documentRef, payload, options = {}) {
+  if (!documentRef || typeof payload !== "object" || payload === null) return false;
+  const safePayload = sanitizeInteractionReactionBubblePayload(payload);
+  if (!safePayload.text) return false;
+
+  const presenceState = getPetPresenceState(documentRef);
+  const timerApi = getPresenceTimerApi(options, presenceState);
+  presenceState.timerApi = timerApi;
+  clearPresenceTimer(presenceState, "reactionBubbleTimer", timerApi);
+
+  setBubbleState(documentRef, "expanded", {
+    response: safePayload.text,
+    source: safePayload.source,
+    statusText: "",
+    message: "",
+    detailsAvailable: false,
+  });
+
+  presenceState.reactionBubbleTimer = schedulePresenceTimer(
+    timerApi,
+    () => {
+      presenceState.reactionBubbleTimer = null;
+      restorePetPresence(documentRef, { timerApi });
+    },
+    safePayload.ttlMs
+  );
+  return true;
+}
+
 function initializePetMode(documentRef = document) {
   const root = documentRef.getElementById("pet-mode-root");
   const dragRegion = documentRef.getElementById("pet-drag-region");
@@ -2672,6 +2728,12 @@ function initializePetMode(documentRef = document) {
       handleInteractionExpressionSuggestion(documentRef, payload);
     });
   }
+  // TASK-220: mirror fixed reaction bubble from Full App — bubble-only, no TTS or /chat.
+  if (api && typeof api.onReactionBubble === "function") {
+    api.onReactionBubble((payload) => {
+      handleInteractionReactionBubble(documentRef, payload);
+    });
+  }
 }
 
 if (typeof document !== "undefined") {
@@ -2716,6 +2778,7 @@ if (typeof module !== "undefined") {
     handleChatHandoff,
     handleHidePetWindow,
     handleInteractionExpressionSuggestion, // TASK-218
+    handleInteractionReactionBubble, // TASK-220
     handlePlaceholderSubmit,
     handleResetPetPosition,
     initializePetMode,
@@ -2739,6 +2802,7 @@ if (typeof module !== "undefined") {
     normalizePetMood,
     sanitizeBubbleDetailText,
     sourceStatusLabel,
+    sanitizeInteractionReactionBubblePayload,
     PET_IDLE_LINES,
     PET_IDLE_LAUNCH_QUIET_MS,
     PET_IDLE_COOLDOWN_MS,

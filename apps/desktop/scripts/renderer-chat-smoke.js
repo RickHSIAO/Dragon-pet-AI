@@ -7260,6 +7260,177 @@ function testTask217ContextMenuStillExists() {
   console.log("  testTask217ContextMenuStillExists PASS");
 }
 
+// ─── TASK-220: Safe Pet Reaction Bubble Mirror ────────────────────────────────
+
+function testTask220RendererHasReactionBubbleState() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("INTERACTION_REACTION_BUBBLE_ALLOWLIST"),
+    "renderer.js must define INTERACTION_REACTION_BUBBLE_ALLOWLIST");
+  assert.ok(src.includes("INTERACTION_REACTION_BUBBLE_MAX = 20"),
+    "renderer.js must cap reaction bubble buffer at 20");
+  assert.ok(src.includes("currentInteractionReactionBubble"),
+    "renderer.js must define currentInteractionReactionBubble");
+  assert.ok(src.includes("recentInteractionReactionBubbles"),
+    "renderer.js must define recentInteractionReactionBubbles");
+  assert.ok(src.includes("function deriveInteractionReactionBubble"),
+    "renderer.js must define deriveInteractionReactionBubble");
+  assert.ok(src.includes("function recordInteractionReactionBubble"),
+    "renderer.js must define recordInteractionReactionBubble");
+  assert.ok(src.includes("function mirrorInteractionReactionBubble"),
+    "renderer.js must define mirrorInteractionReactionBubble");
+  console.log("  testTask220RendererHasReactionBubbleState PASS");
+}
+
+async function testTask220ReactionBubbleMapping() {
+  const { sandbox } = await loadRenderer();
+  const cases = [
+    ["user_active", "哼，總算肯理吾了。"],
+    ["message_management", "整理好了？手腳還算俐落。"],
+    ["correction", "又改？下次可要想清楚。"],
+    ["reset", "清空了。重新開始也無妨。"],
+    ["attention_returned", "回來了？吾才沒有等汝。"],
+    ["none", ""],
+    ["UNKNOWN_HINT_XYZ", ""],
+  ];
+  for (const [hint, text] of cases) {
+    const bubble = sandbox.deriveInteractionReactionBubble(hint);
+    assert.equal(bubble.text, text, `deriveInteractionReactionBubble(${hint}) text mismatch`);
+    assert.equal(bubble.source, "interaction_reaction_bubble");
+  }
+  assert.equal(sandbox.deriveInteractionReactionBubble("UNKNOWN_HINT_XYZ").id, "none");
+  console.log("  testTask220ReactionBubbleMapping PASS");
+}
+
+async function testTask220RecordReactionBubbleSanitizesText() {
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      sendPetReactionBubble() { return Promise.resolve({ ok: true }); },
+    },
+  });
+  sandbox.recordInteractionReactionBubble({ id: "user_active", text: "RAW_USER_TEXT_FORBIDDEN" }, "user_active");
+  assert.equal(sandbox.currentInteractionReactionBubble.id, "user_active");
+  assert.equal(sandbox.currentInteractionReactionBubble.text, "哼，總算肯理吾了。");
+  assert.notEqual(sandbox.currentInteractionReactionBubble.text, "RAW_USER_TEXT_FORBIDDEN");
+  console.log("  testTask220RecordReactionBubbleSanitizesText PASS");
+}
+
+async function testTask220RecordReactionHintProducesBubble() {
+  const mirrorCalls = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      sendPetExpressionSuggestion() { return Promise.resolve({ ok: true }); },
+      sendPetReactionBubble(payload) { mirrorCalls.push({ ...payload }); return Promise.resolve({ ok: true }); },
+    },
+  });
+  mirrorCalls.length = 0;
+  sandbox.recordInteractionEvent("message_edited", {
+    role: "user",
+    source: "full_app",
+    messageLength: 99,
+    text: "RAW_USER_TEXT_FORBIDDEN",
+  });
+  assert.equal(sandbox.currentInteractionReactionBubble.id, "correction");
+  assert.equal(sandbox.currentInteractionReactionBubble.text, "又改？下次可要想清楚。");
+  assert.equal(mirrorCalls.length, 1, "recordInteractionReactionHint must mirror a reaction bubble");
+  assert.equal(mirrorCalls[0].id, "correction");
+  assert.equal(mirrorCalls[0].text, "又改？下次可要想清楚。");
+  assert.ok(!JSON.stringify(mirrorCalls[0]).includes("RAW_USER_TEXT_FORBIDDEN"),
+    "reaction bubble mirror must not include raw user text");
+  console.log("  testTask220RecordReactionHintProducesBubble PASS");
+}
+
+async function testTask220ReactionBubbleRingBufferCap() {
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      sendPetReactionBubble() { return Promise.resolve({ ok: true }); },
+    },
+  });
+  for (let i = 0; i < 25; i += 1) {
+    sandbox.recordInteractionReactionBubble({ id: "reset", text: "IGNORED" }, "reset");
+  }
+  assert.equal(sandbox.recentInteractionReactionBubbles.length, 20,
+    "recentInteractionReactionBubbles must cap at 20");
+  assert.equal(sandbox.currentInteractionReactionBubble.id, "reset");
+  console.log("  testTask220ReactionBubbleRingBufferCap PASS");
+}
+
+async function testTask220MirrorPayloadSchema() {
+  const mirrorCalls = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      sendPetReactionBubble(payload) { mirrorCalls.push({ ...payload }); return Promise.resolve({ ok: true }); },
+    },
+  });
+  sandbox.mirrorInteractionReactionBubble({
+    id: "attention_returned",
+    text: "RAW_USER_TEXT_FORBIDDEN",
+    hint: "FORBIDDEN",
+    reply: "FORBIDDEN",
+  });
+  assert.equal(mirrorCalls.length, 1, "mirrorInteractionReactionBubble must call bridge once");
+  assert.deepEqual(Object.keys(mirrorCalls[0]).sort(), ["id", "source", "text", "ts", "ttlMs"],
+    "reaction bubble mirror payload must only include id/text/source/ts/ttlMs");
+  assert.equal(mirrorCalls[0].id, "attention_returned");
+  assert.equal(mirrorCalls[0].text, "回來了？吾才沒有等汝。");
+  assert.equal(mirrorCalls[0].source, "interaction_reaction_bubble");
+  assert.equal(mirrorCalls[0].ttlMs, 3000);
+  for (const forbidden of ["hint", "event", "role", "messageLength", "message", "body", "rawText", "content", "reply"]) {
+    assert.equal(Object.prototype.hasOwnProperty.call(mirrorCalls[0], forbidden), false,
+      `reaction bubble payload must not include ${forbidden}`);
+  }
+  assert.ok(!JSON.stringify(mirrorCalls[0]).includes("RAW_USER_TEXT_FORBIDDEN"),
+    "reaction bubble payload must not include caller text");
+  console.log("  testTask220MirrorPayloadSchema PASS");
+}
+
+async function testTask220MirrorNoneNoopAndNoBridgeNoThrow() {
+  const { sandbox } = await loadRenderer({
+    dragonPet: { chatHistoryLoad: async () => [] },
+  });
+  assert.doesNotThrow(() => sandbox.mirrorInteractionReactionBubble({ id: "user_active" }));
+  const result = sandbox.mirrorInteractionReactionBubble({ id: "none" });
+  assert.equal(result, false, "none reaction bubble must be a no-op");
+  console.log("  testTask220MirrorNoneNoopAndNoBridgeNoThrow PASS");
+}
+
+async function testTask220ReactionBubbleNoChatHistorySpeechOrTts() {
+  const chatCalls = [];
+  const appendCalls = [];
+  const speechCalls = [];
+  const { sandbox } = await loadRenderer({
+    fetch: async (url) => { chatCalls.push(url); return { ok: true, json: async () => ({}) }; },
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryAppend(entry) { appendCalls.push(entry); return Promise.resolve({ ok: true }); },
+      updatePetSpeech(payload) { speechCalls.push(payload); return Promise.resolve({ ok: true }); },
+      sendPetReactionBubble() { return Promise.resolve({ ok: true }); },
+    },
+  });
+  await settle();
+  chatCalls.length = 0;
+  appendCalls.length = 0;
+  speechCalls.length = 0;
+  sandbox.recordInteractionEvent("chat_history_cleared", { count: 3, text: "RAW_USER_TEXT_FORBIDDEN" });
+  assert.equal(chatCalls.length, 0, "reaction bubble must not call /chat");
+  assert.equal(appendCalls.length, 0, "reaction bubble must not write chat history");
+  assert.equal(speechCalls.length, 0, "reaction bubble must not call updatePetSpeech/TTS path");
+  console.log("  testTask220ReactionBubbleNoChatHistorySpeechOrTts PASS");
+}
+
+function testTask220ExpressionMirrorRegressionStillPresent() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("function mirrorInteractionExpressionSuggestion"),
+    "TASK-220 must not remove TASK-218 expression mirror");
+  assert.ok(src.includes("function scheduleInteractionExpressionMirror"),
+    "TASK-220 must not remove TASK-219 expression debounce");
+  assert.ok(!src.includes("hover-action"), "TASK-220 must not re-introduce hover-action class");
+  console.log("  testTask220ExpressionMirrorRegressionStillPresent PASS");
+}
+
 // ─── TASK-218: Safe Pet Expression Suggestion Mirror ─────────────────────────
 
 function testTask218RendererHasMirrorFunction() {
@@ -8070,6 +8241,17 @@ async function main() {
   await testTask217NoPetOrTts();
   testTask217HoverActionsStillAbsent();
   testTask217ContextMenuStillExists();
+
+  // TASK-220: Safe Pet Reaction Bubble Mirror
+  testTask220RendererHasReactionBubbleState();
+  await testTask220ReactionBubbleMapping();
+  await testTask220RecordReactionBubbleSanitizesText();
+  await testTask220RecordReactionHintProducesBubble();
+  await testTask220ReactionBubbleRingBufferCap();
+  await testTask220MirrorPayloadSchema();
+  await testTask220MirrorNoneNoopAndNoBridgeNoThrow();
+  await testTask220ReactionBubbleNoChatHistorySpeechOrTts();
+  testTask220ExpressionMirrorRegressionStillPresent();
 
   // TASK-218: Safe Pet Expression Suggestion Mirror
   testTask218RendererHasMirrorFunction();

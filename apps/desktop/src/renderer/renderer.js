@@ -635,6 +635,28 @@ const INTERACTION_REACTION_HINT_MAX = 20;
 var recentInteractionReactionHints = []; // var: exposed to vm sandbox for smoke tests
 var currentInteractionReactionHint = "none"; // var: exposed to vm sandbox for smoke tests
 
+// TASK-220: Reaction bubble layer — fixed local text only, no raw message text.
+const INTERACTION_REACTION_BUBBLE_ALLOWLIST = new Set([
+  "user_active",
+  "message_management",
+  "correction",
+  "reset",
+  "attention_returned",
+  "none",
+]);
+const INTERACTION_REACTION_BUBBLE_TEXT = Object.freeze({
+  user_active: "哼，總算肯理吾了。",
+  message_management: "整理好了？手腳還算俐落。",
+  correction: "又改？下次可要想清楚。",
+  reset: "清空了。重新開始也無妨。",
+  attention_returned: "回來了？吾才沒有等汝。",
+  none: "",
+});
+const INTERACTION_REACTION_BUBBLE_MAX = 20;
+const INTERACTION_REACTION_BUBBLE_TTL_MS = 3000;
+var recentInteractionReactionBubbles = []; // var: exposed to vm sandbox for smoke tests
+var currentInteractionReactionBubble = { id: "none", text: "", source: "interaction_reaction_bubble" };
+
 function deriveInteractionReactionHint(event) {
   switch (event.type) {
     case "chat_message_sent":    return "user_active";
@@ -662,7 +684,41 @@ function recordInteractionReactionHint(hint, event = {}) {
   currentInteractionReactionHint = safeHint;
   const expression = deriveInteractionExpressionSuggestion(safeHint); // TASK-217
   recordInteractionExpressionSuggestion(expression, safeHint);        // TASK-217
+  const bubble = deriveInteractionReactionBubble(safeHint);           // TASK-220
+  recordInteractionReactionBubble(bubble, safeHint);                  // TASK-220
   renderInteractionReactionPreview(); // TASK-216/217
+}
+
+function deriveInteractionReactionBubble(hint) {
+  const safeId = INTERACTION_REACTION_BUBBLE_ALLOWLIST.has(hint) ? hint : "none";
+  return {
+    id: safeId,
+    text: INTERACTION_REACTION_BUBBLE_TEXT[safeId] || "",
+    source: "interaction_reaction_bubble",
+  };
+}
+
+function recordInteractionReactionBubble(bubble, hint) {
+  const rawId = bubble && typeof bubble.id === "string" ? bubble.id : "";
+  const safeId = INTERACTION_REACTION_BUBBLE_ALLOWLIST.has(rawId) ? rawId : "none";
+  const entry = {
+    id: safeId,
+    text: INTERACTION_REACTION_BUBBLE_TEXT[safeId] || "",
+    source: "interaction_reaction_bubble",
+    ts: Date.now(),
+    hint: INTERACTION_REACTION_HINT_ALLOWLIST.has(hint) ? hint : "none",
+  };
+  recentInteractionReactionBubbles.push(entry);
+  if (recentInteractionReactionBubbles.length > INTERACTION_REACTION_BUBBLE_MAX) {
+    recentInteractionReactionBubbles.shift();
+  }
+  currentInteractionReactionBubble = {
+    id: entry.id,
+    text: entry.text,
+    source: entry.source,
+  };
+  mirrorInteractionReactionBubble(currentInteractionReactionBubble);
+  return currentInteractionReactionBubble;
 }
 
 // TASK-217: Expression suggestion layer — maps reaction hint → local expression suggestion.
@@ -751,6 +807,25 @@ function scheduleInteractionExpressionMirror(expression) {
 
 function mirrorInteractionExpressionSuggestion(expression) {
   return scheduleInteractionExpressionMirror(expression);
+}
+
+// TASK-220: mirror fixed reaction bubble text to Pet Window via narrow IPC.
+// Text is derived from allowlisted ids only; caller-provided text is ignored.
+function mirrorInteractionReactionBubble(bubble) {
+  const rawId = bubble && typeof bubble.id === "string" ? bubble.id : "";
+  const safeId = INTERACTION_REACTION_BUBBLE_ALLOWLIST.has(rawId) ? rawId : "none";
+  const safeText = INTERACTION_REACTION_BUBBLE_TEXT[safeId] || "";
+  if (!safeText) return false;
+  const bridge = typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null;
+  if (!bridge || typeof bridge.sendPetReactionBubble !== "function") return false;
+  bridge.sendPetReactionBubble({
+    id: safeId,
+    text: safeText,
+    source: "interaction_reaction_bubble",
+    ts: Date.now(),
+    ttlMs: INTERACTION_REACTION_BUBBLE_TTL_MS,
+  });
+  return true;
 }
 
 // TASK-216/217: Reaction hint + expression suggestion debug preview.

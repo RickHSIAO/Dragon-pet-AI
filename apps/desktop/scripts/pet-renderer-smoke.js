@@ -5107,6 +5107,14 @@ function testTask169ScopeChecks() {
     testTask218FixSpeechWinsWhenOlderOverride,
     testTask218FixGetPresenceStateExported,
     testTask218FixOverrideRecordedInPresenceState,
+    // TASK-220
+    testTask220ReactionBubbleHandlerExported,
+    testTask220ReactionBubbleRendersAllowlistedIds,
+    testTask220ReactionBubbleUnknownNoop,
+    testTask220ReactionBubbleNoTtsChatDirectInputOrRecentWrite,
+    testTask220ReactionBubbleTtlRestoresRecentReply,
+    testTask220ReactionBubbleListenerWiredInInit,
+    testTask220RuntimeListenerFlowUpdatesBubble,
   ];
 
   for (const test of tests) {
@@ -5485,6 +5493,109 @@ function testTask218FixOverrideRecordedInPresenceState() {
     "expressionOverride.mood must match the applied expression");
   assert(typeof state.expressionOverride.gen === "number" && state.expressionOverride.gen > 0,
     "expressionOverride.gen must be a positive generation number");
+}
+
+// TASK-220: Safe Pet Reaction Bubble Mirror tests
+
+function testTask220ReactionBubbleHandlerExported() {
+  const { handleInteractionReactionBubble } = require(petRendererPath);
+  assert(typeof handleInteractionReactionBubble === "function",
+    "handleInteractionReactionBubble must be exported from pet-renderer.js");
+}
+
+function testTask220ReactionBubbleRendersAllowlistedIds() {
+  const { handleInteractionReactionBubble } = require(petRendererPath);
+  const cases = [
+    ["user_active", "哼，總算肯理吾了。"],
+    ["message_management", "整理好了？手腳還算俐落。"],
+    ["correction", "又改？下次可要想清楚。"],
+    ["reset", "清空了。重新開始也無妨。"],
+    ["attention_returned", "回來了？吾才沒有等汝。"],
+  ];
+  for (const [id, text] of cases) {
+    const doc = createPetBubbleStateDocument();
+    const ok = handleInteractionReactionBubble(doc, { id, text: "RAW_USER_TEXT_FORBIDDEN", ttlMs: 999999 });
+    assert.equal(ok, true, `${id} reaction bubble must render`);
+    assert.equal(doc.getElementById("pet-bubble-response").textContent, text);
+    assert.equal(doc.getElementById("pet-mode-root").dataset.bubbleSource, "interaction_reaction_bubble");
+    assert.equal(doc.getElementById("pet-bubble").dataset.hasDetails, "false",
+      "reaction bubble details must stay hidden");
+    assert.ok(!doc.getElementById("pet-bubble-response").textContent.includes("RAW_USER_TEXT_FORBIDDEN"),
+      "reaction bubble must ignore raw payload text");
+  }
+}
+
+function testTask220ReactionBubbleUnknownNoop() {
+  const { handleInteractionReactionBubble, PET_IDLE_REPLY, setBubbleState } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  setBubbleState(doc, "idle_default");
+  const ok = handleInteractionReactionBubble(doc, { id: "unknown_id", text: "RAW_USER_TEXT_FORBIDDEN" });
+  assert.equal(ok, false, "unknown reaction bubble id must no-op");
+  assert.equal(doc.getElementById("pet-bubble-response").textContent, PET_IDLE_REPLY,
+    "unknown reaction bubble must not change visible text");
+}
+
+function testTask220ReactionBubbleNoTtsChatDirectInputOrRecentWrite() {
+  const renderer = readText(petRendererPath);
+  const fnIdx = renderer.indexOf("function handleInteractionReactionBubble(");
+  assert(fnIdx >= 0, "handleInteractionReactionBubble must be defined");
+  const fnText = renderer.slice(fnIdx, fnIdx + 1500);
+  assert(!fnText.includes("speakPetReply"), "reaction bubble handler must not call TTS");
+  assert(!fnText.includes("sendPetChatMessage"), "reaction bubble handler must not call backend chat");
+  assert(!fnText.includes("openPetDirectInput"), "reaction bubble handler must not open direct input");
+  assert(!fnText.includes("rememberRecentPetReply"), "reaction bubble handler must not overwrite recent LLM reply");
+  assert(!fnText.includes("handleInteractionExpressionSuggestion"),
+    "reaction bubble handler must not call expression mirror handler");
+}
+
+function testTask220ReactionBubbleTtlRestoresRecentReply() {
+  const { handleInteractionReactionBubble, renderPetSpeechUpdate } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const timerApi = new FakeTimerApi();
+  renderPetSpeechUpdate(doc, { reply: "Recent clean reply.", mood: "happy", source: "mock" }, { timerApi });
+  assert.equal(doc.getElementById("pet-bubble-response").textContent, "Recent clean reply.");
+  handleInteractionReactionBubble(doc, { id: "reset" }, { timerApi });
+  assert.equal(doc.getElementById("pet-bubble-response").textContent, "清空了。重新開始也無妨。");
+  timerApi.advance(3000);
+  assert.equal(doc.getElementById("pet-bubble-response").textContent, "Recent clean reply.",
+    "reaction bubble ttl must restore previous recent reply");
+}
+
+function testTask220ReactionBubbleListenerWiredInInit() {
+  const renderer = readText(petRendererPath);
+  assertIncludes(renderer, "api.onReactionBubble",
+    "initializePetMode must register onReactionBubble listener");
+  assertIncludes(renderer, "handleInteractionReactionBubble(documentRef",
+    "initializePetMode must call handleInteractionReactionBubble");
+}
+
+function testTask220RuntimeListenerFlowUpdatesBubble() {
+  const { initializePetMode } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const previousWindow = global.window;
+  let callback = null;
+  global.window = {
+    location: { search: "" },
+    addEventListener() {},
+    dragonPet: {
+      onSpeechUpdate() { return () => {}; },
+      onUnreadUpdate() { return () => {}; },
+      onExpressionSuggestion() { return () => {}; },
+      onReactionBubble(cb) {
+        callback = cb;
+        return () => {};
+      },
+    },
+  };
+  try {
+    initializePetMode(doc);
+    assert.equal(typeof callback, "function",
+      "initializePetMode must register onReactionBubble callback when preload API exists");
+    callback({ id: "attention_returned", text: "RAW_USER_TEXT_FORBIDDEN", source: "ignored", ttlMs: 3000 });
+    assert.equal(doc.getElementById("pet-bubble-response").textContent, "回來了？吾才沒有等汝。");
+  } finally {
+    global.window = previousWindow;
+  }
 }
 
 run().catch((error) => {

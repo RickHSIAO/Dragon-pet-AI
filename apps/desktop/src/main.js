@@ -36,9 +36,22 @@ const PET_UNREAD_DOT_CHANNEL = "pet:unread-dot";              // TASK-204: Full 
 const PET_UNREAD_DOT_RECEIVED_CHANNEL = "pet:unread-dot-received";  // TASK-204: main → Pet Window
 const PET_EXPRESSION_SUGGESTION_CHANNEL = "pet:expression-suggestion";           // TASK-218: Full App → main
 const PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL = "pet:expression-suggestion-received"; // TASK-218: main → Pet Window
+const PET_REACTION_BUBBLE_CHANNEL = "pet:reaction-bubble";                       // TASK-220: Full App → main
+const PET_REACTION_BUBBLE_RECEIVED_CHANNEL = "pet:reaction-bubble-received";     // TASK-220: main → Pet Window
 const INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST_MAIN = new Set([
   "neutral", "focused", "happy", "proud", "annoyed", "sleepy",
 ]); // TASK-218: expression allowlist for main sanitization
+const REACTION_BUBBLE_TEXT_BY_ID_MAIN = Object.freeze({                          // TASK-220: fixed text mapping
+  user_active: "哼，總算肯理吾了。",
+  message_management: "整理好了？手腳還算俐落。",
+  correction: "又改？下次可要想清楚。",
+  reset: "清空了。重新開始也無妨。",
+  attention_returned: "回來了？吾才沒有等汝。",
+  none: "",
+});
+const REACTION_BUBBLE_ALLOWLIST_MAIN = new Set(Object.keys(REACTION_BUBBLE_TEXT_BY_ID_MAIN));
+const REACTION_BUBBLE_SOURCE = "interaction_reaction_bubble";
+const REACTION_BUBBLE_TTL_MS = 3000;
 const CHAT_EXPORT_CHANNEL    = "chat:export-transcript";      // TASK-205: Full App → main
 const CHAT_HISTORY_MAX_ENTRIES    = 200;                      // TASK-194: bounded history cap
 const CHAT_HISTORY_TEXT_MAX       = 2000;                     // TASK-194: per-entry text cap
@@ -551,6 +564,29 @@ function forwardExpressionSuggestion(payload = {}, targetPetWindow = petWindow) 
   return { ok: true };
 }
 ipcMain.handle(PET_EXPRESSION_SUGGESTION_CHANNEL, (_event, payload) => forwardExpressionSuggestion(payload));
+
+function sanitizeReactionBubblePayload(payload = {}) {
+  const rawId = typeof payload.id === "string" ? payload.id : "";
+  const safeId = REACTION_BUBBLE_ALLOWLIST_MAIN.has(rawId) ? rawId : "none";
+  return {
+    id: safeId,
+    text: REACTION_BUBBLE_TEXT_BY_ID_MAIN[safeId] || "",
+    source: REACTION_BUBBLE_SOURCE,
+    ts: typeof payload.ts === "number" && payload.ts > 0 ? payload.ts : Date.now(),
+    ttlMs: REACTION_BUBBLE_TTL_MS,
+  };
+}
+
+// TASK-220: narrow reaction bubble relay — fixed text only, no /chat, no TTS, no history.
+function forwardReactionBubble(payload = {}, targetPetWindow = petWindow) {
+  const safePayload = sanitizeReactionBubblePayload(payload);
+  if (!targetPetWindow || targetPetWindow.isDestroyed()) {
+    return { ok: false, reason: "pet_window_unavailable" };
+  }
+  targetPetWindow.webContents.send(PET_REACTION_BUBBLE_RECEIVED_CHANNEL, safePayload);
+  return { ok: true };
+}
+ipcMain.handle(PET_REACTION_BUBBLE_CHANNEL, (_event, payload) => forwardReactionBubble(payload));
 
 ipcMain.handle(PET_QUIET_MODE_SET_CHANNEL, (_event, value) => {  // TASK-162
   savePetQuietMode(value);

@@ -14,9 +14,21 @@ const CLIPBOARD_WRITE_TEXT_CHANNEL  = "clipboard:write-text";   // TASK-196
 const PET_UNREAD_DOT_CHANNEL = "pet:unread-dot";                // TASK-204
 const CHAT_EXPORT_CHANNEL    = "chat:export-transcript";        // TASK-205
 const PET_EXPRESSION_SUGGESTION_CHANNEL = "pet:expression-suggestion"; // TASK-218
+const PET_REACTION_BUBBLE_CHANNEL = "pet:reaction-bubble"; // TASK-220
 const EXPRESSION_SUGGESTION_ALLOWLIST = new Set([               // TASK-218: preload-side allowlist
   "neutral", "focused", "happy", "proud", "annoyed", "sleepy",
 ]);
+const REACTION_BUBBLE_TEXT_BY_ID = Object.freeze({              // TASK-220: preload-side fixed text mapping
+  user_active: "哼，總算肯理吾了。",
+  message_management: "整理好了？手腳還算俐落。",
+  correction: "又改？下次可要想清楚。",
+  reset: "清空了。重新開始也無妨。",
+  attention_returned: "回來了？吾才沒有等汝。",
+  none: "",
+});
+const REACTION_BUBBLE_ALLOWLIST = new Set(Object.keys(REACTION_BUBBLE_TEXT_BY_ID));
+const REACTION_BUBBLE_SOURCE = "interaction_reaction_bubble";
+const REACTION_BUBBLE_TTL_MS = 3000;
 
 function sanitizePetSpeechPayload(payload = {}) {
   return {
@@ -51,6 +63,19 @@ function sanitizeChatHistoryEntry(entry = {}) {
     text: typeof entry.text === "string" ? entry.text.slice(0, 2000) : "",
     source: typeof entry.source === "string" ? entry.source.slice(0, 30) : "unknown",
     ts: typeof entry.ts === "number" && entry.ts > 0 ? entry.ts : 0,
+  };
+}
+
+function sanitizeReactionBubblePayload(payload = {}) {
+  const rawId = typeof payload === "object" && payload !== null &&
+    typeof payload.id === "string" ? payload.id : "";
+  const safeId = REACTION_BUBBLE_ALLOWLIST.has(rawId) ? rawId : "none";
+  return {
+    id: safeId,
+    text: REACTION_BUBBLE_TEXT_BY_ID[safeId] || "",
+    source: REACTION_BUBBLE_SOURCE,
+    ts: Date.now(),
+    ttlMs: REACTION_BUBBLE_TTL_MS,
   };
 }
 
@@ -94,6 +119,9 @@ contextBridge.exposeInMainWorld(
         ts: Date.now(),
       });
     },
+    // TASK-220: narrow reaction bubble IPC — fixed allowlist text only, no raw user text.
+    sendPetReactionBubble: (payload) =>
+      ipcRenderer.invoke(PET_REACTION_BUBBLE_CHANNEL, sanitizeReactionBubblePayload(payload)),
     // TASK-205: narrow file save IPC — opens Save Dialog via main, writes plain text only.
     // Content capped at 200000 chars; defaultPath capped at 255 chars.
     saveTextFile: ({ defaultPath, content } = {}) => {

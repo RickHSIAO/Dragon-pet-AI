@@ -13,9 +13,21 @@ const PET_STT_TRANSCRIBE_CHANNEL = "stt:transcribe";           // TASK-167B
 const PET_CHAT_MIRROR_CHANNEL = "pet:chat-mirror";             // TASK-193
 const PET_UNREAD_DOT_RECEIVED_CHANNEL = "pet:unread-dot-received";  // TASK-204
 const PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL = "pet:expression-suggestion-received"; // TASK-218
+const PET_REACTION_BUBBLE_RECEIVED_CHANNEL = "pet:reaction-bubble-received"; // TASK-220
 const EXPRESSION_SUGGESTION_ALLOWLIST_PET = new Set([             // TASK-218: pet-preload-side allowlist
   "neutral", "focused", "happy", "proud", "annoyed", "sleepy",
 ]);
+const REACTION_BUBBLE_TEXT_BY_ID_PET_PRELOAD = Object.freeze({     // TASK-220: pet-preload fixed text mapping
+  user_active: "哼，總算肯理吾了。",
+  message_management: "整理好了？手腳還算俐落。",
+  correction: "又改？下次可要想清楚。",
+  reset: "清空了。重新開始也無妨。",
+  attention_returned: "回來了？吾才沒有等汝。",
+  none: "",
+});
+const REACTION_BUBBLE_ALLOWLIST_PET_PRELOAD = new Set(Object.keys(REACTION_BUBBLE_TEXT_BY_ID_PET_PRELOAD));
+const REACTION_BUBBLE_SOURCE = "interaction_reaction_bubble";
+const REACTION_BUBBLE_TTL_MS = 3000;
 
 function sanitizePetSpeechPayload(payload = {}) {
   return {
@@ -74,6 +86,25 @@ function onExpressionSuggestion(callback) {
   return () => ipcRenderer.removeListener(PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL, listener);
 }
 
+// TASK-220: expose narrow listener for fixed reaction bubble events from main.
+function onReactionBubble(callback) {
+  if (typeof callback !== "function") return () => {};
+  const listener = (_event, payload) => {
+    const rawId = typeof payload === "object" && payload !== null &&
+      typeof payload.id === "string" ? payload.id : "";
+    const safeId = REACTION_BUBBLE_ALLOWLIST_PET_PRELOAD.has(rawId) ? rawId : "none";
+    callback({
+      id: safeId,
+      text: REACTION_BUBBLE_TEXT_BY_ID_PET_PRELOAD[safeId] || "",
+      source: REACTION_BUBBLE_SOURCE,
+      ts: typeof payload.ts === "number" && payload.ts > 0 ? payload.ts : Date.now(),
+      ttlMs: REACTION_BUBBLE_TTL_MS,
+    });
+  };
+  ipcRenderer.on(PET_REACTION_BUBBLE_RECEIVED_CHANNEL, listener);
+  return () => ipcRenderer.removeListener(PET_REACTION_BUBBLE_RECEIVED_CHANNEL, listener);
+}
+
 function onSpeechUpdate(callback) {
   if (typeof callback !== "function") {
     return () => {};
@@ -98,6 +129,7 @@ contextBridge.exposeInMainWorld(
     onSpeechUpdate,
     onUnreadUpdate,      // TASK-204
     onExpressionSuggestion, // TASK-218
+    onReactionBubble, // TASK-220
     setQuietMode: (value) => ipcRenderer.invoke(PET_QUIET_MODE_SET_CHANNEL, value === true),  // TASK-162
     setScale: (value) => ipcRenderer.invoke(PET_SCALE_SET_CHANNEL, value),  // TASK-166B
     setClickThrough: (enabled) => ipcRenderer.invoke(PET_CLICK_THROUGH_SET_CHANNEL, enabled === true),  // TASK-166D

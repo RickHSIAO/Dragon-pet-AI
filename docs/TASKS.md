@@ -21889,3 +21889,178 @@ When `showPetWindow` resolves successfully, the renderer bypasses the cooldown:
 | Focus：Preview 顯示 `Reaction: attention_returned · Suggestion: happy`，Pet 表情 `happy` | PASS |
 | Show Pet Window 重送：重送 current/pending expression 沒有被 cooldown 擋住 | PASS |
 | 一般回歸：沒有新增 Pet Bubble 文字，沒有額外 TTS，沒有主動發話，沒有寫入 history/copy/export | PASS |
+
+---
+
+## TASK-220 | Safe Pet Reaction Bubble Mirror
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-06-01
+**Phase:** Phase 5 — Companion Behavior Loop (Interactive Pet Track)
+**Depends on:** TASK-214 through TASK-219 (`currentInteractionReactionHint`, reaction preview, expression suggestion/mirror, expression cooldown)
+
+### Goal
+
+Mirror a small allowlisted reaction bubble from Full App interaction hints into the Pet Window. This is a local, fixed-text UX cue only. It must not use LLM output, raw user text, `/chat`, TTS, history, OCR, screenshots, or broad IPC.
+
+### Implementation Summary
+
+- `renderer.js`: adds `INTERACTION_REACTION_BUBBLE_ALLOWLIST`, fixed `INTERACTION_REACTION_BUBBLE_TEXT`, `INTERACTION_REACTION_BUBBLE_MAX = 20`, `currentInteractionReactionBubble`, `recentInteractionReactionBubbles`, `deriveInteractionReactionBubble(hint)`, `recordInteractionReactionBubble(bubble, hint)`, and `mirrorInteractionReactionBubble(bubble)`.
+- `recordInteractionReactionHint`: after updating the safe hint and expression suggestion, derives and records a reaction bubble from the same sanitized hint.
+- Full App preload: exposes `window.dragonPet.sendPetReactionBubble(payload)` on fixed channel `pet:reaction-bubble`.
+- Main process: registers `ipcMain.handle("pet:reaction-bubble", ...)` and relays to Pet Window on `pet:reaction-bubble-received`.
+- Pet preload: exposes `window.dragonPet.onReactionBubble(callback)` and sanitizes the received payload.
+- Pet renderer: adds `handleInteractionReactionBubble(documentRef, payload)` and registers `api.onReactionBubble(...)` during `initializePetMode`.
+
+### Reaction Bubble Mapping
+
+| Reaction id | Bubble text |
+|---|---|
+| `user_active` | `哼，總算肯理吾了。` |
+| `message_management` | `整理好了？手腳還算俐落。` |
+| `correction` | `又改？下次可要想清楚。` |
+| `reset` | `清空了。重新開始也無妨。` |
+| `attention_returned` | `回來了？吾才沒有等汝。` |
+| `none` | empty / no-op |
+
+Unknown ids fall back to `none` and do not render a bubble.
+
+### IPC Channel
+
+| Channel | Direction | Purpose |
+|---|---|---|
+| `pet:reaction-bubble` | Full App preload -> main | Invoke a fixed reaction bubble mirror |
+| `pet:reaction-bubble-received` | main -> Pet Window | Deliver sanitized reaction bubble payload |
+
+Generic channels such as `pet`, `pet:event`, `pet:update`, `pet:message`, or a generic payload channel are not used. TASK-218 expression channels remain unchanged:
+
+- `pet:expression-suggestion`
+- `pet:expression-suggestion-received`
+
+### Payload Schema & Sanitize Rules
+
+Payload contains only:
+
+- `id`
+- `text`
+- `source`
+- `ts`
+- `ttlMs`
+
+Fixed values:
+
+- `source = "interaction_reaction_bubble"`
+- `ttlMs = 3000`
+
+Sanitization:
+
+- `id` must be allowlisted; unknown -> `none`.
+- `text` is always derived from the allowlisted `id` mapping at every boundary.
+- Caller-provided `text` is ignored.
+- No raw user message text is accepted or forwarded.
+
+Forbidden fields:
+
+- `hint`
+- `event`
+- `role`
+- `messageLength`
+- `message`
+- `body`
+- `rawText`
+- `content`
+- `reply`
+
+### Pet Window Handler Behavior
+
+- `handleInteractionReactionBubble(documentRef, payload)` validates the id and fixed text mapping.
+- Allowlisted non-empty ids update only the visible Pet bubble text through `setBubbleState(..., "expanded", ...)`.
+- Details are hidden (`detailsAvailable: false`).
+- A TTL timer restores the previous safe state via `restorePetPresence`: recent reply if still valid, otherwise idle.
+- Unknown/`none` ids no-op.
+
+The handler does not:
+
+- call TTS / `speakPetReply`
+- call `sendPetChatMessage`
+- call backend `/chat`
+- write chat history
+- mutate recent LLM reply via `rememberRecentPetReply`
+- open direct input
+- call expression mirror or expression suggestion handler
+- display raw payload text
+
+### Safety Boundary Confirmation
+
+- No backend change ✓
+- No `/chat` API schema change ✓
+- No chat history persistence format change ✓
+- No `/chat` call ✓
+- No chat history write ✓
+- No TTS ✓
+- No proactive Pet speech ✓
+- No LLM-based reaction generation ✓
+- No user message text sent to Pet Window ✓
+- No raw message text storage ✓
+- No `innerHTML` rendering ✓
+- No background monitor / always listening / screenshot / OCR ✓
+- No Ollama/provider runtime change ✓
+- No hover action buttons restored ✓
+- No user/pet message editing changes ✓
+- No TASK-218 expression IPC channel changes ✓
+- No generic reaction bubble IPC channel ✓
+
+### Automated Smoke Test Coverage
+
+| Suite | Coverage |
+|---|---|
+| `renderer-chat-smoke.js` | reaction bubble state/static checks, mapping, sanitized record, hint -> bubble, buffer max 20, mirror payload schema, no forbidden fields/raw text, bridge absent/no-op, no `/chat`/history/speech, expression mirror regression |
+| `pet-window-smoke.js` | channel names, no generic channel, renderer preload bridge, main relay sanitize, Pet Window absent no-op, pet preload listener, runtime bridge/listener/main relay payloads, expression channel regression |
+| `pet-renderer-smoke.js` | handler export, allowlisted id rendering, unknown id no-op, raw payload ignored, no TTS/chat/direct input/recent reply write/expression handler, TTL restore, init listener wiring, runtime listener flow |
+
+### Automated Smoke Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+9 TASK-220 tests) |
+| `pet-window-smoke.js` | PASS (82 checks, +9 TASK-220 tests) |
+| `pet-renderer-smoke.js` | PASS (263 checks, +7 TASK-220 tests) |
+| `git diff --check` | CLEAN (CRLF warnings only) |
+
+### Acceptance Criteria
+
+- [x] Full App renderer derives reaction bubble from sanitized `currentInteractionReactionHint` ✓
+- [x] Reaction id allowlist implemented ✓
+- [x] Fixed mapping implemented ✓
+- [x] `currentInteractionReactionBubble` and `recentInteractionReactionBubbles` implemented ✓
+- [x] Bubble buffer capped at 20 ✓
+- [x] `mirrorInteractionReactionBubble(bubble)` implemented ✓
+- [x] Renderer mirror payload only includes `id/text/source/ts/ttlMs` ✓
+- [x] Renderer mirror payload excludes raw text and forbidden fields ✓
+- [x] Full App preload exposes `sendPetReactionBubble` ✓
+- [x] Main process relays `pet:reaction-bubble` -> `pet:reaction-bubble-received` ✓
+- [x] Pet preload exposes `onReactionBubble` ✓
+- [x] Pet renderer registers `onReactionBubble` during init ✓
+- [x] `handleInteractionReactionBubble` updates visible bubble text only ✓
+- [x] TTL restores recent reply or idle ✓
+- [x] No `/chat`, TTS, history, recent LLM reply mutation, direct input, expression handler call, or backend/provider runtime change ✓
+- [x] TASK-218/219 expression mirror and cooldown remain intact ✓
+- [x] `renderer-chat-smoke.js` PASS ✓
+- [x] `pet-window-smoke.js` PASS ✓
+- [x] `pet-renderer-smoke.js` PASS ✓
+- [x] `git diff --check` CLEAN ✓
+- [x] Windows visual smoke PASS (2026-06-01) ✓
+
+### Windows Visual Smoke Results (2026-06-01)
+
+| Scenario | Result |
+|---|---|
+| 基本啟動：Preview 顯示 `Reaction: none · Suggestion: neutral`，Pet Window 正常 | PASS |
+| 送出訊息：Pet 表情 `focused`，bubble 顯示 `哼，總算肯理吾了。` | PASS |
+| Delete / Undo：Pet 表情 `neutral`，bubble 顯示 `整理好了？手腳還算俐落。` | PASS |
+| Edit last user：Pet 表情 `annoyed`，bubble 顯示 `又改？下次可要想清楚。` | PASS |
+| Clear Chat：Pet 表情 `neutral`，bubble 顯示 `清空了。重新開始也無妨。` | PASS |
+| Focus：Pet 表情 `happy`，bubble 顯示 `回來了？吾才沒有等汝。` | PASS |
+| TTL restore：約 3 秒後恢復 recent reply / idle | PASS |
+| Copy / Export / History 邊界：reaction bubble 沒有進入 history/copy/export | PASS |
+| 一般回歸：沒有 TTS、沒有額外 `/chat`、沒有主動長篇發話，context menu / edit / delete / clear / Pet Window 功能正常 | PASS |

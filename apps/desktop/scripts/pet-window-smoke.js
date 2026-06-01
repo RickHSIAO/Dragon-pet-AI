@@ -1093,6 +1093,202 @@ function testTask218FixPresenceStateHasExpressionOverride() {
     "restorePetPresence must compare expressionOverride.gen");
 }
 
+// ── TASK-220: Safe Pet Reaction Bubble Mirror ────────────────────────────────
+
+function testTask220ReactionBubbleChannelsInMain() {
+  const main = readText(mainPath);
+  assertIncludes(main, 'PET_REACTION_BUBBLE_CHANNEL = "pet:reaction-bubble"',
+    "main.js must define narrow reaction bubble invoke channel");
+  assertIncludes(main, 'PET_REACTION_BUBBLE_RECEIVED_CHANNEL = "pet:reaction-bubble-received"',
+    "main.js must define narrow reaction bubble received channel");
+  assertNotIncludes(main, 'PET_REACTION_BUBBLE_CHANNEL = "pet"',
+    "main.js must not use generic pet channel for reaction bubble invoke");
+  assertNotIncludes(main, 'PET_REACTION_BUBBLE_RECEIVED_CHANNEL = "pet"',
+    "main.js must not use generic pet channel for reaction bubble relay");
+  assertIncludes(main, "ipcMain.handle(PET_REACTION_BUBBLE_CHANNEL",
+    "main.js must register ipcMain.handle for reaction bubble");
+  assertIncludes(main, "targetPetWindow.webContents.send(PET_REACTION_BUBBLE_RECEIVED_CHANNEL",
+    "main.js must forward reaction bubble to Pet Window");
+}
+
+function testTask220ReactionBubbleSanitizesInMain() {
+  const main = readText(mainPath);
+  const sanitizeIdx = main.indexOf("function sanitizeReactionBubblePayload");
+  assert(sanitizeIdx >= 0, "main.js must define sanitizeReactionBubblePayload");
+  const sanitizeText = main.slice(sanitizeIdx, sanitizeIdx + 900);
+  assertIncludes(sanitizeText, "REACTION_BUBBLE_ALLOWLIST_MAIN",
+    "sanitizeReactionBubblePayload must use allowlist");
+  assertIncludes(sanitizeText, "REACTION_BUBBLE_TEXT_BY_ID_MAIN",
+    "sanitizeReactionBubblePayload must derive text from fixed mapping");
+  assertIncludes(sanitizeText, "REACTION_BUBBLE_SOURCE",
+    "sanitizeReactionBubblePayload must fix source via constant");
+  const forwardIdx = main.indexOf("function forwardReactionBubble");
+  assert(forwardIdx >= 0, "main.js must define forwardReactionBubble");
+  const forwardText = main.slice(forwardIdx, forwardIdx + 700);
+  assertIncludes(forwardText, "pet_window_unavailable",
+    "forwardReactionBubble must guard absent Pet Window");
+  assert(!forwardText.includes("isVisible()"),
+    "forwardReactionBubble must not use visibility as a relay condition");
+}
+
+function testTask220ReactionBubbleBridgeInRendererPreload() {
+  const preload = readText(rendererPreloadPath);
+  assertIncludes(preload, 'PET_REACTION_BUBBLE_CHANNEL = "pet:reaction-bubble"',
+    "renderer preload.js must define PET_REACTION_BUBBLE_CHANNEL");
+  assertNotIncludes(preload, 'PET_REACTION_BUBBLE_CHANNEL = "pet"',
+    "renderer preload.js must not use generic pet channel for reaction bubble");
+  assertIncludes(preload, "sendPetReactionBubble",
+    "renderer preload.js must expose sendPetReactionBubble");
+  assertIncludes(preload, "ipcRenderer.invoke(PET_REACTION_BUBBLE_CHANNEL",
+    "renderer preload.js must invoke narrow reaction bubble channel");
+  assertIncludes(preload, "sanitizeReactionBubblePayload",
+    "renderer preload.js must sanitize reaction bubble payload");
+}
+
+function testTask220ReactionBubblePetPreloadExposesListener() {
+  const preload = readText(petPreloadPath);
+  assertIncludes(preload, 'PET_REACTION_BUBBLE_RECEIVED_CHANNEL = "pet:reaction-bubble-received"',
+    "pet-preload.js must define PET_REACTION_BUBBLE_RECEIVED_CHANNEL");
+  assertNotIncludes(preload, 'PET_REACTION_BUBBLE_RECEIVED_CHANNEL = "pet"',
+    "pet-preload.js must not use generic pet channel for reaction bubble listener");
+  assertIncludes(preload, "onReactionBubble",
+    "pet-preload.js must expose onReactionBubble");
+  assertIncludes(preload, "ipcRenderer.on(PET_REACTION_BUBBLE_RECEIVED_CHANNEL",
+    "pet-preload.js must listen on reaction bubble received channel");
+}
+
+function runMainForwardReactionBubbleHarness() {
+  const main = readText(mainPath);
+  const sendCalls = [];
+  const textMapMatch = main.match(/const REACTION_BUBBLE_TEXT_BY_ID_MAIN = Object\.freeze\(\{[\s\S]*?\}\);/);
+  const allowlistMatch = main.match(/const REACTION_BUBBLE_ALLOWLIST_MAIN = new Set\(Object\.keys\(REACTION_BUBBLE_TEXT_BY_ID_MAIN\)\);/);
+  const sourceMatch = main.match(/const REACTION_BUBBLE_SOURCE = "interaction_reaction_bubble";/);
+  const ttlMatch = main.match(/const REACTION_BUBBLE_TTL_MS = 3000;/);
+  const channelMatch = main.match(/const PET_REACTION_BUBBLE_RECEIVED_CHANNEL = "pet:reaction-bubble-received";/);
+  assert(textMapMatch, "main.js must define reaction bubble text map");
+  assert(allowlistMatch, "main.js must define reaction bubble allowlist");
+  assert(sourceMatch, "main.js must define reaction bubble source");
+  assert(ttlMatch, "main.js must define reaction bubble ttl");
+  assert(channelMatch, "main.js must define reaction bubble received channel");
+  const sandbox = {
+    Date: { now: () => 220003 },
+    petWindow: {
+      isDestroyed: () => false,
+      webContents: {
+        send(channel, payload) {
+          sendCalls.push({ channel, payload });
+        },
+      },
+    },
+  };
+  vm.runInNewContext([
+    textMapMatch[0],
+    allowlistMatch[0],
+    sourceMatch[0],
+    ttlMatch[0],
+    channelMatch[0],
+    extractFunction(main, "sanitizeReactionBubblePayload"),
+    extractFunction(main, "forwardReactionBubble"),
+    "globalThis.forwardReactionBubble = forwardReactionBubble;",
+  ].join("\n"), sandbox, { filename: "main-reaction-bubble-harness.js" });
+  return { forwardReactionBubble: sandbox.forwardReactionBubble, sendCalls };
+}
+
+function testTask220RendererPreloadRuntimeBridgePayload() {
+  const { exposedApi, invokeCalls } = runRendererPreloadHarness();
+  assert(exposedApi && typeof exposedApi.sendPetReactionBubble === "function",
+    "renderer preload must expose dragonPet.sendPetReactionBubble");
+  exposedApi.sendPetReactionBubble({
+    id: "correction",
+    text: "RAW_USER_TEXT_FORBIDDEN",
+    hint: "FORBIDDEN",
+    reply: "FORBIDDEN",
+  });
+  assert.equal(invokeCalls.length, 1, "sendPetReactionBubble must invoke once");
+  assert.equal(invokeCalls[0].channel, "pet:reaction-bubble",
+    "sendPetReactionBubble must invoke narrow reaction bubble channel");
+  assert.deepEqual(Object.keys(invokeCalls[0].payload).sort(), ["id", "source", "text", "ts", "ttlMs"],
+    "renderer preload reaction bubble payload must only include id/text/source/ts/ttlMs");
+  assert.equal(invokeCalls[0].payload.id, "correction");
+  assert.equal(invokeCalls[0].payload.text, "又改？下次可要想清楚。");
+  assert.equal(invokeCalls[0].payload.source, "interaction_reaction_bubble");
+  assert.equal(invokeCalls[0].payload.ttlMs, 3000);
+  assert.ok(!JSON.stringify(invokeCalls[0].payload).includes("RAW_USER_TEXT_FORBIDDEN"),
+    "renderer preload must drop caller-provided text");
+}
+
+function testTask220PetPreloadRuntimeListenerPayload() {
+  const { exposedApi, listeners } = runPetPreloadHarness();
+  const received = [];
+  assert(exposedApi && typeof exposedApi.onReactionBubble === "function",
+    "pet preload must expose dragonPet.onReactionBubble");
+  exposedApi.onReactionBubble((payload) => received.push(payload));
+  const listener = listeners.get("pet:reaction-bubble-received");
+  assert.equal(typeof listener, "function",
+    "pet preload must listen on narrow reaction bubble received channel");
+  listener({}, { id: "user_active", text: "RAW_USER_TEXT_FORBIDDEN", ts: 1, reply: "NOPE" });
+  listener({}, { id: "reset", ts: 2 });
+  listener({}, { id: "not_allowed", ts: 3 });
+  assert.deepEqual(received.map((payload) => payload.id), ["user_active", "reset", "none"]);
+  assert.equal(received[0].text, "哼，總算肯理吾了。");
+  assert.equal(received[1].text, "清空了。重新開始也無妨。");
+  assert.equal(received[2].text, "");
+  for (const payload of received) {
+    assert.deepEqual(Object.keys(payload).sort(), ["id", "source", "text", "ts", "ttlMs"],
+      "pet preload listener payload must only include id/text/source/ts/ttlMs");
+    assert.equal(payload.source, "interaction_reaction_bubble");
+    assert.equal(payload.ttlMs, 3000);
+    assert.ok(!JSON.stringify(payload).includes("RAW_USER_TEXT_FORBIDDEN"),
+      "pet preload must ignore raw incoming text");
+  }
+}
+
+function testTask220MainForwardReactionBubbleRuntimeRelay() {
+  const { forwardReactionBubble, sendCalls } = runMainForwardReactionBubbleHarness();
+  for (const id of ["user_active", "message_management", "attention_returned"]) {
+    const result = forwardReactionBubble({ id, text: "RAW_USER_TEXT_FORBIDDEN", ts: 10 });
+    assert.equal(result.ok, true, `forwardReactionBubble(${id}) must succeed`);
+  }
+  assert.deepEqual(sendCalls.map((call) => call.channel), [
+    "pet:reaction-bubble-received",
+    "pet:reaction-bubble-received",
+    "pet:reaction-bubble-received",
+  ], "main relay must send reaction bubbles on narrow received channel");
+  assert.deepEqual(sendCalls.map((call) => call.payload.id), ["user_active", "message_management", "attention_returned"],
+    "main relay must preserve allowlisted ids");
+  for (const call of sendCalls) {
+    assert.deepEqual(Object.keys(call.payload).sort(), ["id", "source", "text", "ts", "ttlMs"],
+      "main relay reaction bubble payload must only include id/text/source/ts/ttlMs");
+    assert.equal(call.payload.source, "interaction_reaction_bubble");
+    assert.equal(call.payload.ttlMs, 3000);
+    assert.ok(!JSON.stringify(call.payload).includes("RAW_USER_TEXT_FORBIDDEN"),
+      "main relay must drop caller-provided raw text");
+  }
+}
+
+function testTask220MainForwardReactionBubbleAbsentPetNoThrow() {
+  const { forwardReactionBubble } = runMainForwardReactionBubbleHarness();
+  const result = forwardReactionBubble({ id: "user_active" }, null);
+  assert.equal(result.ok, false,
+    "forwardReactionBubble must no-op cleanly when Pet Window is absent");
+  assert.equal(result.reason, "pet_window_unavailable",
+    "forwardReactionBubble must report pet_window_unavailable when Pet Window is absent");
+}
+
+function testTask220DoesNotTouchExpressionChannels() {
+  const main = readText(mainPath);
+  const rendererPreload = readText(rendererPreloadPath);
+  const petPreload = readText(petPreloadPath);
+  assertIncludes(main, 'PET_EXPRESSION_SUGGESTION_CHANNEL = "pet:expression-suggestion"',
+    "TASK-220 must preserve expression suggestion invoke channel");
+  assertIncludes(main, 'PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL = "pet:expression-suggestion-received"',
+    "TASK-220 must preserve expression suggestion received channel");
+  assertIncludes(rendererPreload, "sendPetExpressionSuggestion",
+    "TASK-220 must preserve renderer expression bridge");
+  assertIncludes(petPreload, "onExpressionSuggestion",
+    "TASK-220 must preserve pet expression listener");
+}
+
 function run() {
   const tests = [
     testMainHasPetWindowPrototype,
@@ -1183,6 +1379,16 @@ function run() {
     testTask218FixMainRelayAllowsAnnoyed,
     testTask218FixMainRelayNoVisibilityCheck,
     testTask218FixPresenceStateHasExpressionOverride,
+    // TASK-220
+    testTask220ReactionBubbleChannelsInMain,
+    testTask220ReactionBubbleSanitizesInMain,
+    testTask220ReactionBubbleBridgeInRendererPreload,
+    testTask220ReactionBubblePetPreloadExposesListener,
+    testTask220RendererPreloadRuntimeBridgePayload,
+    testTask220PetPreloadRuntimeListenerPayload,
+    testTask220MainForwardReactionBubbleRuntimeRelay,
+    testTask220MainForwardReactionBubbleAbsentPetNoThrow,
+    testTask220DoesNotTouchExpressionChannels,
   ];
 
   for (const test of tests) {
