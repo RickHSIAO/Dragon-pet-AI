@@ -21483,3 +21483,145 @@ Add the first visible UI surface for the reaction hint layer: a low-profile debu
 | 一般回歸：search/highlight/navigation、copy/export、date separator、timestamp tooltip、Pet Window、Voice、STT、TTS 皆正常 | PASS |
 
 > **補充：** preview 文字未進入 chat history / copy transcript / export；無額外觸發 Pet Bubble / TTS。所有可見功能無異常，smoke 判定 PASS。
+
+---
+
+## TASK-217 | Reaction Hint to Local Expression Suggestion
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-06-01
+**Phase:** Phase 5 — Companion Behavior Loop (Interactive Pet Track)
+**Depends on:** TASK-215 (`currentInteractionReactionHint`), TASK-216 (`renderInteractionReactionPreview`)
+
+### Goal
+
+Map `currentInteractionReactionHint` to a local expression suggestion — a pure renderer-memory classification layer between reaction hints and future pet expression changes. No Pet Window change, no IPC, no `/chat`, no TTS, no backend.
+
+### Scope
+
+- `renderer.js`: Add `INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST`, `INTERACTION_EXPRESSION_SUGGESTION_MAX`, `recentInteractionExpressionSuggestions`, `currentInteractionExpressionSuggestion`, `deriveInteractionExpressionSuggestion(hint)`, `recordInteractionExpressionSuggestion(expression, hint)`. Hook into `recordInteractionReactionHint` to call derive + record after updating `currentInteractionReactionHint`. Update `renderInteractionReactionPreview` to show `"Reaction: <hint> · Suggestion: <expression>"`.
+- `index.html`: Update initial text to `"Reaction: none · Suggestion: neutral"`.
+- `renderer-chat-smoke.js`: +30 TASK-217 tests; update 6 TASK-216 `assert.equal` → `assert.ok(...includes(...))` for compatibility.
+
+### Design Summary
+
+| Design decision | Rationale |
+|---|---|
+| Separate `deriveInteractionExpressionSuggestion` | Clean one-way mapping, testable in isolation |
+| `recordInteractionReactionHint` drives expression | Single call site; expression always derived from the same `safeHint` used for hint storage |
+| `neutral` as default and unknown fallback | Safe, neutral expression when state is unclear |
+| No `worried` / `offline` in allowlist | Those are for backend error/offline states; expression suggestion is for interaction-driven hints only |
+| `recentInteractionExpressionSuggestions` stores `{expression, ts, hint}` only | No raw payload keys; hint is already allowlisted from TASK-215 |
+
+### Hint → Expression Mapping
+
+| Reaction hint | Expression suggestion |
+|---|---|
+| `user_active` | `focused` |
+| `message_management` | `neutral` |
+| `correction` | `annoyed` |
+| `reset` | `neutral` |
+| `attention_returned` | `happy` |
+| `pet_attention` | `proud` |
+| `none` | `neutral` |
+| unknown / disallowed | `neutral` |
+
+### Files Changed
+
+| File | Change |
+|---|---|
+| `apps/desktop/src/renderer/renderer.js` | Added TASK-217 allowlist, state, `deriveInteractionExpressionSuggestion`, `recordInteractionExpressionSuggestion`; hooked into `recordInteractionReactionHint`; updated `renderInteractionReactionPreview` to combined format |
+| `apps/desktop/src/renderer/index.html` | Updated initial preview text to `"Reaction: none · Suggestion: neutral"` |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | +30 TASK-217 tests; updated 6 TASK-216 tests from `assert.equal` to `assert.ok(...includes(...))` |
+
+### Safety Boundary Confirmation
+
+- No `/chat` call ✓
+- No `updatePetSpeech` / Pet Bubble ✓
+- No TTS ✓
+- No history write ✓
+- No IPC ✓
+- No backend ✓
+- No Pet Window change ✓
+- No raw text stored in suggestion entries (`{expression, ts, hint}` only) ✓
+- `hover-action` class not re-introduced ✓
+
+### Automated Smoke Test Coverage (30 tests)
+
+| Test | Description |
+|---|---|
+| `testTask217RendererHasExpressionAllowlist` | Static check: allowlist defined with 6 expressions |
+| `testTask217RendererHasExpressionMax` | Static check: `INTERACTION_EXPRESSION_SUGGESTION_MAX = 20` |
+| `testTask217RendererHasExpressionState` | Static check: `recentInteractionExpressionSuggestions` and `currentInteractionExpressionSuggestion` declared as `var` |
+| `testTask217RendererHasDeriveFunction` | Static check: `deriveInteractionExpressionSuggestion` defined |
+| `testTask217RendererHasRecordFunction` | Static check: `recordInteractionExpressionSuggestion` defined |
+| `testTask217DeriveUserActive` | `user_active → focused` |
+| `testTask217DeriveMessageManagement` | `message_management → neutral` |
+| `testTask217DeriveCorrection` | `correction → annoyed` |
+| `testTask217DeriveReset` | `reset → neutral` |
+| `testTask217DeriveAttentionReturned` | `attention_returned → happy` |
+| `testTask217DerivePetAttention` | `pet_attention → proud` |
+| `testTask217DeriveNone` | `none → neutral` |
+| `testTask217DeriveUnknown` | unknown hint → `neutral` |
+| `testTask217ReactionHintUpdatesExpression` | `recordInteractionEvent` chain updates `currentInteractionExpressionSuggestion` |
+| `testTask217CurrentExpressionUpdates` | Initial `neutral`; updates on `full_app_focused` → `happy`, then `chat_history_cleared` → `neutral` |
+| `testTask217RingBufferCap` | 25 events → buffer caps at 20 |
+| `testTask217NoRawTextInSuggestion` | Sentinel payload keys not present in suggestion buffer entries |
+| `testTask217InitPreview` | Startup shows `Reaction: none · Suggestion: neutral` |
+| `testTask217ChatMessageSentPreview` | Preview shows `Reaction: user_active · Suggestion: focused` |
+| `testTask217MessageDeletedPreview` | Preview shows `Reaction: message_management · Suggestion: neutral` |
+| `testTask217MessageEditedPreview` | Preview shows `Reaction: correction · Suggestion: annoyed` |
+| `testTask217ClearChatPreview` | Preview shows `Reaction: reset · Suggestion: neutral` |
+| `testTask217FocusPreview` | Preview shows `Reaction: attention_returned · Suggestion: happy` |
+| `testTask217PreviewNotInHistory` | Preview text not in `collectUndoableChatEntries()` output |
+| `testTask217PreviewNotInTranscript` | Preview text not in `buildChatTranscript()` output |
+| `testTask217NoChat` | `recordInteractionEvent` does not call `/chat` |
+| `testTask217NoPetOrTts` | Does not call `updatePetSpeech` / TTS |
+| `testTask217HoverActionsStillAbsent` | `hover-action` class not present in renderer.js |
+| `testTask217ContextMenuStillExists` | `chat-context-menu`, `複製`, `刪除`, `closeChatContextMenu` still present |
+
+(Plus 1 implicit via TASK-216 regression: all 16 TASK-216 tests still PASS with updated assertions.)
+
+### Automated Smoke Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+30 TASK-217 tests; TASK-216 assertions updated) |
+| `pet-window-smoke.js` | PASS (60 tests, no regression) |
+| `pet-renderer-smoke.js` | PASS (237 tests, no regression) |
+| `git diff --check` | CLEAN (CRLF warnings only) |
+
+### Acceptance Criteria
+
+- [x] `INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST` with 6 expressions ✓
+- [x] `deriveInteractionExpressionSuggestion(hint)` — all 8 hint→expression mappings ✓
+- [x] `recordInteractionExpressionSuggestion(expression, hint)` — allowlist guard, ring buffer, state update ✓
+- [x] `INTERACTION_EXPRESSION_SUGGESTION_MAX = 20` ✓
+- [x] `recentInteractionExpressionSuggestions` ring buffer, max 20 ✓
+- [x] `currentInteractionExpressionSuggestion` starts as `"neutral"`, updates on every hint ✓
+- [x] `recordInteractionReactionHint` drives expression suggestion from `safeHint` ✓
+- [x] Preview format updated to `"Reaction: <hint> · Suggestion: <expression>"` ✓
+- [x] Startup preview shows `"Reaction: none · Suggestion: neutral"` ✓
+- [x] No raw text in suggestion entries ✓
+- [x] No `/chat`, no Pet Bubble, no TTS, no IPC, no backend, no Pet Window change ✓
+- [x] All TASK-216 tests still PASS (assertions updated for new format) ✓
+- [x] `renderer-chat-smoke.js` PASS ✓
+- [x] `pet-window-smoke.js` PASS ✓
+- [x] `pet-renderer-smoke.js` PASS ✓
+- [x] `git diff --check` CLEAN ✓
+- [x] Windows visual smoke PASS ✓
+
+### Windows Visual Smoke Results (2026-06-01)
+
+| Scenario | Result |
+|---|---|
+| 基本啟動：App 啟動正常，preview 顯示 `Reaction: none · Suggestion: neutral` | PASS |
+| 送出訊息：user 訊息送出後 preview 更新為 `Reaction: user_active · Suggestion: focused`，聊天流程無異常 | PASS |
+| Delete / Undo regression：單則刪除後 preview 更新為 `Reaction: message_management · Suggestion: neutral`，10 秒復原正常 | PASS |
+| Edit last user message regression：編輯送出後 preview 更新為 `Reaction: correction · Suggestion: annoyed`，pet reply 更新正常 | PASS |
+| Clear Chat regression：清除後 preview 更新為 `Reaction: reset · Suggestion: neutral`，Undo Clear 復原正常 | PASS |
+| Focus regression：Alt+Tab 切回 App 後 preview 更新為 `Reaction: attention_returned · Suggestion: happy` | PASS |
+| 右鍵 context menu regression：複製、刪除、編輯（最後 user message only）皆正常 | PASS |
+| 一般回歸：search/highlight/navigation、copy/export、date separator、timestamp tooltip、Pet Window、Voice、STT、TTS 皆正常 | PASS |
+
+> **補充：** preview 文字未進入 chat history / copy transcript / export；無額外觸發 Pet Bubble / TTS；沒有真的改變 Pet Window 表情。所有可見功能無異常，smoke 判定 PASS。

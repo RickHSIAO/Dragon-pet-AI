@@ -6838,7 +6838,7 @@ function testTask216HtmlHasPreviewElement() {
   assert.ok(html.includes('id="interaction-reaction-preview"'),
     "index.html must contain element with id=interaction-reaction-preview");
   assert.ok(html.includes("Reaction: none"),
-    "index.html preview element must have initial text 'Reaction: none'");
+    "index.html preview element must have initial text containing 'Reaction: none'");
   console.log("  testTask216HtmlHasPreviewElement PASS");
 }
 
@@ -6861,8 +6861,8 @@ function testTask216RendererHasRenderFunction() {
 async function testTask216InitShowsNone() {
   const { document } = await loadRenderer();
   const el = document.getElementById("interaction-reaction-preview");
-  assert.equal(el.textContent, "Reaction: none",
-    "preview must show 'Reaction: none' on startup");
+  assert.ok(el.textContent.includes("Reaction: none"),
+    "preview must include 'Reaction: none' on startup");
   console.log("  testTask216InitShowsNone PASS");
 }
 
@@ -6870,8 +6870,8 @@ async function testTask216ChatMessageSentShowsUserActive() {
   const { document, sandbox } = await loadRenderer();
   const el = document.getElementById("interaction-reaction-preview");
   sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 10, source: "full_app" });
-  assert.equal(el.textContent, "Reaction: user_active",
-    "preview must show 'Reaction: user_active' after chat_message_sent");
+  assert.ok(el.textContent.includes("Reaction: user_active"),
+    "preview must include 'Reaction: user_active' after chat_message_sent");
   console.log("  testTask216ChatMessageSentShowsUserActive PASS");
 }
 
@@ -6879,8 +6879,8 @@ async function testTask216MessageDeletedShowsMessageManagement() {
   const { document, sandbox } = await loadRenderer();
   const el = document.getElementById("interaction-reaction-preview");
   sandbox.recordInteractionEvent("message_deleted", { role: "user", source: "full_app" });
-  assert.equal(el.textContent, "Reaction: message_management",
-    "preview must show 'Reaction: message_management' after message_deleted");
+  assert.ok(el.textContent.includes("Reaction: message_management"),
+    "preview must include 'Reaction: message_management' after message_deleted");
   console.log("  testTask216MessageDeletedShowsMessageManagement PASS");
 }
 
@@ -6888,8 +6888,8 @@ async function testTask216MessageEditedShowsCorrection() {
   const { document, sandbox } = await loadRenderer();
   const el = document.getElementById("interaction-reaction-preview");
   sandbox.recordInteractionEvent("message_edited", { messageLength: 8, role: "user", source: "full_app" });
-  assert.equal(el.textContent, "Reaction: correction",
-    "preview must show 'Reaction: correction' after message_edited");
+  assert.ok(el.textContent.includes("Reaction: correction"),
+    "preview must include 'Reaction: correction' after message_edited");
   console.log("  testTask216MessageEditedShowsCorrection PASS");
 }
 
@@ -6897,8 +6897,8 @@ async function testTask216ClearChatShowsReset() {
   const { document, sandbox } = await loadRenderer();
   const el = document.getElementById("interaction-reaction-preview");
   sandbox.recordInteractionEvent("chat_history_cleared", { count: 3 });
-  assert.equal(el.textContent, "Reaction: reset",
-    "preview must show 'Reaction: reset' after chat_history_cleared");
+  assert.ok(el.textContent.includes("Reaction: reset"),
+    "preview must include 'Reaction: reset' after chat_history_cleared");
   console.log("  testTask216ClearChatShowsReset PASS");
 }
 
@@ -6906,8 +6906,8 @@ async function testTask216FocusShowsAttentionReturned() {
   const { document, sandbox } = await loadRenderer();
   const el = document.getElementById("interaction-reaction-preview");
   sandbox.window.dispatchEvent({ type: "focus" });
-  assert.equal(el.textContent, "Reaction: attention_returned",
-    "preview must show 'Reaction: attention_returned' after window focus");
+  assert.ok(el.textContent.includes("Reaction: attention_returned"),
+    "preview must include 'Reaction: attention_returned' after window focus");
   console.log("  testTask216FocusShowsAttentionReturned PASS");
 }
 
@@ -6993,6 +6993,274 @@ function testTask216ContextMenuStillExists() {
   assert.ok(src.includes("closeChatContextMenu"), "closeChatContextMenu must still exist");
   console.log("  testTask216ContextMenuStillExists PASS");
 }
+
+// ─── TASK-217: Reaction Hint to Local Expression Suggestion ──────────────────
+
+function testTask217RendererHasExpressionAllowlist() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST"),
+    "renderer.js must define INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST");
+  assert.ok(src.includes('"neutral"') && src.includes('"focused"') && src.includes('"happy"') &&
+    src.includes('"proud"') && src.includes('"annoyed"') && src.includes('"sleepy"'),
+    "expression allowlist must include neutral/focused/happy/proud/annoyed/sleepy");
+  console.log("  testTask217RendererHasExpressionAllowlist PASS");
+}
+
+function testTask217RendererHasExpressionMax() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("INTERACTION_EXPRESSION_SUGGESTION_MAX"),
+    "renderer.js must define INTERACTION_EXPRESSION_SUGGESTION_MAX");
+  assert.ok(src.includes("INTERACTION_EXPRESSION_SUGGESTION_MAX = 20"),
+    "INTERACTION_EXPRESSION_SUGGESTION_MAX must equal 20");
+  console.log("  testTask217RendererHasExpressionMax PASS");
+}
+
+function testTask217RendererHasExpressionState() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("recentInteractionExpressionSuggestions = []"),
+    "renderer.js must declare recentInteractionExpressionSuggestions as var");
+  assert.ok(src.includes('currentInteractionExpressionSuggestion = "neutral"'),
+    "renderer.js must declare currentInteractionExpressionSuggestion defaulting to neutral");
+  console.log("  testTask217RendererHasExpressionState PASS");
+}
+
+function testTask217RendererHasDeriveFunction() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("function deriveInteractionExpressionSuggestion"),
+    "renderer.js must define deriveInteractionExpressionSuggestion");
+  console.log("  testTask217RendererHasDeriveFunction PASS");
+}
+
+function testTask217RendererHasRecordFunction() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("function recordInteractionExpressionSuggestion"),
+    "renderer.js must define recordInteractionExpressionSuggestion");
+  console.log("  testTask217RendererHasRecordFunction PASS");
+}
+
+async function testTask217DeriveUserActive() {
+  const { sandbox } = await loadRenderer();
+  assert.equal(sandbox.deriveInteractionExpressionSuggestion("user_active"), "focused",
+    "user_active → focused");
+  console.log("  testTask217DeriveUserActive PASS");
+}
+
+async function testTask217DeriveMessageManagement() {
+  const { sandbox } = await loadRenderer();
+  assert.equal(sandbox.deriveInteractionExpressionSuggestion("message_management"), "neutral",
+    "message_management → neutral");
+  console.log("  testTask217DeriveMessageManagement PASS");
+}
+
+async function testTask217DeriveCorrection() {
+  const { sandbox } = await loadRenderer();
+  assert.equal(sandbox.deriveInteractionExpressionSuggestion("correction"), "annoyed",
+    "correction → annoyed");
+  console.log("  testTask217DeriveCorrection PASS");
+}
+
+async function testTask217DeriveReset() {
+  const { sandbox } = await loadRenderer();
+  assert.equal(sandbox.deriveInteractionExpressionSuggestion("reset"), "neutral",
+    "reset → neutral");
+  console.log("  testTask217DeriveReset PASS");
+}
+
+async function testTask217DeriveAttentionReturned() {
+  const { sandbox } = await loadRenderer();
+  assert.equal(sandbox.deriveInteractionExpressionSuggestion("attention_returned"), "happy",
+    "attention_returned → happy");
+  console.log("  testTask217DeriveAttentionReturned PASS");
+}
+
+async function testTask217DerivePetAttention() {
+  const { sandbox } = await loadRenderer();
+  assert.equal(sandbox.deriveInteractionExpressionSuggestion("pet_attention"), "proud",
+    "pet_attention → proud");
+  console.log("  testTask217DerivePetAttention PASS");
+}
+
+async function testTask217DeriveNone() {
+  const { sandbox } = await loadRenderer();
+  assert.equal(sandbox.deriveInteractionExpressionSuggestion("none"), "neutral",
+    "none → neutral");
+  console.log("  testTask217DeriveNone PASS");
+}
+
+async function testTask217DeriveUnknown() {
+  const { sandbox } = await loadRenderer();
+  assert.equal(sandbox.deriveInteractionExpressionSuggestion("UNKNOWN_HINT_XYZ"), "neutral",
+    "unknown hint → neutral");
+  console.log("  testTask217DeriveUnknown PASS");
+}
+
+async function testTask217ReactionHintUpdatesExpression() {
+  const { sandbox } = await loadRenderer();
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 5 });
+  assert.equal(sandbox.currentInteractionExpressionSuggestion, "focused",
+    "recordInteractionReactionHint must update currentInteractionExpressionSuggestion to focused after chat_message_sent");
+  sandbox.recordInteractionEvent("message_edited", { messageLength: 3, role: "user" });
+  assert.equal(sandbox.currentInteractionExpressionSuggestion, "annoyed",
+    "currentInteractionExpressionSuggestion must update to annoyed after message_edited");
+  console.log("  testTask217ReactionHintUpdatesExpression PASS");
+}
+
+async function testTask217CurrentExpressionUpdates() {
+  const { sandbox } = await loadRenderer();
+  assert.equal(sandbox.currentInteractionExpressionSuggestion, "neutral",
+    "initial currentInteractionExpressionSuggestion must be neutral");
+  sandbox.recordInteractionEvent("full_app_focused");
+  assert.equal(sandbox.currentInteractionExpressionSuggestion, "happy",
+    "full_app_focused must set currentInteractionExpressionSuggestion to happy");
+  sandbox.recordInteractionEvent("chat_history_cleared", { count: 2 });
+  assert.equal(sandbox.currentInteractionExpressionSuggestion, "neutral",
+    "chat_history_cleared must set currentInteractionExpressionSuggestion to neutral");
+  console.log("  testTask217CurrentExpressionUpdates PASS");
+}
+
+async function testTask217RingBufferCap() {
+  const { sandbox } = await loadRenderer();
+  for (let i = 0; i < 25; i++) {
+    sandbox.recordInteractionEvent("chat_message_sent", { messageLength: i });
+  }
+  assert.equal(sandbox.recentInteractionExpressionSuggestions.length, 20,
+    "recentInteractionExpressionSuggestions must cap at 20");
+  console.log("  testTask217RingBufferCap PASS");
+}
+
+async function testTask217NoRawTextInSuggestion() {
+  const { sandbox } = await loadRenderer();
+  sandbox.recordInteractionEvent("chat_message_sent", {
+    messageLength: 9999,
+    source: "SENTINEL_SRC_217",
+    role: "SENTINEL_ROLE_217",
+  });
+  const entries = sandbox.recentInteractionExpressionSuggestions;
+  const entryStr = JSON.stringify(entries);
+  assert.ok(!entryStr.includes("9999"),              "suggestion buffer must not store messageLength number");
+  assert.ok(!entryStr.includes("SENTINEL_SRC_217"),  "suggestion buffer must not store source value");
+  assert.ok(!entryStr.includes("SENTINEL_ROLE_217"), "suggestion buffer must not store role value");
+  console.log("  testTask217NoRawTextInSuggestion PASS");
+}
+
+async function testTask217InitPreview() {
+  const { document } = await loadRenderer();
+  const el = document.getElementById("interaction-reaction-preview");
+  assert.ok(el.textContent.includes("Reaction: none"),    "startup preview must include 'Reaction: none'");
+  assert.ok(el.textContent.includes("Suggestion: neutral"), "startup preview must include 'Suggestion: neutral'");
+  console.log("  testTask217InitPreview PASS");
+}
+
+async function testTask217ChatMessageSentPreview() {
+  const { document, sandbox } = await loadRenderer();
+  const el = document.getElementById("interaction-reaction-preview");
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 7 });
+  assert.ok(el.textContent.includes("Reaction: user_active"),  "preview must include Reaction: user_active");
+  assert.ok(el.textContent.includes("Suggestion: focused"),    "preview must include Suggestion: focused");
+  console.log("  testTask217ChatMessageSentPreview PASS");
+}
+
+async function testTask217MessageDeletedPreview() {
+  const { document, sandbox } = await loadRenderer();
+  const el = document.getElementById("interaction-reaction-preview");
+  sandbox.recordInteractionEvent("message_deleted", { role: "user" });
+  assert.ok(el.textContent.includes("Reaction: message_management"), "preview must include Reaction: message_management");
+  assert.ok(el.textContent.includes("Suggestion: neutral"),           "preview must include Suggestion: neutral");
+  console.log("  testTask217MessageDeletedPreview PASS");
+}
+
+async function testTask217MessageEditedPreview() {
+  const { document, sandbox } = await loadRenderer();
+  const el = document.getElementById("interaction-reaction-preview");
+  sandbox.recordInteractionEvent("message_edited", { messageLength: 4, role: "user" });
+  assert.ok(el.textContent.includes("Reaction: correction"), "preview must include Reaction: correction");
+  assert.ok(el.textContent.includes("Suggestion: annoyed"),  "preview must include Suggestion: annoyed");
+  console.log("  testTask217MessageEditedPreview PASS");
+}
+
+async function testTask217ClearChatPreview() {
+  const { document, sandbox } = await loadRenderer();
+  const el = document.getElementById("interaction-reaction-preview");
+  sandbox.recordInteractionEvent("chat_history_cleared", { count: 1 });
+  assert.ok(el.textContent.includes("Reaction: reset"),      "preview must include Reaction: reset");
+  assert.ok(el.textContent.includes("Suggestion: neutral"),  "preview must include Suggestion: neutral");
+  console.log("  testTask217ClearChatPreview PASS");
+}
+
+async function testTask217FocusPreview() {
+  const { document, sandbox } = await loadRenderer();
+  const el = document.getElementById("interaction-reaction-preview");
+  sandbox.window.dispatchEvent({ type: "focus" });
+  assert.ok(el.textContent.includes("Reaction: attention_returned"), "preview must include Reaction: attention_returned");
+  assert.ok(el.textContent.includes("Suggestion: happy"),            "preview must include Suggestion: happy");
+  console.log("  testTask217FocusPreview PASS");
+}
+
+async function testTask217PreviewNotInHistory() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 5 });
+  const entries = sandbox.collectUndoableChatEntries();
+  const entriesStr = JSON.stringify(entries);
+  assert.ok(!entriesStr.includes("Reaction:"),   "preview text must not appear in chat history entries");
+  assert.ok(!entriesStr.includes("Suggestion:"), "suggestion text must not appear in chat history entries");
+  console.log("  testTask217PreviewNotInHistory PASS");
+}
+
+async function testTask217PreviewNotInTranscript() {
+  const { document, sandbox } = await loadRenderer();
+  await sendChat(document, "test transcript 217");
+  await settle();
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 19 });
+  const transcript = sandbox.buildChatTranscript();
+  assert.ok(!transcript.includes("Reaction:"),   "reaction preview must not appear in copy/export transcript");
+  assert.ok(!transcript.includes("Suggestion:"), "suggestion preview must not appear in copy/export transcript");
+  console.log("  testTask217PreviewNotInTranscript PASS");
+}
+
+async function testTask217NoChat() {
+  const { state, sandbox } = await loadRenderer();
+  state.calls.length = 0;
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 5 });
+  sandbox.recordInteractionEvent("full_app_focused");
+  await settle();
+  const chatCalls = state.calls.filter((c) => c.url.endsWith("/chat"));
+  assert.equal(chatCalls.length, 0, "expression suggestion must not call /chat");
+  console.log("  testTask217NoChat PASS");
+}
+
+async function testTask217NoPetOrTts() {
+  const speechUpdates = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      updatePetSpeech(p) { speechUpdates.push(p); return Promise.resolve({ ok: true }); },
+      showPetWindow() { return Promise.resolve({ ok: true }); },
+    },
+  });
+  speechUpdates.length = 0;
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 5 });
+  sandbox.recordInteractionEvent("full_app_focused");
+  await settle();
+  assert.equal(speechUpdates.length, 0,
+    "expression suggestion must not call updatePetSpeech / TTS");
+  console.log("  testTask217NoPetOrTts PASS");
+}
+
+function testTask217HoverActionsStillAbsent() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(!src.includes("hover-action"), "TASK-217 must not re-introduce hover-action class");
+  console.log("  testTask217HoverActionsStillAbsent PASS");
+}
+
+function testTask217ContextMenuStillExists() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("chat-context-menu"), "chat-context-menu must still exist after TASK-217");
+  assert.ok(src.includes("複製") && src.includes("刪除"), "copy/delete actions must still exist");
+  assert.ok(src.includes("closeChatContextMenu"), "closeChatContextMenu must still exist after TASK-217");
+  console.log("  testTask217ContextMenuStillExists PASS");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
@@ -7411,6 +7679,38 @@ async function main() {
   await testTask216PreviewNoPetOrTts();
   testTask216HoverActionsStillAbsent();
   testTask216ContextMenuStillExists();
+
+  // TASK-217: Reaction Hint to Local Expression Suggestion
+  testTask217RendererHasExpressionAllowlist();
+  testTask217RendererHasExpressionMax();
+  testTask217RendererHasExpressionState();
+  testTask217RendererHasDeriveFunction();
+  testTask217RendererHasRecordFunction();
+  testTask217DeriveUserActive();
+  testTask217DeriveMessageManagement();
+  testTask217DeriveCorrection();
+  testTask217DeriveReset();
+  testTask217DeriveAttentionReturned();
+  testTask217DerivePetAttention();
+  testTask217DeriveNone();
+  testTask217DeriveUnknown();
+  await testTask217ReactionHintUpdatesExpression();
+  await testTask217CurrentExpressionUpdates();
+  await testTask217RingBufferCap();
+  testTask217NoRawTextInSuggestion();
+  await testTask217InitPreview();
+  await testTask217ChatMessageSentPreview();
+  await testTask217MessageDeletedPreview();
+  await testTask217MessageEditedPreview();
+  await testTask217ClearChatPreview();
+  await testTask217FocusPreview();
+  await testTask217PreviewNotInHistory();
+  await testTask217PreviewNotInTranscript();
+  await testTask217NoChat();
+  await testTask217NoPetOrTts();
+  testTask217HoverActionsStillAbsent();
+  testTask217ContextMenuStillExists();
+
   console.log("renderer chat smoke: PASS");
 }
 

@@ -656,18 +656,60 @@ function recordInteractionReactionHint(hint, event = {}) {
     recentInteractionReactionHints.shift();
   }
   currentInteractionReactionHint = safeHint;
-  renderInteractionReactionPreview(); // TASK-216
+  const expression = deriveInteractionExpressionSuggestion(safeHint); // TASK-217
+  recordInteractionExpressionSuggestion(expression, safeHint);        // TASK-217
+  renderInteractionReactionPreview(); // TASK-216/217
 }
 
-// TASK-216: Reaction hint debug preview — reads currentInteractionReactionHint, no side-effects.
-// Uses textContent (not innerHTML) and only displays allowlisted hint strings.
+// TASK-217: Expression suggestion layer — maps reaction hint → local expression suggestion.
+// Pure local renderer memory; no Pet Window, no IPC, no /chat, no TTS, no history write.
+const INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST = new Set([
+  "neutral",
+  "focused",
+  "happy",
+  "proud",
+  "annoyed",
+  "sleepy",
+]);
+const INTERACTION_EXPRESSION_SUGGESTION_MAX = 20;
+var recentInteractionExpressionSuggestions = []; // var: exposed to vm sandbox for smoke tests
+var currentInteractionExpressionSuggestion = "neutral"; // var: exposed to vm sandbox for smoke tests
+
+function deriveInteractionExpressionSuggestion(hint) {
+  switch (hint) {
+    case "user_active":        return "focused";
+    case "message_management": return "neutral";
+    case "correction":         return "annoyed";
+    case "reset":              return "neutral";
+    case "attention_returned": return "happy";
+    case "pet_attention":      return "proud";
+    case "none":               return "neutral";
+    default:                   return "neutral";
+  }
+}
+
+function recordInteractionExpressionSuggestion(expression, hint) {
+  const safeExpression = INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST.has(expression) ? expression : "neutral";
+  const entry = { expression: safeExpression, ts: Date.now(), hint };
+  recentInteractionExpressionSuggestions.push(entry);
+  if (recentInteractionExpressionSuggestions.length > INTERACTION_EXPRESSION_SUGGESTION_MAX) {
+    recentInteractionExpressionSuggestions.shift();
+  }
+  currentInteractionExpressionSuggestion = safeExpression;
+}
+
+// TASK-216/217: Reaction hint + expression suggestion debug preview.
+// Uses textContent (not innerHTML); only displays allowlisted strings.
 function renderInteractionReactionPreview() {
   const el = document.getElementById("interaction-reaction-preview");
   if (!el) return;
   const safeHint = INTERACTION_REACTION_HINT_ALLOWLIST.has(currentInteractionReactionHint)
     ? currentInteractionReactionHint
     : "none";
-  el.textContent = "Reaction: " + safeHint;
+  const safeExpression = INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST.has(currentInteractionExpressionSuggestion)
+    ? currentInteractionExpressionSuggestion
+    : "neutral";
+  el.textContent = "Reaction: " + safeHint + " · Suggestion: " + safeExpression;
 }
 
 function recordInteractionEvent(type, payload = {}) {
