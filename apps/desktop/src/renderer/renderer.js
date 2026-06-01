@@ -153,7 +153,10 @@ async function showPetWindowFromFullApp() {
     const result = await api.showPetWindow();
     if (result && result.ok) {
       setShowPetWindowStatus("Pet Window shown.");
-      mirrorInteractionExpressionSuggestion(currentInteractionExpressionSuggestion);
+      const replayedPending = flushPendingInteractionExpressionMirror();
+      if (!replayedPending) {
+        sendInteractionExpressionMirrorNow(currentInteractionExpressionSuggestion);
+      }
     } else if (result && result.reason === "pet_mode_disabled") {
       setShowPetWindowStatus("Pet Mode disabled. Start with PET_MODE_ENABLED=true.", true);
     } else {
@@ -673,8 +676,12 @@ const INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST = new Set([
   "sleepy",
 ]);
 const INTERACTION_EXPRESSION_SUGGESTION_MAX = 20;
+const INTERACTION_EXPRESSION_MIRROR_COOLDOWN_MS = 300;
 var recentInteractionExpressionSuggestions = []; // var: exposed to vm sandbox for smoke tests
 var currentInteractionExpressionSuggestion = "neutral"; // var: exposed to vm sandbox for smoke tests
+var pendingInteractionExpressionMirror = null; // var: exposed to vm sandbox for smoke tests
+var interactionExpressionMirrorTimer = null; // var: exposed to vm sandbox for smoke tests
+var lastInteractionExpressionMirrorAt = 0; // var: exposed to vm sandbox for smoke tests
 
 function deriveInteractionExpressionSuggestion(hint) {
   switch (hint) {
@@ -700,14 +707,50 @@ function recordInteractionExpressionSuggestion(expression, hint) {
   mirrorInteractionExpressionSuggestion(safeExpression); // TASK-218
 }
 
-// TASK-218: mirror expression suggestion to Pet Window via narrow IPC bridge.
+// TASK-218/219: mirror expression suggestion to Pet Window via narrow IPC bridge.
 // Only sends allowlisted expression strings; no speech, no bubble, no TTS.
-function mirrorInteractionExpressionSuggestion(expression) {
+function sendInteractionExpressionMirrorNow(expression) {
   const safeExpression = INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST.has(expression)
     ? expression : "neutral";
   const bridge = typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null;
-  if (!bridge || typeof bridge.sendPetExpressionSuggestion !== "function") return;
+  if (!bridge || typeof bridge.sendPetExpressionSuggestion !== "function") return false;
+  lastInteractionExpressionMirrorAt = Date.now();
   bridge.sendPetExpressionSuggestion({ expression: safeExpression });
+  return true;
+}
+
+function flushPendingInteractionExpressionMirror() {
+  if (interactionExpressionMirrorTimer) {
+    clearTimeout(interactionExpressionMirrorTimer);
+    interactionExpressionMirrorTimer = null;
+  }
+  if (!pendingInteractionExpressionMirror) return false;
+  const expression = pendingInteractionExpressionMirror;
+  pendingInteractionExpressionMirror = null;
+  return sendInteractionExpressionMirrorNow(expression);
+}
+
+function scheduleInteractionExpressionMirror(expression) {
+  const safeExpression = INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST.has(expression)
+    ? expression : "neutral";
+  const elapsed = Date.now() - lastInteractionExpressionMirrorAt;
+  if (!lastInteractionExpressionMirrorAt || elapsed >= INTERACTION_EXPRESSION_MIRROR_COOLDOWN_MS) {
+    return sendInteractionExpressionMirrorNow(safeExpression);
+  }
+
+  pendingInteractionExpressionMirror = safeExpression;
+  if (!interactionExpressionMirrorTimer) {
+    const delay = Math.max(0, INTERACTION_EXPRESSION_MIRROR_COOLDOWN_MS - elapsed);
+    interactionExpressionMirrorTimer = setTimeout(() => {
+      interactionExpressionMirrorTimer = null;
+      flushPendingInteractionExpressionMirror();
+    }, delay);
+  }
+  return false;
+}
+
+function mirrorInteractionExpressionSuggestion(expression) {
+  return scheduleInteractionExpressionMirror(expression);
 }
 
 // TASK-216/217: Reaction hint + expression suggestion debug preview.

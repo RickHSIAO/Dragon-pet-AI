@@ -7416,10 +7416,76 @@ function testTask218HoverActionsStillAbsent() {
   console.log("  testTask218HoverActionsStillAbsent PASS");
 }
 
-// TASK-218 fix: consecutive mirror sequence — focused→neutral→annoyed→neutral→happy
-async function testTask218FixConsecutiveMirrorSequence() {
+// TASK-219: expression mirror cooldown / debounce
+function testTask219RendererHasMirrorCooldownState() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("INTERACTION_EXPRESSION_MIRROR_COOLDOWN_MS"),
+    "renderer.js must define INTERACTION_EXPRESSION_MIRROR_COOLDOWN_MS");
+  assert.ok(src.includes("INTERACTION_EXPRESSION_MIRROR_COOLDOWN_MS = 300"),
+    "INTERACTION_EXPRESSION_MIRROR_COOLDOWN_MS must be 300ms");
+  assert.ok(src.includes("pendingInteractionExpressionMirror"),
+    "renderer.js must define pendingInteractionExpressionMirror");
+  assert.ok(src.includes("interactionExpressionMirrorTimer"),
+    "renderer.js must define interactionExpressionMirrorTimer");
+  assert.ok(src.includes("lastInteractionExpressionMirrorAt"),
+    "renderer.js must define lastInteractionExpressionMirrorAt");
+  assert.ok(src.includes("function flushPendingInteractionExpressionMirror"),
+    "renderer.js must define flushPendingInteractionExpressionMirror");
+  assert.ok(src.includes("function scheduleInteractionExpressionMirror"),
+    "renderer.js must define scheduleInteractionExpressionMirror");
+  assert.ok(src.includes("function sendInteractionExpressionMirrorNow"),
+    "renderer.js must define sendInteractionExpressionMirrorNow");
+  console.log("  testTask219RendererHasMirrorCooldownState PASS");
+}
+
+function makeFakeTimeoutController() {
+  const timers = [];
+  return {
+    timers,
+    setTimeout(fn, ms) {
+      timers.push({ fn, ms, cleared: false });
+      return timers.length;
+    },
+    clearTimeout(id) {
+      if (timers[id - 1]) timers[id - 1].cleared = true;
+    },
+    runActiveTimers() {
+      for (const timer of timers) {
+        if (!timer.cleared) {
+          timer.cleared = true;
+          timer.fn();
+        }
+      }
+    },
+  };
+}
+
+async function testTask219FirstMirrorSendsImmediately() {
   const mirrorCalls = [];
+  const timers = makeFakeTimeoutController();
   const { sandbox } = await loadRenderer({
+    setTimeout: timers.setTimeout,
+    clearTimeout: timers.clearTimeout,
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      sendPetExpressionSuggestion(payload) { mirrorCalls.push({ ...payload }); return Promise.resolve({ ok: true }); },
+    },
+  });
+  mirrorCalls.length = 0;
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 5 });
+  assert.equal(mirrorCalls.length, 1, "first expression mirror must send immediately");
+  assert.equal(mirrorCalls[0].expression, "focused", "first mirror must send focused");
+  assert.equal(sandbox.pendingInteractionExpressionMirror, null,
+    "first expression mirror must not leave a pending mirror");
+  console.log("  testTask219FirstMirrorSendsImmediately PASS");
+}
+
+async function testTask219CooldownCoalescesLatestExpression() {
+  const mirrorCalls = [];
+  const timers = makeFakeTimeoutController();
+  const { sandbox } = await loadRenderer({
+    setTimeout: timers.setTimeout,
+    clearTimeout: timers.clearTimeout,
     dragonPet: {
       chatHistoryLoad: async () => [],
       sendPetExpressionSuggestion(payload) { mirrorCalls.push({ ...payload }); return Promise.resolve({ ok: true }); },
@@ -7438,19 +7504,47 @@ async function testTask218FixConsecutiveMirrorSequence() {
   // full_app_focused → happy (attention_returned)
   sandbox.recordInteractionEvent("full_app_focused");
 
-  assert.ok(mirrorCalls.length === 5,
-    `consecutive mirror sequence must produce 5 bridge calls, got ${mirrorCalls.length}`);
-  assert.ok(mirrorCalls[0].expression === "focused",
-    `call[0] must be focused (chat_message_sent), got ${mirrorCalls[0].expression}`);
-  assert.ok(mirrorCalls[1].expression === "neutral",
-    `call[1] must be neutral (message_deleted), got ${mirrorCalls[1].expression}`);
-  assert.ok(mirrorCalls[2].expression === "annoyed",
-    `call[2] must be annoyed (message_edited), got ${mirrorCalls[2].expression}`);
-  assert.ok(mirrorCalls[3].expression === "neutral",
-    `call[3] must be neutral (chat_history_cleared), got ${mirrorCalls[3].expression}`);
-  assert.ok(mirrorCalls[4].expression === "happy",
-    `call[4] must be happy (full_app_focused), got ${mirrorCalls[4].expression}`);
-  console.log("  testTask218FixConsecutiveMirrorSequence PASS");
+  assert.equal(mirrorCalls.length, 1,
+    `cooldown sequence must send only first expression immediately, got ${mirrorCalls.length}`);
+  assert.equal(mirrorCalls[0].expression, "focused",
+    "first immediate mirror must be focused");
+  assert.equal(sandbox.pendingInteractionExpressionMirror, "happy",
+    "cooldown must keep only the latest pending expression");
+  assert.equal(sandbox.currentInteractionExpressionSuggestion, "happy",
+    "currentInteractionExpressionSuggestion must still update to latest expression");
+  assert.ok(timers.timers.some((timer) => timer.ms > 0 && timer.ms <= 300),
+    "cooldown must schedule a pending flush timer");
+
+  sandbox.flushPendingInteractionExpressionMirror();
+  assert.equal(mirrorCalls.length, 2,
+    "manual flush must send the latest pending expression");
+  assert.equal(mirrorCalls[1].expression, "happy",
+    "latest pending expression must win after flush");
+  assert.equal(sandbox.pendingInteractionExpressionMirror, null,
+    "flush must clear pending expression");
+  console.log("  testTask219CooldownCoalescesLatestExpression PASS");
+}
+
+async function testTask219TimerFlushSendsPendingExpression() {
+  const mirrorCalls = [];
+  const timers = makeFakeTimeoutController();
+  const { sandbox } = await loadRenderer({
+    setTimeout: timers.setTimeout,
+    clearTimeout: timers.clearTimeout,
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      sendPetExpressionSuggestion(payload) { mirrorCalls.push({ ...payload }); return Promise.resolve({ ok: true }); },
+    },
+  });
+  mirrorCalls.length = 0;
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 5 });
+  sandbox.recordInteractionEvent("message_edited", { role: "user", source: "full_app", messageLength: 8 });
+  assert.equal(mirrorCalls.length, 1, "second expression inside cooldown must not send immediately");
+  assert.equal(sandbox.pendingInteractionExpressionMirror, "annoyed");
+  timers.runActiveTimers();
+  assert.equal(mirrorCalls.length, 2, "timer flush must send pending expression");
+  assert.equal(mirrorCalls[1].expression, "annoyed", "timer flush must send latest pending expression");
+  console.log("  testTask219TimerFlushSendsPendingExpression PASS");
 }
 
 async function testTask218ShowPetWindowMirrorsCurrentExpression() {
@@ -7487,6 +7581,43 @@ async function testTask218ShowPetWindowAbsentBridgeNoThrow() {
   await settle();
   assert.equal(document.getElementById("show-pet-window-status").textContent, "Pet Window shown.");
   console.log("  testTask218ShowPetWindowAbsentBridgeNoThrow PASS");
+}
+
+async function testTask219ShowPetWindowFlushesPendingExpression() {
+  const mirrorCalls = [];
+  const timers = makeFakeTimeoutController();
+  const { document, sandbox } = await loadRenderer({
+    setTimeout: timers.setTimeout,
+    clearTimeout: timers.clearTimeout,
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      showPetWindow() { return Promise.resolve({ ok: true }); },
+      sendPetExpressionSuggestion(payload) { mirrorCalls.push({ ...payload }); return Promise.resolve({ ok: true }); },
+    },
+  });
+  mirrorCalls.length = 0;
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 5 });
+  sandbox.recordInteractionEvent("message_edited", { role: "user", source: "full_app", messageLength: 8 });
+  assert.deepEqual(mirrorCalls.map((payload) => payload.expression), ["focused"],
+    "pre-show cooldown must leave annoyed pending");
+  assert.equal(sandbox.pendingInteractionExpressionMirror, "annoyed");
+
+  document.getElementById("show-pet-window-btn").click();
+  await settle();
+  assert.deepEqual(mirrorCalls.map((payload) => payload.expression), ["focused", "annoyed"],
+    "showPetWindow success must bypass cooldown by flushing latest pending expression");
+  assert.equal(sandbox.pendingInteractionExpressionMirror, null,
+    "showPetWindow flush must clear pending expression");
+  console.log("  testTask219ShowPetWindowFlushesPendingExpression PASS");
+}
+
+function testTask219NarrowChannelsStillDocumentedInPreloadSmoke() {
+  const src = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "preload.js"), "utf8");
+  assert.ok(src.includes('PET_EXPRESSION_SUGGESTION_CHANNEL = "pet:expression-suggestion"'),
+    "renderer preload must keep TASK-218 narrow invoke channel");
+  assert.ok(!src.includes('PET_EXPRESSION_SUGGESTION_CHANNEL = "pet"'),
+    "renderer preload must not use generic pet channel");
+  console.log("  testTask219NarrowChannelsStillDocumentedInPreloadSmoke PASS");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -7952,9 +8083,14 @@ async function main() {
   await testTask218MirrorNoPetSpeech();
   await testTask218PreviewStillWorks();
   testTask218HoverActionsStillAbsent();
-  await testTask218FixConsecutiveMirrorSequence();
+  testTask219RendererHasMirrorCooldownState();
+  await testTask219FirstMirrorSendsImmediately();
+  await testTask219CooldownCoalescesLatestExpression();
+  await testTask219TimerFlushSendsPendingExpression();
   await testTask218ShowPetWindowMirrorsCurrentExpression();
   await testTask218ShowPetWindowAbsentBridgeNoThrow();
+  await testTask219ShowPetWindowFlushesPendingExpression();
+  testTask219NarrowChannelsStillDocumentedInPreloadSmoke();
 
   console.log("renderer chat smoke: PASS");
 }

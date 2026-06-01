@@ -21759,3 +21759,133 @@ Separately, when the expression mirror happened before the Pet Window existed, `
 | Clear Chat：Preview 顯示 `Reaction: reset · Suggestion: neutral`，Pet 表情 `neutral`；點 Pet Window 後沒有跳回 `focused` | PASS |
 | Focus：Preview 顯示 `Reaction: attention_returned · Suggestion: happy`，Pet 表情 `happy` | PASS |
 | 邊界確認：沒有新增 Pet Bubble 文字，沒有額外 TTS，沒有主動發話，沒有寫入 history/copy/export | PASS |
+
+---
+
+## TASK-219 | Pet Expression Mirror Cooldown / Debounce
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-06-01
+**Phase:** Phase 5 — Companion Behavior Loop (Interactive Pet Track)
+**Depends on:** TASK-218 (`mirrorInteractionExpressionSuggestion`, narrow expression suggestion IPC)
+
+### Goal
+
+Prevent rapid Full App interaction-expression changes from flooding the Pet Window IPC path, while preserving the latest visible expression and all TASK-218 safety boundaries.
+
+### Scope
+
+- `renderer.js`: add `INTERACTION_EXPRESSION_MIRROR_COOLDOWN_MS`, `pendingInteractionExpressionMirror`, `interactionExpressionMirrorTimer`, `lastInteractionExpressionMirrorAt`, `sendInteractionExpressionMirrorNow(expression)`, `scheduleInteractionExpressionMirror(expression)`, and `flushPendingInteractionExpressionMirror()`.
+- `renderer.js`: keep `mirrorInteractionExpressionSuggestion(expression)` as the public helper but make it the scheduler entry.
+- `renderer.js`: update `showPetWindowFromFullApp()` success path to bypass cooldown by flushing pending expression, or immediately sending `currentInteractionExpressionSuggestion` if nothing is pending.
+- `renderer-chat-smoke.js`: add runtime-like cooldown/debounce tests.
+- No backend, `/chat`, chat history, Pet Bubble, TTS, proactive speech, monitoring/OCR/screenshot, new IPC, broad IPC, provider/Ollama runtime, UI, or persistence change.
+
+### Cooldown / Debounce Behavior
+
+| Behavior | Result |
+|---|---|
+| Cooldown duration | `INTERACTION_EXPRESSION_MIRROR_COOLDOWN_MS = 300` |
+| First expression | Sends immediately through the existing bridge |
+| Expression during cooldown | Does not send immediately; overwrites `pendingInteractionExpressionMirror` |
+| Multiple expressions during cooldown | Latest pending expression wins |
+| Timer flush | Sends the latest pending expression once and clears pending/timer state |
+| Bridge missing | No throw; no-op |
+| Pet Window absent | Main relay still no-ops safely; state can be replayed when Pet Window opens |
+
+### showPetWindow Behavior
+
+When `showPetWindow` resolves successfully, the renderer bypasses the cooldown:
+
+1. If a pending expression exists, `flushPendingInteractionExpressionMirror()` sends that latest pending expression immediately.
+2. If no pending expression exists, `sendInteractionExpressionMirrorNow(currentInteractionExpressionSuggestion)` replays the current expression immediately.
+3. This preserves the TASK-218 fix for the case where the Pet Window did not exist during an earlier mirror event.
+
+### Payload Schema & Sanitize Boundary
+
+- Renderer bridge call remains `{ expression }` only.
+- Preload/main/pet preload continue to enforce fixed `source: "interaction_expression_suggestion"` and safe `ts`.
+- IPC channels remain narrow-purpose:
+  - `pet:expression-suggestion`
+  - `pet:expression-suggestion-received`
+- Generic channel `"pet"` is not used.
+- No new IPC was added.
+- Payload after sanitization contains only `expression/source/ts`.
+- Forbidden fields remain excluded: `hint`, `event`, `role`, `messageLength`, `message`, `text`, `body`, `rawText`, `content`, `reply`.
+
+### Root Cause / Fix Retained
+
+- TASK-218 root cause retained in docs: Pet Window focus restore could re-apply the prior AI reply `focused` mood over a newer interaction expression; additionally, Pet Window absent no-op was not followed by current-expression replay after opening.
+- TASK-218 fix remains in place: Pet renderer expression override generation counter; `restorePetPresence` keeps newer interaction expression; `showPetWindow` success replays current expression.
+- TASK-219 only adds coalescing/cooldown around the Full App renderer mirror path.
+
+### Safety Boundary Confirmation
+
+- No `/chat` call ✓
+- No chat history mutation ✓
+- No Pet Bubble text/state change ✓
+- No TTS ✓
+- No proactive Pet speech ✓
+- No raw message text sent to Pet Window ✓
+- No monitoring/OCR/screenshot ✓
+- No broad IPC ✓
+- No new IPC ✓
+- No backend/provider/Ollama runtime change ✓
+- No UI or persistence change ✓
+- Pet Window handler unchanged ✓
+
+### Automated Smoke Test Coverage
+
+| Suite | Tests |
+|---|---|
+| `renderer-chat-smoke.js` | TASK-219 cooldown state/static checks; first mirror sends immediately; cooldown coalesces to latest pending expression; timer flush sends pending expression; `showPetWindow` flushes pending expression; narrow channel regression check |
+| `pet-window-smoke.js` | TASK-218 narrow channel/preload/main relay coverage retained |
+| `pet-renderer-smoke.js` | TASK-218 Pet preload listener -> Pet renderer handler flow retained |
+
+### Automated Smoke Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+6 TASK-219 tests; TASK-218 mirror sequence updated for cooldown behavior) |
+| `pet-window-smoke.js` | PASS (73 checks, no regression) |
+| `pet-renderer-smoke.js` | PASS (256 checks, no regression) |
+| `git diff --check` | CLEAN |
+
+### Acceptance Criteria
+
+- [x] `INTERACTION_EXPRESSION_MIRROR_COOLDOWN_MS` defined ✓
+- [x] `pendingInteractionExpressionMirror` defined ✓
+- [x] `interactionExpressionMirrorTimer` defined ✓
+- [x] `lastInteractionExpressionMirrorAt` defined ✓
+- [x] `sendInteractionExpressionMirrorNow(expression)` defined ✓
+- [x] `scheduleInteractionExpressionMirror(expression)` defined ✓
+- [x] `flushPendingInteractionExpressionMirror()` defined ✓
+- [x] `mirrorInteractionExpressionSuggestion(expression)` routes through scheduler ✓
+- [x] First expression sends immediately ✓
+- [x] Cooldown coalesces repeated expressions and keeps latest pending ✓
+- [x] Timer flush sends latest pending expression once ✓
+- [x] `showPetWindow` success bypasses cooldown and flushes/replays expression ✓
+- [x] Narrow IPC channels retained: `pet:expression-suggestion` / `pet:expression-suggestion-received` ✓
+- [x] Payload schema remains `expression/source/ts`; renderer bridge only sends `{ expression }` ✓
+- [x] No forbidden raw/message/debug fields in payload ✓
+- [x] No `/chat`, history, Pet Bubble, TTS, proactive speech, backend, provider/Ollama, OCR/screenshot, new/broad IPC, UI, or persistence change ✓
+- [x] Pet Window handler unchanged ✓
+- [x] `renderer-chat-smoke.js` PASS ✓
+- [x] `pet-window-smoke.js` PASS ✓
+- [x] `pet-renderer-smoke.js` PASS ✓
+- [x] `git diff --check` CLEAN ✓
+- [x] Windows visual smoke PASS (2026-06-01) ✓
+
+### Windows Visual Smoke Results (2026-06-01)
+
+| Scenario | Result |
+|---|---|
+| 基本啟動：Preview 顯示 `Reaction: none · Suggestion: neutral`，Pet Window 正常 | PASS |
+| 單一事件：送出訊息後 Pet 表情 `focused` | PASS |
+| 快速連續操作：表情不亂跳，最後 expression 正確 | PASS |
+| Delete / Undo：Preview 顯示 `Reaction: message_management · Suggestion: neutral`，Pet 表情 `neutral` | PASS |
+| Edit last user：Preview 顯示 `Reaction: correction · Suggestion: annoyed`，Pet 表情 `annoyed` | PASS |
+| Clear Chat：Preview 顯示 `Reaction: reset · Suggestion: neutral`，Pet 表情 `neutral` | PASS |
+| Focus：Preview 顯示 `Reaction: attention_returned · Suggestion: happy`，Pet 表情 `happy` | PASS |
+| Show Pet Window 重送：重送 current/pending expression 沒有被 cooldown 擋住 | PASS |
+| 一般回歸：沒有新增 Pet Bubble 文字，沒有額外 TTS，沒有主動發話，沒有寫入 history/copy/export | PASS |

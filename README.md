@@ -7,7 +7,7 @@
 📋 **[完整 Demo 腳本與面試重點](docs/PORTFOLIO_DEMO_SCRIPT.md)**
 📋 **[Phase 4 Provider Settings 摘要](docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md)**
 
-**最新本地狀態（2026-06-01）：** TASK-218 已完成 automated smoke 與 Windows visual smoke PASS。新增 `mirrorInteractionExpressionSuggestion(expression)` helper，透過窄用途 IPC channel `"pet:expression-suggestion"` / `"pet:expression-suggestion-received"` 將 expression suggestion 鏡像至 Pet Window；不再使用 generic channel `"pet"`。Pet renderer `handleInteractionExpressionSuggestion` 只更新表情，不改 bubble text、不觸發 TTS、不寫 history、不呼叫 `/chat`。Root cause：Pet Window focus restore 會把先前 AI reply 的 `focused` mood 蓋回來；另 Pet Window 尚未存在時 expression relay no-op，開啟後未重送 `currentInteractionExpressionSuggestion`。Fix：使用 expression override generation counter，`restorePetPresence` 保留較新的 interaction expression，`showPetWindow` 成功後重送 current expression。Payload 僅包含 `expression/source/ts`。Windows visual smoke PASS：基本啟動 none/neutral、送出訊息 user_active/focused、delete/undo neutral 且點 Pet Window 後不跳回 focused、edit annoyed 且不跳回 focused、clear neutral 且不跳回 focused、focus happy；無新增 Pet Bubble 文字、無額外 TTS、無主動發話、無 history/copy/export 寫入。
+**最新本地狀態（2026-06-01）：** TASK-219 已完成 automated smoke 與 Windows visual smoke PASS，狀態為 **DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS**。Full App renderer 的 Pet expression mirror 新增 300ms cooldown/debounce：第一個 expression 立即送出，cooldown 期間只保留最新 pending expression，timer flush 時 latest wins；`showPetWindow` 成功後 bypass cooldown，立即 flush pending expression 或重送 current expression。TASK-218 root cause fix 保留：Pet renderer 的 expression override generation counter、`restorePetPresence` 保留較新的 interaction expression、Pet Window 尚未存在時 no-op 且開啟後重送 current expression。IPC 維持窄用途 channel `"pet:expression-suggestion"` / `"pet:expression-suggestion-received"`，不使用 generic channel `"pet"`，沒有新增 IPC。Payload 邊界維持 `expression/source/ts`；renderer bridge 只送 `{ expression }`，不傳 raw text。Pet Window handler 未改，仍只更新表情，不改 bubble text、不觸發 TTS、不寫 history、不呼叫 `/chat`。Windows visual smoke PASS：基本啟動 none/neutral、單一事件 focused、快速連續操作最後 expression 正確、delete/undo neutral、edit annoyed、clear neutral、focus happy、Show Pet Window 重送未被 cooldown 擋住；無新增 Pet Bubble 文字、無額外 TTS、無主動發話、無 history/copy/export 寫入。
 
 ---
 
@@ -99,7 +99,7 @@ ollama serve
 | 本地 Ollama `/chat` smoke | ✅ 通過 — `qwen3:8b`，`source=llm_local`，克莉絲蒂娜人格確認 |
 | Provider Settings 持久化 | ✅ 通過 — 重啟後設定保留，partial PATCH 保留省略欄位 |
 | UI polish | ✅ 通過 — 情緒→表情對應、Christina expression system |
-| Full App chat UX | ✅ TASK-218 DONE - WINDOWS VISUAL SMOKE PASS — 搜尋/高亮、未讀提示、匯出、時間戳、日期分隔線、清除確認、empty state、Undo Clear Chat、單則訊息刪除/復原、右鍵訊息操作 (viewport clamp + a11y)、最後 user message 編輯/重新送出、互動事件 log、reaction hint 層、reaction preview UI、expression suggestion 鏡像至 Pet Window |
+| Full App chat UX | ✅ TASK-219 DONE - WINDOWS VISUAL SMOKE PASS — 搜尋/高亮、未讀提示、匯出、時間戳、日期分隔線、清除確認、empty state、Undo Clear Chat、單則訊息刪除/復原、右鍵訊息操作 (viewport clamp + a11y)、最後 user message 編輯/重新送出、互動事件 log、reaction hint 層、reaction preview UI、expression suggestion 鏡像至 Pet Window、expression mirror 300ms cooldown/debounce |
 | 表情系統 | 7/10 real PNG（happy、focused、neutral、proud、annoyed、worried、sleepy）；pending/error/offline 為 SVG fallback |
 | pytest | **586 通過，0 失敗** |
 | Electron smoke | **renderer-chat PASS；pet-renderer 256 PASS；pet-window 73 PASS** |
@@ -107,7 +107,7 @@ ollama serve
 | 真實 API Key 使用 | ❌ 無 — 所有測試使用 mocked runner |
 | 生產就緒 | ❌ 尚未 — prototype / portfolio 階段 |
 | Demo 可用（本地 Ollama） | ✅ 是 |
-| 下一個任務 | TASK-219 — TBD，等待使用者指示 |
+| 下一個任務 | TASK-220 — TBD，等待使用者指示 |
 
 ---
 
@@ -397,8 +397,8 @@ python -c "import json, urllib.request; data=json.dumps({'message':'你好！克
 | [docs/PROVIDER_TEST_CONNECTION_DESIGN.md](docs/PROVIDER_TEST_CONNECTION_DESIGN.md) | Test Connection 設計與強化測試結果 |
 | [docs/SECURE_KEY_STORAGE_DESIGN.md](docs/SECURE_KEY_STORAGE_DESIGN.md) | 金鑰儲存威脅模型、儲存選項、遮蔽規則 |
 | [docs/BYOK_PRODUCT_AND_SETTINGS.md](docs/BYOK_PRODUCT_AND_SETTINGS.md) | BYOK 產品設計與安全邊界 |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖；目前下一步為 TASK-219（TBD） |
-| [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄；最新記錄為 TASK-218 Safe Pet Expression Suggestion Mirror automated smoke 與 Windows visual smoke PASS |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖；目前 TASK-219 已完成 automated smoke 與 Windows visual smoke PASS |
+| [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄；最新記錄為 TASK-219 Pet Expression Mirror Cooldown / Debounce automated smoke 與 Windows visual smoke PASS |
 | [docs/STREAMER_COMPANION_MODE.md](docs/STREAMER_COMPANION_MODE.md) | 未來支線 — OBS overlay / Twitch 陪伴設計（尚未排程） |
 
 ---
@@ -545,6 +545,8 @@ dragon-pet-ai/
 > TASK-214：Interactive Pet Event / Reaction Foundation 完成 automated smoke 與 Windows visual smoke PASS。取消原 TASK-214 Regenerate Last Pet Reply — 產品方向為互動式 AI 桌面寵物，非 ChatGPT 工具。新增 `recordInteractionEvent(type, payload)` helper，6 種事件類型 allowlist，payload 只允許 `source/role/messageLength/count`（無原始文字），本地環形 buffer max 20。Hook 接入 sendMessage / clearChatHistory / deleteSingleChatMessage / submitEditedUserMessage / window.focus。不呼叫 `/chat`，不觸發 Pet Bubble/TTS，不寫 history，不新增 IPC/後端。+12 tests。Windows visual smoke PASS (8 groups, 2026-06-01)。
 
 > TASK-218：Safe Pet Expression Suggestion Mirror 完成 automated smoke 與 Windows visual smoke PASS (2026-06-01)。Root cause：Pet Window focus restore 會把先前 AI reply 的 `focused` mood 蓋回來；另 Pet Window 尚未存在時 expression relay no-op，開啟後未重送 `currentInteractionExpressionSuggestion`。Fix：使用 expression override generation counter；`restorePetPresence` 保留較新的 interaction expression；`showPetWindow` 成功後重送 current expression。IPC channel 為窄用途 `pet:expression-suggestion`（Full App preload → main）與 `pet:expression-suggestion-received`（main → Pet Window），不使用 generic `"pet"`。Payload 只包含 `expression/source/ts`。Pet renderer handler 只更新表情，不改 bubble text、不 TTS、不呼叫 `/chat`。Windows visual smoke PASS：基本啟動 none/neutral、送出訊息 focused、delete/undo neutral 且點 Pet Window 後不跳回 focused、edit annoyed 且不跳回 focused、clear neutral 且不跳回 focused、focus happy；無新增 Pet Bubble 文字、無額外 TTS、無主動發話、無 history/copy/export 寫入。
+
+> TASK-219：Pet Expression Mirror Cooldown / Debounce 完成 automated smoke 與 Windows visual smoke PASS (2026-06-01)，狀態為 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS。`mirrorInteractionExpressionSuggestion(expression)` 改為 scheduler entry；新增 300ms cooldown，第一個 expression 立即送出，cooldown 期間只保留最新 pending expression，timer flush 時 latest wins。`showPetWindow` 成功後 bypass cooldown：先 flush pending expression，沒有 pending 時立即重送 `currentInteractionExpressionSuggestion`。TASK-218 root cause fix 保留；IPC 維持 `pet:expression-suggestion` / `pet:expression-suggestion-received`，不使用 generic `"pet"`，沒有新增 IPC。Payload 邊界仍為 `expression/source/ts`，renderer bridge 只送 `{ expression }`；不傳 hint/event/role/messageLength/message/text/body/rawText/content/reply。未改 Pet Window handler；不改 backend、`/chat`、chat history、Pet Bubble、TTS、主動發話、provider/Ollama runtime、UI 或 persistence。Windows visual smoke PASS：基本啟動 none/neutral、單一事件 focused、快速連續操作最後 expression 正確、delete/undo neutral、edit annoyed、clear neutral、focus happy、Show Pet Window 重送未被 cooldown 擋住；無新增 Pet Bubble 文字、無額外 TTS、無主動發話、無 history/copy/export 寫入。
 
 > TASK-217：Reaction Hint to Local Expression Suggestion 完成 automated smoke 與 Windows visual smoke PASS。`deriveInteractionExpressionSuggestion(hint)` 映射 7 種 hint → expression（`user_active → focused`、`correction → annoyed`、`attention_returned → happy`、`pet_attention → proud`、其餘 → `neutral`）；`recordInteractionExpressionSuggestion` 寫入 ring buffer（max 20）並更新 `currentInteractionExpressionSuggestion`。Preview 更新為 `Reaction: <hint> · Suggestion: <expression>`。Allowlist 6 種：neutral/focused/happy/proud/annoyed/sleepy。純 renderer memory，無 Pet Window 表情改變/IPC/chat/TTS/history write。+30 tests PASS。Windows visual smoke PASS (8 groups, 2026-06-01)：基本啟動 Reaction: none · Suggestion: neutral ✓、送出訊息 Reaction: user_active · Suggestion: focused ✓、delete/undo Reaction: message_management · Suggestion: neutral ✓、edit last user Reaction: correction · Suggestion: annoyed ✓、clear chat Reaction: reset · Suggestion: neutral ✓、focus Reaction: attention_returned · Suggestion: happy ✓、context menu regression ✓、一般回歸 ✓。Preview 未進入 history/copy/export；無額外觸發 Pet Bubble/TTS；Pet Window 表情未真正改變。
 
