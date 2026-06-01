@@ -23048,8 +23048,8 @@ TASK-226 is docs-only:
 
 ### Future Task Suggestions
 
-- TASK-227 Output Queue Runtime Skeleton, disabled by default.
-- TASK-228 Output Queue Debug Preview.
+- TASK-228 Output Queue Runtime Skeleton and Diagnostics Preview, disabled by
+  default. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
 - TASK-229 Bubble Priority Enforcement.
 - TASK-230 TTS-safe segment design.
 - TASK-231 Idle Reaction Policy, fixed only, no LLM.
@@ -23228,3 +23228,267 @@ TASK-227 is docs-only:
 - [x] Persona context pack references Voice/TTS research for TTS-safe style.
 - [x] No code/runtime/prompt/TTS/STT/IPC/`/chat` change.
 - [x] No Windows visual smoke required.
+
+---
+
+## TASK-228 | Output Queue Runtime Skeleton, Disabled by Default
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-06-01
+**Phase:** Phase 5 - Interactive Companion Output Arbitration
+**Depends on:** TASK-214 through TASK-227
+
+### Goal
+
+Add a small Full App renderer-only output queue runtime skeleton that follows
+the TASK-226 output queue / priority design while staying disabled by default.
+This task creates deterministic queue helpers and diagnostics preview coverage
+only. It does not dispatch output.
+
+### Implementation Summary
+
+Updated:
+
+- `apps/desktop/src/renderer/renderer.js`
+- `apps/desktop/src/renderer/index.html`
+- `apps/desktop/scripts/renderer-chat-smoke.js`
+- `README.md`
+- `docs/ROADMAP.md`
+- `docs/TASKS.md`
+- `docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md`
+- `docs/INTERACTIVE_COMPANION_ARCHITECTURE.md`
+
+Renderer additions:
+
+- `OUTPUT_QUEUE_ENABLED = false`
+- `OUTPUT_QUEUE_MAX = 50`
+- `OUTPUT_QUEUE_RECENT_MAX = 20`
+- `OUTPUT_PRIORITY_ALLOWLIST`
+- `OUTPUT_CHANNEL_ALLOWLIST`
+- `OUTPUT_SOURCE_ALLOWLIST`
+- `outputQueueItems`
+- `recentOutputQueueItems`
+- `currentOutputQueueSnapshot`
+
+Queue item schema:
+
+```js
+{
+  id,
+  source,
+  priority,
+  channel,
+  payload,
+  createdAt,
+  ttlMs,
+  interruptible,
+  ttsEligible,
+  historyEligible,
+  copyExportEligible,
+  reason
+}
+```
+
+Implemented helper functions:
+
+- `sanitizeOutputQueueItem(input)`
+- `enqueueOutputQueueItem(input)`
+- `getOutputQueueSnapshot()`
+- `clearOutputQueue(reason)`
+- `compareOutputPriority(a, b)`
+- `shouldOutputPreempt(activeItem, incomingItem)`
+
+### Allowed Tokens
+
+Priority allowlist:
+
+- `P0_CRITICAL`
+- `P1_USER_DIRECT`
+- `P2_LLM_REPLY`
+- `P3_IMPORTANT_REACTION`
+- `P4_NORMAL_REACTION`
+- `P5_IDLE_AMBIENT`
+- `P6_DIAGNOSTICS`
+
+Channel allowlist:
+
+- `visual_expression`
+- `pet_bubble`
+- `full_app_chat`
+- `tts_audio`
+- `diagnostics_preview`
+- `notification`
+
+Source allowlist:
+
+- `chat_reply`
+- `manual_pet_input`
+- `reaction_bubble`
+- `expression_mirror`
+- `idle_reaction`
+- `tts_playback`
+- `stt_transcript`
+- `notification`
+- `diagnostics_preview`
+- `safety_error`
+
+Forbidden fields are dropped from queue payloads and summaries:
+
+- `message`
+- `text`
+- `body`
+- `rawText`
+- `content`
+- `reply`
+- `transcript`
+- `audio`
+- `html`
+- `innerHTML`
+- `metadata`
+- `debug`
+- `thinking`
+
+Safe payload keys are limited to local summary tokens such as:
+
+- `expression`
+- `bubbleId`
+- `state`
+- `action`
+- `reason`
+
+### Disabled Behavior
+
+The queue skeleton may store sanitized local items for diagnostics and smoke
+tests even while disabled. Disabled means:
+
+- No dispatch loop.
+- No Pet Window send.
+- No new IPC.
+- No `/chat` call.
+- No chat history write.
+- No TTS/STT/audio runtime.
+- No Pet Bubble runtime behavior change.
+- No Pet expression mirror behavior change.
+- No reaction bubble mirror behavior change.
+- No prompt runtime.
+- No persistence.
+
+### Windows Visual Smoke Result
+
+**Date:** 2026-06-01
+**Result:** PASS
+
+Confirmed:
+
+- Basic startup PASS: Preview shows `Queue: disabled · Items: <valid number>`;
+  Pet Window is normal.
+- Send message PASS: chat, expression, and reaction bubble remain normal; Queue
+  stays disabled.
+- Delete / Undo PASS: feature remains normal; Queue stays disabled.
+- Edit last user PASS: feature remains normal; Queue stays disabled.
+- Clear Chat PASS: feature remains normal; Queue stays disabled.
+- Focus PASS: feature remains normal; Queue stays disabled.
+- Diagnostics format PASS: no `undefined`, `null`, `NaN`, `[object Object]`,
+  raw JSON, or user text.
+- General regression PASS: no new IPC side effect, no extra TTS, no extra
+  `/chat`, no history/copy/export pollution, and Pet Window expression plus
+  reaction bubble behavior remains normal.
+
+### Priority / Preemption Helper Behavior
+
+`compareOutputPriority(a, b)` treats P0 as highest and P6 as lowest.
+
+`shouldOutputPreempt(activeItem, incomingItem)` is deterministic and does not
+dispatch:
+
+- P0 interrupts all.
+- P1 interrupts P2-P6.
+- P2 suppresses P3-P5 while active.
+- P3 interrupts P4-P5.
+- P4 can only preempt P5/P6.
+- P5 interrupts nothing.
+- P6 diagnostics never interrupts and causes no side effect.
+
+### Diagnostics Preview
+
+The existing Full App diagnostics preview now includes queue status:
+
+```text
+Queue: disabled · Items: <count>
+```
+
+The preview stays inside `#character-status`, not `#chat-area`. It uses
+`textContent`, has no fixed positioning, and does not show raw JSON, raw user
+message text, `undefined`, `null`, `[object Object]`, or `NaN`.
+
+The preview does not enter chat history, copy transcript, or export transcript.
+
+### Smoke Coverage
+
+`renderer-chat-smoke.js` adds TASK-228 coverage for:
+
+- Static constants, allowlists, state, and helpers.
+- Default disabled empty snapshot.
+- Safe enqueue of a reaction bubble queue item.
+- Queue max cap at 50.
+- Recent max cap at 20.
+- Forbidden field removal.
+- Invalid source / priority / channel rejection.
+- Boolean and numeric fallbacks.
+- Priority comparison.
+- Preemption rule cases.
+- Clear queue behavior.
+- Queue diagnostics preview.
+- Preview exclusion from chat area.
+- History/copy/export boundary.
+- No `/chat`, history, speech/TTS, expression mirror, or reaction bubble mirror
+  side effects.
+- No new IPC and no generic `"pet"` channel.
+- Existing TASK-218 and TASK-220 narrow IPC channels remain unchanged.
+- Hover action/context menu/edit/Pet Window regression guards.
+
+### Safety Boundary
+
+TASK-228 does not:
+
+- Change backend behavior.
+- Change `/chat` API schema.
+- Change chat history persistence format.
+- Call `/chat`.
+- Write chat history.
+- Add IPC.
+- Add generic IPC.
+- Change Pet Window runtime.
+- Change Pet Bubble runtime behavior.
+- Change Pet expression mirror runtime behavior.
+- Change reaction bubble mirror runtime behavior.
+- Add TTS/STT/audio runtime.
+- Add proactive Pet speech.
+- Add LLM-generated output items.
+- Send user message text to Pet Window.
+- Store raw message text.
+- Use `innerHTML`.
+- Add background monitoring, always listening, screenshots, or OCR.
+- Change Ollama / Provider runtime.
+- Connect prompt runtime.
+- Add persistence.
+- Add assets.
+- Restore hover action buttons.
+- Broaden user/pet message editing.
+- Commit or push changes.
+
+### Acceptance Criteria
+
+- [x] Output queue constants and allowlists implemented.
+- [x] Queue state and snapshot implemented.
+- [x] Sanitized enqueue implemented.
+- [x] Clear queue implemented.
+- [x] Priority comparison helper implemented.
+- [x] Preemption helper implemented.
+- [x] Diagnostics preview includes queue disabled/items text.
+- [x] Preview remains outside `#chat-area`.
+- [x] Renderer smoke covers TASK-228 runtime-like helper behavior.
+- [x] No new IPC added.
+- [x] Existing TASK-218/TASK-220 narrow IPC retained.
+- [x] No `/chat`, history, TTS, Pet Window, Pet Bubble, or mirror side effects.
+- [x] Windows visual smoke PASS on 2026-06-01.

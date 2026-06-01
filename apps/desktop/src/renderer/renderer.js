@@ -728,6 +728,234 @@ var currentCharacterState = {
   ts: 0,
 };
 
+// TASK-228: Output queue runtime skeleton, disabled by default.
+// Local diagnostics/state only. No dispatch, IPC, chat, history, TTS, or Pet Window side effects.
+const OUTPUT_QUEUE_ENABLED = false;
+const OUTPUT_QUEUE_MAX = 50;
+const OUTPUT_QUEUE_RECENT_MAX = 20;
+const OUTPUT_PRIORITY_ALLOWLIST = new Set([
+  "P0_CRITICAL",
+  "P1_USER_DIRECT",
+  "P2_LLM_REPLY",
+  "P3_IMPORTANT_REACTION",
+  "P4_NORMAL_REACTION",
+  "P5_IDLE_AMBIENT",
+  "P6_DIAGNOSTICS",
+]);
+const OUTPUT_CHANNEL_ALLOWLIST = new Set([
+  "visual_expression",
+  "pet_bubble",
+  "full_app_chat",
+  "tts_audio",
+  "diagnostics_preview",
+  "notification",
+]);
+const OUTPUT_SOURCE_ALLOWLIST = new Set([
+  "chat_reply",
+  "manual_pet_input",
+  "reaction_bubble",
+  "expression_mirror",
+  "idle_reaction",
+  "tts_playback",
+  "stt_transcript",
+  "notification",
+  "diagnostics_preview",
+  "safety_error",
+]);
+const OUTPUT_FORBIDDEN_KEYS = new Set([
+  "message",
+  "text",
+  "body",
+  "rawText",
+  "content",
+  "reply",
+  "transcript",
+  "audio",
+  "html",
+  "innerHTML",
+  "metadata",
+  "debug",
+  "thinking",
+]);
+const OUTPUT_SAFE_PAYLOAD_KEYS = new Set([
+  "expression",
+  "bubbleId",
+  "state",
+  "action",
+  "reason",
+]);
+const OUTPUT_PRIORITY_ORDER = [
+  "P0_CRITICAL",
+  "P1_USER_DIRECT",
+  "P2_LLM_REPLY",
+  "P3_IMPORTANT_REACTION",
+  "P4_NORMAL_REACTION",
+  "P5_IDLE_AMBIENT",
+  "P6_DIAGNOSTICS",
+];
+var outputQueueItems = [];
+var recentOutputQueueItems = [];
+var currentOutputQueueSnapshot = {
+  enabled: OUTPUT_QUEUE_ENABLED,
+  length: 0,
+  recentLength: 0,
+  nextItem: null,
+};
+var outputQueueIdCounter = 0;
+
+function sanitizeOutputQueueReason(value) {
+  if (typeof value !== "string") return "";
+  return value.replace(/[^a-zA-Z0-9_:/.-]/g, "").slice(0, 80);
+}
+
+function sanitizeOutputQueuePayload(payload) {
+  const source = payload && typeof payload === "object" ? payload : {};
+  const safe = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (OUTPUT_FORBIDDEN_KEYS.has(key) || !OUTPUT_SAFE_PAYLOAD_KEYS.has(key)) continue;
+    if (key === "expression") {
+      safe.expression = INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST.has(value) ? value : "neutral";
+    } else if (key === "bubbleId") {
+      safe.bubbleId = INTERACTION_REACTION_BUBBLE_ALLOWLIST.has(value) ? value : "none";
+    } else if (key === "action") {
+      safe.action = COMPANION_BEHAVIOR_ACTION_ALLOWLIST.has(value) ? value : "none";
+    } else if (key === "reason") {
+      safe.reason = sanitizeOutputQueueReason(value);
+    } else if (key === "state" && value && typeof value === "object") {
+      safe.state = {
+        mood: CHARACTER_MOOD_STATE_ALLOWLIST.has(value.mood) ? value.mood : "neutral",
+        attention: CHARACTER_ATTENTION_STATE_ALLOWLIST.has(value.attention) ? value.attention : "idle",
+        energy: CHARACTER_ENERGY_STATE_ALLOWLIST.has(value.energy) ? value.energy : "calm",
+        recentInteractionLevel: CHARACTER_INTERACTION_LEVEL_ALLOWLIST.has(value.recentInteractionLevel)
+          ? value.recentInteractionLevel
+          : "none",
+      };
+    }
+  }
+  return safe;
+}
+
+function cloneOutputQueueItemSummary(item) {
+  if (!item || typeof item !== "object") return null;
+  return {
+    id: item.id,
+    source: item.source,
+    priority: item.priority,
+    channel: item.channel,
+    payload: sanitizeOutputQueuePayload(item.payload),
+    createdAt: item.createdAt,
+    ttlMs: item.ttlMs,
+    interruptible: item.interruptible,
+    ttsEligible: item.ttsEligible,
+    historyEligible: item.historyEligible,
+    copyExportEligible: item.copyExportEligible,
+    reason: item.reason,
+  };
+}
+
+function updateOutputQueueSnapshot() {
+  currentOutputQueueSnapshot = {
+    enabled: OUTPUT_QUEUE_ENABLED,
+    length: outputQueueItems.length,
+    recentLength: recentOutputQueueItems.length,
+    nextItem: outputQueueItems.length ? cloneOutputQueueItemSummary(outputQueueItems[0]) : null,
+  };
+  return currentOutputQueueSnapshot;
+}
+
+function sanitizeOutputQueueItem(input) {
+  const source = input && typeof input === "object" ? input : null;
+  if (!source) return null;
+  if (!OUTPUT_SOURCE_ALLOWLIST.has(source.source)) return null;
+  if (!OUTPUT_PRIORITY_ALLOWLIST.has(source.priority)) return null;
+  if (!OUTPUT_CHANNEL_ALLOWLIST.has(source.channel)) return null;
+  const createdAt = Number.isFinite(source.createdAt) && source.createdAt > 0
+    ? source.createdAt
+    : Date.now();
+  const ttlMs = Number.isFinite(source.ttlMs) && source.ttlMs > 0 ? source.ttlMs : 0;
+  outputQueueIdCounter += 1;
+  return {
+    id: typeof source.id === "string" && source.id.startsWith("oq_")
+      ? source.id.slice(0, 80)
+      : "oq_" + createdAt + "_" + outputQueueIdCounter,
+    source: source.source,
+    priority: source.priority,
+    channel: source.channel,
+    payload: sanitizeOutputQueuePayload(source.payload),
+    createdAt,
+    ttlMs,
+    interruptible: source.interruptible === true,
+    ttsEligible: source.ttsEligible === true,
+    historyEligible: source.historyEligible === true,
+    copyExportEligible: source.copyExportEligible === true,
+    reason: sanitizeOutputQueueReason(source.reason),
+  };
+}
+
+function enqueueOutputQueueItem(input) {
+  const item = sanitizeOutputQueueItem(input);
+  if (!item) {
+    updateOutputQueueSnapshot();
+    return null;
+  }
+  outputQueueItems.push(item);
+  if (outputQueueItems.length > OUTPUT_QUEUE_MAX) {
+    outputQueueItems.splice(0, outputQueueItems.length - OUTPUT_QUEUE_MAX);
+  }
+  recentOutputQueueItems.push(cloneOutputQueueItemSummary(item));
+  if (recentOutputQueueItems.length > OUTPUT_QUEUE_RECENT_MAX) {
+    recentOutputQueueItems.splice(0, recentOutputQueueItems.length - OUTPUT_QUEUE_RECENT_MAX);
+  }
+  updateOutputQueueSnapshot();
+  return cloneOutputQueueItemSummary(item);
+}
+
+function getOutputQueueSnapshot() {
+  return {
+    enabled: OUTPUT_QUEUE_ENABLED,
+    length: outputQueueItems.length,
+    recentLength: recentOutputQueueItems.length,
+    nextItem: outputQueueItems.length ? cloneOutputQueueItemSummary(outputQueueItems[0]) : null,
+  };
+}
+
+function clearOutputQueue(reason) {
+  sanitizeOutputQueueReason(reason);
+  outputQueueItems = [];
+  updateOutputQueueSnapshot();
+  return currentOutputQueueSnapshot;
+}
+
+function outputPriorityIndex(value) {
+  const raw = value && typeof value === "object" ? value.priority : value;
+  const priority = OUTPUT_PRIORITY_ALLOWLIST.has(raw) ? raw : "P6_DIAGNOSTICS";
+  return OUTPUT_PRIORITY_ORDER.indexOf(priority);
+}
+
+function compareOutputPriority(a, b) {
+  return outputPriorityIndex(b) - outputPriorityIndex(a);
+}
+
+function shouldOutputPreempt(activeItem, incomingItem) {
+  const active = OUTPUT_PRIORITY_ORDER[outputPriorityIndex(activeItem)] || "P6_DIAGNOSTICS";
+  const incoming = OUTPUT_PRIORITY_ORDER[outputPriorityIndex(incomingItem)] || "P6_DIAGNOSTICS";
+  if (incoming === "P6_DIAGNOSTICS") return false;
+  if (!activeItem) return true;
+  if (incoming === "P0_CRITICAL") return true;
+  if (incoming === "P1_USER_DIRECT") return active !== "P0_CRITICAL" && active !== "P1_USER_DIRECT";
+  if (active === "P2_LLM_REPLY"
+      && ["P3_IMPORTANT_REACTION", "P4_NORMAL_REACTION", "P5_IDLE_AMBIENT"].includes(incoming)) {
+    return false;
+  }
+  if (incoming === "P3_IMPORTANT_REACTION") {
+    return active === "P4_NORMAL_REACTION" || active === "P5_IDLE_AMBIENT";
+  }
+  if (incoming === "P4_NORMAL_REACTION") {
+    return active === "P5_IDLE_AMBIENT" || active === "P6_DIAGNOSTICS";
+  }
+  return false;
+}
+
 function defaultCompanionExpressionForReason(reason) {
   switch (reason) {
     case "user_active":        return "focused";
@@ -1157,10 +1385,18 @@ function formatInteractionDiagnosticsPreview(context = {}) {
   const state = source.characterState && typeof source.characterState === "object"
     ? source.characterState
     : currentCharacterState;
+  const queueSnapshot = source.outputQueueSnapshot && typeof source.outputQueueSnapshot === "object"
+    ? source.outputQueueSnapshot
+    : getOutputQueueSnapshot();
+  const queueEnabled = queueSnapshot.enabled === true ? "enabled" : "disabled";
+  const queueLength = Number.isFinite(queueSnapshot.length) && queueSnapshot.length >= 0
+    ? queueSnapshot.length
+    : 0;
   return "Reaction: " + safeHint
     + " · Suggestion: " + safeExpression
     + "\nDecision: " + safeAction
-    + " · " + formatCharacterStatePreview(state);
+    + " · " + formatCharacterStatePreview(state)
+    + "\nQueue: " + queueEnabled + " · Items: " + queueLength;
 }
 
 function renderInteractionReactionPreview() {

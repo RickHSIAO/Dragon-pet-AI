@@ -1,11 +1,11 @@
 # Interactive Companion Architecture Checkpoint
 
-**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-227 IMPLEMENTED - DOCS ONLY / NO WINDOWS SMOKE REQUIRED
+**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-228 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
 **Date:** 2026-06-01
-**Scope:** Architecture checkpoint for TASK-214 through TASK-227.
+**Scope:** Architecture checkpoint for TASK-214 through TASK-228.
 
 This document records the current interactive companion architecture after the
-TASK-214 through TASK-227 chain.
+TASK-214 through TASK-228 chain.
 
 ---
 
@@ -33,6 +33,7 @@ user interaction
 -> expression suggestion
 -> behavior decision
 -> character state
+-> output queue snapshot / diagnostics preview
 -> expression mirror / reaction bubble
 -> Pet Window expression / fixed short bubble
 ```
@@ -57,6 +58,7 @@ user interaction
 | TASK-225 | Persona context pack | Adds Christina persona source, safe adaptation, strength levels, and runtime boundary. DOCS ONLY. |
 | TASK-226 | Output queue / priority design | Defines future output arbitration priorities and preemption rules. DOCS ONLY. |
 | TASK-227 | Voice/TTS research | Records local-first speech roadmap, provider candidates, and speech safety boundaries. DOCS ONLY. |
+| TASK-228 | Output queue runtime skeleton | Adds Full App renderer-only disabled queue skeleton, sanitized snapshot, priority/preemption helpers, and queue diagnostics preview. DONE - Windows visual smoke PASS. |
 
 ---
 
@@ -75,7 +77,8 @@ flowchart TD
   H --> I[recordCompanionBehaviorDecision]
   I --> R[deriveCharacterState]
   R --> S[recordCharacterState]
-  S --> T[formatInteractionDiagnosticsPreview]
+  S --> U[getOutputQueueSnapshot]
+  U --> T[formatInteractionDiagnosticsPreview]
   F --> J[mirrorInteractionExpressionSuggestion]
   J --> K[pet:expression-suggestion]
   K --> L[pet:expression-suggestion-received]
@@ -96,6 +99,7 @@ User interaction
 -> deriveInteractionReactionBubble
 -> deriveCompanionBehaviorDecision
 -> deriveCharacterState
+-> getOutputQueueSnapshot
 -> formatInteractionDiagnosticsPreview
 -> mirrorExpression / mirrorReactionBubble
 -> Pet Window expression / fixed bubble
@@ -115,7 +119,8 @@ They are not sent to the Pet Window and do not drive the mirror calls.
 | Expression suggestion layer | Reaction hint | Allowlisted expression | Local expression state; existing mirror path | Expressions restricted to allowlist. |
 | Behavior policy layer | Hint, expression, bubble id | Decision object | Local preview/summary only | No IPC, no Pet Window payload, no raw text. |
 | Character state layer | Behavior decision, hint, expression, recent events | `attention/energy/mood/recentInteractionLevel/source/reason/ts` | Local preview/summary only | No IPC, no Pet Window payload, no raw text, no timers. |
-| Preview diagnostics layer | Hint, expression, decision, character state | `Reaction/Suggestion/Decision/State/Level` text | Local Full App display only | `textContent`; allowlisted tokens only; no raw JSON or message text. |
+| Output queue skeleton | Sanitized local output item input | Queue snapshot and recent queue records | Local renderer memory only | Disabled by default; no dispatch, IPC, history, TTS, or Pet Window send. |
+| Preview diagnostics layer | Hint, expression, decision, character state, queue snapshot | `Reaction/Suggestion/Decision/State/Level/Queue` text | Local Full App display only | `textContent`; allowlisted tokens only; no raw JSON or message text. |
 | Expression mirror layer | Expression suggestion | `expression/source/ts` payload | Narrow IPC to Pet Window | No message text; no bubble/TTS/chat. |
 | Expression debounce layer | Expression mirror requests | Latest pending expression | Coalesced mirror timing | 300ms cooldown; latest wins. |
 | Reaction bubble mirror layer | Reaction bubble id | `id/text/source/ts/ttlMs` payload | Narrow IPC to Pet Window | Text comes from fixed allowlist mapping. |
@@ -254,7 +259,7 @@ controller. It does not control side effects.
 
 ---
 
-## 9. Future Output Queue / Priority Design
+## 9. Output Queue / Priority Layer
 
 TASK-226 adds `docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md` as a docs-only design
 for a future interaction output queue and priority model. This future layer
@@ -275,12 +280,48 @@ The proposed priority model is:
 | P6 | Diagnostics only |
 
 The design also records preemption rules, queue item schema proposal, channel
-taxonomy, bubble/expression rules, and future TTS/STT boundaries. It is not
-runtime. It does not add queue execution, IPC, Pet Window side effects, TTS,
-STT, prompt wiring, `/chat` changes, or background behavior.
+taxonomy, bubble/expression rules, and future TTS/STT boundaries.
 
-Important: the future output queue is an execution arbitration layer, but
-TASK-226 only documents that layer. It does not implement it.
+TASK-228 implements the first Full App renderer-only runtime skeleton of that
+design. It is disabled by default and does not dispatch output.
+
+TASK-228 local queue item schema:
+
+| Field | Meaning |
+| --- | --- |
+| `id` | Local renderer queue item id. |
+| `source` | Allowlisted origin such as `reaction_bubble`, `expression_mirror`, or `diagnostics_preview`. |
+| `priority` | P0-P6 output priority. |
+| `channel` | Allowlisted local channel such as `pet_bubble`, `visual_expression`, or `diagnostics_preview`. |
+| `payload` | Sanitized local summary payload only. |
+| `createdAt` | Local timestamp. |
+| `ttlMs` | Local lifetime hint, default `0`. |
+| `interruptible` | Boolean, default `false`. |
+| `ttsEligible` | Boolean, default `false`. |
+| `historyEligible` | Boolean, default `false`. |
+| `copyExportEligible` | Boolean, default `false`. |
+| `reason` | Sanitized local reason token. |
+
+TASK-228 helpers:
+
+- `sanitizeOutputQueueItem(input)`
+- `enqueueOutputQueueItem(input)`
+- `getOutputQueueSnapshot()`
+- `clearOutputQueue(reason)`
+- `compareOutputPriority(a, b)`
+- `shouldOutputPreempt(activeItem, incomingItem)`
+
+Diagnostics preview now includes:
+
+```text
+Queue: disabled · Items: <count>
+```
+
+Important: TASK-228 is not an execution queue yet. It is currently only local
+diagnostics/state and does not control execution. Disabled means no dispatch, no
+IPC, no Pet Window send, no `/chat`, no history write, no TTS/STT/audio runtime,
+no prompt runtime, no persistence, and no Pet Bubble/expression/reaction mirror
+behavior change.
 
 ---
 
@@ -323,6 +364,7 @@ The completed stack is covered by:
 - Windows visual smoke for TASK-214 through TASK-224
 - Automated smoke for TASK-223
 - Automated smoke for TASK-224
+- Automated smoke for TASK-228
 - history/copy/export boundary checks
 - no TTS side-effect checks
 - no `/chat` side-effect checks
@@ -344,6 +386,21 @@ Reaction/Suggestion plus Decision/State/Level display, valid Level values for
 send/delete/edit/clear/focus, no `undefined`, `null`, `[object Object]`, `NaN`,
 raw JSON, or user text, and no Pet Window expression/reaction bubble regression.
 
+TASK-228 automated renderer smoke PASS confirmed on 2026-06-01. Confirmed
+disabled default snapshot, sanitized enqueue, queue/recent caps, forbidden field
+removal, invalid source/priority/channel rejection, boolean fallbacks,
+priority/preemption helpers, queue diagnostics preview, history/copy/export
+exclusion, no `/chat`/history/TTS/Pet Window/mirror side effects, no new IPC,
+no generic `"pet"` channel, and existing TASK-218/TASK-220 narrow IPC retained.
+
+TASK-228 Windows visual smoke PASS confirmed on 2026-06-01. Confirmed startup
+preview shows `Queue: disabled · Items: <valid number>` and Pet Window is
+normal; send/delete-undo/edit/clear/focus remain functional with Queue disabled;
+diagnostics show no `undefined`, `null`, `NaN`, `[object Object]`, raw JSON, or
+user text; and there is no new IPC side effect, extra TTS, extra `/chat`,
+history/copy/export pollution, or Pet Window expression/reaction bubble
+regression.
+
 ---
 
 ## 12. Known Boundaries / Not Yet Implemented
@@ -358,7 +415,7 @@ The current system does not yet implement:
 - Always listening.
 - User-configurable behavior policy.
 - Behavior decision controlling execution.
-- Output queue runtime arbitration.
+- Output queue dispatch/arbitration.
 - Bubble priority enforcement.
 - TTS-safe segment runtime.
 - Idle reaction policy.
@@ -381,7 +438,7 @@ Recommended next architecture phase:
 - Idle reaction policy.
 - Behavior policy starts controlling execution.
 - Safe reaction frequency governor.
-- Output queue runtime skeleton, disabled by default.
+- Output queue dispatch/arbitration on top of the disabled skeleton.
 - TTS provider interface design, docs-only.
 - Push-to-talk STT design.
 

@@ -8227,6 +8227,410 @@ function testTask224RegressionGuards() {
   console.log("  testTask224RegressionGuards PASS");
 }
 
+// ─── TASK-228: Output Queue Runtime Skeleton, Disabled by Default ─────────────
+
+const TASK228_FORBIDDEN_PAYLOAD_KEYS = [
+  "message",
+  "text",
+  "body",
+  "rawText",
+  "content",
+  "reply",
+  "transcript",
+  "audio",
+  "html",
+  "innerHTML",
+  "metadata",
+  "debug",
+  "thinking",
+];
+
+function testTask228StaticSourceCheck() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  for (const token of [
+    "OUTPUT_QUEUE_ENABLED = false",
+    "OUTPUT_QUEUE_MAX = 50",
+    "OUTPUT_QUEUE_RECENT_MAX = 20",
+    "OUTPUT_PRIORITY_ALLOWLIST",
+    "OUTPUT_CHANNEL_ALLOWLIST",
+    "OUTPUT_SOURCE_ALLOWLIST",
+    "function sanitizeOutputQueueItem",
+    "function enqueueOutputQueueItem",
+    "function getOutputQueueSnapshot",
+    "function clearOutputQueue",
+    "function compareOutputPriority",
+    "function shouldOutputPreempt",
+  ]) {
+    assert.ok(src.includes(token), `renderer.js must include ${token}`);
+  }
+  for (const token of [
+    "P0_CRITICAL",
+    "P1_USER_DIRECT",
+    "P2_LLM_REPLY",
+    "P3_IMPORTANT_REACTION",
+    "P4_NORMAL_REACTION",
+    "P5_IDLE_AMBIENT",
+    "P6_DIAGNOSTICS",
+    "visual_expression",
+    "pet_bubble",
+    "full_app_chat",
+    "tts_audio",
+    "diagnostics_preview",
+    "notification",
+    "chat_reply",
+    "manual_pet_input",
+    "reaction_bubble",
+    "expression_mirror",
+    "idle_reaction",
+    "tts_playback",
+    "stt_transcript",
+    "safety_error",
+  ]) {
+    assert.ok(src.includes(token), `TASK-228 allowlist token missing: ${token}`);
+  }
+  console.log("  testTask228StaticSourceCheck PASS");
+}
+
+async function testTask228DefaultSnapshotDisabled() {
+  const { sandbox } = await loadRenderer();
+  assert.deepEqual(JSON.parse(JSON.stringify(sandbox.getOutputQueueSnapshot())), {
+    enabled: false,
+    length: 0,
+    recentLength: 0,
+    nextItem: null,
+  });
+  console.log("  testTask228DefaultSnapshotDisabled PASS");
+}
+
+async function testTask228EnqueueSafeItemUpdatesSnapshotOnly() {
+  const speechCalls = [];
+  const expressionCalls = [];
+  const bubbleCalls = [];
+  const appendCalls = [];
+  const { state, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryAppend(entry) { appendCalls.push(entry); return Promise.resolve({ ok: true }); },
+      updatePetSpeech(payload) { speechCalls.push(payload); return Promise.resolve({ ok: true }); },
+      sendPetExpressionSuggestion(payload) { expressionCalls.push(payload); return Promise.resolve({ ok: true }); },
+      sendPetReactionBubble(payload) { bubbleCalls.push(payload); return Promise.resolve({ ok: true }); },
+    },
+  });
+  await settle();
+  state.calls.length = 0;
+  appendCalls.length = 0;
+  speechCalls.length = 0;
+  expressionCalls.length = 0;
+  bubbleCalls.length = 0;
+  const item = sandbox.enqueueOutputQueueItem({
+    source: "reaction_bubble",
+    priority: "P4_NORMAL_REACTION",
+    channel: "pet_bubble",
+    payload: { bubbleId: "user_active" },
+    reason: "smoke_reaction",
+  });
+  const snapshot = sandbox.getOutputQueueSnapshot();
+  assert.equal(item.source, "reaction_bubble");
+  assert.equal(item.priority, "P4_NORMAL_REACTION");
+  assert.equal(item.channel, "pet_bubble");
+  assert.deepEqual(JSON.parse(JSON.stringify(item.payload)), { bubbleId: "user_active" });
+  assert.equal(snapshot.enabled, false);
+  assert.equal(snapshot.length, 1);
+  assert.equal(snapshot.recentLength, 1);
+  assert.equal(snapshot.nextItem.payload.bubbleId, "user_active");
+  assert.equal(state.calls.filter((call) => String(call.url).endsWith("/chat")).length, 0,
+    "enqueue must not call /chat");
+  assert.equal(appendCalls.length, 0, "enqueue must not write chat history");
+  assert.equal(speechCalls.length, 0, "enqueue must not call updatePetSpeech/TTS path");
+  assert.equal(expressionCalls.length, 0, "enqueue must not mirror expression");
+  assert.equal(bubbleCalls.length, 0, "enqueue must not mirror reaction bubble");
+  console.log("  testTask228EnqueueSafeItemUpdatesSnapshotOnly PASS");
+}
+
+async function testTask228QueueAndRecentCaps() {
+  const { sandbox } = await loadRenderer();
+  for (let i = 0; i < 55; i += 1) {
+    sandbox.enqueueOutputQueueItem({
+      source: "diagnostics_preview",
+      priority: "P6_DIAGNOSTICS",
+      channel: "diagnostics_preview",
+      payload: { reason: `diag_${i}` },
+      createdAt: 1000 + i,
+      reason: `diag_${i}`,
+    });
+  }
+  assert.equal(sandbox.outputQueueItems.length, 50, "outputQueueItems must cap at 50");
+  assert.equal(sandbox.recentOutputQueueItems.length, 20, "recentOutputQueueItems must cap at 20");
+  assert.equal(sandbox.getOutputQueueSnapshot().length, 50);
+  assert.equal(sandbox.getOutputQueueSnapshot().recentLength, 20);
+  assert.equal(sandbox.outputQueueItems[0].createdAt, 1005, "queue cap must trim oldest items");
+  assert.equal(sandbox.recentOutputQueueItems[0].createdAt, 1035, "recent cap must trim oldest recent items");
+  console.log("  testTask228QueueAndRecentCaps PASS");
+}
+
+async function testTask228SanitizeForbiddenPayloadFields() {
+  const { sandbox } = await loadRenderer();
+  const payload = {
+    expression: "happy",
+    bubbleId: "reset",
+    state: {
+      mood: "annoyed",
+      attention: "correcting",
+      energy: "attentive",
+      recentInteractionLevel: "medium",
+      message: "STATE_RAW_TEXT_FORBIDDEN",
+      debug: "STATE_DEBUG_FORBIDDEN",
+    },
+    action: "mirror_expression_and_bubble",
+    reason: "safe_reason",
+  };
+  for (const key of TASK228_FORBIDDEN_PAYLOAD_KEYS) {
+    payload[key] = `TASK228_${key}_FORBIDDEN`;
+  }
+  const item = sandbox.enqueueOutputQueueItem({
+    source: "reaction_bubble",
+    priority: "P3_IMPORTANT_REACTION",
+    channel: "pet_bubble",
+    payload,
+    message: "TOP_LEVEL_MESSAGE_FORBIDDEN",
+    debug: "TOP_LEVEL_DEBUG_FORBIDDEN",
+    reason: "safe_reason",
+  });
+  assert.deepEqual(Object.keys(item).sort(), [
+    "channel",
+    "copyExportEligible",
+    "createdAt",
+    "historyEligible",
+    "id",
+    "interruptible",
+    "payload",
+    "priority",
+    "reason",
+    "source",
+    "ttlMs",
+    "ttsEligible",
+  ]);
+  assert.deepEqual(Object.keys(item.payload).sort(), [
+    "action",
+    "bubbleId",
+    "expression",
+    "reason",
+    "state",
+  ]);
+  const serialized = JSON.stringify({
+    item,
+    snapshot: sandbox.getOutputQueueSnapshot(),
+    queue: sandbox.outputQueueItems,
+    recent: sandbox.recentOutputQueueItems,
+  });
+  for (const key of TASK228_FORBIDDEN_PAYLOAD_KEYS) {
+    assert.ok(!serialized.includes(`TASK228_${key}_FORBIDDEN`),
+      `queue must drop forbidden payload field ${key}`);
+  }
+  assert.ok(!serialized.includes("TOP_LEVEL_MESSAGE_FORBIDDEN"));
+  assert.ok(!serialized.includes("TOP_LEVEL_DEBUG_FORBIDDEN"));
+  assert.ok(!serialized.includes("STATE_RAW_TEXT_FORBIDDEN"));
+  assert.ok(!serialized.includes("STATE_DEBUG_FORBIDDEN"));
+  console.log("  testTask228SanitizeForbiddenPayloadFields PASS");
+}
+
+async function testTask228InvalidSourcePriorityChannelRejected() {
+  const { sandbox } = await loadRenderer();
+  const base = {
+    source: "reaction_bubble",
+    priority: "P4_NORMAL_REACTION",
+    channel: "pet_bubble",
+    payload: { bubbleId: "user_active" },
+  };
+  assert.equal(sandbox.enqueueOutputQueueItem({ ...base, source: "bad_source" }), null,
+    "invalid source must reject");
+  assert.equal(sandbox.enqueueOutputQueueItem({ ...base, priority: "bad_priority" }), null,
+    "invalid priority must reject");
+  assert.equal(sandbox.enqueueOutputQueueItem({ ...base, channel: "bad_channel" }), null,
+    "invalid channel must reject");
+  assert.equal(sandbox.getOutputQueueSnapshot().length, 0,
+    "rejected items must not enter queue");
+  console.log("  testTask228InvalidSourcePriorityChannelRejected PASS");
+}
+
+async function testTask228BooleanAndNumericFallbacks() {
+  const { sandbox } = await loadRenderer();
+  const item = sandbox.enqueueOutputQueueItem({
+    source: "diagnostics_preview",
+    priority: "P6_DIAGNOSTICS",
+    channel: "diagnostics_preview",
+    payload: { reason: "safe" },
+    ttlMs: "not_a_number",
+    interruptible: "yes",
+    ttsEligible: 1,
+    historyEligible: "true",
+    copyExportEligible: null,
+  });
+  assert.equal(item.ttlMs, 0, "invalid ttlMs must fall back to 0");
+  assert.equal(item.interruptible, false, "interruptible must default false");
+  assert.equal(item.ttsEligible, false, "ttsEligible must default false");
+  assert.equal(item.historyEligible, false, "historyEligible must default false");
+  assert.equal(item.copyExportEligible, false, "copyExportEligible must default false");
+  console.log("  testTask228BooleanAndNumericFallbacks PASS");
+}
+
+async function testTask228PriorityCompareAndPreemptRules() {
+  const { sandbox } = await loadRenderer();
+  const p = (priority) => ({
+    source: "diagnostics_preview",
+    priority,
+    channel: "diagnostics_preview",
+    payload: { reason: priority },
+  });
+  assert.ok(sandbox.compareOutputPriority("P0_CRITICAL", "P1_USER_DIRECT") > 0,
+    "P0 must compare higher than P1");
+  assert.ok(sandbox.compareOutputPriority("P1_USER_DIRECT", "P2_LLM_REPLY") > 0,
+    "P1 must compare higher than P2");
+  assert.ok(sandbox.compareOutputPriority("P2_LLM_REPLY", "P3_IMPORTANT_REACTION") > 0,
+    "P2 must compare higher than P3");
+  assert.ok(sandbox.compareOutputPriority("P6_DIAGNOSTICS", "P5_IDLE_AMBIENT") < 0,
+    "P6 must be lowest");
+  assert.equal(sandbox.shouldOutputPreempt(p("P1_USER_DIRECT"), p("P0_CRITICAL")), true);
+  assert.equal(sandbox.shouldOutputPreempt(p("P2_LLM_REPLY"), p("P0_CRITICAL")), true);
+  assert.equal(sandbox.shouldOutputPreempt(p("P6_DIAGNOSTICS"), p("P0_CRITICAL")), true);
+  assert.equal(sandbox.shouldOutputPreempt(p("P2_LLM_REPLY"), p("P1_USER_DIRECT")), true);
+  assert.equal(sandbox.shouldOutputPreempt(p("P6_DIAGNOSTICS"), p("P1_USER_DIRECT")), true);
+  assert.equal(sandbox.shouldOutputPreempt(p("P2_LLM_REPLY"), p("P3_IMPORTANT_REACTION")), false);
+  assert.equal(sandbox.shouldOutputPreempt(p("P2_LLM_REPLY"), p("P4_NORMAL_REACTION")), false);
+  assert.equal(sandbox.shouldOutputPreempt(p("P2_LLM_REPLY"), p("P5_IDLE_AMBIENT")), false);
+  assert.equal(sandbox.shouldOutputPreempt(p("P4_NORMAL_REACTION"), p("P3_IMPORTANT_REACTION")), true);
+  assert.equal(sandbox.shouldOutputPreempt(p("P5_IDLE_AMBIENT"), p("P3_IMPORTANT_REACTION")), true);
+  assert.equal(sandbox.shouldOutputPreempt(p("P4_NORMAL_REACTION"), p("P5_IDLE_AMBIENT")), false);
+  assert.equal(sandbox.shouldOutputPreempt(p("P6_DIAGNOSTICS"), p("P5_IDLE_AMBIENT")), false);
+  assert.equal(sandbox.shouldOutputPreempt(p("P5_IDLE_AMBIENT"), p("P6_DIAGNOSTICS")), false);
+  assert.equal(sandbox.shouldOutputPreempt(p("P0_CRITICAL"), p("P6_DIAGNOSTICS")), false);
+  console.log("  testTask228PriorityCompareAndPreemptRules PASS");
+}
+
+async function testTask228ClearQueueUpdatesSnapshot() {
+  const { sandbox } = await loadRenderer();
+  sandbox.enqueueOutputQueueItem({
+    source: "reaction_bubble",
+    priority: "P4_NORMAL_REACTION",
+    channel: "pet_bubble",
+    payload: { bubbleId: "reset" },
+  });
+  assert.equal(sandbox.getOutputQueueSnapshot().length, 1);
+  const snapshot = sandbox.clearOutputQueue("manual_clear");
+  assert.equal(snapshot.enabled, false);
+  assert.equal(snapshot.length, 0);
+  assert.equal(snapshot.recentLength, 1, "clear keeps recent diagnostics history");
+  assert.equal(snapshot.nextItem, null);
+  assert.equal(sandbox.outputQueueItems.length, 0);
+  console.log("  testTask228ClearQueueUpdatesSnapshot PASS");
+}
+
+async function testTask228PreviewShowsQueueStatusNoRawJson() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.enqueueOutputQueueItem({
+    source: "reaction_bubble",
+    priority: "P4_NORMAL_REACTION",
+    channel: "pet_bubble",
+    payload: {
+      bubbleId: "user_active",
+      text: "PREVIEW_RAW_TEXT_FORBIDDEN",
+      debug: "PREVIEW_DEBUG_FORBIDDEN",
+    },
+  });
+  sandbox.renderInteractionReactionPreview();
+  const preview = document.getElementById("interaction-reaction-preview").textContent;
+  assert.ok(preview.includes("Queue: disabled"), "preview must show queue disabled");
+  assert.ok(preview.includes("Items: 1"), "preview must show queue item count");
+  for (const token of [
+    "PREVIEW_RAW_TEXT_FORBIDDEN",
+    "PREVIEW_DEBUG_FORBIDDEN",
+    "{",
+    "}",
+    "[object Object]",
+    "undefined",
+    "null",
+    "NaN",
+  ]) {
+    assert.ok(!preview.includes(token), `queue preview must not include ${token}`);
+  }
+  console.log("  testTask228PreviewShowsQueueStatusNoRawJson PASS");
+}
+
+function testTask228PreviewNotInChatAreaHtml() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  const chatAreaStart = html.indexOf('<main id="chat-area"');
+  const chatAreaEnd = html.indexOf("</main>", chatAreaStart);
+  const chatAreaContent = chatAreaStart >= 0 && chatAreaEnd > chatAreaStart
+    ? html.slice(chatAreaStart, chatAreaEnd)
+    : "";
+  assert.ok(html.includes("Queue: disabled"), "initial diagnostics preview must mention queue status");
+  assert.ok(!chatAreaContent.includes("Queue:"), "queue preview must not be inside #chat-area");
+  console.log("  testTask228PreviewNotInChatAreaHtml PASS");
+}
+
+async function testTask228PreviewNotInHistoryOrTranscript() {
+  const appendCalls = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryAppend(entry) { appendCalls.push(entry); return Promise.resolve({ ok: true }); },
+    },
+  });
+  await settle();
+  appendCalls.length = 0;
+  sandbox.appendMessage("user", "TASK228 transcript user", { noHistory: true });
+  sandbox.enqueueOutputQueueItem({
+    source: "diagnostics_preview",
+    priority: "P6_DIAGNOSTICS",
+    channel: "diagnostics_preview",
+    payload: { reason: "diag" },
+  });
+  sandbox.renderInteractionReactionPreview();
+  const transcript = sandbox.buildChatTranscript();
+  assert.equal(appendCalls.length, 0, "queue preview must not write chat history");
+  assert.ok(!transcript.includes("Queue:"), "queue preview must not enter copy/export transcript");
+  assert.ok(!transcript.includes("Items:"), "queue item count must not enter copy/export transcript");
+  console.log("  testTask228PreviewNotInHistoryOrTranscript PASS");
+}
+
+function testTask228NoNewIpcChannelsAndPreservesExisting() {
+  const rendererPreload = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "preload.js"), "utf8");
+  const mainSrc = fs.readFileSync(path.join(desktopRoot, "src", "main.js"), "utf8");
+  const petPreload = fs.readFileSync(path.join(desktopRoot, "src", "pet", "pet-preload.js"), "utf8");
+  for (const src of [rendererPreload, mainSrc, petPreload]) {
+    assert.ok(!src.includes("output-queue"), "TASK-228 must not add output queue IPC");
+    assert.ok(!src.includes("output:queue"), "TASK-228 must not add broad output IPC");
+    assert.ok(!src.includes("task-228"), "TASK-228 must not add task-specific IPC");
+  }
+  assert.ok(!rendererPreload.includes('ipcRenderer.invoke("pet",'),
+    "renderer preload must not use generic pet invoke channel");
+  assert.ok(!mainSrc.includes('ipcMain.handle("pet",'),
+    "main must not register generic pet handler");
+  assert.ok(!petPreload.includes('ipcRenderer.on("pet",'),
+    "pet preload must not listen on generic pet channel");
+  assert.ok(rendererPreload.includes('PET_EXPRESSION_SUGGESTION_CHANNEL = "pet:expression-suggestion"'),
+    "TASK-218 narrow renderer invoke channel must remain");
+  assert.ok(mainSrc.includes('PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL = "pet:expression-suggestion-received"'),
+    "TASK-218 narrow main send channel must remain");
+  assert.ok(rendererPreload.includes('PET_REACTION_BUBBLE_CHANNEL = "pet:reaction-bubble"'),
+    "TASK-220 narrow renderer invoke channel must remain");
+  assert.ok(mainSrc.includes('PET_REACTION_BUBBLE_RECEIVED_CHANNEL = "pet:reaction-bubble-received"'),
+    "TASK-220 narrow main send channel must remain");
+  console.log("  testTask228NoNewIpcChannelsAndPreservesExisting PASS");
+}
+
+function testTask228RegressionGuards() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(!src.includes("hover-action"), "TASK-228 must not restore hover action buttons");
+  assert.ok(src.includes("chat-context-menu"), "TASK-228 must keep context menu");
+  assert.ok(src.includes("複製") && src.includes("刪除") && src.includes("編輯"),
+    "TASK-228 must keep context menu copy/delete/edit actions");
+  assert.ok(src.includes("function isLastEditableUserMessage") && src.includes("entry.role !== \"user\""),
+    "TASK-228 must keep edit limited to last formal user message");
+  assert.ok(src.includes("showPetWindow"), "TASK-228 must not remove Pet Window entry point");
+  console.log("  testTask228RegressionGuards PASS");
+}
+
 // ─── TASK-218: Safe Pet Expression Suggestion Mirror ─────────────────────────
 
 function testTask218RendererHasMirrorFunction() {
@@ -9095,6 +9499,22 @@ async function main() {
   await testTask224PreviewNoChatSpeechTtsOrIpcSideEffects();
   testTask224NoNewIpcChannelsAndPreservesExisting();
   testTask224RegressionGuards();
+
+  // TASK-228: Output Queue Runtime Skeleton, Disabled by Default
+  testTask228StaticSourceCheck();
+  await testTask228DefaultSnapshotDisabled();
+  await testTask228EnqueueSafeItemUpdatesSnapshotOnly();
+  await testTask228QueueAndRecentCaps();
+  await testTask228SanitizeForbiddenPayloadFields();
+  await testTask228InvalidSourcePriorityChannelRejected();
+  await testTask228BooleanAndNumericFallbacks();
+  await testTask228PriorityCompareAndPreemptRules();
+  await testTask228ClearQueueUpdatesSnapshot();
+  await testTask228PreviewShowsQueueStatusNoRawJson();
+  testTask228PreviewNotInChatAreaHtml();
+  await testTask228PreviewNotInHistoryOrTranscript();
+  testTask228NoNewIpcChannelsAndPreservesExisting();
+  testTask228RegressionGuards();
 
   // TASK-218: Safe Pet Expression Suggestion Mirror
   testTask218RendererHasMirrorFunction();
