@@ -1,11 +1,11 @@
 # Interactive Companion Architecture Checkpoint
 
-**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-228 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-229 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
 **Date:** 2026-06-01
-**Scope:** Architecture checkpoint for TASK-214 through TASK-228.
+**Scope:** Architecture checkpoint for TASK-214 through TASK-229.
 
 This document records the current interactive companion architecture after the
-TASK-214 through TASK-228 chain.
+TASK-214 through TASK-229 chain.
 
 ---
 
@@ -59,6 +59,7 @@ user interaction
 | TASK-226 | Output queue / priority design | Defines future output arbitration priorities and preemption rules. DOCS ONLY. |
 | TASK-227 | Voice/TTS research | Records local-first speech roadmap, provider candidates, and speech safety boundaries. DOCS ONLY. |
 | TASK-228 | Output queue runtime skeleton | Adds Full App renderer-only disabled queue skeleton, sanitized snapshot, priority/preemption helpers, and queue diagnostics preview. DONE - Windows visual smoke PASS. |
+| TASK-229 | Output queue debug preview | Polishes queue snapshot preview with Recent and safe Next summary. DONE - Windows visual smoke PASS. |
 
 ---
 
@@ -310,18 +311,23 @@ TASK-228 helpers:
 - `clearOutputQueue(reason)`
 - `compareOutputPriority(a, b)`
 - `shouldOutputPreempt(activeItem, incomingItem)`
+- `formatOutputQueueSnapshotPreview(snapshot)` (TASK-229)
 
-Diagnostics preview now includes:
+TASK-229 diagnostics preview format:
 
 ```text
-Queue: disabled · Items: <count>
+Queue: disabled · Items: <count> · Recent: <count> · Next: <priority>/<channel>/<source|none>
 ```
 
-Important: TASK-228 is not an execution queue yet. It is currently only local
-diagnostics/state and does not control execution. Disabled means no dispatch, no
-IPC, no Pet Window send, no `/chat`, no history write, no TTS/STT/audio runtime,
-no prompt runtime, no persistence, and no Pet Bubble/expression/reaction mirror
-behavior change.
+`Next` is a sanitized summary only. It does not expose payload, id in preview,
+raw JSON, raw user message text, raw event payload, or debug metadata. Invalid
+priority/source/channel falls back to `Next: none`.
+
+Important: TASK-228/TASK-229 are not an execution queue yet. The queue is
+currently only local diagnostics/state and does not control execution. Disabled
+means no dispatch, no IPC, no Pet Window send, no `/chat`, no history write, no
+TTS/STT/audio runtime, no prompt runtime, no persistence, and no Pet
+Bubble/expression/reaction mirror behavior change.
 
 ---
 
@@ -365,6 +371,7 @@ The completed stack is covered by:
 - Automated smoke for TASK-223
 - Automated smoke for TASK-224
 - Automated smoke for TASK-228
+- Automated smoke for TASK-229
 - history/copy/export boundary checks
 - no TTS side-effect checks
 - no `/chat` side-effect checks
@@ -400,6 +407,22 @@ diagnostics show no `undefined`, `null`, `NaN`, `[object Object]`, raw JSON, or
 user text; and there is no new IPC side effect, extra TTS, extra `/chat`,
 history/copy/export pollution, or Pet Window expression/reaction bubble
 regression.
+
+TASK-229 automated renderer smoke PASS confirmed on 2026-06-02. Confirmed
+default queue preview, safe item `Next` summary, payload/raw text/debug/raw JSON
+exclusion, invalid snapshot fallback, clear queue preview reset,
+history/copy/export exclusion, no `/chat`/history/TTS/Pet Window/mirror side
+effects, no new IPC, no generic `"pet"` channel, and existing TASK-218/TASK-220
+narrow IPC retained.
+
+TASK-229 Windows visual smoke PASS confirmed on 2026-06-01. Confirmed startup
+preview shows Queue disabled plus Items/Recent/Next and Pet Window is normal;
+send keeps chat/expression/reaction bubble normal, Queue disabled, and `Next`
+as a safe summary; Delete/Undo, Edit last user, Clear Chat, and Focus remain
+functional with Queue disabled; diagnostics show no `undefined`, `null`, `NaN`,
+`[object Object]`, raw JSON, user text, or payload; and there is no new IPC
+side effect, extra TTS, extra `/chat`, history/copy/export pollution, or Pet
+Window expression/reaction bubble regression.
 
 ---
 

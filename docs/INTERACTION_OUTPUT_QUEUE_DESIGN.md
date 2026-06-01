@@ -313,10 +313,12 @@ Suggested future tasks:
 
 - TASK-228 Output Queue Runtime Skeleton and Diagnostics Preview, disabled by
   default. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
-- TASK-229 Bubble Priority Enforcement.
-- TASK-230 TTS-safe segment design.
-- TASK-231 Idle Reaction Policy, fixed only, no LLM.
-- TASK-232 User controls for companion reaction verbosity.
+- TASK-229 Output Queue Debug Preview / Snapshot Polish. DONE - WINDOWS VISUAL
+  SMOKE PASS / DONE - PASS.
+- TASK-230 Bubble Priority Enforcement.
+- TASK-231 TTS-safe segment design.
+- TASK-232 Idle Reaction Policy, fixed only, no LLM.
+- TASK-233 User controls for companion reaction verbosity.
 
 Each task should remain narrow, testable, and explicit about side-effect
 boundaries.
@@ -427,3 +429,75 @@ Windows visual smoke PASS confirmed:
 The runtime skeleton is complete but still does not control execution. Any
 future dispatch/arbitration task must explicitly opt in and preserve the same
 side-effect boundaries.
+
+---
+
+## 17. TASK-229 Debug Preview / Snapshot Polish
+
+TASK-229 polishes the TASK-228 disabled runtime skeleton diagnostics preview.
+It remains Full App renderer-only. Automated smoke and Windows visual smoke PASS
+were confirmed on 2026-06-01.
+
+Implemented:
+
+- `formatOutputQueueSnapshotPreview(snapshot)`.
+- Safe `nextItem` summary through `getOutputQueueSnapshot()`.
+- Diagnostics preview integration.
+- Initial HTML fallback text update.
+
+Preview format:
+
+```text
+Queue: disabled · Items: 0 · Recent: 0 · Next: none
+```
+
+With a safe queued item:
+
+```text
+Queue: disabled · Items: 1 · Recent: 1 · Next: P4_NORMAL_REACTION/pet_bubble/reaction_bubble
+```
+
+`Next` displays only `priority/channel/source`. It does not display payload,
+id, raw JSON, raw user message text, raw event payload, debug metadata,
+`undefined`, `null`, `NaN`, or `[object Object]`.
+
+`getOutputQueueSnapshot()` now exposes `nextItem` as a sanitized summary only.
+Allowed summary fields are:
+
+- `id`
+- `source`
+- `priority`
+- `channel`
+- `reason`
+- `ttlMs`
+
+Fallback rules:
+
+- Invalid `enabled` -> `disabled`.
+- Invalid `length` -> `0`.
+- Invalid `recentLength` -> `0`.
+- Missing or invalid `nextItem` -> `Next: none`.
+- Invalid `priority`, `source`, or `channel` -> `Next: none`.
+
+TASK-229 does not add dispatch or execution control. It does not add IPC, send
+anything to the Pet Window, call `/chat`, write history, trigger TTS/STT/audio,
+change expression mirror behavior, change reaction bubble mirror behavior,
+connect prompt runtime, add persistence, or store raw message text.
+
+Automated renderer smoke PASS.
+
+Windows visual smoke PASS confirmed:
+
+- Startup shows `Queue: disabled · Items/Recent/Next` and Pet Window remains
+  normal.
+- Send message keeps chat, expression, and reaction bubble normal; Queue remains
+  disabled; `Next` displays a safe summary.
+- Delete/Undo, Edit last user, Clear Chat, and Focus remain functional with
+  Queue disabled.
+- Diagnostics format has no `undefined`, `null`, `NaN`, `[object Object]`, raw
+  JSON, user text, or payload.
+- No new IPC side effect, extra TTS, extra `/chat`, history/copy/export
+  pollution, or Pet Window expression/reaction bubble regression.
+
+The snapshot preview polish is complete but still does not control execution.
+Any future dispatch/arbitration task must explicitly opt in.

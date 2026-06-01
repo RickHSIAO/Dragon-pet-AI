@@ -23050,10 +23050,12 @@ TASK-226 is docs-only:
 
 - TASK-228 Output Queue Runtime Skeleton and Diagnostics Preview, disabled by
   default. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
-- TASK-229 Bubble Priority Enforcement.
-- TASK-230 TTS-safe segment design.
-- TASK-231 Idle Reaction Policy, fixed only, no LLM.
-- TASK-232 User controls for companion reaction verbosity.
+- TASK-229 Output Queue Debug Preview / Snapshot Polish. DONE - WINDOWS VISUAL
+  SMOKE PASS / DONE - PASS.
+- TASK-230 Bubble Priority Enforcement.
+- TASK-231 TTS-safe segment design.
+- TASK-232 Idle Reaction Policy, fixed only, no LLM.
+- TASK-233 User controls for companion reaction verbosity.
 
 ### Acceptance Criteria
 
@@ -23491,4 +23493,197 @@ TASK-228 does not:
 - [x] No new IPC added.
 - [x] Existing TASK-218/TASK-220 narrow IPC retained.
 - [x] No `/chat`, history, TTS, Pet Window, Pet Bubble, or mirror side effects.
+- [x] Windows visual smoke PASS on 2026-06-01.
+
+---
+
+## TASK-229 | Output Queue Debug Preview / Snapshot Polish
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-06-01
+**Phase:** Phase 5 - Interactive Companion Output Arbitration
+**Depends on:** TASK-228
+
+### Goal
+
+Polish the disabled output queue diagnostics preview so it shows more useful
+queue snapshot information without exposing payloads, raw text, event data, or
+debug metadata.
+
+### Implementation Summary
+
+Updated:
+
+- `apps/desktop/src/renderer/renderer.js`
+- `apps/desktop/src/renderer/index.html`
+- `apps/desktop/scripts/renderer-chat-smoke.js`
+- `README.md`
+- `docs/ROADMAP.md`
+- `docs/TASKS.md`
+- `docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md`
+- `docs/INTERACTIVE_COMPANION_ARCHITECTURE.md`
+
+Added:
+
+- `formatOutputQueueSnapshotPreview(snapshot)`
+- `cloneOutputQueueNextItemSummary(item)`
+
+Updated:
+
+- `getOutputQueueSnapshot()`
+- `updateOutputQueueSnapshot()`
+- `formatInteractionDiagnosticsPreview(context)`
+- Initial renderer HTML fallback preview.
+
+### Queue Snapshot Preview Format
+
+Default:
+
+```text
+Queue: disabled · Items: 0 · Recent: 0 · Next: none
+```
+
+With a safe queued item:
+
+```text
+Queue: disabled · Items: 1 · Recent: 1 · Next: P4_NORMAL_REACTION/pet_bubble/reaction_bubble
+```
+
+The `Next` field displays only:
+
+- `priority`
+- `channel`
+- `source`
+
+It does not display:
+
+- `id`
+- payload
+- raw JSON
+- raw user message text
+- raw event payload
+- debug metadata
+- `[object Object]`
+
+### Snapshot Sanitization
+
+`getOutputQueueSnapshot()` now returns a safer `nextItem` summary. The summary
+may include:
+
+- `id`
+- `source`
+- `priority`
+- `channel`
+- `reason`
+- `ttlMs`
+
+The snapshot `nextItem` does not include payload fields such as:
+
+- `message`
+- `text`
+- `body`
+- `rawText`
+- `content`
+- `reply`
+- `transcript`
+- `audio`
+- `html`
+- `innerHTML`
+- `metadata`
+- `debug`
+- `thinking`
+
+Fallback behavior:
+
+- Invalid `enabled` -> `disabled`.
+- Invalid `length` -> `0`.
+- Invalid `recentLength` -> `0`.
+- Missing or invalid `nextItem` -> `none`.
+- Invalid `priority`, `source`, or `channel` -> `Next: none`.
+
+### Runtime Boundary
+
+TASK-229 is preview/snapshot polish only:
+
+- No backend change.
+- No `/chat` API schema change.
+- No chat history persistence format change.
+- No `/chat` call.
+- No chat history write.
+- No IPC added.
+- No generic IPC added.
+- No Pet Window side effect.
+- No Pet Window runtime change.
+- No Pet Bubble runtime behavior change.
+- No Pet expression mirror runtime behavior change.
+- No reaction bubble mirror runtime behavior change.
+- No TTS/STT/audio runtime.
+- No queue dispatch.
+- Queue does not control expression, bubble, or chat reply.
+- No raw message text storage.
+- No `innerHTML`.
+- No background monitoring, always listening, screenshots, or OCR.
+- No Ollama / Provider runtime change.
+- No prompt runtime change.
+- No persistence.
+- No assets.
+- No hover action buttons.
+- No user/pet message edit expansion.
+
+### Windows Visual Smoke Result
+
+**Date:** 2026-06-01
+**Result:** PASS
+
+Confirmed:
+
+- Basic startup PASS: Preview shows `Queue: disabled · Items/Recent/Next`; Pet
+  Window is normal.
+- Send message PASS: chat, expression, and reaction bubble remain normal; Queue
+  stays disabled; `Next` shows a safe summary.
+- Delete / Undo PASS: feature remains normal; Queue stays disabled.
+- Edit last user PASS: feature remains normal; Queue stays disabled.
+- Clear Chat PASS: feature remains normal; Queue stays disabled.
+- Focus PASS: feature remains normal; Queue stays disabled.
+- Diagnostics format PASS: no `undefined`, `null`, `NaN`, `[object Object]`,
+  raw JSON, user text, or payload.
+- General regression PASS: no new IPC side effect, no extra TTS, no extra
+  `/chat`, no history/copy/export pollution, and Pet Window expression plus
+  reaction bubble behavior remains normal.
+
+### Smoke Coverage
+
+`renderer-chat-smoke.js` adds TASK-229 coverage for:
+
+- Formatter existence.
+- Default snapshot preview.
+- Safe item preview summary.
+- `Next` summary excluding payload.
+- Forbidden raw field exclusion.
+- Raw JSON / `undefined` / `null` / `NaN` / `[object Object]` exclusion.
+- Invalid snapshot fallback.
+- Invalid priority/source/channel fallback to `Next: none`.
+- Clear queue preview reset.
+- Diagnostics preview integration.
+- Preview outside `#chat-area`.
+- History/copy/export boundary.
+- No `/chat`, history, TTS, expression mirror, or reaction bubble side effects.
+- No new IPC.
+- TASK-218 and TASK-220 narrow IPC regression guards.
+- Hover action/context menu/edit/Pet Window regression guards.
+
+### Acceptance Criteria
+
+- [x] `formatOutputQueueSnapshotPreview(snapshot)` implemented.
+- [x] Default preview shows disabled/items/recent/next.
+- [x] Safe item preview shows priority/channel/source summary.
+- [x] Snapshot `nextItem` does not expose payload.
+- [x] Preview does not expose raw text, raw JSON, debug metadata, or forbidden
+  fields.
+- [x] Invalid snapshot values fall back safely.
+- [x] Preview remains outside `#chat-area`.
+- [x] Preview does not enter history/copy/export transcript.
+- [x] No `/chat`, history, TTS, IPC, Pet Window, expression mirror, or reaction
+  bubble side effects.
+- [x] Renderer automated smoke PASS.
 - [x] Windows visual smoke PASS on 2026-06-01.

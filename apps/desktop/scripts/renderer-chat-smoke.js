@@ -8337,7 +8337,10 @@ async function testTask228EnqueueSafeItemUpdatesSnapshotOnly() {
   assert.equal(snapshot.enabled, false);
   assert.equal(snapshot.length, 1);
   assert.equal(snapshot.recentLength, 1);
-  assert.equal(snapshot.nextItem.payload.bubbleId, "user_active");
+  assert.equal(snapshot.nextItem.priority, "P4_NORMAL_REACTION");
+  assert.equal(snapshot.nextItem.channel, "pet_bubble");
+  assert.equal(snapshot.nextItem.source, "reaction_bubble");
+  assert.ok(!("payload" in snapshot.nextItem), "snapshot nextItem must not expose payload");
   assert.equal(state.calls.filter((call) => String(call.url).endsWith("/chat")).length, 0,
     "enqueue must not call /chat");
   assert.equal(appendCalls.length, 0, "enqueue must not write chat history");
@@ -8629,6 +8632,300 @@ function testTask228RegressionGuards() {
     "TASK-228 must keep edit limited to last formal user message");
   assert.ok(src.includes("showPetWindow"), "TASK-228 must not remove Pet Window entry point");
   console.log("  testTask228RegressionGuards PASS");
+}
+
+// ─── TASK-229: Output Queue Debug Preview / Snapshot Polish ──────────────────
+
+function testTask229RendererHasSnapshotPreviewFormatter() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("function formatOutputQueueSnapshotPreview"),
+    "renderer.js must define formatOutputQueueSnapshotPreview");
+  assert.ok(src.includes("formatOutputQueueSnapshotPreview(queueSnapshot)"),
+    "diagnostics preview must use output queue snapshot formatter");
+  assert.ok(src.includes("function cloneOutputQueueNextItemSummary"),
+    "renderer.js must define safe next-item summary helper");
+  console.log("  testTask229RendererHasSnapshotPreviewFormatter PASS");
+}
+
+async function testTask229DefaultSnapshotPreview() {
+  const { sandbox } = await loadRenderer();
+  const preview = sandbox.formatOutputQueueSnapshotPreview(sandbox.getOutputQueueSnapshot());
+  assert.equal(preview, "Queue: disabled · Items: 0 · Recent: 0 · Next: none");
+  console.log("  testTask229DefaultSnapshotPreview PASS");
+}
+
+async function testTask229SafeItemPreviewShowsSummaryOnly() {
+  const { sandbox } = await loadRenderer();
+  sandbox.enqueueOutputQueueItem({
+    source: "reaction_bubble",
+    priority: "P4_NORMAL_REACTION",
+    channel: "pet_bubble",
+    payload: { bubbleId: "user_active" },
+    reason: "safe_reaction",
+  });
+  const snapshot = JSON.parse(JSON.stringify(sandbox.getOutputQueueSnapshot()));
+  const preview = sandbox.formatOutputQueueSnapshotPreview(snapshot);
+  assert.equal(preview,
+    "Queue: disabled · Items: 1 · Recent: 1 · Next: P4_NORMAL_REACTION/pet_bubble/reaction_bubble");
+  assert.deepEqual(Object.keys(snapshot.nextItem).sort(), [
+    "channel",
+    "id",
+    "priority",
+    "reason",
+    "source",
+    "ttlMs",
+  ]);
+  assert.ok(!("payload" in snapshot.nextItem), "next item summary must not include payload");
+  console.log("  testTask229SafeItemPreviewShowsSummaryOnly PASS");
+}
+
+async function testTask229NextSummaryNoRawPayload() {
+  const { sandbox } = await loadRenderer();
+  sandbox.enqueueOutputQueueItem({
+    source: "reaction_bubble",
+    priority: "P4_NORMAL_REACTION",
+    channel: "pet_bubble",
+    payload: {
+      bubbleId: "reset",
+      message: "TASK229_RAW_MESSAGE_FORBIDDEN",
+      text: "TASK229_RAW_TEXT_FORBIDDEN",
+      debug: "TASK229_DEBUG_FORBIDDEN",
+    },
+    metadata: "TASK229_METADATA_FORBIDDEN",
+    reason: "safe",
+  });
+  const snapshotText = JSON.stringify(sandbox.getOutputQueueSnapshot());
+  const preview = sandbox.formatOutputQueueSnapshotPreview();
+  for (const token of [
+    "payload",
+    "bubbleId",
+    "TASK229_RAW_MESSAGE_FORBIDDEN",
+    "TASK229_RAW_TEXT_FORBIDDEN",
+    "TASK229_DEBUG_FORBIDDEN",
+    "TASK229_METADATA_FORBIDDEN",
+  ]) {
+    assert.ok(!snapshotText.includes(token), `snapshot next item must not include ${token}`);
+    assert.ok(!preview.includes(token), `preview must not include ${token}`);
+  }
+  console.log("  testTask229NextSummaryNoRawPayload PASS");
+}
+
+async function testTask229PreviewDropsForbiddenRawFields() {
+  const { sandbox } = await loadRenderer();
+  const payload = { bubbleId: "user_active" };
+  for (const key of TASK228_FORBIDDEN_PAYLOAD_KEYS) {
+    payload[key] = `TASK229_${key}_FORBIDDEN`;
+  }
+  sandbox.enqueueOutputQueueItem({
+    source: "reaction_bubble",
+    priority: "P4_NORMAL_REACTION",
+    channel: "pet_bubble",
+    payload,
+    reason: "safe",
+  });
+  const preview = sandbox.formatOutputQueueSnapshotPreview();
+  for (const key of TASK228_FORBIDDEN_PAYLOAD_KEYS) {
+    assert.ok(!preview.includes(`TASK229_${key}_FORBIDDEN`),
+      `preview must not include forbidden field value for ${key}`);
+    assert.ok(!preview.includes(`${key}:`), `preview must not expose forbidden key ${key}`);
+  }
+  console.log("  testTask229PreviewDropsForbiddenRawFields PASS");
+}
+
+async function testTask229PreviewNoRawJsonOrBadTokens() {
+  const { sandbox } = await loadRenderer();
+  sandbox.enqueueOutputQueueItem({
+    source: "diagnostics_preview",
+    priority: "P6_DIAGNOSTICS",
+    channel: "diagnostics_preview",
+    payload: { reason: "safe" },
+  });
+  const preview = sandbox.formatOutputQueueSnapshotPreview();
+  for (const token of ["{", "}", "[object Object]", "undefined", "null", "NaN"]) {
+    assert.ok(!preview.includes(token), `queue snapshot preview must not include ${token}`);
+  }
+  console.log("  testTask229PreviewNoRawJsonOrBadTokens PASS");
+}
+
+async function testTask229InvalidSnapshotFallbacks() {
+  const { sandbox } = await loadRenderer();
+  assert.equal(sandbox.formatOutputQueueSnapshotPreview({
+    enabled: "yes",
+    length: "bad",
+    recentLength: -1,
+    nextItem: "bad",
+  }), "Queue: disabled · Items: 0 · Recent: 0 · Next: none");
+  assert.equal(sandbox.formatOutputQueueSnapshotPreview({
+    enabled: false,
+    length: 2,
+    recentLength: 1,
+    nextItem: {
+      priority: "BAD_PRIORITY",
+      channel: "pet_bubble",
+      source: "reaction_bubble",
+    },
+  }), "Queue: disabled · Items: 2 · Recent: 1 · Next: none");
+  assert.equal(sandbox.formatOutputQueueSnapshotPreview({
+    enabled: false,
+    length: 2,
+    recentLength: 1,
+    nextItem: {
+      priority: "P4_NORMAL_REACTION",
+      channel: "BAD_CHANNEL",
+      source: "reaction_bubble",
+    },
+  }), "Queue: disabled · Items: 2 · Recent: 1 · Next: none");
+  assert.equal(sandbox.formatOutputQueueSnapshotPreview({
+    enabled: false,
+    length: 2,
+    recentLength: 1,
+    nextItem: {
+      priority: "P4_NORMAL_REACTION",
+      channel: "pet_bubble",
+      source: "BAD_SOURCE",
+    },
+  }), "Queue: disabled · Items: 2 · Recent: 1 · Next: none");
+  console.log("  testTask229InvalidSnapshotFallbacks PASS");
+}
+
+async function testTask229ClearQueuePreviewResets() {
+  const { sandbox } = await loadRenderer();
+  sandbox.enqueueOutputQueueItem({
+    source: "reaction_bubble",
+    priority: "P4_NORMAL_REACTION",
+    channel: "pet_bubble",
+    payload: { bubbleId: "reset" },
+  });
+  sandbox.clearOutputQueue("manual_clear");
+  const preview = sandbox.formatOutputQueueSnapshotPreview(sandbox.getOutputQueueSnapshot());
+  assert.equal(preview, "Queue: disabled · Items: 0 · Recent: 1 · Next: none");
+  console.log("  testTask229ClearQueuePreviewResets PASS");
+}
+
+async function testTask229DiagnosticsPreviewIncludesSnapshotLine() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.enqueueOutputQueueItem({
+    source: "reaction_bubble",
+    priority: "P4_NORMAL_REACTION",
+    channel: "pet_bubble",
+    payload: { bubbleId: "user_active" },
+  });
+  sandbox.renderInteractionReactionPreview();
+  const preview = document.getElementById("interaction-reaction-preview").textContent;
+  assert.ok(preview.includes("Queue: disabled · Items: 1 · Recent: 1 · Next: P4_NORMAL_REACTION/pet_bubble/reaction_bubble"),
+    "diagnostics preview must include polished queue snapshot line");
+  console.log("  testTask229DiagnosticsPreviewIncludesSnapshotLine PASS");
+}
+
+function testTask229InitialHtmlPreviewLine() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes("Queue: disabled · Items: 0 · Recent: 0 · Next: none"),
+    "initial HTML preview must include polished queue snapshot fallback");
+  const chatAreaStart = html.indexOf('<main id="chat-area"');
+  const chatAreaEnd = html.indexOf("</main>", chatAreaStart);
+  const chatAreaContent = chatAreaStart >= 0 && chatAreaEnd > chatAreaStart
+    ? html.slice(chatAreaStart, chatAreaEnd)
+    : "";
+  assert.ok(!chatAreaContent.includes("Queue:"), "queue snapshot preview must not be inside #chat-area");
+  console.log("  testTask229InitialHtmlPreviewLine PASS");
+}
+
+async function testTask229PreviewNotInHistoryOrTranscript() {
+  const appendCalls = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryAppend(entry) { appendCalls.push(entry); return Promise.resolve({ ok: true }); },
+    },
+  });
+  await settle();
+  appendCalls.length = 0;
+  sandbox.appendMessage("user", "TASK229 transcript user", { noHistory: true });
+  sandbox.enqueueOutputQueueItem({
+    source: "reaction_bubble",
+    priority: "P4_NORMAL_REACTION",
+    channel: "pet_bubble",
+    payload: { bubbleId: "user_active" },
+  });
+  sandbox.renderInteractionReactionPreview();
+  const transcript = sandbox.buildChatTranscript();
+  assert.equal(appendCalls.length, 0, "queue snapshot preview must not write chat history");
+  assert.ok(!transcript.includes("Queue:"), "queue snapshot preview must not enter copy/export transcript");
+  assert.ok(!transcript.includes("Next:"), "queue next summary must not enter copy/export transcript");
+  console.log("  testTask229PreviewNotInHistoryOrTranscript PASS");
+}
+
+async function testTask229PreviewNoChatHistorySpeechTtsOrMirrors() {
+  const appendCalls = [];
+  const speechCalls = [];
+  const expressionCalls = [];
+  const bubbleCalls = [];
+  const { state, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryAppend(entry) { appendCalls.push(entry); return Promise.resolve({ ok: true }); },
+      updatePetSpeech(payload) { speechCalls.push(payload); return Promise.resolve({ ok: true }); },
+      sendPetExpressionSuggestion(payload) { expressionCalls.push(payload); return Promise.resolve({ ok: true }); },
+      sendPetReactionBubble(payload) { bubbleCalls.push(payload); return Promise.resolve({ ok: true }); },
+    },
+  });
+  await settle();
+  state.calls.length = 0;
+  appendCalls.length = 0;
+  speechCalls.length = 0;
+  expressionCalls.length = 0;
+  bubbleCalls.length = 0;
+  sandbox.enqueueOutputQueueItem({
+    source: "diagnostics_preview",
+    priority: "P6_DIAGNOSTICS",
+    channel: "diagnostics_preview",
+    payload: { reason: "safe" },
+  });
+  sandbox.renderInteractionReactionPreview();
+  await settle();
+  assert.equal(state.calls.filter((call) => String(call.url).endsWith("/chat")).length, 0,
+    "queue snapshot preview must not call /chat");
+  assert.equal(appendCalls.length, 0, "queue snapshot preview must not write history");
+  assert.equal(speechCalls.length, 0, "queue snapshot preview must not call updatePetSpeech/TTS");
+  assert.equal(expressionCalls.length, 0, "queue snapshot preview must not mirror expression");
+  assert.equal(bubbleCalls.length, 0, "queue snapshot preview must not mirror reaction bubble");
+  console.log("  testTask229PreviewNoChatHistorySpeechTtsOrMirrors PASS");
+}
+
+function testTask229NoNewIpcChannelsAndPreservesExisting() {
+  const rendererPreload = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "preload.js"), "utf8");
+  const mainSrc = fs.readFileSync(path.join(desktopRoot, "src", "main.js"), "utf8");
+  const petPreload = fs.readFileSync(path.join(desktopRoot, "src", "pet", "pet-preload.js"), "utf8");
+  for (const src of [rendererPreload, mainSrc, petPreload]) {
+    assert.ok(!src.includes("output-queue"), "TASK-229 must not add output queue IPC");
+    assert.ok(!src.includes("output:queue"), "TASK-229 must not add broad output IPC");
+    assert.ok(!src.includes("task-229"), "TASK-229 must not add task-specific IPC");
+  }
+  assert.ok(rendererPreload.includes('PET_EXPRESSION_SUGGESTION_CHANNEL = "pet:expression-suggestion"'),
+    "TASK-218 narrow renderer invoke channel must remain");
+  assert.ok(mainSrc.includes('PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL = "pet:expression-suggestion-received"'),
+    "TASK-218 narrow main send channel must remain");
+  assert.ok(rendererPreload.includes('PET_REACTION_BUBBLE_CHANNEL = "pet:reaction-bubble"'),
+    "TASK-220 narrow renderer invoke channel must remain");
+  assert.ok(mainSrc.includes('PET_REACTION_BUBBLE_RECEIVED_CHANNEL = "pet:reaction-bubble-received"'),
+    "TASK-220 narrow main send channel must remain");
+  assert.ok(!rendererPreload.includes('PET_EXPRESSION_SUGGESTION_CHANNEL = "pet"'),
+    "TASK-218 expression channel must not be generic pet");
+  assert.ok(!rendererPreload.includes('PET_REACTION_BUBBLE_CHANNEL = "pet"'),
+    "TASK-220 reaction bubble channel must not be generic pet");
+  console.log("  testTask229NoNewIpcChannelsAndPreservesExisting PASS");
+}
+
+function testTask229RegressionGuards() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(!src.includes("hover-action"), "TASK-229 must not restore hover action buttons");
+  assert.ok(src.includes("chat-context-menu"), "TASK-229 must keep context menu");
+  assert.ok(src.includes("複製") && src.includes("刪除") && src.includes("編輯"),
+    "TASK-229 must keep context menu copy/delete/edit actions");
+  assert.ok(src.includes("function isLastEditableUserMessage") && src.includes("entry.role !== \"user\""),
+    "TASK-229 must keep edit limited to last formal user message");
+  assert.ok(src.includes("showPetWindow"), "TASK-229 must not remove Pet Window entry point");
+  console.log("  testTask229RegressionGuards PASS");
 }
 
 // ─── TASK-218: Safe Pet Expression Suggestion Mirror ─────────────────────────
@@ -9515,6 +9812,22 @@ async function main() {
   await testTask228PreviewNotInHistoryOrTranscript();
   testTask228NoNewIpcChannelsAndPreservesExisting();
   testTask228RegressionGuards();
+
+  // TASK-229: Output Queue Debug Preview / Snapshot Polish
+  testTask229RendererHasSnapshotPreviewFormatter();
+  await testTask229DefaultSnapshotPreview();
+  await testTask229SafeItemPreviewShowsSummaryOnly();
+  await testTask229NextSummaryNoRawPayload();
+  await testTask229PreviewDropsForbiddenRawFields();
+  await testTask229PreviewNoRawJsonOrBadTokens();
+  await testTask229InvalidSnapshotFallbacks();
+  await testTask229ClearQueuePreviewResets();
+  await testTask229DiagnosticsPreviewIncludesSnapshotLine();
+  testTask229InitialHtmlPreviewLine();
+  await testTask229PreviewNotInHistoryOrTranscript();
+  await testTask229PreviewNoChatHistorySpeechTtsOrMirrors();
+  testTask229NoNewIpcChannelsAndPreservesExisting();
+  testTask229RegressionGuards();
 
   // TASK-218: Safe Pet Expression Suggestion Mirror
   testTask218RendererHasMirrorFunction();

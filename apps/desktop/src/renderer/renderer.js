@@ -853,12 +853,27 @@ function cloneOutputQueueItemSummary(item) {
   };
 }
 
+function cloneOutputQueueNextItemSummary(item) {
+  if (!item || typeof item !== "object") return null;
+  if (!OUTPUT_SOURCE_ALLOWLIST.has(item.source)) return null;
+  if (!OUTPUT_PRIORITY_ALLOWLIST.has(item.priority)) return null;
+  if (!OUTPUT_CHANNEL_ALLOWLIST.has(item.channel)) return null;
+  return {
+    id: typeof item.id === "string" ? item.id.slice(0, 80) : "",
+    source: item.source,
+    priority: item.priority,
+    channel: item.channel,
+    reason: sanitizeOutputQueueReason(item.reason),
+    ttlMs: Number.isFinite(item.ttlMs) && item.ttlMs > 0 ? item.ttlMs : 0,
+  };
+}
+
 function updateOutputQueueSnapshot() {
   currentOutputQueueSnapshot = {
     enabled: OUTPUT_QUEUE_ENABLED,
     length: outputQueueItems.length,
     recentLength: recentOutputQueueItems.length,
-    nextItem: outputQueueItems.length ? cloneOutputQueueItemSummary(outputQueueItems[0]) : null,
+    nextItem: outputQueueItems.length ? cloneOutputQueueNextItemSummary(outputQueueItems[0]) : null,
   };
   return currentOutputQueueSnapshot;
 }
@@ -915,7 +930,7 @@ function getOutputQueueSnapshot() {
     enabled: OUTPUT_QUEUE_ENABLED,
     length: outputQueueItems.length,
     recentLength: recentOutputQueueItems.length,
-    nextItem: outputQueueItems.length ? cloneOutputQueueItemSummary(outputQueueItems[0]) : null,
+    nextItem: outputQueueItems.length ? cloneOutputQueueNextItemSummary(outputQueueItems[0]) : null,
   };
 }
 
@@ -954,6 +969,31 @@ function shouldOutputPreempt(activeItem, incomingItem) {
     return active === "P5_IDLE_AMBIENT" || active === "P6_DIAGNOSTICS";
   }
   return false;
+}
+
+function formatOutputQueueSnapshotPreview(snapshot = getOutputQueueSnapshot()) {
+  const source = snapshot && typeof snapshot === "object" ? snapshot : {};
+  const enabled = source.enabled === true ? "enabled" : "disabled";
+  const length = Number.isFinite(source.length) && source.length >= 0
+    ? source.length
+    : 0;
+  const recentLength = Number.isFinite(source.recentLength) && source.recentLength >= 0
+    ? source.recentLength
+    : 0;
+  const next = source.nextItem && typeof source.nextItem === "object"
+    ? source.nextItem
+    : null;
+  const hasValidNext = next
+    && OUTPUT_PRIORITY_ALLOWLIST.has(next.priority)
+    && OUTPUT_CHANNEL_ALLOWLIST.has(next.channel)
+    && OUTPUT_SOURCE_ALLOWLIST.has(next.source);
+  const nextText = hasValidNext
+    ? next.priority + "/" + next.channel + "/" + next.source
+    : "none";
+  return "Queue: " + enabled
+    + " · Items: " + length
+    + " · Recent: " + recentLength
+    + " · Next: " + nextText;
 }
 
 function defaultCompanionExpressionForReason(reason) {
@@ -1388,15 +1428,11 @@ function formatInteractionDiagnosticsPreview(context = {}) {
   const queueSnapshot = source.outputQueueSnapshot && typeof source.outputQueueSnapshot === "object"
     ? source.outputQueueSnapshot
     : getOutputQueueSnapshot();
-  const queueEnabled = queueSnapshot.enabled === true ? "enabled" : "disabled";
-  const queueLength = Number.isFinite(queueSnapshot.length) && queueSnapshot.length >= 0
-    ? queueSnapshot.length
-    : 0;
   return "Reaction: " + safeHint
     + " · Suggestion: " + safeExpression
     + "\nDecision: " + safeAction
     + " · " + formatCharacterStatePreview(state)
-    + "\nQueue: " + queueEnabled + " · Items: " + queueLength;
+    + "\n" + formatOutputQueueSnapshotPreview(queueSnapshot);
 }
 
 function renderInteractionReactionPreview() {
