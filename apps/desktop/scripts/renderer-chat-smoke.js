@@ -7431,6 +7431,270 @@ function testTask220ExpressionMirrorRegressionStillPresent() {
   console.log("  testTask220ExpressionMirrorRegressionStillPresent PASS");
 }
 
+// ─── TASK-221: Companion Behavior Policy Layer ───────────────────────────────
+
+function testTask221RendererHasDecisionState() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("function deriveCompanionBehaviorDecision"),
+    "renderer.js must define deriveCompanionBehaviorDecision");
+  assert.ok(src.includes("function recordCompanionBehaviorDecision"),
+    "renderer.js must define recordCompanionBehaviorDecision");
+  assert.ok(src.includes("currentCompanionBehaviorDecision"),
+    "renderer.js must define currentCompanionBehaviorDecision");
+  assert.ok(src.includes("recentCompanionBehaviorDecisions"),
+    "renderer.js must define recentCompanionBehaviorDecisions");
+  assert.ok(src.includes("COMPANION_BEHAVIOR_DECISION_MAX = 20"),
+    "renderer.js must cap companion behavior decisions at 20");
+  console.log("  testTask221RendererHasDecisionState PASS");
+}
+
+function testTask221DecisionAllowlists() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  for (const token of ["COMPANION_BEHAVIOR_DECISION_REASONS", "none", "user_active", "message_management", "correction", "reset", "attention_returned", "pet_attention"]) {
+    assert.ok(src.includes(token), `renderer.js must include decision reason token ${token}`);
+  }
+  for (const token of ["COMPANION_BEHAVIOR_ACTION_ALLOWLIST", "mirror_expression", "show_reaction_bubble", "mirror_expression_and_bubble"]) {
+    assert.ok(src.includes(token), `renderer.js must include decision action token ${token}`);
+  }
+  console.log("  testTask221DecisionAllowlists PASS");
+}
+
+async function testTask221DecisionMapping() {
+  const { sandbox } = await loadRenderer();
+  const cases = [
+    ["user_active", "focused", "user_active", true, true, "mirror_expression_and_bubble"],
+    ["message_management", "neutral", "message_management", true, true, "mirror_expression_and_bubble"],
+    ["correction", "annoyed", "correction", true, true, "mirror_expression_and_bubble"],
+    ["reset", "neutral", "reset", true, true, "mirror_expression_and_bubble"],
+    ["attention_returned", "happy", "attention_returned", true, true, "mirror_expression_and_bubble"],
+    ["none", "neutral", "none", false, false, "none"],
+  ];
+  for (const [hint, expression, bubbleId, shouldMirrorExpression, shouldShowBubble, action] of cases) {
+    const decision = sandbox.deriveCompanionBehaviorDecision({ reactionHint: hint, expression, bubbleId });
+    assert.equal(decision.reason, hint, `decision reason mismatch for ${hint}`);
+    assert.equal(decision.reactionHint, hint, `decision reactionHint mismatch for ${hint}`);
+    assert.equal(decision.expression, expression, `decision expression mismatch for ${hint}`);
+    assert.equal(decision.bubbleId, bubbleId, `decision bubbleId mismatch for ${hint}`);
+    assert.equal(decision.shouldMirrorExpression, shouldMirrorExpression, `decision mirror flag mismatch for ${hint}`);
+    assert.equal(decision.shouldShowBubble, shouldShowBubble, `decision bubble flag mismatch for ${hint}`);
+    assert.equal(decision.action, action, `decision action mismatch for ${hint}`);
+  }
+  console.log("  testTask221DecisionMapping PASS");
+}
+
+async function testTask221PetAttentionDecision() {
+  const { sandbox } = await loadRenderer();
+  const decision = sandbox.deriveCompanionBehaviorDecision({ reactionHint: "pet_attention" });
+  assert.equal(decision.expression, "proud", "pet_attention decision must default expression to proud");
+  assert.equal(decision.bubbleId, "none", "pet_attention decision must not show a TASK-220 bubble");
+  assert.equal(decision.shouldMirrorExpression, true, "pet_attention must mirror expression");
+  assert.equal(decision.shouldShowBubble, false, "pet_attention must not show reaction bubble");
+  assert.equal(decision.action, "mirror_expression", "pet_attention action must be mirror_expression");
+  console.log("  testTask221PetAttentionDecision PASS");
+}
+
+async function testTask221UnknownFallbacks() {
+  const { sandbox } = await loadRenderer();
+  let decision = sandbox.deriveCompanionBehaviorDecision({ reactionHint: "UNKNOWN_HINT", expression: "focused", bubbleId: "user_active" });
+  assert.equal(decision.reason, "none", "unknown reactionHint must fallback to none");
+  assert.equal(decision.expression, "neutral", "unknown reactionHint must force neutral expression");
+  assert.equal(decision.bubbleId, "none", "unknown reactionHint must force none bubbleId");
+  decision = sandbox.deriveCompanionBehaviorDecision({ reactionHint: "user_active", expression: "UNKNOWN_EXPRESSION", bubbleId: "user_active" });
+  assert.equal(decision.expression, "neutral", "unknown expression must fallback to neutral");
+  decision = sandbox.deriveCompanionBehaviorDecision({ reactionHint: "user_active", expression: "focused", bubbleId: "UNKNOWN_BUBBLE" });
+  assert.equal(decision.bubbleId, "none", "unknown bubbleId must fallback to none");
+  assert.equal(decision.action, "mirror_expression", "unknown bubbleId must remove bubble action");
+  console.log("  testTask221UnknownFallbacks PASS");
+}
+
+async function testTask221RecordDecisionRingBuffer() {
+  const { sandbox } = await loadRenderer();
+  for (let i = 0; i < 25; i += 1) {
+    sandbox.recordCompanionBehaviorDecision(sandbox.deriveCompanionBehaviorDecision({
+      reactionHint: i % 2 ? "correction" : "reset",
+    }));
+  }
+  assert.equal(sandbox.recentCompanionBehaviorDecisions.length, 20,
+    "recentCompanionBehaviorDecisions must cap at 20");
+  console.log("  testTask221RecordDecisionRingBuffer PASS");
+}
+
+async function testTask221CurrentDecisionUpdatesLatest() {
+  const { sandbox } = await loadRenderer();
+  sandbox.recordCompanionBehaviorDecision(sandbox.deriveCompanionBehaviorDecision({ reactionHint: "user_active" }));
+  assert.equal(sandbox.currentCompanionBehaviorDecision.reason, "user_active",
+    "currentCompanionBehaviorDecision must update to user_active");
+  sandbox.recordCompanionBehaviorDecision(sandbox.deriveCompanionBehaviorDecision({ reactionHint: "attention_returned" }));
+  assert.equal(sandbox.currentCompanionBehaviorDecision.reason, "attention_returned",
+    "currentCompanionBehaviorDecision must update to latest decision");
+  assert.equal(sandbox.currentCompanionBehaviorDecision.action, "mirror_expression_and_bubble",
+    "latest currentCompanionBehaviorDecision action mismatch");
+  console.log("  testTask221CurrentDecisionUpdatesLatest PASS");
+}
+
+async function testTask221DecisionNoRawText() {
+  const { sandbox } = await loadRenderer();
+  const decision = sandbox.deriveCompanionBehaviorDecision({
+    reactionHint: "user_active",
+    expression: "focused",
+    bubbleId: "user_active",
+    message: "RAW_USER_TEXT_FORBIDDEN",
+    text: "RAW_USER_TEXT_FORBIDDEN",
+    body: "RAW_USER_TEXT_FORBIDDEN",
+    rawText: "RAW_USER_TEXT_FORBIDDEN",
+    content: "RAW_USER_TEXT_FORBIDDEN",
+    reply: "RAW_USER_TEXT_FORBIDDEN",
+  });
+  sandbox.recordCompanionBehaviorDecision(decision);
+  const serialized = JSON.stringify(sandbox.recentCompanionBehaviorDecisions);
+  assert.ok(!serialized.includes("RAW_USER_TEXT_FORBIDDEN"),
+    "companion behavior decision buffer must not store raw text fields");
+  assert.deepEqual(Object.keys(sandbox.currentCompanionBehaviorDecision).sort(), [
+    "action",
+    "bubbleId",
+    "expression",
+    "reactionHint",
+    "reason",
+    "shouldMirrorExpression",
+    "shouldShowBubble",
+    "ts",
+  ], "companion behavior decision must only store allowlisted keys");
+  console.log("  testTask221DecisionNoRawText PASS");
+}
+
+async function testTask221InteractionFlowUpdatesDecision() {
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      sendPetExpressionSuggestion() { return Promise.resolve({ ok: true }); },
+      sendPetReactionBubble() { return Promise.resolve({ ok: true }); },
+    },
+  });
+  const cases = [
+    ["chat_message_sent", "user_active", "focused", "user_active", "mirror_expression_and_bubble"],
+    ["message_deleted", "message_management", "neutral", "message_management", "mirror_expression_and_bubble"],
+    ["message_edited", "correction", "annoyed", "correction", "mirror_expression_and_bubble"],
+    ["chat_history_cleared", "reset", "neutral", "reset", "mirror_expression_and_bubble"],
+    ["full_app_focused", "attention_returned", "happy", "attention_returned", "mirror_expression_and_bubble"],
+  ];
+  for (const [eventType, reason, expression, bubbleId, action] of cases) {
+    sandbox.recordInteractionEvent(eventType, { messageLength: 5, source: "full_app", text: "RAW_USER_TEXT_FORBIDDEN" });
+    assert.equal(sandbox.currentCompanionBehaviorDecision.reason, reason, `${eventType} decision reason mismatch`);
+    assert.equal(sandbox.currentCompanionBehaviorDecision.expression, expression, `${eventType} decision expression mismatch`);
+    assert.equal(sandbox.currentCompanionBehaviorDecision.bubbleId, bubbleId, `${eventType} decision bubbleId mismatch`);
+    assert.equal(sandbox.currentCompanionBehaviorDecision.action, action, `${eventType} decision action mismatch`);
+  }
+  console.log("  testTask221InteractionFlowUpdatesDecision PASS");
+}
+
+async function testTask221PreviewShowsDecision() {
+  const { document, sandbox } = await loadRenderer();
+  const el = document.getElementById("interaction-reaction-preview");
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 7 });
+  assert.ok(el.textContent.includes("Reaction: user_active"), "preview must include TASK-215 reaction");
+  assert.ok(el.textContent.includes("Suggestion: focused"), "preview must include TASK-217 suggestion");
+  assert.ok(el.textContent.includes("Decision: mirror_expression_and_bubble"),
+    "preview must include TASK-221 decision action");
+  console.log("  testTask221PreviewShowsDecision PASS");
+}
+
+async function testTask221PreviewNotInHistory() {
+  const appendCalls = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryAppend(entry) { appendCalls.push(entry); return Promise.resolve({ ok: true }); },
+    },
+  });
+  await settle();
+  appendCalls.length = 0;
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 9 });
+  await settle();
+  assert.equal(appendCalls.length, 0, "companion decision preview must not write chat history");
+  console.log("  testTask221PreviewNotInHistory PASS");
+}
+
+async function testTask221PreviewNotInTranscript() {
+  const { sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "TASK221 transcript user", { noHistory: true });
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 9 });
+  const transcript = sandbox.buildChatTranscript();
+  assert.ok(!transcript.includes("Decision:"), "companion decision preview must not enter copy/export transcript");
+  assert.ok(!transcript.includes("mirror_expression_and_bubble"),
+    "companion decision action must not enter copy/export transcript");
+  console.log("  testTask221PreviewNotInTranscript PASS");
+}
+
+async function testTask221NoChatHistorySpeechOrTts() {
+  const chatCalls = [];
+  const appendCalls = [];
+  const speechCalls = [];
+  const { sandbox } = await loadRenderer({
+    fetch: async (url) => { chatCalls.push(url); return { ok: true, json: async () => ({}) }; },
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryAppend(entry) { appendCalls.push(entry); return Promise.resolve({ ok: true }); },
+      updatePetSpeech(payload) { speechCalls.push(payload); return Promise.resolve({ ok: true }); },
+      sendPetExpressionSuggestion() { return Promise.resolve({ ok: true }); },
+      sendPetReactionBubble() { return Promise.resolve({ ok: true }); },
+    },
+  });
+  await settle();
+  chatCalls.length = 0;
+  appendCalls.length = 0;
+  speechCalls.length = 0;
+  sandbox.recordInteractionEvent("message_edited", {
+    messageLength: 11,
+    message: "RAW_USER_TEXT_FORBIDDEN",
+    text: "RAW_USER_TEXT_FORBIDDEN",
+    body: "RAW_USER_TEXT_FORBIDDEN",
+    rawText: "RAW_USER_TEXT_FORBIDDEN",
+    content: "RAW_USER_TEXT_FORBIDDEN",
+    reply: "RAW_USER_TEXT_FORBIDDEN",
+  });
+  await settle();
+  assert.equal(chatCalls.filter((url) => String(url).endsWith("/chat")).length, 0,
+    "companion behavior policy must not call /chat");
+  assert.equal(appendCalls.length, 0, "companion behavior policy must not write chat history");
+  assert.equal(speechCalls.length, 0, "companion behavior policy must not call updatePetSpeech/TTS path");
+  console.log("  testTask221NoChatHistorySpeechOrTts PASS");
+}
+
+function testTask221NoNewIpcChannelsAndPreservesExisting() {
+  const rendererPreload = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "preload.js"), "utf8");
+  const mainSrc = fs.readFileSync(path.join(desktopRoot, "src", "main.js"), "utf8");
+  const petPreload = fs.readFileSync(path.join(desktopRoot, "src", "pet", "pet-preload.js"), "utf8");
+  for (const src of [rendererPreload, mainSrc, petPreload]) {
+    assert.ok(!src.includes("companion-behavior"), "TASK-221 must not add companion behavior IPC");
+    assert.ok(!src.includes("companion:behavior"), "TASK-221 must not add broad companion IPC");
+  }
+  assert.ok(rendererPreload.includes('PET_EXPRESSION_SUGGESTION_CHANNEL = "pet:expression-suggestion"'),
+    "TASK-218 narrow renderer invoke channel must remain");
+  assert.ok(mainSrc.includes('PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL = "pet:expression-suggestion-received"'),
+    "TASK-218 narrow main send channel must remain");
+  assert.ok(rendererPreload.includes('PET_REACTION_BUBBLE_CHANNEL = "pet:reaction-bubble"'),
+    "TASK-220 narrow renderer invoke channel must remain");
+  assert.ok(mainSrc.includes('PET_REACTION_BUBBLE_RECEIVED_CHANNEL = "pet:reaction-bubble-received"'),
+    "TASK-220 narrow main send channel must remain");
+  assert.ok(!rendererPreload.includes('PET_EXPRESSION_SUGGESTION_CHANNEL = "pet"'),
+    "TASK-218 expression channel must not be generic pet");
+  assert.ok(!rendererPreload.includes('PET_REACTION_BUBBLE_CHANNEL = "pet"'),
+    "TASK-220 reaction bubble channel must not be generic pet");
+  console.log("  testTask221NoNewIpcChannelsAndPreservesExisting PASS");
+}
+
+function testTask221RegressionGuards() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(!src.includes("hover-action"), "TASK-221 must not restore hover action buttons");
+  assert.ok(src.includes("chat-context-menu"), "TASK-221 must keep context menu");
+  assert.ok(src.includes("複製") && src.includes("刪除") && src.includes("編輯"),
+    "TASK-221 must keep context menu copy/delete/edit actions");
+  assert.ok(src.includes("function isLastEditableUserMessage") && src.includes("entry.role !== \"user\""),
+    "TASK-221 must keep edit limited to last formal user message");
+  assert.ok(src.includes("showPetWindow"), "TASK-221 must not remove Pet Window entry point");
+  console.log("  testTask221RegressionGuards PASS");
+}
+
 // ─── TASK-218: Safe Pet Expression Suggestion Mirror ─────────────────────────
 
 function testTask218RendererHasMirrorFunction() {
@@ -8252,6 +8516,23 @@ async function main() {
   await testTask220MirrorNoneNoopAndNoBridgeNoThrow();
   await testTask220ReactionBubbleNoChatHistorySpeechOrTts();
   testTask220ExpressionMirrorRegressionStillPresent();
+
+  // TASK-221: Companion Behavior Policy Layer
+  testTask221RendererHasDecisionState();
+  testTask221DecisionAllowlists();
+  await testTask221DecisionMapping();
+  await testTask221PetAttentionDecision();
+  await testTask221UnknownFallbacks();
+  await testTask221RecordDecisionRingBuffer();
+  await testTask221CurrentDecisionUpdatesLatest();
+  await testTask221DecisionNoRawText();
+  await testTask221InteractionFlowUpdatesDecision();
+  await testTask221PreviewShowsDecision();
+  await testTask221PreviewNotInHistory();
+  await testTask221PreviewNotInTranscript();
+  await testTask221NoChatHistorySpeechOrTts();
+  testTask221NoNewIpcChannelsAndPreservesExisting();
+  testTask221RegressionGuards();
 
   // TASK-218: Safe Pet Expression Suggestion Mirror
   testTask218RendererHasMirrorFunction();

@@ -22064,3 +22064,190 @@ The handler does not:
 | TTL restore：約 3 秒後恢復 recent reply / idle | PASS |
 | Copy / Export / History 邊界：reaction bubble 沒有進入 history/copy/export | PASS |
 | 一般回歸：沒有 TTS、沒有額外 `/chat`、沒有主動長篇發話，context menu / edit / delete / clear / Pet Window 功能正常 | PASS |
+---
+
+## TASK-221 | Companion Behavior Policy Layer
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-06-01
+**Phase:** Phase 5 — Companion Behavior Loop (Interactive Pet Track)
+**Depends on:** TASK-214 through TASK-220 (`currentInteractionReactionHint`, expression suggestion/mirror, expression debounce, reaction bubble mirror)
+
+### Goal
+
+Add a pure Full App renderer policy layer that summarizes what the companion should do for an interaction, without driving side effects itself.
+
+### Implementation Summary
+
+- Added `deriveCompanionBehaviorDecision(context)`.
+- Added `recordCompanionBehaviorDecision(decision)`.
+- Added `currentCompanionBehaviorDecision`.
+- Added `recentCompanionBehaviorDecisions`.
+- Added `COMPANION_BEHAVIOR_DECISION_MAX = 20`.
+- Added allowlisted reasons: `none`, `user_active`, `message_management`, `correction`, `reset`, `attention_returned`, `pet_attention`.
+- Added allowlisted actions: `none`, `mirror_expression`, `show_reaction_bubble`, `mirror_expression_and_bubble`.
+- `recordInteractionReactionHint` still runs TASK-217 expression suggestion and TASK-220 reaction bubble recording first, then records a TASK-221 decision from the current hint/expression/bubble state.
+- TASK-221 does not control TASK-218/219/220 side effects. Expression mirror and reaction bubble mirror remain on their existing code paths.
+- Scope remains Full App renderer-only for runtime behavior.
+- The decision object is used only for local decision summary / preview.
+
+### Behavior Decision Schema
+
+```js
+{
+  reason: "user_active",
+  reactionHint: "user_active",
+  expression: "focused",
+  bubbleId: "user_active",
+  shouldMirrorExpression: true,
+  shouldShowBubble: true,
+  action: "mirror_expression_and_bubble",
+  ts: 0
+}
+```
+
+None state:
+
+```js
+{
+  reason: "none",
+  reactionHint: "none",
+  expression: "neutral",
+  bubbleId: "none",
+  shouldMirrorExpression: false,
+  shouldShowBubble: false,
+  action: "none",
+  ts: 0
+}
+```
+
+Stored decision entries contain only:
+
+- `reason`
+- `reactionHint`
+- `expression`
+- `bubbleId`
+- `shouldMirrorExpression`
+- `shouldShowBubble`
+- `action`
+- `ts`
+
+### Decision Mapping
+
+| Reason | Expression | Bubble Id | Mirror Expression | Show Bubble | Action |
+|---|---|---|---|---|---|
+| `user_active` | `focused` | `user_active` | true | true | `mirror_expression_and_bubble` |
+| `message_management` | `neutral` | `message_management` | true | true | `mirror_expression_and_bubble` |
+| `correction` | `annoyed` | `correction` | true | true | `mirror_expression_and_bubble` |
+| `reset` | `neutral` | `reset` | true | true | `mirror_expression_and_bubble` |
+| `attention_returned` | `happy` | `attention_returned` | true | true | `mirror_expression_and_bubble` |
+| `pet_attention` | `proud` | `none` | true | false | `mirror_expression` |
+| `none` | `neutral` | `none` | false | false | `none` |
+
+Sanitization:
+
+- Unknown `reactionHint` -> `none`.
+- Unknown `expression` -> `neutral`.
+- Unknown `bubbleId` -> `none`.
+- `none` always forces expression `neutral` and bubble id `none`.
+- `pet_attention` always forces bubble id `none` because TASK-220 has no `pet_attention` bubble.
+
+### Preview Display
+
+Preview changed from:
+
+```text
+Reaction: <hint> · Suggestion: <expression>
+```
+
+to:
+
+```text
+Reaction: <hint> · Suggestion: <expression> · Decision: <action>
+```
+
+Example:
+
+```text
+Reaction: user_active · Suggestion: focused · Decision: mirror_expression_and_bubble
+```
+
+The preview remains local-only and is not written to chat history, copy, or export transcript.
+
+### Safety Boundary Confirmation
+
+- No backend change.
+- No `/chat` schema change.
+- No `/chat` call.
+- No chat history format change.
+- No chat history write.
+- No new IPC.
+- No generic IPC/channel.
+- No decision payload sent to Pet Window.
+- No Pet Window runtime change.
+- No Pet Bubble behavior change.
+- No expression mirror behavior change.
+- No reaction bubble mirror behavior change.
+- No TTS.
+- No proactive speech.
+- No LLM-based reaction generation.
+- No user message text sent to Pet Window.
+- No raw message text stored.
+- No `innerHTML`.
+- No background monitoring / OCR / screenshot.
+- No Ollama/provider runtime change.
+- No hover action buttons restored.
+- No user/pet message edit rule changes.
+- TASK-218 narrow IPC retained: `pet:expression-suggestion` / `pet:expression-suggestion-received`.
+- TASK-220 narrow IPC retained: `pet:reaction-bubble` / `pet:reaction-bubble-received`.
+- Generic `"pet"` is not used for TASK-218/TASK-220 mirrors.
+
+### Automated Smoke Test Coverage
+
+| Suite | Coverage |
+|---|---|
+| `renderer-chat-smoke.js` | TASK-221 state/static checks; decision reason/action allowlists; mapping; `pet_attention`; unknown fallback handling; ring buffer cap; latest current decision; no raw text in decision buffer; interaction flow updates decision; preview includes decision action; preview not in history/transcript; no `/chat`/history/speech; no new IPC; TASK-218/TASK-220 narrow channel regression; hover/context menu/edit/Pet Window guards |
+| `pet-window-smoke.js` | Existing TASK-218/TASK-220 Pet Window channel and relay coverage retained; no TASK-221 runtime change |
+| `pet-renderer-smoke.js` | Existing TASK-218/TASK-220 Pet preload/Pet renderer handler coverage retained; no TASK-221 runtime change |
+
+### Automated Smoke Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+15 TASK-221 tests) |
+| `pet-window-smoke.js` | PASS (82 checks, no TASK-221 runtime change) |
+| `pet-renderer-smoke.js` | PASS (263 checks, no TASK-221 runtime change) |
+| `git diff --check` | CLEAN |
+
+### Acceptance Criteria
+
+- [x] `deriveCompanionBehaviorDecision(context)` implemented.
+- [x] `recordCompanionBehaviorDecision(decision)` implemented.
+- [x] `currentCompanionBehaviorDecision` implemented.
+- [x] `recentCompanionBehaviorDecisions` implemented.
+- [x] `COMPANION_BEHAVIOR_DECISION_MAX = 20`.
+- [x] Decision reason/action allowlists implemented.
+- [x] Mapping implemented for `user_active`, `message_management`, `correction`, `reset`, `attention_returned`, `pet_attention`, and `none`.
+- [x] Unknown hint/expression/bubble fallback behavior implemented.
+- [x] Preview includes `Decision: <action>`.
+- [x] Preview remains outside history/copy/export.
+- [x] Decision entries store no raw message text.
+- [x] No `/chat`, history, Pet Bubble, TTS, backend, provider/Ollama, OCR/screenshot, new IPC, generic IPC, or Pet Window runtime change.
+- [x] TASK-218/219/220 behavior retained.
+- [x] `renderer-chat-smoke.js` PASS.
+- [x] `pet-window-smoke.js` PASS.
+- [x] `pet-renderer-smoke.js` PASS.
+- [x] `git diff --check` CLEAN.
+- [x] Windows visual smoke PASS (2026-06-01).
+
+### Windows Visual Smoke Results (2026-06-01)
+
+| Scenario | Result |
+|---|---|
+| 基本啟動：Preview `none/neutral/none`，Pet Window 正常 | PASS |
+| 送出訊息：Preview `user_active/focused/mirror_expression_and_bubble` | PASS |
+| Delete / Undo：Preview `message_management/neutral/mirror_expression_and_bubble` | PASS |
+| Edit last user：Preview `correction/annoyed/mirror_expression_and_bubble` | PASS |
+| Clear Chat：Preview `reset/neutral/mirror_expression_and_bubble` | PASS |
+| Focus：Preview `attention_returned/happy/mirror_expression_and_bubble` | PASS |
+| 一般回歸：沒有新增 IPC side-effect，沒有額外 TTS，沒有額外 `/chat`，沒有 history/copy/export 污染，Pet Window 表情與 reaction bubble 行為維持正常 | PASS |

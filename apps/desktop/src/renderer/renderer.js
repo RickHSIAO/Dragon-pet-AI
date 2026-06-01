@@ -657,6 +657,149 @@ const INTERACTION_REACTION_BUBBLE_TTL_MS = 3000;
 var recentInteractionReactionBubbles = []; // var: exposed to vm sandbox for smoke tests
 var currentInteractionReactionBubble = { id: "none", text: "", source: "interaction_reaction_bubble" };
 
+// TASK-221: Companion behavior policy layer.
+// Pure local decision summary only; it does not drive mirror side effects.
+const COMPANION_BEHAVIOR_DECISION_REASONS = new Set([
+  "none",
+  "user_active",
+  "message_management",
+  "correction",
+  "reset",
+  "attention_returned",
+  "pet_attention",
+]);
+const COMPANION_BEHAVIOR_ACTION_ALLOWLIST = new Set([
+  "none",
+  "mirror_expression",
+  "show_reaction_bubble",
+  "mirror_expression_and_bubble",
+]);
+const COMPANION_BEHAVIOR_DECISION_MAX = 20;
+var recentCompanionBehaviorDecisions = []; // var: exposed to vm sandbox for smoke tests
+var currentCompanionBehaviorDecision = {
+  reason: "none",
+  reactionHint: "none",
+  expression: "neutral",
+  bubbleId: "none",
+  shouldMirrorExpression: false,
+  shouldShowBubble: false,
+  action: "none",
+  ts: 0,
+};
+
+function defaultCompanionExpressionForReason(reason) {
+  switch (reason) {
+    case "user_active":        return "focused";
+    case "correction":         return "annoyed";
+    case "attention_returned": return "happy";
+    case "pet_attention":      return "proud";
+    case "message_management":
+    case "reset":
+    case "none":
+    default:                   return "neutral";
+  }
+}
+
+function defaultCompanionBubbleIdForReason(reason) {
+  switch (reason) {
+    case "user_active":
+    case "message_management":
+    case "correction":
+    case "reset":
+    case "attention_returned":
+      return reason;
+    case "pet_attention":
+    case "none":
+    default:
+      return "none";
+  }
+}
+
+function deriveCompanionBehaviorAction(shouldMirrorExpression, shouldShowBubble) {
+  if (shouldMirrorExpression && shouldShowBubble) return "mirror_expression_and_bubble";
+  if (shouldMirrorExpression) return "mirror_expression";
+  if (shouldShowBubble) return "show_reaction_bubble";
+  return "none";
+}
+
+function deriveCompanionBehaviorDecision(context = {}) {
+  const source = context && typeof context === "object" ? context : {};
+  const rawHint = typeof source.reactionHint === "string" ? source.reactionHint : "";
+  const safeReason = COMPANION_BEHAVIOR_DECISION_REASONS.has(rawHint) ? rawHint : "none";
+  const rawExpression = typeof source.expression === "string" ? source.expression : "";
+  let safeExpression = rawExpression
+    ? (INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST.has(rawExpression) ? rawExpression : "neutral")
+    : defaultCompanionExpressionForReason(safeReason);
+  if (safeReason === "none") safeExpression = "neutral";
+
+  const rawBubbleId = typeof source.bubbleId === "string" ? source.bubbleId : "";
+  let safeBubbleId = rawBubbleId
+    ? (INTERACTION_REACTION_BUBBLE_ALLOWLIST.has(rawBubbleId) ? rawBubbleId : "none")
+    : defaultCompanionBubbleIdForReason(safeReason);
+  if (safeReason === "none" || safeReason === "pet_attention") safeBubbleId = "none";
+
+  const shouldMirrorExpression = safeReason !== "none";
+  const shouldShowBubble = safeBubbleId !== "none";
+  const action = deriveCompanionBehaviorAction(shouldMirrorExpression, shouldShowBubble);
+  return {
+    reason: safeReason,
+    reactionHint: safeReason,
+    expression: safeExpression,
+    bubbleId: safeBubbleId,
+    shouldMirrorExpression,
+    shouldShowBubble,
+    action,
+    ts: Date.now(),
+  };
+}
+
+function recordCompanionBehaviorDecision(decision = {}) {
+  const source = decision && typeof decision === "object" ? decision : {};
+  const safeReason = COMPANION_BEHAVIOR_DECISION_REASONS.has(source.reason) ? source.reason : "none";
+  const safeReactionHint = INTERACTION_REACTION_HINT_ALLOWLIST.has(source.reactionHint)
+    ? source.reactionHint
+    : safeReason;
+  const safeExpression = INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST.has(source.expression)
+    ? source.expression
+    : "neutral";
+  const safeBubbleId = INTERACTION_REACTION_BUBBLE_ALLOWLIST.has(source.bubbleId)
+    ? source.bubbleId
+    : "none";
+  const shouldMirrorExpression = Boolean(source.shouldMirrorExpression);
+  const shouldShowBubble = Boolean(source.shouldShowBubble);
+  const derivedAction = deriveCompanionBehaviorAction(shouldMirrorExpression, shouldShowBubble);
+  const safeAction = COMPANION_BEHAVIOR_ACTION_ALLOWLIST.has(source.action)
+    ? source.action
+    : derivedAction;
+  const safeTs = Number.isFinite(source.ts) && source.ts > 0 ? source.ts : Date.now();
+  const entry = {
+    reason: safeReason,
+    reactionHint: safeReactionHint,
+    expression: safeExpression,
+    bubbleId: safeBubbleId,
+    shouldMirrorExpression,
+    shouldShowBubble,
+    action: safeAction,
+    ts: safeTs,
+  };
+  recentCompanionBehaviorDecisions.push(entry);
+  if (recentCompanionBehaviorDecisions.length > COMPANION_BEHAVIOR_DECISION_MAX) {
+    recentCompanionBehaviorDecisions.shift();
+  }
+  currentCompanionBehaviorDecision = entry;
+  return currentCompanionBehaviorDecision;
+}
+
+function recordCurrentCompanionBehaviorDecision() {
+  return recordCompanionBehaviorDecision(deriveCompanionBehaviorDecision({
+    reactionHint: currentInteractionReactionHint,
+    expression: currentInteractionExpressionSuggestion,
+    bubbleId: currentInteractionReactionBubble && currentInteractionReactionBubble.id
+      ? currentInteractionReactionBubble.id
+      : "none",
+  }));
+}
+
 function deriveInteractionReactionHint(event) {
   switch (event.type) {
     case "chat_message_sent":    return "user_active";
@@ -686,6 +829,7 @@ function recordInteractionReactionHint(hint, event = {}) {
   recordInteractionExpressionSuggestion(expression, safeHint);        // TASK-217
   const bubble = deriveInteractionReactionBubble(safeHint);           // TASK-220
   recordInteractionReactionBubble(bubble, safeHint);                  // TASK-220
+  recordCurrentCompanionBehaviorDecision();                           // TASK-221
   renderInteractionReactionPreview(); // TASK-216/217
 }
 
@@ -839,7 +983,11 @@ function renderInteractionReactionPreview() {
   const safeExpression = INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST.has(currentInteractionExpressionSuggestion)
     ? currentInteractionExpressionSuggestion
     : "neutral";
-  el.textContent = "Reaction: " + safeHint + " · Suggestion: " + safeExpression;
+  const safeAction = currentCompanionBehaviorDecision
+    && COMPANION_BEHAVIOR_ACTION_ALLOWLIST.has(currentCompanionBehaviorDecision.action)
+    ? currentCompanionBehaviorDecision.action
+    : "none";
+  el.textContent = "Reaction: " + safeHint + " · Suggestion: " + safeExpression + " · Decision: " + safeAction;
 }
 
 function recordInteractionEvent(type, payload = {}) {
