@@ -1,11 +1,11 @@
 # Interactive Companion Architecture Checkpoint
 
-**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-225 IMPLEMENTED - DOCS ONLY / NO WINDOWS SMOKE REQUIRED
+**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-226 IMPLEMENTED - DOCS ONLY / NO WINDOWS SMOKE REQUIRED
 **Date:** 2026-06-01
-**Scope:** Architecture checkpoint for TASK-214 through TASK-225.
+**Scope:** Architecture checkpoint for TASK-214 through TASK-226.
 
 This document records the current interactive companion architecture after the
-TASK-214 through TASK-225 chain.
+TASK-214 through TASK-226 chain.
 
 ---
 
@@ -55,6 +55,7 @@ user interaction
 | TASK-223 | Character state layer | Summarizes mood, attention, energy, and recent interaction level. DONE - Windows visual smoke PASS. |
 | TASK-224 | Character state preview diagnostics | Formats local reaction, decision, state, and level preview. DONE - Windows visual smoke PASS. |
 | TASK-225 | Persona context pack | Adds Christina persona source, safe adaptation, strength levels, and runtime boundary. DOCS ONLY. |
+| TASK-226 | Output queue / priority design | Defines future output arbitration priorities and preemption rules. DOCS ONLY. |
 
 ---
 
@@ -252,7 +253,37 @@ controller. It does not control side effects.
 
 ---
 
-## 9. Smoke Coverage Summary
+## 9. Future Output Queue / Priority Design
+
+TASK-226 adds `docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md` as a docs-only design
+for a future interaction output queue and priority model. This future layer
+would arbitrate outputs such as chat replies, Pet bubble reactions, expression
+mirrors, diagnostics preview, idle reactions, TTS, STT-confirmed transcript
+handoff, manual Pet input, notifications, and long reply segments.
+
+The proposed priority model is:
+
+| Priority | Output class |
+|---|---|
+| P0 | Critical safety / error |
+| P1 | User direct action |
+| P2 | LLM chat reply |
+| P3 | Important companion reaction |
+| P4 | Normal companion reaction |
+| P5 | Idle / ambient reaction |
+| P6 | Diagnostics only |
+
+The design also records preemption rules, queue item schema proposal, channel
+taxonomy, bubble/expression rules, and future TTS/STT boundaries. It is not
+runtime. It does not add queue execution, IPC, Pet Window side effects, TTS,
+STT, prompt wiring, `/chat` changes, or background behavior.
+
+Important: the future output queue is an execution arbitration layer, but
+TASK-226 only documents that layer. It does not implement it.
+
+---
+
+## 10. Smoke Coverage Summary
 
 The completed stack is covered by:
 
@@ -285,7 +316,7 @@ raw JSON, or user text, and no Pet Window expression/reaction bubble regression.
 
 ---
 
-## 10. Known Boundaries / Not Yet Implemented
+## 11. Known Boundaries / Not Yet Implemented
 
 The current system does not yet implement:
 
@@ -297,6 +328,10 @@ The current system does not yet implement:
 - Always listening.
 - User-configurable behavior policy.
 - Behavior decision controlling execution.
+- Output queue runtime arbitration.
+- Bubble priority enforcement.
+- TTS-safe segment runtime.
+- Idle reaction policy.
 
 Important: TASK-221 behavior decisions, TASK-223 character states, and TASK-224
 diagnostics previews are currently summary/preview only. They do not execute
@@ -304,7 +339,7 @@ actions directly.
 
 ---
 
-## 11. Recommended Next Phase
+## 12. Recommended Next Phase
 
 Recommended next architecture phase:
 
@@ -313,6 +348,7 @@ Recommended next architecture phase:
 - Idle reaction policy.
 - Behavior policy starts controlling execution.
 - Safe reaction frequency governor.
+- Output queue runtime skeleton, disabled by default.
 
 These should still avoid jumping directly to LLM proactive speech, screen
 monitoring, OCR, always listening, or broad IPC. Each capability should be

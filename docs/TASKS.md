@@ -22976,3 +22976,104 @@ TASK-225 is docs-only:
 - [x] Interactive companion architecture doc records persona pack as content layer.
 - [x] No code/runtime/prompt/TTS/STT/IPC/`/chat` change.
 - [x] No Windows visual smoke required.
+
+---
+
+## TASK-226 | Interaction Output Queue / Priority Design
+
+**Status:** IMPLEMENTED - DOCS ONLY / NO WINDOWS SMOKE REQUIRED
+**Date:** 2026-06-01
+**Phase:** Phase 5 - Companion Output Arbitration Design
+**Depends on:** TASK-214 through TASK-225
+
+### Goal
+
+Design a future Interaction Output Queue / Priority model for Dragon Pet AI so
+chat replies, reaction bubbles, expression mirrors, diagnostics preview, future
+idle reactions, TTS, STT, manual Pet input, notifications, and long reply
+segments can be arbitrated safely before runtime queue work begins.
+
+### Summary
+
+Added:
+
+- `docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md`
+
+The design document covers:
+
+- Purpose and problem statement.
+- Current and future output source inventory.
+- Priority levels P0 through P6.
+- Preemption rules.
+- Bubble display rules.
+- Expression rules.
+- TTS future rules.
+- STT future rules.
+- Queue item schema proposal.
+- Channel taxonomy.
+- Safety boundary / forbidden list.
+- Relationship to existing docs.
+- Recommended future implementation tasks.
+
+### Priority Model Summary
+
+| Priority | Label | Examples |
+|---|---|---|
+| P0 | Critical safety / error | crash-safe fallback, backend error, TTS error fallback, safety warning |
+| P1 | User direct action | submitted chat, manual Pet input, explicit button/menu command |
+| P2 | LLM chat reply | normal `/chat` reply, long reply segments, future TTS-safe speech from reply |
+| P3 | Important companion reaction | `attention_returned`, `correction`, `reset`, high-confidence decision reaction |
+| P4 | Normal companion reaction | `user_active`, `message_management`, fixed short reaction bubble |
+| P5 | Idle / ambient reaction | future idle bubble, low-frequency mood line, silent expression-only reaction |
+| P6 | Diagnostics only | Full App preview, state/decision debug, internal counters |
+
+### Runtime Boundary
+
+TASK-226 is docs-only:
+
+- No queue runtime implementation.
+- No renderer behavior change.
+- No Pet Window behavior change.
+- No backend behavior change.
+- No `/chat` API schema change.
+- No chat history persistence format change.
+- No IPC added.
+- No generic IPC added.
+- No TTS added.
+- No STT added.
+- No `/chat` call added.
+- No Ollama / Provider runtime change.
+- No prompt runtime change.
+- No assets added.
+
+### Future Task Suggestions
+
+- TASK-227 Output Queue Runtime Skeleton, disabled by default.
+- TASK-228 Output Queue Debug Preview.
+- TASK-229 Bubble Priority Enforcement.
+- TASK-230 TTS-safe segment design.
+- TASK-231 Idle Reaction Policy, fixed only, no LLM.
+- TASK-232 User controls for companion reaction verbosity.
+
+### Acceptance Criteria
+
+- [x] `docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md` created.
+- [x] Purpose and problem statement documented.
+- [x] Output source inventory documented.
+- [x] Priority levels P0-P6 documented.
+- [x] Preemption rules documented.
+- [x] Bubble display rules documented.
+- [x] Expression rules documented.
+- [x] TTS future boundary documented.
+- [x] STT future boundary documented.
+- [x] Queue item schema proposal documented.
+- [x] Channel taxonomy documented.
+- [x] Safety boundary / forbidden list documented.
+- [x] Relationship to existing docs documented.
+- [x] Future implementation task suggestions documented.
+- [x] README links the output queue design.
+- [x] ROADMAP records TASK-226 as docs-only.
+- [x] Interactive companion architecture doc records output queue as future
+  execution arbitration layer.
+- [x] No code/runtime/prompt/TTS/STT/IPC/`/chat` change.
+- [x] No Windows visual smoke required.

@@ -1,0 +1,336 @@
+# Interaction Output Queue / Priority Design
+
+**Task:** TASK-226
+**Status:** IMPLEMENTED - DOCS ONLY / NO WINDOWS SMOKE REQUIRED
+**Date:** 2026-06-01
+**Scope:** Architecture/design only. No runtime behavior is implemented here.
+
+This document defines a future interaction output queue and priority model for
+Dragon Pet AI. It is a design reference only. It does not change the renderer,
+Pet Window, backend, `/chat`, IPC, TTS, STT, prompts, assets, or persistence.
+
+---
+
+## 1. Purpose
+
+Dragon Pet AI now has multiple companion output paths:
+
+- Full App chat replies.
+- Pet Window expression mirrors.
+- Fixed reaction bubbles.
+- Local diagnostics preview.
+
+Future features may add more output paths:
+
+- Idle reactions.
+- TTS playback.
+- STT-confirmed transcript handoff.
+- Manual Pet input.
+- Notifications or reminders.
+- Long reply display segments.
+- TTS-safe speech segments.
+
+Without an explicit queue and priority model, these outputs can compete for the
+same UI and audio surfaces. This design defines future arbitration rules so chat
+replies, reaction bubbles, idle reactions, TTS, manual input, notifications, and
+diagnostics do not collide.
+
+This is not runtime. It is the design boundary for future implementation tasks.
+
+---
+
+## 2. Problem Statement
+
+Output conflicts to avoid:
+
+- An LLM reply is visible, then a reaction bubble replaces it too aggressively.
+- TTS starts speaking while an idle reaction or another reply is active.
+- User-triggered Pet input competes with automatic or ambient output.
+- Reaction bubbles repeat too often or appear during higher-priority work.
+- Notifications or reminders interrupt active user-driven workflows.
+- Debug preview or metadata leaks into bubble text or TTS.
+- Long reply segmentation conflicts with short Pet bubble TTL behavior.
+
+The system needs deterministic rules before adding idle reactions, TTS,
+notifications, or richer Pet responses.
+
+---
+
+## 3. Output Source Inventory
+
+Current output sources:
+
+- `chat_reply`
+- `pet_expression_mirror`
+- `reaction_bubble`
+- `diagnostics_preview`
+
+Future output sources:
+
+- `idle_reaction`
+- `tts_playback`
+- `stt_confirmed_transcript`
+- `manual_pet_input`
+- `notification_reminder`
+- `long_reply_display_segment`
+- `tts_safe_speech_segment`
+
+---
+
+## 4. Proposed Priority Levels
+
+Priority levels are ordered from highest to lowest.
+
+### P0 - Critical Safety / Error
+
+Examples:
+
+- Crash-safe fallback.
+- Backend error display.
+- TTS error safe fallback.
+- User safety-critical warning.
+
+### P1 - User Direct Action
+
+Examples:
+
+- User submitted chat message.
+- Manual Pet input.
+- Explicit button action.
+- Explicit show/hide/menu command.
+
+### P2 - LLM Chat Reply
+
+Examples:
+
+- Normal `/chat` reply.
+- Long reply display segments.
+- Future TTS-safe speech derived from an LLM reply.
+
+### P3 - Important Companion Reaction
+
+Examples:
+
+- `attention_returned`.
+- `correction`.
+- `reset`.
+- High-confidence behavior decision reaction.
+
+### P4 - Normal Companion Reaction
+
+Examples:
+
+- `user_active`.
+- `message_management`.
+- Fixed short reaction bubble.
+
+### P5 - Idle / Ambient Reaction
+
+Examples:
+
+- Future idle bubble.
+- Future low-frequency mood line.
+- Future silent expression-only reaction.
+
+### P6 - Diagnostics Only
+
+Examples:
+
+- Full App preview.
+- State / decision debug.
+- Internal counters.
+
+---
+
+## 5. Preemption Rules
+
+Proposed interruption rules:
+
+- P0 can interrupt all.
+- P1 can interrupt P2-P6.
+- P2 can suppress P3-P5 while active.
+- P3 can interrupt P4-P5, but not P1 or P2.
+- P4 cannot interrupt P1, P2, or P3.
+- P5 never interrupts anything.
+- P6 never causes side effects.
+
+Design intent:
+
+- User actions and safety always win.
+- LLM replies should remain stable while active.
+- Companion reactions should feel responsive, but not noisy.
+- Diagnostics should never affect runtime behavior.
+
+---
+
+## 6. Bubble Display Rules
+
+Future bubble arbitration should follow these rules:
+
+- Reaction bubbles should not replace an active LLM reply bubble unless allowed
+  by priority.
+- Reaction bubble TTL should be short.
+- Repeated identical bubbles should be suppressed by cooldown.
+- Fixed reaction bubbles should never enter chat history.
+- Fixed reaction bubbles should never be exported or copied.
+- Reaction bubbles should not be sent to TTS by default.
+- Long reply display segments should not be truncated by reaction-bubble TTL.
+
+---
+
+## 7. Expression Rules
+
+Expression output is lower risk than bubble text, but still needs boundaries:
+
+- Expression mirror is lower risk than bubble text.
+- Expression may update more freely than bubble text.
+- Expression should still obey debounce or coalescing.
+- Expression should not imply spoken output.
+- Expression should not create history entries.
+- Expression should not trigger TTS.
+
+---
+
+## 8. TTS Future Rules
+
+TTS is not changed by TASK-226. Future TTS queue work should follow these rules:
+
+- TTS is default off.
+- TTS never calls `/chat` by itself.
+- TTS only reads TTS-safe text.
+- TTS never reads debug preview.
+- TTS never reads metadata, JSON, source labels, or thinking text.
+- TTS uses a queue so speech does not overlap.
+- TTS allows user stop/cancel.
+- Speech and singing must be separate capabilities.
+- Voice cloning requires legally authorized data.
+
+---
+
+## 9. STT Future Rules
+
+STT is not changed by TASK-226. Future STT queue work should follow these rules:
+
+- Push-to-talk or explicit user action only.
+- No always listening.
+- Transcript confirmation before `/chat` if needed.
+- Do not store raw audio by default.
+- Do not send unconfirmed ambient audio to an LLM.
+
+---
+
+## 10. Queue Item Schema Proposal
+
+Future runtime tasks may use a queue item shape like this:
+
+```js
+{
+  id,
+  source,
+  priority,
+  channel,
+  payload,
+  createdAt,
+  ttlMs,
+  interruptible,
+  ttsEligible,
+  historyEligible,
+  copyExportEligible,
+  reason
+}
+```
+
+Schema guidance:
+
+- `payload` must be sanitized per source.
+- Reaction bubble payload must not contain raw user text.
+- Diagnostics preview should not become a side-effect queue item.
+- `ttsEligible` should default to `false`.
+- `historyEligible` should default to `false` for reactions.
+- `copyExportEligible` should default to `false` for reactions and diagnostics.
+
+---
+
+## 11. Channel Taxonomy
+
+Potential future queue channels:
+
+- `visual_expression`
+- `pet_bubble`
+- `full_app_chat`
+- `tts_audio`
+- `diagnostics_preview`
+- `notification`
+
+This taxonomy is conceptual. TASK-226 does not add IPC or runtime channels.
+
+---
+
+## 12. Safety Boundary / Forbidden List
+
+The output queue design must not allow:
+
+- Proactive long-form speech without explicit future design.
+- Always listening.
+- Hidden capture.
+- Screenshot capture.
+- OCR.
+- Debug preview sent to TTS.
+- Reaction bubble written into chat history.
+- Reaction bubble included in copy/export.
+- Raw user message text sent into reaction bubble payloads.
+- Generic or broad IPC.
+- Lower-priority output interrupting direct user action.
+- LLM-generated reaction bubbles unless a future task explicitly designs safe
+  generation.
+
+---
+
+## 13. Relationship to Existing Docs
+
+Related current docs:
+
+- `docs/INTERACTIVE_COMPANION_ARCHITECTURE.md`
+- `docs/CHRISTINA_PERSONA_CONTEXT_PACK.md`
+
+Voice/TTS research design docs:
+
+- `docs/VOICE_TTS_RESEARCH.md` is not present at the time of TASK-226.
+- Future voice/TTS roadmap docs are TBD.
+
+---
+
+## 14. Recommended Future Implementation Tasks
+
+Suggested future tasks:
+
+- TASK-227 Output Queue Runtime Skeleton, disabled by default.
+- TASK-228 Output Queue Debug Preview.
+- TASK-229 Bubble Priority Enforcement.
+- TASK-230 TTS-safe segment design.
+- TASK-231 Idle Reaction Policy, fixed only, no LLM.
+- TASK-232 User controls for companion reaction verbosity.
+
+Each task should remain narrow, testable, and explicit about side-effect
+boundaries.
+
+---
+
+## 15. TASK-226 Runtime Boundary
+
+TASK-226 is docs-only. It does not:
+
+- Change renderer behavior.
+- Change Pet Window behavior.
+- Change backend behavior.
+- Change `/chat` API schema.
+- Change chat history persistence format.
+- Add IPC.
+- Add generic IPC.
+- Add TTS.
+- Add STT.
+- Call `/chat`.
+- Change Ollama / Provider runtime.
+- Change prompt runtime.
+- Add assets.
+- Commit or push changes.
