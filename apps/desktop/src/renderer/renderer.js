@@ -687,6 +687,47 @@ var currentCompanionBehaviorDecision = {
   ts: 0,
 };
 
+// TASK-223: Character state layer — pure local state summary only.
+const CHARACTER_ATTENTION_STATE_ALLOWLIST = new Set([
+  "idle",
+  "active",
+  "returned",
+  "managing",
+  "correcting",
+  "reset",
+]);
+const CHARACTER_ENERGY_STATE_ALLOWLIST = new Set([
+  "calm",
+  "attentive",
+  "lively",
+  "resting",
+]);
+const CHARACTER_MOOD_STATE_ALLOWLIST = new Set([
+  "neutral",
+  "focused",
+  "happy",
+  "proud",
+  "annoyed",
+  "sleepy",
+]);
+const CHARACTER_INTERACTION_LEVEL_ALLOWLIST = new Set([
+  "none",
+  "low",
+  "medium",
+  "high",
+]);
+const CHARACTER_STATE_MAX = 20;
+var recentCharacterStates = []; // var: exposed to vm sandbox for smoke tests
+var currentCharacterState = {
+  attention: "idle",
+  energy: "calm",
+  mood: "neutral",
+  recentInteractionLevel: "none",
+  source: "character_state_layer",
+  reason: "none",
+  ts: 0,
+};
+
 function defaultCompanionExpressionForReason(reason) {
   switch (reason) {
     case "user_active":        return "focused";
@@ -720,6 +761,100 @@ function deriveCompanionBehaviorAction(shouldMirrorExpression, shouldShowBubble)
   if (shouldMirrorExpression) return "mirror_expression";
   if (shouldShowBubble) return "show_reaction_bubble";
   return "none";
+}
+
+function defaultCharacterStateForReason(reason) {
+  switch (reason) {
+    case "user_active":
+      return { attention: "active", energy: "attentive", mood: "focused" };
+    case "message_management":
+      return { attention: "managing", energy: "calm", mood: "neutral" };
+    case "correction":
+      return { attention: "correcting", energy: "attentive", mood: "annoyed" };
+    case "reset":
+      return { attention: "reset", energy: "calm", mood: "neutral" };
+    case "attention_returned":
+      return { attention: "returned", energy: "lively", mood: "happy" };
+    case "pet_attention":
+      return { attention: "active", energy: "lively", mood: "proud" };
+    case "none":
+    default:
+      return { attention: "idle", energy: "calm", mood: "neutral" };
+  }
+}
+
+function deriveRecentInteractionLevel(events) {
+  const count = Array.isArray(events) ? events.length : 0;
+  if (count <= 0) return "none";
+  if (count <= 2) return "low";
+  if (count <= 5) return "medium";
+  return "high";
+}
+
+function deriveCharacterState(context = {}) {
+  const source = context && typeof context === "object" ? context : {};
+  const decision = source.behaviorDecision && typeof source.behaviorDecision === "object"
+    ? source.behaviorDecision
+    : {};
+  const rawReason = typeof decision.reactionHint === "string"
+    ? decision.reactionHint
+    : (typeof decision.reason === "string"
+      ? decision.reason
+      : (typeof source.reactionHint === "string" ? source.reactionHint : ""));
+  const safeReason = COMPANION_BEHAVIOR_DECISION_REASONS.has(rawReason) ? rawReason : "none";
+  const defaults = defaultCharacterStateForReason(safeReason);
+
+  const rawMood = typeof decision.expression === "string"
+    ? decision.expression
+    : (typeof source.expression === "string" ? source.expression : "");
+  const mood = rawMood
+    ? (CHARACTER_MOOD_STATE_ALLOWLIST.has(rawMood) ? rawMood : "neutral")
+    : defaults.mood;
+
+  const rawAttention = typeof source.attention === "string" ? source.attention : "";
+  const attention = rawAttention
+    ? (CHARACTER_ATTENTION_STATE_ALLOWLIST.has(rawAttention) ? rawAttention : "idle")
+    : defaults.attention;
+
+  const rawEnergy = typeof source.energy === "string" ? source.energy : "";
+  const energy = rawEnergy
+    ? (CHARACTER_ENERGY_STATE_ALLOWLIST.has(rawEnergy) ? rawEnergy : "calm")
+    : defaults.energy;
+
+  const events = Array.isArray(source.recentInteractionEvents)
+    ? source.recentInteractionEvents
+    : recentInteractionEvents;
+
+  return {
+    attention,
+    energy,
+    mood: safeReason === "none" ? "neutral" : mood,
+    recentInteractionLevel: deriveRecentInteractionLevel(events),
+    source: "character_state_layer",
+    reason: safeReason,
+    ts: Date.now(),
+  };
+}
+
+function recordCharacterState(state = {}) {
+  const source = state && typeof state === "object" ? state : {};
+  const entry = {
+    attention: CHARACTER_ATTENTION_STATE_ALLOWLIST.has(source.attention) ? source.attention : "idle",
+    energy: CHARACTER_ENERGY_STATE_ALLOWLIST.has(source.energy) ? source.energy : "calm",
+    mood: CHARACTER_MOOD_STATE_ALLOWLIST.has(source.mood) ? source.mood : "neutral",
+    recentInteractionLevel: CHARACTER_INTERACTION_LEVEL_ALLOWLIST.has(source.recentInteractionLevel)
+      ? source.recentInteractionLevel
+      : "none",
+    source: "character_state_layer",
+    reason: COMPANION_BEHAVIOR_DECISION_REASONS.has(source.reason) ? source.reason : "none",
+    ts: Number.isFinite(source.ts) && source.ts > 0 ? source.ts : Date.now(),
+  };
+  recentCharacterStates.push(entry);
+  if (recentCharacterStates.length > CHARACTER_STATE_MAX) {
+    recentCharacterStates.shift();
+  }
+  currentCharacterState = entry;
+  return currentCharacterState;
 }
 
 function deriveCompanionBehaviorDecision(context = {}) {
@@ -787,6 +922,13 @@ function recordCompanionBehaviorDecision(decision = {}) {
     recentCompanionBehaviorDecisions.shift();
   }
   currentCompanionBehaviorDecision = entry;
+  recordCharacterState(deriveCharacterState({
+    behaviorDecision: currentCompanionBehaviorDecision,
+    reactionHint: currentInteractionReactionHint,
+    expression: currentInteractionExpressionSuggestion,
+    recentInteractionEvents,
+    recentCompanionBehaviorDecisions,
+  }));
   return currentCompanionBehaviorDecision;
 }
 
@@ -987,7 +1129,19 @@ function renderInteractionReactionPreview() {
     && COMPANION_BEHAVIOR_ACTION_ALLOWLIST.has(currentCompanionBehaviorDecision.action)
     ? currentCompanionBehaviorDecision.action
     : "none";
-  el.textContent = "Reaction: " + safeHint + " · Suggestion: " + safeExpression + " · Decision: " + safeAction;
+  const safeMood = currentCharacterState && CHARACTER_MOOD_STATE_ALLOWLIST.has(currentCharacterState.mood)
+    ? currentCharacterState.mood
+    : "neutral";
+  const safeAttention = currentCharacterState && CHARACTER_ATTENTION_STATE_ALLOWLIST.has(currentCharacterState.attention)
+    ? currentCharacterState.attention
+    : "idle";
+  const safeEnergy = currentCharacterState && CHARACTER_ENERGY_STATE_ALLOWLIST.has(currentCharacterState.energy)
+    ? currentCharacterState.energy
+    : "calm";
+  el.textContent = "Reaction: " + safeHint
+    + " · Suggestion: " + safeExpression
+    + " · Decision: " + safeAction
+    + " · State: " + safeMood + "/" + safeAttention + "/" + safeEnergy;
 }
 
 function recordInteractionEvent(type, payload = {}) {

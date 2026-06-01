@@ -7695,6 +7695,321 @@ function testTask221RegressionGuards() {
   console.log("  testTask221RegressionGuards PASS");
 }
 
+// ─── TASK-223: Character State Layer Foundation ──────────────────────────────
+
+function testTask223RendererHasCharacterState() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("function deriveCharacterState"),
+    "renderer.js must define deriveCharacterState");
+  assert.ok(src.includes("function recordCharacterState"),
+    "renderer.js must define recordCharacterState");
+  assert.ok(src.includes("currentCharacterState"),
+    "renderer.js must define currentCharacterState");
+  assert.ok(src.includes("recentCharacterStates"),
+    "renderer.js must define recentCharacterStates");
+  assert.ok(src.includes("CHARACTER_STATE_MAX = 20"),
+    "renderer.js must cap character state buffer at 20");
+  console.log("  testTask223RendererHasCharacterState PASS");
+}
+
+function testTask223CharacterAllowlists() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  for (const token of [
+    "CHARACTER_ATTENTION_STATE_ALLOWLIST",
+    "idle",
+    "active",
+    "returned",
+    "managing",
+    "correcting",
+    "reset",
+    "CHARACTER_ENERGY_STATE_ALLOWLIST",
+    "calm",
+    "attentive",
+    "lively",
+    "resting",
+    "CHARACTER_MOOD_STATE_ALLOWLIST",
+    "neutral",
+    "focused",
+    "happy",
+    "proud",
+    "annoyed",
+    "sleepy",
+    "CHARACTER_INTERACTION_LEVEL_ALLOWLIST",
+    "low",
+    "medium",
+    "high",
+  ]) {
+    assert.ok(src.includes(token), `renderer.js must include character state token ${token}`);
+  }
+  console.log("  testTask223CharacterAllowlists PASS");
+}
+
+async function testTask223CharacterStateMapping() {
+  const { sandbox } = await loadRenderer();
+  const cases = [
+    ["none", "neutral", "idle", "calm", "none"],
+    ["user_active", "focused", "active", "attentive", "none"],
+    ["message_management", "neutral", "managing", "calm", "none"],
+    ["correction", "annoyed", "correcting", "attentive", "none"],
+    ["reset", "neutral", "reset", "calm", "none"],
+    ["attention_returned", "happy", "returned", "lively", "none"],
+    ["pet_attention", "proud", "active", "lively", "none"],
+  ];
+  for (const [reactionHint, mood, attention, energy, recentInteractionLevel] of cases) {
+    const state = sandbox.deriveCharacterState({ reactionHint, recentInteractionEvents: [] });
+    assert.equal(state.reason, reactionHint, `${reactionHint} reason mismatch`);
+    assert.equal(state.mood, mood, `${reactionHint} mood mismatch`);
+    assert.equal(state.attention, attention, `${reactionHint} attention mismatch`);
+    assert.equal(state.energy, energy, `${reactionHint} energy mismatch`);
+    assert.equal(state.recentInteractionLevel, recentInteractionLevel, `${reactionHint} level mismatch`);
+    assert.equal(state.source, "character_state_layer", `${reactionHint} source mismatch`);
+  }
+  console.log("  testTask223CharacterStateMapping PASS");
+}
+
+async function testTask223UnknownFallbacks() {
+  const { sandbox } = await loadRenderer();
+  let state = sandbox.deriveCharacterState({ reactionHint: "UNKNOWN_HINT", expression: "focused", recentInteractionEvents: [] });
+  assert.equal(state.reason, "none", "unknown reactionHint must fallback to none");
+  assert.equal(state.mood, "neutral", "unknown reactionHint must fallback to neutral mood");
+  assert.equal(state.attention, "idle", "unknown reactionHint must fallback to idle attention");
+  assert.equal(state.energy, "calm", "unknown reactionHint must fallback to calm energy");
+
+  state = sandbox.deriveCharacterState({ reactionHint: "user_active", expression: "UNKNOWN_MOOD", recentInteractionEvents: [] });
+  assert.equal(state.mood, "neutral", "unknown mood/expression must fallback to neutral");
+
+  state = sandbox.recordCharacterState({
+    attention: "UNKNOWN_ATTENTION",
+    energy: "UNKNOWN_ENERGY",
+    mood: "focused",
+    recentInteractionLevel: "UNKNOWN_LEVEL",
+    reason: "user_active",
+    source: "RAW_SOURCE_FORBIDDEN",
+  });
+  assert.equal(state.attention, "idle", "unknown attention must fallback to idle");
+  assert.equal(state.energy, "calm", "unknown energy must fallback to calm");
+  assert.equal(state.recentInteractionLevel, "none", "unknown interaction level must fallback to none");
+  assert.equal(state.source, "character_state_layer", "character state source must be fixed");
+  console.log("  testTask223UnknownFallbacks PASS");
+}
+
+async function testTask223RecentInteractionLevel() {
+  const { sandbox } = await loadRenderer();
+  const mkEvents = (count) => Array.from({ length: count }, (_, i) => ({ type: "chat_message_sent", ts: i }));
+  const cases = [
+    [0, "none"],
+    [1, "low"],
+    [2, "low"],
+    [3, "medium"],
+    [5, "medium"],
+    [6, "high"],
+    [9, "high"],
+  ];
+  for (const [count, expected] of cases) {
+    const state = sandbox.deriveCharacterState({
+      reactionHint: "user_active",
+      recentInteractionEvents: mkEvents(count),
+    });
+    assert.equal(state.recentInteractionLevel, expected, `${count} events must map to ${expected}`);
+  }
+  console.log("  testTask223RecentInteractionLevel PASS");
+}
+
+async function testTask223RecordCharacterStateRingBuffer() {
+  const { sandbox } = await loadRenderer();
+  for (let i = 0; i < 25; i += 1) {
+    sandbox.recordCharacterState(sandbox.deriveCharacterState({
+      reactionHint: i % 2 ? "correction" : "reset",
+      recentInteractionEvents: [],
+    }));
+  }
+  assert.equal(sandbox.recentCharacterStates.length, 20,
+    "recentCharacterStates must cap at 20");
+  console.log("  testTask223RecordCharacterStateRingBuffer PASS");
+}
+
+async function testTask223CurrentCharacterStateUpdatesLatest() {
+  const { sandbox } = await loadRenderer();
+  sandbox.recordCharacterState(sandbox.deriveCharacterState({ reactionHint: "user_active", recentInteractionEvents: [] }));
+  assert.equal(sandbox.currentCharacterState.mood, "focused",
+    "currentCharacterState must update to focused");
+  sandbox.recordCharacterState(sandbox.deriveCharacterState({ reactionHint: "attention_returned", recentInteractionEvents: [] }));
+  assert.equal(sandbox.currentCharacterState.mood, "happy",
+    "currentCharacterState must update to latest mood");
+  assert.equal(sandbox.currentCharacterState.attention, "returned",
+    "currentCharacterState must update to latest attention");
+  console.log("  testTask223CurrentCharacterStateUpdatesLatest PASS");
+}
+
+async function testTask223CharacterStateNoRawText() {
+  const { sandbox } = await loadRenderer();
+  const state = sandbox.deriveCharacterState({
+    reactionHint: "user_active",
+    expression: "focused",
+    message: "RAW_USER_TEXT_FORBIDDEN",
+    text: "RAW_USER_TEXT_FORBIDDEN",
+    body: "RAW_USER_TEXT_FORBIDDEN",
+    rawText: "RAW_USER_TEXT_FORBIDDEN",
+    content: "RAW_USER_TEXT_FORBIDDEN",
+    reply: "RAW_USER_TEXT_FORBIDDEN",
+    recentInteractionEvents: [
+      { type: "chat_message_sent", message: "RAW_USER_TEXT_FORBIDDEN", text: "RAW_USER_TEXT_FORBIDDEN" },
+    ],
+  });
+  sandbox.recordCharacterState({
+    ...state,
+    message: "RAW_USER_TEXT_FORBIDDEN",
+    text: "RAW_USER_TEXT_FORBIDDEN",
+    body: "RAW_USER_TEXT_FORBIDDEN",
+    rawText: "RAW_USER_TEXT_FORBIDDEN",
+    content: "RAW_USER_TEXT_FORBIDDEN",
+    reply: "RAW_USER_TEXT_FORBIDDEN",
+  });
+  const serialized = JSON.stringify(sandbox.recentCharacterStates);
+  assert.ok(!serialized.includes("RAW_USER_TEXT_FORBIDDEN"),
+    "character state buffer must not store raw text fields");
+  assert.deepEqual(Object.keys(sandbox.currentCharacterState).sort(), [
+    "attention",
+    "energy",
+    "mood",
+    "reason",
+    "recentInteractionLevel",
+    "source",
+    "ts",
+  ], "character state must only store allowlisted keys");
+  console.log("  testTask223CharacterStateNoRawText PASS");
+}
+
+async function testTask223CompanionDecisionFlowUpdatesCharacterState() {
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      sendPetExpressionSuggestion() { return Promise.resolve({ ok: true }); },
+      sendPetReactionBubble() { return Promise.resolve({ ok: true }); },
+    },
+  });
+  sandbox.recordInteractionEvent("message_edited", { messageLength: 8, source: "full_app", text: "RAW_USER_TEXT_FORBIDDEN" });
+  assert.equal(sandbox.currentCompanionBehaviorDecision.reason, "correction",
+    "interaction flow must update companion decision");
+  assert.equal(sandbox.currentCharacterState.reason, "correction",
+    "recordCompanionBehaviorDecision flow must update character state reason");
+  assert.equal(sandbox.currentCharacterState.mood, "annoyed",
+    "recordCompanionBehaviorDecision flow must update character state mood");
+  assert.equal(sandbox.currentCharacterState.attention, "correcting",
+    "recordCompanionBehaviorDecision flow must update character state attention");
+  assert.equal(sandbox.currentCharacterState.energy, "attentive",
+    "recordCompanionBehaviorDecision flow must update character state energy");
+  console.log("  testTask223CompanionDecisionFlowUpdatesCharacterState PASS");
+}
+
+async function testTask223PreviewShowsState() {
+  const { document, sandbox } = await loadRenderer();
+  const el = document.getElementById("interaction-reaction-preview");
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 7 });
+  assert.ok(el.textContent.includes("Reaction: user_active"), "preview must include reaction");
+  assert.ok(el.textContent.includes("Suggestion: focused"), "preview must include expression suggestion");
+  assert.ok(el.textContent.includes("Decision: mirror_expression_and_bubble"), "preview must include behavior decision");
+  assert.ok(el.textContent.includes("State: focused/active/attentive"),
+    "preview must include character state summary");
+  console.log("  testTask223PreviewShowsState PASS");
+}
+
+async function testTask223PreviewNotInHistory() {
+  const appendCalls = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryAppend(entry) { appendCalls.push(entry); return Promise.resolve({ ok: true }); },
+    },
+  });
+  await settle();
+  appendCalls.length = 0;
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 9 });
+  await settle();
+  assert.equal(appendCalls.length, 0, "character state preview must not write chat history");
+  console.log("  testTask223PreviewNotInHistory PASS");
+}
+
+async function testTask223PreviewNotInTranscript() {
+  const { sandbox } = await loadRenderer();
+  sandbox.appendMessage("user", "TASK223 transcript user", { noHistory: true });
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 9 });
+  const transcript = sandbox.buildChatTranscript();
+  assert.ok(!transcript.includes("State:"), "character state preview must not enter copy/export transcript");
+  assert.ok(!transcript.includes("focused/active/attentive"),
+    "character state summary must not enter copy/export transcript");
+  console.log("  testTask223PreviewNotInTranscript PASS");
+}
+
+async function testTask223NoChatHistorySpeechOrTts() {
+  const chatCalls = [];
+  const appendCalls = [];
+  const speechCalls = [];
+  const { sandbox } = await loadRenderer({
+    fetch: async (url) => { chatCalls.push(url); return { ok: true, json: async () => ({}) }; },
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryAppend(entry) { appendCalls.push(entry); return Promise.resolve({ ok: true }); },
+      updatePetSpeech(payload) { speechCalls.push(payload); return Promise.resolve({ ok: true }); },
+      sendPetExpressionSuggestion() { return Promise.resolve({ ok: true }); },
+      sendPetReactionBubble() { return Promise.resolve({ ok: true }); },
+    },
+  });
+  await settle();
+  chatCalls.length = 0;
+  appendCalls.length = 0;
+  speechCalls.length = 0;
+  sandbox.recordInteractionEvent("full_app_focused", {
+    message: "RAW_USER_TEXT_FORBIDDEN",
+    text: "RAW_USER_TEXT_FORBIDDEN",
+    body: "RAW_USER_TEXT_FORBIDDEN",
+    rawText: "RAW_USER_TEXT_FORBIDDEN",
+    content: "RAW_USER_TEXT_FORBIDDEN",
+    reply: "RAW_USER_TEXT_FORBIDDEN",
+  });
+  await settle();
+  assert.equal(chatCalls.filter((url) => String(url).endsWith("/chat")).length, 0,
+    "character state layer must not call /chat");
+  assert.equal(appendCalls.length, 0, "character state layer must not write chat history");
+  assert.equal(speechCalls.length, 0, "character state layer must not call updatePetSpeech/TTS path");
+  console.log("  testTask223NoChatHistorySpeechOrTts PASS");
+}
+
+function testTask223NoNewIpcChannelsAndPreservesExisting() {
+  const rendererPreload = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "preload.js"), "utf8");
+  const mainSrc = fs.readFileSync(path.join(desktopRoot, "src", "main.js"), "utf8");
+  const petPreload = fs.readFileSync(path.join(desktopRoot, "src", "pet", "pet-preload.js"), "utf8");
+  for (const src of [rendererPreload, mainSrc, petPreload]) {
+    assert.ok(!src.includes("character-state"), "TASK-223 must not add character state IPC");
+    assert.ok(!src.includes("character:state"), "TASK-223 must not add broad character IPC");
+  }
+  assert.ok(rendererPreload.includes('PET_EXPRESSION_SUGGESTION_CHANNEL = "pet:expression-suggestion"'),
+    "TASK-218 narrow renderer invoke channel must remain");
+  assert.ok(mainSrc.includes('PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL = "pet:expression-suggestion-received"'),
+    "TASK-218 narrow main send channel must remain");
+  assert.ok(rendererPreload.includes('PET_REACTION_BUBBLE_CHANNEL = "pet:reaction-bubble"'),
+    "TASK-220 narrow renderer invoke channel must remain");
+  assert.ok(mainSrc.includes('PET_REACTION_BUBBLE_RECEIVED_CHANNEL = "pet:reaction-bubble-received"'),
+    "TASK-220 narrow main send channel must remain");
+  assert.ok(!rendererPreload.includes('PET_EXPRESSION_SUGGESTION_CHANNEL = "pet"'),
+    "TASK-218 expression channel must not be generic pet");
+  assert.ok(!rendererPreload.includes('PET_REACTION_BUBBLE_CHANNEL = "pet"'),
+    "TASK-220 reaction bubble channel must not be generic pet");
+  console.log("  testTask223NoNewIpcChannelsAndPreservesExisting PASS");
+}
+
+function testTask223RegressionGuards() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(!src.includes("hover-action"), "TASK-223 must not restore hover action buttons");
+  assert.ok(src.includes("chat-context-menu"), "TASK-223 must keep context menu");
+  assert.ok(src.includes("複製") && src.includes("刪除") && src.includes("編輯"),
+    "TASK-223 must keep context menu copy/delete/edit actions");
+  assert.ok(src.includes("function isLastEditableUserMessage") && src.includes("entry.role !== \"user\""),
+    "TASK-223 must keep edit limited to last formal user message");
+  assert.ok(src.includes("showPetWindow"), "TASK-223 must not remove Pet Window entry point");
+  console.log("  testTask223RegressionGuards PASS");
+}
+
 // ─── TASK-218: Safe Pet Expression Suggestion Mirror ─────────────────────────
 
 function testTask218RendererHasMirrorFunction() {
@@ -8533,6 +8848,23 @@ async function main() {
   await testTask221NoChatHistorySpeechOrTts();
   testTask221NoNewIpcChannelsAndPreservesExisting();
   testTask221RegressionGuards();
+
+  // TASK-223: Character State Layer Foundation
+  testTask223RendererHasCharacterState();
+  testTask223CharacterAllowlists();
+  await testTask223CharacterStateMapping();
+  await testTask223UnknownFallbacks();
+  await testTask223RecentInteractionLevel();
+  await testTask223RecordCharacterStateRingBuffer();
+  await testTask223CurrentCharacterStateUpdatesLatest();
+  await testTask223CharacterStateNoRawText();
+  await testTask223CompanionDecisionFlowUpdatesCharacterState();
+  await testTask223PreviewShowsState();
+  await testTask223PreviewNotInHistory();
+  await testTask223PreviewNotInTranscript();
+  await testTask223NoChatHistorySpeechOrTts();
+  testTask223NoNewIpcChannelsAndPreservesExisting();
+  testTask223RegressionGuards();
 
   // TASK-218: Safe Pet Expression Suggestion Mirror
   testTask218RendererHasMirrorFunction();

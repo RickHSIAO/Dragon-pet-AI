@@ -1,12 +1,11 @@
 # Interactive Companion Architecture Checkpoint
 
-**Status:** IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED
+**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-223 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
 **Date:** 2026-06-01
-**Scope:** Documentation-only architecture checkpoint for TASK-214 through TASK-221.
+**Scope:** Architecture checkpoint for TASK-214 through TASK-223.
 
 This document records the current interactive companion architecture after the
-TASK-214 through TASK-221 chain. It does not define a runtime change and does
-not introduce new behavior.
+TASK-214 through TASK-223 chain.
 
 ---
 
@@ -33,6 +32,7 @@ user interaction
 -> reaction hint
 -> expression suggestion
 -> behavior decision
+-> character state
 -> expression mirror / reaction bubble
 -> Pet Window expression / fixed short bubble
 ```
@@ -51,6 +51,8 @@ user interaction
 | TASK-219 | Expression mirror cooldown / debounce | Coalesces rapid expression mirrors; latest wins. |
 | TASK-220 | Safe reaction bubble mirror | Mirrors fixed allowlisted short reaction bubbles. |
 | TASK-221 | Behavior policy | Summarizes hint/expression/bubble into a local decision object. |
+| TASK-222 | Architecture checkpoint | Records the interactive companion architecture. |
+| TASK-223 | Character state layer | Summarizes mood, attention, energy, and recent interaction level. DONE - Windows visual smoke PASS. |
 
 ---
 
@@ -67,6 +69,8 @@ flowchart TD
   F --> H[deriveCompanionBehaviorDecision]
   G --> H
   H --> I[recordCompanionBehaviorDecision]
+  I --> R[deriveCharacterState]
+  R --> S[recordCharacterState]
   F --> J[mirrorInteractionExpressionSuggestion]
   J --> K[pet:expression-suggestion]
   K --> L[pet:expression-suggestion-received]
@@ -86,12 +90,13 @@ User interaction
 -> deriveInteractionExpressionSuggestion
 -> deriveInteractionReactionBubble
 -> deriveCompanionBehaviorDecision
+-> deriveCharacterState
 -> mirrorExpression / mirrorReactionBubble
 -> Pet Window expression / fixed bubble
 ```
 
-The behavior decision is local-only. It is not sent to the Pet Window and does
-not drive the mirror calls.
+The behavior decision and character state are local-only. They are not sent to
+the Pet Window and do not drive the mirror calls.
 
 ---
 
@@ -103,6 +108,7 @@ not drive the mirror calls.
 | Reaction hint layer | Sanitized event | Allowlisted reaction hint | Local hint state | Unknown values fall back to `none`. |
 | Expression suggestion layer | Reaction hint | Allowlisted expression | Local expression state; existing mirror path | Expressions restricted to allowlist. |
 | Behavior policy layer | Hint, expression, bubble id | Decision object | Local preview/summary only | No IPC, no Pet Window payload, no raw text. |
+| Character state layer | Behavior decision, hint, expression, recent events | `attention/energy/mood/recentInteractionLevel/source/reason/ts` | Local preview/summary only | No IPC, no Pet Window payload, no raw text, no timers. |
 | Expression mirror layer | Expression suggestion | `expression/source/ts` payload | Narrow IPC to Pet Window | No message text; no bubble/TTS/chat. |
 | Expression debounce layer | Expression mirror requests | Latest pending expression | Coalesced mirror timing | 300ms cooldown; latest wins. |
 | Reaction bubble mirror layer | Reaction bubble id | `id/text/source/ts/ttlMs` payload | Narrow IPC to Pet Window | Text comes from fixed allowlist mapping. |
@@ -129,6 +135,7 @@ Rules:
 - Reaction bubble payload contains only `id/text/source/ts/ttlMs`.
 - Reaction bubble text is derived from fixed allowlist mapping.
 - Behavior decision objects are not sent through IPC.
+- Character state objects are not sent through IPC.
 
 ---
 
@@ -149,6 +156,7 @@ The interactive companion stack must continue to forbid:
 - Reaction bubble text entering copy/export/history.
 - Generic IPC for companion interaction signals.
 - Backend/provider/Ollama runtime changes for these local interaction layers.
+- Character state driving Pet Window behavior before an explicit future task.
 
 ---
 
@@ -174,6 +182,30 @@ Behavior decision examples:
 | `pet_attention` | `mirror_expression` |
 | `none` | `none` |
 
+Character state examples:
+
+| Hint | Mood | Attention | Energy |
+|---|---|---|---|
+| `none` | `neutral` | `idle` | `calm` |
+| `user_active` | `focused` | `active` | `attentive` |
+| `message_management` | `neutral` | `managing` | `calm` |
+| `correction` | `annoyed` | `correcting` | `attentive` |
+| `reset` | `neutral` | `reset` | `calm` |
+| `attention_returned` | `happy` | `returned` | `lively` |
+| `pet_attention` | `proud` | `active` | `lively` |
+
+Character state fields:
+
+| Field | Meaning |
+|---|---|
+| `attention` | Current attention posture: `idle`, `active`, `returned`, `managing`, `correcting`, or `reset`. |
+| `energy` | Current energy posture: `calm`, `attentive`, `lively`, or `resting`. |
+| `mood` | Current local mood summary: `neutral`, `focused`, `happy`, `proud`, `annoyed`, or `sleepy`. |
+| `recentInteractionLevel` | Local interaction density summary: `none`, `low`, `medium`, or `high`. |
+| `source` | Fixed to `character_state_layer`. |
+| `reason` | The allowlisted reaction hint driving the state. |
+| `ts` | Local timestamp for the state record. |
+
 ---
 
 ## 8. Smoke Coverage Summary
@@ -183,7 +215,8 @@ The completed stack is covered by:
 - `renderer-chat-smoke.js`
 - `pet-window-smoke.js`
 - `pet-renderer-smoke.js`
-- Windows visual smoke for TASK-214 through TASK-221
+- Windows visual smoke for TASK-214 through TASK-223
+- Automated smoke for TASK-223
 - history/copy/export boundary checks
 - no TTS side-effect checks
 - no `/chat` side-effect checks
@@ -191,8 +224,11 @@ The completed stack is covered by:
 - Pet expression mirror checks
 - reaction bubble TTL restore checks
 
-TASK-222 is documentation-only, so no Windows smoke is required for this
-checkpoint itself.
+TASK-223 Windows visual smoke PASS confirmed on 2026-06-01. Confirmed preview
+states: startup `neutral/idle/calm`, send `focused/active/attentive`,
+delete/undo `neutral/managing/calm`, edit `annoyed/correcting/attentive`,
+clear `neutral/reset/calm`, and focus `happy/returned/lively`. Continuous
+interactions showed no `undefined`, `null`, `[object Object]`, or raw JSON.
 
 ---
 
@@ -200,7 +236,6 @@ checkpoint itself.
 
 The current system does not yet implement:
 
-- Mood state.
 - Relationship state.
 - Idle reaction policy.
 - LLM-based proactive reaction.
@@ -210,8 +245,8 @@ The current system does not yet implement:
 - User-configurable behavior policy.
 - Behavior decision controlling execution.
 
-Important: TASK-221 behavior decisions are currently summary/preview only.
-They do not execute actions directly.
+Important: TASK-221 behavior decisions and TASK-223 character states are
+currently summary/preview only. They do not execute actions directly.
 
 ---
 
@@ -219,8 +254,8 @@ They do not execute actions directly.
 
 Recommended next architecture phase:
 
-- Character State Layer.
-- Mood / attention / energy state.
+- Relationship state.
+- Mood / attention / energy state beyond the local preview foundation.
 - Idle reaction policy.
 - Behavior policy starts controlling execution.
 - Safe reaction frequency governor.

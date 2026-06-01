@@ -22450,3 +22450,266 @@ LLM proactive speech, screen monitoring, OCR, always listening, or broad IPC.
 - [x] ROADMAP updated with TASK-222 latest entry.
 - [x] No runtime/source code files modified for TASK-222.
 - [x] No Windows visual smoke required for TASK-222.
+
+---
+
+## TASK-223 | Character State Layer Foundation
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-06-01
+**Phase:** Phase 5 — Companion Behavior Loop (Character State Track)
+**Depends on:** TASK-214 through TASK-222
+
+### Goal
+
+Create a pure local Character State Layer in the Full App renderer. The layer
+summarizes current companion state as mood, attention, energy, and recent
+interaction level. It is a local state/preview foundation only and does not
+send state to the Pet Window or control execution.
+
+### Runtime Scope
+
+Changed:
+
+- `apps/desktop/src/renderer/renderer.js`
+- `apps/desktop/scripts/renderer-chat-smoke.js`
+
+Not changed:
+
+- Backend.
+- `/chat` API schema.
+- Chat history persistence format.
+- IPC channels.
+- Pet Window runtime.
+- Pet Bubble behavior.
+- Pet expression mirror behavior.
+- Reaction bubble mirror behavior.
+- TTS behavior.
+- Ollama / Provider runtime.
+- Assets.
+- Persistence.
+
+### Character State Schema
+
+```js
+{
+  attention: "idle",
+  energy: "calm",
+  mood: "neutral",
+  recentInteractionLevel: "none",
+  source: "character_state_layer",
+  reason: "none",
+  ts: 0
+}
+```
+
+Stored entries contain only:
+
+- `attention`
+- `energy`
+- `mood`
+- `recentInteractionLevel`
+- `source`
+- `reason`
+- `ts`
+
+### State Allowlists
+
+Attention:
+
+- `idle`
+- `active`
+- `returned`
+- `managing`
+- `correcting`
+- `reset`
+
+Energy:
+
+- `calm`
+- `attentive`
+- `lively`
+- `resting`
+
+Mood:
+
+- `neutral`
+- `focused`
+- `happy`
+- `proud`
+- `annoyed`
+- `sleepy`
+
+Recent interaction level:
+
+- `none`
+- `low`
+- `medium`
+- `high`
+
+### State Mapping
+
+| Reason / hint | Mood | Attention | Energy |
+|---|---|---|---|
+| `none` | `neutral` | `idle` | `calm` |
+| `user_active` | `focused` | `active` | `attentive` |
+| `message_management` | `neutral` | `managing` | `calm` |
+| `correction` | `annoyed` | `correcting` | `attentive` |
+| `reset` | `neutral` | `reset` | `calm` |
+| `attention_returned` | `happy` | `returned` | `lively` |
+| `pet_attention` | `proud` | `active` | `lively` |
+
+Recent interaction level is derived deterministically from the current
+in-memory `recentInteractionEvents` length:
+
+| Event count | Level |
+|---|---|
+| 0 | `none` |
+| 1-2 | `low` |
+| 3-5 | `medium` |
+| 6+ | `high` |
+
+No timer, background monitor, OCR, screenshot, or always-listening behavior is
+used.
+
+### Implementation Summary
+
+- Added `CHARACTER_ATTENTION_STATE_ALLOWLIST`.
+- Added `CHARACTER_ENERGY_STATE_ALLOWLIST`.
+- Added `CHARACTER_MOOD_STATE_ALLOWLIST`.
+- Added `CHARACTER_INTERACTION_LEVEL_ALLOWLIST`.
+- Added `CHARACTER_STATE_MAX = 20`.
+- Added `currentCharacterState`.
+- Added `recentCharacterStates`.
+- Added `deriveCharacterState(context)`.
+- Added `recordCharacterState(state)`.
+- `recordCompanionBehaviorDecision(decision)` now derives and records the
+  latest character state after updating `currentCompanionBehaviorDecision`.
+- Character state is local-only and is not sent to Pet Window.
+
+### Preview Change
+
+Before TASK-223:
+
+```text
+Reaction: <hint> · Suggestion: <expression> · Decision: <action>
+```
+
+After TASK-223:
+
+```text
+Reaction: <hint> · Suggestion: <expression> · Decision: <action> · State: <mood>/<attention>/<energy>
+```
+
+Example:
+
+```text
+Reaction: user_active · Suggestion: focused · Decision: mirror_expression_and_bubble · State: focused/active/attentive
+```
+
+The preview remains local-only:
+
+- Not written to chat history.
+- Not included in copy/export transcript.
+- Does not display raw JSON.
+- Does not display raw user message text.
+- Does not send character state anywhere.
+
+### Safety Boundary Confirmation
+
+- No backend change.
+- No `/chat` API schema change.
+- No chat history persistence format change.
+- No `/chat` call.
+- No chat history write.
+- No IPC added.
+- No broad/generic IPC channel added.
+- No Pet Window side effect.
+- No Pet Window runtime change.
+- No Pet Bubble behavior change.
+- No Pet expression mirror behavior change.
+- No reaction bubble mirror behavior change.
+- No TTS.
+- No proactive Pet speech.
+- No LLM reaction generation.
+- No user message text sent to Pet Window.
+- No raw message text stored.
+- No `innerHTML` rendering for state preview.
+- No background monitoring.
+- No always-listening behavior.
+- No screenshot capture.
+- No OCR.
+- No Ollama / Provider runtime change.
+- No hover action buttons restored.
+- No user message edit broadening.
+- No pet message edit broadening.
+- No persistence added.
+- No assets changed.
+
+### Automated Smoke Test Coverage
+
+| Suite | Coverage |
+|---|---|
+| `renderer-chat-smoke.js` | TASK-223 state/static checks; allowlists; state mapping; unknown fallback; recentInteractionLevel mapping; ring buffer max 20; latest current state; no raw text in state buffer; companion decision flow updates state; preview includes `State`; preview excluded from history/transcript; no `/chat`/history/speech; no new IPC; TASK-218/TASK-220 narrow channel regression; hover/context menu/edit/Pet Window guards |
+| `pet-window-smoke.js` | Existing TASK-218/TASK-220 Pet Window channel and relay coverage retained; no TASK-223 runtime change |
+| `pet-renderer-smoke.js` | Existing TASK-218/TASK-220 Pet preload/Pet renderer handler coverage retained; no TASK-223 runtime change |
+
+### Automated Smoke Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+15 TASK-223 tests) |
+| `pet-window-smoke.js` | PASS (82 checks, no TASK-223 runtime change) |
+| `pet-renderer-smoke.js` | PASS (263 checks, no TASK-223 runtime change) |
+| `git diff --check` | CLEAN |
+
+### Architecture Docs Update
+
+Updated `docs/INTERACTIVE_COMPANION_ARCHITECTURE.md` to include TASK-223:
+
+- Data flow now includes `deriveCharacterState` / `recordCharacterState`.
+- Layer responsibility table includes Character State Layer.
+- IPC inventory explicitly notes character state is not sent through IPC.
+- Safety boundary forbids character state driving Pet Window behavior before a
+  future explicit task.
+- Behavior examples include mood / attention / energy mapping.
+- Known boundaries now clarify that TASK-223 state remains summary/preview only.
+
+### Acceptance Criteria
+
+- [x] `deriveCharacterState` implemented.
+- [x] `recordCharacterState` implemented.
+- [x] `currentCharacterState` implemented.
+- [x] `recentCharacterStates` implemented.
+- [x] `CHARACTER_STATE_MAX = 20`.
+- [x] All character state allowlists implemented.
+- [x] Mapping implemented for `none`, `user_active`, `message_management`,
+  `correction`, `reset`, `attention_returned`, and `pet_attention`.
+- [x] Unknown hint/mood/attention/energy fallback behavior covered.
+- [x] recentInteractionLevel derived deterministically from in-memory event count.
+- [x] `recordCompanionBehaviorDecision` flow updates character state.
+- [x] Preview includes `State: <mood>/<attention>/<energy>`.
+- [x] Preview remains outside history/copy/export.
+- [x] No raw message text stored in character state.
+- [x] No `/chat`, history, Pet Bubble, TTS, backend, provider/Ollama,
+  OCR/screenshot, new IPC, generic IPC, persistence, assets, or Pet Window
+  runtime change.
+- [x] TASK-218/219/220 behavior retained.
+- [x] `renderer-chat-smoke.js` PASS.
+- [x] `pet-window-smoke.js` PASS.
+- [x] `pet-renderer-smoke.js` PASS.
+- [x] `git diff --check` CLEAN.
+- [x] Windows visual smoke PASS (2026-06-01).
+
+### Windows Visual Smoke Results (2026-06-01)
+
+| Scenario | Result |
+|---|---|
+| 基本啟動：Preview `none/neutral/none/state neutral/idle/calm`，Pet Window 正常 | PASS |
+| 送出訊息：Preview `user_active/focused/mirror_expression_and_bubble/state focused/active/attentive` | PASS |
+| Delete / Undo：Preview `message_management/neutral/mirror_expression_and_bubble/state neutral/managing/calm` | PASS |
+| Edit last user：Preview `correction/annoyed/mirror_expression_and_bubble/state annoyed/correcting/attentive` | PASS |
+| Clear Chat：Preview `reset/neutral/mirror_expression_and_bubble/state neutral/reset/calm` | PASS |
+| Focus：Preview `attention_returned/happy/mirror_expression_and_bubble/state happy/returned/lively` | PASS |
+| 連續互動：State preview 沒有 `undefined` / `null` / `[object Object]` / raw JSON | PASS |
+| 一般回歸：沒有新增 IPC side-effect，沒有額外 TTS，沒有額外 `/chat`，沒有 history/copy/export 污染，Pet Window 表情與 reaction bubble 行為維持正常 | PASS |
