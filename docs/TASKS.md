@@ -23077,3 +23077,154 @@ TASK-226 is docs-only:
   execution arbitration layer.
 - [x] No code/runtime/prompt/TTS/STT/IPC/`/chat` change.
 - [x] No Windows visual smoke required.
+
+---
+
+## TASK-227 | Voice/TTS Research Note and Local Speech Roadmap
+
+**Status:** IMPLEMENTED - DOCS ONLY / NO WINDOWS SMOKE REQUIRED
+**Date:** 2026-06-01
+**Phase:** Phase 5 - Companion Voice / Speech Research
+**Depends on:** TASK-214 through TASK-226
+
+### Goal
+
+Create a docs-only Voice / TTS / STT research note that compares external AI
+VTuber / livestream voice architecture with Dragon Pet AI's local-first desktop
+pet direction, then records a safe local speech roadmap.
+
+### Summary
+
+Added:
+
+- `docs/VOICE_TTS_RESEARCH.md`
+
+Updated:
+
+- `README.md`
+- `docs/ROADMAP.md`
+- `docs/TASKS.md`
+- `docs/INTERACTIVE_COMPANION_ARCHITECTURE.md`
+- `docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md`
+- `docs/CHRISTINA_PERSONA_CONTEXT_PACK.md`
+
+The research note covers:
+
+- Purpose.
+- External AI VTuber / Discord voice architecture summary.
+- What applies to Dragon Pet AI.
+- What should not be copied.
+- Dragon Pet AI local-first voice direction.
+- Current TTS lab status.
+- Candidate TTS / speech models.
+- STT future direction.
+- TTS safety rules.
+- Voice licensing / ethics rules.
+- Proposed future TTS/STT tasks.
+- Relationship to existing docs.
+
+### External Reference Architecture Summary
+
+The user-provided external reference stack includes:
+
+- STT: Groq Whisper `large-v3-turbo`.
+- LLM: Anthropic Claude Haiku 4.5 with prompt cache plus a partially fine-tuned
+  local LLM.
+- TTS: ElevenLabs Tiffy Taiwanese Bilingual Narrator.
+- Discord integration: `discord.js` and `@discordjs/voice`.
+- Main program: Python 3.13 / `aiohttp`.
+- Overlay: HTML/JS through Cloudflare Tunnel.
+- Latency chain: cloud server -> Discord bot -> Discord voice channel -> user
+  computer.
+- Future local TTS direction: GPT-SoVITS local.
+- Custom voice data requirement: approximately 30 minutes of good emotional
+  recording data.
+
+This is recorded as research context only. It is not adopted as Dragon Pet AI's
+runtime architecture.
+
+### Dragon Pet AI Local-First Voice Roadmap
+
+- Desktop pet remains local-first.
+- Local TTS is preferred.
+- Cloud TTS can only be an optional future provider, not the default.
+- TTS is a post-reply audio layer.
+- TTS must not call `/chat`.
+- TTS must not write chat history.
+- TTS must not read diagnostics preview.
+- STT must be push-to-talk or explicit user action.
+- No always listening.
+- TTS / STT must obey `docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md`.
+
+### TTS/STT Safety Boundary
+
+TTS future boundary:
+
+- Default off.
+- Never calls `/chat` by itself.
+- Reads only TTS-safe text.
+- Never reads debug preview, metadata, JSON, source labels, hidden details,
+  thinking text, provider diagnostics, or raw event payload.
+- Does not read reaction bubbles unless a future task explicitly allows it.
+- Does not write history.
+- Supports stop/cancel before default-on behavior is considered.
+
+STT future boundary:
+
+- Explicit push-to-talk or record action only.
+- No always listening.
+- No wake-word capture by default.
+- No raw audio storage by default.
+- Transcript may require confirmation before `/chat`.
+- Candidate providers are local Whisper, faster-whisper, or optional cloud STT.
+
+### Future Task List
+
+- TASK-TTS-001 ChatTTS lab evaluation.
+- TASK-TTS-002 GPT-SoVITS local character voice spike.
+- TASK-TTS-003 F5-TTS / CosyVoice comparison spike.
+- TASK-TTS-004 TTS provider interface design, docs-only.
+- TASK-TTS-005 Dragon Pet AI audio skeleton, disabled by default.
+- TASK-TTS-006 Local TTS provider integration behind user controls.
+- TASK-STT-001 Push-to-talk STT design.
+- TASK-STT-002 Local Whisper / faster-whisper spike.
+- TASK-STT-003 Confirmed transcript to `/chat` flow.
+
+### Runtime Boundary
+
+TASK-227 is docs-only:
+
+- No renderer behavior change.
+- No Pet Window behavior change.
+- No backend behavior change.
+- No `/chat` API schema change.
+- No chat history persistence format change.
+- No IPC added.
+- No generic IPC added.
+- No TTS runtime path added.
+- No STT added.
+- No audio skeleton added.
+- No `/chat` call added.
+- No Ollama / Provider runtime change.
+- No prompt runtime change.
+- No assets added.
+- No voice model added or trained.
+
+### Acceptance Criteria
+
+- [x] `docs/VOICE_TTS_RESEARCH.md` created.
+- [x] External AI VTuber / Discord voice architecture summarized.
+- [x] Dragon Pet AI local-first voice roadmap documented.
+- [x] Candidate TTS / speech models documented.
+- [x] STT future direction documented.
+- [x] TTS safety rules documented.
+- [x] Voice licensing / ethics rules documented.
+- [x] Future TTS/STT task list documented.
+- [x] README links the research note.
+- [x] ROADMAP records TASK-227 as docs-only.
+- [x] Interactive companion architecture doc records Voice/TTS research as future
+  speech provider and safety roadmap.
+- [x] Interaction output queue design references Voice/TTS research.
+- [x] Persona context pack references Voice/TTS research for TTS-safe style.
+- [x] No code/runtime/prompt/TTS/STT/IPC/`/chat` change.
+- [x] No Windows visual smoke required.

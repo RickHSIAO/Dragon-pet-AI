@@ -1,11 +1,11 @@
 # Interactive Companion Architecture Checkpoint
 
-**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-226 IMPLEMENTED - DOCS ONLY / NO WINDOWS SMOKE REQUIRED
+**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-227 IMPLEMENTED - DOCS ONLY / NO WINDOWS SMOKE REQUIRED
 **Date:** 2026-06-01
-**Scope:** Architecture checkpoint for TASK-214 through TASK-226.
+**Scope:** Architecture checkpoint for TASK-214 through TASK-227.
 
 This document records the current interactive companion architecture after the
-TASK-214 through TASK-226 chain.
+TASK-214 through TASK-227 chain.
 
 ---
 
@@ -56,6 +56,7 @@ user interaction
 | TASK-224 | Character state preview diagnostics | Formats local reaction, decision, state, and level preview. DONE - Windows visual smoke PASS. |
 | TASK-225 | Persona context pack | Adds Christina persona source, safe adaptation, strength levels, and runtime boundary. DOCS ONLY. |
 | TASK-226 | Output queue / priority design | Defines future output arbitration priorities and preemption rules. DOCS ONLY. |
+| TASK-227 | Voice/TTS research | Records local-first speech roadmap, provider candidates, and speech safety boundaries. DOCS ONLY. |
 
 ---
 
@@ -283,7 +284,36 @@ TASK-226 only documents that layer. It does not implement it.
 
 ---
 
-## 10. Smoke Coverage Summary
+## 10. Voice / TTS Research Layer
+
+TASK-227 adds `docs/VOICE_TTS_RESEARCH.md` as a docs-only research and roadmap
+note for future speech work. It records an external AI VTuber / Discord voice
+stack as reference material, then narrows Dragon Pet AI's target direction to a
+local-first desktop pet model.
+
+Dragon Pet AI speech direction:
+
+- TTS is a post-reply audio layer.
+- TTS must not call `/chat`.
+- TTS must not write chat history.
+- TTS must not read diagnostics preview, metadata, JSON, source labels, thinking
+  text, provider diagnostics, hidden details, or raw event payloads.
+- STT must be explicit push-to-talk or another user action.
+- No always listening.
+- No raw audio persistence by default.
+- TTS / STT must obey the future output queue and priority model.
+
+The research note lists candidate tracks such as ChatTTS, GPT-SoVITS, F5-TTS,
+CosyVoice, ElevenLabs as optional cloud reference, local Whisper, and
+faster-whisper. It also records voice licensing and ethics boundaries.
+
+Important: TASK-227 does not add TTS, STT, an audio skeleton, voice models,
+provider wiring, prompt runtime wiring, IPC, `/chat` changes, or Pet Window
+behavior. It is a future speech provider and safety roadmap only.
+
+---
+
+## 11. Smoke Coverage Summary
 
 The completed stack is covered by:
 
@@ -316,7 +346,7 @@ raw JSON, or user text, and no Pet Window expression/reaction bubble regression.
 
 ---
 
-## 11. Known Boundaries / Not Yet Implemented
+## 12. Known Boundaries / Not Yet Implemented
 
 The current system does not yet implement:
 
@@ -332,6 +362,9 @@ The current system does not yet implement:
 - Bubble priority enforcement.
 - TTS-safe segment runtime.
 - Idle reaction policy.
+- Voice provider runtime.
+- Local TTS runtime.
+- Push-to-talk STT runtime.
 
 Important: TASK-221 behavior decisions, TASK-223 character states, and TASK-224
 diagnostics previews are currently summary/preview only. They do not execute
@@ -339,7 +372,7 @@ actions directly.
 
 ---
 
-## 12. Recommended Next Phase
+## 13. Recommended Next Phase
 
 Recommended next architecture phase:
 
@@ -349,6 +382,8 @@ Recommended next architecture phase:
 - Behavior policy starts controlling execution.
 - Safe reaction frequency governor.
 - Output queue runtime skeleton, disabled by default.
+- TTS provider interface design, docs-only.
+- Push-to-talk STT design.
 
 These should still avoid jumping directly to LLM proactive speech, screen
 monitoring, OCR, always listening, or broad IPC. Each capability should be

@@ -235,3 +235,21 @@ Forbidden by this document alone:
 - No always-listening behavior.
 - No monitoring, OCR, screenshots, or background capture.
 - No persistence format change.
+
+---
+
+## Voice / TTS Research Relationship
+
+TASK-227 adds `docs/VOICE_TTS_RESEARCH.md` as the future speech research and
+local-first voice roadmap.
+
+This persona context pack may guide TTS-safe script style in a future explicit
+task, but it does not wire TTS now. Persona tone must still pass through runtime
+safety rules before speech output is allowed.
+
+Boundary:
+
+- Persona pack can inform style.
+- Voice/TTS research can inform provider and safety choices.
+- Output queue design can inform timing and interruption rules.
+- None of these docs enable runtime speech by themselves.

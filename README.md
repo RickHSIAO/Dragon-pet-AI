@@ -7,7 +7,7 @@
 📋 **[完整 Demo 腳本與面試重點](docs/PORTFOLIO_DEMO_SCRIPT.md)**
 📋 **[Phase 4 Provider Settings 摘要](docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md)**
 
-**最新本地狀態（2026-06-01）：** TASK-226 Interaction Output Queue / Priority Design 已完成 docs-only，狀態為 **IMPLEMENTED - DOCS ONLY / NO WINDOWS SMOKE REQUIRED**。新增 `docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md`，定義未來 output queue / priority model、preemption rules、bubble/expression/TTS/STT future boundaries、queue item schema proposal、channel taxonomy、forbidden list 與後續 TASK-227 到 TASK-232 建議。此任務不改 runtime、不改 renderer/Pet Window/backend、不新增 IPC、不改 `/chat`、不接 prompt runtime、不新增 TTS/STT。
+**最新本地狀態（2026-06-01）：** TASK-227 Voice/TTS Research Note and Local Speech Roadmap 已完成 docs-only，狀態為 **IMPLEMENTED - DOCS ONLY / NO WINDOWS SMOKE REQUIRED**。新增 `docs/VOICE_TTS_RESEARCH.md`，整理外部 AI VTuber / Discord voice chain 參考、Dragon Pet AI local-first voice roadmap、候選 TTS/STT 技術、TTS/STT safety boundary、voice licensing / ethics rules 與未來 TTS/STT task list。此任務不改 runtime、不改 renderer/Pet Window/backend、不新增 IPC、不改 `/chat`、不接 prompt runtime、不新增 TTS/STT/audio skeleton、不新增 voice model。
 
 ---
 
@@ -402,6 +402,7 @@ python -c "import json, urllib.request; data=json.dumps({'message':'你好！克
 | [docs/INTERACTIVE_COMPANION_ARCHITECTURE.md](docs/INTERACTIVE_COMPANION_ARCHITECTURE.md) | TASK-222/224 互動陪伴架構 checkpoint：data flow、layer responsibility、IPC inventory、安全邊界、Character State Layer diagnostics 與下一階段 |
 | [docs/CHRISTINA_PERSONA_CONTEXT_PACK.md](docs/CHRISTINA_PERSONA_CONTEXT_PACK.md) | TASK-225 Christina persona context pack：canonical source、runtime-safe adaptation、strength levels、runtime boundary |
 | [docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md](docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md) | TASK-226 Interaction Output Queue / Priority Design：priority model、preemption、queue schema、future TTS/STT boundaries |
+| [docs/VOICE_TTS_RESEARCH.md](docs/VOICE_TTS_RESEARCH.md) | TASK-227 Voice/TTS research note：local-first speech roadmap、candidate TTS/STT、licensing/safety boundaries |
 | [docs/STREAMER_COMPANION_MODE.md](docs/STREAMER_COMPANION_MODE.md) | 未來支線 — OBS overlay / Twitch 陪伴設計（尚未排程） |
 
 ---
@@ -464,6 +465,7 @@ dragon-pet-ai/
 | `docs/INTERACTIVE_COMPANION_ARCHITECTURE.md` | TASK-222/224 互動陪伴架構 checkpoint |
 | `docs/CHRISTINA_PERSONA_CONTEXT_PACK.md` | TASK-225 克莉絲蒂娜 persona context pack |
 | `docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md` | TASK-226 output queue / priority design |
+| `docs/VOICE_TTS_RESEARCH.md` | TASK-227 Voice/TTS/STT research and local speech roadmap |
 | `docs/CHARACTER_SPEC.md` | 角色人格規格 |
 | `docs/MEMORY_SYSTEM.md` | 記憶系統設計 |
 | `docs/PHASE3_DEMO_SUMMARY.md` | Phase 3 demo 摘要與安全模型 |
@@ -567,6 +569,8 @@ dragon-pet-ai/
 > TASK-225：Christina Persona Context Pack 完成 docs-only (2026-06-01)，狀態為 IMPLEMENTED - DOCS ONLY / NO WINDOWS SMOKE REQUIRED。新增 `docs/CHRISTINA_PERSONA_CONTEXT_PACK.md`，整合使用者提供的 canonical extracted persona source，並整理 runtime-safe adaptation、persona strength levels、runtime integration boundary。此文件只作為未來 LLM prompt、reaction bubble style、TTS-safe script、idle reaction content、character state expression style 的內容層；不接 runtime prompt、不接 TTS/STT、不新增 IPC、不改 `/chat`、不改 renderer、Pet Window、backend 或 provider runtime。
 
 > TASK-226：Interaction Output Queue / Priority Design 完成 docs-only (2026-06-01)，狀態為 IMPLEMENTED - DOCS ONLY / NO WINDOWS SMOKE REQUIRED。新增 `docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md`，定義未來 output queue / priority model：P0 critical safety/error、P1 user direct action、P2 LLM chat reply、P3 important companion reaction、P4 normal companion reaction、P5 idle/ambient reaction、P6 diagnostics only；並記錄 preemption rules、bubble display rules、expression rules、TTS/STT future boundaries、queue item schema proposal、channel taxonomy、forbidden list、與未來 TASK-227 到 TASK-232 建議。此文件只做架構設計，不改 runtime、不改 renderer/Pet Window/backend、不新增 IPC、不改 `/chat`、不接 prompt runtime、不新增 TTS/STT、不 commit、不 push。
+
+> TASK-227：Voice/TTS Research Note and Local Speech Roadmap 完成 docs-only (2026-06-01)，狀態為 IMPLEMENTED - DOCS ONLY / NO WINDOWS SMOKE REQUIRED。新增 `docs/VOICE_TTS_RESEARCH.md`，記錄使用者提供的外部 AI VTuber / Discord voice chain 作為研究參考，但 Dragon Pet AI 方向維持 local-first desktop pet：TTS 是 post-reply audio layer，不自行呼叫 `/chat`，不寫 history，不讀 diagnostics；STT 只允許 push-to-talk 或明確使用者動作，無 always listening，不預設保存 raw audio。文件整理候選 TTS/STT 技術（ChatTTS、GPT-SoVITS、F5-TTS、CosyVoice、ElevenLabs、local Whisper / faster-whisper）、voice licensing / ethics rules、與未來 TASK-TTS / TASK-STT task list。此任務不改 runtime、不新增 TTS/STT/audio skeleton、不新增 IPC、不改 `/chat`、不接 prompt runtime、不新增 voice model。
 
 > TASK-217：Reaction Hint to Local Expression Suggestion 完成 automated smoke 與 Windows visual smoke PASS。`deriveInteractionExpressionSuggestion(hint)` 映射 7 種 hint → expression（`user_active → focused`、`correction → annoyed`、`attention_returned → happy`、`pet_attention → proud`、其餘 → `neutral`）；`recordInteractionExpressionSuggestion` 寫入 ring buffer（max 20）並更新 `currentInteractionExpressionSuggestion`。Preview 更新為 `Reaction: <hint> · Suggestion: <expression>`。Allowlist 6 種：neutral/focused/happy/proud/annoyed/sleepy。純 renderer memory，無 Pet Window 表情改變/IPC/chat/TTS/history write。+30 tests PASS。Windows visual smoke PASS (8 groups, 2026-06-01)：基本啟動 Reaction: none · Suggestion: neutral ✓、送出訊息 Reaction: user_active · Suggestion: focused ✓、delete/undo Reaction: message_management · Suggestion: neutral ✓、edit last user Reaction: correction · Suggestion: annoyed ✓、clear chat Reaction: reset · Suggestion: neutral ✓、focus Reaction: attention_returned · Suggestion: happy ✓、context menu regression ✓、一般回歸 ✓。Preview 未進入 history/copy/export；無額外觸發 Pet Bubble/TTS；Pet Window 表情未真正改變。
 

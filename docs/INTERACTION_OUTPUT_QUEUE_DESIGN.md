@@ -292,11 +292,15 @@ Related current docs:
 
 - `docs/INTERACTIVE_COMPANION_ARCHITECTURE.md`
 - `docs/CHRISTINA_PERSONA_CONTEXT_PACK.md`
+- `docs/VOICE_TTS_RESEARCH.md`
 
 Voice/TTS research design docs:
 
-- `docs/VOICE_TTS_RESEARCH.md` is not present at the time of TASK-226.
-- Future voice/TTS roadmap docs are TBD.
+- TASK-227 adds `docs/VOICE_TTS_RESEARCH.md`.
+- Voice/TTS research supplies provider candidates, licensing boundaries, and
+  local-first speech roadmap.
+- This output queue design supplies timing, priority, and interruption rules for
+  any future TTS/STT runtime.
 
 ---
 

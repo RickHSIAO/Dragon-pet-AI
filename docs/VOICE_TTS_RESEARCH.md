@@ -1,0 +1,295 @@
+# Voice / TTS Research Note and Local Speech Roadmap
+
+**Task:** TASK-227
+**Status:** IMPLEMENTED - DOCS ONLY / NO WINDOWS SMOKE REQUIRED
+**Date:** 2026-06-01
+**Scope:** Voice / TTS / STT research note only. No runtime speech behavior is
+implemented here.
+
+This document records voice, TTS, and STT research context for Dragon Pet AI.
+It is a roadmap and safety note, not an implementation. It does not change
+renderer behavior, Pet Window behavior, backend behavior, `/chat`, IPC, TTS,
+STT, audio skeletons, prompts, providers, assets, or persistence.
+
+---
+
+## 1. Purpose
+
+The goal is to clarify Dragon Pet AI's future speech direction before adding any
+new runtime audio path.
+
+This note:
+
+- Records a user-provided AI VTuber / livestream companion voice architecture as
+  external reference material.
+- Separates what applies to Dragon Pet AI from what should not be copied.
+- Defines a local-first speech roadmap for a desktop pet.
+- Records TTS/STT safety boundaries.
+- Links speech work to the Interaction Output Queue / Priority Design.
+
+This is not runtime. It is a research and architecture checkpoint.
+
+---
+
+## 2. External AI VTuber Architecture Summary
+
+The user provided an external AI livestream / Discord voice architecture as a
+reference. It is useful for research comparison, but it is not the target
+architecture for Dragon Pet AI.
+
+Reference components:
+
+- STT: Groq Whisper `large-v3-turbo`.
+- LLM: Anthropic Claude Haiku 4.5 with prompt cache plus a partially fine-tuned
+  local LLM.
+- TTS: ElevenLabs Tiffy Taiwanese Bilingual Narrator.
+- Discord integration: `discord.js` and `@discordjs/voice`.
+- Main program: Python 3.13 / `aiohttp`.
+- Overlay: HTML/JS through Cloudflare Tunnel.
+- Latency chain: cloud server -> Discord bot -> Discord voice channel -> user
+  computer.
+- Future local TTS direction: GPT-SoVITS local.
+- Custom voice data requirement: approximately 30 minutes of good emotional
+  recording data for voice work.
+
+This architecture is optimized for livestream or Discord character use. Dragon
+Pet AI is a local-first desktop pet and should avoid inheriting cloud or Discord
+latency unless a future task explicitly designs an optional integration.
+
+---
+
+## 3. What Applies to Dragon Pet AI
+
+Useful ideas:
+
+- Persona/context pack influences voice style and script tone.
+- Local-first speech is a good fit for a desktop pet.
+- TTS should be a post-reply audio layer, not a new chat driver.
+- STT should be explicit user action only.
+- Output queue / priority rules should govern speech timing.
+- GPT-SoVITS, F5-TTS, and CosyVoice are worth future local speech research.
+
+---
+
+## 4. What Should Not Be Copied
+
+Dragon Pet AI should not copy these pieces by default:
+
+- Discord voice chain.
+- Cloudflare Tunnel overlay.
+- Livestream chat / superchat queue model.
+- Cloud-first TTS as primary runtime.
+- Always-on voice routing.
+- Any architecture that adds unnecessary latency for a local desktop pet.
+
+---
+
+## 5. Dragon Pet AI Local-First Voice Direction
+
+Recommended direction:
+
+- Desktop pet remains local-first.
+- Local TTS is preferred.
+- Cloud TTS may be an optional future provider, not the default.
+- TTS is a post-reply audio layer.
+- TTS must not call `/chat`.
+- TTS must not affect chat history.
+- TTS must not read diagnostics preview.
+- TTS must obey `docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md`.
+- STT must be push-to-talk or another explicit user action.
+- No always-listening mode.
+- No unconfirmed ambient audio to an LLM.
+
+---
+
+## 6. Current TTS Lab Status
+
+Current known status:
+
+- The user has an external TTS lab.
+- ChatTTS WebUI can run as a local TTS experiment.
+- Dragon Pet AI is not wired to that TTS lab.
+- Any future TTS provider should start as a lab spike before entering Dragon Pet
+  AI runtime.
+- No external TTS provider is currently a Dragon Pet AI runtime dependency.
+
+---
+
+## 7. Candidate TTS / Speech Models
+
+### ChatTTS
+
+Potential value:
+
+- Useful local research candidate.
+- Good for quick speech experimentation.
+
+Risks / unknowns:
+
+- Runtime stability and voice consistency need testing.
+- Character voice control may be limited.
+- Must not be wired directly into Dragon Pet AI without a separate safe runtime
+  task.
+
+### GPT-SoVITS
+
+Potential value:
+
+- Strong candidate for local-first character voice research.
+- Better fit for custom voice style experiments.
+
+Risks / unknowns:
+
+- Requires careful data preparation.
+- Voice licensing and consent must be explicit.
+- Training/inference complexity needs separate spike work.
+
+### F5-TTS
+
+Potential value:
+
+- Research candidate for zero-shot or style-driven TTS.
+
+Risks / unknowns:
+
+- Needs quality, latency, and runtime packaging evaluation.
+- Must be isolated from production runtime until explicitly designed.
+
+### CosyVoice
+
+Potential value:
+
+- Research candidate for multilingual or style-controlled speech.
+
+Risks / unknowns:
+
+- Runtime footprint and licensing need review.
+- Voice consistency and packaging need separate spike work.
+
+### ElevenLabs
+
+Potential value:
+
+- High-quality cloud TTS reference.
+- May be useful as optional future provider.
+
+Risks / unknowns:
+
+- Cloud dependency.
+- Cost and account management.
+- Voice licensing requirements.
+- Not suitable as default local-first runtime.
+
+---
+
+## 8. STT Future Direction
+
+Recommended STT direction:
+
+- STT is an explicit feature, not ambient listening.
+- Use push-to-talk or an explicit record button.
+- No always listening.
+- No wake-word capture by default.
+- Do not store raw audio by default.
+- Transcript may require user confirmation before `/chat`.
+- Candidate providers: local Whisper, faster-whisper, or optional cloud STT.
+- STT should not be coupled to Discord by default.
+
+---
+
+## 9. TTS Safety Rules
+
+Future TTS must obey:
+
+- TTS default off.
+- TTS must never call `/chat` by itself.
+- TTS must only read TTS-safe text.
+- TTS must never read:
+  - debug preview
+  - metadata
+  - JSON
+  - source labels
+  - hidden details
+  - thinking text
+  - provider diagnostics
+  - raw event payload
+- TTS must not read reaction bubbles unless a future task explicitly allows it.
+- TTS must not write chat history.
+- TTS must not export audio by default.
+- TTS must support stop/cancel before default-on behavior is considered.
+- TTS must obey Interaction Output Queue / Priority Design.
+
+---
+
+## 10. Voice Licensing / Ethics Rules
+
+Voice work must remain legally and ethically clean:
+
+- Do not clone a streamer, VTuber, voice actor, or private person's voice
+  without clear authorization.
+- Keep source recordings legally usable and documented.
+- Separate speech mode from singing mode.
+- Voice cloning requires explicit permission and appropriate source data.
+- Do not imply official affiliation with a character, performer, or voice owner.
+- Avoid uploading private user voice data to cloud services without explicit
+  consent and documentation.
+
+---
+
+## 11. Proposed Future Tasks
+
+Suggested research and implementation tasks:
+
+- TASK-TTS-001 ChatTTS lab evaluation: seed / speaker / quality notes.
+- TASK-TTS-002 GPT-SoVITS local character voice spike.
+- TASK-TTS-003 F5-TTS / CosyVoice comparison spike.
+- TASK-TTS-004 TTS provider interface design, docs-only.
+- TASK-TTS-005 Dragon Pet AI audio skeleton, disabled by default.
+- TASK-TTS-006 Local TTS provider integration behind user controls.
+- TASK-STT-001 Push-to-talk STT design.
+- TASK-STT-002 Local Whisper / faster-whisper spike.
+- TASK-STT-003 Confirmed transcript to `/chat` flow.
+
+Each future task must explicitly define safety boundaries, user controls,
+provider scope, queue priority, and no-regression checks.
+
+---
+
+## 12. Relationship to Existing Docs
+
+Related docs:
+
+- `docs/INTERACTIVE_COMPANION_ARCHITECTURE.md`
+- `docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md`
+- `docs/CHRISTINA_PERSONA_CONTEXT_PACK.md`
+
+Relationship:
+
+- Persona pack controls speech style guidance and TTS-safe script style.
+- Output queue controls timing, priority, and interruption rules.
+- Voice/TTS research controls provider candidates, licensing, and local-first
+  roadmap.
+- None of these docs wire runtime behavior by themselves.
+
+---
+
+## 13. TASK-227 Runtime Boundary
+
+TASK-227 is docs-only. It does not:
+
+- Change renderer behavior.
+- Change Pet Window behavior.
+- Change backend behavior.
+- Change `/chat` API schema.
+- Change chat history persistence format.
+- Add IPC.
+- Add generic IPC.
+- Add a TTS runtime path.
+- Add STT.
+- Add an audio skeleton.
+- Call `/chat`.
+- Change Ollama / Provider runtime.
+- Change prompt runtime.
+- Add assets.
+- Add or train a voice model.
+- Commit or push changes.
