@@ -656,6 +656,18 @@ function recordInteractionReactionHint(hint, event = {}) {
     recentInteractionReactionHints.shift();
   }
   currentInteractionReactionHint = safeHint;
+  renderInteractionReactionPreview(); // TASK-216
+}
+
+// TASK-216: Reaction hint debug preview — reads currentInteractionReactionHint, no side-effects.
+// Uses textContent (not innerHTML) and only displays allowlisted hint strings.
+function renderInteractionReactionPreview() {
+  const el = document.getElementById("interaction-reaction-preview");
+  if (!el) return;
+  const safeHint = INTERACTION_REACTION_HINT_ALLOWLIST.has(currentInteractionReactionHint)
+    ? currentInteractionReactionHint
+    : "none";
+  el.textContent = "Reaction: " + safeHint;
 }
 
 function recordInteractionEvent(type, payload = {}) {
@@ -3586,5 +3598,6 @@ async function checkLocalProviderLiveness() {
     setPetHint(moodHintLabel("offline"));
   }
 
+  renderInteractionReactionPreview(); // TASK-216: show initial state
   msgInput.focus();
 })();

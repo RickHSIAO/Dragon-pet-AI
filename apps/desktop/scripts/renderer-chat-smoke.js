@@ -6831,6 +6831,169 @@ function testTask215ContextMenuStillExists() {
   console.log("  testTask215ContextMenuStillExists PASS");
 }
 
+// ─── TASK-216: Safe Local Reaction Preview / Debug Panel ─────────────────────
+
+function testTask216HtmlHasPreviewElement() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes('id="interaction-reaction-preview"'),
+    "index.html must contain element with id=interaction-reaction-preview");
+  assert.ok(html.includes("Reaction: none"),
+    "index.html preview element must have initial text 'Reaction: none'");
+  console.log("  testTask216HtmlHasPreviewElement PASS");
+}
+
+function testTask216CssHasPreviewStyle() {
+  const css = fs.readFileSync(cssPath, "utf8");
+  assert.ok(css.includes("#interaction-reaction-preview"),
+    "styles.css must have a rule for #interaction-reaction-preview");
+  console.log("  testTask216CssHasPreviewStyle PASS");
+}
+
+function testTask216RendererHasRenderFunction() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("function renderInteractionReactionPreview"),
+    "renderer.js must define renderInteractionReactionPreview");
+  assert.ok(src.includes("renderInteractionReactionPreview()"),
+    "renderer.js must call renderInteractionReactionPreview() at least once");
+  console.log("  testTask216RendererHasRenderFunction PASS");
+}
+
+async function testTask216InitShowsNone() {
+  const { document } = await loadRenderer();
+  const el = document.getElementById("interaction-reaction-preview");
+  assert.equal(el.textContent, "Reaction: none",
+    "preview must show 'Reaction: none' on startup");
+  console.log("  testTask216InitShowsNone PASS");
+}
+
+async function testTask216ChatMessageSentShowsUserActive() {
+  const { document, sandbox } = await loadRenderer();
+  const el = document.getElementById("interaction-reaction-preview");
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 10, source: "full_app" });
+  assert.equal(el.textContent, "Reaction: user_active",
+    "preview must show 'Reaction: user_active' after chat_message_sent");
+  console.log("  testTask216ChatMessageSentShowsUserActive PASS");
+}
+
+async function testTask216MessageDeletedShowsMessageManagement() {
+  const { document, sandbox } = await loadRenderer();
+  const el = document.getElementById("interaction-reaction-preview");
+  sandbox.recordInteractionEvent("message_deleted", { role: "user", source: "full_app" });
+  assert.equal(el.textContent, "Reaction: message_management",
+    "preview must show 'Reaction: message_management' after message_deleted");
+  console.log("  testTask216MessageDeletedShowsMessageManagement PASS");
+}
+
+async function testTask216MessageEditedShowsCorrection() {
+  const { document, sandbox } = await loadRenderer();
+  const el = document.getElementById("interaction-reaction-preview");
+  sandbox.recordInteractionEvent("message_edited", { messageLength: 8, role: "user", source: "full_app" });
+  assert.equal(el.textContent, "Reaction: correction",
+    "preview must show 'Reaction: correction' after message_edited");
+  console.log("  testTask216MessageEditedShowsCorrection PASS");
+}
+
+async function testTask216ClearChatShowsReset() {
+  const { document, sandbox } = await loadRenderer();
+  const el = document.getElementById("interaction-reaction-preview");
+  sandbox.recordInteractionEvent("chat_history_cleared", { count: 3 });
+  assert.equal(el.textContent, "Reaction: reset",
+    "preview must show 'Reaction: reset' after chat_history_cleared");
+  console.log("  testTask216ClearChatShowsReset PASS");
+}
+
+async function testTask216FocusShowsAttentionReturned() {
+  const { document, sandbox } = await loadRenderer();
+  const el = document.getElementById("interaction-reaction-preview");
+  sandbox.window.dispatchEvent({ type: "focus" });
+  assert.equal(el.textContent, "Reaction: attention_returned",
+    "preview must show 'Reaction: attention_returned' after window focus");
+  console.log("  testTask216FocusShowsAttentionReturned PASS");
+}
+
+async function testTask216PreviewNoRawText() {
+  const { document, sandbox } = await loadRenderer();
+  const el = document.getElementById("interaction-reaction-preview");
+  // Use sentinel values that cannot appear in any allowlisted hint string
+  sandbox.recordInteractionEvent("chat_message_sent", {
+    messageLength: 9999,
+    source: "SENTINEL_SOURCE_VALUE",
+    role: "SENTINEL_ROLE_VALUE",
+  });
+  assert.ok(!el.textContent.includes("9999"),                "preview must not show messageLength number");
+  assert.ok(!el.textContent.includes("SENTINEL_SOURCE_VALUE"), "preview must not show source value");
+  assert.ok(!el.textContent.includes("SENTINEL_ROLE_VALUE"),   "preview must not show role value");
+  assert.ok(el.textContent.startsWith("Reaction:"),          "preview must only show 'Reaction: <hint>'");
+  console.log("  testTask216PreviewNoRawText PASS");
+}
+
+function testTask216PreviewNotInChatArea() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  const chatAreaStart = html.indexOf('<main id="chat-area"');
+  const chatAreaEnd   = html.indexOf("</main>", chatAreaStart);
+  assert.ok(chatAreaStart > 0, "index.html must have <main id=\"chat-area\">");
+  const chatAreaContent = html.slice(chatAreaStart, chatAreaEnd);
+  assert.ok(!chatAreaContent.includes("interaction-reaction-preview"),
+    "interaction-reaction-preview must NOT be inside #chat-area in index.html");
+  console.log("  testTask216PreviewNotInChatArea PASS");
+}
+
+async function testTask216PreviewNotInTranscript() {
+  const { document, sandbox } = await loadRenderer();
+  await sendChat(document, "transcript test");
+  await settle();
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 14 });
+  const transcript = sandbox.buildChatTranscript();
+  assert.ok(!transcript.includes("Reaction:"),
+    "reaction preview text must not appear in copy/export transcript");
+  console.log("  testTask216PreviewNotInTranscript PASS");
+}
+
+async function testTask216PreviewNoChat() {
+  const { state, sandbox, document } = await loadRenderer();
+  state.calls.length = 0;
+  sandbox.renderInteractionReactionPreview();
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 5 });
+  sandbox.recordInteractionEvent("full_app_focused");
+  await settle();
+  const chatCalls = state.calls.filter((c) => c.url.endsWith("/chat"));
+  assert.equal(chatCalls.length, 0, "renderInteractionReactionPreview must not call /chat");
+  console.log("  testTask216PreviewNoChat PASS");
+}
+
+async function testTask216PreviewNoPetOrTts() {
+  const speechUpdates = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      updatePetSpeech(p) { speechUpdates.push(p); return Promise.resolve({ ok: true }); },
+      showPetWindow() { return Promise.resolve({ ok: true }); },
+    },
+  });
+  speechUpdates.length = 0;
+  sandbox.renderInteractionReactionPreview();
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 5 });
+  sandbox.recordInteractionEvent("full_app_focused");
+  await settle();
+  assert.equal(speechUpdates.length, 0,
+    "renderInteractionReactionPreview must not call updatePetSpeech");
+  console.log("  testTask216PreviewNoPetOrTts PASS");
+}
+
+function testTask216HoverActionsStillAbsent() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(!src.includes("hover-action"), "TASK-216 must not re-introduce hover-action class");
+  console.log("  testTask216HoverActionsStillAbsent PASS");
+}
+
+function testTask216ContextMenuStillExists() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("chat-context-menu"), "chat-context-menu must still exist after TASK-216");
+  assert.ok(src.includes("複製") && src.includes("刪除"), "copy/delete actions must still exist");
+  assert.ok(src.includes("closeChatContextMenu"), "closeChatContextMenu must still exist");
+  console.log("  testTask216ContextMenuStillExists PASS");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -7231,6 +7394,23 @@ async function main() {
   await testTask215ReactionHintNoPetOrTts();
   testTask215HoverActionsStillAbsent();
   testTask215ContextMenuStillExists();
+  // TASK-216: Safe Local Reaction Preview / Debug Panel
+  testTask216HtmlHasPreviewElement();
+  testTask216CssHasPreviewStyle();
+  testTask216RendererHasRenderFunction();
+  await testTask216InitShowsNone();
+  await testTask216ChatMessageSentShowsUserActive();
+  await testTask216MessageDeletedShowsMessageManagement();
+  await testTask216MessageEditedShowsCorrection();
+  await testTask216ClearChatShowsReset();
+  await testTask216FocusShowsAttentionReturned();
+  await testTask216PreviewNoRawText();
+  testTask216PreviewNotInChatArea();
+  await testTask216PreviewNotInTranscript();
+  await testTask216PreviewNoChat();
+  await testTask216PreviewNoPetOrTts();
+  testTask216HoverActionsStillAbsent();
+  testTask216ContextMenuStillExists();
   console.log("renderer chat smoke: PASS");
 }
 

@@ -1588,3 +1588,14 @@ textarea {
   }
 
 }
+
+/* TASK-216: Reaction hint debug preview — low-profile, no animation, no fixed position */
+#interaction-reaction-preview {
+  font-size: 11px;
+  color: var(--text-muted, #8a8a9a);
+  font-style: italic;
+  opacity: 0.75;
+  user-select: none;
+  letter-spacing: 0.01em;
+  flex-basis: 100%;
+}

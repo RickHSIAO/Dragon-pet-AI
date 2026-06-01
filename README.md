@@ -7,7 +7,7 @@
 📋 **[完整 Demo 腳本與面試重點](docs/PORTFOLIO_DEMO_SCRIPT.md)**
 📋 **[Phase 4 Provider Settings 摘要](docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md)**
 
-**最新本地狀態（2026-06-01）：** TASK-215 已完成 automated smoke 與 Windows visual smoke PASS。在 TASK-214 事件 log 基礎上新增 reaction hint 層：`deriveInteractionReactionHint(event)` 將各事件類型對應至語意 hint（`user_active`/`correction`/`reset`/`attention_returned` 等 7 種），`recordInteractionReactionHint` 寫入 `recentInteractionReactionHints`（max 20）並更新 `currentInteractionReactionHint`。純本地 renderer memory，無 UI side-effects、無 Pet Window、無 `/chat`、無 TTS、無 history write。
+**最新本地狀態（2026-06-01）：** TASK-216 已完成 automated smoke 與 Windows visual smoke PASS。在 `#character-status` 區域新增 `#interaction-reaction-preview` span，以 11px 斜體灰色文字顯示當前 `currentInteractionReactionHint`（格式：`Reaction: <hint>`）。`renderInteractionReactionPreview()` 由 `recordInteractionReactionHint` 及 startup IIFE 呼叫，純本地 renderer memory 讀取，無 IPC、無 `/chat`、無 TTS、無 Pet Window、無 history write。Preview 未進入 chat history / copy / export；無額外觸發 Pet Bubble / TTS。
 
 ---
 
@@ -99,7 +99,7 @@ ollama serve
 | 本地 Ollama `/chat` smoke | ✅ 通過 — `qwen3:8b`，`source=llm_local`，克莉絲蒂娜人格確認 |
 | Provider Settings 持久化 | ✅ 通過 — 重啟後設定保留，partial PATCH 保留省略欄位 |
 | UI polish | ✅ 通過 — 情緒→表情對應、Christina expression system |
-| Full App chat UX | ✅ TASK-215 Windows visual smoke PASS — 搜尋/高亮、未讀提示、匯出、時間戳、日期分隔線、清除確認、empty state、Undo Clear Chat、單則訊息刪除/復原、右鍵訊息操作 (viewport clamp + a11y)、最後 user message 編輯/重新送出、互動事件 log、reaction hint 層 |
+| Full App chat UX | ✅ TASK-216 Windows visual smoke PASS — 搜尋/高亮、未讀提示、匯出、時間戳、日期分隔線、清除確認、empty state、Undo Clear Chat、單則訊息刪除/復原、右鍵訊息操作 (viewport clamp + a11y)、最後 user message 編輯/重新送出、互動事件 log、reaction hint 層、reaction preview UI (`Reaction: <hint>`) |
 | 表情系統 | 7/10 real PNG（happy、focused、neutral、proud、annoyed、worried、sleepy）；pending/error/offline 為 SVG fallback |
 | pytest | **586 通過，0 失敗** |
 | Electron smoke | **renderer-chat PASS；pet-renderer 237 PASS；pet-window 60 PASS** |
@@ -107,7 +107,7 @@ ollama serve
 | 真實 API Key 使用 | ❌ 無 — 所有測試使用 mocked runner |
 | 生產就緒 | ❌ 尚未 — prototype / portfolio 階段 |
 | Demo 可用（本地 Ollama） | ✅ 是 |
-| 下一個任務 | TASK-216 — TBD，等待使用者指示 |
+| 下一個任務 | TASK-217 — TBD，等待使用者指示 |
 
 ---
 
@@ -397,7 +397,7 @@ python -c "import json, urllib.request; data=json.dumps({'message':'你好！克
 | [docs/PROVIDER_TEST_CONNECTION_DESIGN.md](docs/PROVIDER_TEST_CONNECTION_DESIGN.md) | Test Connection 設計與強化測試結果 |
 | [docs/SECURE_KEY_STORAGE_DESIGN.md](docs/SECURE_KEY_STORAGE_DESIGN.md) | 金鑰儲存威脅模型、儲存選項、遮蔽規則 |
 | [docs/BYOK_PRODUCT_AND_SETTINGS.md](docs/BYOK_PRODUCT_AND_SETTINGS.md) | BYOK 產品設計與安全邊界 |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖；目前下一步為 TASK-215（TBD） |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖；目前下一步為 TASK-217（TBD） |
 | [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄；最新記錄為 TASK-214 Interactive Pet Event / Reaction Foundation automated smoke PASS，Windows visual smoke pending |
 | [docs/STREAMER_COMPANION_MODE.md](docs/STREAMER_COMPANION_MODE.md) | 未來支線 — OBS overlay / Twitch 陪伴設計（尚未排程） |
 
@@ -543,6 +543,8 @@ dragon-pet-ai/
 > TASK-213：Context Menu Viewport / Accessibility Polish 完成 automated smoke 與 Windows visual smoke PASS。context menu 新增 `positionChatContextMenu` 8px 邊距 clamp（右/下邊緣自動向左/上移），開啟時 focus 第一個 action，`role="menu"` / `role="menuitem"` / `aria-label="訊息操作"`，Enter/Space 鍵盤觸發，新增 scroll/blur/visibilitychange 關閉觸發。+13 tests。
 
 > TASK-214：Interactive Pet Event / Reaction Foundation 完成 automated smoke 與 Windows visual smoke PASS。取消原 TASK-214 Regenerate Last Pet Reply — 產品方向為互動式 AI 桌面寵物，非 ChatGPT 工具。新增 `recordInteractionEvent(type, payload)` helper，6 種事件類型 allowlist，payload 只允許 `source/role/messageLength/count`（無原始文字），本地環形 buffer max 20。Hook 接入 sendMessage / clearChatHistory / deleteSingleChatMessage / submitEditedUserMessage / window.focus。不呼叫 `/chat`，不觸發 Pet Bubble/TTS，不寫 history，不新增 IPC/後端。+12 tests。Windows visual smoke PASS (8 groups, 2026-06-01)。
+
+> TASK-216：Safe Local Reaction Preview / Debug Panel 完成 automated smoke 與 Windows visual smoke PASS。`#interaction-reaction-preview` span 新增至 `#character-status`，顯示 `"Reaction: <hint>"`（11px italic muted，flex-basis:100% 強制獨立行）。`renderInteractionReactionPreview()` 從 `recordInteractionReactionHint` 及 startup IIFE 呼叫。純 renderer DOM 讀取，無 IPC/chat/TTS/Pet Window/history write。+16 tests。Windows visual smoke PASS (8 groups, 2026-06-01)：基本啟動 Reaction: none ✓、送出訊息 Reaction: user_active ✓、context menu regression ✓、delete/undo Reaction: message_management ✓、edit last user Reaction: correction ✓、clear chat Reaction: reset ✓、focus Reaction: attention_returned ✓、一般回歸 ✓。Preview 未進入 history/copy/export；無額外觸發 Pet Bubble/TTS。
 
 > TASK-215：Interactive Pet Reaction Hint Layer 完成 automated smoke 與 Windows visual smoke PASS。首次消費 TASK-214 event log：`deriveInteractionReactionHint(event)` 將事件類型對應至語意 hint（7 種：user_active / message_management / correction / reset / attention_returned / pet_attention / none），`recordInteractionReactionHint(hint, event)` 存入 `recentInteractionReactionHints`（max 20，ring buffer）並更新 `currentInteractionReactionHint`。未知 hint 轉為 "none"。payload 只保留 source/role/messageLength，無原始文字。`recordInteractionEvent` 先組好 event object 再同步傳給兩層。純本地 renderer memory，無 UI 副作用，無 Pet Window、/chat、TTS、history、IPC、backend。+13 tests。Windows visual smoke PASS (8 groups, 2026-06-01)。DevTools Console 快捷鍵無反應，未檢查 Console；所有可見功能無異常。
 

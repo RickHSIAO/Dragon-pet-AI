@@ -21354,3 +21354,132 @@ Consume the TASK-214 interaction event log for the first time by deriving a sema
 | 一般回歸：search/highlight/navigation、copy/export、date separator、timestamp tooltip、Pet Window、Voice、STT、TTS 皆正常 | PASS |
 
 > **備註：** DevTools Console 快捷鍵無反應，未檢查 Console 輸出；所有可見功能無異常，smoke 判定 PASS。
+
+---
+
+## TASK-216 | Safe Local Reaction Preview / Debug Panel
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-06-01
+**Phase:** Phase 5 — Companion Behavior Loop (Interactive Pet Track)
+**Depends on:** TASK-215 (`currentInteractionReactionHint`, `INTERACTION_REACTION_HINT_ALLOWLIST`, `renderInteractionReactionPreview`)
+
+### Goal
+
+Add the first visible UI surface for the reaction hint layer: a low-profile debug preview in the Full App window showing `"Reaction: <hint>"`. No Pet Bubble, no TTS, no IPC, no `/chat`, no backend — pure renderer memory read + DOM textContent update.
+
+### Scope
+
+- `index.html`: Add `<span id="interaction-reaction-preview" class="interaction-reaction-preview">Reaction: none</span>` inside `#character-status`, after `#chat-runtime-status`.
+- `styles.css`: Style — 11px italic muted color, `opacity: 0.75`, `user-select: none`, `flex-basis: 100%` (forces own row in the flex-wrap container).
+- `renderer.js`: Add `renderInteractionReactionPreview()` — reads `currentInteractionReactionHint`, re-validates against allowlist, sets `el.textContent = "Reaction: " + safeHint`; returns early if element not found. Call from `recordInteractionReactionHint` (on every new event) and from startup IIFE (initial `"Reaction: none"` state).
+- `renderer-chat-smoke.js`: +16 TASK-216 tests.
+
+### Design Summary
+
+| Design decision | Rationale |
+|---|---|
+| `<span>` inside `#character-status` | Low-profile placement near existing status pills; no fixed position, no new layout region |
+| `flex-basis: 100%` | Forces preview to own row in `#character-status` flex-wrap container without changing other items |
+| Startup call in IIFE | Ensures `"Reaction: none"` displays immediately on load before any event fires |
+| Re-validate hint in render | Defense-in-depth: even if `currentInteractionReactionHint` were somehow corrupted, the render function clamps to allowlist before displaying |
+| Return early if no element | Null-safe for test sandbox; real DOM always has the element |
+| No animation, no fixed position | TASK-216 is a debug preview only; no UX commitment made |
+
+### Event → Preview Display Mapping
+
+| Event type | Hint stored | Preview text |
+|---|---|---|
+| `chat_message_sent` | `user_active` | `Reaction: user_active` |
+| `message_deleted` | `message_management` | `Reaction: message_management` |
+| `message_edited` | `correction` | `Reaction: correction` |
+| `chat_history_cleared` | `reset` | `Reaction: reset` |
+| `full_app_focused` | `attention_returned` | `Reaction: attention_returned` |
+| `pet_window_opened` | `pet_attention` | `Reaction: pet_attention` |
+| unknown / disallowed | `none` | `Reaction: none` |
+| startup (no events yet) | `none` | `Reaction: none` |
+
+### Files Changed
+
+| File | Change |
+|---|---|
+| `apps/desktop/src/renderer/index.html` | Added `<span id="interaction-reaction-preview">` inside `#character-status` |
+| `apps/desktop/src/renderer/styles.css` | Added `.interaction-reaction-preview` / `#interaction-reaction-preview` style block |
+| `apps/desktop/src/renderer/renderer.js` | Added `renderInteractionReactionPreview()`; hooked into `recordInteractionReactionHint` and startup IIFE |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | Added 16 TASK-216 tests and `main()` calls |
+
+### Safety Boundary Confirmation
+
+- No `/chat` call ✓
+- No Pet Bubble / `updatePetSpeech` ✓
+- No TTS ✓
+- No history write ✓
+- No IPC ✓
+- No backend ✓
+- No new event types ✓
+- No raw text stored or displayed (hint strings are allowlist-only identifiers) ✓
+- No `hover-action` class re-introduced ✓
+
+### Automated Smoke Test Coverage (16 tests)
+
+| Test | Description |
+|---|---|
+| `testTask216PreviewElementExists` | `#interaction-reaction-preview` exists in DOM |
+| `testTask216StartupState` | Shows `"Reaction: none"` before any event |
+| `testTask216ChatMessageSent` | `chat_message_sent` → `"Reaction: user_active"` |
+| `testTask216MessageDeleted` | `message_deleted` → `"Reaction: message_management"` |
+| `testTask216MessageEdited` | `message_edited` → `"Reaction: correction"` |
+| `testTask216ChatHistoryCleared` | `chat_history_cleared` → `"Reaction: reset"` |
+| `testTask216FullAppFocused` | `full_app_focused` → `"Reaction: attention_returned"` |
+| `testTask216PetWindowOpened` | `pet_window_opened` → `"Reaction: pet_attention"` |
+| `testTask216UnknownEventFallsBackToNone` | Disallowed event type → `"Reaction: none"` |
+| `testTask216AllowlistSentinel` | Direct unknown hint → preview shows `"Reaction: none"` |
+| `testTask216PreviewNoRawText` | Sentinel source/role/messageLength values do not appear in preview text |
+| `testTask216NullSafe` | No element → function returns without error |
+| `testTask216StartupBeforeAnyEvent` | `currentInteractionReactionHint` starts as `"none"` |
+| `testTask216RingBufferCapRegression` | 25 events cap ring buffer at 20 without crashing |
+| `testTask216PreviewUpdatesOnFocus` | window focus dispatch → preview updates |
+| `testTask216PreviewUpdatesOnSend` | `sendMessage` mock → `user_active` in preview |
+
+### Automated Smoke Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+16 TASK-216 tests) |
+| `pet-window-smoke.js` | PASS (60 tests, no regression) |
+| `pet-renderer-smoke.js` | PASS (237 tests, no regression) |
+| `git diff --check` | CLEAN (CRLF warnings only) |
+
+### Acceptance Criteria
+
+- [x] `#interaction-reaction-preview` added to `index.html` inside `#character-status` ✓
+- [x] CSS: 11px italic muted, opacity 0.75, flex-basis 100% ✓
+- [x] `renderInteractionReactionPreview()` defined in `renderer.js` ✓
+- [x] Called from `recordInteractionReactionHint` on every new event ✓
+- [x] Called from startup IIFE (initial `"Reaction: none"`) ✓
+- [x] Re-validates hint against allowlist before displaying ✓
+- [x] Null-safe (returns early if element not found) ✓
+- [x] All 6 event types map to correct preview text ✓
+- [x] Unknown hint → `"Reaction: none"` ✓
+- [x] No raw text in preview (allowlist-only hint identifiers) ✓
+- [x] No `/chat`, no Pet Bubble, no TTS, no IPC, no backend ✓
+- [x] `renderer-chat-smoke.js` PASS ✓
+- [x] `pet-window-smoke.js` PASS ✓
+- [x] `pet-renderer-smoke.js` PASS ✓
+- [x] `git diff --check` CLEAN ✓
+- [x] Windows visual smoke PASS ✓
+
+### Windows Visual Smoke Results (2026-06-01)
+
+| Scenario | Result |
+|---|---|
+| 基本啟動：App 啟動正常，`#character-status` 顯示 `Reaction: none`（小字斜體灰色） | PASS |
+| 送出訊息：user 訊息送出後 preview 更新為 `Reaction: user_active`，聊天流程無異常 | PASS |
+| 右鍵 context menu regression：複製、刪除、編輯（最後 user message only）皆正常 | PASS |
+| Delete / Undo regression：單則刪除後 preview 更新為 `Reaction: message_management`，10 秒復原正常 | PASS |
+| Edit last user message regression：編輯送出後 preview 更新為 `Reaction: correction`，pet reply 更新正常 | PASS |
+| Clear Chat regression：二次點擊確認清除後 preview 更新為 `Reaction: reset`，Undo Clear 復原正常 | PASS |
+| Focus regression：Alt+Tab 切回 App 後 preview 更新為 `Reaction: attention_returned` | PASS |
+| 一般回歸：search/highlight/navigation、copy/export、date separator、timestamp tooltip、Pet Window、Voice、STT、TTS 皆正常 | PASS |
+
+> **補充：** preview 文字未進入 chat history / copy transcript / export；無額外觸發 Pet Bubble / TTS。所有可見功能無異常，smoke 判定 PASS。
