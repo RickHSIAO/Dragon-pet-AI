@@ -153,6 +153,7 @@ async function showPetWindowFromFullApp() {
     const result = await api.showPetWindow();
     if (result && result.ok) {
       setShowPetWindowStatus("Pet Window shown.");
+      mirrorInteractionExpressionSuggestion(currentInteractionExpressionSuggestion);
     } else if (result && result.reason === "pet_mode_disabled") {
       setShowPetWindowStatus("Pet Mode disabled. Start with PET_MODE_ENABLED=true.", true);
     } else {
@@ -696,6 +697,17 @@ function recordInteractionExpressionSuggestion(expression, hint) {
     recentInteractionExpressionSuggestions.shift();
   }
   currentInteractionExpressionSuggestion = safeExpression;
+  mirrorInteractionExpressionSuggestion(safeExpression); // TASK-218
+}
+
+// TASK-218: mirror expression suggestion to Pet Window via narrow IPC bridge.
+// Only sends allowlisted expression strings; no speech, no bubble, no TTS.
+function mirrorInteractionExpressionSuggestion(expression) {
+  const safeExpression = INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST.has(expression)
+    ? expression : "neutral";
+  const bridge = typeof window !== "undefined" && window.dragonPet ? window.dragonPet : null;
+  if (!bridge || typeof bridge.sendPetExpressionSuggestion !== "function") return;
+  bridge.sendPetExpressionSuggestion({ expression: safeExpression });
 }
 
 // TASK-216/217: Reaction hint + expression suggestion debug preview.

@@ -12,6 +12,10 @@ const PET_CLICK_THROUGH_SET_CHANNEL = "pet:set-click-through";  // TASK-166D
 const PET_STT_TRANSCRIBE_CHANNEL = "stt:transcribe";           // TASK-167B
 const PET_CHAT_MIRROR_CHANNEL = "pet:chat-mirror";             // TASK-193
 const PET_UNREAD_DOT_RECEIVED_CHANNEL = "pet:unread-dot-received";  // TASK-204
+const PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL = "pet:expression-suggestion-received"; // TASK-218
+const EXPRESSION_SUGGESTION_ALLOWLIST_PET = new Set([             // TASK-218: pet-preload-side allowlist
+  "neutral", "focused", "happy", "proud", "annoyed", "sleepy",
+]);
 
 function sanitizePetSpeechPayload(payload = {}) {
   return {
@@ -52,6 +56,24 @@ function onUnreadUpdate(callback) {  // TASK-204
   };
 }
 
+// TASK-218: expose narrow listener for expression suggestion events from main.
+function onExpressionSuggestion(callback) {
+  if (typeof callback !== "function") return () => {};
+  const listener = (_event, payload) => {
+    const rawExpression = typeof payload === "object" && payload !== null &&
+      typeof payload.expression === "string" ? payload.expression : "";
+    const safeExpression = EXPRESSION_SUGGESTION_ALLOWLIST_PET.has(rawExpression)
+      ? rawExpression : "neutral";
+    callback({
+      expression: safeExpression,
+      source: "interaction_expression_suggestion",
+      ts: typeof payload.ts === "number" && payload.ts > 0 ? payload.ts : Date.now(),
+    });
+  };
+  ipcRenderer.on(PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL, listener);
+  return () => ipcRenderer.removeListener(PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL, listener);
+}
+
 function onSpeechUpdate(callback) {
   if (typeof callback !== "function") {
     return () => {};
@@ -74,7 +96,8 @@ contextBridge.exposeInMainWorld(
     resetPetPosition: () => ipcRenderer.invoke(PET_RESET_POSITION_CHANNEL),
     hidePetWindow: () => ipcRenderer.invoke(PET_HIDE_WINDOW_CHANNEL),
     onSpeechUpdate,
-    onUnreadUpdate,  // TASK-204
+    onUnreadUpdate,      // TASK-204
+    onExpressionSuggestion, // TASK-218
     setQuietMode: (value) => ipcRenderer.invoke(PET_QUIET_MODE_SET_CHANNEL, value === true),  // TASK-162
     setScale: (value) => ipcRenderer.invoke(PET_SCALE_SET_CHANNEL, value),  // TASK-166B
     setClickThrough: (enabled) => ipcRenderer.invoke(PET_CLICK_THROUGH_SET_CHANNEL, enabled === true),  // TASK-166D

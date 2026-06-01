@@ -25,6 +25,9 @@ const PET_IDLE_LAUNCH_QUIET_MS = 120000;
 const PET_IDLE_COOLDOWN_MS = 90000;
 // TASK-158: interval between idle presence line rotations
 const PET_IDLE_ROTATION_MS = 60000;
+// TASK-218 fix: monotonic counter — incremented each time an interaction expression suggestion is
+// received; captured in recentReply so restorePetPresence can tell if the override is newer.
+var interactionExpressionOverrideGeneration = 0;
 // TASK-167A: voice push-to-talk
 const PET_RECORDING_MAX_MS = 30000;  // 30-second hard cap on a single recording
 const PET_VOICE_MIC_DENIED_MSG = "麥克風權限被拒絕。請在系統設定中開啟麥克風權限。";
@@ -502,6 +505,7 @@ function createPetPresenceState() {
     idleCooldownUntil: 0,      // TASK-159
     quietMode: false,           // TASK-160
     clickThrough: false,        // TASK-166D
+    expressionOverride: null,   // TASK-218 fix: {mood, gen} from last interaction expression suggestion
   };
 }
 
@@ -1540,6 +1544,7 @@ function rememberRecentPetReply(documentRef, state, bubbleOptions, options = {})
     state,
     options: { ...bubbleOptions },
     expiresAt: now + PET_RECENT_REPLY_VISIBLE_MS,
+    expressionGen: interactionExpressionOverrideGeneration, // TASK-218 fix: generation at storage time
   };
   presenceState.recentTimer = schedulePresenceTimer(
     timerApi,
@@ -1556,12 +1561,24 @@ function restorePetPresence(documentRef = document, options = {}) {
   presenceState.timerApi = timerApi;
 
   if (recentReply && recentReply.expiresAt > now) {
-    return setBubbleState(documentRef, recentReply.state, recentReply.options);
+    const restoredState = setBubbleState(documentRef, recentReply.state, recentReply.options);
+    // TASK-218 fix: re-apply interaction expression override if its generation is higher than
+    // the generation captured when this speech update was stored, meaning the override arrived
+    // after the speech update and should take priority.
+    if (presenceState.expressionOverride &&
+        presenceState.expressionOverride.gen > (recentReply.expressionGen || 0)) {
+      setPetExpression(documentRef, presenceState.expressionOverride.mood);
+    }
+    return restoredState;
   }
 
   clearPresenceTimer(presenceState, "recentTimer", timerApi);
   presenceState.recentReply = null;
   const idleResult = setIdleQuietBubble(documentRef, presenceState);  // TASK-160 fix
+  // TASK-218 fix: re-apply interaction expression override when falling to idle (no recentReply).
+  if (presenceState.expressionOverride && presenceState.expressionOverride.gen > 0) {
+    setPetExpression(documentRef, presenceState.expressionOverride.mood);
+  }
   setIdleCooldown(presenceState, timerApi, PET_IDLE_COOLDOWN_MS);  // TASK-159: cooldown after show/restore
   startIdleRotation(documentRef, presenceState, timerApi);  // TASK-159
   return idleResult;
@@ -2239,6 +2256,25 @@ function renderUnreadDot(documentRef, unreadCount) {  // TASK-204
   }
 }
 
+// TASK-218: apply a Full App expression suggestion to the Pet avatar — expression only.
+// Does NOT change bubble text, bubble state, TTS, recent reply, or any persistence.
+const INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST_PET = new Set([
+  "neutral", "focused", "happy", "proud", "annoyed", "sleepy",
+]);
+
+function handleInteractionExpressionSuggestion(documentRef, payload) {
+  if (typeof payload !== "object" || payload === null) return;
+  const rawExpression = typeof payload.expression === "string" ? payload.expression : "";
+  const safeExpression = INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST_PET.has(rawExpression)
+    ? rawExpression : "neutral";
+  // TASK-218 fix: record override so restorePetPresenceAfterShow preserves this expression.
+  // Increment generation so recentReply stored before this call has a lower gen.
+  interactionExpressionOverrideGeneration++;
+  const presenceState = getPetPresenceState(documentRef);
+  presenceState.expressionOverride = { mood: safeExpression, gen: interactionExpressionOverrideGeneration };
+  setPetExpression(documentRef, safeExpression);
+}
+
 function initializePetMode(documentRef = document) {
   const root = documentRef.getElementById("pet-mode-root");
   const dragRegion = documentRef.getElementById("pet-drag-region");
@@ -2630,6 +2666,12 @@ function initializePetMode(documentRef = document) {
       renderUnreadDot(documentRef, unreadCount);
     });
   }
+  // TASK-218: mirror expression suggestion from Full App — expression-only, no bubble, no TTS.
+  if (api && typeof api.onExpressionSuggestion === "function") {
+    api.onExpressionSuggestion((payload) => {
+      handleInteractionExpressionSuggestion(documentRef, payload);
+    });
+  }
 }
 
 if (typeof document !== "undefined") {
@@ -2673,6 +2715,7 @@ if (typeof module !== "undefined") {
     handleOpenFullApp,
     handleChatHandoff,
     handleHidePetWindow,
+    handleInteractionExpressionSuggestion, // TASK-218
     handlePlaceholderSubmit,
     handleResetPetPosition,
     initializePetMode,
@@ -2786,5 +2829,7 @@ if (typeof module !== "undefined") {
     resetTtsControls,
     // TASK-204
     renderUnreadDot,
+    // TASK-218 fix
+    getPetPresenceState,
   };
 }

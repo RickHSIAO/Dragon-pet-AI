@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const vm = require("node:vm");
 
 const desktopRoot = path.resolve(__dirname, "..");
 const mainPath = path.join(desktopRoot, "src", "main.js");
@@ -810,6 +811,288 @@ function testTask204UnreadDotHtmlAndCssExist() {
   assertIncludes(css, ".pet-unread-dot[hidden]", "pet.css must override [hidden] to display:none");
 }
 
+// ── TASK-218: Safe Pet Expression Suggestion Mirror ───────────────────────────
+
+function testTask218ExpressionSuggestionChannelsInMain() {
+  const main = readText(mainPath);
+  assertIncludes(main, 'PET_EXPRESSION_SUGGESTION_CHANNEL = "pet:expression-suggestion"',
+    "main.js must define PET_EXPRESSION_SUGGESTION_CHANNEL");
+  assertIncludes(main, 'PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL = "pet:expression-suggestion-received"',
+    "main.js must define PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL");
+  assertNotIncludes(main, 'PET_EXPRESSION_SUGGESTION_CHANNEL = "pet"',
+    "main.js must not use generic pet channel for expression suggestion invoke");
+  assertNotIncludes(main, 'PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL = "pet"',
+    "main.js must not use generic pet channel for expression suggestion relay");
+  assertIncludes(main, "ipcMain.handle(PET_EXPRESSION_SUGGESTION_CHANNEL",
+    "main.js must register ipcMain.handle for expression suggestion");
+  assertIncludes(main, "targetPetWindow.webContents.send(PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL",
+    "main.js must forward expression suggestion to petWindow");
+}
+
+function testTask218ExpressionSuggestionSanitizesInMain() {
+  const main = readText(mainPath);
+  const sanitizeIdx = main.indexOf("function sanitizeExpressionSuggestionPayload");
+  assert(sanitizeIdx >= 0, "main.js must define sanitizeExpressionSuggestionPayload");
+  const sanitizeText = main.slice(sanitizeIdx, sanitizeIdx + 600);
+  assertIncludes(sanitizeText, "INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST_MAIN",
+    "sanitizeExpressionSuggestionPayload must use expression allowlist");
+  assertIncludes(sanitizeText, '"interaction_expression_suggestion"',
+    "sanitizeExpressionSuggestionPayload must fix source field");
+
+  const forwardIdx = main.indexOf("function forwardExpressionSuggestion");
+  assert(forwardIdx >= 0, "main.js must define forwardExpressionSuggestion");
+  const forwardText = main.slice(forwardIdx, forwardIdx + 600);
+  assertIncludes(forwardText, "pet_window_unavailable",
+    "forwardExpressionSuggestion must guard petWindow availability");
+}
+
+function testTask218ExpressionSuggestionBridgeInRendererPreload() {
+  const preload = readText(rendererPreloadPath);
+  assertIncludes(preload, 'PET_EXPRESSION_SUGGESTION_CHANNEL = "pet:expression-suggestion"',
+    "renderer preload.js must define PET_EXPRESSION_SUGGESTION_CHANNEL");
+  assertNotIncludes(preload, 'PET_EXPRESSION_SUGGESTION_CHANNEL = "pet"',
+    "renderer preload.js must not use generic pet channel for expression suggestion invoke");
+  assertIncludes(preload, "sendPetExpressionSuggestion",
+    "renderer preload.js must expose sendPetExpressionSuggestion");
+  assertIncludes(preload, "ipcRenderer.invoke(PET_EXPRESSION_SUGGESTION_CHANNEL",
+    "renderer preload.js must invoke expression suggestion IPC channel");
+}
+
+function testTask218ExpressionSuggestionPetPreloadExposesListener() {
+  const preload = readText(petPreloadPath);
+  assertIncludes(preload, 'PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL = "pet:expression-suggestion-received"',
+    "pet-preload.js must define PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL");
+  assertNotIncludes(preload, 'PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL = "pet"',
+    "pet-preload.js must not use generic pet channel for expression suggestion received listener");
+  assertIncludes(preload, "onExpressionSuggestion",
+    "pet-preload.js must expose onExpressionSuggestion");
+  assertIncludes(preload, "ipcRenderer.on(PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL",
+    "pet-preload.js must listen on expression suggestion received channel");
+}
+
+function testTask218ExpressionSuggestionPreloadNoGenericIpc() {
+  const rendererPreload = readText(rendererPreloadPath);
+  const petPreload = readText(petPreloadPath);
+  // Preloads must use contextBridge — not return the raw ipcRenderer object to the renderer.
+  assertIncludes(rendererPreload, "contextBridge.exposeInMainWorld",
+    "renderer preload.js must use contextBridge.exposeInMainWorld");
+  assertIncludes(petPreload, "contextBridge.exposeInMainWorld",
+    "pet preload.js must use contextBridge.exposeInMainWorld");
+  assert(!rendererPreload.includes("module.exports = ipcRenderer") &&
+    !rendererPreload.includes("global.ipcRenderer") &&
+    !rendererPreload.includes("window.ipcRenderer"),
+    "renderer preload.js must not expose raw ipcRenderer to renderer context");
+}
+
+function extractFunction(source, name) {
+  const start = source.indexOf(`function ${name}`);
+  assert(start >= 0, `${name} must exist`);
+  const argsEnd = source.indexOf(")", start);
+  assert(argsEnd >= 0, `${name} must have a parameter list`);
+  const braceStart = source.indexOf("{", argsEnd);
+  assert(braceStart >= 0, `${name} must have a body`);
+  let depth = 0;
+  for (let i = braceStart; i < source.length; i += 1) {
+    const char = source[i];
+    if (char === "{") depth += 1;
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return source.slice(start, i + 1);
+    }
+  }
+  throw new Error(`${name} body was not closed`);
+}
+
+function runRendererPreloadHarness() {
+  const invokeCalls = [];
+  let exposedApi = null;
+  const sandbox = {
+    Date: { now: () => 218001 },
+    require(name) {
+      assert.equal(name, "electron");
+      return {
+        contextBridge: {
+          exposeInMainWorld(nameArg, api) {
+            assert.equal(nameArg, "dragonPet");
+            exposedApi = api;
+          },
+        },
+        ipcRenderer: {
+          invoke(channel, payload) {
+            invokeCalls.push({ channel, payload });
+            return Promise.resolve({ ok: true });
+          },
+          on() {},
+          removeListener() {},
+        },
+      };
+    },
+  };
+  vm.runInNewContext(readText(rendererPreloadPath), sandbox, { filename: rendererPreloadPath });
+  return { exposedApi, invokeCalls };
+}
+
+function runPetPreloadHarness() {
+  const listeners = new Map();
+  let exposedApi = null;
+  const sandbox = {
+    Date: { now: () => 218002 },
+    require(name) {
+      assert.equal(name, "electron");
+      return {
+        contextBridge: {
+          exposeInMainWorld(nameArg, api) {
+            assert.equal(nameArg, "dragonPet");
+            exposedApi = api;
+          },
+        },
+        ipcRenderer: {
+          on(channel, listener) {
+            listeners.set(channel, listener);
+          },
+          removeListener(channel, listener) {
+            if (listeners.get(channel) === listener) listeners.delete(channel);
+          },
+          invoke() {
+            return Promise.resolve({ ok: true });
+          },
+        },
+      };
+    },
+  };
+  vm.runInNewContext(readText(petPreloadPath), sandbox, { filename: petPreloadPath });
+  return { exposedApi, listeners };
+}
+
+function runMainForwardExpressionHarness() {
+  const main = readText(mainPath);
+  const sendCalls = [];
+  const allowlistMatch = main.match(/const INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST_MAIN = new Set\(\[[\s\S]*?\]\);/);
+  const channelMatch = main.match(/const PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL = "pet:expression-suggestion-received";/);
+  assert(allowlistMatch, "main.js must define expression allowlist");
+  assert(channelMatch, "main.js must define received channel as pet");
+  const sandbox = {
+    Date: { now: () => 218003 },
+    petWindow: {
+      isDestroyed: () => false,
+      webContents: {
+        send(channel, payload) {
+          sendCalls.push({ channel, payload });
+        },
+      },
+    },
+  };
+  vm.runInNewContext([
+    allowlistMatch[0],
+    channelMatch[0],
+    extractFunction(main, "sanitizeExpressionSuggestionPayload"),
+    extractFunction(main, "forwardExpressionSuggestion"),
+    "globalThis.forwardExpressionSuggestion = forwardExpressionSuggestion;",
+  ].join("\n"), sandbox, { filename: "main-expression-harness.js" });
+  return { forwardExpressionSuggestion: sandbox.forwardExpressionSuggestion, sendCalls };
+}
+
+function testTask218RendererPreloadRuntimeBridgePayload() {
+  const { exposedApi, invokeCalls } = runRendererPreloadHarness();
+  assert(exposedApi && typeof exposedApi.sendPetExpressionSuggestion === "function",
+    "renderer preload must expose dragonPet.sendPetExpressionSuggestion");
+  exposedApi.sendPetExpressionSuggestion({ expression: "annoyed", text: "FORBIDDEN" });
+  assert.equal(invokeCalls.length, 1, "sendPetExpressionSuggestion must invoke once");
+  assert.equal(invokeCalls[0].channel, "pet:expression-suggestion",
+    "sendPetExpressionSuggestion must invoke narrow expression suggestion channel");
+  assert.deepEqual(Object.keys(invokeCalls[0].payload).sort(), ["expression", "source", "ts"],
+    "renderer preload payload must only include expression/source/ts");
+  assert.equal(invokeCalls[0].payload.expression, "annoyed");
+  assert.equal(invokeCalls[0].payload.source, "interaction_expression_suggestion");
+}
+
+function testTask218PetPreloadRuntimeListenerPayload() {
+  const { exposedApi, listeners } = runPetPreloadHarness();
+  const received = [];
+  assert(exposedApi && typeof exposedApi.onExpressionSuggestion === "function",
+    "pet preload must expose dragonPet.onExpressionSuggestion");
+  exposedApi.onExpressionSuggestion((payload) => received.push(payload));
+  const listener = listeners.get("pet:expression-suggestion-received");
+  assert.equal(typeof listener, "function",
+    "pet preload must listen on narrow expression suggestion received channel");
+  listener({}, { expression: "neutral", source: "ignored", ts: 1, text: "FORBIDDEN" });
+  listener({}, { expression: "annoyed", ts: 2 });
+  listener({}, { expression: "happy", ts: 3 });
+  listener({}, { expression: "not_allowed", ts: 4 });
+  assert.deepEqual(received.map((payload) => payload.expression), ["neutral", "annoyed", "happy", "neutral"]);
+  for (const payload of received) {
+    assert.deepEqual(Object.keys(payload).sort(), ["expression", "source", "ts"],
+      "pet preload listener payload must only include expression/source/ts");
+    assert.equal(payload.source, "interaction_expression_suggestion");
+  }
+}
+
+function testTask218MainForwardExpressionRuntimeRelay() {
+  const { forwardExpressionSuggestion, sendCalls } = runMainForwardExpressionHarness();
+  for (const expression of ["neutral", "annoyed", "happy"]) {
+    const result = forwardExpressionSuggestion({ expression, ts: 10 });
+    assert.equal(result.ok, true, `forwardExpressionSuggestion(${expression}) must succeed`);
+  }
+  assert.deepEqual(sendCalls.map((call) => call.channel), [
+    "pet:expression-suggestion-received",
+    "pet:expression-suggestion-received",
+    "pet:expression-suggestion-received",
+  ], "main relay must send all expression suggestions on narrow received channel");
+  assert.deepEqual(sendCalls.map((call) => call.payload.expression), ["neutral", "annoyed", "happy"],
+    "main relay must preserve allowlisted expressions");
+  for (const call of sendCalls) {
+    assert.deepEqual(Object.keys(call.payload).sort(), ["expression", "source", "ts"],
+      "main relay payload must only include expression/source/ts");
+    assert.equal(call.payload.source, "interaction_expression_suggestion");
+  }
+}
+
+function testTask218MainForwardExpressionAbsentPetNoThrow() {
+  const { forwardExpressionSuggestion } = runMainForwardExpressionHarness();
+  const result = forwardExpressionSuggestion({ expression: "happy" }, null);
+  assert.equal(result.ok, false,
+    "forwardExpressionSuggestion must no-op cleanly when Pet Window is absent");
+  assert.equal(result.reason, "pet_window_unavailable",
+    "forwardExpressionSuggestion must report pet_window_unavailable when Pet Window is absent");
+}
+
+// TASK-218 fix: main relay allows neutral/annoyed
+function testTask218FixMainRelayAllowsNeutral() {
+  const main = readText(mainPath);
+  const allowlistIdx = main.indexOf("INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST_MAIN");
+  assert(allowlistIdx >= 0, "main.js must define INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST_MAIN");
+  const allowlistText = main.slice(allowlistIdx, allowlistIdx + 300);
+  assertIncludes(allowlistText, '"neutral"',
+    "INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST_MAIN must include neutral");
+}
+
+function testTask218FixMainRelayAllowsAnnoyed() {
+  const main = readText(mainPath);
+  const allowlistIdx = main.indexOf("INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST_MAIN");
+  assert(allowlistIdx >= 0, "main.js must define INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST_MAIN");
+  const allowlistText = main.slice(allowlistIdx, allowlistIdx + 300);
+  assertIncludes(allowlistText, '"annoyed"',
+    "INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST_MAIN must include annoyed");
+}
+
+function testTask218FixMainRelayNoVisibilityCheck() {
+  const main = readText(mainPath);
+  const fnIdx = main.indexOf("function forwardExpressionSuggestion");
+  const fnText = main.slice(fnIdx, fnIdx + 600);
+  assert(!fnText.includes("isVisible()"),
+    "forwardExpressionSuggestion must NOT check petWindow.isVisible() — expression updates bypass visibility");
+}
+
+function testTask218FixPresenceStateHasExpressionOverride() {
+  const renderer = readText(petRendererPath);
+  assertIncludes(renderer, "expressionOverride: null",
+    "createPetPresenceState must initialise expressionOverride to null");
+  assertIncludes(renderer, "expressionOverride = { mood:",
+    "handleInteractionExpressionSuggestion must set expressionOverride.mood");
+  assertIncludes(renderer, "expressionOverride.gen",
+    "restorePetPresence must compare expressionOverride.gen");
+}
+
 function run() {
   const tests = [
     testMainHasPetWindowPrototype,
@@ -885,6 +1168,21 @@ function run() {
     testTask204UnreadDotChannelInRendererPreload,
     testTask204UnreadDotChannelInPetPreload,
     testTask204UnreadDotHtmlAndCssExist,
+    // TASK-218
+    testTask218ExpressionSuggestionChannelsInMain,
+    testTask218ExpressionSuggestionSanitizesInMain,
+    testTask218ExpressionSuggestionBridgeInRendererPreload,
+    testTask218ExpressionSuggestionPetPreloadExposesListener,
+    testTask218ExpressionSuggestionPreloadNoGenericIpc,
+    testTask218RendererPreloadRuntimeBridgePayload,
+    testTask218PetPreloadRuntimeListenerPayload,
+    testTask218MainForwardExpressionRuntimeRelay,
+    testTask218MainForwardExpressionAbsentPetNoThrow,
+    // TASK-218 fix: main relay allows neutral/annoyed, no visibility guard
+    testTask218FixMainRelayAllowsNeutral,
+    testTask218FixMainRelayAllowsAnnoyed,
+    testTask218FixMainRelayNoVisibilityCheck,
+    testTask218FixPresenceStateHasExpressionOverride,
   ];
 
   for (const test of tests) {

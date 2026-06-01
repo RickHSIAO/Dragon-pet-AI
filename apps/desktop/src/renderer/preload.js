@@ -13,6 +13,10 @@ const SCREEN_CAPTURE_WINDOW_CHANNEL = "screen:capture-window";  // TASK-176
 const CLIPBOARD_WRITE_TEXT_CHANNEL  = "clipboard:write-text";   // TASK-196
 const PET_UNREAD_DOT_CHANNEL = "pet:unread-dot";                // TASK-204
 const CHAT_EXPORT_CHANNEL    = "chat:export-transcript";        // TASK-205
+const PET_EXPRESSION_SUGGESTION_CHANNEL = "pet:expression-suggestion"; // TASK-218
+const EXPRESSION_SUGGESTION_ALLOWLIST = new Set([               // TASK-218: preload-side allowlist
+  "neutral", "focused", "happy", "proud", "annoyed", "sleepy",
+]);
 
 function sanitizePetSpeechPayload(payload = {}) {
   return {
@@ -77,6 +81,18 @@ contextBridge.exposeInMainWorld(
     notifyUnreadDot: (count) => {
       const safe = typeof count === "number" && count >= 0 ? count : 0;
       return ipcRenderer.invoke(PET_UNREAD_DOT_CHANNEL, { unreadCount: safe });
+    },
+    // TASK-218: narrow expression suggestion IPC — expression-only, no speech, no bubble, no TTS.
+    sendPetExpressionSuggestion: (payload) => {
+      const rawExpression = typeof payload === "object" && payload !== null &&
+        typeof payload.expression === "string" ? payload.expression : "";
+      const safeExpression = EXPRESSION_SUGGESTION_ALLOWLIST.has(rawExpression)
+        ? rawExpression : "neutral";
+      return ipcRenderer.invoke(PET_EXPRESSION_SUGGESTION_CHANNEL, {
+        expression: safeExpression,
+        source: "interaction_expression_suggestion",
+        ts: Date.now(),
+      });
     },
     // TASK-205: narrow file save IPC — opens Save Dialog via main, writes plain text only.
     // Content capped at 200000 chars; defaultPath capped at 255 chars.

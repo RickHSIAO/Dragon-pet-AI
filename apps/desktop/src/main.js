@@ -34,6 +34,11 @@ const CHAT_HISTORY_CLEAR_CHANNEL  = "chat-history:clear";     // TASK-194
 const CLIPBOARD_WRITE_TEXT_CHANNEL = "clipboard:write-text";  // TASK-196
 const PET_UNREAD_DOT_CHANNEL = "pet:unread-dot";              // TASK-204: Full App → main
 const PET_UNREAD_DOT_RECEIVED_CHANNEL = "pet:unread-dot-received";  // TASK-204: main → Pet Window
+const PET_EXPRESSION_SUGGESTION_CHANNEL = "pet:expression-suggestion";           // TASK-218: Full App → main
+const PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL = "pet:expression-suggestion-received"; // TASK-218: main → Pet Window
+const INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST_MAIN = new Set([
+  "neutral", "focused", "happy", "proud", "annoyed", "sleepy",
+]); // TASK-218: expression allowlist for main sanitization
 const CHAT_EXPORT_CHANNEL    = "chat:export-transcript";      // TASK-205: Full App → main
 const CHAT_HISTORY_MAX_ENTRIES    = 200;                      // TASK-194: bounded history cap
 const CHAT_HISTORY_TEXT_MAX       = 2000;                     // TASK-194: per-entry text cap
@@ -524,6 +529,28 @@ ipcMain.handle(PET_RESET_POSITION_CHANNEL, () => resetPetWindowPosition());
 ipcMain.handle(PET_HIDE_WINDOW_CHANNEL, () => hidePetWindow());
 
 ipcMain.handle(PET_SPEECH_UPDATE_CHANNEL, (_event, payload) => forwardPetSpeechUpdate(payload));
+
+function sanitizeExpressionSuggestionPayload(payload = {}) {
+  const rawExpression = typeof payload.expression === "string" ? payload.expression : "";
+  const safeExpression = INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST_MAIN.has(rawExpression)
+    ? rawExpression : "neutral";
+  return {
+    expression: safeExpression,
+    source: "interaction_expression_suggestion",
+    ts: typeof payload.ts === "number" && payload.ts > 0 ? payload.ts : Date.now(),
+  };
+}
+
+// TASK-218: narrow expression suggestion relay — expression-only, no speech, no bubble, no TTS.
+function forwardExpressionSuggestion(payload = {}, targetPetWindow = petWindow) {
+  const safePayload = sanitizeExpressionSuggestionPayload(payload);
+  if (!targetPetWindow || targetPetWindow.isDestroyed()) {
+    return { ok: false, reason: "pet_window_unavailable" };
+  }
+  targetPetWindow.webContents.send(PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL, safePayload);
+  return { ok: true };
+}
+ipcMain.handle(PET_EXPRESSION_SUGGESTION_CHANNEL, (_event, payload) => forwardExpressionSuggestion(payload));
 
 ipcMain.handle(PET_QUIET_MODE_SET_CHANNEL, (_event, value) => {  // TASK-162
   savePetQuietMode(value);

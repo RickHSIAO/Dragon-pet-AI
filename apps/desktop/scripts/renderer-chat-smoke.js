@@ -7260,6 +7260,235 @@ function testTask217ContextMenuStillExists() {
   console.log("  testTask217ContextMenuStillExists PASS");
 }
 
+// ─── TASK-218: Safe Pet Expression Suggestion Mirror ─────────────────────────
+
+function testTask218RendererHasMirrorFunction() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("function mirrorInteractionExpressionSuggestion"),
+    "renderer.js must define mirrorInteractionExpressionSuggestion");
+  console.log("  testTask218RendererHasMirrorFunction PASS");
+}
+
+async function testTask218MirrorCalledAfterRecord() {
+  const mirrorCalls = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      sendPetExpressionSuggestion(payload) { mirrorCalls.push(payload); return Promise.resolve({ ok: true }); },
+    },
+  });
+  mirrorCalls.length = 0;
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 5 });
+  assert.ok(mirrorCalls.length > 0, "recordInteractionExpressionSuggestion must call mirrorInteractionExpressionSuggestion");
+  console.log("  testTask218MirrorCalledAfterRecord PASS");
+}
+
+async function testTask218MirrorPayloadHasAllowedKeys() {
+  const mirrorCalls = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      sendPetExpressionSuggestion(payload) { mirrorCalls.push(payload); return Promise.resolve({ ok: true }); },
+    },
+  });
+  mirrorCalls.length = 0;
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 5 });
+  assert.ok(mirrorCalls.length > 0, "expected at least one mirror call");
+  const p = mirrorCalls[0];
+  assert.ok("expression" in p, "mirror payload must have expression key");
+  console.log("  testTask218MirrorPayloadHasAllowedKeys PASS");
+}
+
+async function testTask218MirrorPayloadNoForbiddenKeys() {
+  const mirrorCalls = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      sendPetExpressionSuggestion(payload) { mirrorCalls.push(payload); return Promise.resolve({ ok: true }); },
+    },
+  });
+  mirrorCalls.length = 0;
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 42, source: "full_app" });
+  assert.ok(mirrorCalls.length > 0, "expected at least one mirror call");
+  const p = mirrorCalls[0];
+  const forbidden = ["hint", "event", "role", "messageLength", "message", "text", "body", "rawText", "content", "reply"];
+  for (const key of forbidden) {
+    assert.ok(!(key in p), `mirror payload must not contain key: ${key}`);
+  }
+  console.log("  testTask218MirrorPayloadNoForbiddenKeys PASS");
+}
+
+async function testTask218MirrorUnknownExpressionFallback() {
+  const mirrorCalls = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      sendPetExpressionSuggestion(payload) { mirrorCalls.push(payload); return Promise.resolve({ ok: true }); },
+    },
+  });
+  mirrorCalls.length = 0;
+  sandbox.mirrorInteractionExpressionSuggestion("UNKNOWN_EXPRESSION_XYZ");
+  assert.ok(mirrorCalls.length > 0, "mirror must still call bridge with fallback");
+  assert.equal(mirrorCalls[0].expression, "neutral", "unknown expression must fall back to neutral");
+  console.log("  testTask218MirrorUnknownExpressionFallback PASS");
+}
+
+async function testTask218MirrorNoBridgeNoThrow() {
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      // sendPetExpressionSuggestion deliberately omitted
+    },
+  });
+  assert.doesNotThrow(() => {
+    sandbox.mirrorInteractionExpressionSuggestion("focused");
+  }, "mirrorInteractionExpressionSuggestion must not throw when bridge is absent");
+  console.log("  testTask218MirrorNoBridgeNoThrow PASS");
+}
+
+async function testTask218MirrorNoChat() {
+  const { state, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      sendPetExpressionSuggestion() { return Promise.resolve({ ok: true }); },
+    },
+  });
+  state.calls.length = 0;
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 5 });
+  sandbox.recordInteractionEvent("full_app_focused");
+  await settle();
+  const chatCalls = state.calls.filter((c) => c.url.endsWith("/chat"));
+  assert.equal(chatCalls.length, 0, "mirrorInteractionExpressionSuggestion must not call /chat");
+  console.log("  testTask218MirrorNoChat PASS");
+}
+
+async function testTask218MirrorNoHistory() {
+  const appendCalls = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryAppend(entry) { appendCalls.push(entry); return Promise.resolve({ ok: true }); },
+      sendPetExpressionSuggestion() { return Promise.resolve({ ok: true }); },
+    },
+  });
+  appendCalls.length = 0;
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 5 });
+  sandbox.recordInteractionEvent("full_app_focused");
+  await settle();
+  assert.equal(appendCalls.length, 0, "mirrorInteractionExpressionSuggestion must not write chat history");
+  console.log("  testTask218MirrorNoHistory PASS");
+}
+
+async function testTask218MirrorNoPetSpeech() {
+  const speechUpdates = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      updatePetSpeech(p) { speechUpdates.push(p); return Promise.resolve({ ok: true }); },
+      sendPetExpressionSuggestion() { return Promise.resolve({ ok: true }); },
+    },
+  });
+  speechUpdates.length = 0;
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 5 });
+  sandbox.recordInteractionEvent("full_app_focused");
+  await settle();
+  assert.equal(speechUpdates.length, 0, "mirrorInteractionExpressionSuggestion must not call updatePetSpeech");
+  console.log("  testTask218MirrorNoPetSpeech PASS");
+}
+
+async function testTask218PreviewStillWorks() {
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      sendPetExpressionSuggestion() { return Promise.resolve({ ok: true }); },
+    },
+  });
+  const el = document.getElementById("interaction-reaction-preview");
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 8 });
+  assert.ok(el.textContent.includes("Reaction: user_active"),  "preview Reaction part must still show user_active");
+  assert.ok(el.textContent.includes("Suggestion: focused"),    "preview Suggestion part must still show focused");
+  console.log("  testTask218PreviewStillWorks PASS");
+}
+
+function testTask218HoverActionsStillAbsent() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(!src.includes("hover-action"), "TASK-218 must not re-introduce hover-action class");
+  console.log("  testTask218HoverActionsStillAbsent PASS");
+}
+
+// TASK-218 fix: consecutive mirror sequence — focused→neutral→annoyed→neutral→happy
+async function testTask218FixConsecutiveMirrorSequence() {
+  const mirrorCalls = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      sendPetExpressionSuggestion(payload) { mirrorCalls.push({ ...payload }); return Promise.resolve({ ok: true }); },
+    },
+  });
+  mirrorCalls.length = 0;
+
+  // chat_message_sent → focused
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 5 });
+  // message_deleted → neutral (message_management)
+  sandbox.recordInteractionEvent("message_deleted", { role: "user", source: "full_app" });
+  // message_edited → annoyed (correction)
+  sandbox.recordInteractionEvent("message_edited", { role: "user", source: "full_app", messageLength: 8 });
+  // chat_history_cleared → neutral (reset)
+  sandbox.recordInteractionEvent("chat_history_cleared", { count: 3 });
+  // full_app_focused → happy (attention_returned)
+  sandbox.recordInteractionEvent("full_app_focused");
+
+  assert.ok(mirrorCalls.length === 5,
+    `consecutive mirror sequence must produce 5 bridge calls, got ${mirrorCalls.length}`);
+  assert.ok(mirrorCalls[0].expression === "focused",
+    `call[0] must be focused (chat_message_sent), got ${mirrorCalls[0].expression}`);
+  assert.ok(mirrorCalls[1].expression === "neutral",
+    `call[1] must be neutral (message_deleted), got ${mirrorCalls[1].expression}`);
+  assert.ok(mirrorCalls[2].expression === "annoyed",
+    `call[2] must be annoyed (message_edited), got ${mirrorCalls[2].expression}`);
+  assert.ok(mirrorCalls[3].expression === "neutral",
+    `call[3] must be neutral (chat_history_cleared), got ${mirrorCalls[3].expression}`);
+  assert.ok(mirrorCalls[4].expression === "happy",
+    `call[4] must be happy (full_app_focused), got ${mirrorCalls[4].expression}`);
+  console.log("  testTask218FixConsecutiveMirrorSequence PASS");
+}
+
+async function testTask218ShowPetWindowMirrorsCurrentExpression() {
+  const mirrorCalls = [];
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      showPetWindow() { return Promise.resolve({ ok: true }); },
+      sendPetExpressionSuggestion(payload) { mirrorCalls.push({ ...payload }); return Promise.resolve({ ok: true }); },
+    },
+  });
+  mirrorCalls.length = 0;
+  sandbox.recordInteractionEvent("message_edited", { role: "user", source: "full_app", messageLength: 8 });
+  assert.equal(mirrorCalls.length, 1, "message_edited must mirror annoyed before Pet Window show");
+  mirrorCalls.length = 0;
+
+  document.getElementById("show-pet-window-btn").click();
+  await settle();
+  assert.equal(mirrorCalls.length, 1,
+    "showPetWindow success must re-mirror current expression suggestion");
+  assert.equal(mirrorCalls[0].expression, "annoyed",
+    "showPetWindow success must send the latest currentInteractionExpressionSuggestion");
+  console.log("  testTask218ShowPetWindowMirrorsCurrentExpression PASS");
+}
+
+async function testTask218ShowPetWindowAbsentBridgeNoThrow() {
+  const { document } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      showPetWindow() { return Promise.resolve({ ok: true }); },
+    },
+  });
+  document.getElementById("show-pet-window-btn").click();
+  await settle();
+  assert.equal(document.getElementById("show-pet-window-status").textContent, "Pet Window shown.");
+  console.log("  testTask218ShowPetWindowAbsentBridgeNoThrow PASS");
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -7710,6 +7939,22 @@ async function main() {
   await testTask217NoPetOrTts();
   testTask217HoverActionsStillAbsent();
   testTask217ContextMenuStillExists();
+
+  // TASK-218: Safe Pet Expression Suggestion Mirror
+  testTask218RendererHasMirrorFunction();
+  await testTask218MirrorCalledAfterRecord();
+  await testTask218MirrorPayloadHasAllowedKeys();
+  await testTask218MirrorPayloadNoForbiddenKeys();
+  await testTask218MirrorUnknownExpressionFallback();
+  await testTask218MirrorNoBridgeNoThrow();
+  await testTask218MirrorNoChat();
+  await testTask218MirrorNoHistory();
+  await testTask218MirrorNoPetSpeech();
+  await testTask218PreviewStillWorks();
+  testTask218HoverActionsStillAbsent();
+  await testTask218FixConsecutiveMirrorSequence();
+  await testTask218ShowPetWindowMirrorsCurrentExpression();
+  await testTask218ShowPetWindowAbsentBridgeNoThrow();
 
   console.log("renderer chat smoke: PASS");
 }

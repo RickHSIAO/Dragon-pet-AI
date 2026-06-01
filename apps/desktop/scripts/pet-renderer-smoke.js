@@ -5086,6 +5086,27 @@ function testTask169ScopeChecks() {
     testTask204RenderUnreadDotShowsWhenNonZero,
     testTask204RenderUnreadDotHidesWhenZero,
     testTask204UnreadDotListenerWiredInInit,
+    // TASK-218
+    testTask218HandlerExported,
+    testTask218NeutralUpdatesExpression,
+    testTask218FocusedUpdatesExpression,
+    testTask218HappyUpdatesExpression,
+    testTask218ProudUpdatesExpression,
+    testTask218AnnoyedUpdatesExpression,
+    testTask218SleepyUpdatesExpression,
+    testTask218UnknownFallbackNeutral,
+    testTask218NoBubbleChange,
+    testTask218NoTts,
+    testTask218NoChat,
+    testTask218NoDirectInput,
+    testTask218ListenerWiredInInit,
+    testTask218RuntimeListenerFlowUpdatesExpression,
+    // TASK-218 fix: consecutive mirror + restore override
+    testTask218FixSequentialExpressions,
+    testTask218FixOverrideSurvivesRestorePetPresence,
+    testTask218FixSpeechWinsWhenOlderOverride,
+    testTask218FixGetPresenceStateExported,
+    testTask218FixOverrideRecordedInPresenceState,
   ];
 
   for (const test of tests) {
@@ -5199,6 +5220,271 @@ function testTask204UnreadDotListenerWiredInInit() {
   const renderer = readText(petRendererPath);
   assertIncludes(renderer, "api.onUnreadUpdate", "initializePetMode must register onUnreadUpdate listener");
   assertIncludes(renderer, "renderUnreadDot(documentRef", "initializePetMode must call renderUnreadDot");
+}
+
+// ---------------------------------------------------------------------------
+// TASK-218: Safe Pet Expression Suggestion Mirror tests
+// ---------------------------------------------------------------------------
+
+function testTask218HandlerExported() {
+  const { handleInteractionExpressionSuggestion } = require(petRendererPath);
+  assert(typeof handleInteractionExpressionSuggestion === "function",
+    "handleInteractionExpressionSuggestion must be exported from pet-renderer.js");
+}
+
+function makeFakeDocForExpression() {
+  const container = new FakeElement("pet-avatar-container");
+  const avatar = new FakeElement("pet-avatar");
+  const root = new FakeElement("pet-mode-root");
+  return {
+    fakeDoc: { getElementById: (id) => {
+      if (id === "pet-avatar-container") return container;
+      if (id === "pet-avatar") return avatar;
+      if (id === "pet-mode-root") return root;
+      return null;
+    }},
+    container,
+    avatar,
+    root,
+  };
+}
+
+function testTask218NeutralUpdatesExpression() {
+  const { handleInteractionExpressionSuggestion } = require(petRendererPath);
+  const { fakeDoc, container } = makeFakeDocForExpression();
+  handleInteractionExpressionSuggestion(fakeDoc, { expression: "neutral" });
+  assert(container.dataset.expression === "neutral", "neutral expression must set dataset.expression to neutral");
+}
+
+function testTask218FocusedUpdatesExpression() {
+  const { handleInteractionExpressionSuggestion } = require(petRendererPath);
+  const { fakeDoc, container } = makeFakeDocForExpression();
+  handleInteractionExpressionSuggestion(fakeDoc, { expression: "focused" });
+  assert(container.dataset.expression === "focused", "focused expression must set dataset.expression to focused");
+}
+
+function testTask218HappyUpdatesExpression() {
+  const { handleInteractionExpressionSuggestion } = require(petRendererPath);
+  const { fakeDoc, container } = makeFakeDocForExpression();
+  handleInteractionExpressionSuggestion(fakeDoc, { expression: "happy" });
+  assert(container.dataset.expression === "happy", "happy expression must set dataset.expression to happy");
+}
+
+function testTask218ProudUpdatesExpression() {
+  const { handleInteractionExpressionSuggestion } = require(petRendererPath);
+  const { fakeDoc, container } = makeFakeDocForExpression();
+  handleInteractionExpressionSuggestion(fakeDoc, { expression: "proud" });
+  assert(container.dataset.expression === "proud", "proud expression must set dataset.expression to proud");
+}
+
+function testTask218AnnoyedUpdatesExpression() {
+  const { handleInteractionExpressionSuggestion } = require(petRendererPath);
+  const { fakeDoc, container } = makeFakeDocForExpression();
+  handleInteractionExpressionSuggestion(fakeDoc, { expression: "annoyed" });
+  assert(container.dataset.expression === "annoyed", "annoyed expression must set dataset.expression to annoyed");
+}
+
+function testTask218SleepyUpdatesExpression() {
+  const { handleInteractionExpressionSuggestion } = require(petRendererPath);
+  const { fakeDoc, container } = makeFakeDocForExpression();
+  handleInteractionExpressionSuggestion(fakeDoc, { expression: "sleepy" });
+  assert(container.dataset.expression === "sleepy", "sleepy expression must set dataset.expression to sleepy");
+}
+
+function testTask218UnknownFallbackNeutral() {
+  const { handleInteractionExpressionSuggestion } = require(petRendererPath);
+  const { fakeDoc, container } = makeFakeDocForExpression();
+  handleInteractionExpressionSuggestion(fakeDoc, { expression: "UNKNOWN_XYZ" });
+  assert(container.dataset.expression === "neutral", "unknown expression must fall back to neutral");
+}
+
+function testTask218NoBubbleChange() {
+  const { handleInteractionExpressionSuggestion } = require(petRendererPath);
+  const { fakeDoc } = makeFakeDocForExpression();
+  const bubble = new FakeElement("pet-bubble");
+  const bubbleMessage = new FakeElement("pet-bubble-message");
+  bubbleMessage.textContent = "ORIGINAL_BUBBLE_TEXT";
+  fakeDoc.getElementById = (id) => {
+    if (id === "pet-avatar-container") return new FakeElement("pet-avatar-container");
+    if (id === "pet-avatar") return new FakeElement("pet-avatar");
+    if (id === "pet-mode-root") return new FakeElement("pet-mode-root");
+    if (id === "pet-bubble") return bubble;
+    if (id === "pet-bubble-message") return bubbleMessage;
+    return null;
+  };
+  handleInteractionExpressionSuggestion(fakeDoc, { expression: "happy" });
+  assert(bubbleMessage.textContent === "ORIGINAL_BUBBLE_TEXT",
+    "handleInteractionExpressionSuggestion must not change bubble message text");
+}
+
+function testTask218NoTts() {
+  const renderer = readText(petRendererPath);
+  const fnIdx = renderer.indexOf("function handleInteractionExpressionSuggestion(");
+  assert(fnIdx >= 0, "handleInteractionExpressionSuggestion must be defined");
+  const fnText = renderer.slice(fnIdx, fnIdx + 500);
+  assert(!fnText.includes("speakPetReply") && !fnText.includes("startPetSpeech") && !fnText.includes("stopPetSpeech"),
+    "handleInteractionExpressionSuggestion must not call any TTS function");
+}
+
+function testTask218NoChat() {
+  const renderer = readText(petRendererPath);
+  const fnIdx = renderer.indexOf("function handleInteractionExpressionSuggestion(");
+  const fnText = renderer.slice(fnIdx, fnIdx + 500);
+  assert(!fnText.includes("sendPetChatMessage") && !fnText.includes("/chat"),
+    "handleInteractionExpressionSuggestion must not call backend chat");
+}
+
+function testTask218NoDirectInput() {
+  const renderer = readText(petRendererPath);
+  const fnIdx = renderer.indexOf("function handleInteractionExpressionSuggestion(");
+  const fnText = renderer.slice(fnIdx, fnIdx + 500);
+  assert(!fnText.includes("openPetDirectInput") && !fnText.includes("direct-input"),
+    "handleInteractionExpressionSuggestion must not open direct input");
+}
+
+function testTask218ListenerWiredInInit() {
+  const renderer = readText(petRendererPath);
+  assertIncludes(renderer, "api.onExpressionSuggestion",
+    "initializePetMode must register onExpressionSuggestion listener");
+  assertIncludes(renderer, "handleInteractionExpressionSuggestion(documentRef",
+    "initializePetMode must call handleInteractionExpressionSuggestion");
+}
+
+function testTask218RuntimeListenerFlowUpdatesExpression() {
+  const { initializePetMode } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const container = doc.getElementById("pet-avatar-container");
+  const avatar = doc.getElementById("pet-avatar");
+  const root = doc.getElementById("pet-mode-root");
+  const originalWindow = global.window;
+  let registeredCallback = null;
+
+  global.window = {
+    dragonPet: {
+      onExpressionSuggestion(callback) {
+        registeredCallback = callback;
+        return () => {};
+      },
+    },
+  };
+
+  try {
+    initializePetMode(doc);
+  } finally {
+    global.window = originalWindow;
+  }
+
+  assert.equal(typeof registeredCallback, "function",
+    "initializePetMode must register onExpressionSuggestion callback when preload API exists");
+  for (const expression of ["focused", "neutral", "annoyed", "happy"]) {
+    registeredCallback({
+      expression,
+      source: "interaction_expression_suggestion",
+      ts: 1,
+    });
+    assert.equal(container.dataset.expression, expression,
+      `listener flow must set avatar container expression to ${expression}`);
+    assert.equal(root.dataset.expression, expression,
+      `listener flow must set root expression to ${expression}`);
+    assert.match(avatar.getAttribute("src"), new RegExp(`christina_${expression}\\.png$`),
+      `listener flow must update avatar image src to ${expression} asset`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// TASK-218 fix: consecutive expression mirror + restore override tests
+// ---------------------------------------------------------------------------
+
+function testTask218FixSequentialExpressions() {
+  const { handleInteractionExpressionSuggestion } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const container = doc.getElementById("pet-avatar-container");
+  const sequence = ["focused", "neutral", "annoyed", "neutral", "happy"];
+  for (const expr of sequence) {
+    handleInteractionExpressionSuggestion(doc, { expression: expr });
+    assert(container.dataset.expression === expr,
+      `sequential handleInteractionExpressionSuggestion: expected dataset.expression "${expr}"`);
+  }
+}
+
+function testTask218FixOverrideSurvivesRestorePetPresence() {
+  // Scenario: AI reply sets speaking+focused (recentReply stored), then user deletes
+  // (expression suggestion neutral, newer ts). On focus restore, neutral must win.
+  const {
+    renderPetSpeechUpdate,
+    handleInteractionExpressionSuggestion,
+    restorePetPresenceAfterShow,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const container = doc.getElementById("pet-avatar-container");
+  const timerApi = new FakeTimerApi();
+
+  // Step 1: AI reply (speaking + mood focused) → recentReply.storedAt = now
+  renderPetSpeechUpdate(doc, { reply: "Test reply.", mood: "focused", source: "llm_local" }, { timerApi });
+  assert(container.dataset.expression === "focused",
+    "after speaking+focused speech update, expression must be focused");
+
+  // Step 2: User deletes → expression suggestion neutral (ts = Date.now(), which is >= timerApi.now())
+  handleInteractionExpressionSuggestion(doc, { expression: "neutral" });
+  assert(container.dataset.expression === "neutral",
+    "after handleInteractionExpressionSuggestion(neutral), expression must update to neutral");
+
+  // Step 3: User focuses Pet Window → restorePetPresenceAfterShow fires
+  // Override.ts >= recentReply.storedAt → override must win → expression stays neutral
+  restorePetPresenceAfterShow(doc, { timerApi });
+  assert(container.dataset.expression === "neutral",
+    "after restorePetPresenceAfterShow, expression override (neutral) must survive — not be overwritten by focused speech reply");
+}
+
+function testTask218FixSpeechWinsWhenOlderOverride() {
+  // Scenario: chat_message_sent → expression suggestion focused (override gen=N).
+  // AI replies (speaking + mood happy → recentReply.expressionGen captures gen=N at that point).
+  // On restore, recentReply.expressionGen === override.gen → override does NOT win → speech mood happy.
+  const {
+    renderPetSpeechUpdate,
+    handleInteractionExpressionSuggestion,
+    restorePetPresenceAfterShow,
+    getPetPresenceState,
+  } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const container = doc.getElementById("pet-avatar-container");
+  const timerApi = new FakeTimerApi();
+
+  // Step 1: expression suggestion focused (override.gen = G)
+  handleInteractionExpressionSuggestion(doc, { expression: "focused" });
+  const genAfterSuggestion = getPetPresenceState(doc).expressionOverride.gen;
+
+  // Step 2: AI replies with mood happy — recentReply.expressionGen = G (same, no new interaction)
+  renderPetSpeechUpdate(doc, { reply: "AI reply.", mood: "happy", source: "llm_local" }, { timerApi });
+  assert(container.dataset.expression === "happy",
+    "after speaking+happy speech update, expression must be happy");
+  const recentReplyGen = getPetPresenceState(doc).recentReply.expressionGen;
+  assert(recentReplyGen === genAfterSuggestion,
+    "recentReply.expressionGen must equal override.gen when no new interaction occurred");
+
+  // Step 3: restore — override.gen === recentReply.expressionGen → override does NOT win → happy
+  restorePetPresenceAfterShow(doc, { timerApi });
+  assert(container.dataset.expression === "happy",
+    "restorePetPresenceAfterShow must use speech mood when override gen equals recentReply gen (same session)");
+}
+
+function testTask218FixGetPresenceStateExported() {
+  const { getPetPresenceState } = require(petRendererPath);
+  assert(typeof getPetPresenceState === "function",
+    "getPetPresenceState must be exported for fix verification");
+}
+
+function testTask218FixOverrideRecordedInPresenceState() {
+  const { handleInteractionExpressionSuggestion, getPetPresenceState } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  handleInteractionExpressionSuggestion(doc, { expression: "annoyed" });
+  const state = getPetPresenceState(doc);
+  assert(state.expressionOverride !== null && state.expressionOverride !== undefined,
+    "handleInteractionExpressionSuggestion must set expressionOverride in presenceState");
+  assert(state.expressionOverride.mood === "annoyed",
+    "expressionOverride.mood must match the applied expression");
+  assert(typeof state.expressionOverride.gen === "number" && state.expressionOverride.gen > 0,
+    "expressionOverride.gen must be a positive generation number");
 }
 
 run().catch((error) => {

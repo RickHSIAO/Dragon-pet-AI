@@ -21625,3 +21625,137 @@ Map `currentInteractionReactionHint` to a local expression suggestion — a pure
 | 一般回歸：search/highlight/navigation、copy/export、date separator、timestamp tooltip、Pet Window、Voice、STT、TTS 皆正常 | PASS |
 
 > **補充：** preview 文字未進入 chat history / copy transcript / export；無額外觸發 Pet Bubble / TTS；沒有真的改變 Pet Window 表情。所有可見功能無異常，smoke 判定 PASS。
+
+---
+
+## TASK-218 | Safe Pet Expression Suggestion Mirror
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-06-01
+**Phase:** Phase 5 — Companion Behavior Loop (Interactive Pet Track)
+**Depends on:** TASK-217 (`currentInteractionExpressionSuggestion`, `recordInteractionExpressionSuggestion`), Pet Window IPC infrastructure
+
+### Goal
+
+First real Pet Window side-effect from the TASK-214→217 interaction stack: when `currentInteractionExpressionSuggestion` updates, mirror it to the Pet Window to update the avatar expression. Expression-only — no bubble text change, no TTS, no speech, no backend.
+
+### Scope
+
+- `renderer.js`: Add `mirrorInteractionExpressionSuggestion(expression)` helper; call from `recordInteractionExpressionSuggestion`.
+- `preload.js` (Full App): Add `PET_EXPRESSION_SUGGESTION_CHANNEL`, `EXPRESSION_SUGGESTION_ALLOWLIST`, `sendPetExpressionSuggestion(payload)` bridge method.
+- `main.js`: Add `PET_EXPRESSION_SUGGESTION_CHANNEL` / `PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL` constants, `INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST_MAIN`, `forwardExpressionSuggestion(payload)`, `ipcMain.handle`.
+- `pet-preload.js`: Add `PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL`, `EXPRESSION_SUGGESTION_ALLOWLIST_PET`, `onExpressionSuggestion(callback)` bridge method.
+- `pet-renderer.js`: Add `INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST_PET`, `handleInteractionExpressionSuggestion(documentRef, payload)`; wire in `initializePetMode` IIFE; export.
+- Smoke tests: renderer-chat runtime-like mirror sequence and showPetWindow replay; pet-window preload/main relay channel and payload harness; pet-renderer preload listener → handler flow.
+
+### New IPC Channel
+
+| Channel | Direction | Purpose |
+|---|---|---|
+| `"pet:expression-suggestion"` | Full App preload → main (invoke) | Carry expression suggestion from renderer to main |
+| `"pet:expression-suggestion-received"` | main → Pet Window (send) | Forward sanitized expression to Pet Window |
+
+Generic channel `"pet"` is not used for TASK-218 expression suggestion IPC.
+
+### Payload Schema & Sanitize Rules
+
+| Field | Value | Sanitize |
+|---|---|---|
+| `expression` | One of allowlist: `neutral/focused/happy/proud/annoyed/sleepy` | Unknown → `"neutral"` at every boundary |
+| `source` | Fixed: `"interaction_expression_suggestion"` | Overwritten at every boundary — never from caller |
+| `ts` | `Date.now()` | Validated as `number > 0`; fallback to `Date.now()` |
+
+Forbidden payload fields: `hint`, `event`, `role`, `messageLength`, `message`, `text`, `body`, `rawText`, `content`, `reply`.
+
+### Triple Sanitize Boundary
+
+1. **renderer.js** `mirrorInteractionExpressionSuggestion`: allowlist check before calling bridge.
+2. **preload.js** `sendPetExpressionSuggestion`: allowlist check + fixed source + `Date.now()` ts.
+3. **main.js** `forwardExpressionSuggestion`: allowlist check + fixed source + ts validation + petWindow null check.
+4. **pet-preload.js** `onExpressionSuggestion`: allowlist check + fixed source + ts validation before calling callback.
+
+### Expression Mapping
+
+1:1 mapping — `neutral → neutral`, `focused → focused`, `happy → happy`, `proud → proud`, `annoyed → annoyed`, `sleepy → sleepy`. Unknown at any boundary → `"neutral"`.
+
+### Safety Boundary Confirmation
+
+- No `/chat` call ✓
+- No `updatePetSpeech` / Pet Bubble ✓
+- No TTS ✓
+- No history write ✓
+- No backend ✓
+- `handleInteractionExpressionSuggestion` only calls `setPetExpression` ✓
+- No raw payload displayed ✓
+- Bridge absent → no-op (no throw) ✓
+- Pet Window absent / destroyed → no-op ✓
+- `hover-action` class not re-introduced ✓
+
+### Root Cause / Fix Summary (2026-06-01)
+
+When the user clicked the Pet Window to observe the expression after delete/edit/clear, `window.focus` triggered `restorePetPresenceAfterShow` → `restorePetPresence` → `setBubbleState(recentReply.state, {mood: AI_mood})` — restoring the previous AI speech mood (e.g., `focused`) and overwriting the interaction expression suggestion.
+
+Separately, when the expression mirror happened before the Pet Window existed, `forwardExpressionSuggestion` correctly no-oped, but opening the Pet Window later did not replay the latest `currentInteractionExpressionSuggestion`.
+
+**Fix applied**:
+- `interactionExpressionOverrideGeneration` monotonic counter (module-level `var`)
+- `handleInteractionExpressionSuggestion` increments counter and stores `{mood, gen}` in `presenceState.expressionOverride`
+- `rememberRecentPetReply` captures current generation in `recentReply.expressionGen`
+- `restorePetPresence`: after `setBubbleState`, checks `expressionOverride.gen > recentReply.expressionGen` → if override is newer, re-applies expression. Falls to idle case also re-applies if override gen > 0.
+- `showPetWindow` success re-sends `currentInteractionExpressionSuggestion`
+- New exports: `getPetPresenceState`
+
+### Automated Smoke Test Coverage
+
+| Suite | Tests | Count |
+|---|---|---|
+| `renderer-chat-smoke.js` | hasMirrorFunction, mirrorCalledAfterRecord, payload allowed keys, no forbidden keys, unknown fallback neutral, no bridge no throw, no chat, no history, no pet speech, preview still works, hover actions absent, **fix: consecutive mirror sequence**, **showPetWindow success replays current expression**, absent bridge no throw | 14 |
+| `pet-window-smoke.js` | named channel checks in main/preload, rejects generic `"pet"`, sanitize in main, bridge in renderer preload, listener in pet preload, no generic ipcRenderer exposed, runtime preload harnesses, runtime main relay harness, **fix: main relay allows neutral/annoyed/happy, no isVisible guard, presenceState has expressionOverride** | 13 |
+| `pet-renderer-smoke.js` | handler exported, neutral/focused/happy/proud/annoyed/sleepy each update expression, unknown→neutral, no bubble change, no TTS, no chat, no direct input, listener wired in init, **runtime preload listener → handler flow**, **fix: sequential expressions, override survives restore, speech wins when older, getPetPresenceState exported, override recorded in state** | 19 |
+
+### Automated Smoke Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+14 TASK-218 tests) |
+| `pet-window-smoke.js` | PASS (73 checks, +13 TASK-218 tests) |
+| `pet-renderer-smoke.js` | PASS (256 checks, +19 TASK-218 tests) |
+| `git diff --check` | CLEAN (CRLF warnings only) |
+
+### Acceptance Criteria
+
+- [x] `mirrorInteractionExpressionSuggestion(expression)` defined in `renderer.js` ✓
+- [x] Called from `recordInteractionExpressionSuggestion` ✓
+- [x] `sendPetExpressionSuggestion` exposed in Full App preload ✓
+- [x] `"pet:expression-suggestion"` handler in `main.js` with sanitize + petWindow null guard ✓
+- [x] `"pet:expression-suggestion-received"` forwarded to Pet Window ✓
+- [x] `onExpressionSuggestion` exposed in pet preload with sanitize ✓
+- [x] `handleInteractionExpressionSuggestion` in `pet-renderer.js` — expression-only ✓
+- [x] Wired in `initializePetMode` IIFE ✓
+- [x] Exported from `module.exports` ✓
+- [x] Unknown expression → `"neutral"` at every boundary ✓
+- [x] No bubble change, no TTS, no history, no backend ✓
+- [x] Bridge absent → no-op ✓
+- [x] `renderer-chat-smoke.js` PASS ✓
+- [x] `pet-window-smoke.js` PASS ✓
+- [x] `pet-renderer-smoke.js` PASS ✓
+- [x] `git diff --check` CLEAN ✓
+- [x] Visual smoke FAIL root cause diagnosed: `restorePetPresenceAfterShow` on Pet Window focus restored old AI mood ✓
+- [x] Fix: `interactionExpressionOverrideGeneration` counter + `presenceState.expressionOverride` + `recentReply.expressionGen` comparison ✓
+- [x] Fix: `showPetWindow` success re-sends current expression suggestion after earlier Pet Window absent no-op ✓
+- [x] IPC channels are narrow-purpose: `"pet:expression-suggestion"` / `"pet:expression-suggestion-received"`; generic `"pet"` not used ✓
+- [x] Payload only contains `expression/source/ts` ✓
+- [x] Runtime-like smoke tests cover renderer bridge sequence, preload/main relay, and Pet preload listener → renderer handler flow ✓
+- [x] Windows visual smoke PASS (2026-06-01) ✓
+
+### Windows Visual Smoke Results (2026-06-01)
+
+| Scenario | Result |
+|---|---|
+| 基本啟動：App 啟動正常，Preview 顯示 `Reaction: none · Suggestion: neutral`，Pet Window 正常 | PASS |
+| 送出訊息：Preview 顯示 `Reaction: user_active · Suggestion: focused`，Pet 表情 `focused` | PASS |
+| Delete / Undo：Preview 顯示 `Reaction: message_management · Suggestion: neutral`，Pet 表情 `neutral`；點 Pet Window 後沒有跳回 `focused` | PASS |
+| Edit last user：Preview 顯示 `Reaction: correction · Suggestion: annoyed`，Pet 表情 `annoyed`；點 Pet Window 後沒有跳回 `focused` | PASS |
+| Clear Chat：Preview 顯示 `Reaction: reset · Suggestion: neutral`，Pet 表情 `neutral`；點 Pet Window 後沒有跳回 `focused` | PASS |
+| Focus：Preview 顯示 `Reaction: attention_returned · Suggestion: happy`，Pet 表情 `happy` | PASS |
+| 邊界確認：沒有新增 Pet Bubble 文字，沒有額外 TTS，沒有主動發話，沒有寫入 history/copy/export | PASS |
