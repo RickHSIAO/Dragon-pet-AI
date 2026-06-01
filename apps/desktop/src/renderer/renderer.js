@@ -1271,8 +1271,27 @@ function recordInteractionReactionBubble(bubble, hint) {
     text: entry.text,
     source: entry.source,
   };
+  enqueueReactionBubbleOutputDiagnostics(currentInteractionReactionBubble);
   mirrorInteractionReactionBubble(currentInteractionReactionBubble);
   return currentInteractionReactionBubble;
+}
+
+function enqueueReactionBubbleOutputDiagnostics(bubble) {
+  const rawId = bubble && typeof bubble.id === "string" ? bubble.id : "";
+  const safeId = INTERACTION_REACTION_BUBBLE_ALLOWLIST.has(rawId) ? rawId : "none";
+  if (safeId === "none") return null;
+  return enqueueOutputQueueItem({
+    source: "reaction_bubble",
+    priority: "P4_NORMAL_REACTION",
+    channel: "pet_bubble",
+    payload: { bubbleId: safeId },
+    ttlMs: INTERACTION_REACTION_BUBBLE_TTL_MS,
+    interruptible: true,
+    ttsEligible: false,
+    historyEligible: false,
+    copyExportEligible: false,
+    reason: "interaction_reaction_bubble",
+  });
 }
 
 // TASK-217: Expression suggestion layer — maps reaction hint → local expression suggestion.

@@ -23052,10 +23052,12 @@ TASK-226 is docs-only:
   default. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
 - TASK-229 Output Queue Debug Preview / Snapshot Polish. DONE - WINDOWS VISUAL
   SMOKE PASS / DONE - PASS.
-- TASK-230 Bubble Priority Enforcement.
-- TASK-231 TTS-safe segment design.
-- TASK-232 Idle Reaction Policy, fixed only, no LLM.
-- TASK-233 User controls for companion reaction verbosity.
+- TASK-230 Enqueue Reaction Bubble Diagnostics Only. DONE - WINDOWS VISUAL
+  SMOKE PASS / DONE - PASS.
+- TASK-231 Bubble Priority Enforcement.
+- TASK-232 TTS-safe segment design.
+- TASK-233 Idle Reaction Policy, fixed only, no LLM.
+- TASK-234 User controls for companion reaction verbosity.
 
 ### Acceptance Criteria
 
@@ -23685,5 +23687,194 @@ Confirmed:
 - [x] Preview does not enter history/copy/export transcript.
 - [x] No `/chat`, history, TTS, IPC, Pet Window, expression mirror, or reaction
   bubble side effects.
+- [x] Renderer automated smoke PASS.
+- [x] Windows visual smoke PASS on 2026-06-01.
+
+---
+
+## TASK-230 | Enqueue Reaction Bubble Diagnostics Only
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-06-01
+**Phase:** Phase 5 - Interactive Companion Output Arbitration
+**Depends on:** TASK-228, TASK-229
+
+### Goal
+
+When the Full App renderer creates a safe reaction bubble, enqueue one
+diagnostics-only output queue item so the disabled output queue preview can
+reflect reaction bubble activity. This is local diagnostics only and must not
+change actual reaction bubble display, expression mirror behavior, chat reply
+behavior, or Pet Window runtime behavior.
+
+### Implementation Summary
+
+Updated:
+
+- `apps/desktop/src/renderer/renderer.js`
+- `apps/desktop/scripts/renderer-chat-smoke.js`
+- `README.md`
+- `docs/ROADMAP.md`
+- `docs/TASKS.md`
+- `docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md`
+- `docs/INTERACTIVE_COMPANION_ARCHITECTURE.md`
+
+Renderer additions:
+
+- `enqueueReactionBubbleOutputDiagnostics(bubble)`
+- `recordInteractionReactionBubble(...)` now calls the diagnostics enqueue
+  helper after sanitizing `currentInteractionReactionBubble`.
+
+The helper:
+
+- Sanitizes `bubble.id` through `INTERACTION_REACTION_BUBBLE_ALLOWLIST`.
+- Ignores `none`, empty, or invalid bubble ids.
+- Calls `enqueueOutputQueueItem(...)`.
+- Allows diagnostics queue state to update while `OUTPUT_QUEUE_ENABLED=false`.
+- Does not dispatch.
+- Does not call or depend on the Pet bridge.
+- Does not throw when the bridge is absent.
+
+### Queue Item Schema
+
+Reaction bubble diagnostics enqueue writes only this safe item shape:
+
+```js
+{
+  source: "reaction_bubble",
+  priority: "P4_NORMAL_REACTION",
+  channel: "pet_bubble",
+  payload: {
+    bubbleId: "<safe bubble id>"
+  },
+  ttlMs: 3000,
+  interruptible: true,
+  ttsEligible: false,
+  historyEligible: false,
+  copyExportEligible: false,
+  reason: "interaction_reaction_bubble"
+}
+```
+
+Payload is restricted to `bubbleId` only. It does not store bubble text, user
+message text, raw event payload, hint, debug metadata, audio, transcript, HTML,
+or thinking text.
+
+### Preview Behavior
+
+After a safe `user_active` reaction bubble is recorded, diagnostics preview can
+show:
+
+```text
+Queue: disabled · Items: 1 · Recent: 1 · Next: P4_NORMAL_REACTION/pet_bubble/reaction_bubble
+```
+
+The preview still does not show raw payload, raw JSON, user text, fixed bubble
+text, `undefined`, `null`, `NaN`, or `[object Object]`.
+
+### Runtime Boundary
+
+TASK-230 is Full App renderer-only:
+
+- No backend change.
+- No `/chat` API schema change.
+- No chat history persistence format change.
+- No `/chat` call.
+- No chat history write.
+- No IPC added.
+- No generic IPC added.
+- No Pet Window side effect added.
+- No Pet Window runtime change.
+- No Pet Bubble visible behavior change.
+- No Pet expression mirror behavior change.
+- No reaction bubble mirror payload schema change.
+- No TTS/STT/audio runtime.
+- No queue dispatch.
+- Queue does not control expression, bubble, or chat reply.
+- No raw message text storage.
+- No `innerHTML` output display.
+- No background monitoring, always listening, screenshots, or OCR.
+- No Ollama / Provider runtime change.
+- No prompt runtime change.
+- No persistence.
+- No assets.
+- No hover action buttons.
+- No old user message edit broadening.
+- No pet message edit broadening.
+- No commit or push.
+
+Existing narrow IPC remains unchanged:
+
+- `pet:expression-suggestion`
+- `pet:expression-suggestion-received`
+- `pet:reaction-bubble`
+- `pet:reaction-bubble-received`
+
+Generic channel `"pet"` is not used for expression or reaction bubble mirrors.
+
+### Windows Visual Smoke Result
+
+**Date:** 2026-06-01
+**Result:** PASS
+
+Confirmed:
+
+- Basic startup PASS: Preview shows `Queue: disabled · Items/Recent/Next`; Pet
+  Window is normal.
+- Send message PASS: reaction bubble remains normal, Queue enqueues the
+  diagnostics item, and `Next` shows
+  `P4_NORMAL_REACTION/pet_bubble/reaction_bubble`.
+- Delete / Undo PASS: feature remains normal; Queue stays disabled.
+- Edit last user PASS: feature remains normal; Queue stays disabled.
+- Clear Chat PASS: feature remains normal; Queue stays disabled.
+- Focus PASS: feature remains normal; Queue stays disabled.
+- Queue diagnostics format PASS: no `undefined`, `null`, `NaN`,
+  `[object Object]`, raw JSON, user text, bubble text, or payload.
+- General regression PASS: no new IPC side effect, no extra TTS, no extra
+  `/chat`, no history/copy/export pollution, and Pet Window expression plus
+  reaction bubble behavior remains normal.
+
+### Smoke Coverage
+
+`renderer-chat-smoke.js` adds TASK-230 coverage for:
+
+- `enqueueReactionBubbleOutputDiagnostics` existence and record-path call.
+- `user_active` diagnostics enqueue schema.
+- `message_management`, `correction`, `reset`, and `attention_returned`
+  enqueue safe items.
+- `none` / empty bubble no-op.
+- Queue remains disabled.
+- Preview count/recent/next summary after enqueue.
+- Queue item excludes fixed bubble text.
+- Queue item excludes forbidden fields: `message`, `text`, `body`,
+  `rawText`, `content`, `reply`, `transcript`, `audio`, `html`, `innerHTML`,
+  `metadata`, `debug`, and `thinking`.
+- Preview excludes raw payload, raw JSON, `undefined`, `null`, `NaN`, and
+  `[object Object]`.
+- Diagnostics enqueue does not dispatch, call `/chat`, write history, trigger
+  TTS, mirror expression, or mirror reaction bubble.
+- Record path keeps existing reaction bubble mirror payload separate and
+  unchanged.
+- TASK-218 and TASK-220 narrow IPC regression guards.
+- Hover action/context menu/edit/Pet Window regression guards.
+
+### Acceptance Criteria
+
+- [x] `enqueueReactionBubbleOutputDiagnostics(bubble)` implemented.
+- [x] Reaction bubble record path enqueues one diagnostics item for safe,
+  non-`none` bubbles.
+- [x] `none` / empty bubble does not enqueue.
+- [x] Queue item schema is restricted to safe diagnostics fields.
+- [x] Queue payload contains only `bubbleId`.
+- [x] Queue item does not contain bubble text, raw user message text, raw event
+  payload, hint, debug metadata, audio, transcript, HTML, or thinking text.
+- [x] Queue remains disabled and does not dispatch.
+- [x] Preview shows disabled/items/recent/next safe summary.
+- [x] Preview does not expose raw payload, raw JSON, user text, or bad tokens.
+- [x] No IPC added and no generic `"pet"` channel added.
+- [x] TASK-218 and TASK-220 narrow IPC retained.
+- [x] No `/chat`, history, TTS/STT/audio, Pet Window runtime, Pet Bubble
+  visible behavior, expression mirror, reaction bubble mirror schema, prompt
+  runtime, persistence, asset, or edit-scope change.
 - [x] Renderer automated smoke PASS.
 - [x] Windows visual smoke PASS on 2026-06-01.

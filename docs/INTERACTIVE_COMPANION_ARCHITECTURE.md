@@ -1,11 +1,11 @@
 # Interactive Companion Architecture Checkpoint
 
-**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-229 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-230 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
 **Date:** 2026-06-01
-**Scope:** Architecture checkpoint for TASK-214 through TASK-229.
+**Scope:** Architecture checkpoint for TASK-214 through TASK-230.
 
 This document records the current interactive companion architecture after the
-TASK-214 through TASK-229 chain.
+TASK-214 through TASK-230 chain.
 
 ---
 
@@ -60,6 +60,7 @@ user interaction
 | TASK-227 | Voice/TTS research | Records local-first speech roadmap, provider candidates, and speech safety boundaries. DOCS ONLY. |
 | TASK-228 | Output queue runtime skeleton | Adds Full App renderer-only disabled queue skeleton, sanitized snapshot, priority/preemption helpers, and queue diagnostics preview. DONE - Windows visual smoke PASS. |
 | TASK-229 | Output queue debug preview | Polishes queue snapshot preview with Recent and safe Next summary. DONE - Windows visual smoke PASS. |
+| TASK-230 | Reaction bubble diagnostics enqueue | Enqueues safe reaction bubble ids into the disabled local output queue for diagnostics only. DONE - Windows visual smoke PASS. |
 
 ---
 
@@ -80,6 +81,8 @@ flowchart TD
   R --> S[recordCharacterState]
   S --> U[getOutputQueueSnapshot]
   U --> T[formatInteractionDiagnosticsPreview]
+  G --> V[enqueueReactionBubbleOutputDiagnostics]
+  V --> U
   F --> J[mirrorInteractionExpressionSuggestion]
   J --> K[pet:expression-suggestion]
   K --> L[pet:expression-suggestion-received]
@@ -312,6 +315,7 @@ TASK-228 helpers:
 - `compareOutputPriority(a, b)`
 - `shouldOutputPreempt(activeItem, incomingItem)`
 - `formatOutputQueueSnapshotPreview(snapshot)` (TASK-229)
+- `enqueueReactionBubbleOutputDiagnostics(bubble)` (TASK-230)
 
 TASK-229 diagnostics preview format:
 
@@ -323,11 +327,24 @@ Queue: disabled · Items: <count> · Recent: <count> · Next: <priority>/<channe
 raw JSON, raw user message text, raw event payload, or debug metadata. Invalid
 priority/source/channel falls back to `Next: none`.
 
-Important: TASK-228/TASK-229 are not an execution queue yet. The queue is
-currently only local diagnostics/state and does not control execution. Disabled
-means no dispatch, no IPC, no Pet Window send, no `/chat`, no history write, no
-TTS/STT/audio runtime, no prompt runtime, no persistence, and no Pet
-Bubble/expression/reaction mirror behavior change.
+TASK-230 enqueues safe reaction bubble diagnostics items when
+`recordInteractionReactionBubble(...)` receives a non-`none` allowlisted bubble
+id. The local item uses:
+
+```text
+source=reaction_bubble · priority=P4_NORMAL_REACTION · channel=pet_bubble · payload={ bubbleId } · ttlMs=3000
+```
+
+The payload only contains `bubbleId`. It does not store fixed bubble text, raw
+user message text, raw event payload, hint, debug metadata, audio, transcript,
+HTML, or thinking text. `none`, empty, or invalid bubbles do not enqueue.
+
+Important: TASK-228/TASK-230 are not an execution queue yet. The queue is
+currently only local diagnostics/state and can record reaction bubble output
+intent, but it does not control execution. Disabled means no dispatch, no IPC,
+no Pet Window send, no `/chat`, no history write, no TTS/STT/audio runtime, no
+prompt runtime, no persistence, and no Pet Bubble/expression/reaction mirror
+behavior change.
 
 ---
 
@@ -372,6 +389,7 @@ The completed stack is covered by:
 - Automated smoke for TASK-224
 - Automated smoke for TASK-228
 - Automated smoke for TASK-229
+- Automated smoke for TASK-230
 - history/copy/export boundary checks
 - no TTS side-effect checks
 - no `/chat` side-effect checks
@@ -423,6 +441,26 @@ functional with Queue disabled; diagnostics show no `undefined`, `null`, `NaN`,
 `[object Object]`, raw JSON, user text, or payload; and there is no new IPC
 side effect, extra TTS, extra `/chat`, history/copy/export pollution, or Pet
 Window expression/reaction bubble regression.
+
+TASK-230 automated renderer smoke PASS confirmed on 2026-06-02. Confirmed
+reaction bubble diagnostics helper existence, `user_active` item schema,
+`message_management` / `correction` / `reset` / `attention_returned` safe
+enqueue, `none` / empty no-op, disabled queue state, preview Items/Recent/Next
+summary, fixed bubble text and forbidden field exclusion, no raw payload/raw
+JSON/user text/bad tokens in preview, no `/chat`/history/TTS/dispatch/mirror
+side effects from the diagnostics helper, unchanged reaction bubble mirror
+payload schema, no new IPC, no generic `"pet"` channel, and retained
+TASK-218/TASK-220 narrow IPC channels.
+
+TASK-230 Windows visual smoke PASS confirmed on 2026-06-01. Confirmed startup
+preview shows Queue disabled plus Items/Recent/Next and Pet Window is normal;
+send keeps reaction bubble normal, enqueues the diagnostics item, and shows
+`Next: P4_NORMAL_REACTION/pet_bubble/reaction_bubble`; Delete/Undo, Edit last
+user, Clear Chat, and Focus remain functional with Queue disabled; Queue
+diagnostics show no `undefined`, `null`, `NaN`, `[object Object]`, raw JSON,
+user text, bubble text, or payload; and there is no new IPC side effect, extra
+TTS, extra `/chat`, history/copy/export pollution, or Pet Window
+expression/reaction bubble regression.
 
 ---
 

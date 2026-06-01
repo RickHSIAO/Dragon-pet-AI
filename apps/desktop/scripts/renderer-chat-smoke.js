@@ -8928,6 +8928,239 @@ function testTask229RegressionGuards() {
   console.log("  testTask229RegressionGuards PASS");
 }
 
+// ─── TASK-230: Enqueue Reaction Bubble Diagnostics Only ──────────────────────
+
+const TASK230_REACTION_BUBBLE_TEXTS = [
+  "哼，總算肯理吾了。",
+  "整理好了？手腳還算俐落。",
+  "又改？下次可要想清楚。",
+  "清空了。重新開始也無妨。",
+  "回來了？吾才沒有等汝。",
+];
+
+function task230AssertReactionBubbleQueueItem(item, bubbleId) {
+  const safe = JSON.parse(JSON.stringify(item));
+  assert.equal(safe.source, "reaction_bubble");
+  assert.equal(safe.priority, "P4_NORMAL_REACTION");
+  assert.equal(safe.channel, "pet_bubble");
+  assert.deepEqual(Object.keys(safe.payload).sort(), ["bubbleId"]);
+  assert.deepEqual(safe.payload, { bubbleId });
+  assert.equal(safe.ttlMs, 3000);
+  assert.equal(safe.interruptible, true);
+  assert.equal(safe.ttsEligible, false);
+  assert.equal(safe.historyEligible, false);
+  assert.equal(safe.copyExportEligible, false);
+  assert.equal(safe.reason, "interaction_reaction_bubble");
+}
+
+function testTask230RendererHasDiagnosticsEnqueueHelper() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("function enqueueReactionBubbleOutputDiagnostics"),
+    "renderer.js must define enqueueReactionBubbleOutputDiagnostics");
+  assert.ok(src.includes("enqueueReactionBubbleOutputDiagnostics(currentInteractionReactionBubble)"),
+    "recordInteractionReactionBubble must enqueue local diagnostics for current safe bubble");
+  console.log("  testTask230RendererHasDiagnosticsEnqueueHelper PASS");
+}
+
+async function testTask230UserActiveReactionBubbleEnqueuesDiagnosticsItem() {
+  const { sandbox } = await loadRenderer();
+  const result = sandbox.recordInteractionReactionBubble({
+    id: "user_active",
+    text: "TASK230_CALLER_TEXT_FORBIDDEN",
+  }, "user_active");
+  assert.equal(result.id, "user_active");
+  assert.equal(sandbox.outputQueueItems.length, 1);
+  task230AssertReactionBubbleQueueItem(sandbox.outputQueueItems[0], "user_active");
+  assert.equal(sandbox.getOutputQueueSnapshot().enabled, false, "queue must remain disabled");
+  assert.ok(!JSON.stringify(sandbox.outputQueueItems).includes("TASK230_CALLER_TEXT_FORBIDDEN"),
+    "queue item must not keep caller text");
+  console.log("  testTask230UserActiveReactionBubbleEnqueuesDiagnosticsItem PASS");
+}
+
+async function testTask230AllSafeReactionBubblesEnqueue() {
+  const { sandbox } = await loadRenderer();
+  const ids = ["message_management", "correction", "reset", "attention_returned"];
+  for (const id of ids) {
+    sandbox.recordInteractionReactionBubble({ id, text: "TASK230_TEXT_FORBIDDEN" }, id);
+  }
+  assert.equal(sandbox.outputQueueItems.length, ids.length);
+  const queuedIds = sandbox.outputQueueItems.map((item) => item.payload.bubbleId);
+  assert.deepEqual(JSON.parse(JSON.stringify(queuedIds)), ids);
+  for (let i = 0; i < ids.length; i += 1) {
+    task230AssertReactionBubbleQueueItem(sandbox.outputQueueItems[i], ids[i]);
+  }
+  console.log("  testTask230AllSafeReactionBubblesEnqueue PASS");
+}
+
+async function testTask230NoneAndEmptyBubbleDoNotEnqueue() {
+  const { sandbox } = await loadRenderer();
+  assert.equal(sandbox.enqueueReactionBubbleOutputDiagnostics({ id: "none" }), null);
+  assert.equal(sandbox.enqueueReactionBubbleOutputDiagnostics({ id: "" }), null);
+  assert.equal(sandbox.enqueueReactionBubbleOutputDiagnostics(null), null);
+  sandbox.recordInteractionReactionBubble({ id: "none", text: "TASK230_NONE_TEXT_FORBIDDEN" }, "none");
+  sandbox.recordInteractionReactionBubble({ id: "", text: "TASK230_EMPTY_TEXT_FORBIDDEN" }, "none");
+  assert.equal(sandbox.outputQueueItems.length, 0, "none/empty reaction bubbles must not enqueue");
+  assert.equal(sandbox.getOutputQueueSnapshot().length, 0);
+  console.log("  testTask230NoneAndEmptyBubbleDoNotEnqueue PASS");
+}
+
+async function testTask230PreviewUpdatesAfterReactionBubbleEnqueue() {
+  const { document, sandbox } = await loadRenderer();
+  sandbox.recordInteractionEvent("chat_message_sent", {
+    source: "full_app",
+    role: "user",
+    messageLength: 12,
+    text: "TASK230_RAW_USER_TEXT_FORBIDDEN",
+  });
+  const preview = document.getElementById("interaction-reaction-preview").textContent;
+  assert.ok(preview.includes("Reaction: user_active"), "preview must still show reaction hint");
+  assert.ok(preview.includes("Suggestion: focused"), "preview must still show expression suggestion");
+  assert.ok(preview.includes("Queue: disabled · Items: 1 · Recent: 1 · Next: P4_NORMAL_REACTION/pet_bubble/reaction_bubble"),
+    "preview must show disabled queue item summary after user_active");
+  assert.ok(!preview.includes("TASK230_RAW_USER_TEXT_FORBIDDEN"),
+    "preview must not include raw user text");
+  console.log("  testTask230PreviewUpdatesAfterReactionBubbleEnqueue PASS");
+}
+
+async function testTask230QueueItemNoBubbleTextOrForbiddenFields() {
+  const { sandbox } = await loadRenderer();
+  sandbox.recordInteractionReactionBubble({
+    id: "attention_returned",
+    text: "TASK230_RAW_BUBBLE_TEXT_FORBIDDEN",
+    message: "TASK230_MESSAGE_FORBIDDEN",
+    debug: "TASK230_DEBUG_FORBIDDEN",
+  }, "attention_returned");
+  const serialized = JSON.stringify({
+    item: sandbox.outputQueueItems[0],
+    recent: sandbox.recentOutputQueueItems,
+    snapshot: sandbox.getOutputQueueSnapshot(),
+  });
+  for (const text of TASK230_REACTION_BUBBLE_TEXTS) {
+    assert.ok(!serialized.includes(text), "queue diagnostics must not store fixed bubble text");
+  }
+  for (const key of TASK228_FORBIDDEN_PAYLOAD_KEYS) {
+    assert.ok(!serialized.includes(`"${key}"`), `queue diagnostics must not include forbidden field ${key}`);
+  }
+  for (const token of [
+    "TASK230_RAW_BUBBLE_TEXT_FORBIDDEN",
+    "TASK230_MESSAGE_FORBIDDEN",
+    "TASK230_DEBUG_FORBIDDEN",
+  ]) {
+    assert.ok(!serialized.includes(token), `queue diagnostics must not include ${token}`);
+  }
+  task230AssertReactionBubbleQueueItem(sandbox.outputQueueItems[0], "attention_returned");
+  console.log("  testTask230QueueItemNoBubbleTextOrForbiddenFields PASS");
+}
+
+async function testTask230PreviewNoRawPayloadOrBadTokens() {
+  const { sandbox } = await loadRenderer();
+  sandbox.recordInteractionReactionBubble({ id: "reset", text: "TASK230_RESET_TEXT_FORBIDDEN" }, "reset");
+  const preview = sandbox.formatOutputQueueSnapshotPreview(sandbox.getOutputQueueSnapshot());
+  for (const token of [
+    "payload",
+    "bubbleId",
+    "TASK230_RESET_TEXT_FORBIDDEN",
+    "{",
+    "}",
+    "[object Object]",
+    "undefined",
+    "null",
+    "NaN",
+  ]) {
+    assert.ok(!preview.includes(token), `TASK-230 preview must not include ${token}`);
+  }
+  assert.equal(preview,
+    "Queue: disabled · Items: 1 · Recent: 1 · Next: P4_NORMAL_REACTION/pet_bubble/reaction_bubble");
+  console.log("  testTask230PreviewNoRawPayloadOrBadTokens PASS");
+}
+
+async function testTask230DiagnosticsEnqueueDoesNotDispatch() {
+  const appendCalls = [];
+  const speechCalls = [];
+  const expressionCalls = [];
+  const bubbleCalls = [];
+  const { state, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryAppend(entry) { appendCalls.push(entry); return Promise.resolve({ ok: true }); },
+      updatePetSpeech(payload) { speechCalls.push(payload); return Promise.resolve({ ok: true }); },
+      sendPetExpressionSuggestion(payload) { expressionCalls.push(payload); return Promise.resolve({ ok: true }); },
+      sendPetReactionBubble(payload) { bubbleCalls.push(payload); return Promise.resolve({ ok: true }); },
+    },
+  });
+  await settle();
+  state.calls.length = 0;
+  appendCalls.length = 0;
+  speechCalls.length = 0;
+  expressionCalls.length = 0;
+  bubbleCalls.length = 0;
+  const item = sandbox.enqueueReactionBubbleOutputDiagnostics({ id: "user_active" });
+  task230AssertReactionBubbleQueueItem(item, "user_active");
+  await settle();
+  assert.equal(sandbox.getOutputQueueSnapshot().enabled, false, "queue must remain disabled");
+  assert.equal(state.calls.filter((call) => String(call.url).endsWith("/chat")).length, 0,
+    "diagnostics enqueue must not call /chat");
+  assert.equal(appendCalls.length, 0, "diagnostics enqueue must not write history");
+  assert.equal(speechCalls.length, 0, "diagnostics enqueue must not call speech/TTS");
+  assert.equal(expressionCalls.length, 0, "diagnostics enqueue must not mirror expression");
+  assert.equal(bubbleCalls.length, 0, "diagnostics enqueue must not mirror reaction bubble");
+  console.log("  testTask230DiagnosticsEnqueueDoesNotDispatch PASS");
+}
+
+async function testTask230RecordPathKeepsExistingMirrorPayloadSeparate() {
+  const bubbleCalls = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      sendPetReactionBubble(payload) { bubbleCalls.push({ ...payload }); return Promise.resolve({ ok: true }); },
+    },
+  });
+  bubbleCalls.length = 0;
+  sandbox.recordInteractionReactionBubble({ id: "correction", text: "TASK230_TEXT_FORBIDDEN" }, "correction");
+  assert.equal(bubbleCalls.length, 1, "existing reaction bubble mirror must still happen once");
+  assert.deepEqual(Object.keys(bubbleCalls[0]).sort(), ["id", "source", "text", "ts", "ttlMs"],
+    "reaction bubble mirror payload schema must remain unchanged");
+  assert.ok(!("payload" in bubbleCalls[0]), "mirror payload must not include queue payload");
+  task230AssertReactionBubbleQueueItem(sandbox.outputQueueItems[0], "correction");
+  console.log("  testTask230RecordPathKeepsExistingMirrorPayloadSeparate PASS");
+}
+
+function testTask230NoNewIpcChannelsAndPreservesExisting() {
+  const rendererPreload = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "preload.js"), "utf8");
+  const mainSrc = fs.readFileSync(path.join(desktopRoot, "src", "main.js"), "utf8");
+  const petPreload = fs.readFileSync(path.join(desktopRoot, "src", "pet", "pet-preload.js"), "utf8");
+  for (const src of [rendererPreload, mainSrc, petPreload]) {
+    assert.ok(!src.includes("output-queue"), "TASK-230 must not add output queue IPC");
+    assert.ok(!src.includes("output:queue"), "TASK-230 must not add broad output IPC");
+    assert.ok(!src.includes("task-230"), "TASK-230 must not add task-specific IPC");
+  }
+  assert.ok(rendererPreload.includes('PET_EXPRESSION_SUGGESTION_CHANNEL = "pet:expression-suggestion"'),
+    "TASK-218 narrow renderer invoke channel must remain");
+  assert.ok(mainSrc.includes('PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL = "pet:expression-suggestion-received"'),
+    "TASK-218 narrow main send channel must remain");
+  assert.ok(rendererPreload.includes('PET_REACTION_BUBBLE_CHANNEL = "pet:reaction-bubble"'),
+    "TASK-220 narrow renderer invoke channel must remain");
+  assert.ok(mainSrc.includes('PET_REACTION_BUBBLE_RECEIVED_CHANNEL = "pet:reaction-bubble-received"'),
+    "TASK-220 narrow main send channel must remain");
+  assert.ok(!rendererPreload.includes('PET_EXPRESSION_SUGGESTION_CHANNEL = "pet"'),
+    "TASK-218 expression channel must not be generic pet");
+  assert.ok(!rendererPreload.includes('PET_REACTION_BUBBLE_CHANNEL = "pet"'),
+    "TASK-220 reaction bubble channel must not be generic pet");
+  console.log("  testTask230NoNewIpcChannelsAndPreservesExisting PASS");
+}
+
+function testTask230RegressionGuards() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(!src.includes("hover-action"), "TASK-230 must not restore hover action buttons");
+  assert.ok(src.includes("chat-context-menu"), "TASK-230 must keep context menu");
+  assert.ok(src.includes("複製") && src.includes("刪除") && src.includes("編輯"),
+    "TASK-230 must keep context menu copy/delete/edit actions");
+  assert.ok(src.includes("function isLastEditableUserMessage") && src.includes("entry.role !== \"user\""),
+    "TASK-230 must keep edit limited to last formal user message");
+  assert.ok(src.includes("showPetWindow"), "TASK-230 must not remove Pet Window entry point");
+  console.log("  testTask230RegressionGuards PASS");
+}
+
 // ─── TASK-218: Safe Pet Expression Suggestion Mirror ─────────────────────────
 
 function testTask218RendererHasMirrorFunction() {
@@ -9828,6 +10061,19 @@ async function main() {
   await testTask229PreviewNoChatHistorySpeechTtsOrMirrors();
   testTask229NoNewIpcChannelsAndPreservesExisting();
   testTask229RegressionGuards();
+
+  // TASK-230: Enqueue Reaction Bubble Diagnostics Only
+  testTask230RendererHasDiagnosticsEnqueueHelper();
+  await testTask230UserActiveReactionBubbleEnqueuesDiagnosticsItem();
+  await testTask230AllSafeReactionBubblesEnqueue();
+  await testTask230NoneAndEmptyBubbleDoNotEnqueue();
+  await testTask230PreviewUpdatesAfterReactionBubbleEnqueue();
+  await testTask230QueueItemNoBubbleTextOrForbiddenFields();
+  await testTask230PreviewNoRawPayloadOrBadTokens();
+  await testTask230DiagnosticsEnqueueDoesNotDispatch();
+  await testTask230RecordPathKeepsExistingMirrorPayloadSeparate();
+  testTask230NoNewIpcChannelsAndPreservesExisting();
+  testTask230RegressionGuards();
 
   // TASK-218: Safe Pet Expression Suggestion Mirror
   testTask218RendererHasMirrorFunction();

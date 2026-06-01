@@ -315,10 +315,12 @@ Suggested future tasks:
   default. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
 - TASK-229 Output Queue Debug Preview / Snapshot Polish. DONE - WINDOWS VISUAL
   SMOKE PASS / DONE - PASS.
-- TASK-230 Bubble Priority Enforcement.
-- TASK-231 TTS-safe segment design.
-- TASK-232 Idle Reaction Policy, fixed only, no LLM.
-- TASK-233 User controls for companion reaction verbosity.
+- TASK-230 Enqueue Reaction Bubble Diagnostics Only. DONE - WINDOWS VISUAL
+  SMOKE PASS / DONE - PASS.
+- TASK-231 Bubble Priority Enforcement.
+- TASK-232 TTS-safe segment design.
+- TASK-233 Idle Reaction Policy, fixed only, no LLM.
+- TASK-234 User controls for companion reaction verbosity.
 
 Each task should remain narrow, testable, and explicit about side-effect
 boundaries.
@@ -501,3 +503,93 @@ Windows visual smoke PASS confirmed:
 
 The snapshot preview polish is complete but still does not control execution.
 Any future dispatch/arbitration task must explicitly opt in.
+
+---
+
+## 18. TASK-230 Reaction Bubble Diagnostics Enqueue
+
+TASK-230 connects the existing safe reaction bubble record path to the disabled
+output queue as local diagnostics only. It remains Full App renderer-only and
+does not dispatch output. Automated smoke PASS and Windows visual smoke PASS
+were confirmed; the Windows visual smoke date is 2026-06-01.
+
+Implemented helper:
+
+- `enqueueReactionBubbleOutputDiagnostics(bubble)`
+
+Behavior:
+
+- Sanitizes `bubble.id` through `INTERACTION_REACTION_BUBBLE_ALLOWLIST`.
+- Enqueues only safe non-`none` reaction bubble ids.
+- Ignores `none`, empty, or invalid bubble ids.
+- Calls `enqueueOutputQueueItem(...)`.
+- Works while `OUTPUT_QUEUE_ENABLED = false`.
+- Does not send anything to the Pet Window.
+- Does not replace or drive `mirrorInteractionReactionBubble(...)`.
+- Does not throw if the Pet bridge is absent.
+
+TASK-230 reaction bubble diagnostics item:
+
+```js
+{
+  source: "reaction_bubble",
+  priority: "P4_NORMAL_REACTION",
+  channel: "pet_bubble",
+  payload: {
+    bubbleId: "<safe bubble id>"
+  },
+  ttlMs: 3000,
+  interruptible: true,
+  ttsEligible: false,
+  historyEligible: false,
+  copyExportEligible: false,
+  reason: "interaction_reaction_bubble"
+}
+```
+
+The payload only contains `bubbleId`. It does not contain reaction bubble text,
+user message text, raw event payload, hint, message/body/content/reply fields,
+transcript/audio fields, HTML, metadata, debug data, or thinking text.
+
+Preview after a safe `user_active` reaction bubble can show:
+
+```text
+Queue: disabled · Items: 1 · Recent: 1 · Next: P4_NORMAL_REACTION/pet_bubble/reaction_bubble
+```
+
+The preview still does not expose raw payload, raw JSON, user text, fixed
+reaction bubble text, `undefined`, `null`, `NaN`, or `[object Object]`.
+
+TASK-230 preserves the TASK-218 and TASK-220 narrow IPC channels:
+
+- `pet:expression-suggestion`
+- `pet:expression-suggestion-received`
+- `pet:reaction-bubble`
+- `pet:reaction-bubble-received`
+
+No generic `"pet"` channel is used for those mirrors.
+
+TASK-230 does not add IPC, dispatch, Pet Window runtime behavior, Pet Bubble
+visible behavior, expression mirror changes, reaction bubble mirror payload
+changes, `/chat`, history writes, TTS/STT/audio, prompt runtime, persistence,
+assets, hover action buttons, or message edit scope changes.
+
+Windows visual smoke PASS confirmed on 2026-06-01:
+
+- Basic startup PASS: Preview shows `Queue: disabled · Items/Recent/Next`; Pet
+  Window remains normal.
+- Send message PASS: reaction bubble remains normal, Queue enqueues the
+  diagnostics item, and `Next` shows
+  `P4_NORMAL_REACTION/pet_bubble/reaction_bubble`.
+- Delete / Undo PASS: feature remains normal; Queue stays disabled.
+- Edit last user PASS: feature remains normal; Queue stays disabled.
+- Clear Chat PASS: feature remains normal; Queue stays disabled.
+- Focus PASS: feature remains normal; Queue stays disabled.
+- Queue diagnostics format PASS: no `undefined`, `null`, `NaN`,
+  `[object Object]`, raw JSON, user text, bubble text, or payload.
+- General regression PASS: no new IPC side effect, no extra TTS, no extra
+  `/chat`, no history/copy/export pollution, and Pet Window expression plus
+  reaction bubble behavior remains normal.
+
+The output queue can now record reaction bubble output intent for diagnostics,
+but it still does not control execution.
