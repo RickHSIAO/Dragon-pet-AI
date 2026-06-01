@@ -616,6 +616,48 @@ const INTERACTION_EVENT_ALLOWLIST = new Set([
 const INTERACTION_EVENT_MAX = 20;
 var recentInteractionEvents = []; // var: exposed to vm sandbox for smoke tests
 
+// TASK-215: Reaction hint layer — derives a semantic hint from each sanitized interaction event.
+// Pure local renderer memory; no UI side-effects, no Pet Window, no /chat, no TTS, no history write.
+const INTERACTION_REACTION_HINT_ALLOWLIST = new Set([
+  "user_active",
+  "message_management",
+  "correction",
+  "reset",
+  "attention_returned",
+  "pet_attention",
+  "none",
+]);
+const INTERACTION_REACTION_HINT_MAX = 20;
+var recentInteractionReactionHints = []; // var: exposed to vm sandbox for smoke tests
+var currentInteractionReactionHint = "none"; // var: exposed to vm sandbox for smoke tests
+
+function deriveInteractionReactionHint(event) {
+  switch (event.type) {
+    case "chat_message_sent":    return "user_active";
+    case "message_deleted":      return "message_management";
+    case "message_edited":       return "correction";
+    case "chat_history_cleared": return "reset";
+    case "full_app_focused":     return "attention_returned";
+    case "pet_window_opened":    return "pet_attention";
+    default:                     return "none";
+  }
+}
+
+function recordInteractionReactionHint(hint, event = {}) {
+  const safeHint = INTERACTION_REACTION_HINT_ALLOWLIST.has(hint) ? hint : "none";
+  const HINT_SAFE_KEYS = new Set(["source", "role", "messageLength"]);
+  const safe = {};
+  for (const [k, v] of Object.entries(event)) {
+    if (HINT_SAFE_KEYS.has(k)) safe[k] = v;
+  }
+  const entry = { hint: safeHint, ts: Date.now(), eventType: event.type || "unknown", ...safe };
+  recentInteractionReactionHints.push(entry);
+  if (recentInteractionReactionHints.length > INTERACTION_REACTION_HINT_MAX) {
+    recentInteractionReactionHints.shift();
+  }
+  currentInteractionReactionHint = safeHint;
+}
+
 function recordInteractionEvent(type, payload = {}) {
   if (!INTERACTION_EVENT_ALLOWLIST.has(type)) return;
   const SAFE_KEYS = new Set(["source", "role", "messageLength", "count"]);
@@ -623,10 +665,13 @@ function recordInteractionEvent(type, payload = {}) {
   for (const [k, v] of Object.entries(payload)) {
     if (SAFE_KEYS.has(k)) safe[k] = v;
   }
-  recentInteractionEvents.push({ type, ts: Date.now(), ...safe });
+  const event = { type, ts: Date.now(), ...safe };
+  recentInteractionEvents.push(event);
   if (recentInteractionEvents.length > INTERACTION_EVENT_MAX) {
     recentInteractionEvents.shift();
   }
+  const hint = deriveInteractionReactionHint(event);
+  recordInteractionReactionHint(hint, event);
 }
 
 // TASK-113: smarter auto-scroll helpers — user sends always scroll,

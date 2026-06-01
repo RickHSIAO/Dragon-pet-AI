@@ -6633,6 +6633,204 @@ async function testTask214EventsDoNotTriggerPetOrTts() {
   console.log("  testTask214EventsDoNotTriggerPetOrTts PASS");
 }
 
+// ─── TASK-215: Interactive Pet Reaction Hint Layer ───────────────────────────
+
+function testTask215StaticSourceCheck() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("function deriveInteractionReactionHint"),
+    "renderer.js must define deriveInteractionReactionHint");
+  assert.ok(src.includes("function recordInteractionReactionHint"),
+    "renderer.js must define recordInteractionReactionHint");
+  assert.ok(src.includes("INTERACTION_REACTION_HINT_ALLOWLIST"),
+    "renderer.js must define INTERACTION_REACTION_HINT_ALLOWLIST");
+  assert.ok(src.includes("INTERACTION_REACTION_HINT_MAX = 20"),
+    "renderer.js must define INTERACTION_REACTION_HINT_MAX with cap 20");
+  assert.ok(src.includes("recentInteractionReactionHints"),
+    "renderer.js must define recentInteractionReactionHints");
+  assert.ok(src.includes("currentInteractionReactionHint"),
+    "renderer.js must define currentInteractionReactionHint");
+  console.log("  testTask215StaticSourceCheck PASS");
+}
+
+async function testTask215AllowlistContainsExpectedHints() {
+  const { sandbox } = await loadRenderer();
+  const expectedHints = [
+    "user_active", "message_management", "correction", "reset",
+    "attention_returned", "pet_attention", "none",
+  ];
+  for (const hint of expectedHints) {
+    const before = sandbox.recentInteractionReactionHints.length;
+    sandbox.recordInteractionReactionHint(hint, { type: "test" });
+    assert.equal(sandbox.recentInteractionReactionHints.length, before + 1,
+      `hint "${hint}" must be accepted by recordInteractionReactionHint`);
+    assert.equal(sandbox.recentInteractionReactionHints.at(-1).hint, hint,
+      `stored hint must equal "${hint}"`);
+  }
+  console.log("  testTask215AllowlistContainsExpectedHints PASS");
+}
+
+async function testTask215DeriveHintMapping() {
+  const { sandbox } = await loadRenderer();
+  const mappings = [
+    ["chat_message_sent",    "user_active"],
+    ["message_deleted",      "message_management"],
+    ["message_edited",       "correction"],
+    ["chat_history_cleared", "reset"],
+    ["full_app_focused",     "attention_returned"],
+    ["pet_window_opened",    "pet_attention"],
+    ["unknown_event",        "none"],
+    ["regenerate",           "none"],
+  ];
+  for (const [eventType, expectedHint] of mappings) {
+    const result = sandbox.deriveInteractionReactionHint({ type: eventType });
+    assert.equal(result, expectedHint,
+      `event "${eventType}" must derive hint "${expectedHint}", got "${result}"`);
+  }
+  console.log("  testTask215DeriveHintMapping PASS");
+}
+
+async function testTask215RecordEventProducesHint() {
+  const { sandbox } = await loadRenderer();
+  const hintsBefore = sandbox.recentInteractionReactionHints.length;
+  const eventsBefore = sandbox.recentInteractionEvents.length;
+  sandbox.recordInteractionEvent("chat_message_sent", { source: "full_app", messageLength: 10 });
+  assert.equal(sandbox.recentInteractionEvents.length, eventsBefore + 1,
+    "event must be recorded in recentInteractionEvents");
+  assert.equal(sandbox.recentInteractionReactionHints.length, hintsBefore + 1,
+    "reaction hint must be recorded alongside the event");
+  assert.equal(sandbox.recentInteractionReactionHints.at(-1).hint, "user_active",
+    "chat_message_sent must produce user_active hint");
+  assert.equal(sandbox.currentInteractionReactionHint, "user_active",
+    "currentInteractionReactionHint must be updated to user_active");
+  console.log("  testTask215RecordEventProducesHint PASS");
+}
+
+async function testTask215HintNoRawText() {
+  const { sandbox } = await loadRenderer();
+  sandbox.recordInteractionReactionHint("user_active", {
+    type: "chat_message_sent",
+    message: "DO NOT STORE",
+    text: "ALSO NO",
+    body: "NOPE",
+    rawText: "NOPE2",
+    content: "NOPE3",
+    source: "full_app",
+    role: "user",
+    messageLength: 42,
+  });
+  const entry = sandbox.recentInteractionReactionHints.at(-1);
+  assert.ok(!Object.prototype.hasOwnProperty.call(entry, "message"),   "hint must not store message");
+  assert.ok(!Object.prototype.hasOwnProperty.call(entry, "text"),      "hint must not store text");
+  assert.ok(!Object.prototype.hasOwnProperty.call(entry, "body"),      "hint must not store body");
+  assert.ok(!Object.prototype.hasOwnProperty.call(entry, "rawText"),   "hint must not store rawText");
+  assert.ok(!Object.prototype.hasOwnProperty.call(entry, "content"),   "hint must not store content");
+  assert.equal(entry.messageLength, 42,        "messageLength must be preserved in hint entry");
+  assert.equal(entry.source, "full_app",       "source must be preserved in hint entry");
+  assert.equal(entry.role, "user",             "role must be preserved in hint entry");
+  console.log("  testTask215HintNoRawText PASS");
+}
+
+async function testTask215HintRingBufferCap() {
+  const { sandbox } = await loadRenderer();
+  for (let i = 0; i < 25; i++) {
+    sandbox.recordInteractionEvent("chat_message_sent", { messageLength: i });
+  }
+  assert.ok(sandbox.recentInteractionReactionHints.length <= 20,
+    "recentInteractionReactionHints must not exceed 20 entries");
+  console.log("  testTask215HintRingBufferCap PASS");
+}
+
+async function testTask215CurrentHintUpdates() {
+  const { sandbox } = await loadRenderer();
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 5 });
+  assert.equal(sandbox.currentInteractionReactionHint, "user_active");
+  sandbox.recordInteractionEvent("message_edited", { messageLength: 10, source: "full_app", role: "user" });
+  assert.equal(sandbox.currentInteractionReactionHint, "correction");
+  sandbox.recordInteractionEvent("chat_history_cleared", { count: 3 });
+  assert.equal(sandbox.currentInteractionReactionHint, "reset");
+  sandbox.recordInteractionEvent("full_app_focused");
+  assert.equal(sandbox.currentInteractionReactionHint, "attention_returned");
+  console.log("  testTask215CurrentHintUpdates PASS");
+}
+
+async function testTask215ReactionHintUnknownBecomesNone() {
+  const { sandbox } = await loadRenderer();
+  sandbox.recordInteractionReactionHint("completely_unknown_hint", { type: "test" });
+  const entry = sandbox.recentInteractionReactionHints.at(-1);
+  assert.equal(entry.hint, "none",
+    "unknown hint must be stored as 'none'");
+  assert.equal(sandbox.currentInteractionReactionHint, "none",
+    "currentInteractionReactionHint must be 'none' for unknown hint");
+  console.log("  testTask215ReactionHintUnknownBecomesNone PASS");
+}
+
+async function testTask215ReactionHintNoChat() {
+  const { state, sandbox } = await loadRenderer();
+  state.calls.length = 0;
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 5 });
+  sandbox.recordInteractionEvent("message_edited", { messageLength: 10 });
+  sandbox.recordInteractionEvent("chat_history_cleared", { count: 0 });
+  sandbox.recordInteractionEvent("full_app_focused");
+  await settle();
+  const chatCalls = state.calls.filter((c) => c.url.endsWith("/chat"));
+  assert.equal(chatCalls.length, 0, "reaction hint recording must not call /chat");
+  console.log("  testTask215ReactionHintNoChat PASS");
+}
+
+async function testTask215ReactionHintNoHistory() {
+  let appended = 0;
+  let cleared = 0;
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryAppend: () => { appended++; return Promise.resolve({}); },
+      chatHistoryClear: () => { cleared++; return Promise.resolve({}); },
+    },
+  });
+  await settle();
+  const beforeAppended = appended;
+  const beforeCleared = cleared;
+  sandbox.recordInteractionEvent("message_deleted", { role: "user", source: "full_app" });
+  sandbox.recordInteractionEvent("full_app_focused");
+  sandbox.recordInteractionEvent("message_edited", { messageLength: 5, role: "user", source: "full_app" });
+  await settle();
+  assert.equal(appended, beforeAppended, "reaction hint must not call chatHistoryAppend");
+  assert.equal(cleared, beforeCleared,  "reaction hint must not call chatHistoryClear");
+  console.log("  testTask215ReactionHintNoHistory PASS");
+}
+
+async function testTask215ReactionHintNoPetOrTts() {
+  const speechUpdates = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      updatePetSpeech(payload) { speechUpdates.push(payload); return Promise.resolve({ ok: true }); },
+      showPetWindow() { return Promise.resolve({ ok: true }); },
+    },
+  });
+  speechUpdates.length = 0;
+  sandbox.recordInteractionEvent("chat_message_sent", { messageLength: 5 });
+  sandbox.recordInteractionEvent("chat_history_cleared", { count: 0 });
+  sandbox.recordInteractionEvent("full_app_focused");
+  await settle();
+  assert.equal(speechUpdates.length, 0, "reaction hint must not call updatePetSpeech");
+  console.log("  testTask215ReactionHintNoPetOrTts PASS");
+}
+
+function testTask215HoverActionsStillAbsent() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(!src.includes("hover-action"), "TASK-215 must not re-introduce hover-action class");
+  console.log("  testTask215HoverActionsStillAbsent PASS");
+}
+
+function testTask215ContextMenuStillExists() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("chat-context-menu"), "chat-context-menu must still exist after TASK-215");
+  assert.ok(src.includes("複製") && src.includes("刪除"), "copy and delete actions must still exist in context menu");
+  assert.ok(src.includes("closeChatContextMenu"), "closeChatContextMenu must still exist after TASK-215");
+  console.log("  testTask215ContextMenuStillExists PASS");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -7019,6 +7217,20 @@ async function main() {
   await testTask214EventsDoNotCallChat();
   await testTask214EventsDoNotWriteHistory();
   await testTask214EventsDoNotTriggerPetOrTts();
+  // TASK-215: Interactive Pet Reaction Hint Layer
+  testTask215StaticSourceCheck();
+  await testTask215AllowlistContainsExpectedHints();
+  await testTask215DeriveHintMapping();
+  await testTask215RecordEventProducesHint();
+  await testTask215HintNoRawText();
+  await testTask215HintRingBufferCap();
+  await testTask215CurrentHintUpdates();
+  await testTask215ReactionHintUnknownBecomesNone();
+  await testTask215ReactionHintNoChat();
+  await testTask215ReactionHintNoHistory();
+  await testTask215ReactionHintNoPetOrTts();
+  testTask215HoverActionsStillAbsent();
+  testTask215ContextMenuStillExists();
   console.log("renderer chat smoke: PASS");
 }
 

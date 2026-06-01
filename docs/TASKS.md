@@ -21238,3 +21238,119 @@ Establish a lightweight, privacy-safe interaction event log that records sanitiz
 | Clear Chat regression：二次點擊確認、Undo Clear 復原、empty state 正常 | PASS |
 | Focus regression：window focus 觸發事件記錄，不影響 chat UI 或 pet bubble | PASS |
 | 一般回歸：search/highlight/navigation、copy/export、date separator、timestamp tooltip、Pet Window、Voice、STT、TTS 皆正常 | PASS |
+
+## TASK-215 | Interactive Pet Reaction Hint Layer
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-06-01
+
+### Goal
+
+Consume the TASK-214 interaction event log for the first time by deriving a semantic **reaction hint** from each sanitized event — a lightweight internal classification layer that sits between raw events and future pet reaction logic. No new UI. No pet reactions yet. Foundation only.
+
+### Scope
+
+- `renderer.js`: `INTERACTION_REACTION_HINT_ALLOWLIST`, `INTERACTION_REACTION_HINT_MAX`, `recentInteractionReactionHints`, `currentInteractionReactionHint`, `deriveInteractionReactionHint()`, `recordInteractionReactionHint()`, updated `recordInteractionEvent()`.
+- `renderer-chat-smoke.js`: +13 TASK-215 tests.
+- `docs/ROADMAP.md`, `docs/TASKS.md`, `README.md`: status sync.
+- Strict safety boundary: no `/chat`, no Pet Bubble, no TTS, no history write, no IPC, no backend, no UI side-effects.
+
+### Design Summary
+
+| Area | Detail |
+|---|---|
+| Allowlist | `INTERACTION_REACTION_HINT_ALLOWLIST` — Set of 7 valid hints: `user_active`, `message_management`, `correction`, `reset`, `attention_returned`, `pet_attention`, `none`. |
+| event → hint mapping | `chat_message_sent` → `user_active`; `message_deleted` → `message_management`; `message_edited` → `correction`; `chat_history_cleared` → `reset`; `full_app_focused` → `attention_returned`; `pet_window_opened` → `pet_attention`; all others → `none`. |
+| Unknown hint fallback | `recordInteractionReactionHint` converts any hint not in the allowlist to `"none"` before storing. |
+| Payload sanitization | Hint entries keep only `source`, `role`, `messageLength` from the event — same safety boundary as TASK-214. No raw text, no message body. |
+| Ring buffer | `var recentInteractionReactionHints = []` — max 20 entries. Oldest entry shifted off when full. |
+| Current hint | `var currentInteractionReactionHint = "none"` — always reflects the latest hint; updated in `recordInteractionReactionHint`. |
+| Integration with TASK-214 | `recordInteractionEvent` now builds the event object first, pushes it, then derives and records the reaction hint from the same sanitized event object — no data divergence. |
+| `pet_window_opened` mapping | Supported in `deriveInteractionReactionHint` for completeness. No new IPC or hook added (no TASK-214 hook existed for it). |
+| No UI side-effects | `recentInteractionReactionHints` and `currentInteractionReactionHint` are internal state only — no DOM writes, no pet speech, no TTS. |
+| Smoke test access | All new state uses `var` so `vm.runInNewContext` sandbox exposes them for test verification. |
+
+### Files Changed
+
+| File | Change |
+|---|---|
+| `apps/desktop/src/renderer/renderer.js` | Added `INTERACTION_REACTION_HINT_ALLOWLIST`, `INTERACTION_REACTION_HINT_MAX`, `var recentInteractionReactionHints`, `var currentInteractionReactionHint`, `deriveInteractionReactionHint()`, `recordInteractionReactionHint()`; updated `recordInteractionEvent()` to build event object first and then call reaction hint layer |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | Added 13 TASK-215 tests and TASK-215 calls in `main()` |
+| `docs/ROADMAP.md` | Added TASK-215 status |
+| `docs/TASKS.md` | Added this TASK-215 record |
+| `README.md` | Updated latest state and status table |
+
+### event → hint mapping table
+
+| event.type | Derived hint |
+|---|---|
+| `chat_message_sent` | `user_active` |
+| `message_deleted` | `message_management` |
+| `message_edited` | `correction` |
+| `chat_history_cleared` | `reset` |
+| `full_app_focused` | `attention_returned` |
+| `pet_window_opened` | `pet_attention` |
+| *(any other / unknown)* | `none` |
+
+### Test Coverage
+
+| Test | What it verifies |
+|---|---|
+| `testTask215StaticSourceCheck` | Static: all 6 new definitions present in renderer.js |
+| `testTask215AllowlistContainsExpectedHints` | All 7 allowlist hints are accepted by `recordInteractionReactionHint` |
+| `testTask215DeriveHintMapping` | All 6 known event types + 2 unknown map to correct hints |
+| `testTask215RecordEventProducesHint` | `recordInteractionEvent` populates both event log and reaction hint log in sync |
+| `testTask215HintNoRawText` | `message`, `text`, `body`, `rawText`, `content` fields stripped from hint entries |
+| `testTask215HintRingBufferCap` | 25 events → `recentInteractionReactionHints.length` ≤ 20 |
+| `testTask215CurrentHintUpdates` | `currentInteractionReactionHint` updates correctly across 4 different event types |
+| `testTask215ReactionHintUnknownBecomesNone` | Unknown hint input stored as `"none"` |
+| `testTask215ReactionHintNoChat` | No `/chat` fetch triggered by reaction hint recording |
+| `testTask215ReactionHintNoHistory` | No `chatHistoryAppend` or `chatHistoryClear` called by reaction hint recording |
+| `testTask215ReactionHintNoPetOrTts` | No `updatePetSpeech` call triggered by reaction hint recording |
+| `testTask215HoverActionsStillAbsent` | Static: `hover-action` class not re-introduced in renderer.js |
+| `testTask215ContextMenuStillExists` | Static: `chat-context-menu`, `複製`, `刪除`, `closeChatContextMenu` still present |
+
+### Automated Suite Results
+
+| Suite | Result |
+|---|---|
+| `renderer-chat-smoke.js` | PASS (+13 TASK-215 tests) |
+| `pet-window-smoke.js` | PASS — 60 checks |
+| `pet-renderer-smoke.js` | PASS — 237 checks |
+| `git diff --check` | CLEAN (CRLF warnings only) |
+
+### Acceptance Criteria
+
+- [x] `deriveInteractionReactionHint(event)` defined — maps 6 known types + default `none` ✓
+- [x] `recordInteractionReactionHint(hint, event)` defined — allowlist guard, payload sanitization, ring buffer, current hint update ✓
+- [x] `INTERACTION_REACTION_HINT_ALLOWLIST` with 7 hints ✓
+- [x] Unknown hints stored as `"none"` ✓
+- [x] Hint entries keep only `source`, `role`, `messageLength` — no raw text ✓
+- [x] `recentInteractionReactionHints` ring buffer, max 20 entries ✓
+- [x] `currentInteractionReactionHint` always reflects latest hint ✓
+- [x] `recordInteractionEvent` calls reaction hint layer from same sanitized event object ✓
+- [x] No `/chat` call, no Pet Bubble, no TTS, no history write, no IPC, no backend ✓
+- [x] No UI side-effects ✓
+- [x] No new `pet_window_opened` IPC hook (mapping exists in derive; hook deliberately absent) ✓
+- [x] `hover-action` class not re-introduced ✓
+- [x] Context menu `複製`/`刪除`/`closeChatContextMenu` still present ✓
+- [x] `renderer-chat-smoke.js` PASS ✓
+- [x] `pet-window-smoke.js` PASS ✓
+- [x] `pet-renderer-smoke.js` PASS ✓
+- [x] `git diff --check` CLEAN ✓
+- [x] Windows visual smoke PASS ✓
+
+### Windows Visual Smoke Results (2026-06-01)
+
+| Scenario | Result |
+|---|---|
+| 基本啟動：App 啟動正常，chat area 空白，empty state 顯示正常 | PASS |
+| 送出訊息：user 訊息送出，pet reply 正常顯示，reaction hint 記錄不干擾正常聊天流程 | PASS |
+| 右鍵 context menu regression：複製、刪除、編輯（最後 user message only）皆正常 | PASS |
+| Delete / Undo regression：單則刪除、10 秒復原、history persistence 正常 | PASS |
+| Edit last user message regression：最後 user message 編輯送出、pet reply 更新、history rewrite 正常 | PASS |
+| Clear Chat regression：二次點擊確認、Undo Clear 復原、empty state 正常 | PASS |
+| Focus regression：window focus 觸發 attention_returned hint 記錄，不影響 chat UI 或 pet bubble | PASS |
+| 一般回歸：search/highlight/navigation、copy/export、date separator、timestamp tooltip、Pet Window、Voice、STT、TTS 皆正常 | PASS |
+
+> **備註：** DevTools Console 快捷鍵無反應，未檢查 Console 輸出；所有可見功能無異常，smoke 判定 PASS。
