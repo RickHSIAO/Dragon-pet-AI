@@ -22251,3 +22251,202 @@ The preview remains local-only and is not written to chat history, copy, or expo
 | Clear Chat：Preview `reset/neutral/mirror_expression_and_bubble` | PASS |
 | Focus：Preview `attention_returned/happy/mirror_expression_and_bubble` | PASS |
 | 一般回歸：沒有新增 IPC side-effect，沒有額外 TTS，沒有額外 `/chat`，沒有 history/copy/export 污染，Pet Window 表情與 reaction bubble 行為維持正常 | PASS |
+
+---
+
+## TASK-222 | Interactive Companion Architecture Checkpoint
+
+**Status:** IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED
+**Date:** 2026-06-01
+**Phase:** Phase 5 — Companion Behavior Loop (Architecture Checkpoint)
+**Depends on:** TASK-214 through TASK-221
+
+### Goal
+
+Create a documentation-only architecture checkpoint for the completed
+TASK-214 through TASK-221 interactive companion chain. This checkpoint records
+the architecture, data flow, safety boundaries, IPC inventory, smoke coverage,
+known boundaries, and recommended next phase before moving into deeper
+companion behavior work.
+
+### Scope
+
+Files updated:
+
+- `docs/INTERACTIVE_COMPANION_ARCHITECTURE.md`
+- `docs/TASKS.md`
+- `docs/ROADMAP.md`
+- `README.md`
+
+Runtime scope:
+
+- No code change.
+- No backend change.
+- No `/chat` API schema change.
+- No chat history persistence format change.
+- No IPC change.
+- No generic IPC.
+- No Pet Window runtime change.
+- No Full App renderer runtime change.
+- No smoke test change.
+- No `/chat` call.
+- No Ollama / Provider runtime change.
+- No assets change.
+- No commit.
+- No push.
+
+### Architecture Checkpoint Document
+
+Added:
+
+- `docs/INTERACTIVE_COMPANION_ARCHITECTURE.md`
+
+The document covers:
+
+1. Architecture checkpoint summary.
+2. Completed task chain from TASK-214 to TASK-221.
+3. Current data flow with Mermaid diagram.
+4. Layer responsibility table.
+5. IPC channel inventory.
+6. Safety boundary / permanent forbidden list.
+7. Current behavior examples.
+8. Smoke coverage summary.
+9. Known boundaries / not yet implemented.
+10. Recommended next phase.
+
+### Completed Task Chain Recorded
+
+| Task | Layer |
+|---|---|
+| TASK-214 | Interaction event |
+| TASK-215 | Reaction hint |
+| TASK-216 | Reaction preview |
+| TASK-217 | Expression suggestion |
+| TASK-218 | Pet Window expression mirror |
+| TASK-219 | Expression mirror cooldown / debounce |
+| TASK-220 | Safe reaction bubble mirror |
+| TASK-221 | Companion behavior policy layer |
+
+### Current Data Flow Recorded
+
+```text
+User interaction
+-> recordInteractionEvent
+-> deriveInteractionReactionHint
+-> deriveInteractionExpressionSuggestion
+-> deriveInteractionReactionBubble
+-> deriveCompanionBehaviorDecision
+-> mirrorExpression / mirrorReactionBubble
+-> Pet Window expression / fixed bubble
+```
+
+### IPC Inventory Recorded
+
+Current narrow IPC channels:
+
+- `pet:expression-suggestion`
+- `pet:expression-suggestion-received`
+- `pet:reaction-bubble`
+- `pet:reaction-bubble-received`
+
+Documented IPC boundaries:
+
+- Generic `"pet"` is not used for expression suggestion or reaction bubble.
+- Raw message text is not sent through these channels.
+- Expression payload contains only `expression/source/ts`.
+- Reaction bubble payload contains only `id/text/source/ts/ttlMs`.
+- Reaction bubble text is derived from fixed allowlist mapping.
+- Behavior decision objects are not sent through IPC.
+
+### Safety Boundary Recorded
+
+The checkpoint records the permanent forbidden list:
+
+- No autonomous long speech.
+- No TTS side effects from interaction signals.
+- No `/chat` calls from interaction signals.
+- No chat history writes from interaction signals.
+- No raw user message text sent to Pet Window.
+- No background monitoring.
+- No screenshot capture.
+- No OCR.
+- No always listening behavior.
+- No LLM-generated reaction bubbles.
+- No reaction bubble text entering copy/export/history.
+- No generic IPC for companion interaction signals.
+- No backend/provider/Ollama runtime changes for these local interaction layers.
+
+### Current Behavior Examples Recorded
+
+| Event | Hint | Expression | Reaction bubble |
+|---|---|---|---|
+| `chat_message_sent` | `user_active` | `focused` | `哼，總算肯理吾了。` |
+| `message_deleted` | `message_management` | `neutral` | `整理好了？手腳還算俐落。` |
+| `message_edited` | `correction` | `annoyed` | `又改？下次可要想清楚。` |
+| `chat_history_cleared` | `reset` | `neutral` | `清空了。重新開始也無妨。` |
+| `full_app_focused` | `attention_returned` | `happy` | `回來了？吾才沒有等汝。` |
+
+### Smoke Coverage Summary Recorded
+
+The checkpoint records existing coverage:
+
+- `renderer-chat-smoke.js`
+- `pet-window-smoke.js`
+- `pet-renderer-smoke.js`
+- Windows visual smoke for TASK-214 through TASK-221
+- history/copy/export boundary
+- no TTS side-effect
+- no `/chat` side-effect
+- no generic IPC
+- Pet expression mirror
+- reaction bubble TTL restore
+
+TASK-222 itself is docs-only, so no Windows visual smoke is required.
+
+### Known Boundaries / Not Yet Implemented
+
+The checkpoint explicitly records these as not yet implemented:
+
+- Mood state.
+- Relationship state.
+- Idle reaction policy.
+- LLM-based proactive reaction.
+- Screen context behavior in the companion policy.
+- OCR behavior in the companion policy.
+- Always listening.
+- User-configurable behavior policy.
+- Behavior decision controlling execution.
+
+Important: TASK-221 behavior decisions remain summary/preview only and do not
+execute actions directly.
+
+### Recommended Next Phase
+
+Recommended next architecture phase:
+
+- Character State Layer.
+- Mood / attention / energy state.
+- Idle reaction policy.
+- Behavior policy starts controlling execution.
+- Safe reaction frequency governor.
+
+The checkpoint also records that the next phase should not jump directly into
+LLM proactive speech, screen monitoring, OCR, always listening, or broad IPC.
+
+### Acceptance Criteria
+
+- [x] `docs/INTERACTIVE_COMPANION_ARCHITECTURE.md` added.
+- [x] Architecture checkpoint summary recorded.
+- [x] TASK-214 through TASK-221 completed chain recorded.
+- [x] Current data flow recorded with Mermaid diagram.
+- [x] Layer responsibility table recorded.
+- [x] IPC inventory recorded.
+- [x] Safety boundary / permanent forbidden list recorded.
+- [x] Current behavior examples recorded.
+- [x] Smoke coverage summary recorded.
+- [x] Known boundaries / not yet implemented recorded.
+- [x] Recommended next phase recorded.
+- [x] README updated with TASK-222 docs-only status.
+- [x] ROADMAP updated with TASK-222 latest entry.
+- [x] No runtime/source code files modified for TASK-222.
+- [x] No Windows visual smoke required for TASK-222.
