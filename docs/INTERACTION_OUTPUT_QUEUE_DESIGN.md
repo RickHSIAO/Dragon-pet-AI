@@ -747,3 +747,26 @@ Windows visual smoke PASS confirmed on 2026-06-01:
 The output queue can now record expression mirror intent (TASK-231), reaction bubble
 intent (TASK-230), and chat reply intent (TASK-232) as local diagnostics, but it
 still does not control execution.
+
+---
+
+## 21. TASK-233 Output Queue Runtime Checkpoint
+
+TASK-233 is a docs-only checkpoint for the TASK-226 through TASK-232 output queue
+work. It adds `docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md`, which consolidates the
+current state of the disabled diagnostics ledger into a single reference.
+
+As of TASK-232, the queue is a **disabled diagnostics ledger**:
+
+- Three sources enqueue items: `expression_mirror`, `reaction_bubble`, `chat_reply`.
+- All existing execution paths (TASK-218/219, TASK-220, original chat flow) remain
+  unchanged — the queue is a passive parallel observer.
+- `OUTPUT_QUEUE_ENABLED = false`. No dispatch, no IPC, no TTS, no Pet Window send,
+  no extra `/chat`, no history write, no raw text storage.
+
+The checkpoint doc defines a dispatch readiness checklist (12 items) that must be
+satisfied before `OUTPUT_QUEUE_ENABLED` can be set to `true`, and recommends
+TASK-234 through TASK-239 as the next incremental steps.
+
+See [`docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md`](OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md)
+for the full checkpoint.

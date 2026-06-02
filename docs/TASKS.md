@@ -23056,8 +23056,13 @@ TASK-226 is docs-only:
   SMOKE PASS / DONE - PASS.
 - TASK-231 Enqueue Expression Mirror Diagnostics Only. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
 - TASK-232 Enqueue Chat Reply Diagnostics Only. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
-- TASK-233 Idle Reaction Policy, fixed only, no LLM.
-- TASK-234 User controls for companion reaction verbosity.
+- TASK-233 Output Queue Runtime Checkpoint. IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED.
+- TASK-234 Output Queue Priority Winner Preview, diagnostics only.
+- TASK-235 Active Output Item Model, disabled.
+- TASK-236 Bubble Priority Enforcement, guarded and disabled by default.
+- TASK-237 TTS-safe Segment Design, docs-only or helper-only.
+- TASK-238 User Controls for Companion Verbosity.
+- TASK-239 Idle Reaction Policy, fixed only, no LLM.
 
 ### Acceptance Criteria
 
@@ -24156,3 +24161,55 @@ TASK-232 is Full App renderer-only:
 - General regression PASS: no new IPC side effect, no extra TTS, no extra
   `/chat`, no history/copy/export pollution, and Pet Window expression plus
   reaction bubble behavior remains normal.
+
+## TASK-233 | Output Queue Runtime Checkpoint
+
+**Status:** IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED
+
+### Summary
+
+TASK-233 is a docs-only architecture checkpoint that consolidates the output
+queue work from TASK-226 through TASK-232 into a single reference document:
+`docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md`.
+
+The checkpoint records:
+
+- The completed output queue task chain (TASK-226 through TASK-232).
+- Current runtime state: `OUTPUT_QUEUE_ENABLED = false`, disabled skeleton,
+  diagnostics-only enqueue for expression_mirror, reaction_bubble, and chat_reply.
+- All three current diagnostics item schemas (source / priority / channel / payload /
+  reason / eligibility flags).
+- Current queue preview behavior and the note that `Next` is queue-order first,
+  not priority winner.
+- Safety boundary: 18 explicit "queue does not" properties.
+- Sanitization summary: `OUTPUT_SAFE_PAYLOAD_KEYS`, `OUTPUT_FORBIDDEN_KEYS`,
+  per-key validation, eligibility flag defaults.
+- Relationship to existing runtime: queue runs parallel to TASK-218/219/220 and
+  original chat flow — passive observer only.
+- What is not yet implemented: dispatch, priority winner, preemption, active item,
+  TTL, controls, IPC, persistence, TTS, idle reaction, notifications.
+- Dispatch readiness checklist: 12 items that must be confirmed before
+  `OUTPUT_QUEUE_ENABLED` can be set to `true`.
+- Recommended next tasks: TASK-234 through TASK-239.
+- Relationship to existing docs.
+
+No runtime change. No code change. No IPC. No commit. No push.
+
+### New File
+
+`docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md`
+
+### Acceptance Criteria
+
+- [x] `docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md` created.
+- [x] Checkpoint covers all 12 required sections.
+- [x] All three diagnostics item sources documented with full schema.
+- [x] Safety boundary table complete (18 properties).
+- [x] Dispatch readiness checklist present (12 items).
+- [x] Recommended next tasks TASK-234 through TASK-239 listed.
+- [x] Relationship to existing docs section present.
+- [x] `docs/TASKS.md`, `docs/ROADMAP.md`, `README.md`,
+      `docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md`,
+      `docs/INTERACTIVE_COMPANION_ARCHITECTURE.md` updated.
+- [x] No code changes.
+- [x] No commit or push.

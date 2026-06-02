@@ -490,7 +490,37 @@ actions directly.
 
 ---
 
-## 13. Recommended Next Phase
+## 13. Output Queue as Diagnostics Ledger (TASK-226–232)
+
+As of TASK-232, the output queue is a **disabled diagnostics ledger**. It is not
+an execution layer. It records output intent in parallel with the existing runtime
+but does not control, gate, or dispatch any output.
+
+Three sources currently enqueue diagnostics items:
+
+| Source | Priority | Channel | Payload |
+|--------|----------|---------|---------|
+| `expression_mirror` | P4_NORMAL_REACTION | visual_expression | `{ expression }` |
+| `reaction_bubble` | P4_NORMAL_REACTION | pet_bubble | `{ bubbleId }` |
+| `chat_reply` | P2_LLM_REPLY | full_app_chat | `{ source, mood, replyLength }` |
+
+All existing execution paths remain unchanged. The queue is a parallel observer:
+
+- Expression mirror still executes via TASK-218/219 IPC (`sendPetExpressionSuggestion`).
+- Reaction bubble still executes via TASK-220 IPC (`sendPetReactionBubble`).
+- Chat reply still renders via the original `sendMessage` / `submitEditedUserMessage` flow.
+
+`OUTPUT_QUEUE_ENABLED = false`. The queue does not dispatch, does not send to the
+Pet Window, does not add IPC, does not call `/chat`, does not trigger TTS/STT/audio,
+does not write history, and does not store raw user text, reply text, bubble text,
+prompt, or memory content.
+
+Before the queue can control execution, a dispatch readiness checklist must be
+satisfied (see `docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md`, Section 10).
+
+---
+
+## 14. Recommended Next Phase
 
 Recommended next architecture phase:
 
