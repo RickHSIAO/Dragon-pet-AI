@@ -69,6 +69,9 @@ const FULL_APP_CONVERSATION_MIN_SPEECH_MS    = 300;
 const FULL_APP_CONVERSATION_MAX_UTTERANCE_MS = 30000;
 const FULL_APP_CONVERSATION_VAD_INTERVAL_MS  = 100;
 const FULL_APP_CONVERSATION_RMS_THRESHOLD    = 0.035;
+// TASK-244b: Voice Pipeline Diagnostics constants
+const FULL_APP_VOICE_MIME_PRIORITY = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"];
+const FULL_APP_VOICE_AUDIO_CONSTRAINTS = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
 // TASK-179: gentle hint shown after OCR summary exists.
 const ocrAskHintEl = document.getElementById("ocr-ask-hint");
 const memoryForm  = document.getElementById("memory-form");
@@ -136,6 +139,14 @@ const voiceAutosendToggle     = document.getElementById("voice-autosend-toggle")
 // TASK-243: Voice Conversation Mode DOM refs
 const conversationModeBtn    = document.getElementById("conversation-mode-btn");
 const conversationModeStatus = document.getElementById("conversation-mode-status");
+// TASK-244: Voice Quality Diagnostics DOM refs
+const voiceDiagnosticsDisplay = document.getElementById("voice-diagnostics-display");
+const vadRmsThresholdInput    = document.getElementById("vad-rms-threshold-input");
+const vadSilenceMsSelect      = document.getElementById("vad-silence-ms-select");
+// TASK-244b: Voice Pipeline Diagnostics DOM refs
+const voicePreviewPlayBtn    = document.getElementById("voice-preview-play-btn");
+const voicePreviewAudio      = document.getElementById("voice-preview-audio");
+const voicePreviewStatus     = document.getElementById("voice-preview-status");
 
 // ---------------------------------------------------------------------------
 // State
@@ -163,6 +174,52 @@ var fullAppVoiceConversationRecorder        = null;
 var fullAppVoiceConversationChunks          = [];
 var fullAppVoiceConversationSpeechStartedAt = 0;
 var fullAppVoiceConversationLastVoiceAt     = 0;
+// TASK-244: Voice Quality Diagnostics state — session-only, not persisted
+var fullAppVoiceDiagnostics = {
+  mode: "none",
+  recordingStartedAt: 0,
+  recordingEndedAt: 0,
+  durationMs: 0,
+  blobSizeBytes: 0,
+  mimeType: "",
+  chunksCount: 0,
+  transcriptLength: 0,
+  transcriptPreview: "",
+  emptyTranscript: false,
+  autoSendEnabled: false,
+  conversationState: "off",
+  stopReason: "none",
+  lastRms: 0,
+  maxRms: 0,
+  rmsThreshold: FULL_APP_CONVERSATION_RMS_THRESHOLD,
+  silenceDurationMs: FULL_APP_CONVERSATION_SILENCE_MS,
+  minSpeechMs: FULL_APP_CONVERSATION_MIN_SPEECH_MS,
+  maxUtteranceMs: FULL_APP_CONVERSATION_MAX_UTTERANCE_MS,
+  speechStarted: false,
+  silenceMsAtStop: 0,
+  sttStatus: "none",
+  selectedMimeType: "",
+  bytesPerSecond: 0,
+  constraintsEchoCancellation: false,
+  constraintsNoiseSuppression: false,
+  constraintsAutoGainControl: false,
+  lastAudioPreviewAvailable: false,
+  lastAudioObjectUrlCreated: false,
+  objectUrlActive: false,
+  previewStatus: "",
+  previewErrorName: "",
+  previewErrorMessage: "",
+  audioElementErrorCode: -1,
+  audioCanPlayTypeResult: "",
+  audioBlobTypeCanPlayResult: ""
+};
+// TASK-244: session-only VAD tuning vars — override constants for this session only, not persisted
+var fullAppConversationRmsThreshold = FULL_APP_CONVERSATION_RMS_THRESHOLD;
+var fullAppConversationSilenceMs    = FULL_APP_CONVERSATION_SILENCE_MS;
+// TASK-244b: in-memory audio preview — no disk write
+var fullAppLastAudioBlob           = null; // var: exposed to vm sandbox
+var fullAppLastAudioObjectUrl      = null; // var: exposed to vm sandbox
+var fullAppVoiceDiagnosticsHistory = [];   // var: max 2 recent recording snapshots
 // TASK-060: track in-flight test connection to prevent double-click
 let isTestingConnection = false;
 // TASK-060: cache last-loaded provider settings for Test Connection enable conditions
@@ -3955,6 +4012,25 @@ function _fullAppSttTranscribeChunks(chunks, mimeType) {
     return;
   }
 
+  // TASK-244: update diagnostics with blob/recording metadata
+  try { fullAppVoiceDiagnostics.blobSizeBytes = audioBlob.size || 0; } catch (_e) {}
+  fullAppVoiceDiagnostics.mimeType = mimeType || "";
+  fullAppVoiceDiagnostics.chunksCount = (chunks || []).length;
+  var _sttEndedAt = Date.now();
+  fullAppVoiceDiagnostics.recordingEndedAt = _sttEndedAt;
+  fullAppVoiceDiagnostics.durationMs = _sttEndedAt - (fullAppVoiceDiagnostics.recordingStartedAt || _sttEndedAt);
+  // TASK-244b: pipeline diagnostics — selectedMimeType, bytesPerSecond, in-memory preview blob
+  fullAppVoiceDiagnostics.selectedMimeType = mimeType || "";
+  if (audioBlob && audioBlob.size > 0) {
+    fullAppLastAudioBlob = audioBlob;
+    fullAppVoiceDiagnostics.lastAudioPreviewAvailable = true;
+    if (fullAppVoiceDiagnostics.durationMs > 0) {
+      fullAppVoiceDiagnostics.bytesPerSecond = Math.round(audioBlob.size / (fullAppVoiceDiagnostics.durationMs / 1000));
+    }
+    if (voicePreviewPlayBtn) voicePreviewPlayBtn.disabled = false;
+  }
+  renderFullAppVoiceDiagnostics();
+
   transcribeFullAppAudioBlob(audioBlob).then(function (transcript) {
     setFullAppVoiceState("idle");
 
@@ -3963,6 +4039,11 @@ function _fullAppSttTranscribeChunks(chunks, mimeType) {
     }
 
     if (!transcript) {
+      // TASK-244: empty transcript diagnostics
+      fullAppVoiceDiagnostics.emptyTranscript = true;
+      fullAppVoiceDiagnostics.sttStatus = "empty";
+      renderFullAppVoiceDiagnostics();
+      _recordVoiceDiagnosticsHistory();
       var emptyMsg = "未偵測到語音，請重試。";
       if (voiceInputStatus) {
         voiceInputStatus.textContent = emptyMsg;
@@ -3993,6 +4074,14 @@ function _fullAppSttTranscribeChunks(chunks, mimeType) {
       return;
     }
 
+    // TASK-244: success transcript diagnostics
+    fullAppVoiceDiagnostics.transcriptLength  = trimmed.length;
+    fullAppVoiceDiagnostics.transcriptPreview = makeSafeTranscriptPreview(trimmed);
+    fullAppVoiceDiagnostics.emptyTranscript   = false;
+    fullAppVoiceDiagnostics.sttStatus         = "success";
+    renderFullAppVoiceDiagnostics();
+    _recordVoiceDiagnosticsHistory();
+
     // Fill textarea for user review
     if (msgInput) {
       msgInput.value = trimmed;
@@ -4005,7 +4094,11 @@ function _fullAppSttTranscribeChunks(chunks, mimeType) {
     }
   }).catch(function (err) {
     setFullAppVoiceState("idle");
+    // TASK-244: error diagnostics
     var errCode = (err && err.message) ? err.message : "";
+    fullAppVoiceDiagnostics.sttStatus = errCode === "stt_timeout" ? "timeout" : "error";
+    renderFullAppVoiceDiagnostics();
+    _recordVoiceDiagnosticsHistory();
     var errText;
     if (errCode === "stt_unavailable") {
       errText = "語音辨識服務不可用。";
@@ -4032,6 +4125,9 @@ function _fullAppSttTranscribeChunks(chunks, mimeType) {
 function stopFullAppVoiceInput() {
   var recorder = _fullAppRecorder;
   var mimeType = (recorder && recorder.mimeType) ? recorder.mimeType : "audio/webm";
+
+  // TASK-244: record manual stop reason
+  fullAppVoiceDiagnostics.stopReason = "manual_stop";
 
   if (_fullAppRecordingTimer !== null) {
     clearTimeout(_fullAppRecordingTimer);
@@ -4109,7 +4205,7 @@ async function openFullAppVoiceInput() {
     if (!navObj || !navObj.mediaDevices || typeof navObj.mediaDevices.getUserMedia !== "function") {
       throw new Error("no_mic");
     }
-    stream = await navObj.mediaDevices.getUserMedia({ audio: true });
+    stream = await navObj.mediaDevices.getUserMedia({ audio: FULL_APP_VOICE_AUDIO_CONSTRAINTS });
   } catch (err) {
     var errName    = err && err.name    ? err.name    : "";
     var errMsgStr  = err && err.message ? err.message : "";
@@ -4134,14 +4230,20 @@ async function openFullAppVoiceInput() {
     return;
   }
 
-  // Build MediaRecorder — prefer webm/opus for Whisper compatibility
-  var mimeType = "audio/webm;codecs=opus";
-  if (typeof MediaRecorder.isTypeSupported === "function" && !MediaRecorder.isTypeSupported(mimeType)) {
-    mimeType = "audio/webm";
-    if (typeof MediaRecorder.isTypeSupported === "function" && !MediaRecorder.isTypeSupported(mimeType)) {
-      mimeType = "";
+  // TASK-244b: capture audio track settings for diagnostics
+  try {
+    var _audioTrack = stream.getAudioTracks()[0];
+    if (_audioTrack && typeof _audioTrack.getSettings === "function") {
+      var _ts = _audioTrack.getSettings();
+      fullAppVoiceDiagnostics.constraintsEchoCancellation = Boolean(_ts.echoCancellation);
+      fullAppVoiceDiagnostics.constraintsNoiseSuppression = Boolean(_ts.noiseSuppression);
+      fullAppVoiceDiagnostics.constraintsAutoGainControl  = Boolean(_ts.autoGainControl);
+      renderFullAppVoiceDiagnostics();
     }
-  }
+  } catch (_trackErr) {}
+
+  // Build MediaRecorder — prefer webm/opus for Whisper compatibility
+  var mimeType = selectVoiceMimeType();
   var recorder;
   try {
     recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
@@ -4178,6 +4280,8 @@ async function openFullAppVoiceInput() {
   });
 
   setFullAppVoiceState("recording");
+  // TASK-244: reset diagnostics for this manual recording
+  resetFullAppVoiceDiagnosticsForRecording(fullAppVoiceAutoSendEnabled ? "manual_auto_send" : "manual_mic");
 
   try {
     recorder.start();
@@ -4289,10 +4393,15 @@ function _conversationReleaseResources() {
 }
 
 function _startConversationUtteranceRecorder() {
+  // TASK-244: reset diagnostics for this utterance recording
+  resetFullAppVoiceDiagnosticsForRecording("conversation");
+  fullAppVoiceDiagnostics.speechStarted = true;
+  fullAppVoiceDiagnostics.maxRms = fullAppVoiceDiagnostics.lastRms;
+  renderFullAppVoiceDiagnostics();
+
   fullAppVoiceConversationChunks = [];
-  var mimeType = (typeof MediaRecorder !== "undefined" &&
-    typeof MediaRecorder.isTypeSupported === "function" &&
-    MediaRecorder.isTypeSupported("audio/webm")) ? "audio/webm" : "";
+  // TASK-244b: use shared mime type selector (same priority as manual mic)
+  var mimeType = selectVoiceMimeType();
   var recorder;
   try {
     recorder = new MediaRecorder(
@@ -4335,19 +4444,54 @@ function _transcribeConversationChunks(chunks, mimeType) {
     return;
   }
 
+  // TASK-244: update diagnostics with blob/recording metadata
+  try { fullAppVoiceDiagnostics.blobSizeBytes = audioBlob.size || 0; } catch (_e) {}
+  fullAppVoiceDiagnostics.mimeType = mimeType || "";
+  fullAppVoiceDiagnostics.chunksCount = (chunks || []).length;
+  var _convEndedAt = Date.now();
+  fullAppVoiceDiagnostics.recordingEndedAt = _convEndedAt;
+  fullAppVoiceDiagnostics.durationMs = _convEndedAt - (fullAppVoiceDiagnostics.recordingStartedAt || _convEndedAt);
+  // TASK-244b: pipeline diagnostics — selectedMimeType, bytesPerSecond, in-memory preview blob
+  fullAppVoiceDiagnostics.selectedMimeType = mimeType || "";
+  if (audioBlob && audioBlob.size > 0) {
+    fullAppLastAudioBlob = audioBlob;
+    fullAppVoiceDiagnostics.lastAudioPreviewAvailable = true;
+    if (fullAppVoiceDiagnostics.durationMs > 0) {
+      fullAppVoiceDiagnostics.bytesPerSecond = Math.round(audioBlob.size / (fullAppVoiceDiagnostics.durationMs / 1000));
+    }
+    if (voicePreviewPlayBtn) voicePreviewPlayBtn.disabled = false;
+  }
+  renderFullAppVoiceDiagnostics();
+
   transcribeFullAppAudioBlob(audioBlob).then(function (transcript) {
     if (!fullAppVoiceConversationEnabled) return;
 
     if (transcript === null || !transcript) {
+      // TASK-244: empty/unavailable diagnostics
+      fullAppVoiceDiagnostics.emptyTranscript = true;
+      fullAppVoiceDiagnostics.sttStatus = "empty";
+      renderFullAppVoiceDiagnostics();
+      _recordVoiceDiagnosticsHistory();
       setConversationState("waiting");
       return;
     }
 
     var trimmed = transcript.trim();
     if (!trimmed || trimmed.length > FULL_APP_VOICE_CHAT_MAX_CHARS) {
+      fullAppVoiceDiagnostics.emptyTranscript = true;
+      fullAppVoiceDiagnostics.sttStatus = "empty";
+      renderFullAppVoiceDiagnostics();
       setConversationState("waiting");
       return;
     }
+
+    // TASK-244: success transcript diagnostics
+    fullAppVoiceDiagnostics.transcriptLength  = trimmed.length;
+    fullAppVoiceDiagnostics.transcriptPreview = makeSafeTranscriptPreview(trimmed);
+    fullAppVoiceDiagnostics.emptyTranscript   = false;
+    fullAppVoiceDiagnostics.sttStatus         = "success";
+    renderFullAppVoiceDiagnostics();
+    _recordVoiceDiagnosticsHistory();
 
     if (msgInput) {
       msgInput.value = trimmed;
@@ -4370,6 +4514,10 @@ function _transcribeConversationChunks(chunks, mimeType) {
       setConversationState("waiting");
     }
   }).catch(function () {
+    // TASK-244: error diagnostics
+    fullAppVoiceDiagnostics.sttStatus = "error";
+    renderFullAppVoiceDiagnostics();
+    _recordVoiceDiagnosticsHistory();
     if (fullAppVoiceConversationEnabled) setConversationState("waiting");
   });
 }
@@ -4382,22 +4530,31 @@ function _conversationVadTick() {
   var rms = computeConversationRms(fullAppVoiceConversationAnalyser);
   var now = Date.now();
 
+  // TASK-244: update VAD diagnostics every tick
+  fullAppVoiceDiagnostics.lastRms = rms;
+  if (rms > fullAppVoiceDiagnostics.maxRms) fullAppVoiceDiagnostics.maxRms = rms;
+  fullAppVoiceDiagnostics.conversationState = state;
+  renderFullAppVoiceDiagnostics();
+
   if (state === "waiting") {
-    if (rms >= FULL_APP_CONVERSATION_RMS_THRESHOLD) {
+    if (rms >= fullAppConversationRmsThreshold) {
       fullAppVoiceConversationSpeechStartedAt = now;
       fullAppVoiceConversationLastVoiceAt = now;
       setConversationState("speaking");
       _startConversationUtteranceRecorder();
     }
   } else if (state === "speaking") {
-    if (rms >= FULL_APP_CONVERSATION_RMS_THRESHOLD) {
+    if (rms >= fullAppConversationRmsThreshold) {
       fullAppVoiceConversationLastVoiceAt = now;
     }
     var silenceDuration = now - fullAppVoiceConversationLastVoiceAt;
     var speechDuration  = now - fullAppVoiceConversationSpeechStartedAt;
     var minMet   = speechDuration >= FULL_APP_CONVERSATION_MIN_SPEECH_MS;
     var timedOut = speechDuration >= FULL_APP_CONVERSATION_MAX_UTTERANCE_MS;
-    if (timedOut || (minMet && silenceDuration >= FULL_APP_CONVERSATION_SILENCE_MS)) {
+    if (timedOut || (minMet && silenceDuration >= fullAppConversationSilenceMs)) {
+      // TASK-244: record stop reason and silence duration before stopping
+      fullAppVoiceDiagnostics.stopReason = timedOut ? "max_duration" : "silence";
+      fullAppVoiceDiagnostics.silenceMsAtStop = silenceDuration;
       _stopConversationUtteranceRecorder();
     }
   }
@@ -4413,11 +4570,23 @@ async function startConversationMode() {
 
   var stream;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    stream = await navigator.mediaDevices.getUserMedia({ audio: FULL_APP_VOICE_AUDIO_CONSTRAINTS });
   } catch (_e) {
     setConversationState("error");
     return;
   }
+
+  // TASK-244b: capture audio track settings for diagnostics
+  try {
+    var _convTrack = stream.getAudioTracks()[0];
+    if (_convTrack && typeof _convTrack.getSettings === "function") {
+      var _cts = _convTrack.getSettings();
+      fullAppVoiceDiagnostics.constraintsEchoCancellation = Boolean(_cts.echoCancellation);
+      fullAppVoiceDiagnostics.constraintsNoiseSuppression = Boolean(_cts.noiseSuppression);
+      fullAppVoiceDiagnostics.constraintsAutoGainControl  = Boolean(_cts.autoGainControl);
+      renderFullAppVoiceDiagnostics();
+    }
+  } catch (_ctErr) {}
 
   var audioContext;
   try {
@@ -4444,6 +4613,10 @@ async function startConversationMode() {
 }
 
 function stopConversationMode() {
+  // TASK-244: record cancel stop reason before releasing resources
+  if (fullAppVoiceDiagnostics.stopReason === "none") {
+    fullAppVoiceDiagnostics.stopReason = "cancel";
+  }
   fullAppVoiceConversationEnabled = false;
   _conversationReleaseResources();
   setConversationState("off");
@@ -4457,6 +4630,268 @@ if (conversationModeBtn) {
     } else {
       startConversationMode();
     }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// TASK-244: Voice Quality Diagnostics / VAD Tuning
+// ---------------------------------------------------------------------------
+
+// TASK-244b: Voice Pipeline Diagnostics helpers
+
+function selectVoiceMimeType() {
+  if (typeof MediaRecorder === "undefined" || typeof MediaRecorder.isTypeSupported !== "function") return "";
+  var candidates = FULL_APP_VOICE_MIME_PRIORITY;
+  for (var _mi = 0; _mi < candidates.length; _mi++) {
+    if (MediaRecorder.isTypeSupported(candidates[_mi])) return candidates[_mi];
+  }
+  return "";
+}
+
+function _recordVoiceDiagnosticsHistory() {
+  var d = fullAppVoiceDiagnostics;
+  var entry = {
+    mode:            d.mode,
+    durationMs:      d.durationMs,
+    blobSizeBytes:   d.blobSizeBytes,
+    transcriptLength: d.transcriptLength,
+    transcriptPreview: d.transcriptPreview,
+    stopReason:      d.stopReason,
+    selectedMimeType: d.selectedMimeType,
+    bytesPerSecond:  d.bytesPerSecond,
+    sttStatus:       d.sttStatus
+  };
+  fullAppVoiceDiagnosticsHistory.unshift(entry);
+  if (fullAppVoiceDiagnosticsHistory.length > 2) fullAppVoiceDiagnosticsHistory.length = 2;
+}
+
+function _setVoicePreviewStatus(msg) {
+  if (voicePreviewStatus) voicePreviewStatus.textContent = msg || "";
+  fullAppVoiceDiagnostics.previewStatus = msg || "";
+}
+
+function revokeLastAudioObjectUrl() {
+  if (voicePreviewAudio) {
+    voicePreviewAudio.pause();
+    voicePreviewAudio.src = "";
+  }
+  if (fullAppLastAudioObjectUrl) {
+    try { URL.revokeObjectURL(fullAppLastAudioObjectUrl); } catch (_e) {}
+    fullAppLastAudioObjectUrl = null;
+  }
+  fullAppVoiceDiagnostics.lastAudioObjectUrlCreated = false;
+  fullAppVoiceDiagnostics.objectUrlActive = false;
+  if (voicePreviewPlayBtn) voicePreviewPlayBtn.disabled = !fullAppVoiceDiagnostics.lastAudioPreviewAvailable;
+}
+
+function playLastAudioPreview() {
+  if (!fullAppLastAudioBlob || fullAppLastAudioBlob.size === 0) {
+    _setVoicePreviewStatus("尚無可播放錄音");
+    renderFullAppVoiceDiagnostics();
+    return;
+  }
+  var _el = voicePreviewAudio;
+  if (!_el) { _setVoicePreviewStatus("play failed: no audio element"); renderFullAppVoiceDiagnostics(); return; }
+
+  // canPlayType diagnostics before attempting play
+  var _blobType = fullAppLastAudioBlob.type || fullAppVoiceDiagnostics.selectedMimeType || "";
+  var _selType  = fullAppVoiceDiagnostics.selectedMimeType || _blobType;
+  fullAppVoiceDiagnostics.audioCanPlayTypeResult     = (_el.canPlayType && _selType)  ? _el.canPlayType(_selType)  : "";
+  fullAppVoiceDiagnostics.audioBlobTypeCanPlayResult = (_el.canPlayType && _blobType) ? _el.canPlayType(_blobType) : "";
+
+  if (fullAppVoiceDiagnostics.audioCanPlayTypeResult === "" && _selType) {
+    _setVoicePreviewStatus("此音訊格式目前無法播放，但仍可送 STT");
+    renderFullAppVoiceDiagnostics();
+    return;
+  }
+
+  // Revoke previous object URL only when replacing with a new one
+  if (fullAppLastAudioObjectUrl) {
+    _el.pause();
+    _el.src = "";
+    try { URL.revokeObjectURL(fullAppLastAudioObjectUrl); } catch (_re) {}
+    fullAppLastAudioObjectUrl = null;
+    fullAppVoiceDiagnostics.objectUrlActive = false;
+  }
+
+  // Reset error fields
+  fullAppVoiceDiagnostics.previewErrorName    = "";
+  fullAppVoiceDiagnostics.previewErrorMessage = "";
+  fullAppVoiceDiagnostics.audioElementErrorCode = -1;
+
+  try {
+    var _url = URL.createObjectURL(fullAppLastAudioBlob);
+    fullAppLastAudioObjectUrl = _url;
+    fullAppVoiceDiagnostics.lastAudioObjectUrlCreated = true;
+    fullAppVoiceDiagnostics.objectUrlActive = true;
+    _setVoicePreviewStatus("播放中…");
+    renderFullAppVoiceDiagnostics();
+    _el.src = _url;
+    // ended: status clears, URL stays alive for replay — do NOT revoke
+    _el.onended = function () {
+      _setVoicePreviewStatus("");
+      renderFullAppVoiceDiagnostics();
+    };
+    _el.onerror = function () {
+      var _code = (_el.error && _el.error.code != null) ? _el.error.code : -1;
+      var _msg  = (_el.error && _el.error.message) ? _el.error.message.slice(0, 80) : "";
+      fullAppVoiceDiagnostics.audioElementErrorCode = _code;
+      fullAppVoiceDiagnostics.previewErrorName    = "MediaError";
+      fullAppVoiceDiagnostics.previewErrorMessage = _msg || ("code " + _code);
+      _setVoicePreviewStatus("audio error code: " + _code);
+      renderFullAppVoiceDiagnostics();
+    };
+    _el.play().catch(function (_err) {
+      var _name = (_err && _err.name)    ? _err.name              : "PlayError";
+      var _msg  = (_err && _err.message) ? _err.message.slice(0, 80) : "";
+      fullAppVoiceDiagnostics.previewErrorName    = _name;
+      fullAppVoiceDiagnostics.previewErrorMessage = _msg;
+      _setVoicePreviewStatus("play failed: " + _name);
+      renderFullAppVoiceDiagnostics();
+    });
+  } catch (_e) {
+    var _en = (_e && _e.name)    ? _e.name              : "Error";
+    var _em = (_e && _e.message) ? _e.message.slice(0, 80) : "";
+    fullAppVoiceDiagnostics.previewErrorName    = _en;
+    fullAppVoiceDiagnostics.previewErrorMessage = _em;
+    _setVoicePreviewStatus("play failed: " + _en);
+    renderFullAppVoiceDiagnostics();
+  }
+}
+
+function makeSafeTranscriptPreview(text) {
+  if (!text || typeof text !== "string") return "";
+  var safe = text.trim().replace(/[\r\n]+/g, " ");
+  return safe.length > 30 ? safe.slice(0, 30) + "…" : safe;
+}
+
+function renderFullAppVoiceDiagnostics() {
+  var el = voiceDiagnosticsDisplay;
+  if (!el) return;
+  var d = fullAppVoiceDiagnostics;
+  var lines = [
+    "模式: " + d.mode,
+    "錄音時長 ms: " + d.durationMs,
+    "Blob 大小 bytes: " + d.blobSizeBytes,
+    "選取 MimeType: " + (d.selectedMimeType || "—"),
+    "Blob 實際 type: " + (d.mimeType || "—"),
+    "每秒位元組: " + d.bytesPerSecond,
+    "Chunks: " + d.chunksCount,
+    "Transcript 長度: " + d.transcriptLength,
+    "Transcript 預覽: " + (d.transcriptPreview || "—"),
+    "空 transcript: " + (d.emptyTranscript ? "是" : "否"),
+    "Auto-send: " + (d.autoSendEnabled ? "開" : "關"),
+    "對話狀態: " + d.conversationState,
+    "停止原因: " + d.stopReason,
+    "STT 狀態: " + d.sttStatus,
+    "---",
+    "VAD 最後 RMS: " + d.lastRms.toFixed(4),
+    "VAD 最高 RMS: " + d.maxRms.toFixed(4),
+    "RMS 閾值: " + d.rmsThreshold.toFixed(4),
+    "靜音時長 ms: " + d.silenceDurationMs,
+    "最短說話 ms: " + d.minSpeechMs,
+    "最長句子 ms: " + d.maxUtteranceMs,
+    "偵測到說話: " + (d.speechStarted ? "是" : "否"),
+    "停止時靜音 ms: " + d.silenceMsAtStop,
+    "VAD 間隔 ms: " + FULL_APP_CONVERSATION_VAD_INTERVAL_MS,
+    "---",
+    "Audio約束 echo:" + d.constraintsEchoCancellation + " 降噪:" + d.constraintsNoiseSuppression + " 增益:" + d.constraintsAutoGainControl,
+    "---",
+    "錄音預覽: " + (d.lastAudioPreviewAvailable ? "可用" : "無") + "  objectUrlActive: " + (d.objectUrlActive ? "yes" : "no"),
+    "canPlayType(selectedMimeType): " + (d.audioCanPlayTypeResult || "—"),
+    "canPlayType(blob.type): "       + (d.audioBlobTypeCanPlayResult || "—"),
+    "previewStatus: "   + (d.previewStatus || "—"),
+    "previewError: "    + (d.previewErrorName ? d.previewErrorName + " — " + (d.previewErrorMessage || "") : "—"),
+    "audioErrCode: "    + (d.audioElementErrorCode !== -1 ? d.audioElementErrorCode : "—")
+  ];
+  for (var _hi = 0; _hi < fullAppVoiceDiagnosticsHistory.length; _hi++) {
+    var _h = fullAppVoiceDiagnosticsHistory[_hi];
+    var _mt = _h.selectedMimeType ? _h.selectedMimeType.replace("audio/", "").replace(";codecs=opus", "+opus") : "—";
+    if (_hi === 0) lines.push("---");
+    lines.push("#" + (_hi + 1) + " " + _h.mode + " " + _h.durationMs + "ms " + _h.blobSizeBytes + "B " + _mt + " " + _h.bytesPerSecond + "B/s STT:" + _h.sttStatus);
+  }
+  el.textContent = lines.join("\n");
+}
+
+function updateFullAppVoiceDiagnostics(patch) {
+  if (patch && typeof patch === "object") {
+    var keys = Object.keys(patch);
+    for (var i = 0; i < keys.length; i++) {
+      if (Object.prototype.hasOwnProperty.call(fullAppVoiceDiagnostics, keys[i])) {
+        fullAppVoiceDiagnostics[keys[i]] = patch[keys[i]];
+      }
+    }
+  }
+  renderFullAppVoiceDiagnostics();
+}
+
+function resetFullAppVoiceDiagnosticsForRecording(mode) {
+  fullAppVoiceDiagnostics.mode              = mode || "none";
+  fullAppVoiceDiagnostics.recordingStartedAt = Date.now();
+  fullAppVoiceDiagnostics.recordingEndedAt   = 0;
+  fullAppVoiceDiagnostics.durationMs         = 0;
+  fullAppVoiceDiagnostics.blobSizeBytes      = 0;
+  fullAppVoiceDiagnostics.mimeType           = "";
+  fullAppVoiceDiagnostics.chunksCount        = 0;
+  fullAppVoiceDiagnostics.transcriptLength   = 0;
+  fullAppVoiceDiagnostics.transcriptPreview  = "";
+  fullAppVoiceDiagnostics.emptyTranscript    = false;
+  fullAppVoiceDiagnostics.autoSendEnabled    = fullAppVoiceAutoSendEnabled;
+  fullAppVoiceDiagnostics.conversationState  = fullAppVoiceConversationState;
+  fullAppVoiceDiagnostics.stopReason         = "none";
+  fullAppVoiceDiagnostics.lastRms            = 0;
+  fullAppVoiceDiagnostics.maxRms             = 0;
+  fullAppVoiceDiagnostics.rmsThreshold       = fullAppConversationRmsThreshold;
+  fullAppVoiceDiagnostics.silenceDurationMs  = fullAppConversationSilenceMs;
+  fullAppVoiceDiagnostics.minSpeechMs        = FULL_APP_CONVERSATION_MIN_SPEECH_MS;
+  fullAppVoiceDiagnostics.maxUtteranceMs     = FULL_APP_CONVERSATION_MAX_UTTERANCE_MS;
+  fullAppVoiceDiagnostics.speechStarted      = false;
+  fullAppVoiceDiagnostics.silenceMsAtStop    = 0;
+  fullAppVoiceDiagnostics.sttStatus          = "none";
+  fullAppVoiceDiagnostics.selectedMimeType   = "";
+  fullAppVoiceDiagnostics.bytesPerSecond     = 0;
+  fullAppVoiceDiagnostics.lastAudioPreviewAvailable = false;
+  fullAppVoiceDiagnostics.lastAudioObjectUrlCreated = false;
+  fullAppVoiceDiagnostics.objectUrlActive    = false;
+  fullAppVoiceDiagnostics.previewStatus      = "";
+  fullAppVoiceDiagnostics.previewErrorName   = "";
+  fullAppVoiceDiagnostics.previewErrorMessage = "";
+  fullAppVoiceDiagnostics.audioElementErrorCode = -1;
+  fullAppVoiceDiagnostics.audioCanPlayTypeResult = "";
+  fullAppVoiceDiagnostics.audioBlobTypeCanPlayResult = "";
+  // constraintsEchoCancellation/NoiseSuppression/AutoGainControl: not reset (carry over from stream)
+  revokeLastAudioObjectUrl();
+  if (voicePreviewPlayBtn) voicePreviewPlayBtn.disabled = true;
+  if (voicePreviewStatus) voicePreviewStatus.textContent = "";
+  renderFullAppVoiceDiagnostics();
+}
+
+// TASK-244: VAD tuning controls wiring — session-only, no persistence
+if (vadRmsThresholdInput) {
+  vadRmsThresholdInput.addEventListener("input", function () {
+    var val = parseFloat(vadRmsThresholdInput.value);
+    if (!isNaN(val) && val >= 0.01 && val <= 0.10) {
+      fullAppConversationRmsThreshold = val;
+      fullAppVoiceDiagnostics.rmsThreshold = val;
+      renderFullAppVoiceDiagnostics();
+    }
+  });
+}
+if (vadSilenceMsSelect) {
+  vadSilenceMsSelect.addEventListener("change", function () {
+    var val = parseInt(vadSilenceMsSelect.value, 10);
+    if (!isNaN(val)) {
+      fullAppConversationSilenceMs = val;
+      fullAppVoiceDiagnostics.silenceDurationMs = val;
+      renderFullAppVoiceDiagnostics();
+    }
+  });
+}
+
+// TASK-244b: preview play button wiring — in-memory only, no disk write
+if (voicePreviewPlayBtn) {
+  voicePreviewPlayBtn.addEventListener("click", function () {
+    playLastAudioPreview();
   });
 }
 

@@ -1788,3 +1788,120 @@ textarea {
 .conversation-mode-status[data-state="error"] {
   color: var(--error, #e05);
 }
+
+/* TASK-244: Voice Quality Diagnostics / VAD Tuning */
+.voice-diagnostics-details {
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.voice-diagnostics-summary {
+  padding: 4px 8px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.voice-diagnostics-panel {
+  padding: 4px 8px 6px 8px;
+}
+
+.voice-tuning-section {
+  margin-bottom: 6px;
+}
+
+.voice-tuning-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.voice-tuning-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.voice-tuning-input {
+  width: 70px;
+  font-size: 11px;
+  padding: 1px 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary, #1e1e1e);
+  color: var(--text-primary, #eee);
+  border-radius: 3px;
+}
+
+.voice-tuning-select {
+  font-size: 11px;
+  padding: 1px 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary, #1e1e1e);
+  color: var(--text-primary, #eee);
+  border-radius: 3px;
+}
+
+.voice-tuning-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.voice-diagnostics-display {
+  font-size: 10px;
+  font-family: monospace;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  margin: 0;
+  padding: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* TASK-244b: in-memory audio preview */
+.voice-preview-section {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 6px 0;
+}
+
+.voice-preview-play-btn {
+  font-size: 11px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary, #1e1e1e);
+  color: var(--text-primary, #eee);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.voice-preview-play-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.voice-preview-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.voice-preview-status {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.voice-preview-audio-el {
+  display: block;
+  width: 100%;
+  height: 28px;
+  margin: 4px 0 0 0;
+}

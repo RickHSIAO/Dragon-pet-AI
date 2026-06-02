@@ -272,9 +272,30 @@ Suggested research and implementation tasks:
   half-duplex, consecutive utterances, stop, Voice Input OFF guard, empty/short audio handling, and
   general regression all confirmed.
 
-Recommended follow-up: TASK-244 — Voice Conversation Polish / Turn Feedback / Safety Tuning.
-Future tuning can adjust VAD threshold / silence duration and improve speaking volume / listening
-feedback while preserving no background listening and no raw audio persistence.
+- TASK-STT-005 VAD quality diagnostics and threshold tuning. **Covered by TASK-244 (IMPLEMENTED - NEEDS WINDOWS VOICE QUALITY SMOKE; implemented 2026-06-03):**
+  Collapsible `<details>` diagnostics panel in Full App. Session-only RMS threshold number input
+  (0.01–0.10, step 0.005) and silence duration select (800/1000/1200/1500 ms). Changes update
+  session vars `fullAppConversationRmsThreshold` / `fullAppConversationSilenceMs`, which
+  `_conversationVadTick` reads instead of the frozen constants. `fullAppVoiceDiagnostics` state
+  object tracks: mode (manual_mic / manual_auto_send / conversation), recording start/end times,
+  durationMs, Blob size, MIME type, chunk count, transcript length, transcript preview (capped 30
+  chars, newlines stripped), emptyTranscript flag, autoSendEnabled, conversationState, stopReason
+  (silence / max_duration / cancel / manual_stop), lastRms, maxRms, rmsThreshold,
+  silenceDurationMs, minSpeechMs, maxUtteranceMs, speechStarted, silenceMsAtStop, sttStatus
+  (none / success / empty / timeout / error). `renderFullAppVoiceDiagnostics` writes a multi-line
+  string to `<pre id="voice-diagnostics-display">` via textContent only (never innerHTML).
+  `updateFullAppVoiceDiagnostics` patches only known keys via hasOwnProperty. Diagnostics reset on
+  every recording start; VAD tick updates lastRms/maxRms every 100 ms; stopReason/silenceMsAtStop
+  set when utterance ends. Known VAD risks: (1) sentence-head clipping — MediaRecorder starts only
+  after RMS exceeds threshold, so the first ~100 ms of an utterance may be missed; no pre-roll
+  buffer yet, mitigation is lowering RMS threshold; (2) noise triggers — ambient sounds at or above
+  threshold cause false positives; mitigation is raising threshold or reducing silence duration;
+  (3) silence too short — 800 ms may cut mid-sentence pauses; (4) silence too long — 1500 ms
+  increases latency. No localStorage. No new IPC. No Pet Window calls in diagnostics section. No
+  audio persistence. No TTS. No always-listening. 22 TASK-244 smoke tests PASS (522 renderer-chat
+  total). Windows voice quality smoke NEEDED.
+
+Recommended follow-up: TASK-245 — Extract Context Menu / Search Modules.
 
 Each future task must explicitly define safety boundaries, user controls,
 provider scope, queue priority, and no-regression checks.

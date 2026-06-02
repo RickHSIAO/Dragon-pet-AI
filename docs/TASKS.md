@@ -25168,3 +25168,260 @@ Future polish notes:
 - Conversation Mode state can be more explicit.
 - Still no background listening.
 - Still no raw audio persistence.
+
+---
+
+## TASK-244 | Voice Quality Diagnostics / VAD Tuning
+
+Status: IMPLEMENTED - NEEDS WINDOWS VOICE QUALITY SMOKE
+
+Date: 2026-06-03
+
+### Goal
+
+Add a Voice Quality Diagnostics panel + session-only VAD tuning controls to the Full App to help diagnose STT quality issues (empty transcript, clipped audio, noise triggers, silence too short/long). No new backend, IPC, Pet Window, localStorage, or always-listening.
+
+### Features
+
+**A. Voice Diagnostics Panel** — `<details>` collapsed by default. Contains tuning controls and a `<pre>` diagnostics display. Non-intrusive; only opened when user expands it.
+
+**B. Manual Mic diagnostics** — When the mic button is used (TASK-241/242), diagnostics are reset and updated with recording mode, duration, Blob size, MIME type, chunk count, transcript length, transcript preview (capped 30 chars), empty/success/error/timeout status.
+
+**C. Conversation Mode diagnostics** — VAD tick updates `lastRms`, `maxRms`, `conversationState` every 100 ms. `stopReason` is set to `"silence"`, `"max_duration"`, `"cancel"`, or `"manual_stop"` depending on what triggered the stop. `silenceMsAtStop` captures the silence duration at stop time.
+
+**D. Session-only VAD tuning controls** — RMS threshold number input (0.01–0.10, step 0.005); silence duration select (800/1000/1200/1500 ms). Changes update `fullAppConversationRmsThreshold` / `fullAppConversationSilenceMs` session vars which `_conversationVadTick` uses instead of the frozen constants. No localStorage, no persistence.
+
+### Restrictions Confirmed
+
+- No new IPC channels.
+- No Pet Window calls in diagnostics section.
+- No localStorage or sessionStorage.
+- No audio persistence.
+- No TTS.
+- `renderFullAppVoiceDiagnostics` uses only `textContent`, never `innerHTML`.
+- `updateFullAppVoiceDiagnostics` only patches known keys via `hasOwnProperty`.
+- `makeSafeTranscriptPreview` strips newlines, caps at 30 chars + "…".
+- VAD session vars (`fullAppConversationRmsThreshold`, `fullAppConversationSilenceMs`) are `var` declarations defaulting to constants, not new DOM-read paths.
+
+### Modified Files
+
+| File | Change |
+|---|---|
+| `apps/desktop/src/renderer/index.html` | `<details id="voice-diagnostics-details">` panel with tuning controls and `<pre id="voice-diagnostics-display">` |
+| `apps/desktop/src/renderer/styles.css` | TASK-244 CSS: `.voice-diagnostics-details`, `.voice-diagnostics-summary`, `.voice-diagnostics-panel`, `.voice-tuning-section`, `.voice-tuning-row`, `.voice-tuning-label`, `.voice-tuning-input`, `.voice-tuning-select`, `.voice-tuning-hint`, `.voice-diagnostics-display` |
+| `apps/desktop/src/renderer/renderer.js` | 3 DOM refs; `fullAppVoiceDiagnostics` state object (var); 2 session tuning vars (`var`); 3 helper functions (`makeSafeTranscriptPreview`, `renderFullAppVoiceDiagnostics`, `updateFullAppVoiceDiagnostics`, `resetFullAppVoiceDiagnosticsForRecording`); VAD tuning controls wiring; diagnostics patches in `openFullAppVoiceInput`, `stopFullAppVoiceInput`, `_fullAppSttTranscribeChunks`, `_startConversationUtteranceRecorder`, `_transcribeConversationChunks`, `_conversationVadTick`, `stopConversationMode` |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | 22 TASK-244 smoke tests; FakeDocument additions for `vad-rms-threshold-input`, `vad-silence-ms-select`; bug fix: `sectionStart` now uses `"TASK-244: Voice Quality Diagnostics / VAD Tuning"` to avoid matching earlier DOM ref comments |
+
+### Test Coverage (22 TASK-244 tests)
+
+| Test | Type | Covers |
+|---|---|---|
+| `testTask244HtmlDiagnosticsPanelExists` | static | `<details>` panel, `<pre>` display, tuning inputs in HTML |
+| `testTask244HtmlAccessibility` | static | ARIA labels on tuning inputs |
+| `testTask244CssDiagnosticsPanel` | static | TASK-244 CSS classes present |
+| `testTask244RendererHasDiagnosticsState` | static | `fullAppVoiceDiagnostics` object, session tuning vars |
+| `testTask244RendererHasDiagnosticsHelpers` | static | all 4 helpers defined |
+| `testTask244RendererVadUsesSessionVars` | static | `_conversationVadTick` uses `fullAppConversationRmsThreshold` / `fullAppConversationSilenceMs` |
+| `testTask244DiagnosticsExistsInSandbox` | sandbox | `fullAppVoiceDiagnostics` accessible in VM |
+| `testTask244DiagnosticsDefaultValues` | sandbox | default field values correct |
+| `testTask244MakeSafeTranscriptPreviewTruncates` | sandbox | truncation at 30 chars + "…" |
+| `testTask244MakeSafeTranscriptPreviewShort` | sandbox | short text returned as-is |
+| `testTask244MakeSafeTranscriptPreviewEmpty` | sandbox | null/empty returns "" |
+| `testTask244UpdateDiagnosticsPatches` | sandbox | known keys patched; unknown keys rejected |
+| `testTask244ResetDiagnosticsForRecording` | sandbox | reset zeroes fields and sets mode |
+| `testTask244SessionVarDefaultsInSandbox` | sandbox | session vars match constants |
+| `testTask244TuningRmsInputUpdatesSessionVar` | sandbox | RMS input event updates session var |
+| `testTask244TuningSilenceSelectUpdatesSessionVar` | sandbox | silence select change updates session var |
+| `testTask244DiagnosticsNotInChatHistoryArea` | static | no diagnostics DOM IDs in chat history logic |
+| `testTask244DiagnosticsNoRawAudioInSource` | static | `renderFullAppVoiceDiagnostics` has no `arrayBuffer`, no `new Blob`, uses `textContent` |
+| `testTask244NoNewIpcChannels` | static | no new `ipcRenderer` calls |
+| `testTask244NoPetWindowCallsInDiagnosticsFunctions` | static | TASK-244 section has no Pet Window API calls |
+| `testTask244NoLocalStorageInTuningWiring` | static | tuning wiring has no localStorage / sessionStorage |
+| `testTask244RegressionTask243StillPass` | sandbox | TASK-243 state vars and functions still present |
+
+### TASK-244b: Voice Pipeline Diagnostics / Audio Constraints / In-Memory Preview
+
+Status: IMPLEMENTED - NEEDS VOICE PIPELINE DEBUG (2026-06-03, extends TASK-244)
+
+User-reported symptom: STT quality is unclear even after adjusting RMS/silence. Same mic works clearly with ChatGPT voice. Not likely hardware/speech problem — likely audio format, constraints, VAD clipping, or STT backend issue.
+
+Pipeline debug additions:
+
+**Audio constraints**: Both `openFullAppVoiceInput` and `startConversationMode` now use `FULL_APP_VOICE_AUDIO_CONSTRAINTS = { echoCancellation: true, noiseSuppression: true, autoGainControl: true }` instead of bare `{ audio: true }`. Actual track settings captured via `stream.getAudioTracks()[0].getSettings()` and displayed in diagnostics (echo/noise/gain).
+
+**MimeType unification**: New `selectVoiceMimeType()` helper tries `audio/webm;codecs=opus` → `audio/webm` → `audio/ogg;codecs=opus` → browser default. Previously Conversation Mode only tried `audio/webm`; now both modes use the same priority. `selectedMimeType` and `bytesPerSecond` displayed in diagnostics.
+
+**In-memory preview button**: `<button id="voice-preview-play-btn">播放最近錄音</button>` added to diagnostics panel. Starts disabled; enabled after any recording. Click calls `playLastAudioPreview()` which creates a temporary `URL.createObjectURL(fullAppLastAudioBlob)`, plays via `new Audio(url)`, and revokes the URL on ended/error. No disk write. `fullAppLastAudioBlob` is the last recorded Blob stored in memory only. Purpose: let the user listen to what the app recorded — if it sounds garbled there, the problem is in audio constraints/device; if clear, the problem is in STT/model.
+
+**Diagnostics history**: `fullAppVoiceDiagnosticsHistory` (var, max 2) records mode/duration/blobSize/selectedMimeType/bytesPerSecond/sttStatus of the last 2 recordings. Displayed at the bottom of the `<pre>` for Manual Mic vs Conversation Mode comparison.
+
+**Diagnostic panel additions**: `renderFullAppVoiceDiagnostics` now also shows: `選取 MimeType`, `每秒位元組`, `Audio約束 echo/降噪/增益`, `錄音預覽 可用/URL播放中`, and history lines.
+
+### Test Coverage (18 TASK-244b tests)
+
+| Test | Type | Covers |
+|---|---|---|
+| `testTask244bHtmlPreviewBtnExists` | static | `#voice-preview-play-btn` in HTML with disabled attribute |
+| `testTask244bCssPreviewSection` | static | `.voice-preview-play-btn`, `.voice-preview-section`, disabled state CSS |
+| `testTask244bRendererHasMimePriority` | static | `FULL_APP_VOICE_MIME_PRIORITY` constant, `selectVoiceMimeType` function |
+| `testTask244bRendererAudioConstraints` | static | constraints constant, echoCancellation/noiseSuppression/autoGainControl true, no bare `audio: true` |
+| `testTask244bRendererHasPreviewHelpers` | static | `revokeLastAudioObjectUrl`, `playLastAudioPreview`, `_recordVoiceDiagnosticsHistory` |
+| `testTask244bRendererHasPipelineStateVars` | static | `fullAppLastAudioBlob`, `fullAppLastAudioObjectUrl`, `fullAppVoiceDiagnosticsHistory` |
+| `testTask244bDiagnosticsHasNewFields` | sandbox | new fields exist with correct defaults |
+| `testTask244bHistoryDefaultsEmpty` | sandbox | `fullAppVoiceDiagnosticsHistory` starts as `[]` |
+| `testTask244bRecordHistoryPushesEntry` | sandbox | `_recordVoiceDiagnosticsHistory()` pushes entry with correct fields |
+| `testTask244bHistoryMaxTwo` | sandbox | history capped at 2 |
+| `testTask244bResetClearsPreviewFields` | sandbox | reset clears selectedMimeType, bytesPerSecond, lastAudioPreviewAvailable, lastAudioObjectUrlCreated |
+| `testTask244bPreviewBtnStartsDisabled` | sandbox | preview button starts disabled |
+| `testTask244bSelectVoiceMimeTypeSandbox` | sandbox | `selectVoiceMimeType()` returns string |
+| `testTask244bDiagnosticsShowsNewFields` | static | render function shows selectedMimeType, bytesPerSecond, constraints, history |
+| `testTask244bNoRawAudioPersistenceInPipeline` | static | no writeFile/appendFile; uses URL.createObjectURL + revokeObjectURL |
+| `testTask244bNoNewIpcInPipeline` | static | no new ipcRenderer calls |
+| `testTask244bNoPetWindowInPipelineHelpers` | static | pipeline section has no Pet Window calls |
+| `testTask244bRegressionTask244aStillPass` | sandbox | original TASK-244 helpers still present |
+
+### Automated Smoke
+
+- [x] `node apps\desktop\scripts\renderer-chat-smoke.js` PASS (**540 PASS** — 18 TASK-244b + 22 TASK-244 + 500 prior).
+- [x] `node apps\desktop\scripts\pet-window-smoke.js` PASS (82 checks).
+- [x] `node apps\desktop\scripts\pet-renderer-smoke.js` PASS (285 checks).
+- [x] `git diff --check` — LF/CRLF line-ending warnings only (normal for Windows). No whitespace errors.
+
+### Windows Visual Smoke
+
+NEEDS VOICE PIPELINE DEBUG + WINDOWS QUALITY SMOKE.
+
+Suggested test items:
+
+1. App starts normally; Diagnostics panel visible but collapsed; no diagnostics data yet.
+2. Expand diagnostics `<details>` — panel shows "(尚無語音記錄)"; "播放最近錄音" button is disabled (greyed out).
+3. Use Manual Mic (TASK-241 button) — record a sentence, stop. Diagnostics shows: 選取 MimeType (should be audio/webm;codecs=opus), Blob大小, 每秒位元組, STT狀態 = success. "播放最近錄音" button becomes enabled.
+4. Click "播放最近錄音" — should hear the recording clearly. If muffled/distorted: constraints/device problem. If clear but STT fails: STT/model problem.
+5. Audio約束 row should show echo=true, 降噪=true, 增益=true.
+6. Start Conversation Mode — speak and stop. History row "#1 conversation …" appears. Compare with "#1 manual_mic …" if previously done.
+7. Compare Manual Mic vs Conversation Mode bytesPerSecond — should be similar if both use same constraints + mimeType.
+8. VAD tuning — adjust threshold and observe lastRms vs threshold. If lastRms never reaches threshold: raise threshold.
+9. Empty transcript / error cases — STT狀態 shows empty/error; preview button still enabled from last recording.
+10. General regression — chat, edit/delete, Pet Window, Diagnostics Drawer, Output Queue all normal.
+
+### Pipeline Debug Guide
+
+Use the diagnostics panel to determine the likely cause:
+
+| Symptom | Likely cause |
+|---|---|
+| Audio preview (播放最近錄音) sounds clear, but transcript is wrong/empty | STT/model quality issue — consider evaluating alternative STT providers |
+| Audio preview sounds garbled/muffled | Audio constraints not applied, device driver issue, or codec incompatible with Whisper |
+| Manual Mic STT is OK, Conversation Mode STT is bad | VAD sentence clipping — MediaRecorder starts after RMS threshold, first ~100 ms of speech may be missing; reduce RMS threshold or implement pre-roll buffer |
+| bytesPerSecond very low (< 5000) | Audio quality too low — codec bitrate may be inadequate |
+| selectedMimeType shows "" (empty) | Browser doesn't support webm/opus/ogg — audio might be in an incompatible format for Whisper |
+| constraintsEchoCancellation = false | Track settings not applied — might indicate browser/OS audio routing bypasses constraints |
+
+### Follow-up Direction
+
+Recommended next task:
+
+TASK-245 — STT Language Lock / Provider Quality Check (pipeline debug confirmed audio preview is clear; remaining quality issue is STT language auto-detect mis-classifying zh as Thai/Malay/Indonesian).
+
+---
+
+### TASK-244c: Audio Preview Button Fix — DOM Audio Element / Blob Size Guard
+
+Status: DONE (rolled into TASK-244d) — 2026-06-03
+
+Brief: First attempt at fixing the “播放最近錄音” button. Switched in-memory preview from ad-hoc `new Audio(url)` to a hidden `<audio>` element + blob size guard. Did not fully fix the button on Windows due to a CSP `media-src` gap and the hidden-audio element being unable to surface playback errors — see TASK-244d below.
+
+---
+
+### TASK-244d: Audio Preview Fix Round 2 — CSP blob: / Visible Controls / Error Diagnostics
+
+Status: DONE — PIPELINE DEBUG AUDIO PREVIEW PASS / NEEDS STT LANGUAGE FOLLOW-UP (2026-06-03)
+
+Date: 2026-06-03
+
+#### Root causes fixed
+
+1. CSP had no `media-src` → blob: URIs were blocked by `default-src 'self'`.
+2. `<audio hidden>` may silently fail in Electron — user had no visible playback control.
+3. Object URL was revoked on `ended` → preview could not be replayed.
+4. No error details were surfaced (only generic "錄音播放失敗") → diagnosis impossible.
+
+#### Changes
+
+- `apps/desktop/src/renderer/index.html` — CSP meta tag adds `media-src 'self' blob:;`. `<audio hidden>` replaced with `<audio controls class="voice-preview-audio-el">` so the user has visible native playback controls.
+- `apps/desktop/src/renderer/renderer.js` — `playLastAudioPreview` does a `canPlayType` check before `play()`; reports detailed error names (`NotAllowedError`, `audio error code: 4`, …); no longer revokes URL on `ended` so the preview can be replayed. `revokeLastAudioObjectUrl` no longer re-renders diagnostics (callers do that themselves). `resetFullAppVoiceDiagnosticsForRecording` resets new preview fields + calls `revokeLastAudioObjectUrl`.
+- `apps/desktop/src/renderer/styles.css` — `.voice-preview-audio-el` styling for native controls.
+- `apps/desktop/scripts/renderer-chat-smoke.js` — `URL.createObjectURL` / `revokeObjectURL` mocks; FakeElement `voice-preview-audio` gets a `canPlayType` stub; 14 TASK-244c + 12 TASK-244d smoke tests.
+
+#### New diagnostics fields
+
+`objectUrlActive`, `previewStatus`, `previewErrorName`, `previewErrorMessage`, `audioElementErrorCode`, `audioCanPlayTypeResult`, `audioBlobTypeCanPlayResult`.
+
+#### Smoke
+
+- `node apps\desktop\scripts\renderer-chat-smoke.js` PASS — 566 PASS (12 TASK-244d + 14 TASK-244c + 18 TASK-244b + 22 TASK-244 + 500 prior).
+- `node apps\desktop\scripts\pet-window-smoke.js` PASS — 82 checks.
+- `node apps\desktop\scripts\pet-renderer-smoke.js` PASS — 285 checks.
+
+#### Windows Pipeline Debug Smoke — PASS (2026-06-03)
+
+User-confirmed PASS items:
+
+1. ✅ App starts normally; Full App + Pet Window OK.
+2. ✅ Voice Diagnostics panel expands; audio controls visible.
+3. ✅ Manual Mic recording produces a valid audio blob.
+4. ✅ "播放最近錄音" plays the most recent recording via native audio controls.
+5. ✅ Pipeline diagnostics shows blobSize / duration / selectedMimeType / mode metadata.
+
+#### Follow-up — needs further work in TASK-245 (NOT TASK-244)
+
+6. ⚠ STT quality still poor: zh speech is being transcribed as Thai / Malay / Indonesian text.
+7. Confirmed: audio preview is clear → the remaining issue is **not** in capture or codec. It is in STT language detection / provider quality.
+8. Do **not** continue tuning VAD threshold / silence duration in TASK-244 — that direction is closed.
+
+Next task: **TASK-245 — STT Language Lock / Provider Quality Check** (see below).
+
+---
+
+## TASK-245 | STT Language Lock / Provider Quality Check
+
+Status: PLANNED (2026-06-03)
+
+### Goal
+
+Eliminate STT mis-classification of Chinese speech as Thai / Malay / Indonesian by **locking the STT language** instead of relying on Whisper's auto-detection. Surface the active STT language / task / provider / model in the existing diagnostics panel so future quality issues can be diagnosed without source-code reads.
+
+### Scope
+
+- Audit the `stt:transcribe` IPC handler in `apps/desktop/src/main.js` and the backend `/stt/transcribe` route in `backend/app/api/routes.py` → confirm the current language argument path (currently the route does **not** pass `language` to `transcribe_audio_bytes`, so Whisper auto-detects).
+- Force STT `language = "zh"` (or `"zh-TW"` if the provider supports it) end-to-end. Pick the wire mechanism that does not add a new IPC channel.
+- Confirm Whisper `task = "transcribe"` (not `"translate"`) — current code uses the default which is `transcribe`, but add an explicit assertion / test so a regression cannot silently flip it.
+- Add diagnostics fields surfaced in the existing Voice Diagnostics panel:
+  - `sttLanguage` (e.g. `"zh"`)
+  - `languageLocked` (boolean)
+  - `sttTask` (e.g. `"transcribe"`)
+  - `sttProvider` (e.g. `"faster-whisper-local"`)
+  - `sttModel` (e.g. `"tiny"`)
+
+### Restrictions
+
+- **No new IPC channels** — reuse existing `stt:transcribe`.
+- **No new backend endpoints or services** — modifying the existing `/stt/transcribe` route + `transcribe_audio_bytes` signature is allowed; adding new modules is not.
+- **No raw audio persistence** — in-memory only, same as TASK-167B / TASK-244b.
+- **No background / always-listening.**
+- **No changes to Pet Window, Output Queue, or Diagnostics Drawer.**
+- **No localStorage / sessionStorage** for the language setting in this task (session-default only; persistent settings deferred).
+
+### Acceptance Criteria
+
+- Recording Chinese into Manual Mic produces a Chinese transcript (Hanzi), not Thai / Malay / Indonesian characters.
+- Voice Diagnostics panel shows `sttLanguage = zh`, `languageLocked = true`, `sttTask = transcribe`, `sttProvider`, `sttModel`.
+- Existing smoke suites still PASS (renderer-chat, pet-renderer, pet-window, backend tests).
+- New tests cover: backend transcribe call receives `language="zh"`; route accepts the language; renderer displays the diagnostics fields; no new IPC channel introduced.
+
+### Out of Scope
+
+- Switching STT provider (e.g. cloud Whisper, Azure, Google) — that is a separate evaluation (TASK-245b candidate).
+- Pre-roll audio buffer for Conversation Mode VAD clipping.
+- Per-recording language override UI.
+- Multi-language support (English / Japanese toggle).

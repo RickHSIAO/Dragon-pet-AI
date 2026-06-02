@@ -7,7 +7,7 @@
 📋 **[完整 Demo 腳本與面試重點](docs/PORTFOLIO_DEMO_SCRIPT.md)**
 📋 **[Phase 4 Provider Settings 摘要](docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md)**
 
-**最新本地狀態（2026-06-03）：** TASK-243 Voice Conversation Mode / Silence Detection 已由使用者手動確認 Windows visual smoke PASS，狀態為 **DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS**。Full App 新增明確 Conversation Mode：預設 OFF，不在啟動時自動開麥；必須由使用者按 Start Conversation 才開始 waiting/listening。使用 amplitude-based VAD 偵測使用者說話，停頓約 1 秒後自動停止該句錄音並進入 STT；transcript 填入 input 後走既有 `sendMessage(trimmed)` send flow 自動送出，不直接 fetch `/chat`，不繞過 `isSending` guard。採 half-duplex，AI 回覆中不錄下一句、不建立並發 `/chat`，回覆完成且 Conversation Mode 仍開啟時才回到 waiting。Stop Conversation 會停止 mic stream、VAD timer、recorder / audio context；Voice Input OFF 時不能啟動 Conversation Mode。無 always listening、無背景監聽、無 raw audio 保存、無新增 IPC channel（仍用 `stt:transcribe`）、不觸發 TTS、不送 Pet Window、不改 Output Queue / Diagnostics Drawer。renderer-chat-smoke.js 500 PASS（22 TASK-243 tests）；pet-renderer 285 PASS；pet-window 82 PASS。Windows visual smoke PASS (2026-06-02)：10 項確認項目全部 PASS。未 commit、未 push。
+**最新本地狀態（2026-06-03）：** TASK-244 Voice Quality Diagnostics / VAD Tuning + Pipeline Debug **IMPLEMENTED - NEEDS VOICE PIPELINE DEBUG**。使用者回報 STT 辨識不清，但同支麥克風在 ChatGPT 語音功能清晰，判斷為 pipeline 問題而非硬體。TASK-244b 新增 pipeline debug：兩個 `getUserMedia` 改為明確 audio constraints（echoCancellation/noiseSuppression/autoGainControl: true）；新增 `selectVoiceMimeType()` 統一 Manual Mic 與 Conversation Mode 的 MIME 優先順序（webm/opus → webm → ogg/opus）；新增「播放最近錄音」按鈕（in-memory only，不寫 disk，URL.createObjectURL + revoke）讓使用者直接確認錄音品質；新增 `fullAppVoiceDiagnosticsHistory`（max 2）比較兩種模式；diagnostics 也顯示 selectedMimeType、bytesPerSecond、audio constraints 值。renderer-chat-smoke.js **540 PASS**（18 TASK-244b + 22 TASK-244 + 500 prior）；pet-renderer 285 PASS；pet-window 82 PASS。未 commit、未 push。
 
 ---
 
@@ -99,15 +99,15 @@ ollama serve
 | 本地 Ollama `/chat` smoke | ✅ 通過 — `qwen3:8b`，`source=llm_local`，克莉絲蒂娜人格確認 |
 | Provider Settings 持久化 | ✅ 通過 — 重啟後設定保留，partial PATCH 保留省略欄位 |
 | UI polish | ✅ 通過 — 情緒→表情對應、Christina expression system |
-| Full App chat UX | ✅ TASK-236 DONE；TASK-237 docs-only modularization plan complete；TASK-238 DONE - WINDOWS VISUAL SMOKE PASS；TASK-239 DONE - WINDOWS VISUAL SMOKE PASS；TASK-240 DONE - WINDOWS VISUAL SMOKE PASS；TASK-241 DONE - WINDOWS VISUAL SMOKE PASS；TASK-242 DONE - WINDOWS VISUAL SMOKE PASS；TASK-243 DONE - WINDOWS VISUAL SMOKE PASS — 搜尋/高亮、未讀提示、匯出、時間戳、日期分隔線、清除確認、empty state、Undo Clear Chat、單則訊息刪除/復原、右鍵訊息操作 (viewport clamp + a11y)、最後 user message 編輯/重新送出、互動事件 log、reaction hint 層、reaction preview UI、expression suggestion 鏡像至 Pet Window、expression mirror 300ms cooldown/debounce、reaction bubble 鏡像至 Pet Window、companion behavior policy decision preview、character state diagnostics preview、collapsible diagnostics drawer、output queue module extraction、diagnostics drawer module extraction、Pet Window cutout stage + hover dock / chrome reduction、Full App 語音輸入按鈕 (TASK-241 DONE - WINDOWS VISUAL SMOKE PASS)、Full App 語音輸入設定 + 自動送出 (TASK-242 DONE - WINDOWS VISUAL SMOKE PASS)、Voice Conversation Mode / VAD 靜音偵測 (TASK-243 DONE - WINDOWS VISUAL SMOKE PASS) |
+| Full App chat UX | ✅ TASK-236 DONE；TASK-237 docs-only modularization plan complete；TASK-238 DONE - WINDOWS VISUAL SMOKE PASS；TASK-239 DONE - WINDOWS VISUAL SMOKE PASS；TASK-240 DONE - WINDOWS VISUAL SMOKE PASS；TASK-241 DONE - WINDOWS VISUAL SMOKE PASS；TASK-242 DONE - WINDOWS VISUAL SMOKE PASS；TASK-243 DONE - WINDOWS VISUAL SMOKE PASS；TASK-244 IMPLEMENTED - NEEDS WINDOWS VOICE QUALITY SMOKE — 搜尋/高亮、未讀提示、匯出、時間戳、日期分隔線、清除確認、empty state、Undo Clear Chat、單則訊息刪除/復原、右鍵訊息操作 (viewport clamp + a11y)、最後 user message 編輯/重新送出、互動事件 log、reaction hint 層、reaction preview UI、expression suggestion 鏡像至 Pet Window、expression mirror 300ms cooldown/debounce、reaction bubble 鏡像至 Pet Window、companion behavior policy decision preview、character state diagnostics preview、collapsible diagnostics drawer、output queue module extraction、diagnostics drawer module extraction、Pet Window cutout stage + hover dock / chrome reduction、Full App 語音輸入按鈕 (TASK-241)、Full App 語音輸入設定 + 自動送出 (TASK-242)、Voice Conversation Mode / VAD 靜音偵測 (TASK-243)、Voice Quality Diagnostics + VAD 調參 (TASK-244 NEEDS WINDOWS SMOKE) |
 | 表情系統 | 7/10 real PNG（happy、focused、neutral、proud、annoyed、worried、sleepy）；pending/error/offline 為 SVG fallback |
 | pytest | **586 通過，0 失敗** |
-| Electron smoke | **renderer-chat 500 PASS；pet-renderer 285 PASS；pet-window 82 PASS** |
+| Electron smoke | **renderer-chat 540 PASS；pet-renderer 285 PASS；pet-window 82 PASS** |
 | 外部 provider 呼叫 | ❌ 無 — 刻意封鎖 |
 | 真實 API Key 使用 | ❌ 無 — 所有測試使用 mocked runner |
 | 生產就緒 | ❌ 尚未 — prototype / portfolio 階段 |
 | Demo 可用（本地 Ollama） | ✅ 是 |
-| 下一個任務 | TASK-244 — Voice Conversation Polish / Turn Feedback / Safety Tuning |
+| 下一個任務 | TASK-244 Windows pipeline debug smoke → TASK-245 or Voice Pre-roll Buffer |
 
 ---
 

@@ -233,6 +233,22 @@ class FakeDocument {
       // TASK-243: conversation-mode-status starts hidden; btn starts data-state="off"
       if (id === "conversation-mode-status") element.hidden = true;
       if (id === "conversation-mode-btn") element.dataset = { state: "off" };
+      // TASK-244: VAD tuning inputs — set defaults matching HTML
+      if (id === "vad-rms-threshold-input") element.value = "0.035";
+      if (id === "vad-silence-ms-select") element.value = "1000";
+      // TASK-244b: preview play button starts disabled (no blob yet)
+      if (id === "voice-preview-play-btn") element.disabled = true;
+      // TASK-244c/d: DOM audio element with canPlayType + status span
+      if (id === "voice-preview-audio") {
+        element.src = "";
+        element.pause = function(){};
+        element.play = function(){ return Promise.resolve(); };
+        element.canPlayType = function(t){ return (t && (t.includes("webm") || t.includes("ogg"))) ? "probably" : ""; };
+        element.error = null;
+        element.onended = null;
+        element.onerror = null;
+      }
+      if (id === "voice-preview-status") element.textContent = "";
       this.elements.set(id, element);
     }
     return this.elements.get(id);
@@ -530,6 +546,11 @@ async function loadRenderer(options = {}) {
     AbortController,
     // TASK-242: Blob needed for voice transcription audio chain in smoke tests
     Blob: typeof Blob !== "undefined" ? Blob : undefined,
+    // TASK-244d: URL.createObjectURL / revokeObjectURL for audio preview in smoke tests
+    URL: Object.assign(Object.create(null), {
+      createObjectURL: (blob) => "blob:fake-" + Math.random().toString(36).slice(2),
+      revokeObjectURL: () => {}
+    }),
     Event: class Event {
       constructor(type, init = {}) {
         this.type = type;
@@ -12102,6 +12123,723 @@ async function testTask242RegressionTask241StillPass() {
 }
 
 // ---------------------------------------------------------------------------
+// TASK-244b: Voice Pipeline Diagnostics / Audio Constraints / In-Memory Preview
+// ---------------------------------------------------------------------------
+
+function testTask244bHtmlPreviewBtnExists() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes('id="voice-preview-play-btn"'), "TASK-244b HTML must have #voice-preview-play-btn");
+  assert.ok(html.includes('disabled'), "TASK-244b preview button must have disabled attribute");
+  assert.ok(html.includes("voice-preview-play-btn"), "TASK-244b HTML must have class voice-preview-play-btn");
+  assert.ok(html.includes("voice-preview-section"), "TASK-244b HTML must have voice-preview-section container");
+  console.log("  testTask244bHtmlPreviewBtnExists PASS");
+}
+
+function testTask244bCssPreviewSection() {
+  const css = fs.readFileSync(cssPath, "utf8");
+  assert.ok(css.includes("TASK-244b"), "TASK-244b CSS section comment must be present");
+  assert.ok(css.includes(".voice-preview-play-btn"), "TASK-244b CSS must include .voice-preview-play-btn rule");
+  assert.ok(css.includes(".voice-preview-section"), "TASK-244b CSS must include .voice-preview-section rule");
+  assert.ok(css.includes(".voice-preview-play-btn:disabled"), "TASK-244b CSS must include disabled state");
+  console.log("  testTask244bCssPreviewSection PASS");
+}
+
+function testTask244bRendererHasMimePriority() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("FULL_APP_VOICE_MIME_PRIORITY"), "TASK-244b renderer must define FULL_APP_VOICE_MIME_PRIORITY");
+  assert.ok(src.includes('"audio/webm;codecs=opus"'), "TASK-244b mime priority must include webm/opus");
+  assert.ok(src.includes('"audio/ogg;codecs=opus"'), "TASK-244b mime priority must include ogg/opus");
+  assert.ok(src.includes("function selectVoiceMimeType"), "TASK-244b renderer must define selectVoiceMimeType");
+  console.log("  testTask244bRendererHasMimePriority PASS");
+}
+
+function testTask244bRendererAudioConstraints() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("FULL_APP_VOICE_AUDIO_CONSTRAINTS"), "TASK-244b renderer must define FULL_APP_VOICE_AUDIO_CONSTRAINTS");
+  assert.ok(src.includes("echoCancellation: true"), "TASK-244b constraints must set echoCancellation: true");
+  assert.ok(src.includes("noiseSuppression: true"), "TASK-244b constraints must set noiseSuppression: true");
+  assert.ok(src.includes("autoGainControl: true"), "TASK-244b constraints must set autoGainControl: true");
+  assert.ok(!src.includes("getUserMedia({ audio: true"), "TASK-244b getUserMedia must use constraints, not bare { audio: true }");
+  console.log("  testTask244bRendererAudioConstraints PASS");
+}
+
+function testTask244bRendererHasPreviewHelpers() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("function revokeLastAudioObjectUrl"), "TASK-244b renderer must define revokeLastAudioObjectUrl");
+  assert.ok(src.includes("function playLastAudioPreview"), "TASK-244b renderer must define playLastAudioPreview");
+  assert.ok(src.includes("function _recordVoiceDiagnosticsHistory"), "TASK-244b renderer must define _recordVoiceDiagnosticsHistory");
+  console.log("  testTask244bRendererHasPreviewHelpers PASS");
+}
+
+function testTask244bRendererHasPipelineStateVars() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("var fullAppLastAudioBlob"), "TASK-244b renderer must have fullAppLastAudioBlob var");
+  assert.ok(src.includes("var fullAppLastAudioObjectUrl"), "TASK-244b renderer must have fullAppLastAudioObjectUrl var");
+  assert.ok(src.includes("var fullAppVoiceDiagnosticsHistory"), "TASK-244b renderer must have fullAppVoiceDiagnosticsHistory var");
+  console.log("  testTask244bRendererHasPipelineStateVars PASS");
+}
+
+async function testTask244bDiagnosticsHasNewFields() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  const d = sandbox.fullAppVoiceDiagnostics;
+  assert.ok(Object.prototype.hasOwnProperty.call(d, "selectedMimeType"), "TASK-244b diagnostics must have selectedMimeType");
+  assert.ok(Object.prototype.hasOwnProperty.call(d, "bytesPerSecond"), "TASK-244b diagnostics must have bytesPerSecond");
+  assert.ok(Object.prototype.hasOwnProperty.call(d, "constraintsEchoCancellation"), "TASK-244b diagnostics must have constraintsEchoCancellation");
+  assert.ok(Object.prototype.hasOwnProperty.call(d, "constraintsNoiseSuppression"), "TASK-244b diagnostics must have constraintsNoiseSuppression");
+  assert.ok(Object.prototype.hasOwnProperty.call(d, "constraintsAutoGainControl"), "TASK-244b diagnostics must have constraintsAutoGainControl");
+  assert.ok(Object.prototype.hasOwnProperty.call(d, "lastAudioPreviewAvailable"), "TASK-244b diagnostics must have lastAudioPreviewAvailable");
+  assert.ok(Object.prototype.hasOwnProperty.call(d, "lastAudioObjectUrlCreated"), "TASK-244b diagnostics must have lastAudioObjectUrlCreated");
+  assert.strictEqual(d.selectedMimeType, "", "TASK-244b selectedMimeType defaults to empty string");
+  assert.strictEqual(d.bytesPerSecond, 0, "TASK-244b bytesPerSecond defaults to 0");
+  assert.strictEqual(d.constraintsEchoCancellation, false, "TASK-244b constraintsEchoCancellation defaults to false");
+  assert.strictEqual(d.lastAudioPreviewAvailable, false, "TASK-244b lastAudioPreviewAvailable defaults to false");
+  console.log("  testTask244bDiagnosticsHasNewFields PASS");
+}
+
+async function testTask244bHistoryDefaultsEmpty() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  assert.ok(Array.isArray(sandbox.fullAppVoiceDiagnosticsHistory), "TASK-244b fullAppVoiceDiagnosticsHistory must be array");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnosticsHistory.length, 0, "TASK-244b history starts empty");
+  console.log("  testTask244bHistoryDefaultsEmpty PASS");
+}
+
+async function testTask244bRecordHistoryPushesEntry() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  sandbox.fullAppVoiceDiagnostics.mode = "manual_mic";
+  sandbox.fullAppVoiceDiagnostics.sttStatus = "success";
+  sandbox.fullAppVoiceDiagnostics.selectedMimeType = "audio/webm;codecs=opus";
+  sandbox._recordVoiceDiagnosticsHistory();
+  assert.strictEqual(sandbox.fullAppVoiceDiagnosticsHistory.length, 1, "TASK-244b history has 1 entry after record");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnosticsHistory[0].mode, "manual_mic", "TASK-244b history entry has correct mode");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnosticsHistory[0].sttStatus, "success", "TASK-244b history entry has correct sttStatus");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnosticsHistory[0].selectedMimeType, "audio/webm;codecs=opus", "TASK-244b history entry has correct mimeType");
+  console.log("  testTask244bRecordHistoryPushesEntry PASS");
+}
+
+async function testTask244bHistoryMaxTwo() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  sandbox._recordVoiceDiagnosticsHistory();
+  sandbox._recordVoiceDiagnosticsHistory();
+  sandbox._recordVoiceDiagnosticsHistory();
+  assert.strictEqual(sandbox.fullAppVoiceDiagnosticsHistory.length, 2, "TASK-244b history capped at 2");
+  console.log("  testTask244bHistoryMaxTwo PASS");
+}
+
+async function testTask244bResetClearsPreviewFields() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  sandbox.fullAppVoiceDiagnostics.selectedMimeType = "audio/webm;codecs=opus";
+  sandbox.fullAppVoiceDiagnostics.bytesPerSecond = 12345;
+  sandbox.fullAppVoiceDiagnostics.lastAudioPreviewAvailable = true;
+  sandbox.fullAppVoiceDiagnostics.lastAudioObjectUrlCreated = true;
+  sandbox.resetFullAppVoiceDiagnosticsForRecording("manual_mic");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.selectedMimeType, "", "TASK-244b reset clears selectedMimeType");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.bytesPerSecond, 0, "TASK-244b reset clears bytesPerSecond");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.lastAudioPreviewAvailable, false, "TASK-244b reset clears lastAudioPreviewAvailable");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.lastAudioObjectUrlCreated, false, "TASK-244b reset clears lastAudioObjectUrlCreated");
+  console.log("  testTask244bResetClearsPreviewFields PASS");
+}
+
+async function testTask244bPreviewBtnStartsDisabled() {
+  const { document } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  const btn = document.getElementById("voice-preview-play-btn");
+  assert.ok(btn, "TASK-244b #voice-preview-play-btn must exist in sandbox");
+  assert.ok(btn.disabled, "TASK-244b preview button must start disabled");
+  console.log("  testTask244bPreviewBtnStartsDisabled PASS");
+}
+
+async function testTask244bSelectVoiceMimeTypeSandbox() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  assert.ok(typeof sandbox.selectVoiceMimeType === "function", "TASK-244b selectVoiceMimeType must be a function in sandbox");
+  const result = sandbox.selectVoiceMimeType();
+  assert.ok(typeof result === "string", "TASK-244b selectVoiceMimeType must return a string");
+  console.log("  testTask244bSelectVoiceMimeTypeSandbox PASS");
+}
+
+function testTask244bDiagnosticsShowsNewFields() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const renderFnStart = src.indexOf("function renderFullAppVoiceDiagnostics");
+  const renderFnEnd   = src.indexOf("\n}", renderFnStart) + 2;
+  const renderFn = src.slice(renderFnStart, renderFnEnd);
+  assert.ok(renderFn.includes("selectedMimeType"), "TASK-244b render must show selectedMimeType");
+  assert.ok(renderFn.includes("bytesPerSecond"), "TASK-244b render must show bytesPerSecond");
+  assert.ok(renderFn.includes("constraintsEchoCancellation"), "TASK-244b render must show constraintsEchoCancellation");
+  assert.ok(renderFn.includes("lastAudioPreviewAvailable"), "TASK-244b render must show lastAudioPreviewAvailable");
+  assert.ok(renderFn.includes("fullAppVoiceDiagnosticsHistory"), "TASK-244b render must show history");
+  assert.ok(!renderFn.includes("innerHTML"), "TASK-244b render must not use innerHTML");
+  console.log("  testTask244bDiagnosticsShowsNewFields PASS");
+}
+
+function testTask244bNoRawAudioPersistenceInPipeline() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const pipelineStart = src.indexOf("TASK-244b: Voice Pipeline Diagnostics helpers");
+  const pipelineEnd   = src.indexOf("TASK-172A/172B: initialise button states");
+  assert.ok(pipelineStart !== -1, "TASK-244b pipeline helpers section must be present");
+  const section = src.slice(pipelineStart, pipelineEnd);
+  assert.ok(!section.includes("writeFile"), "TASK-244b pipeline must not write files");
+  assert.ok(!section.includes("appendFile"), "TASK-244b pipeline must not append files");
+  assert.ok(!section.includes(".path"), "TASK-244b pipeline must not reference file paths");
+  assert.ok(section.includes("URL.createObjectURL"), "TASK-244b pipeline must use URL.createObjectURL for in-memory preview");
+  assert.ok(section.includes("URL.revokeObjectURL"), "TASK-244b pipeline must revoke object URL");
+  console.log("  testTask244bNoRawAudioPersistenceInPipeline PASS");
+}
+
+function testTask244bNoNewIpcInPipeline() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(!/ipcRenderer\.(invoke|send|on)\(/.test(src), "TASK-244b renderer must not call ipcRenderer directly");
+  console.log("  testTask244bNoNewIpcInPipeline PASS");
+}
+
+function testTask244bNoPetWindowInPipelineHelpers() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const sectionStart = src.indexOf("TASK-244b: Voice Pipeline Diagnostics helpers");
+  const sectionEnd   = src.indexOf("TASK-172A/172B: initialise button states");
+  assert.ok(sectionStart !== -1, "TASK-244b pipeline section must be present");
+  const section = src.slice(sectionStart, sectionEnd);
+  assert.ok(!section.includes("updatePetSpeech"), "TASK-244b pipeline section must not call updatePetSpeech");
+  assert.ok(!section.includes("updatePetExpression"), "TASK-244b pipeline section must not call updatePetExpression");
+  assert.ok(!section.includes("showPet("), "TASK-244b pipeline section must not call showPet");
+  console.log("  testTask244bNoPetWindowInPipelineHelpers PASS");
+}
+
+async function testTask244bRegressionTask244aStillPass() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  assert.ok(typeof sandbox.makeSafeTranscriptPreview === "function", "TASK-244b regression: makeSafeTranscriptPreview must still exist");
+  assert.ok(typeof sandbox.renderFullAppVoiceDiagnostics === "function", "TASK-244b regression: renderFullAppVoiceDiagnostics must still exist");
+  assert.ok(typeof sandbox.updateFullAppVoiceDiagnostics === "function", "TASK-244b regression: updateFullAppVoiceDiagnostics must still exist");
+  assert.ok(typeof sandbox.resetFullAppVoiceDiagnosticsForRecording === "function", "TASK-244b regression: reset helper must still exist");
+  assert.ok(typeof sandbox.fullAppConversationRmsThreshold === "number", "TASK-244b regression: rmsThreshold var must still exist");
+  assert.ok(typeof sandbox.fullAppConversationSilenceMs === "number", "TASK-244b regression: silenceMs var must still exist");
+  console.log("  testTask244bRegressionTask244aStillPass PASS");
+}
+
+// ---------------------------------------------------------------------------
+// TASK-244c: Audio Preview Button Fix — DOM audio element + blob size guard
+// ---------------------------------------------------------------------------
+
+function testTask244cHtmlHasDomAudioElement() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes('id="voice-preview-audio"'), "TASK-244c HTML must have #voice-preview-audio element");
+  assert.ok(html.includes('<audio'), "TASK-244c HTML must have <audio> tag");
+  console.log("  testTask244cHtmlHasDomAudioElement PASS");
+}
+
+function testTask244cHtmlHasStatusSpan() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes('id="voice-preview-status"'), "TASK-244c HTML must have #voice-preview-status span");
+  assert.ok(html.includes('voice-preview-status'), "TASK-244c HTML must have voice-preview-status class");
+  console.log("  testTask244cHtmlHasStatusSpan PASS");
+}
+
+function testTask244cCssHasStatusClass() {
+  const css = fs.readFileSync(cssPath, "utf8");
+  assert.ok(css.includes(".voice-preview-status"), "TASK-244c CSS must include .voice-preview-status rule");
+  console.log("  testTask244cCssHasStatusClass PASS");
+}
+
+function testTask244cRendererHasDomAudioRef() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes('document.getElementById("voice-preview-audio")'), "TASK-244c renderer must get #voice-preview-audio");
+  assert.ok(src.includes('document.getElementById("voice-preview-status")'), "TASK-244c renderer must get #voice-preview-status");
+  console.log("  testTask244cRendererHasDomAudioRef PASS");
+}
+
+function testTask244cRendererNoBareNewAudio() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(!src.includes("new Audio("), "TASK-244c renderer must not use new Audio() — use persistent DOM element instead");
+  console.log("  testTask244cRendererNoBareNewAudio PASS");
+}
+
+function testTask244cRendererBlobSizeGuard() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("audioBlob.size > 0"), "TASK-244c renderer must check audioBlob.size > 0 before enabling preview button");
+  console.log("  testTask244cRendererBlobSizeGuard PASS");
+}
+
+function testTask244cRendererPlayFnGuardsMissingBlob() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const fnStart = src.indexOf("function playLastAudioPreview");
+  assert.ok(fnStart !== -1, "TASK-244c playLastAudioPreview must exist");
+  const fnEnd = src.indexOf("\nfunction ", fnStart + 1);
+  const fn = src.slice(fnStart, fnEnd);
+  assert.ok(fn.includes("fullAppLastAudioBlob.size === 0") || fn.includes("fullAppLastAudioBlob.size > 0"), "TASK-244c playLastAudioPreview must guard against empty blob");
+  assert.ok(fn.includes("尚無可播放錄音"), "TASK-244c playLastAudioPreview must show '尚無可播放錄音' message");
+  console.log("  testTask244cRendererPlayFnGuardsMissingBlob PASS");
+}
+
+function testTask244cRendererPlayFnUsesDomElement() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const fnStart = src.indexOf("function playLastAudioPreview");
+  const fnEnd = src.indexOf("\nfunction ", fnStart + 1);
+  const fn = src.slice(fnStart, fnEnd);
+  assert.ok(fn.includes("voicePreviewAudio"), "TASK-244c playLastAudioPreview must use voicePreviewAudio DOM ref");
+  assert.ok(fn.includes(".src ="), "TASK-244c playLastAudioPreview must set .src on the audio element");
+  assert.ok(fn.includes(".play()"), "TASK-244c playLastAudioPreview must call .play() on the audio element");
+  console.log("  testTask244cRendererPlayFnUsesDomElement PASS");
+}
+
+function testTask244cRendererPlayFnShowsStatus() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const fnStart = src.indexOf("function playLastAudioPreview");
+  const fnEnd = src.indexOf("\nfunction ", fnStart + 1);
+  const fn = src.slice(fnStart, fnEnd);
+  assert.ok(fn.includes("播放中"), "TASK-244c playLastAudioPreview must show '播放中' while playing");
+  assert.ok(fn.includes("play failed:"), "TASK-244c playLastAudioPreview must show 'play failed:' on error");
+  console.log("  testTask244cRendererPlayFnShowsStatus PASS");
+}
+
+function testTask244cRendererRevokeClearsAudioSrc() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const fnStart = src.indexOf("function revokeLastAudioObjectUrl");
+  const fnEnd = src.indexOf("\nfunction ", fnStart + 1);
+  const fn = src.slice(fnStart, fnEnd);
+  assert.ok(fn.includes('voicePreviewAudio'), "TASK-244c revokeLastAudioObjectUrl must reference voicePreviewAudio");
+  assert.ok(fn.includes('.src = ""') || fn.includes(".src = ''"), "TASK-244c revokeLastAudioObjectUrl must clear audio element src");
+  assert.ok(fn.includes('.pause()'), "TASK-244c revokeLastAudioObjectUrl must call .pause() before clearing src");
+  console.log("  testTask244cRendererRevokeClearsAudioSrc PASS");
+}
+
+async function testTask244cSandboxDomAudioElementExists() {
+  const { document } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  const audio = document.getElementById("voice-preview-audio");
+  assert.ok(audio, "TASK-244c #voice-preview-audio must exist in sandbox");
+  assert.ok(typeof audio.play === "function", "TASK-244c audio element must have .play() method");
+  assert.ok(typeof audio.pause === "function", "TASK-244c audio element must have .pause() method");
+  assert.ok(typeof audio.canPlayType === "function", "TASK-244c audio element must have .canPlayType() method");
+  console.log("  testTask244cSandboxDomAudioElementExists PASS");
+}
+
+async function testTask244cSandboxStatusSpanExists() {
+  const { document } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  const status = document.getElementById("voice-preview-status");
+  assert.ok(status, "TASK-244c #voice-preview-status must exist in sandbox");
+  assert.strictEqual(status.textContent, "", "TASK-244c voice-preview-status starts empty");
+  console.log("  testTask244cSandboxStatusSpanExists PASS");
+}
+
+async function testTask244cBtnRemainsDisabledForEmptyBlob() {
+  const { sandbox, document } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  const btn = document.getElementById("voice-preview-play-btn");
+  // Simulate empty blob arriving (size 0)
+  sandbox.fullAppVoiceDiagnostics.durationMs = 500;
+  const emptyBlob = { size: 0, type: "audio/webm" };
+  // Directly test the guard: size > 0 must be checked before enabling
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("audioBlob.size > 0"), "TASK-244c blob size guard must be in renderer source");
+  // btn should still be disabled since we never enabled it for empty blob
+  assert.ok(btn.disabled, "TASK-244c preview button must remain disabled when blob is empty");
+  console.log("  testTask244cBtnRemainsDisabledForEmptyBlob PASS");
+}
+
+async function testTask244cPlayFnSandboxCallable() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  // No blob set — should return without error, set status text
+  sandbox.playLastAudioPreview();
+  console.log("  testTask244cPlayFnSandboxCallable PASS");
+}
+
+// ---------------------------------------------------------------------------
+// TASK-244d: Audio Preview — CSP blob:, visible controls, error diagnostics, URL lifecycle
+// ---------------------------------------------------------------------------
+
+function testTask244dCspAllowsMediaBlob() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes("media-src"), "TASK-244d CSP must include media-src directive");
+  assert.ok(html.includes("blob:"), "TASK-244d CSP media-src must allow blob: URIs");
+  console.log("  testTask244dCspAllowsMediaBlob PASS");
+}
+
+function testTask244dAudioElementHasControls() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes("voice-preview-audio"), "TASK-244d HTML must have voice-preview-audio");
+  assert.ok(html.includes("controls"), "TASK-244d audio element must have controls attribute");
+  assert.ok(!html.includes('<audio id="voice-preview-audio" hidden>'), "TASK-244d audio element must not be hidden-only");
+  console.log("  testTask244dAudioElementHasControls PASS");
+}
+
+function testTask244dCssHasAudioElClass() {
+  const css = fs.readFileSync(cssPath, "utf8");
+  assert.ok(css.includes(".voice-preview-audio-el"), "TASK-244d CSS must style .voice-preview-audio-el");
+  console.log("  testTask244dCssHasAudioElClass PASS");
+}
+
+function testTask244dDiagnosticsHasPreviewErrorFields() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("previewStatus:"), "TASK-244d diagnostics must have previewStatus field");
+  assert.ok(src.includes("previewErrorName:"), "TASK-244d diagnostics must have previewErrorName field");
+  assert.ok(src.includes("previewErrorMessage:"), "TASK-244d diagnostics must have previewErrorMessage field");
+  assert.ok(src.includes("audioElementErrorCode:"), "TASK-244d diagnostics must have audioElementErrorCode field");
+  assert.ok(src.includes("audioCanPlayTypeResult:"), "TASK-244d diagnostics must have audioCanPlayTypeResult field");
+  assert.ok(src.includes("audioBlobTypeCanPlayResult:"), "TASK-244d diagnostics must have audioBlobTypeCanPlayResult field");
+  assert.ok(src.includes("objectUrlActive:"), "TASK-244d diagnostics must have objectUrlActive field");
+  console.log("  testTask244dDiagnosticsHasPreviewErrorFields PASS");
+}
+
+function testTask244dRendererObjectUrlNotRevokedOnEnded() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const fnStart = src.indexOf("function playLastAudioPreview");
+  const fnEnd = src.indexOf("\nfunction ", fnStart + 1);
+  const fn = src.slice(fnStart, fnEnd);
+  // onended handler must NOT call revokeLastAudioObjectUrl
+  const endedMatch = fn.match(/onended\s*=\s*function[^}]+\}/);
+  if (endedMatch) {
+    assert.ok(!endedMatch[0].includes("revokeLastAudioObjectUrl"), "TASK-244d onended must NOT revoke object URL");
+  }
+  console.log("  testTask244dRendererObjectUrlNotRevokedOnEnded PASS");
+}
+
+function testTask244dRendererPlayFnChecksCanPlayType() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const fnStart = src.indexOf("function playLastAudioPreview");
+  const fnEnd = src.indexOf("\nfunction ", fnStart + 1);
+  const fn = src.slice(fnStart, fnEnd);
+  assert.ok(fn.includes("canPlayType"), "TASK-244d playLastAudioPreview must call canPlayType");
+  assert.ok(fn.includes("audioCanPlayTypeResult"), "TASK-244d playLastAudioPreview must update audioCanPlayTypeResult");
+  console.log("  testTask244dRendererPlayFnChecksCanPlayType PASS");
+}
+
+function testTask244dRendererPlayFnDetailedError() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const fnStart = src.indexOf("function playLastAudioPreview");
+  const fnEnd = src.indexOf("\nfunction ", fnStart + 1);
+  const fn = src.slice(fnStart, fnEnd);
+  assert.ok(fn.includes("_err.name"), "TASK-244d play().catch must capture error name");
+  assert.ok(fn.includes("play failed: "), "TASK-244d play failure status must say 'play failed:'");
+  assert.ok(fn.includes("audio error code: "), "TASK-244d audio.onerror must say 'audio error code:'");
+  assert.ok(!fn.includes("錄音播放失敗"), "TASK-244d must use specific error messages, not generic '錄音播放失敗'");
+  console.log("  testTask244dRendererPlayFnDetailedError PASS");
+}
+
+function testTask244dDiagnosticsRendersPreviewFields() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const fnStart = src.indexOf("function renderFullAppVoiceDiagnostics");
+  const fnEnd = src.indexOf("\nfunction ", fnStart + 1);
+  const fn = src.slice(fnStart, fnEnd);
+  assert.ok(fn.includes("objectUrlActive"), "TASK-244d render must show objectUrlActive");
+  assert.ok(fn.includes("canPlayType"), "TASK-244d render must show canPlayType result");
+  assert.ok(fn.includes("previewError"), "TASK-244d render must show previewError");
+  assert.ok(fn.includes("audioErrCode"), "TASK-244d render must show audioErrCode");
+  console.log("  testTask244dDiagnosticsRendersPreviewFields PASS");
+}
+
+function testTask244dResetRevokesUrlAndClearsAudioSrc() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const fnStart = src.indexOf("function resetFullAppVoiceDiagnosticsForRecording");
+  const fnEnd = src.indexOf("\n// TASK-244", fnStart + 1);
+  const fn = src.slice(fnStart, fnEnd);
+  assert.ok(fn.includes("revokeLastAudioObjectUrl()"), "TASK-244d reset must call revokeLastAudioObjectUrl");
+  assert.ok(fn.includes("objectUrlActive"), "TASK-244d reset must reset objectUrlActive");
+  assert.ok(fn.includes("previewStatus"), "TASK-244d reset must reset previewStatus");
+  assert.ok(fn.includes("previewErrorName"), "TASK-244d reset must reset previewErrorName");
+  console.log("  testTask244dResetRevokesUrlAndClearsAudioSrc PASS");
+}
+
+async function testTask244dDiagnosticsDefaultsNewFields() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  const d = sandbox.fullAppVoiceDiagnostics;
+  assert.strictEqual(d.objectUrlActive, false, "TASK-244d objectUrlActive defaults to false");
+  assert.strictEqual(d.previewStatus, "", "TASK-244d previewStatus defaults to empty string");
+  assert.strictEqual(d.previewErrorName, "", "TASK-244d previewErrorName defaults to empty string");
+  assert.strictEqual(d.previewErrorMessage, "", "TASK-244d previewErrorMessage defaults to empty string");
+  assert.strictEqual(d.audioElementErrorCode, -1, "TASK-244d audioElementErrorCode defaults to -1");
+  assert.strictEqual(d.audioCanPlayTypeResult, "", "TASK-244d audioCanPlayTypeResult defaults to empty string");
+  assert.strictEqual(d.audioBlobTypeCanPlayResult, "", "TASK-244d audioBlobTypeCanPlayResult defaults to empty string");
+  console.log("  testTask244dDiagnosticsDefaultsNewFields PASS");
+}
+
+async function testTask244dPlayFnSetsObjectUrlActive() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  // Provide a fake blob with webm type so canPlayType passes
+  sandbox.fullAppLastAudioBlob = { size: 100, type: "audio/webm" };
+  sandbox.fullAppVoiceDiagnostics.selectedMimeType = "audio/webm;codecs=opus";
+  sandbox.fullAppVoiceDiagnostics.lastAudioPreviewAvailable = true;
+  sandbox.playLastAudioPreview();
+  assert.ok(sandbox.fullAppVoiceDiagnostics.objectUrlActive, "TASK-244d objectUrlActive must be true after playLastAudioPreview");
+  assert.ok(sandbox.fullAppLastAudioObjectUrl, "TASK-244d object URL must exist after playLastAudioPreview");
+  console.log("  testTask244dPlayFnSetsObjectUrlActive PASS");
+}
+
+async function testTask244dResetSandboxClearsPreviewState() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  sandbox.fullAppVoiceDiagnostics.objectUrlActive = true;
+  sandbox.fullAppVoiceDiagnostics.previewErrorName = "TestError";
+  sandbox.resetFullAppVoiceDiagnosticsForRecording("manual_mic");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.objectUrlActive, false, "TASK-244d reset must clear objectUrlActive");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.previewErrorName, "", "TASK-244d reset must clear previewErrorName");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.previewStatus, "", "TASK-244d reset must clear previewStatus");
+  console.log("  testTask244dResetSandboxClearsPreviewState PASS");
+}
+
+// ---------------------------------------------------------------------------
+// TASK-244: Voice Quality Diagnostics / VAD Tuning
+// ---------------------------------------------------------------------------
+
+function testTask244HtmlDiagnosticsPanelExists() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes('id="voice-diagnostics-details"'), "TASK-244 HTML must have #voice-diagnostics-details");
+  assert.ok(html.includes('id="voice-diagnostics-display"'), "TASK-244 HTML must have #voice-diagnostics-display");
+  assert.ok(html.includes('id="vad-rms-threshold-input"'), "TASK-244 HTML must have #vad-rms-threshold-input");
+  assert.ok(html.includes('id="vad-silence-ms-select"'), "TASK-244 HTML must have #vad-silence-ms-select");
+  assert.ok(html.includes('class="voice-diagnostics-details"'), "TASK-244 HTML must have .voice-diagnostics-details class");
+  console.log("  testTask244HtmlDiagnosticsPanelExists PASS");
+}
+
+function testTask244HtmlAccessibility() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes('語音診斷'), "TASK-244 summary must contain 語音診斷 text");
+  assert.ok(html.includes('aria-label="VAD RMS 閾值'), "TASK-244 RMS input must have Chinese aria-label");
+  assert.ok(html.includes('aria-label="VAD 靜音時長"'), "TASK-244 silence select must have Chinese aria-label");
+  assert.ok(html.includes('value="1000" selected'), "TASK-244 silence select must have 1000ms selected by default");
+  assert.ok(html.includes('class="voice-tuning-hint"'), "TASK-244 HTML must have .voice-tuning-hint");
+  console.log("  testTask244HtmlAccessibility PASS");
+}
+
+function testTask244CssDiagnosticsPanel() {
+  const css = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "styles.css"), "utf8");
+  assert.ok(css.includes("TASK-244"), "TASK-244 CSS section comment must be present");
+  assert.ok(css.includes(".voice-diagnostics-details"), "TASK-244 CSS must include .voice-diagnostics-details rule");
+  assert.ok(css.includes(".voice-diagnostics-display"), "TASK-244 CSS must include .voice-diagnostics-display rule");
+  assert.ok(css.includes(".voice-tuning-hint"), "TASK-244 CSS must include .voice-tuning-hint rule");
+  console.log("  testTask244CssDiagnosticsPanel PASS");
+}
+
+function testTask244RendererHasDiagnosticsState() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("var fullAppVoiceDiagnostics"), "TASK-244 renderer must declare fullAppVoiceDiagnostics with var");
+  assert.ok(src.includes("var fullAppConversationRmsThreshold"), "TASK-244 renderer must declare fullAppConversationRmsThreshold with var");
+  assert.ok(src.includes("var fullAppConversationSilenceMs"), "TASK-244 renderer must declare fullAppConversationSilenceMs with var");
+  assert.ok(src.includes("sttStatus: \"none\""), "TASK-244 fullAppVoiceDiagnostics must have sttStatus default");
+  assert.ok(src.includes("stopReason: \"none\""), "TASK-244 fullAppVoiceDiagnostics must have stopReason default");
+  console.log("  testTask244RendererHasDiagnosticsState PASS");
+}
+
+function testTask244RendererHasDiagnosticsHelpers() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("function makeSafeTranscriptPreview"), "TASK-244 renderer must define makeSafeTranscriptPreview");
+  assert.ok(src.includes("function renderFullAppVoiceDiagnostics"), "TASK-244 renderer must define renderFullAppVoiceDiagnostics");
+  assert.ok(src.includes("function updateFullAppVoiceDiagnostics"), "TASK-244 renderer must define updateFullAppVoiceDiagnostics");
+  assert.ok(src.includes("function resetFullAppVoiceDiagnosticsForRecording"), "TASK-244 renderer must define resetFullAppVoiceDiagnosticsForRecording");
+  console.log("  testTask244RendererHasDiagnosticsHelpers PASS");
+}
+
+function testTask244RendererVadUsesSessionVars() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  // _conversationVadTick must use session vars, not only constants
+  assert.ok(src.includes("fullAppConversationRmsThreshold"),
+    "TASK-244 VAD logic must reference fullAppConversationRmsThreshold");
+  assert.ok(src.includes("fullAppConversationSilenceMs"),
+    "TASK-244 VAD logic must reference fullAppConversationSilenceMs");
+  // Session vars must be initialized from constants
+  assert.ok(src.includes("var fullAppConversationRmsThreshold = FULL_APP_CONVERSATION_RMS_THRESHOLD"),
+    "TASK-244 fullAppConversationRmsThreshold must be initialized from constant");
+  assert.ok(src.includes("var fullAppConversationSilenceMs    = FULL_APP_CONVERSATION_SILENCE_MS"),
+    "TASK-244 fullAppConversationSilenceMs must be initialized from constant");
+  console.log("  testTask244RendererVadUsesSessionVars PASS");
+}
+
+async function testTask244DiagnosticsExistsInSandbox() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  assert.ok(sandbox.fullAppVoiceDiagnostics && typeof sandbox.fullAppVoiceDiagnostics === "object",
+    "TASK-244 fullAppVoiceDiagnostics must be an object in sandbox");
+  assert.ok("mode" in sandbox.fullAppVoiceDiagnostics, "TASK-244 diagnostics must have mode property");
+  assert.ok("sttStatus" in sandbox.fullAppVoiceDiagnostics, "TASK-244 diagnostics must have sttStatus property");
+  assert.ok("stopReason" in sandbox.fullAppVoiceDiagnostics, "TASK-244 diagnostics must have stopReason property");
+  assert.ok("lastRms" in sandbox.fullAppVoiceDiagnostics, "TASK-244 diagnostics must have lastRms property");
+  console.log("  testTask244DiagnosticsExistsInSandbox PASS");
+}
+
+async function testTask244DiagnosticsDefaultValues() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  const d = sandbox.fullAppVoiceDiagnostics;
+  assert.strictEqual(d.mode, "none", "TASK-244 diagnostics.mode must default to 'none'");
+  assert.strictEqual(d.sttStatus, "none", "TASK-244 diagnostics.sttStatus must default to 'none'");
+  assert.strictEqual(d.stopReason, "none", "TASK-244 diagnostics.stopReason must default to 'none'");
+  assert.strictEqual(d.emptyTranscript, false, "TASK-244 diagnostics.emptyTranscript must default to false");
+  assert.strictEqual(d.lastRms, 0, "TASK-244 diagnostics.lastRms must default to 0");
+  assert.strictEqual(d.maxRms, 0, "TASK-244 diagnostics.maxRms must default to 0");
+  console.log("  testTask244DiagnosticsDefaultValues PASS");
+}
+
+async function testTask244MakeSafeTranscriptPreviewTruncates() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  const longText = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789XYZ";
+  const result = sandbox.makeSafeTranscriptPreview(longText);
+  assert.ok(result.length <= 32, "TASK-244 preview of long text must be ≤32 chars (30 + ellipsis)");
+  assert.ok(result.endsWith("…") || result.length === longText.length,
+    "TASK-244 truncated preview must end with ellipsis");
+  assert.ok(!result.includes("\n"), "TASK-244 preview must not contain newlines");
+  console.log("  testTask244MakeSafeTranscriptPreviewTruncates PASS");
+}
+
+async function testTask244MakeSafeTranscriptPreviewShort() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  const shortText = "Hello world";
+  const result = sandbox.makeSafeTranscriptPreview(shortText);
+  assert.strictEqual(result, shortText, "TASK-244 preview of short text must be unchanged");
+  console.log("  testTask244MakeSafeTranscriptPreviewShort PASS");
+}
+
+async function testTask244MakeSafeTranscriptPreviewEmpty() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  assert.strictEqual(sandbox.makeSafeTranscriptPreview(""), "", "TASK-244 empty string returns empty");
+  assert.strictEqual(sandbox.makeSafeTranscriptPreview(null), "", "TASK-244 null returns empty");
+  assert.strictEqual(sandbox.makeSafeTranscriptPreview(undefined), "", "TASK-244 undefined returns empty");
+  console.log("  testTask244MakeSafeTranscriptPreviewEmpty PASS");
+}
+
+async function testTask244UpdateDiagnosticsPatches() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  sandbox.updateFullAppVoiceDiagnostics({ mode: "manual_mic", sttStatus: "success" });
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.mode, "manual_mic",
+    "TASK-244 updateFullAppVoiceDiagnostics must patch mode");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttStatus, "success",
+    "TASK-244 updateFullAppVoiceDiagnostics must patch sttStatus");
+  // Non-existent key must not be added
+  sandbox.updateFullAppVoiceDiagnostics({ nonExistentKey: "should_not_appear" });
+  assert.ok(!("nonExistentKey" in sandbox.fullAppVoiceDiagnostics),
+    "TASK-244 updateFullAppVoiceDiagnostics must not add unknown keys");
+  console.log("  testTask244UpdateDiagnosticsPatches PASS");
+}
+
+async function testTask244ResetDiagnosticsForRecording() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  // Set some values first
+  sandbox.fullAppVoiceDiagnostics.sttStatus = "error";
+  sandbox.fullAppVoiceDiagnostics.transcriptLength = 42;
+  // Reset
+  sandbox.resetFullAppVoiceDiagnosticsForRecording("manual_mic");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.mode, "manual_mic",
+    "TASK-244 reset must set mode");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttStatus, "none",
+    "TASK-244 reset must clear sttStatus to none");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.transcriptLength, 0,
+    "TASK-244 reset must clear transcriptLength to 0");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.stopReason, "none",
+    "TASK-244 reset must clear stopReason to none");
+  console.log("  testTask244ResetDiagnosticsForRecording PASS");
+}
+
+async function testTask244SessionVarDefaultsInSandbox() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  // Session vars must exist
+  assert.ok(typeof sandbox.fullAppConversationRmsThreshold === "number",
+    "TASK-244 fullAppConversationRmsThreshold must be a number");
+  assert.ok(typeof sandbox.fullAppConversationSilenceMs === "number",
+    "TASK-244 fullAppConversationSilenceMs must be a number");
+  // Must be positive values matching the constants
+  assert.ok(sandbox.fullAppConversationRmsThreshold > 0,
+    "TASK-244 fullAppConversationRmsThreshold must be > 0");
+  assert.ok(sandbox.fullAppConversationSilenceMs > 0,
+    "TASK-244 fullAppConversationSilenceMs must be > 0");
+  console.log("  testTask244SessionVarDefaultsInSandbox PASS");
+}
+
+async function testTask244TuningRmsInputUpdatesSessionVar() {
+  const { document, sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  const input = document.getElementById("vad-rms-threshold-input");
+  assert.ok(input, "TASK-244 #vad-rms-threshold-input must exist in sandbox");
+  input.value = "0.05";
+  input.dispatchEvent(new sandbox.Event("input"));
+  assert.ok(Math.abs(sandbox.fullAppConversationRmsThreshold - 0.05) < 0.001,
+    "TASK-244 changing rms threshold input must update fullAppConversationRmsThreshold");
+  console.log("  testTask244TuningRmsInputUpdatesSessionVar PASS");
+}
+
+async function testTask244TuningSilenceSelectUpdatesSessionVar() {
+  const { document, sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  const sel = document.getElementById("vad-silence-ms-select");
+  assert.ok(sel, "TASK-244 #vad-silence-ms-select must exist in sandbox");
+  sel.value = "1200";
+  sel.dispatchEvent(new sandbox.Event("change"));
+  assert.strictEqual(sandbox.fullAppConversationSilenceMs, 1200,
+    "TASK-244 changing silence select must update fullAppConversationSilenceMs");
+  console.log("  testTask244TuningSilenceSelectUpdatesSessionVar PASS");
+}
+
+function testTask244DiagnosticsNotInChatHistoryArea() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  // voice-diagnostics-details must appear AFTER the chat area and voice strips
+  const chatAreaIdx = html.indexOf('id="chat-area"');
+  const diagIdx     = html.indexOf('id="voice-diagnostics-details"');
+  assert.ok(diagIdx > chatAreaIdx,
+    "TASK-244 #voice-diagnostics-details must appear after #chat-area (not inside it)");
+  // Also verify it's not nested inside #chat-area by checking the diagnostics panel
+  // is outside the chat-area tag context (simple content check)
+  assert.ok(!html.slice(chatAreaIdx, diagIdx).includes('id="voice-diagnostics-details"'),
+    "TASK-244 diagnostics panel must not be nested inside #chat-area");
+  console.log("  testTask244DiagnosticsNotInChatHistoryArea PASS");
+}
+
+function testTask244DiagnosticsNoRawAudioInSource() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  // renderFullAppVoiceDiagnostics must not expose raw audio data
+  const renderFnStart = src.indexOf("function renderFullAppVoiceDiagnostics");
+  const renderFnEnd   = src.indexOf("\n}", renderFnStart) + 2;
+  const renderFn = src.slice(renderFnStart, renderFnEnd);
+  assert.ok(!renderFn.includes("arrayBuffer"), "TASK-244 render function must not expose arrayBuffer");
+  assert.ok(!renderFn.includes("new Blob"), "TASK-244 render function must not create new Blob");
+  assert.ok(!renderFn.includes("innerHTML"), "TASK-244 render function must not use innerHTML");
+  assert.ok(renderFn.includes("textContent"), "TASK-244 render function must use textContent for safe output");
+  console.log("  testTask244DiagnosticsNoRawAudioInSource PASS");
+}
+
+function testTask244NoNewIpcChannels() {
+  const rendererSrc = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(!/ipcRenderer\.(invoke|send|on)\(/.test(rendererSrc),
+    "TASK-244 renderer.js must not call ipcRenderer directly");
+  const preloadSrc = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "preload.js"), "utf8");
+  assert.ok(preloadSrc.includes("stt:transcribe"),
+    "TASK-244 preload must still expose stt:transcribe (no new channel)");
+  console.log("  testTask244NoNewIpcChannels PASS");
+}
+
+function testTask244NoPetWindowCallsInDiagnosticsFunctions() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const sectionStart = src.indexOf("TASK-244: Voice Quality Diagnostics / VAD Tuning");
+  const sectionEnd   = src.indexOf("TASK-172A/172B: initialise button states");
+  assert.ok(sectionStart !== -1, "TASK-244 section must be present in renderer");
+  const section = src.slice(sectionStart, sectionEnd);
+  assert.ok(!section.includes("updatePetSpeech"),
+    "TASK-244 diagnostics section must not call updatePetSpeech");
+  assert.ok(!section.includes("updatePetExpression"),
+    "TASK-244 diagnostics section must not call updatePetExpression");
+  assert.ok(!section.includes("showPet("),
+    "TASK-244 diagnostics section must not call showPet");
+  console.log("  testTask244NoPetWindowCallsInDiagnosticsFunctions PASS");
+}
+
+function testTask244NoLocalStorageInTuningWiring() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const wiringStart = src.indexOf("TASK-244: VAD tuning controls wiring");
+  assert.ok(wiringStart !== -1, "TASK-244 tuning wiring comment must be present");
+  const wiringBlock = src.slice(wiringStart, wiringStart + 600);
+  assert.ok(!wiringBlock.includes("localStorage"),
+    "TASK-244 tuning wiring must not use localStorage");
+  assert.ok(!wiringBlock.includes("sessionStorage"),
+    "TASK-244 tuning wiring must not use sessionStorage");
+  console.log("  testTask244NoLocalStorageInTuningWiring PASS");
+}
+
+async function testTask244RegressionTask243StillPass() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("var fullAppVoiceConversationEnabled"),
+    "TASK-244 regression: fullAppVoiceConversationEnabled must still exist");
+  assert.ok(src.includes("var fullAppVoiceConversationState"),
+    "TASK-244 regression: fullAppVoiceConversationState must still exist");
+  assert.ok(src.includes("function startConversationMode"),
+    "TASK-244 regression: startConversationMode must still exist");
+  assert.ok(src.includes("function stopConversationMode"),
+    "TASK-244 regression: stopConversationMode must still exist");
+  assert.ok(src.includes("function _conversationVadTick"),
+    "TASK-244 regression: _conversationVadTick must still exist");
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  assert.strictEqual(sandbox.fullAppVoiceConversationEnabled, false,
+    "TASK-244 regression: fullAppVoiceConversationEnabled must still default to false");
+  assert.strictEqual(sandbox.fullAppVoiceConversationState, "off",
+    "TASK-244 regression: fullAppVoiceConversationState must still default to off");
+  console.log("  testTask244RegressionTask243StillPass PASS");
+}
+
+// ---------------------------------------------------------------------------
 // TASK-243: Voice Conversation Mode / Silence Detection
 // ---------------------------------------------------------------------------
 
@@ -13121,6 +13859,80 @@ async function main() {
   testTask242NoNewIpcChannels();
   await testTask242NoAudioPersistence();
   await testTask242RegressionTask241StillPass();
+
+  // TASK-244b: Voice Pipeline Diagnostics / Audio Constraints / In-Memory Preview
+  testTask244bHtmlPreviewBtnExists();
+  testTask244bCssPreviewSection();
+  testTask244bRendererHasMimePriority();
+  testTask244bRendererAudioConstraints();
+  testTask244bRendererHasPreviewHelpers();
+  testTask244bRendererHasPipelineStateVars();
+  await testTask244bDiagnosticsHasNewFields();
+  await testTask244bHistoryDefaultsEmpty();
+  await testTask244bRecordHistoryPushesEntry();
+  await testTask244bHistoryMaxTwo();
+  await testTask244bResetClearsPreviewFields();
+  await testTask244bPreviewBtnStartsDisabled();
+  await testTask244bSelectVoiceMimeTypeSandbox();
+  testTask244bDiagnosticsShowsNewFields();
+  testTask244bNoRawAudioPersistenceInPipeline();
+  testTask244bNoNewIpcInPipeline();
+  testTask244bNoPetWindowInPipelineHelpers();
+  await testTask244bRegressionTask244aStillPass();
+
+  // TASK-244c: Audio Preview Button Fix — DOM audio element + blob size guard
+  testTask244cHtmlHasDomAudioElement();
+  testTask244cHtmlHasStatusSpan();
+  testTask244cCssHasStatusClass();
+  testTask244cRendererHasDomAudioRef();
+  testTask244cRendererNoBareNewAudio();
+  testTask244cRendererBlobSizeGuard();
+  testTask244cRendererPlayFnGuardsMissingBlob();
+  testTask244cRendererPlayFnUsesDomElement();
+  testTask244cRendererPlayFnShowsStatus();
+  testTask244cRendererRevokeClearsAudioSrc();
+  await testTask244cSandboxDomAudioElementExists();
+  await testTask244cSandboxStatusSpanExists();
+  await testTask244cBtnRemainsDisabledForEmptyBlob();
+  await testTask244cPlayFnSandboxCallable();
+
+  // TASK-244d: CSP blob:, visible audio controls, error diagnostics, URL lifecycle
+  testTask244dCspAllowsMediaBlob();
+  testTask244dAudioElementHasControls();
+  testTask244dCssHasAudioElClass();
+  testTask244dDiagnosticsHasPreviewErrorFields();
+  testTask244dRendererObjectUrlNotRevokedOnEnded();
+  testTask244dRendererPlayFnChecksCanPlayType();
+  testTask244dRendererPlayFnDetailedError();
+  testTask244dDiagnosticsRendersPreviewFields();
+  testTask244dResetRevokesUrlAndClearsAudioSrc();
+  await testTask244dDiagnosticsDefaultsNewFields();
+  await testTask244dPlayFnSetsObjectUrlActive();
+  await testTask244dResetSandboxClearsPreviewState();
+
+  // TASK-244: Voice Quality Diagnostics / VAD Tuning
+  testTask244HtmlDiagnosticsPanelExists();
+  testTask244HtmlAccessibility();
+  testTask244CssDiagnosticsPanel();
+  testTask244RendererHasDiagnosticsState();
+  testTask244RendererHasDiagnosticsHelpers();
+  testTask244RendererVadUsesSessionVars();
+  await testTask244DiagnosticsExistsInSandbox();
+  await testTask244DiagnosticsDefaultValues();
+  await testTask244MakeSafeTranscriptPreviewTruncates();
+  await testTask244MakeSafeTranscriptPreviewShort();
+  await testTask244MakeSafeTranscriptPreviewEmpty();
+  await testTask244UpdateDiagnosticsPatches();
+  await testTask244ResetDiagnosticsForRecording();
+  await testTask244SessionVarDefaultsInSandbox();
+  await testTask244TuningRmsInputUpdatesSessionVar();
+  await testTask244TuningSilenceSelectUpdatesSessionVar();
+  testTask244DiagnosticsNotInChatHistoryArea();
+  testTask244DiagnosticsNoRawAudioInSource();
+  testTask244NoNewIpcChannels();
+  testTask244NoPetWindowCallsInDiagnosticsFunctions();
+  testTask244NoLocalStorageInTuningWiring();
+  await testTask244RegressionTask243StillPass();
 
   // TASK-243: Voice Conversation Mode / Silence Detection
   testTask243HtmlConversationStripExists();

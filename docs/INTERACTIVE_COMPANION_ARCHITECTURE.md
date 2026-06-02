@@ -558,11 +558,20 @@ Recommended next architecture phase:
   fullAppVoiceInputEnabled guard respected; Windows visual smoke PASS on 2026-06-02: startup OFF/no
   auto mic, manual start, silence detection, auto STT + single send, half-duplex, consecutive
   utterances, stop, Voice Input OFF guard, empty/short audio handling, and general regression)
-  DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
+  DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS;
+  TASK-244 (Voice Quality Diagnostics / VAD Tuning — collapsible `<details>` diagnostics panel with
+  session-only RMS threshold number input (0.01–0.10) and silence duration select (800/1000/1200/1500
+  ms); `<pre id="voice-diagnostics-display">` updated via textContent only; fullAppVoiceDiagnostics
+  state object tracks mode, recording metadata, transcript preview (capped 30 chars), STT status,
+  VAD lastRms/maxRms/stopReason/silenceMsAtStop; session tuning vars fullAppConversationRmsThreshold
+  / fullAppConversationSilenceMs used by _conversationVadTick instead of frozen constants; diagnostics
+  reset on every recording start, updated at every VAD tick (100 ms), and final status set on
+  transcription success/empty/error; stopReason values: silence / max_duration / cancel /
+  manual_stop; no new IPC, no Pet Window calls in diagnostics section, no localStorage, no audio
+  persistence, no TTS, no always-listening; 22 TASK-244 smoke tests PASS, 522 renderer-chat total)
+  IMPLEMENTED - NEEDS WINDOWS VOICE QUALITY SMOKE.
   Based on `docs/RENDERER_MODULARIZATION_PLAN.md`.
-- TASK-244 recommended next: Voice Conversation Polish / Turn Feedback / Safety Tuning, including
-  VAD threshold / silence duration tuning, speaking volume / listening feedback, and clearer
-  Conversation Mode state while preserving no background listening and no raw audio persistence.
+- TASK-245 recommended next: Extract Context Menu / Search Modules.
 - Relationship state.
 - Mood / attention / energy state beyond the local preview foundation.
 - Idle reaction policy.
