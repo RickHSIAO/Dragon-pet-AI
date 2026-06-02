@@ -340,7 +340,7 @@ all of the following must be explicitly reviewed and confirmed:
 | Task | Description | Type |
 |------|-------------|------|
 | TASK-234 | Output Queue Priority Winner Preview, diagnostics only | runtime (renderer-only, disabled) — **DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-01)**. Winner preview is diagnostics-only: does not dispatch, does not change queue order or Next, does not control any output channel. |
-| TASK-235 | Active Output Item Model, disabled | runtime (renderer-only, disabled) |
+| TASK-235 | Active Output Item Model, disabled | runtime (renderer-only, disabled) — **DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-01)**. Adds `currentActiveOutputItem` state, 4 helpers, `activeItem` in snapshot, `· Active:` in preview. Active is diagnostics-only: never auto-set, does not dispatch or control any output channel. Note: manual console helper SKIP (DevTools unavailable); covered by automated smoke. |
 | TASK-236 | Bubble Priority Enforcement, guarded and disabled by default | runtime (renderer-only, guarded) |
 | TASK-237 | TTS-safe Segment Design, docs-only or helper-only | docs or helper-only |
 | TASK-238 | User Controls for Companion Verbosity | runtime (settings UI) |

@@ -23058,7 +23058,7 @@ TASK-226 is docs-only:
 - TASK-232 Enqueue Chat Reply Diagnostics Only. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
 - TASK-233 Output Queue Runtime Checkpoint. IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED.
 - TASK-234 Output Queue Priority Winner Preview, diagnostics only. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
-- TASK-235 Active Output Item Model, disabled.
+- TASK-235 Active Output Item Model, disabled. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS (with note: manual console helper SKIP, covered by automated smoke).
 - TASK-236 Bubble Priority Enforcement, guarded and disabled by default.
 - TASK-237 TTS-safe Segment Design, docs-only or helper-only.
 - TASK-238 User Controls for Companion Verbosity.
@@ -24287,3 +24287,92 @@ payload.
 - [x] Focus PASS：功能正常，Queue 仍 disabled。
 - [x] Diagnostics 格式 PASS：沒有 `undefined`/`null`/`NaN`/`[object Object]`/raw JSON/user text/reply text/bubble text/payload。
 - [x] 一般回歸 PASS：沒有新增 IPC side-effect，沒有額外 TTS，沒有額外 `/chat`，沒有 history/copy/export 污染，Pet Window 表情與 reaction bubble 行為維持正常。
+
+## TASK-235 | Active Output Item Model, Disabled
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+
+### Summary
+
+TASK-235 adds the Active Output Item Model. Full App renderer-only. Diagnostics-only
+disabled model representing "the item currently being output." This task only
+establishes the data model, snapshot, and preview — the active item does not control
+any output.
+
+New state: `currentActiveOutputItem = null` (default).
+
+New helpers:
+
+- `cloneOutputQueueActiveItemSummary(item)` — sanitized summary with fields
+  `source / priority / channel / reason / ttlMs` only. No payload, no id.
+  Invalid item returns null.
+- `getActiveOutputItemSnapshot()` — returns sanitized summary or null.
+- `setActiveOutputItemForDiagnosticsOnly(item)` — sanitizes item, sets
+  `currentActiveOutputItem`. Invalid item → null. Updates snapshot. No dispatch,
+  no IPC, no TTS, no history.
+- `clearActiveOutputItem()` — clears `currentActiveOutputItem`, updates snapshot.
+
+`getOutputQueueSnapshot()` and `updateOutputQueueSnapshot()` now include
+`activeItem: sanitized summary or null`.
+
+`formatOutputQueueSnapshotPreview()` now appends `· Active: P/C/S` (or
+`· Active: none`), completing the preview format:
+
+```
+Queue: disabled · Items: <count> · Recent: <count> · Next: <summary|none> · Winner: <summary|none> · Active: <summary|none>
+```
+
+**Active is diagnostics-only.** It does not dispatch, does not change queue order,
+does not change Next, does not change Winner, does not control expression mirror /
+reaction bubble / chat reply, does not send to Pet Window, does not add IPC, does
+not call `/chat`, does not trigger TTS/STT/audio, does not write history, does not
+enter copy/export, does not store raw user text / reply text / bubble text / payload.
+
+Active is never set automatically. `sendChat` does not auto-set Active to the winner
+or next item. Only direct calls to `setActiveOutputItemForDiagnosticsOnly` set it.
+
+`OUTPUT_QUEUE_ENABLED` remains `false`. No dispatch.
+
+### New / Modified Files
+
+- `apps/desktop/src/renderer/renderer.js` — `currentActiveOutputItem` state,
+  `cloneOutputQueueActiveItemSummary`, `getActiveOutputItemSnapshot`,
+  `setActiveOutputItemForDiagnosticsOnly`, `clearActiveOutputItem`,
+  updated `currentOutputQueueSnapshot` initial value (adds `winnerItem: null`,
+  `activeItem: null`), updated snapshot functions and preview formatter.
+- `apps/desktop/scripts/renderer-chat-smoke.js` — 19 new TASK-235 tests,
+  1 TASK-228 snapshot `deepEqual` test updated for new `activeItem: null` field,
+  8 existing preview `assert.equal` tests updated for new `· Active: none` format.
+
+### Acceptance Criteria
+
+- [x] `currentActiveOutputItem` state added to renderer.js.
+- [x] `cloneOutputQueueActiveItemSummary(item)` added — returns source/priority/channel/reason/ttlMs only.
+- [x] `getActiveOutputItemSnapshot()` added — returns sanitized summary or null.
+- [x] `setActiveOutputItemForDiagnosticsOnly(item)` added — sanitizes, sets state, returns summary or null.
+- [x] `clearActiveOutputItem()` added — clears state, updates snapshot.
+- [x] `getOutputQueueSnapshot()` includes `activeItem`.
+- [x] `updateOutputQueueSnapshot()` includes `activeItem`.
+- [x] `formatOutputQueueSnapshotPreview()` appends `· Active: P/C/S` or `· Active: none`.
+- [x] `sendChat` does NOT auto-set Active — Active remains none after sendChat.
+- [x] 19 new smoke tests covering all helpers, safety, regression.
+- [x] All existing smoke tests updated and passing (renderer-chat, pet-renderer, pet-window).
+- [x] `OUTPUT_QUEUE_ENABLED` remains false.
+- [x] No dispatch, no IPC side effects, no chat display changes.
+- [x] No commit or push.
+
+### Windows Visual Smoke Results (2026-06-01)
+
+- [x] 基本啟動 PASS：Preview 顯示 `Queue: disabled · Items/Recent/Next/Winner/Active`，Pet Window 正常。
+- [x] 送出訊息 PASS：Next / Winner 正常，Active 仍 none，不會自動設成 Winner 或 Next。
+- [~] 手動設定 Active SKIP：Ctrl+Shift+I / F12 目前無法開啟 Full App DevTools，未測 console helper。已由 automated smoke (`setActiveOutputItemForDiagnosticsOnly`) 覆蓋。
+- [~] 清除 Active SKIP：同上，`clearActiveOutputItem` 已由 automated smoke 覆蓋。
+- [x] Delete / Undo PASS：功能正常，Queue 仍 disabled。
+- [x] Edit last user PASS：功能正常，Queue 仍 disabled，沒有額外 `/chat`。
+- [x] Clear Chat / Focus PASS：功能正常，Queue 仍 disabled。
+- [x] Diagnostics 格式 PASS：沒有 `undefined`/`null`/`NaN`/`[object Object]`/raw JSON/user text/reply text/bubble text/payload。
+- [x] 一般回歸 PASS：沒有新增 IPC side-effect，沒有額外 TTS，沒有額外 `/chat`，沒有 history/copy/export 污染，Pet Window 表情與 reaction bubble 行為維持正常。
+
+**附記：** Full App DevTools shortcut 目前無反應，manual console helper 未測；但 Active helper 已由 automated smoke 完整覆蓋。
+
+**觀察到：** diagnostics preview 現在資訊過長（含 Next/Winner/Active 後），已開始干擾正常使用畫面。建議下一步改做 collapsible diagnostics / debug drawer，把 Reaction / Decision / Queue / Next / Winner / Active 收納起來，需要點開才顯示。Output Queue 功能性任務（TASK-236 Bubble Priority Enforcement）建議暫緩，先解決 diagnostics UX。

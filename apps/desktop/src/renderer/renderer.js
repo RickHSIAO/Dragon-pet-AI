@@ -805,11 +805,14 @@ const OUTPUT_PRIORITY_ORDER = [
 ];
 var outputQueueItems = [];
 var recentOutputQueueItems = [];
+var currentActiveOutputItem = null;
 var currentOutputQueueSnapshot = {
   enabled: OUTPUT_QUEUE_ENABLED,
   length: 0,
   recentLength: 0,
   nextItem: null,
+  winnerItem: null,
+  activeItem: null,
 };
 var outputQueueIdCounter = 0;
 
@@ -891,6 +894,7 @@ function updateOutputQueueSnapshot() {
     recentLength: recentOutputQueueItems.length,
     nextItem: outputQueueItems.length ? cloneOutputQueueNextItemSummary(outputQueueItems[0]) : null,
     winnerItem: getOutputQueuePriorityWinner(outputQueueItems),
+    activeItem: getActiveOutputItemSnapshot(),
   };
   return currentOutputQueueSnapshot;
 }
@@ -949,6 +953,7 @@ function getOutputQueueSnapshot() {
     recentLength: recentOutputQueueItems.length,
     nextItem: outputQueueItems.length ? cloneOutputQueueNextItemSummary(outputQueueItems[0]) : null,
     winnerItem: getOutputQueuePriorityWinner(outputQueueItems),
+    activeItem: getActiveOutputItemSnapshot(),
   };
 }
 
@@ -1005,6 +1010,38 @@ function getOutputQueuePriorityWinner(items) {
   return winner ? cloneOutputQueueNextItemSummary(winner) : null;
 }
 
+// TASK-235: Sanitized active item summary — source/priority/channel/reason/ttlMs only.
+// No payload, no id, no raw text. Invalid item returns null.
+function cloneOutputQueueActiveItemSummary(item) {
+  if (!item || typeof item !== "object") return null;
+  if (!OUTPUT_SOURCE_ALLOWLIST.has(item.source)) return null;
+  if (!OUTPUT_PRIORITY_ALLOWLIST.has(item.priority)) return null;
+  if (!OUTPUT_CHANNEL_ALLOWLIST.has(item.channel)) return null;
+  return {
+    source: item.source,
+    priority: item.priority,
+    channel: item.channel,
+    reason: sanitizeOutputQueueReason(item.reason),
+    ttlMs: Number.isFinite(item.ttlMs) && item.ttlMs > 0 ? item.ttlMs : 0,
+  };
+}
+
+function getActiveOutputItemSnapshot() {
+  return cloneOutputQueueActiveItemSummary(currentActiveOutputItem);
+}
+
+function setActiveOutputItemForDiagnosticsOnly(item) {
+  const sanitized = cloneOutputQueueActiveItemSummary(item);
+  currentActiveOutputItem = sanitized;
+  updateOutputQueueSnapshot();
+  return sanitized;
+}
+
+function clearActiveOutputItem() {
+  currentActiveOutputItem = null;
+  updateOutputQueueSnapshot();
+}
+
 function formatOutputQueueSnapshotPreview(snapshot = getOutputQueueSnapshot()) {
   const source = snapshot && typeof snapshot === "object" ? snapshot : {};
   const enabled = source.enabled === true ? "enabled" : "disabled";
@@ -1034,11 +1071,22 @@ function formatOutputQueueSnapshotPreview(snapshot = getOutputQueueSnapshot()) {
   const winnerText = hasValidWinner
     ? winner.priority + "/" + winner.channel + "/" + winner.source
     : "none";
+  const active = source.activeItem && typeof source.activeItem === "object"
+    ? source.activeItem
+    : null;
+  const hasValidActive = active
+    && OUTPUT_PRIORITY_ALLOWLIST.has(active.priority)
+    && OUTPUT_CHANNEL_ALLOWLIST.has(active.channel)
+    && OUTPUT_SOURCE_ALLOWLIST.has(active.source);
+  const activeText = hasValidActive
+    ? active.priority + "/" + active.channel + "/" + active.source
+    : "none";
   return "Queue: " + enabled
     + " · Items: " + length
     + " · Recent: " + recentLength
     + " · Next: " + nextText
-    + " · Winner: " + winnerText;
+    + " · Winner: " + winnerText
+    + " · Active: " + activeText;
 }
 
 function defaultCompanionExpressionForReason(reason) {

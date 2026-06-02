@@ -811,3 +811,41 @@ does not store raw user text / reply text / bubble text / payload.
 tests. All 3 smoke scripts PASS. Windows visual smoke PASS: startup / send /
 Winner boundary / Delete / Undo / Edit last user / Clear Chat / Focus / diagnostics
 format / general regression all confirmed.
+
+## 23. TASK-235 Active Output Item Model, Disabled
+
+**Status: DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-01, manual console helper SKIP — covered by automated smoke)**
+
+TASK-235 adds the Active Output Item Model. Full App renderer-only. Diagnostics-only
+disabled model for representing the item "currently being output."
+
+New state: `currentActiveOutputItem = null`.
+
+New helpers:
+
+- `cloneOutputQueueActiveItemSummary(item)` — fields: `source / priority / channel /
+  reason / ttlMs` only. No payload, no id. Invalid item returns null.
+- `getActiveOutputItemSnapshot()` — returns sanitized summary or null.
+- `setActiveOutputItemForDiagnosticsOnly(item)` — sanitizes item, sets
+  `currentActiveOutputItem`. Invalid input → null. Updates snapshot. No dispatch,
+  no IPC, no TTS, no history.
+- `clearActiveOutputItem()` — clears `currentActiveOutputItem`, updates snapshot.
+
+`getOutputQueueSnapshot()` and `updateOutputQueueSnapshot()` now include
+`activeItem` (sanitized summary or null).
+
+`formatOutputQueueSnapshotPreview()` now appends `· Active: P/C/S` (or
+`· Active: none`), completing the preview format:
+
+```
+Queue: disabled · Items: N · Recent: N · Next: P/C/S · Winner: P/C/S · Active: P/C/S
+```
+
+**Active is diagnostics-only.** It is never set automatically by `sendChat`.
+It does not dispatch, does not change queue order/Next/Winner, does not control
+expression mirror / reaction bubble / chat reply, does not send to Pet Window,
+does not add IPC, does not call `/chat`, does not trigger TTS/STT/audio, does not
+write history, does not enter copy/export, and does not store raw text.
+
+`OUTPUT_QUEUE_ENABLED` remains false. 19 new smoke tests plus 9 updated existing
+tests. All 3 smoke scripts PASS.
