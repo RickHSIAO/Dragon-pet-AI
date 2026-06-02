@@ -23060,10 +23060,15 @@ TASK-226 is docs-only:
 - TASK-234 Output Queue Priority Winner Preview, diagnostics only. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
 - TASK-235 Active Output Item Model, disabled. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS (with note: manual console helper SKIP, covered by automated smoke).
 - TASK-236 Collapsible Diagnostics Drawer. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
-- TASK-237 Bubble Priority Enforcement, guarded and disabled by default.
-- TASK-238 TTS-safe Segment Design, docs-only or helper-only.
-- TASK-239 User Controls for Companion Verbosity.
-- TASK-240 Idle Reaction Policy, fixed only, no LLM.
+- TASK-237 Renderer Modularization Plan / Boundary Map. IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED.
+- TASK-238 Extract Output Queue Module.
+- TASK-239 Extract Diagnostics Drawer Module.
+- TASK-240 Extract Interaction Events / Behavior / Character State Modules.
+- TASK-241 Extract Pet Bridge Module.
+- TASK-242 Extract Chat Rendering Module.
+- TASK-243 Extract Chat History / Copy / Export Module.
+- TASK-244 Extract Context Menu / Search Modules.
+- TASK-245 Renderer Core Cleanup.
 
 ### Acceptance Criteria
 
@@ -24191,7 +24196,8 @@ The checkpoint records:
   TTL, controls, IPC, persistence, TTS, idle reaction, notifications.
 - Dispatch readiness checklist: 12 items that must be confirmed before
   `OUTPUT_QUEUE_ENABLED` can be set to `true`.
-- Recommended next tasks: TASK-234 through TASK-239.
+- Recommended next tasks updated by TASK-237: TASK-238 through TASK-245 renderer
+  extraction chain, beginning with Extract Output Queue Module.
 - Relationship to existing docs.
 
 No runtime change. No code change. No IPC. No commit. No push.
@@ -24207,7 +24213,7 @@ No runtime change. No code change. No IPC. No commit. No push.
 - [x] All three diagnostics item sources documented with full schema.
 - [x] Safety boundary table complete (18 properties).
 - [x] Dispatch readiness checklist present (12 items).
-- [x] Recommended next tasks TASK-234 through TASK-239 listed.
+- [x] Recommended next tasks updated through TASK-245 extraction chain.
 - [x] Relationship to existing docs section present.
 - [x] `docs/TASKS.md`, `docs/ROADMAP.md`, `README.md`,
       `docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md`,

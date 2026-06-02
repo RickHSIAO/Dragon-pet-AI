@@ -765,8 +765,9 @@ As of TASK-232, the queue is a **disabled diagnostics ledger**:
   no extra `/chat`, no history write, no raw text storage.
 
 The checkpoint doc defines a dispatch readiness checklist (12 items) that must be
-satisfied before `OUTPUT_QUEUE_ENABLED` can be set to `true`, and recommends
-TASK-234 through TASK-239 as the next incremental steps.
+satisfied before `OUTPUT_QUEUE_ENABLED` can be set to `true`. After TASK-237,
+the next incremental steps are the renderer extraction chain TASK-238 through
+TASK-245, beginning with Extract Output Queue Module.
 
 See [`docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md`](OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md)
 for the full checkpoint.
@@ -930,3 +931,37 @@ Windows visual smoke PASS (2026-06-01):
   `[object Object]`, raw JSON, user text, reply text, bubble text, or payload.
 - General regression PASS: no new IPC side effect, no extra TTS, no extra `/chat`,
   no history/copy/export pollution.
+
+## 25. TASK-237 Renderer Modularization Plan / Boundary Map
+
+**Status: IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED (2026-06-02)**
+
+TASK-237 adds `docs/RENDERER_MODULARIZATION_PLAN.md` as the docs-only boundary
+map for future renderer extraction. It does not change queue runtime behavior.
+
+Relationship to the output queue design:
+
+- The output queue remains disabled and diagnostics-only.
+- Queue diagnostics remain a ledger / preview, not a dispatcher.
+- No priority enforcement, output dispatch, Pet Window send, IPC, `/chat`, TTS,
+  STT, audio, history, copy/export, provider, prompt runtime, or asset behavior
+  changes in TASK-237.
+- The first recommended extraction is TASK-238 Extract Output Queue Module.
+- TASK-238 should move queue sanitization, enqueue, snapshot, Next/Winner/Active,
+  and disabled-state helpers behind `output-queue.js`.
+- TASK-238 must keep `OUTPUT_QUEUE_ENABLED = false`, no dispatch, no IPC, no Pet
+  Window side effect, and no behavior change.
+
+Module boundary from TASK-237:
+
+| Future module | Queue relationship |
+|---|---|
+| `output-queue.js` | Owns sanitize, enqueue, snapshot, Next/Winner/Active diagnostics. |
+| `diagnostics-drawer.js` | Consumes safe queue snapshots for summary/details display only. |
+| `pet-bridge.js` | Owns Pet Window calls; output queue must not call Pet Window directly. |
+| `chat-api-client.js` | Owns `/chat`; output queue must not call `/chat`. |
+| `chat-history.js` | Owns history/copy/export; output queue must not write transcripts. |
+
+See `docs/RENDERER_MODULARIZATION_PLAN.md` for the full renderer responsibility
+map, proposed module boundary table, extraction order, contract rules, risk
+register, and validation strategy.

@@ -370,10 +370,15 @@ all of the following must be explicitly reviewed and confirmed:
 | TASK-234 | Output Queue Priority Winner Preview, diagnostics only | runtime (renderer-only, disabled) — **DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-01)**. Winner preview is diagnostics-only: does not dispatch, does not change queue order or Next, does not control any output channel. |
 | TASK-235 | Active Output Item Model, disabled | runtime (renderer-only, disabled) — **DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-01)**. Adds `currentActiveOutputItem` state, 4 helpers, `activeItem` in snapshot, `· Active:` in preview. Active is diagnostics-only: never auto-set, does not dispatch or control any output channel. Note: manual console helper SKIP (DevTools unavailable); covered by automated smoke. |
 | TASK-236 | Collapsible Diagnostics Drawer | runtime (renderer-only) — **DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-01)**. Summary collapsed by default; details show Reaction/Decision/Queue/Next/Winner/Active only after explicit toggle. No dispatch, no IPC, no `/chat`, no history/copy/export, no Pet Window/Pet Bubble/TTS/STT side effect. Queue diagnostics remain ledger / preview only, not dispatcher. |
-| TASK-237 | Bubble Priority Enforcement, guarded and disabled by default | runtime (renderer-only, guarded) |
-| TASK-238 | TTS-safe Segment Design, docs-only or helper-only | docs or helper-only |
-| TASK-239 | User Controls for Companion Verbosity | runtime (settings UI) |
-| TASK-240 | Idle Reaction Policy, fixed only, no LLM | runtime (renderer-only, guarded) |
+| TASK-237 | Renderer Modularization Plan / Boundary Map | docs-only architecture checkpoint — **IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED (2026-06-02)**. Adds `docs/RENDERER_MODULARIZATION_PLAN.md`; maps current renderer responsibilities and proposed module boundaries. No runtime extraction, no queue dispatch, no IPC, no `/chat`, no TTS/STT/audio, no Pet Window, no backend, no prompt/provider/assets change. |
+| TASK-238 | Extract Output Queue Module | runtime extraction (renderer-only, no behavior change) — recommended first extraction. Queue diagnostics must remain ledger / preview only, not dispatcher. Keep `OUTPUT_QUEUE_ENABLED=false`, no dispatch, no IPC, no Pet Window side effect, no history/copy/export write, and no TTS/STT/audio. |
+| TASK-239 | Extract Diagnostics Drawer Module | runtime extraction (renderer-only, no behavior change) |
+| TASK-240 | Extract Interaction Events / Behavior / Character State Modules | runtime extraction (renderer-only, no behavior change) |
+| TASK-241 | Extract Pet Bridge Module | runtime extraction (renderer-only, narrow bridge preservation) |
+| TASK-242 | Extract Chat Rendering Module | runtime extraction (renderer-only, no behavior change) |
+| TASK-243 | Extract Chat History / Copy / Export Module | runtime extraction (renderer-only, transcript boundary preservation) |
+| TASK-244 | Extract Context Menu / Search Modules | runtime extraction (renderer-only, no behavior change) |
+| TASK-245 | Renderer Core Cleanup | runtime extraction cleanup |
 
 Each task should remain narrow and testable with explicit side-effect boundaries
 and Windows visual smoke before any dispatch-related change is considered
@@ -387,5 +392,6 @@ production-ready.
 |----------|-------------|
 | [docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md](INTERACTION_OUTPUT_QUEUE_DESIGN.md) | Original TASK-226 priority design and TASK-228 through TASK-232 implementation notes. This checkpoint doc summarizes the current runtime state that the design doc describes. |
 | [docs/INTERACTIVE_COMPANION_ARCHITECTURE.md](INTERACTIVE_COMPANION_ARCHITECTURE.md) | TASK-222/224 architecture checkpoint. The output queue is the parallel diagnostics ledger referenced in Section 12 ("What Is Not Implemented Yet") of that doc. |
+| [docs/RENDERER_MODULARIZATION_PLAN.md](RENDERER_MODULARIZATION_PLAN.md) | TASK-237 docs-only renderer boundary map. It recommends TASK-238 Extract Output Queue Module as the first runtime extraction while preserving the queue as ledger / preview only, not dispatcher. |
 | [docs/VOICE_TTS_RESEARCH.md](VOICE_TTS_RESEARCH.md) | TTS/STT research note. TTS integration is listed as not yet implemented above (Section 9). The queue will need a `ttsEligible` dispatch path before TTS can be considered. |
-| [docs/CHRISTINA_PERSONA_CONTEXT_PACK.md](CHRISTINA_PERSONA_CONTEXT_PACK.md) | Persona context for Dragon Pet AI. Future idle reaction dispatch (TASK-239) must respect persona reaction rules and frequency guidelines defined there. |
+| [docs/CHRISTINA_PERSONA_CONTEXT_PACK.md](CHRISTINA_PERSONA_CONTEXT_PACK.md) | Persona context for Dragon Pet AI. Future idle reaction dispatch must respect persona reaction rules and frequency guidelines defined there; TASK-237 does not change persona or prompt runtime. |

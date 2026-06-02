@@ -1,6 +1,6 @@
 # Interactive Companion Architecture Checkpoint
 
-**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-236 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-236 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS; TASK-237 IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED
 **Date:** 2026-06-01
 **Scope:** Architecture checkpoint for TASK-214 through TASK-230.
 
@@ -535,6 +535,8 @@ satisfied (see `docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md`, Section 10).
 
 Recommended next architecture phase:
 
+- Renderer modularization begins with TASK-238 Extract Output Queue Module, based
+  on `docs/RENDERER_MODULARIZATION_PLAN.md`.
 - Relationship state.
 - Mood / attention / energy state beyond the local preview foundation.
 - Idle reaction policy.
@@ -547,3 +549,18 @@ Recommended next architecture phase:
 These should still avoid jumping directly to LLM proactive speech, screen
 monitoring, OCR, always listening, or broad IPC. Each capability should be
 introduced behind a narrow, testable, explicit user-controlled boundary.
+
+TASK-237 adds a docs-only renderer modularization map before runtime extraction.
+The map records that the Full App renderer currently owns boot/DOM wiring,
+`/chat`, chat rendering/history/actions, search, context menu, Pet bridge,
+expression mirror, reaction bubble mirror, interaction events, companion
+behavior, character state, output queue diagnostics, diagnostics drawer,
+settings, memory, and voice control shells. Future extraction should split these
+into explicit modules without changing runtime behavior.
+
+The first recommended extraction is the output queue module. Queue diagnostics
+remain ledger / preview only, not dispatcher. Diagnostics drawer UI remains
+collapsed by default in the Full App; complete diagnostics require explicit
+expansion. No TASK-237 runtime change, IPC change, Pet Window change, `/chat`
+schema change, TTS/STT/audio change, provider/prompt runtime change, or asset
+change was made.
