@@ -529,6 +529,11 @@ async function loadRenderer(options = {}) {
     },
   };
 
+  // TASK-238: load output-queue module into same sandbox before renderer.js
+  const outputQueueModulePath = path.join(desktopRoot, "src", "renderer", "modules", "output-queue.js");
+  const moduleCode = fs.readFileSync(outputQueueModulePath, "utf8");
+  vm.runInNewContext(moduleCode, sandbox, { filename: outputQueueModulePath });
+
   const code = fs.readFileSync(rendererPath, "utf8");
   vm.runInNewContext(code, sandbox, { filename: rendererPath });
   await settle();
@@ -8247,6 +8252,9 @@ const TASK228_FORBIDDEN_PAYLOAD_KEYS = [
 
 function testTask228StaticSourceCheck() {
   const src = fs.readFileSync(rendererPath, "utf8");
+  // TASK-238: constants/allowlists moved to module; wrappers remain in renderer.js
+  const moduleSrc = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "modules", "output-queue.js"), "utf8");
+  const combined = src + moduleSrc;
   for (const token of [
     "OUTPUT_QUEUE_ENABLED = false",
     "OUTPUT_QUEUE_MAX = 50",
@@ -8261,7 +8269,7 @@ function testTask228StaticSourceCheck() {
     "function compareOutputPriority",
     "function shouldOutputPreempt",
   ]) {
-    assert.ok(src.includes(token), `renderer.js must include ${token}`);
+    assert.ok(combined.includes(token), `TASK-228 symbol missing from renderer.js+module: ${token}`);
   }
   for (const token of [
     "P0_CRITICAL",
@@ -8286,7 +8294,7 @@ function testTask228StaticSourceCheck() {
     "stt_transcript",
     "safety_error",
   ]) {
-    assert.ok(src.includes(token), `TASK-228 allowlist token missing: ${token}`);
+    assert.ok(combined.includes(token), `TASK-228 allowlist token missing: ${token}`);
   }
   console.log("  testTask228StaticSourceCheck PASS");
 }
@@ -10094,8 +10102,10 @@ function testTask234RegressionGuards() {
 
 function testTask235RendererHasActiveItemSymbols() {
   const src = fs.readFileSync(rendererPath, "utf8");
-  assert.ok(src.includes("currentActiveOutputItem"),
-    "TASK-235 renderer must define currentActiveOutputItem");
+  // TASK-238: currentActiveOutputItem lives in module; function wrappers stay in renderer.js
+  const moduleSrc = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "modules", "output-queue.js"), "utf8");
+  assert.ok(moduleSrc.includes("currentActiveOutputItem"),
+    "TASK-235 currentActiveOutputItem must be defined in output-queue.js module");
   assert.ok(src.includes("function cloneOutputQueueActiveItemSummary"),
     "TASK-235 renderer must define cloneOutputQueueActiveItemSummary");
   assert.ok(src.includes("function getActiveOutputItemSnapshot"),
@@ -11077,6 +11087,235 @@ function testTask219NarrowChannelsStillDocumentedInPreloadSmoke() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TASK-238: Extract Output Queue Module
+// ─────────────────────────────────────────────────────────────────────────────
+
+function testTask238ModuleFileExists() {
+  const modulePath = path.join(desktopRoot, "src", "renderer", "modules", "output-queue.js");
+  assert.ok(fs.existsSync(modulePath), "output-queue.js module file must exist");
+  const src = fs.readFileSync(modulePath, "utf8");
+  assert.ok(src.includes("window.dragonOutputQueue = api"), "module must assign window.dragonOutputQueue");
+  assert.ok(src.includes("(function ()"), "module must use IIFE pattern");
+  console.log("  testTask238ModuleFileExists PASS");
+}
+
+function testTask238IndexHtmlLoadsModuleBeforeRenderer() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  const moduleScriptTag = 'src="./modules/output-queue.js"';
+  const rendererScriptTag = 'src="renderer.js"';
+  const modulePos = html.indexOf(moduleScriptTag);
+  const rendererPos = html.indexOf(rendererScriptTag);
+  assert.ok(modulePos !== -1, "index.html must contain output-queue.js script tag");
+  assert.ok(rendererPos !== -1, "index.html must contain renderer.js script tag");
+  assert.ok(modulePos < rendererPos, "output-queue.js must appear before renderer.js in index.html");
+  assert.ok(!html.includes('type="module"'), "script tags must NOT use type=module (classic browser scripts only)");
+  console.log("  testTask238IndexHtmlLoadsModuleBeforeRenderer PASS");
+}
+
+async function testTask238WindowDragonOutputQueueIsSet() {
+  const { sandbox } = await loadRenderer();
+  assert.ok(sandbox.window.dragonOutputQueue != null, "window.dragonOutputQueue must be set after module load");
+  assert.equal(typeof sandbox.window.dragonOutputQueue.enqueueOutputQueueItem, "function",
+    "window.dragonOutputQueue must expose enqueueOutputQueueItem");
+  console.log("  testTask238WindowDragonOutputQueueIsSet PASS");
+}
+
+async function testTask238OutputQueueEnabledFalseInModule() {
+  const { sandbox } = await loadRenderer();
+  assert.equal(sandbox.window.dragonOutputQueue.OUTPUT_QUEUE_ENABLED, false,
+    "module must expose OUTPUT_QUEUE_ENABLED=false");
+  assert.equal(sandbox.getOutputQueueSnapshot().enabled, false,
+    "getOutputQueueSnapshot().enabled must be false (OUTPUT_QUEUE_ENABLED=false propagates through module)");
+  console.log("  testTask238OutputQueueEnabledFalseInModule PASS");
+}
+
+async function testTask238OutputQueueItemsIsLiveArrayRef() {
+  const { sandbox } = await loadRenderer();
+  const moduleArr = sandbox.window.dragonOutputQueue.outputQueueItems;
+  const rendererRef = sandbox.outputQueueItems;
+  assert.ok(Array.isArray(moduleArr), "module outputQueueItems must be an array");
+  assert.ok(moduleArr === rendererRef, "renderer.js outputQueueItems var must be the same reference as module array");
+  console.log("  testTask238OutputQueueItemsIsLiveArrayRef PASS");
+}
+
+async function testTask238RecentOutputQueueItemsIsLiveArrayRef() {
+  const { sandbox } = await loadRenderer();
+  const moduleArr = sandbox.window.dragonOutputQueue.recentOutputQueueItems;
+  const rendererRef = sandbox.recentOutputQueueItems;
+  assert.ok(Array.isArray(moduleArr), "module recentOutputQueueItems must be an array");
+  assert.ok(moduleArr === rendererRef, "renderer.js recentOutputQueueItems var must be same reference as module array");
+  console.log("  testTask238RecentOutputQueueItemsIsLiveArrayRef PASS");
+}
+
+async function testTask238ClearQueueUsesSpliceNotReassignment() {
+  const { sandbox } = await loadRenderer();
+  const moduleArr = sandbox.window.dragonOutputQueue.outputQueueItems;
+  const rendererRef = sandbox.outputQueueItems;
+  sandbox.enqueueOutputQueueItem({
+    source: "chat_reply", priority: "P2_LLM_REPLY", channel: "full_app_chat",
+    payload: { source: "llm_local", mood: "focused", replyLength: 10 },
+    reason: "test",
+  });
+  assert.equal(rendererRef.length, 1, "queue must have 1 item before clear");
+  sandbox.clearOutputQueue("test_clear");
+  assert.ok(sandbox.outputQueueItems === moduleArr,
+    "after clearOutputQueue, renderer.js ref must still point to the same array (in-place splice)");
+  assert.equal(moduleArr.length, 0, "array must be empty after clear");
+  assert.equal(rendererRef.length, 0, "renderer ref must also show empty after clear");
+  console.log("  testTask238ClearQueueUsesSpliceNotReassignment PASS");
+}
+
+async function testTask238EnqueueThroughRendererWrapper() {
+  const { sandbox } = await loadRenderer();
+  const result = sandbox.enqueueOutputQueueItem({
+    source: "reaction_bubble", priority: "P4_NORMAL_REACTION", channel: "pet_bubble",
+    payload: { bubbleId: "user_active" }, reason: "wrapper_test",
+  });
+  assert.ok(result != null, "enqueueOutputQueueItem wrapper must return item summary");
+  assert.equal(result.source, "reaction_bubble");
+  assert.equal(result.priority, "P4_NORMAL_REACTION");
+  assert.equal(sandbox.outputQueueItems.length, 1, "queue must contain the enqueued item");
+  console.log("  testTask238EnqueueThroughRendererWrapper PASS");
+}
+
+async function testTask238GetSnapshotThroughWrapper() {
+  const { sandbox } = await loadRenderer();
+  sandbox.enqueueOutputQueueItem({
+    source: "expression_mirror", priority: "P4_NORMAL_REACTION", channel: "visual_expression",
+    payload: { expression: "happy" }, reason: "snapshot_test",
+  });
+  const snap = sandbox.getOutputQueueSnapshot();
+  assert.ok(snap != null, "getOutputQueueSnapshot wrapper must return a snapshot");
+  assert.equal(snap.enabled, false);
+  assert.equal(snap.length, 1);
+  assert.ok(snap.nextItem != null, "snapshot must include nextItem");
+  console.log("  testTask238GetSnapshotThroughWrapper PASS");
+}
+
+async function testTask238FormatPreviewThroughWrapper() {
+  const { sandbox } = await loadRenderer();
+  const preview = sandbox.formatOutputQueueSnapshotPreview();
+  assert.ok(typeof preview === "string", "formatOutputQueueSnapshotPreview wrapper must return string");
+  assert.ok(preview.includes("Queue: disabled"), "preview must include Queue: disabled");
+  assert.ok(preview.includes("Items: 0"), "preview must include Items: 0");
+  assert.ok(preview.includes("Active: none"), "preview must include Active: none");
+  console.log("  testTask238FormatPreviewThroughWrapper PASS");
+}
+
+async function testTask238SetActiveItemThroughWrapper() {
+  const { sandbox } = await loadRenderer();
+  const result = sandbox.setActiveOutputItemForDiagnosticsOnly({
+    source: "chat_reply", priority: "P2_LLM_REPLY", channel: "full_app_chat",
+    reason: "active_test", ttlMs: 0,
+  });
+  assert.ok(result != null, "setActiveOutputItemForDiagnosticsOnly must return summary");
+  assert.equal(result.source, "chat_reply");
+  const snap = sandbox.getOutputQueueSnapshot();
+  assert.ok(snap.activeItem != null, "snapshot activeItem must be set after setActive");
+  assert.equal(snap.activeItem.source, "chat_reply");
+  console.log("  testTask238SetActiveItemThroughWrapper PASS");
+}
+
+async function testTask238ClearActiveItemThroughWrapper() {
+  const { sandbox } = await loadRenderer();
+  sandbox.setActiveOutputItemForDiagnosticsOnly({
+    source: "reaction_bubble", priority: "P4_NORMAL_REACTION", channel: "pet_bubble",
+    reason: "clear_test", ttlMs: 0,
+  });
+  sandbox.clearActiveOutputItem();
+  const snap = sandbox.getOutputQueueSnapshot();
+  assert.equal(snap.activeItem, null, "snapshot activeItem must be null after clearActiveOutputItem");
+  console.log("  testTask238ClearActiveItemThroughWrapper PASS");
+}
+
+async function testTask238ExistingReactionBubbleAdapterWorks() {
+  const { sandbox } = await loadRenderer();
+  sandbox.recordInteractionReactionHint("user_active");
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const items = sandbox.outputQueueItems.filter((i) => i.source === "reaction_bubble");
+  assert.ok(items.length >= 1, "reaction_bubble enqueue adapter must still add items to queue via module");
+  assert.equal(items[0].channel, "pet_bubble");
+  console.log("  testTask238ExistingReactionBubbleAdapterWorks PASS");
+}
+
+async function testTask238ExistingChatReplyAdapterWorks() {
+  const { sandbox } = await loadRenderer();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const before = sandbox.outputQueueItems.length;
+  sandbox.enqueueChatReplyOutputDiagnostics({ reply: "test reply", source: "llm_local", mood: "focused" });
+  assert.equal(sandbox.outputQueueItems.length, before + 1, "chat reply adapter must add item to module-owned queue");
+  const item = sandbox.outputQueueItems[sandbox.outputQueueItems.length - 1];
+  assert.equal(item.source, "chat_reply");
+  assert.equal(item.priority, "P2_LLM_REPLY");
+  console.log("  testTask238ExistingChatReplyAdapterWorks PASS");
+}
+
+async function testTask238ModuleAllowlistsComplete() {
+  const { sandbox } = await loadRenderer();
+  const api = sandbox.window.dragonOutputQueue;
+  const snap = api.getOutputQueueSnapshot();
+  assert.equal(snap.enabled, false, "module snapshot must show disabled");
+  assert.equal(typeof api.outputPriorityIndex, "function", "module must expose outputPriorityIndex");
+  assert.equal(typeof api.compareOutputPriority, "function", "module must expose compareOutputPriority");
+  assert.equal(typeof api.shouldOutputPreempt, "function", "module must expose shouldOutputPreempt");
+  assert.equal(typeof api.getOutputQueuePriorityWinner, "function", "module must expose getOutputQueuePriorityWinner");
+  console.log("  testTask238ModuleAllowlistsComplete PASS");
+}
+
+async function testTask238PriorityWinnerStillWorksViaModule() {
+  const { sandbox } = await loadRenderer();
+  sandbox.enqueueOutputQueueItem({
+    source: "chat_reply", priority: "P2_LLM_REPLY", channel: "full_app_chat",
+    payload: { source: "llm_local", mood: "focused", replyLength: 5 }, reason: "r1",
+  });
+  sandbox.enqueueOutputQueueItem({
+    source: "reaction_bubble", priority: "P4_NORMAL_REACTION", channel: "pet_bubble",
+    payload: { bubbleId: "user_active" }, reason: "r2",
+  });
+  const snap = sandbox.getOutputQueueSnapshot();
+  assert.ok(snap.winnerItem != null, "winner must be set when queue has items");
+  assert.equal(snap.winnerItem.priority, "P2_LLM_REPLY", "P2_LLM_REPLY must beat P4_NORMAL_REACTION");
+  console.log("  testTask238PriorityWinnerStillWorksViaModule PASS");
+}
+
+async function testTask238RendererSrcHasThinWrappers() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("window.dragonOutputQueue.enqueueOutputQueueItem"),
+    "renderer.js must delegate enqueueOutputQueueItem to module");
+  assert.ok(src.includes("window.dragonOutputQueue.getOutputQueueSnapshot"),
+    "renderer.js must delegate getOutputQueueSnapshot to module");
+  assert.ok(src.includes("window.dragonOutputQueue.clearOutputQueue"),
+    "renderer.js must delegate clearOutputQueue to module");
+  assert.ok(!src.includes("const OUTPUT_QUEUE_MAX"),
+    "renderer.js must NOT define OUTPUT_QUEUE_MAX (belongs in module)");
+  assert.ok(!src.includes("var outputQueueIdCounter"),
+    "renderer.js must NOT define outputQueueIdCounter (belongs in module)");
+  console.log("  testTask238RendererSrcHasThinWrappers PASS");
+}
+
+function testTask238NoNewIpcChannelsAndPreservesExisting() {
+  const rendererSrc = fs.readFileSync(rendererPath, "utf8");
+  const moduleSrc = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "modules", "output-queue.js"), "utf8");
+  const preloadSrc = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "preload.js"), "utf8");
+  const mainSrc = fs.readFileSync(path.join(desktopRoot, "src", "main.js"), "utf8");
+  const existing = ["pet:expression-suggestion", "pet:reaction-bubble", "pet:chat-mirror"];
+  for (const ch of existing) {
+    const found = preloadSrc.includes(ch) || mainSrc.includes(ch);
+    assert.ok(found, `existing IPC channel '${ch}' must still be present in preload/main`);
+  }
+  const ipcPattern = /ipcRenderer\.(on|send|invoke)|ipcMain\.(on|handle)/;
+  assert.ok(!ipcPattern.test(moduleSrc), "output-queue.js module must not contain any IPC calls");
+  console.log("  testTask238NoNewIpcChannelsAndPreservesExisting PASS");
+}
+
+async function testTask238NoNewChatHistorySpeechOrTts() {
+  const { state } = await loadRenderer();
+  const chatCalls = state.calls.filter((c) => c.url && c.url.endsWith("/chat"));
+  assert.equal(chatCalls.length, 0, "loading module must not trigger any /chat calls");
+  console.log("  testTask238NoNewChatHistorySpeechOrTts PASS");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -11725,6 +11964,27 @@ async function main() {
   await testTask236NotInHistoryTranscriptOrExport();
   await testTask236ToggleHasNoSideEffects();
   testTask236NoNewIpcChannelsAndRegressionGuards();
+
+  // TASK-238: Extract Output Queue Module
+  testTask238ModuleFileExists();
+  testTask238IndexHtmlLoadsModuleBeforeRenderer();
+  await testTask238WindowDragonOutputQueueIsSet();
+  await testTask238OutputQueueEnabledFalseInModule();
+  await testTask238OutputQueueItemsIsLiveArrayRef();
+  await testTask238RecentOutputQueueItemsIsLiveArrayRef();
+  await testTask238ClearQueueUsesSpliceNotReassignment();
+  await testTask238EnqueueThroughRendererWrapper();
+  await testTask238GetSnapshotThroughWrapper();
+  await testTask238FormatPreviewThroughWrapper();
+  await testTask238SetActiveItemThroughWrapper();
+  await testTask238ClearActiveItemThroughWrapper();
+  await testTask238ExistingReactionBubbleAdapterWorks();
+  await testTask238ExistingChatReplyAdapterWorks();
+  await testTask238ModuleAllowlistsComplete();
+  await testTask238PriorityWinnerStillWorksViaModule();
+  testTask238RendererSrcHasThinWrappers();
+  testTask238NoNewIpcChannelsAndPreservesExisting();
+  await testTask238NoNewChatHistorySpeechOrTts();
 
   // TASK-218: Safe Pet Expression Suggestion Mirror
   testTask218RendererHasMirrorFunction();

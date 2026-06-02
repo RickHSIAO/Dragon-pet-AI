@@ -23061,7 +23061,7 @@ TASK-226 is docs-only:
 - TASK-235 Active Output Item Model, disabled. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS (with note: manual console helper SKIP, covered by automated smoke).
 - TASK-236 Collapsible Diagnostics Drawer. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
 - TASK-237 Renderer Modularization Plan / Boundary Map. IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED.
-- TASK-238 Extract Output Queue Module.
+- TASK-238 Extract Output Queue Module. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
 - TASK-239 Extract Diagnostics Drawer Module.
 - TASK-240 Extract Interaction Events / Behavior / Character State Modules.
 - TASK-241 Extract Pet Bridge Module.
@@ -24477,3 +24477,99 @@ Behavior summary:
 - [x] Clear Chat / Focus PASS：功能正常，Pet Window 表情與 reaction bubble 維持正常。
 - [x] Diagnostics 格式 PASS：summary/details 沒有 `undefined`/`null`/`NaN`/`[object Object]`/raw JSON/user text/reply text/bubble text/payload。
 - [x] 一般回歸 PASS：沒有新增 IPC side-effect，沒有額外 TTS，沒有額外 `/chat`，沒有 history/copy/export 污染。
+
+---
+
+## TASK-238 | Extract Output Queue Module
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-06-02
+**Phase:** Phase 5 - Renderer Modularization
+**Depends on:** TASK-237
+
+### Summary
+
+TASK-238 extracts the Output Queue engine from `renderer.js` into a dedicated
+classic browser module at `apps/desktop/src/renderer/modules/output-queue.js`.
+
+The module is an IIFE (`(function(){"use strict"; ... window.dragonOutputQueue = api; })()`),
+loaded via a `<script>` tag in `index.html` before `renderer.js`. No ESM,
+no bundler, no build step, no `type="module"`.
+
+`renderer.js` is updated with thin one-liner wrapper functions that delegate to
+`window.dragonOutputQueue`. Three enqueue adapters stay in `renderer.js`
+(`enqueueReactionBubbleOutputDiagnostics`, `enqueueExpressionMirrorOutputDiagnostics`,
+`enqueueChatReplyOutputDiagnostics`).
+
+Key design: the module uses in-place `splice()` for `clearOutputQueue` instead
+of reassignment, so `renderer.js` can hold a stable reference to the arrays via
+`var outputQueueItems = window.dragonOutputQueue.outputQueueItems`.
+Existing smoke tests that access `sandbox.outputQueueItems` continue to work.
+
+`CHAT_REPLY_SAFE_SOURCE_ALLOWLIST` is exposed on the module API so
+`enqueueChatReplyOutputDiagnostics` in `renderer.js` can validate against it.
+
+No behavior change. `OUTPUT_QUEUE_ENABLED` remains `false`. Queue remains a
+diagnostics ledger — no dispatch, no IPC, no Pet Window side effect, no history,
+no copy/export, no TTS/STT/audio.
+
+### New / Modified Files
+
+- `apps/desktop/src/renderer/modules/output-queue.js` — new IIFE module (~280 lines).
+  Contains all queue constants, module-private allowlist copies, state, and engine
+  functions. Exposes `window.dragonOutputQueue` api with 21 named exports including
+  `OUTPUT_QUEUE_ENABLED`, `CHAT_REPLY_SAFE_SOURCE_ALLOWLIST`, array getters, and
+  all public functions.
+- `apps/desktop/src/renderer/index.html` — adds `<script src="./modules/output-queue.js"></script>`
+  before `<script src="renderer.js"></script>`.
+- `apps/desktop/src/renderer/renderer.js` — replaces ~360 line output queue block
+  with 5-line wrapper header + 18 thin wrapper functions. `CHAT_REPLY_SAFE_SOURCE_ALLOWLIST`
+  reference in `enqueueChatReplyOutputDiagnostics` updated to
+  `window.dragonOutputQueue.CHAT_REPLY_SAFE_SOURCE_ALLOWLIST`.
+- `apps/desktop/scripts/renderer-chat-smoke.js` — `loadRenderer` updated to load
+  module into same VM sandbox before renderer.js. 19 new TASK-238 tests.
+  `testTask228StaticSourceCheck` and `testTask235RendererHasActiveItemSymbols` updated
+  to check combined renderer.js + module content.
+
+### Safety Boundary
+
+- No backend change.
+- No `/chat` schema or request flow change.
+- No chat history persistence format change.
+- No new IPC and no existing IPC channel change.
+- No Pet Window runtime change.
+- No Pet Bubble, expression mirror, or reaction bubble mirror behavior change.
+- No TTS/STT/audio change.
+- No queue dispatch. `OUTPUT_QUEUE_ENABLED` remains `false`.
+- No persistence, localStorage, settings page, background monitoring, screenshot,
+  OCR, provider/Ollama runtime, prompt runtime, hover action buttons, or message
+  edit rule change.
+- Module is pure classic JS: no ESM, no bundler, no build step.
+
+### Automated Smoke
+
+- [x] `node apps\desktop\scripts\renderer-chat-smoke.js` PASS (19 new TASK-238 tests + full regression, 419 total).
+- [x] `node apps\desktop\scripts\pet-window-smoke.js` PASS (82 checks).
+- [x] `node apps\desktop\scripts\pet-renderer-smoke.js` PASS (263 checks).
+
+### Windows Visual Smoke
+
+Windows visual smoke PASS (2026-06-01):
+
+- Basic startup PASS: Full App / Pet Window normal. Diagnostics drawer default
+  collapsed. Queue still disabled.
+- Expand Diagnostics PASS: Reaction / Decision / Queue / Next / Winner / Active
+  display correctly in details.
+- Send message PASS: chat / expression / reaction bubble normal. Queue diagnostics
+  update correctly.
+- Collapse / expand PASS: drawer state correct; details show latest queue state.
+- Delete / Undo PASS: functionality normal, context menu normal, Queue still
+  disabled.
+- Edit last user PASS: functionality normal, no extra `/chat`, Queue diagnostics
+  normal.
+- Clear Chat / Focus PASS: functionality normal, Pet Window expression and reaction
+  bubble normal.
+- Diagnostics format PASS: summary/details show no `undefined`, `null`, `NaN`,
+  `[object Object]`, raw JSON, user text, reply text, bubble text, or payload.
+- General regression PASS: no new IPC side-effect, no extra TTS, no extra `/chat`,
+  no history/copy/export pollution.

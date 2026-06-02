@@ -7,7 +7,7 @@
 📋 **[完整 Demo 腳本與面試重點](docs/PORTFOLIO_DEMO_SCRIPT.md)**
 📋 **[Phase 4 Provider Settings 摘要](docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md)**
 
-**最新本地狀態（2026-06-02）：** TASK-237 Renderer Modularization Plan / Boundary Map 已完成 docs-only architecture checkpoint，狀態為 **IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED**。新增 `docs/RENDERER_MODULARIZATION_PLAN.md`，整理目前 `apps/desktop/src/renderer/renderer.js` 的責任範圍與未來模組邊界；第一個建議拆分任務是 **TASK-238 Extract Output Queue Module**。TASK-237 不改 runtime、不改 `renderer.js` / `index.html` / `styles.css` / smoke tests / main / preload / Pet Window / backend、不改 `/chat` schema、不改 chat history persistence、不新增 IPC、不改 TTS/STT/audio、Ollama/Provider、prompt runtime 或 assets；未 commit、未 push。
+**最新本地狀態（2026-06-02）：** TASK-238 Extract Output Queue Module 已完成，狀態為 **DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS**。新增 `apps/desktop/src/renderer/modules/output-queue.js`（IIFE classic-browser-script），將 ~360 行 output queue engine 從 `renderer.js` 拆出，透過 `window.dragonOutputQueue` 公開；`index.html` 已更新先載入模組；`renderer.js` 改為 18 個 thin wrapper；smoke tests 新增 19 個 TASK-238 測試並全數通過；Windows visual smoke PASS (2026-06-01)；`OUTPUT_QUEUE_ENABLED` 仍為 `false`，無 dispatch、無 IPC、無行為變更；未 commit、未 push。
 
 ---
 
@@ -99,7 +99,7 @@ ollama serve
 | 本地 Ollama `/chat` smoke | ✅ 通過 — `qwen3:8b`，`source=llm_local`，克莉絲蒂娜人格確認 |
 | Provider Settings 持久化 | ✅ 通過 — 重啟後設定保留，partial PATCH 保留省略欄位 |
 | UI polish | ✅ 通過 — 情緒→表情對應、Christina expression system |
-| Full App chat UX | ✅ TASK-236 DONE - WINDOWS VISUAL SMOKE PASS；TASK-237 docs-only modularization plan complete — 搜尋/高亮、未讀提示、匯出、時間戳、日期分隔線、清除確認、empty state、Undo Clear Chat、單則訊息刪除/復原、右鍵訊息操作 (viewport clamp + a11y)、最後 user message 編輯/重新送出、互動事件 log、reaction hint 層、reaction preview UI、expression suggestion 鏡像至 Pet Window、expression mirror 300ms cooldown/debounce、reaction bubble 鏡像至 Pet Window、companion behavior policy decision preview、character state diagnostics preview、collapsible diagnostics drawer；下一步建議 TASK-238 Extract Output Queue Module |
+| Full App chat UX | ✅ TASK-236 DONE；TASK-237 docs-only modularization plan complete；TASK-238 DONE - WINDOWS VISUAL SMOKE PASS — 搜尋/高亮、未讀提示、匯出、時間戳、日期分隔線、清除確認、empty state、Undo Clear Chat、單則訊息刪除/復原、右鍵訊息操作 (viewport clamp + a11y)、最後 user message 編輯/重新送出、互動事件 log、reaction hint 層、reaction preview UI、expression suggestion 鏡像至 Pet Window、expression mirror 300ms cooldown/debounce、reaction bubble 鏡像至 Pet Window、companion behavior policy decision preview、character state diagnostics preview、collapsible diagnostics drawer、output queue module extraction |
 | 表情系統 | 7/10 real PNG（happy、focused、neutral、proud、annoyed、worried、sleepy）；pending/error/offline 為 SVG fallback |
 | pytest | **586 通過，0 失敗** |
 | Electron smoke | **renderer-chat PASS；pet-renderer 263 PASS；pet-window 82 PASS** |
@@ -107,7 +107,7 @@ ollama serve
 | 真實 API Key 使用 | ❌ 無 — 所有測試使用 mocked runner |
 | 生產就緒 | ❌ 尚未 — prototype / portfolio 階段 |
 | Demo 可用（本地 Ollama） | ✅ 是 |
-| 下一個任務 | TBD，等待使用者指示 |
+| 下一個任務 | TASK-239 Extract Diagnostics Drawer Module |
 
 ---
 
@@ -397,13 +397,13 @@ python -c "import json, urllib.request; data=json.dumps({'message':'你好！克
 | [docs/PROVIDER_TEST_CONNECTION_DESIGN.md](docs/PROVIDER_TEST_CONNECTION_DESIGN.md) | Test Connection 設計與強化測試結果 |
 | [docs/SECURE_KEY_STORAGE_DESIGN.md](docs/SECURE_KEY_STORAGE_DESIGN.md) | 金鑰儲存威脅模型、儲存選項、遮蔽規則 |
 | [docs/BYOK_PRODUCT_AND_SETTINGS.md](docs/BYOK_PRODUCT_AND_SETTINGS.md) | BYOK 產品設計與安全邊界 |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖；目前 TASK-237 Renderer Modularization Plan / Boundary Map 完成 docs-only checkpoint，下一步 TASK-238 |
-| [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄；最新記錄為 TASK-237 Renderer Modularization Plan / Boundary Map，IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED |
-| [docs/RENDERER_MODULARIZATION_PLAN.md](docs/RENDERER_MODULARIZATION_PLAN.md) | TASK-237 renderer modularization boundary map：current renderer responsibilities, proposed modules, extraction order, contracts, risks, validation strategy |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖；目前 TASK-238 Extract Output Queue Module 完成 automated smoke，NEEDS WINDOWS VISUAL SMOKE，下一步 TASK-239 |
+| [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄；最新記錄為 TASK-238 Extract Output Queue Module，IMPLEMENTED - AUTOMATED SMOKE PASS / NEEDS WINDOWS VISUAL SMOKE |
+| [docs/RENDERER_MODULARIZATION_PLAN.md](docs/RENDERER_MODULARIZATION_PLAN.md) | TASK-237 renderer modularization boundary map：current renderer responsibilities, proposed modules, extraction order (TASK-238 done), contracts, risks, validation strategy |
 | [docs/INTERACTIVE_COMPANION_ARCHITECTURE.md](docs/INTERACTIVE_COMPANION_ARCHITECTURE.md) | TASK-222/224 互動陪伴架構 checkpoint：data flow、layer responsibility、IPC inventory、安全邊界、Character State Layer diagnostics、TASK-237 renderer modularization phase |
 | [docs/CHRISTINA_PERSONA_CONTEXT_PACK.md](docs/CHRISTINA_PERSONA_CONTEXT_PACK.md) | TASK-225 Christina persona context pack：canonical source、runtime-safe adaptation、strength levels、runtime boundary |
-| [docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md](docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md) | TASK-226/TASK-237 Interaction Output Queue：priority design, disabled runtime skeleton, debug snapshot preview, diagnostics enqueue, priority winner preview, active output item model, collapsible diagnostics drawer, renderer modularization relationship |
-| [docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md](docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md) | TASK-233/TASK-237 Output Queue Runtime Checkpoint：completed task chain, current runtime state, diagnostics item schemas, safety boundary, sanitization summary, dispatch readiness checklist, renderer modularization relationship and TASK-238 queue extraction recommendation |
+| [docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md](docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md) | TASK-226/TASK-238 Interaction Output Queue：priority design, disabled runtime skeleton, debug snapshot preview, diagnostics enqueue, priority winner preview, active output item model, collapsible diagnostics drawer, renderer modularization relationship, TASK-238 output queue module extraction |
+| [docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md](docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md) | TASK-233/TASK-238 Output Queue Runtime Checkpoint：completed task chain, current runtime state, diagnostics item schemas, safety boundary, sanitization summary, dispatch readiness checklist, renderer modularization relationship, TASK-238 extraction status |
 | [docs/VOICE_TTS_RESEARCH.md](docs/VOICE_TTS_RESEARCH.md) | TASK-227 Voice/TTS research note：local-first speech roadmap、candidate TTS/STT、licensing/safety boundaries |
 | [docs/STREAMER_COMPANION_MODE.md](docs/STREAMER_COMPANION_MODE.md) | 未來支線 — OBS overlay / Twitch 陪伴設計（尚未排程） |
 
@@ -467,8 +467,8 @@ dragon-pet-ai/
 | `docs/INTERACTIVE_COMPANION_ARCHITECTURE.md` | TASK-222/224 互動陪伴架構 checkpoint |
 | `docs/CHRISTINA_PERSONA_CONTEXT_PACK.md` | TASK-225 克莉絲蒂娜 persona context pack |
 | `docs/RENDERER_MODULARIZATION_PLAN.md` | TASK-237 Renderer Modularization Plan / Boundary Map：renderer responsibility map, module boundaries, extraction order, contracts, risk register |
-| `docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md` | TASK-226 output queue / priority design, TASK-228 disabled runtime skeleton, TASK-229 snapshot preview notes, TASK-230/231/232 diagnostics enqueue, TASK-234 winner preview, TASK-235 active item model, and TASK-236 collapsible diagnostics drawer |
-| `docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md` | TASK-233 Output Queue Runtime Checkpoint：task chain, current state, safety boundary, dispatch readiness checklist, next tasks, TASK-236 drawer status, TASK-237 modularization relationship |
+| `docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md` | TASK-226 output queue / priority design, TASK-228 disabled runtime skeleton, TASK-229 snapshot preview notes, TASK-230/231/232 diagnostics enqueue, TASK-234 winner preview, TASK-235 active item model, TASK-236 collapsible diagnostics drawer, TASK-238 output queue module extraction |
+| `docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md` | TASK-233 Output Queue Runtime Checkpoint：task chain, current state, safety boundary, dispatch readiness checklist, next tasks, TASK-236 drawer status, TASK-237 modularization relationship, TASK-238 extraction status |
 | `docs/VOICE_TTS_RESEARCH.md` | TASK-227 Voice/TTS/STT research and local speech roadmap |
 | `docs/CHARACTER_SPEC.md` | 角色人格規格 |
 | `docs/MEMORY_SYSTEM.md` | 記憶系統設計 |

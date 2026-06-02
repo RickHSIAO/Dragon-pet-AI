@@ -965,3 +965,113 @@ Module boundary from TASK-237:
 See `docs/RENDERER_MODULARIZATION_PLAN.md` for the full renderer responsibility
 map, proposed module boundary table, extraction order, contract rules, risk
 register, and validation strategy.
+
+---
+
+## 26. TASK-238 Extract Output Queue Module
+
+**Status: DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-02, Windows visual smoke 2026-06-01)**
+
+TASK-238 is the first runtime extraction from the renderer modularization plan.
+It moves all output queue engine code out of `renderer.js` into a dedicated
+classic-browser-script module.
+
+### What was extracted
+
+New file: `apps/desktop/src/renderer/modules/output-queue.js`
+
+- IIFE module pattern: `(function(){"use strict"; ... window.dragonOutputQueue = api; })();`
+- Not ESM. No bundler. Loaded as a plain `<script src="./modules/output-queue.js">` tag.
+- Exposes `window.dragonOutputQueue` with all queue engine functions.
+- Owns all queue constants: `OUTPUT_QUEUE_ENABLED`, `OUTPUT_QUEUE_MAX`,
+  `OUTPUT_QUEUE_RECENT_MAX`, priority/channel/source allowlists.
+- Owns all module-private allowlist copies for payload sanitization:
+  `_EXPRESSION_ALLOWLIST`, `_BUBBLE_ID_ALLOWLIST`, `_ACTION_ALLOWLIST`,
+  `_MOOD_ALLOWLIST`, `_ATTENTION_ALLOWLIST`, `_ENERGY_ALLOWLIST`,
+  `_INTERACTION_LEVEL_ALLOWLIST`.
+- Exposes `CHAT_REPLY_SAFE_SOURCE_ALLOWLIST` from the api object so
+  `enqueueChatReplyOutputDiagnostics` in `renderer.js` can reference it as
+  `window.dragonOutputQueue.CHAT_REPLY_SAFE_SOURCE_ALLOWLIST`.
+- Uses in-place `splice(0)` (not `= []`) in `clearOutputQueue` so that
+  `renderer.js`'s captured `var outputQueueItems` reference remains stable
+  after clear.
+
+### renderer.js after extraction
+
+`renderer.js` now holds:
+
+- A thin delegation block replacing the removed ~360-line engine block:
+  ```js
+  const OUTPUT_QUEUE_ENABLED = window.dragonOutputQueue.OUTPUT_QUEUE_ENABLED;
+  var outputQueueItems = window.dragonOutputQueue.outputQueueItems;
+  var recentOutputQueueItems = window.dragonOutputQueue.recentOutputQueueItems;
+  var interactionDiagnosticsExpanded = false;
+  ```
+- 18 thin wrapper functions that delegate to `window.dragonOutputQueue`.
+- Three enqueue adapters remain in `renderer.js`:
+  `enqueueReactionBubbleOutputDiagnostics`,
+  `enqueueExpressionMirrorOutputDiagnostics`,
+  `enqueueChatReplyOutputDiagnostics`.
+
+### index.html load order
+
+`apps/desktop/src/renderer/index.html` loads the module before `renderer.js`:
+
+```html
+<script src="./modules/output-queue.js"></script>
+<script src="renderer.js"></script>
+```
+
+### Smoke test update
+
+`apps/desktop/scripts/renderer-chat-smoke.js` loads the module into the VM
+sandbox before `renderer.js` so `window.dragonOutputQueue` is available when
+the renderer executes. 19 new TASK-238 tests cover:
+
+- Module file exists.
+- `index.html` loads module before renderer.
+- `window.dragonOutputQueue` is set after load.
+- `OUTPUT_QUEUE_ENABLED = false` via snapshot.
+- `outputQueueItems` and `recentOutputQueueItems` are the same live array
+  references as the module's internal arrays.
+- `clearOutputQueue` uses in-place splice — same ref after clear.
+- Enqueue / snapshot / preview / active item / clear active item via wrapper.
+- Existing reaction bubble and chat reply adapter paths.
+- Module allowlists complete.
+- Priority winner still works via module.
+- `renderer.js` src has thin wrapper functions.
+- No new IPC channels, no new chat/history/speech/TTS behavior.
+
+### Runtime boundary
+
+TASK-238 does not change visible behavior. All side-effect boundaries from
+TASK-228 through TASK-236 are preserved:
+
+- `OUTPUT_QUEUE_ENABLED` remains `false`.
+- No dispatch, no IPC, no Pet Window send.
+- No extra `/chat`, no history write, no TTS/STT/audio.
+- No raw user text storage or forwarding.
+- No new persistence.
+
+All 3 smoke scripts PASS after extraction (renderer-chat 419 checks, pet-window
+82 checks, pet-renderer 263 checks).
+
+Windows visual smoke PASS (2026-06-01):
+
+- Basic startup PASS: Full App and Pet Window normal. Diagnostics drawer default
+  collapsed. Queue still disabled.
+- Expand Diagnostics PASS: Reaction / Decision / Queue / Next / Winner / Active
+  display correctly in details.
+- Send message PASS: chat / expression / reaction bubble normal. Queue diagnostics
+  update correctly.
+- Collapse / expand PASS: drawer state correct; details show latest queue state.
+- Delete / Undo PASS: functionality normal, context menu normal, Queue still
+  disabled.
+- Edit last user PASS: functionality normal, no extra `/chat`, Queue diagnostics
+  normal.
+- Clear Chat / Focus PASS: functionality normal, Pet Window expression and reaction
+  bubble normal.
+- Diagnostics format PASS: summary/details show no `undefined`, `null`, `NaN`,
+  `[object Object]`, raw JSON, user text, reply text, bubble text, or payload.
+- General regression PASS: no new IPC side-effect, no extra TTS, no extra `/chat`,
+  no history/copy/export pollution.
