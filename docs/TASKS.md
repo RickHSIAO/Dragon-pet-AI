@@ -23055,7 +23055,7 @@ TASK-226 is docs-only:
 - TASK-230 Enqueue Reaction Bubble Diagnostics Only. DONE - WINDOWS VISUAL
   SMOKE PASS / DONE - PASS.
 - TASK-231 Enqueue Expression Mirror Diagnostics Only. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
-- TASK-232 TTS-safe segment design.
+- TASK-232 Enqueue Chat Reply Diagnostics Only. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
 - TASK-233 Idle Reaction Policy, fixed only, no LLM.
 - TASK-234 User controls for companion reaction verbosity.
 
@@ -24009,6 +24009,150 @@ TASK-231 is Full App renderer-only:
 - Focus PASS: feature remains normal; Queue stays disabled.
 - Queue diagnostics format PASS: no `undefined`, `null`, `NaN`,
   `[object Object]`, raw JSON, user text, bubble text, or payload.
+- General regression PASS: no new IPC side effect, no extra TTS, no extra
+  `/chat`, no history/copy/export pollution, and Pet Window expression plus
+  reaction bubble behavior remains normal.
+
+## TASK-232 | Enqueue Chat Reply Diagnostics Only
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+
+### Summary
+
+TASK-232 enqueues one diagnostics-only output queue item each time a successful
+`/chat` response is rendered as a formal pet reply in the Full App. The item
+records intent (that a chat reply was rendered) without storing reply text.
+`enqueueChatReplyOutputDiagnostics({ reply, mood, source })` is called from the
+two `/chat` success paths in `renderer.js` (main `sendMessage` flow and the
+message-edit flow) immediately after the reply is rendered to the chat area.
+
+This is local diagnostics only. It does not store reply text, does not dispatch
+output, does not affect the existing chat display, does not call `/chat` again,
+does not write extra history, does not trigger TTS/STT/audio, and does not alter
+any Pet Window, Pet Bubble, expression mirror, or reaction bubble behavior.
+
+### Enqueue Item Schema
+
+```js
+{
+  source: "chat_reply",
+  priority: "P2_LLM_REPLY",
+  channel: "full_app_chat",
+  payload: { source: "<safe source>", mood: "<safe mood>", replyLength: <number> },
+  ttlMs: 0,
+  interruptible: false,
+  ttsEligible: false,
+  historyEligible: true,
+  copyExportEligible: true,
+  reason: "chat_reply_rendered",
+}
+```
+
+- `payload` contains only `source`, `mood`, and `replyLength`. Reply text is never stored.
+- `payload.source` is validated against `CHAT_REPLY_SAFE_SOURCE_ALLOWLIST`
+  (`llm_local`, `llm_real`, `llm_local_error`, `llm_real_error`, `unknown`);
+  unknown values fall back to `"unknown"`.
+- `payload.mood` is validated against `CHARACTER_MOOD_STATE_ALLOWLIST`;
+  unknown values fall back to `"neutral"`.
+- `payload.replyLength` is clamped to 0–10000 (integer).
+- Calling `enqueueChatReplyOutputDiagnostics` with a non-string `reply` (including
+  `null` or `undefined`) returns `null` (no-op).
+- Network errors and non-200 responses never reach the enqueue call site.
+
+### Queue Preview After TASK-232
+
+After a successful `sendChat`, the queue holds three items (expression_mirror at
+index 0 from TASK-231, reaction_bubble at index 1 from TASK-230, chat_reply at
+index 2 from TASK-232). `nextItem` = `outputQueueItems[0]` = expression_mirror:
+
+```
+Queue: disabled · Items: 3 · Recent: 3 · Next: P4_NORMAL_REACTION/visual_expression/expression_mirror
+```
+
+### Runtime Boundary
+
+TASK-232 is Full App renderer-only:
+
+- No backend change.
+- No `/chat` API schema change.
+- No chat history persistence format change.
+- No extra `/chat` call.
+- No extra history write.
+- No new IPC.
+- No existing IPC modification.
+- No Pet Window side-effect.
+- No Pet Window runtime change.
+- No Pet Bubble visible behavior change.
+- No expression mirror behavior change.
+- No reaction bubble mirror behavior change.
+- No TTS / STT / audio runtime.
+- Queue remains disabled (OUTPUT_QUEUE_ENABLED = false).
+- No queue dispatch.
+- No raw reply text storage in payload.
+
+### Smoke Coverage
+
+`renderer-chat-smoke.js` adds TASK-232 coverage for:
+
+- `enqueueChatReplyOutputDiagnostics` existence and `CHAT_REPLY_SAFE_SOURCE_ALLOWLIST` existence.
+- `sendChat` → chat_reply item enqueued with full schema assertion.
+- Payload has exactly `source`, `mood`, `replyLength` keys.
+- `payload.source` matches response source (`llm_local`).
+- `payload.mood` matches response mood (`focused`).
+- `payload.replyLength` equals `"Hmph, local dragon reply.".length`.
+- Payload contains no raw reply text.
+- `interruptible=false`, `priority=P2_LLM_REPLY`, `channel=full_app_chat`.
+- `historyEligible=true`, `copyExportEligible=true`, `ttsEligible=false`.
+- `reason="chat_reply_rendered"`.
+- Unknown source → `"unknown"` fallback.
+- Unknown mood → `"neutral"` fallback.
+- `replyLength` clamped to 10000 for oversized reply.
+- `null` reply returns `null` (no-op, nothing enqueued).
+- `undefined` reply returns `null` (no-op).
+- Queue remains disabled after enqueue.
+- Preview shows `Items: 3 · Recent: 3` and `expression_mirror` as Next after sendChat.
+- No forbidden payload keys in serialized queue.
+- Preview contains no raw reply text.
+- Direct `enqueueChatReplyOutputDiagnostics` call does not trigger history write,
+  speech update, expression IPC, or reaction bubble IPC.
+- Chat area still renders reply text normally.
+- `local_error` source (`llm_local_error`) passes allowlist and is stored.
+- Network error path does not enqueue chat_reply.
+- IPC channels unchanged; no output-queue, output:queue, or task-232 IPC added.
+- Regression guards: expression mirror, TASK-219 cooldown, TASK-231 and TASK-230
+  helpers all still present.
+
+### Acceptance Criteria
+
+- [x] `function enqueueChatReplyOutputDiagnostics` defined in `renderer.js`.
+- [x] `CHAT_REPLY_SAFE_SOURCE_ALLOWLIST` defined in `renderer.js`.
+- [x] Main `sendMessage` flow calls `enqueueChatReplyOutputDiagnostics` after `appendMessage("pet", ...)`.
+- [x] Edit flow calls `enqueueChatReplyOutputDiagnostics` after `renderFormalChatEntries(finalEntries)`.
+- [x] Payload contains only `{ source, mood, replyLength }` — no reply text.
+- [x] Non-string reply returns null (no-op).
+- [x] Queue remains disabled (OUTPUT_QUEUE_ENABLED = false).
+- [x] No IPC added, no existing IPC modified.
+- [x] No Pet Window runtime change.
+- [x] TASK-218, TASK-219, TASK-220 behavior unchanged.
+- [x] Renderer automated smoke PASS (28 TASK-232 tests).
+- [x] Windows visual smoke PASS on 2026-06-01.
+
+### Windows Visual Smoke Results (2026-06-01)
+
+- Basic startup PASS: Preview shows `Queue: disabled · Items/Recent/Next`; Pet
+  Window remains normal.
+- Send message PASS: formal chat reply renders normally, Queue enqueues the
+  `chat_reply` diagnostics item with `Next: P2_LLM_REPLY/full_app_chat/chat_reply`
+  visible in queue state.
+- Chat reply boundary PASS: Queue does not display reply text, user text, raw
+  response, prompt, or memory raw content.
+- Delete / Undo PASS: feature remains normal; Queue stays disabled.
+- Edit last user PASS: edited reply renders normally, Queue enqueues
+  `chat_reply` diagnostics item; no extra `/chat` call observed.
+- Clear Chat PASS: feature remains normal; Queue stays disabled.
+- Focus PASS: feature remains normal; Queue stays disabled.
+- Queue diagnostics format PASS: no `undefined`, `null`, `NaN`,
+  `[object Object]`, raw JSON, user text, reply text, bubble text, or payload.
 - General regression PASS: no new IPC side effect, no extra TTS, no extra
   `/chat`, no history/copy/export pollution, and Pet Window expression plus
   reaction bubble behavior remains normal.

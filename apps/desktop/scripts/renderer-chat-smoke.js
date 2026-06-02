@@ -9445,6 +9445,316 @@ function testTask231RegressionGuards() {
   console.log("  testTask231RegressionGuards PASS");
 }
 
+// ─── TASK-232: Enqueue Chat Reply Diagnostics Only ───────────────────────────
+
+function task232AssertChatReplyQueueItem(item) {
+  const safe = JSON.parse(JSON.stringify(item));
+  assert.equal(safe.source, "chat_reply");
+  assert.equal(safe.priority, "P2_LLM_REPLY");
+  assert.equal(safe.channel, "full_app_chat");
+  assert.deepEqual(Object.keys(safe.payload).sort(), ["mood", "replyLength", "source"]);
+  assert.equal(safe.ttlMs, 0);
+  assert.equal(safe.interruptible, false);
+  assert.equal(safe.ttsEligible, false);
+  assert.equal(safe.historyEligible, true);
+  assert.equal(safe.copyExportEligible, true);
+  assert.equal(safe.reason, "chat_reply_rendered");
+}
+
+function testTask232RendererHasChatReplyEnqueueHelper() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("function enqueueChatReplyOutputDiagnostics"),
+    "renderer.js must define enqueueChatReplyOutputDiagnostics");
+  console.log("  testTask232RendererHasChatReplyEnqueueHelper PASS");
+}
+
+function testTask232RendererHasChatReplySafeSourceAllowlist() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("CHAT_REPLY_SAFE_SOURCE_ALLOWLIST"),
+    "renderer.js must define CHAT_REPLY_SAFE_SOURCE_ALLOWLIST");
+  console.log("  testTask232RendererHasChatReplySafeSourceAllowlist PASS");
+}
+
+async function testTask232SendChatEnqueuesChatReplyItem() {
+  const { document, sandbox } = await loadRenderer();
+  await sendChat(document, "hello dragon");
+  const item = sandbox.outputQueueItems.find((i) => i.source === "chat_reply");
+  assert.ok(item, "sendChat must enqueue a chat_reply item");
+  task232AssertChatReplyQueueItem(item);
+  console.log("  testTask232SendChatEnqueuesChatReplyItem PASS");
+}
+
+async function testTask232ChatReplyPayloadHasSourceMoodReplyLength() {
+  const { document, sandbox } = await loadRenderer();
+  await sendChat(document, "hello");
+  const item = sandbox.outputQueueItems.find((i) => i.source === "chat_reply");
+  const payload = JSON.parse(JSON.stringify(item)).payload;
+  assert.deepEqual(Object.keys(payload).sort(), ["mood", "replyLength", "source"],
+    "chat_reply payload must have exactly source, mood, replyLength");
+  console.log("  testTask232ChatReplyPayloadHasSourceMoodReplyLength PASS");
+}
+
+async function testTask232ChatReplyPayloadSourceFromResponse() {
+  const { document, sandbox } = await loadRenderer();
+  await sendChat(document, "hello");
+  const item = sandbox.outputQueueItems.find((i) => i.source === "chat_reply");
+  assert.equal(item.payload.source, "llm_local",
+    "chat_reply payload.source must match response source");
+  console.log("  testTask232ChatReplyPayloadSourceFromResponse PASS");
+}
+
+async function testTask232ChatReplyPayloadMoodFromResponse() {
+  const { document, sandbox } = await loadRenderer();
+  await sendChat(document, "hello");
+  const item = sandbox.outputQueueItems.find((i) => i.source === "chat_reply");
+  assert.equal(item.payload.mood, "focused",
+    "chat_reply payload.mood must match response mood");
+  console.log("  testTask232ChatReplyPayloadMoodFromResponse PASS");
+}
+
+async function testTask232ChatReplyPayloadReplyLength() {
+  const { document, sandbox } = await loadRenderer();
+  await sendChat(document, "hello");
+  const item = sandbox.outputQueueItems.find((i) => i.source === "chat_reply");
+  assert.equal(item.payload.replyLength, "Hmph, local dragon reply.".length,
+    "chat_reply payload.replyLength must equal reply string length");
+  console.log("  testTask232ChatReplyPayloadReplyLength PASS");
+}
+
+async function testTask232ChatReplyPayloadNoReplyText() {
+  const { document, sandbox } = await loadRenderer();
+  await sendChat(document, "hello");
+  const serialized = JSON.stringify(sandbox.outputQueueItems);
+  assert.ok(!serialized.includes("Hmph, local dragon reply."),
+    "chat_reply queue item must not store actual reply text");
+  console.log("  testTask232ChatReplyPayloadNoReplyText PASS");
+}
+
+async function testTask232ChatReplyIsNotInterruptible() {
+  const { document, sandbox } = await loadRenderer();
+  await sendChat(document, "hello");
+  const item = sandbox.outputQueueItems.find((i) => i.source === "chat_reply");
+  assert.equal(item.interruptible, false, "chat_reply must be interruptible=false");
+  console.log("  testTask232ChatReplyIsNotInterruptible PASS");
+}
+
+async function testTask232ChatReplyIsPriorityP2() {
+  const { document, sandbox } = await loadRenderer();
+  await sendChat(document, "hello");
+  const item = sandbox.outputQueueItems.find((i) => i.source === "chat_reply");
+  assert.equal(item.priority, "P2_LLM_REPLY", "chat_reply must have priority P2_LLM_REPLY");
+  console.log("  testTask232ChatReplyIsPriorityP2 PASS");
+}
+
+async function testTask232ChatReplyChannelIsFullAppChat() {
+  const { document, sandbox } = await loadRenderer();
+  await sendChat(document, "hello");
+  const item = sandbox.outputQueueItems.find((i) => i.source === "chat_reply");
+  assert.equal(item.channel, "full_app_chat", "chat_reply must use channel full_app_chat");
+  console.log("  testTask232ChatReplyChannelIsFullAppChat PASS");
+}
+
+async function testTask232ChatReplyHistoryAndExportEligible() {
+  const { document, sandbox } = await loadRenderer();
+  await sendChat(document, "hello");
+  const item = sandbox.outputQueueItems.find((i) => i.source === "chat_reply");
+  assert.equal(item.historyEligible, true, "chat_reply must be historyEligible=true");
+  assert.equal(item.copyExportEligible, true, "chat_reply must be copyExportEligible=true");
+  assert.equal(item.ttsEligible, false, "chat_reply must be ttsEligible=false");
+  console.log("  testTask232ChatReplyHistoryAndExportEligible PASS");
+}
+
+async function testTask232ChatReplyReasonIsChatReplyRendered() {
+  const { document, sandbox } = await loadRenderer();
+  await sendChat(document, "hello");
+  const item = sandbox.outputQueueItems.find((i) => i.source === "chat_reply");
+  assert.equal(item.reason, "chat_reply_rendered");
+  console.log("  testTask232ChatReplyReasonIsChatReplyRendered PASS");
+}
+
+async function testTask232UnknownSourceFallsBackToUnknown() {
+  const { sandbox } = await loadRenderer();
+  const item = sandbox.enqueueChatReplyOutputDiagnostics({ reply: "hello", mood: "focused", source: "llm_alien" });
+  assert.equal(item.payload.source, "unknown", "unknown source must fall back to 'unknown'");
+  console.log("  testTask232UnknownSourceFallsBackToUnknown PASS");
+}
+
+async function testTask232UnknownMoodFallsBackToNeutral() {
+  const { sandbox } = await loadRenderer();
+  const item = sandbox.enqueueChatReplyOutputDiagnostics({ reply: "hello", mood: "legendary", source: "llm_local" });
+  assert.equal(item.payload.mood, "neutral", "unknown mood must fall back to 'neutral'");
+  console.log("  testTask232UnknownMoodFallsBackToNeutral PASS");
+}
+
+async function testTask232ReplyLengthClampedTo10000() {
+  const { sandbox } = await loadRenderer();
+  const item = sandbox.enqueueChatReplyOutputDiagnostics({ reply: "x".repeat(20000), mood: "focused", source: "llm_local" });
+  assert.equal(item.payload.replyLength, 10000, "replyLength must be clamped to 10000");
+  console.log("  testTask232ReplyLengthClampedTo10000 PASS");
+}
+
+async function testTask232NullReplyIsNoop() {
+  const { sandbox } = await loadRenderer();
+  const result = sandbox.enqueueChatReplyOutputDiagnostics({ reply: null, mood: "focused", source: "llm_local" });
+  assert.equal(result, null, "null reply must return null (no-op)");
+  assert.equal(sandbox.outputQueueItems.filter((i) => i.source === "chat_reply").length, 0);
+  console.log("  testTask232NullReplyIsNoop PASS");
+}
+
+async function testTask232UndefinedReplyIsNoop() {
+  const { sandbox } = await loadRenderer();
+  const result = sandbox.enqueueChatReplyOutputDiagnostics({ mood: "focused", source: "llm_local" });
+  assert.equal(result, null, "missing reply must return null (no-op)");
+  console.log("  testTask232UndefinedReplyIsNoop PASS");
+}
+
+async function testTask232QueueStillDisabled() {
+  const { document, sandbox } = await loadRenderer();
+  await sendChat(document, "hello");
+  const snapshot = sandbox.getOutputQueueSnapshot();
+  assert.equal(snapshot.enabled, false, "OUTPUT_QUEUE_ENABLED must remain false");
+  console.log("  testTask232QueueStillDisabled PASS");
+}
+
+async function testTask232PreviewUpdatesAfterChatReply() {
+  const { document, sandbox } = await loadRenderer();
+  await sendChat(document, "hello");
+  const preview = sandbox.formatOutputQueueSnapshotPreview();
+  // expression_mirror (idx 0), reaction_bubble (idx 1), chat_reply (idx 2)
+  assert.match(preview, /Items: 3/, "preview must show 3 items after sendChat");
+  assert.match(preview, /Recent: 3/, "preview must show Recent: 3");
+  assert.ok(preview.includes("Queue: disabled"), "queue must remain disabled");
+  // nextItem = outputQueueItems[0] = expression_mirror
+  assert.ok(preview.includes("expression_mirror"), "preview Next must show expression_mirror (first enqueued)");
+  console.log("  testTask232PreviewUpdatesAfterChatReply PASS");
+}
+
+async function testTask232QueueItemNoForbiddenFields() {
+  const { document, sandbox } = await loadRenderer();
+  await sendChat(document, "hello");
+  const item = sandbox.outputQueueItems.find((i) => i.source === "chat_reply");
+  const serialized = JSON.stringify({
+    item,
+    snapshot: sandbox.getOutputQueueSnapshot(),
+    queue: sandbox.outputQueueItems,
+    recent: sandbox.recentOutputQueueItems,
+  });
+  for (const key of TASK228_FORBIDDEN_PAYLOAD_KEYS) {
+    assert.ok(!serialized.includes(`"${key}"`), `queue item must not include forbidden field ${key}`);
+  }
+  assert.ok(!serialized.includes("Hmph, local dragon reply."),
+    "queue item must not contain raw reply text");
+  console.log("  testTask232QueueItemNoForbiddenFields PASS");
+}
+
+async function testTask232PreviewNoRawReplyText() {
+  const { document, sandbox } = await loadRenderer();
+  await sendChat(document, "hello");
+  const preview = sandbox.formatOutputQueueSnapshotPreview();
+  assert.ok(!preview.includes("Hmph, local dragon reply."),
+    "preview must not include raw reply text");
+  console.log("  testTask232PreviewNoRawReplyText PASS");
+}
+
+async function testTask232ChatReplyEnqueueDoesNotDispatch() {
+  const appendCalls = [];
+  const speechCalls = [];
+  const expressionCalls = [];
+  const bubbleCalls = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryAppend(entry) { appendCalls.push(entry); return Promise.resolve({ ok: true }); },
+      updatePetSpeech(payload) { speechCalls.push(payload); return Promise.resolve({ ok: true }); },
+      sendPetExpressionSuggestion(payload) { expressionCalls.push(payload); return Promise.resolve({ ok: true }); },
+      sendPetReactionBubble(payload) { bubbleCalls.push(payload); return Promise.resolve({ ok: true }); },
+    },
+  });
+  await settle();
+  appendCalls.length = 0;
+  speechCalls.length = 0;
+  expressionCalls.length = 0;
+  bubbleCalls.length = 0;
+  sandbox.enqueueChatReplyOutputDiagnostics({ reply: "test reply", mood: "focused", source: "llm_local" });
+  await settle();
+  assert.equal(appendCalls.length, 0, "enqueueChatReplyOutputDiagnostics must not write history");
+  assert.equal(speechCalls.length, 0, "enqueueChatReplyOutputDiagnostics must not call updatePetSpeech");
+  assert.equal(expressionCalls.length, 0, "enqueueChatReplyOutputDiagnostics must not mirror expression");
+  assert.equal(bubbleCalls.length, 0, "enqueueChatReplyOutputDiagnostics must not mirror reaction bubble");
+  console.log("  testTask232ChatReplyEnqueueDoesNotDispatch PASS");
+}
+
+async function testTask232ExistingChatDisplayUnchanged() {
+  const { document } = await loadRenderer();
+  await sendChat(document, "hello dragon");
+  const rendered = document.getElementById("chat-area").children
+    .map((m) => m.children.map((c) => c.textContent).join(" ")).join(" ");
+  assert.match(rendered, /Hmph, local dragon reply/, "chat reply must still be rendered in chat area");
+  console.log("  testTask232ExistingChatDisplayUnchanged PASS");
+}
+
+async function testTask232LocalErrorSourceSanitized() {
+  const { document, sandbox } = await loadRenderer({ chatMode: "local_error" });
+  await sendChat(document, "hello");
+  const item = sandbox.outputQueueItems.find((i) => i.source === "chat_reply");
+  assert.ok(item, "local_error chat must still enqueue chat_reply");
+  assert.equal(item.payload.source, "llm_local_error",
+    "local_error source must be preserved as llm_local_error");
+  console.log("  testTask232LocalErrorSourceSanitized PASS");
+}
+
+async function testTask232ChatFailureDoesNotEnqueue() {
+  const { document, sandbox } = await loadRenderer({ chatMode: "network_error" });
+  await sendChat(document, "hello");
+  const chatReplyItems = sandbox.outputQueueItems.filter((i) => i.source === "chat_reply");
+  assert.equal(chatReplyItems.length, 0,
+    "network error path must not enqueue chat_reply");
+  console.log("  testTask232ChatFailureDoesNotEnqueue PASS");
+}
+
+function testTask232NoNewIpcChannelsAndPreservesExisting() {
+  const rendererPreload = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "preload.js"), "utf8");
+  const mainSrc = fs.readFileSync(path.join(desktopRoot, "src", "main.js"), "utf8");
+  const petPreload = fs.readFileSync(path.join(desktopRoot, "src", "pet", "pet-preload.js"), "utf8");
+  for (const src of [rendererPreload, mainSrc, petPreload]) {
+    assert.ok(!src.includes("output-queue"), "TASK-232 must not add output queue IPC");
+    assert.ok(!src.includes("output:queue"), "TASK-232 must not add broad output IPC");
+    assert.ok(!src.includes("task-232"), "TASK-232 must not add task-specific IPC");
+    assert.ok(!src.includes("chat-reply-output"), "TASK-232 must not add chat reply output IPC");
+  }
+  assert.ok(rendererPreload.includes('PET_EXPRESSION_SUGGESTION_CHANNEL = "pet:expression-suggestion"'),
+    "TASK-218 narrow renderer invoke channel must remain");
+  assert.ok(mainSrc.includes('PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL = "pet:expression-suggestion-received"'),
+    "TASK-218 narrow main send channel must remain");
+  assert.ok(rendererPreload.includes('PET_REACTION_BUBBLE_CHANNEL = "pet:reaction-bubble"'),
+    "TASK-220 narrow renderer invoke channel must remain");
+  assert.ok(mainSrc.includes('PET_REACTION_BUBBLE_RECEIVED_CHANNEL = "pet:reaction-bubble-received"'),
+    "TASK-220 narrow main send channel must remain");
+  console.log("  testTask232NoNewIpcChannelsAndPreservesExisting PASS");
+}
+
+function testTask232RegressionGuards() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(!src.includes("hover-action"), "TASK-232 must not restore hover action buttons");
+  assert.ok(src.includes("chat-context-menu"), "TASK-232 must keep context menu");
+  assert.ok(src.includes("複製") && src.includes("刪除") && src.includes("編輯"),
+    "TASK-232 must keep context menu copy/delete/edit actions");
+  assert.ok(src.includes("function isLastEditableUserMessage") && src.includes("entry.role !== \"user\""),
+    "TASK-232 must keep edit limited to last formal user message");
+  assert.ok(src.includes("showPetWindow"), "TASK-232 must not remove Pet Window entry point");
+  assert.ok(src.includes("function mirrorInteractionExpressionSuggestion"),
+    "TASK-232 must not remove expression mirror function");
+  assert.ok(src.includes("function scheduleInteractionExpressionMirror"),
+    "TASK-232 must not remove TASK-219 cooldown/debounce function");
+  assert.ok(src.includes("INTERACTION_EXPRESSION_MIRROR_COOLDOWN_MS"),
+    "TASK-232 must not remove TASK-219 cooldown constant");
+  assert.ok(src.includes("function enqueueExpressionMirrorOutputDiagnostics"),
+    "TASK-232 must not remove TASK-231 expression mirror diagnostics helper");
+  assert.ok(src.includes("function enqueueReactionBubbleOutputDiagnostics"),
+    "TASK-232 must not remove TASK-230 reaction bubble diagnostics helper");
+  console.log("  testTask232RegressionGuards PASS");
+}
+
 // ─── TASK-218: Safe Pet Expression Suggestion Mirror ─────────────────────────
 
 function testTask218RendererHasMirrorFunction() {
@@ -10373,6 +10683,36 @@ async function main() {
   testTask231NoNewIpcChannelsAndPreservesExisting();
   await testTask231ExpressionDebounceStillWorksWithDiagnostics();
   testTask231RegressionGuards();
+
+  // TASK-232: Enqueue Chat Reply Diagnostics Only
+  testTask232RendererHasChatReplyEnqueueHelper();
+  testTask232RendererHasChatReplySafeSourceAllowlist();
+  await testTask232SendChatEnqueuesChatReplyItem();
+  await testTask232ChatReplyPayloadHasSourceMoodReplyLength();
+  await testTask232ChatReplyPayloadSourceFromResponse();
+  await testTask232ChatReplyPayloadMoodFromResponse();
+  await testTask232ChatReplyPayloadReplyLength();
+  await testTask232ChatReplyPayloadNoReplyText();
+  await testTask232ChatReplyIsNotInterruptible();
+  await testTask232ChatReplyIsPriorityP2();
+  await testTask232ChatReplyChannelIsFullAppChat();
+  await testTask232ChatReplyHistoryAndExportEligible();
+  await testTask232ChatReplyReasonIsChatReplyRendered();
+  await testTask232UnknownSourceFallsBackToUnknown();
+  await testTask232UnknownMoodFallsBackToNeutral();
+  await testTask232ReplyLengthClampedTo10000();
+  await testTask232NullReplyIsNoop();
+  await testTask232UndefinedReplyIsNoop();
+  await testTask232QueueStillDisabled();
+  await testTask232PreviewUpdatesAfterChatReply();
+  await testTask232QueueItemNoForbiddenFields();
+  await testTask232PreviewNoRawReplyText();
+  await testTask232ChatReplyEnqueueDoesNotDispatch();
+  await testTask232ExistingChatDisplayUnchanged();
+  await testTask232LocalErrorSourceSanitized();
+  await testTask232ChatFailureDoesNotEnqueue();
+  testTask232NoNewIpcChannelsAndPreservesExisting();
+  testTask232RegressionGuards();
 
   // TASK-218: Safe Pet Expression Suggestion Mirror
   testTask218RendererHasMirrorFunction();

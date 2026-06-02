@@ -762,6 +762,13 @@ const OUTPUT_SOURCE_ALLOWLIST = new Set([
   "diagnostics_preview",
   "safety_error",
 ]);
+const CHAT_REPLY_SAFE_SOURCE_ALLOWLIST = new Set([
+  "llm_local",
+  "llm_real",
+  "llm_local_error",
+  "llm_real_error",
+  "unknown",
+]);
 const OUTPUT_FORBIDDEN_KEYS = new Set([
   "message",
   "text",
@@ -783,6 +790,9 @@ const OUTPUT_SAFE_PAYLOAD_KEYS = new Set([
   "state",
   "action",
   "reason",
+  "source",
+  "mood",
+  "replyLength",
 ]);
 const OUTPUT_PRIORITY_ORDER = [
   "P0_CRITICAL",
@@ -830,6 +840,12 @@ function sanitizeOutputQueuePayload(payload) {
           ? value.recentInteractionLevel
           : "none",
       };
+    } else if (key === "source") {
+      safe.source = CHAT_REPLY_SAFE_SOURCE_ALLOWLIST.has(value) ? value : "unknown";
+    } else if (key === "mood") {
+      safe.mood = CHARACTER_MOOD_STATE_ALLOWLIST.has(value) ? value : "neutral";
+    } else if (key === "replyLength") {
+      safe.replyLength = Math.max(0, Math.min(10000, typeof value === "number" && Number.isFinite(value) ? Math.floor(value) : 0));
     }
   }
   return safe;
@@ -1399,6 +1415,28 @@ function enqueueExpressionMirrorOutputDiagnostics(expression) {
     historyEligible: false,
     copyExportEligible: false,
     reason: "interaction_expression_suggestion",
+  });
+}
+
+// TASK-232: Enqueue chat reply diagnostics item (local only).
+// Does not store reply text; payload carries only source, mood, and replyLength.
+function enqueueChatReplyOutputDiagnostics(data) {
+  const reply = data && typeof data.reply === "string" ? data.reply : null;
+  if (reply === null) return null;
+  const safeSource = CHAT_REPLY_SAFE_SOURCE_ALLOWLIST.has(data.source) ? data.source : "unknown";
+  const safeMood = CHARACTER_MOOD_STATE_ALLOWLIST.has(data.mood) ? data.mood : "neutral";
+  const replyLength = Math.max(0, Math.min(10000, reply.length));
+  return enqueueOutputQueueItem({
+    source: "chat_reply",
+    priority: "P2_LLM_REPLY",
+    channel: "full_app_chat",
+    payload: { source: safeSource, mood: safeMood, replyLength },
+    ttlMs: 0,
+    interruptible: false,
+    ttsEligible: false,
+    historyEligible: true,
+    copyExportEligible: true,
+    reason: "chat_reply_rendered",
   });
 }
 
@@ -3782,6 +3820,7 @@ async function submitEditedUserMessage(text) {
       if (!finalRewrite) throw new Error("history unavailable");
       loadingMessage.remove();
       renderFormalChatEntries(finalEntries);
+      enqueueChatReplyOutputDiagnostics({ reply: data.reply, mood: data.mood, source: data.source }); // TASK-232
       if (document.hidden) markUnread();
       maybeScrollChatToBottom();
 
@@ -3883,6 +3922,7 @@ async function sendMessage(text) {
 
     loadingMessage.remove();
     appendMessage("pet", data.reply, { source: "full_app", ts: Date.now() });
+    enqueueChatReplyOutputDiagnostics({ reply: data.reply, mood: data.mood, source: data.source }); // TASK-232
     maybeScrollChatToBottom(); // TASK-113: only scroll if user was near the bottom
     const source = data.source || "unknown";
     const isSourceError = source === "llm_local_error" || source === "llm_real_error";

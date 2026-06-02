@@ -318,7 +318,7 @@ Suggested future tasks:
 - TASK-230 Enqueue Reaction Bubble Diagnostics Only. DONE - WINDOWS VISUAL
   SMOKE PASS / DONE - PASS.
 - TASK-231 Enqueue Expression Mirror Diagnostics Only. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
-- TASK-232 TTS-safe segment design.
+- TASK-232 Enqueue Chat Reply Diagnostics Only. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
 - TASK-233 Idle Reaction Policy, fixed only, no LLM.
 - TASK-234 User controls for companion reaction verbosity.
 
@@ -670,3 +670,80 @@ Windows visual smoke PASS confirmed on 2026-06-01:
 
 The output queue can now record both expression mirror intent and reaction
 bubble intent as local diagnostics, but it still does not control execution.
+
+---
+
+## 20. TASK-232 Chat Reply Diagnostics Enqueue
+
+TASK-232 connects both `/chat` success paths in the Full App renderer to the
+disabled output queue as local diagnostics only. It remains Full App renderer-only
+and does not dispatch output. Renderer automated smoke PASS confirmed on 2026-06-02.
+Windows visual smoke PASS confirmed on 2026-06-01.
+
+`enqueueChatReplyOutputDiagnostics({ reply, mood, source })` is called immediately
+after the chat reply is rendered to the chat area, in both the main `sendMessage`
+flow (after `appendMessage("pet", data.reply, ...)`) and the edit flow (after
+`renderFormalChatEntries(finalEntries)`). This means every successful `/chat`
+response that reaches the display layer produces one diagnostics-only queue item.
+
+TASK-232 chat reply diagnostics item:
+
+```js
+{
+  source: "chat_reply",
+  priority: "P2_LLM_REPLY",
+  channel: "full_app_chat",
+  payload: { source: "<safe source>", mood: "<safe mood>", replyLength: <number> },
+  ttlMs: 0,
+  interruptible: false,
+  ttsEligible: false,
+  historyEligible: true,
+  copyExportEligible: true,
+  reason: "chat_reply_rendered",
+}
+```
+
+`payload` contains only `source`, `mood`, and `replyLength`. Reply text is never
+stored. `payload.source` is validated against `CHAT_REPLY_SAFE_SOURCE_ALLOWLIST`
+(`llm_local`, `llm_real`, `llm_local_error`, `llm_real_error`, `unknown`); unknown
+values fall back to `"unknown"`. `payload.mood` is validated against
+`CHARACTER_MOOD_STATE_ALLOWLIST`; unknown values fall back to `"neutral"`.
+`payload.replyLength` is clamped 0–10000. Non-string `reply` returns `null` (no-op).
+Network errors and non-200 responses never reach the call site.
+
+After a full successful `sendChat`, the queue holds three items:
+expression_mirror (index 0, from TASK-231), reaction_bubble (index 1, from TASK-230),
+and chat_reply (index 2, from TASK-232). Since `nextItem` = `outputQueueItems[0]`:
+
+```
+Queue: disabled · Items: 3 · Recent: 3 · Next: P4_NORMAL_REACTION/visual_expression/expression_mirror
+```
+
+TASK-232 preserves the TASK-218 and TASK-220 narrow IPC channels and all prior
+behavior. It does not add IPC, dispatch, Pet Window runtime behavior, Pet Bubble
+visible behavior, expression mirror behavior, reaction bubble mirror behavior,
+TASK-219 debounce changes, extra `/chat` calls, extra history writes, TTS/STT/audio,
+prompt runtime, persistence, assets, hover action buttons, or message edit scope
+changes.
+
+Windows visual smoke PASS confirmed on 2026-06-01:
+
+- Basic startup PASS: Preview shows `Queue: disabled · Items/Recent/Next`; Pet
+  Window remains normal.
+- Send message PASS: formal chat reply renders normally, Queue enqueues the
+  `chat_reply` diagnostics item; Queue does not display reply text, user text,
+  raw response, prompt, or memory raw content.
+- Edit last user PASS: edited reply renders normally, Queue enqueues the
+  `chat_reply` diagnostics item; no extra `/chat` call.
+- Delete / Undo PASS: feature remains normal; Queue stays disabled.
+- Clear Chat PASS: feature remains normal; Queue stays disabled.
+- Focus PASS: feature remains normal; Queue stays disabled.
+- Queue diagnostics format PASS: no `undefined`, `null`, `NaN`,
+  `[object Object]`, raw JSON, user text, reply text, bubble text, or payload.
+- General regression PASS: no new IPC side effect, no extra TTS, no extra
+  `/chat`, no history/copy/export pollution, and Pet Window expression plus
+  reaction bubble behavior remains normal.
+
+The output queue can now record expression mirror intent (TASK-231), reaction bubble
+intent (TASK-230), and chat reply intent (TASK-232) as local diagnostics, but it
+still does not control execution.
