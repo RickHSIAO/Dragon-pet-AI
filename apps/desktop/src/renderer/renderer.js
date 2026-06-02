@@ -736,8 +736,6 @@ var currentCharacterState = {
 const OUTPUT_QUEUE_ENABLED = window.dragonOutputQueue.OUTPUT_QUEUE_ENABLED;
 var outputQueueItems = window.dragonOutputQueue.outputQueueItems;
 var recentOutputQueueItems = window.dragonOutputQueue.recentOutputQueueItems;
-var interactionDiagnosticsExpanded = false;
-
 function sanitizeOutputQueueReason(v) { return window.dragonOutputQueue.sanitizeOutputQueueReason(v); }
 function sanitizeOutputQueuePayload(p) { return window.dragonOutputQueue.sanitizeOutputQueuePayload(p); }
 function cloneOutputQueueItemSummary(item) { return window.dragonOutputQueue.cloneOutputQueueItemSummary(item); }
@@ -1204,145 +1202,29 @@ function mirrorInteractionReactionBubble(bubble) {
   return true;
 }
 
-// TASK-224: Local diagnostics preview formatters.
-// Uses textContent (not innerHTML); only displays allowlisted summary tokens.
-function formatCharacterStatePreview(state = currentCharacterState) {
-  const source = state && typeof state === "object" ? state : {};
-  const safeMood = CHARACTER_MOOD_STATE_ALLOWLIST.has(source.mood)
-    ? source.mood
-    : "neutral";
-  const safeAttention = CHARACTER_ATTENTION_STATE_ALLOWLIST.has(source.attention)
-    ? source.attention
-    : "idle";
-  const safeEnergy = CHARACTER_ENERGY_STATE_ALLOWLIST.has(source.energy)
-    ? source.energy
-    : "calm";
-  const safeLevel = CHARACTER_INTERACTION_LEVEL_ALLOWLIST.has(source.recentInteractionLevel)
-    ? source.recentInteractionLevel
-    : "none";
-  return "State: " + safeMood + "/" + safeAttention + "/" + safeEnergy
-    + " · Level: " + safeLevel;
-}
-
-function formatInteractionDiagnosticsPreview(context = {}) {
-  const source = context && typeof context === "object" ? context : {};
-  const rawHint = typeof source.reactionHint === "string"
-    ? source.reactionHint
-    : currentInteractionReactionHint;
-  const rawExpression = typeof source.expression === "string"
-    ? source.expression
-    : currentInteractionExpressionSuggestion;
-  const decision = source.behaviorDecision && typeof source.behaviorDecision === "object"
-    ? source.behaviorDecision
-    : currentCompanionBehaviorDecision;
-  const safeHint = INTERACTION_REACTION_HINT_ALLOWLIST.has(rawHint)
-    ? rawHint
-    : "none";
-  const safeExpression = INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST.has(rawExpression)
-    ? rawExpression
-    : "neutral";
-  const safeAction = decision && COMPANION_BEHAVIOR_ACTION_ALLOWLIST.has(decision.action)
-    ? decision.action
-    : "none";
-  const state = source.characterState && typeof source.characterState === "object"
-    ? source.characterState
-    : currentCharacterState;
-  const queueSnapshot = source.outputQueueSnapshot && typeof source.outputQueueSnapshot === "object"
-    ? source.outputQueueSnapshot
-    : getOutputQueueSnapshot();
-  return "Reaction: " + safeHint
-    + " · Suggestion: " + safeExpression
-    + "\nDecision: " + safeAction
-    + " · " + formatCharacterStatePreview(state)
-    + "\n" + formatOutputQueueSnapshotPreview(queueSnapshot);
-}
-
-function formatInteractionDiagnosticsSummary(context = {}) {
-  const source = context && typeof context === "object" ? context : {};
-  const rawHint = typeof source.reactionHint === "string"
-    ? source.reactionHint
-    : currentInteractionReactionHint;
-  const rawExpression = typeof source.expression === "string"
-    ? source.expression
-    : currentInteractionExpressionSuggestion;
-  const safeHint = INTERACTION_REACTION_HINT_ALLOWLIST.has(rawHint)
-    ? rawHint
-    : "none";
-  const safeExpression = INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST.has(rawExpression)
-    ? rawExpression
-    : "neutral";
-  const queueSnapshot = source.outputQueueSnapshot && typeof source.outputQueueSnapshot === "object"
-    ? source.outputQueueSnapshot
-    : getOutputQueueSnapshot();
-  const queueEnabled = queueSnapshot && queueSnapshot.enabled === true
-    ? "Queue enabled"
-    : "Queue disabled";
-  const itemCount = queueSnapshot && Number.isFinite(queueSnapshot.length) && queueSnapshot.length >= 0
-    ? queueSnapshot.length
-    : 0;
-  return "Reaction: " + safeHint
-    + " · Suggestion: " + safeExpression
-    + " · " + queueEnabled
-    + " · Items " + itemCount;
-}
-
-function formatInteractionDiagnosticsDetails(context = {}) {
-  const hasContext = context && typeof context === "object" && Object.keys(context).length > 0;
-  return hasContext ? formatInteractionDiagnosticsPreview(context) : formatInteractionDiagnosticsPreview();
-}
-
-function ensureInteractionDiagnosticsDrawerElements(container, summaryEl, toggleEl, detailsEl) {
-  if (!container || !summaryEl || !toggleEl || !detailsEl) return;
-  if (summaryEl.parentNode || toggleEl.parentNode || detailsEl.parentNode) return;
-
-  const row = document.createElement("div");
-  row.className = "diagnostics-summary-row";
-  row.appendChild(summaryEl);
-  row.appendChild(toggleEl);
-  container.appendChild(row);
-  container.appendChild(detailsEl);
-  if (container.dataset) {
-    container.dataset.syntheticDiagnosticsText = "true";
-  }
-}
-
+// TASK-239: Diagnostics Drawer engine delegated to window.dragonDiagnosticsDrawer module (diagnostics-drawer.js).
+function formatCharacterStatePreview(state) { return window.dragonDiagnosticsDrawer.formatCharacterStatePreview(state); }
+function formatInteractionDiagnosticsPreview(context) { return window.dragonDiagnosticsDrawer.formatInteractionDiagnosticsPreview(context); }
+function formatInteractionDiagnosticsSummary(context) { return window.dragonDiagnosticsDrawer.formatInteractionDiagnosticsSummary(context); }
+function formatInteractionDiagnosticsDetails(context) { return window.dragonDiagnosticsDrawer.formatInteractionDiagnosticsDetails(context); }
+function ensureInteractionDiagnosticsDrawerElements(c, s, t, d) { return window.dragonDiagnosticsDrawer.ensureInteractionDiagnosticsDrawerElements(c, s, t, d); }
 function renderInteractionReactionPreview() {
-  const el = interactionDiagnosticsContainer || document.getElementById("interaction-reaction-preview");
-  if (!el) return;
-  const summaryEl = interactionDiagnosticsSummary || document.getElementById("interaction-diagnostics-summary");
-  const toggleEl = interactionDiagnosticsToggle || document.getElementById("interaction-diagnostics-toggle");
-  const detailsEl = interactionDiagnosticsDetails || document.getElementById("interaction-diagnostics-details");
-  const summary = formatInteractionDiagnosticsSummary();
-  const details = formatInteractionDiagnosticsDetails();
-
-  if (!summaryEl || !toggleEl || !detailsEl) {
-    el.textContent = summary;
-    return;
-  }
-
-  ensureInteractionDiagnosticsDrawerElements(el, summaryEl, toggleEl, detailsEl);
-  summaryEl.textContent = summary;
-  detailsEl.textContent = details;
-  detailsEl.hidden = !interactionDiagnosticsExpanded;
-  toggleEl.textContent = interactionDiagnosticsExpanded ? "Diagnostics ▾" : "Diagnostics ▸";
-  toggleEl.setAttribute("aria-expanded", interactionDiagnosticsExpanded ? "true" : "false");
-  toggleEl.setAttribute("aria-controls", "interaction-diagnostics-details");
-  if (toggleEl.type !== "button") toggleEl.type = "button";
-  if (interactionDiagnosticsExpanded) {
-    el.classList.add("is-expanded");
-    el.classList.remove("is-collapsed");
-  } else {
-    el.classList.add("is-collapsed");
-    el.classList.remove("is-expanded");
-  }
-
-  if (el.dataset && el.dataset.syntheticDiagnosticsText === "true") {
-    el.textContent = summary + "\n" + details;
-  }
+  window.dragonDiagnosticsDrawer.renderInteractionDiagnosticsPreview({
+    elements: {
+      root: interactionDiagnosticsContainer || document.getElementById("interaction-reaction-preview"),
+      summary: interactionDiagnosticsSummary || document.getElementById("interaction-diagnostics-summary"),
+      toggle: interactionDiagnosticsToggle || document.getElementById("interaction-diagnostics-toggle"),
+      details: interactionDiagnosticsDetails || document.getElementById("interaction-diagnostics-details"),
+    },
+    reactionHint: currentInteractionReactionHint,
+    expression: currentInteractionExpressionSuggestion,
+    behaviorDecision: currentCompanionBehaviorDecision,
+    characterState: currentCharacterState,
+    outputQueueSnapshot: getOutputQueueSnapshot(),
+  });
 }
-
 function toggleInteractionDiagnosticsDrawer() {
-  interactionDiagnosticsExpanded = !interactionDiagnosticsExpanded;
+  window.dragonDiagnosticsDrawer.toggleInteractionDiagnosticsDrawer();
   renderInteractionReactionPreview();
 }
 

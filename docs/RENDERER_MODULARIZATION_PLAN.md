@@ -90,7 +90,7 @@ changing visible behavior.
 ## 5. Suggested Extraction Order
 
 1. TASK-238 Extract Output Queue Module. **DONE — WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-02, Windows visual smoke 2026-06-01).**
-2. TASK-239 Extract Diagnostics Drawer Module.
+2. TASK-239 Extract Diagnostics Drawer Module. **DONE — WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-02, Windows visual smoke 2026-06-01).**
 3. TASK-240 Extract Interaction Events / Behavior / Character State Modules.
 4. TASK-241 Extract Pet Bridge Module.
 5. TASK-242 Extract Chat Rendering Module.

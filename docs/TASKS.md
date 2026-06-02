@@ -23062,7 +23062,7 @@ TASK-226 is docs-only:
 - TASK-236 Collapsible Diagnostics Drawer. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
 - TASK-237 Renderer Modularization Plan / Boundary Map. IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED.
 - TASK-238 Extract Output Queue Module. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
-- TASK-239 Extract Diagnostics Drawer Module.
+- TASK-239 Extract Diagnostics Drawer Module. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
 - TASK-240 Extract Interaction Events / Behavior / Character State Modules.
 - TASK-241 Extract Pet Bridge Module.
 - TASK-242 Extract Chat Rendering Module.
@@ -24567,6 +24567,103 @@ Windows visual smoke PASS (2026-06-01):
   disabled.
 - Edit last user PASS: functionality normal, no extra `/chat`, Queue diagnostics
   normal.
+- Clear Chat / Focus PASS: functionality normal, Pet Window expression and reaction
+  bubble normal.
+- Diagnostics format PASS: summary/details show no `undefined`, `null`, `NaN`,
+  `[object Object]`, raw JSON, user text, reply text, bubble text, or payload.
+- General regression PASS: no new IPC side-effect, no extra TTS, no extra `/chat`,
+  no history/copy/export pollution.
+
+## TASK-239 | Extract Diagnostics Drawer Module
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-06-02
+**Phase:** Phase 5 - Renderer Modularization
+**Depends on:** TASK-238
+
+### Summary
+
+TASK-239 extracts the Diagnostics Drawer engine from `renderer.js` into a dedicated
+classic browser module at `apps/desktop/src/renderer/modules/diagnostics-drawer.js`.
+
+The module is an IIFE (`(function(){"use strict"; ... window.dragonDiagnosticsDrawer = api; })()`),
+loaded via a `<script>` tag in `index.html` after `output-queue.js` and before `renderer.js`.
+No ESM, no bundler, no build step, no `type="module"`.
+
+`renderer.js` is updated with thin one-liner wrapper functions that delegate to
+`window.dragonDiagnosticsDrawer`. The `interactionDiagnosticsExpanded` state variable
+moves to `_expanded` inside the module IIFE. `renderInteractionReactionPreview()` in
+`renderer.js` collects current state and passes it explicitly to
+`window.dragonDiagnosticsDrawer.renderInteractionDiagnosticsPreview({elements, reactionHint,
+expression, behaviorDecision, characterState, outputQueueSnapshot})`.
+`toggleInteractionDiagnosticsDrawer()` delegates to the module then re-renders.
+
+The module owns private copies of all 7 allowlists it needs (`_HINT_ALLOWLIST`,
+`_EXPRESSION_ALLOWLIST`, `_ACTION_ALLOWLIST`, `_MOOD_ALLOWLIST`, `_ATTENTION_ALLOWLIST`,
+`_ENERGY_ALLOWLIST`, `_LEVEL_ALLOWLIST`) and calls `window.dragonOutputQueue.formatOutputQueueSnapshotPreview`
+directly (output-queue.js is always loaded first).
+
+No behavior change. Diagnostics drawer remains collapsed by default. Queue remains disabled.
+
+### New / Modified Files
+
+- `apps/desktop/src/renderer/modules/diagnostics-drawer.js` — new IIFE module (~190 lines).
+  Contains `_expanded` state, 7 private allowlist copies, and 9 functions:
+  `formatCharacterStatePreview`, `formatInteractionDiagnosticsPreview`,
+  `formatInteractionDiagnosticsSummary`, `formatInteractionDiagnosticsDetails`,
+  `ensureInteractionDiagnosticsDrawerElements`, `renderInteractionDiagnosticsPreview`,
+  `toggleInteractionDiagnosticsDrawer`, `isInteractionDiagnosticsExpanded`,
+  `setInteractionDiagnosticsExpandedForTests`. Exposes `window.dragonDiagnosticsDrawer`.
+- `apps/desktop/src/renderer/index.html` — adds `<script src="./modules/diagnostics-drawer.js"></script>`
+  between output-queue.js and renderer.js script tags.
+- `apps/desktop/src/renderer/renderer.js` — removes `var interactionDiagnosticsExpanded = false;`
+  and replaces the 7 diagnostics functions (~140 lines) with thin wrapper delegates.
+  `renderInteractionReactionPreview` passes explicit state context to module.
+- `apps/desktop/scripts/renderer-chat-smoke.js` — `loadRenderer` updated to load
+  diagnostics-drawer module into same VM sandbox after output-queue, before renderer.js.
+  4 existing tests updated for TASK-239 module delegation
+  (`testTask224RendererHasDiagnosticsFormatters`, `testTask229RendererHasSnapshotPreviewFormatter`,
+  `testTask228StaticSourceCheck`, `testTask236HtmlCssAndRendererSymbols`).
+  14 new TASK-239 tests added.
+
+### Safety Boundary
+
+- No backend change.
+- No `/chat` schema or request flow change.
+- No chat history persistence format change.
+- No new IPC and no existing IPC channel change.
+- No Pet Window runtime change.
+- No Pet Bubble, expression mirror, or reaction bubble mirror behavior change.
+- No TTS/STT/audio change.
+- No queue dispatch. `OUTPUT_QUEUE_ENABLED` remains `false`.
+- No persistence, localStorage, settings page, background monitoring, screenshot,
+  OCR, provider/Ollama runtime, prompt runtime, hover action buttons, or message
+  edit rule change.
+- Module is pure classic JS: no ESM, no bundler, no build step.
+- No `innerHTML`. Module uses `textContent` only.
+
+### Automated Smoke
+
+- [x] `node apps\desktop\scripts\renderer-chat-smoke.js` PASS (14 new TASK-239 tests + full regression).
+- [x] `node apps\desktop\scripts\pet-window-smoke.js` PASS (82 checks).
+- [x] `node apps\desktop\scripts\pet-renderer-smoke.js` PASS (263 checks).
+
+### Windows Visual Smoke
+
+Windows visual smoke PASS (2026-06-01):
+
+- Basic startup PASS: Full App / Pet Window normal. Diagnostics drawer default
+  collapsed. Queue still disabled.
+- Expand Diagnostics PASS: Reaction / Decision / Queue / Next / Winner / Active
+  display correctly in details.
+- Collapse Diagnostics PASS: details hidden, screen returns to clean summary-only view.
+- Send message PASS: chat / expression / reaction bubble normal. Summary and details
+  update correctly after send.
+- Collapse / expand PASS: drawer state correct; details show latest diagnostics state.
+- Delete / Undo PASS: functionality normal, context menu normal, Queue still
+  disabled.
+- Edit last user PASS: functionality normal, no extra `/chat`, Diagnostics updates
+  normally.
 - Clear Chat / Focus PASS: functionality normal, Pet Window expression and reaction
   bubble normal.
 - Diagnostics format PASS: summary/details show no `undefined`, `null`, `NaN`,

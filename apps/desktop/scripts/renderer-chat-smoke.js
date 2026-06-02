@@ -534,6 +534,11 @@ async function loadRenderer(options = {}) {
   const moduleCode = fs.readFileSync(outputQueueModulePath, "utf8");
   vm.runInNewContext(moduleCode, sandbox, { filename: outputQueueModulePath });
 
+  // TASK-239: load diagnostics-drawer module into same sandbox after output-queue, before renderer.js
+  const diagDrawerModulePath = path.join(desktopRoot, "src", "renderer", "modules", "diagnostics-drawer.js");
+  const diagDrawerCode = fs.readFileSync(diagDrawerModulePath, "utf8");
+  vm.runInNewContext(diagDrawerCode, sandbox, { filename: diagDrawerModulePath });
+
   const code = fs.readFileSync(rendererPath, "utf8");
   vm.runInNewContext(code, sandbox, { filename: rendererPath });
   await settle();
@@ -8019,12 +8024,16 @@ function testTask223RegressionGuards() {
 
 function testTask224RendererHasDiagnosticsFormatters() {
   const src = fs.readFileSync(rendererPath, "utf8");
+  // TASK-239: functions now delegate to diagnostics-drawer module; thin wrappers remain in renderer.js
+  const diagModuleSrc = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "modules", "diagnostics-drawer.js"), "utf8");
   assert.ok(src.includes("function formatInteractionDiagnosticsPreview"),
     "renderer.js must define formatInteractionDiagnosticsPreview");
   assert.ok(src.includes("function formatCharacterStatePreview"),
     "renderer.js must define formatCharacterStatePreview");
-  assert.ok(src.includes("formatInteractionDiagnosticsPreview()"),
-    "renderInteractionReactionPreview must use the diagnostics formatter");
+  assert.ok(
+    src.includes("window.dragonDiagnosticsDrawer.renderInteractionDiagnosticsPreview") ||
+    (src + diagModuleSrc).includes("formatInteractionDiagnosticsPreview("),
+    "renderInteractionReactionPreview must use the diagnostics formatter (via module or directly)");
   console.log("  testTask224RendererHasDiagnosticsFormatters PASS");
 }
 
@@ -8254,7 +8263,9 @@ function testTask228StaticSourceCheck() {
   const src = fs.readFileSync(rendererPath, "utf8");
   // TASK-238: constants/allowlists moved to module; wrappers remain in renderer.js
   const moduleSrc = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "modules", "output-queue.js"), "utf8");
-  const combined = src + moduleSrc;
+  // TASK-239: diagnostics functions moved to diagnostics-drawer module
+  const diagModuleSrc = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "modules", "diagnostics-drawer.js"), "utf8");
+  const combined = src + moduleSrc + diagModuleSrc;
   for (const token of [
     "OUTPUT_QUEUE_ENABLED = false",
     "OUTPUT_QUEUE_MAX = 50",
@@ -8648,10 +8659,14 @@ function testTask228RegressionGuards() {
 
 function testTask229RendererHasSnapshotPreviewFormatter() {
   const src = fs.readFileSync(rendererPath, "utf8");
+  // TASK-239: formatInteractionDiagnosticsPreview moved to diagnostics-drawer module
+  const diagModuleSrc = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "modules", "diagnostics-drawer.js"), "utf8");
   assert.ok(src.includes("function formatOutputQueueSnapshotPreview"),
     "renderer.js must define formatOutputQueueSnapshotPreview");
-  assert.ok(src.includes("formatOutputQueueSnapshotPreview(queueSnapshot)"),
-    "diagnostics preview must use output queue snapshot formatter");
+  assert.ok(
+    src.includes("formatOutputQueueSnapshotPreview(queueSnapshot)") ||
+    diagModuleSrc.includes("formatOutputQueueSnapshotPreview("),
+    "diagnostics preview must use output queue snapshot formatter (in renderer or module)");
   assert.ok(src.includes("function cloneOutputQueueNextItemSummary"),
     "renderer.js must define safe next-item summary helper");
   console.log("  testTask229RendererHasSnapshotPreviewFormatter PASS");
@@ -10505,6 +10520,8 @@ function testTask236HtmlCssAndRendererSymbols() {
   const html = fs.readFileSync(indexPath, "utf8");
   const css = fs.readFileSync(cssPath, "utf8");
   const src = fs.readFileSync(rendererPath, "utf8");
+  // TASK-239: diagnostics state moved to module; check combined for backward-compat assertions
+  const diagModuleSrc = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "modules", "diagnostics-drawer.js"), "utf8");
   assert.ok(html.includes('id="interaction-diagnostics-summary"'),
     "TASK-236 HTML must include diagnostics summary element");
   assert.ok(html.includes('id="interaction-diagnostics-toggle"'),
@@ -10522,8 +10539,11 @@ function testTask236HtmlCssAndRendererSymbols() {
     "TASK-236 CSS must preserve safe details wrapping");
   assert.ok(!css.includes("position: fixed") || !css.slice(css.indexOf("#interaction-reaction-preview"), css.indexOf("#interaction-reaction-preview") + 500).includes("position: fixed"),
     "TASK-236 diagnostics must not use fixed positioning");
-  assert.ok(src.includes("interactionDiagnosticsExpanded"),
-    "TASK-236 renderer must define expanded/collapsed state");
+  assert.ok(
+    (src + diagModuleSrc).includes("interactionDiagnosticsExpanded") ||
+    diagModuleSrc.includes("_expanded") ||
+    diagModuleSrc.includes("isInteractionDiagnosticsExpanded"),
+    "TASK-236 renderer+module must define expanded/collapsed state");
   assert.ok(src.includes("function formatInteractionDiagnosticsSummary"),
     "TASK-236 renderer must define summary formatter");
   assert.ok(src.includes("function formatInteractionDiagnosticsDetails"),
@@ -11316,6 +11336,163 @@ async function testTask238NoNewChatHistorySpeechOrTts() {
   console.log("  testTask238NoNewChatHistorySpeechOrTts PASS");
 }
 
+// TASK-239: Extract Diagnostics Drawer Module
+function testTask239ModuleFileExists() {
+  const modPath = path.join(desktopRoot, "src", "renderer", "modules", "diagnostics-drawer.js");
+  assert.ok(fs.existsSync(modPath), "TASK-239 diagnostics-drawer.js module file must exist");
+  const src = fs.readFileSync(modPath, "utf8");
+  assert.ok(src.includes("window.dragonDiagnosticsDrawer"), "TASK-239 module must set window.dragonDiagnosticsDrawer");
+  console.log("  testTask239ModuleFileExists PASS");
+}
+
+function testTask239IndexHtmlLoadOrder() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  const outputQueueIdx = html.indexOf('src="./modules/output-queue.js"');
+  const diagIdx = html.indexOf('src="./modules/diagnostics-drawer.js"');
+  const rendererIdx = html.indexOf('src="renderer.js"');
+  assert.ok(outputQueueIdx !== -1, "TASK-239 index.html must load output-queue.js");
+  assert.ok(diagIdx !== -1, "TASK-239 index.html must load diagnostics-drawer.js");
+  assert.ok(rendererIdx !== -1, "TASK-239 index.html must load renderer.js");
+  assert.ok(outputQueueIdx < diagIdx, "TASK-239 output-queue.js must load before diagnostics-drawer.js");
+  assert.ok(diagIdx < rendererIdx, "TASK-239 diagnostics-drawer.js must load before renderer.js");
+  console.log("  testTask239IndexHtmlLoadOrder PASS");
+}
+
+async function testTask239WindowApiExposed() {
+  const { sandbox } = await loadRenderer();
+  assert.ok(sandbox.window.dragonDiagnosticsDrawer, "TASK-239 window.dragonDiagnosticsDrawer must be set after module load");
+  console.log("  testTask239WindowApiExposed PASS");
+}
+
+async function testTask239ApiSurface() {
+  const { sandbox } = await loadRenderer();
+  const api = sandbox.window.dragonDiagnosticsDrawer;
+  const required = [
+    "formatCharacterStatePreview",
+    "formatInteractionDiagnosticsPreview",
+    "formatInteractionDiagnosticsSummary",
+    "formatInteractionDiagnosticsDetails",
+    "ensureInteractionDiagnosticsDrawerElements",
+    "renderInteractionDiagnosticsPreview",
+    "toggleInteractionDiagnosticsDrawer",
+    "isInteractionDiagnosticsExpanded",
+    "setInteractionDiagnosticsExpandedForTests",
+  ];
+  for (const name of required) {
+    assert.strictEqual(typeof api[name], "function", `TASK-239 dragonDiagnosticsDrawer must expose ${name}`);
+  }
+  console.log("  testTask239ApiSurface PASS");
+}
+
+function testTask239RendererThinWrappers() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("window.dragonDiagnosticsDrawer.formatCharacterStatePreview"),
+    "TASK-239 renderer.js must delegate formatCharacterStatePreview to module");
+  assert.ok(src.includes("window.dragonDiagnosticsDrawer.renderInteractionDiagnosticsPreview"),
+    "TASK-239 renderer.js must delegate renderInteractionDiagnosticsPreview to module");
+  assert.ok(src.includes("window.dragonDiagnosticsDrawer.toggleInteractionDiagnosticsDrawer"),
+    "TASK-239 renderer.js must delegate toggleInteractionDiagnosticsDrawer to module");
+  assert.ok(!src.includes("interactionDiagnosticsExpanded ="),
+    "TASK-239 renderer.js must not own interactionDiagnosticsExpanded state directly");
+  console.log("  testTask239RendererThinWrappers PASS");
+}
+
+async function testTask239DefaultCollapsed() {
+  const { sandbox } = await loadRenderer();
+  const api = sandbox.window.dragonDiagnosticsDrawer;
+  assert.strictEqual(api.isInteractionDiagnosticsExpanded(), false,
+    "TASK-239 drawer must default to collapsed (_expanded === false)");
+  console.log("  testTask239DefaultCollapsed PASS");
+}
+
+async function testTask239ToggleOpens() {
+  const { sandbox } = await loadRenderer();
+  const api = sandbox.window.dragonDiagnosticsDrawer;
+  api.setInteractionDiagnosticsExpandedForTests(false);
+  api.toggleInteractionDiagnosticsDrawer();
+  assert.strictEqual(api.isInteractionDiagnosticsExpanded(), true,
+    "TASK-239 toggle from collapsed must set expanded=true");
+  console.log("  testTask239ToggleOpens PASS");
+}
+
+async function testTask239ToggleCloses() {
+  const { sandbox } = await loadRenderer();
+  const api = sandbox.window.dragonDiagnosticsDrawer;
+  api.setInteractionDiagnosticsExpandedForTests(true);
+  api.toggleInteractionDiagnosticsDrawer();
+  assert.strictEqual(api.isInteractionDiagnosticsExpanded(), false,
+    "TASK-239 toggle from expanded must set expanded=false");
+  console.log("  testTask239ToggleCloses PASS");
+}
+
+async function testTask239SendChatUpdatesPreview() {
+  const { document } = await loadRenderer();
+  const container = document.getElementById("interaction-reaction-preview");
+  assert.ok(container, "TASK-239 interaction-reaction-preview element must exist");
+  document.getElementById("message-input").value = "hello";
+  document.getElementById("send-btn").click();
+  await settle();
+  const text = container.textContent || "";
+  assert.ok(text.length > 0, "TASK-239 diagnostics container must have text content after send");
+  console.log("  testTask239SendChatUpdatesPreview PASS");
+}
+
+async function testTask239OutputQueueSnapshotPassedThrough() {
+  const { sandbox } = await loadRenderer();
+  const api = sandbox.window.dragonDiagnosticsDrawer;
+  const snapshot = { enabled: false, length: 0, recent: 0, winner: null, active: null, items: [] };
+  const summary = api.formatInteractionDiagnosticsSummary({
+    reactionHint: "none",
+    expression: "neutral",
+    outputQueueSnapshot: snapshot,
+  });
+  assert.ok(summary.includes("Queue disabled"), "TASK-239 summary must reflect disabled queue from snapshot");
+  assert.ok(summary.includes("Items 0"), "TASK-239 summary must reflect item count from snapshot");
+  console.log("  testTask239OutputQueueSnapshotPassedThrough PASS");
+}
+
+function testTask239SummaryDetailsSafety() {
+  const modPath = path.join(desktopRoot, "src", "renderer", "modules", "diagnostics-drawer.js");
+  const src = fs.readFileSync(modPath, "utf8");
+  assert.ok(!src.includes("innerHTML"), "TASK-239 module must not use innerHTML");
+  assert.ok(src.includes("textContent"), "TASK-239 module must use textContent for safe rendering");
+  assert.ok(src.includes("_HINT_ALLOWLIST"), "TASK-239 module must have private hint allowlist");
+  assert.ok(src.includes("_EXPRESSION_ALLOWLIST"), "TASK-239 module must have private expression allowlist");
+  assert.ok(src.includes("_ACTION_ALLOWLIST"), "TASK-239 module must have private action allowlist");
+  console.log("  testTask239SummaryDetailsSafety PASS");
+}
+
+async function testTask239NoSideEffects() {
+  const { state } = await loadRenderer();
+  const chatCalls = state.calls.filter((c) => c.url && c.url.endsWith("/chat"));
+  assert.equal(chatCalls.length, 0, "TASK-239 module load must not trigger any /chat calls");
+  const modSrc = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "modules", "diagnostics-drawer.js"), "utf8");
+  assert.ok(!modSrc.includes("ipcRenderer"), "TASK-239 module must not invoke ipcRenderer on load");
+  console.log("  testTask239NoSideEffects PASS");
+}
+
+function testTask239NoNewIpcAdded() {
+  const modPath = path.join(desktopRoot, "src", "renderer", "modules", "diagnostics-drawer.js");
+  const src = fs.readFileSync(modPath, "utf8");
+  assert.ok(!src.includes("ipcRenderer"), "TASK-239 module must not use ipcRenderer");
+  assert.ok(!src.includes("window.dragonPetBridge"), "TASK-239 module must not call Pet Window bridge");
+  assert.ok(!src.includes("fetch("), "TASK-239 module must not call fetch");
+  console.log("  testTask239NoNewIpcAdded PASS");
+}
+
+async function testTask239RegressionExistingSmokeStillPass() {
+  const { document } = await loadRenderer();
+  const container = document.getElementById("interaction-reaction-preview");
+  assert.ok(container, "TASK-239 regression: interaction-reaction-preview element must still exist");
+  const summary = document.getElementById("interaction-diagnostics-summary");
+  assert.ok(summary, "TASK-239 regression: interaction-diagnostics-summary element must still exist");
+  const toggle = document.getElementById("interaction-diagnostics-toggle");
+  assert.ok(toggle, "TASK-239 regression: interaction-diagnostics-toggle element must still exist");
+  const details = document.getElementById("interaction-diagnostics-details");
+  assert.ok(details, "TASK-239 regression: interaction-diagnostics-details element must still exist");
+  console.log("  testTask239RegressionExistingSmokeStillPass PASS");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -12006,6 +12183,22 @@ async function main() {
   await testTask218ShowPetWindowAbsentBridgeNoThrow();
   await testTask219ShowPetWindowFlushesPendingExpression();
   testTask219NarrowChannelsStillDocumentedInPreloadSmoke();
+
+  // TASK-239: Extract Diagnostics Drawer Module
+  testTask239ModuleFileExists();
+  testTask239IndexHtmlLoadOrder();
+  testTask239WindowApiExposed();
+  testTask239ApiSurface();
+  testTask239RendererThinWrappers();
+  testTask239DefaultCollapsed();
+  await testTask239ToggleOpens();
+  await testTask239ToggleCloses();
+  await testTask239SendChatUpdatesPreview();
+  await testTask239OutputQueueSnapshotPassedThrough();
+  testTask239SummaryDetailsSafety();
+  testTask239NoSideEffects();
+  testTask239NoNewIpcAdded();
+  await testTask239RegressionExistingSmokeStillPass();
 
   console.log("renderer chat smoke: PASS");
 }

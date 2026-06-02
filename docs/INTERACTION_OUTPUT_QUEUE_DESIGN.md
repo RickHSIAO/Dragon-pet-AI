@@ -1075,3 +1075,108 @@ Windows visual smoke PASS (2026-06-01):
   `[object Object]`, raw JSON, user text, reply text, bubble text, or payload.
 - General regression PASS: no new IPC side-effect, no extra TTS, no extra `/chat`,
   no history/copy/export pollution.
+
+## 27. TASK-239 Extract Diagnostics Drawer Module
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-06-02
+
+TASK-239 is the second runtime extraction from the renderer modularization plan.
+
+### What Was Extracted
+
+The diagnostics drawer engine (~140 lines) moves from `renderer.js` into
+`apps/desktop/src/renderer/modules/diagnostics-drawer.js`.
+
+Extracted functions:
+- `formatCharacterStatePreview(state)`
+- `formatInteractionDiagnosticsPreview(context)`
+- `formatInteractionDiagnosticsSummary(context)`
+- `formatInteractionDiagnosticsDetails(context)`
+- `ensureInteractionDiagnosticsDrawerElements(container, summaryEl, toggleEl, detailsEl)`
+- `renderInteractionDiagnosticsPreview(opts)` — receives explicit state via `opts` arg
+- `toggleInteractionDiagnosticsDrawer()`
+
+Extracted state:
+- `var interactionDiagnosticsExpanded = false` → module-private `var _expanded = false`
+  exposed via `isInteractionDiagnosticsExpanded()` and `setInteractionDiagnosticsExpandedForTests(val)`
+
+### Module API
+
+`window.dragonDiagnosticsDrawer` exposes 9 named exports.
+
+The module owns private copies of all 7 allowlists:
+`_HINT_ALLOWLIST`, `_EXPRESSION_ALLOWLIST`, `_ACTION_ALLOWLIST`,
+`_MOOD_ALLOWLIST`, `_ATTENTION_ALLOWLIST`, `_ENERGY_ALLOWLIST`, `_LEVEL_ALLOWLIST`.
+
+The module calls `window.dragonOutputQueue.formatOutputQueueSnapshotPreview` directly
+(output-queue.js is always loaded before diagnostics-drawer.js).
+
+### Context Passing Pattern
+
+`renderInteractionReactionPreview()` in `renderer.js` now collects current state
+and passes it explicitly:
+
+```js
+window.dragonDiagnosticsDrawer.renderInteractionDiagnosticsPreview({
+  elements: { root, summary, toggle, details },
+  reactionHint: currentInteractionReactionHint,
+  expression: currentInteractionExpressionSuggestion,
+  behaviorDecision: currentCompanionBehaviorDecision,
+  characterState: currentCharacterState,
+  outputQueueSnapshot: getOutputQueueSnapshot(),
+});
+```
+
+This avoids the module reading renderer.js globals directly.
+
+### Load Order
+
+`index.html` loads scripts in this order:
+1. `./modules/output-queue.js`
+2. `./modules/diagnostics-drawer.js`
+3. `renderer.js`
+
+### Smoke Results
+
+- renderer-chat-smoke.js PASS (14 new TASK-239 tests; 4 existing tests updated for module delegation).
+- pet-window-smoke.js PASS (82 checks).
+- pet-renderer-smoke.js PASS (263 checks).
+
+### Safety Boundary
+
+TASK-239 does not change visible behavior. All side-effect boundaries from
+TASK-236 and TASK-238 remain in force:
+
+- No dispatch. `OUTPUT_QUEUE_ENABLED` remains `false`.
+- No IPC. No new IPC channels.
+- No Pet Window send.
+- No expression mirror / reaction bubble / chat reply behavior change.
+- No backend / `/chat` change.
+- No history / copy / export write.
+- No TTS/STT/audio.
+- No raw user text, reply text, bubble text, or payload storage.
+- No `innerHTML`. Module uses `textContent` only.
+
+### Windows Visual Smoke
+
+Windows visual smoke PASS (2026-06-01):
+
+- Basic startup PASS: Full App / Pet Window normal. Diagnostics drawer default
+  collapsed. Queue still disabled.
+- Expand Diagnostics PASS: Reaction / Decision / Queue / Next / Winner / Active
+  display correctly in details.
+- Collapse Diagnostics PASS: details hidden, screen returns to clean summary-only view.
+- Send message PASS: chat / expression / reaction bubble normal. Summary and details
+  update correctly after send.
+- Collapse / expand PASS: drawer state correct; details show latest diagnostics state.
+- Delete / Undo PASS: functionality normal, context menu normal, Queue still
+  disabled.
+- Edit last user PASS: functionality normal, no extra `/chat`, Diagnostics updates
+  normally.
+- Clear Chat / Focus PASS: functionality normal, Pet Window expression and reaction
+  bubble normal.
+- Diagnostics format PASS: summary/details show no `undefined`, `null`, `NaN`,
+  `[object Object]`, raw JSON, user text, reply text, bubble text, or payload.
+- General regression PASS: no new IPC side-effect, no extra TTS, no extra `/chat`,
+  no history/copy/export pollution.

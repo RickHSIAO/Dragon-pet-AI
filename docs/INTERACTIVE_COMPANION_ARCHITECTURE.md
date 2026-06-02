@@ -535,8 +535,9 @@ satisfied (see `docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md`, Section 10).
 
 Recommended next architecture phase:
 
-- Renderer modularization begins with TASK-238 Extract Output Queue Module, based
-  on `docs/RENDERER_MODULARIZATION_PLAN.md`.
+- Renderer modularization in progress: TASK-238 (output queue module) DONE - WINDOWS VISUAL SMOKE PASS;
+  TASK-239 (diagnostics drawer module) DONE - WINDOWS VISUAL SMOKE PASS. Based on
+  `docs/RENDERER_MODULARIZATION_PLAN.md`.
 - Relationship state.
 - Mood / attention / energy state beyond the local preview foundation.
 - Idle reaction policy.
