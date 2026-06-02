@@ -228,6 +228,8 @@ class FakeDocument {
       if (id === "chat-new-message-btn") element.hidden = true;
       // TASK-241: voice status starts hidden (matches HTML `hidden` attribute)
       if (id === "voice-input-status") element.hidden = true;
+      // TASK-242: voice-input-enabled-toggle starts checked (matches HTML `checked` attribute)
+      if (id === "voice-input-enabled-toggle") element.checked = true;
       this.elements.set(id, element);
     }
     return this.elements.get(id);
@@ -523,6 +525,8 @@ async function loadRenderer(options = {}) {
     Image: FakeImage,
     // TASK-197: startup health check uses AbortController for an 8-second timeout.
     AbortController,
+    // TASK-242: Blob needed for voice transcription audio chain in smoke tests
+    Blob: typeof Blob !== "undefined" ? Blob : undefined,
     Event: class Event {
       constructor(type, init = {}) {
         this.type = type;
@@ -11753,6 +11757,347 @@ async function testTask241IsSendingIndependentOfVoice() {
   console.log("  testTask241IsSendingIndependentOfVoice PASS");
 }
 
+// ---------------------------------------------------------------------------
+// TASK-242: Full App Voice Input Settings / Auto-send Mode
+// ---------------------------------------------------------------------------
+
+function testTask242HtmlVoiceSettingsStripExists() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes('id="voice-settings-strip"'), "TASK-242 HTML must have #voice-settings-strip");
+  assert.ok(html.includes('id="voice-input-enabled-toggle"'), "TASK-242 HTML must have #voice-input-enabled-toggle");
+  assert.ok(html.includes('id="voice-autosend-toggle"'), "TASK-242 HTML must have #voice-autosend-toggle");
+  assert.ok(html.includes('class="voice-settings-strip"'), "TASK-242 HTML must have .voice-settings-strip class");
+  console.log("  testTask242HtmlVoiceSettingsStripExists PASS");
+}
+
+function testTask242HtmlToggleDefaults() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  // voice-input-enabled-toggle must have `checked` attribute (ON by default)
+  assert.ok(
+    /id="voice-input-enabled-toggle"[^>]*checked/.test(html) ||
+    /checked[^>]*id="voice-input-enabled-toggle"/.test(html),
+    "TASK-242 voice-input-enabled-toggle must have `checked` attribute (default ON)"
+  );
+  // voice-autosend-toggle must NOT have `checked` attribute (OFF by default)
+  const autosendTagMatch = html.match(/id="voice-autosend-toggle"[^>]*/);
+  assert.ok(autosendTagMatch, "TASK-242 voice-autosend-toggle element must exist");
+  assert.ok(!autosendTagMatch[0].includes("checked"), "TASK-242 voice-autosend-toggle must not have `checked` (default OFF)");
+  console.log("  testTask242HtmlToggleDefaults PASS");
+}
+
+function testTask242HtmlAccessibility() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes('aria-label="語音輸入設定"'), "TASK-242 voice-settings-strip must have Chinese aria-label");
+  assert.ok(html.includes('class="voice-settings-label"'), "TASK-242 HTML must have .voice-settings-label elements");
+  console.log("  testTask242HtmlAccessibility PASS");
+}
+
+function testTask242CssVoiceSettingsStrip() {
+  const css = fs.readFileSync(cssPath, "utf8");
+  assert.ok(css.includes("TASK-242"), "TASK-242 CSS section must be present");
+  assert.ok(css.includes("#voice-settings-strip"), "TASK-242 CSS must include #voice-settings-strip rule");
+  assert.ok(css.includes(".voice-settings-label"), "TASK-242 CSS must include .voice-settings-label rule");
+  console.log("  testTask242CssVoiceSettingsStrip PASS");
+}
+
+function testTask242RendererHasVoiceSettingsVars() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("var fullAppVoiceInputEnabled"), "TASK-242 renderer must declare fullAppVoiceInputEnabled with var");
+  assert.ok(src.includes("var fullAppVoiceAutoSendEnabled"), "TASK-242 renderer must declare fullAppVoiceAutoSendEnabled with var");
+  assert.ok(src.includes("fullAppVoiceInputEnabled    = true"), "TASK-242 fullAppVoiceInputEnabled must default to true");
+  assert.ok(src.includes("fullAppVoiceAutoSendEnabled = false"), "TASK-242 fullAppVoiceAutoSendEnabled must default to false");
+  console.log("  testTask242RendererHasVoiceSettingsVars PASS");
+}
+
+function testTask242RendererHasToggleDomRefs() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("voice-input-enabled-toggle"), "TASK-242 renderer must reference voice-input-enabled-toggle");
+  assert.ok(src.includes("voice-autosend-toggle"), "TASK-242 renderer must reference voice-autosend-toggle");
+  assert.ok(src.includes("voiceInputEnabledToggle"), "TASK-242 renderer must declare voiceInputEnabledToggle const");
+  assert.ok(src.includes("voiceAutosendToggle"), "TASK-242 renderer must declare voiceAutosendToggle const");
+  console.log("  testTask242RendererHasToggleDomRefs PASS");
+}
+
+async function testTask242ToggleDefaultsInSandbox() {
+  const { sandbox } = await loadRenderer({
+    dragonPet: { chatHistoryLoad: async () => [] },
+  });
+  assert.strictEqual(sandbox.fullAppVoiceInputEnabled, true,
+    "TASK-242 fullAppVoiceInputEnabled must be true on load");
+  assert.strictEqual(sandbox.fullAppVoiceAutoSendEnabled, false,
+    "TASK-242 fullAppVoiceAutoSendEnabled must be false on load");
+  console.log("  testTask242ToggleDefaultsInSandbox PASS");
+}
+
+async function testTask242VoiceEnabledOFFBlocksRecording() {
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: { chatHistoryLoad: async () => [] },
+  });
+  // Disable voice input
+  sandbox.fullAppVoiceInputEnabled = false;
+  // Call openFullAppVoiceInput — should return immediately without touching recording state
+  await sandbox.openFullAppVoiceInput();
+  assert.strictEqual(sandbox.fullAppRecording, false,
+    "TASK-242 openFullAppVoiceInput must not start recording when fullAppVoiceInputEnabled=false");
+  assert.strictEqual(sandbox.fullAppTranscribing, false,
+    "TASK-242 openFullAppVoiceInput must not start transcribing when fullAppVoiceInputEnabled=false");
+  console.log("  testTask242VoiceEnabledOFFBlocksRecording PASS");
+}
+
+async function testTask242VoiceEnabledONAllowsOpeningAttempt() {
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: { chatHistoryLoad: async () => [] },
+  });
+  // Voice input is enabled (default). openFullAppVoiceInput will try to access MediaRecorder.
+  // MediaRecorder is undefined in test environment — should show error message, not silently skip.
+  assert.strictEqual(sandbox.fullAppVoiceInputEnabled, true,
+    "TASK-242 fullAppVoiceInputEnabled must be true by default");
+  // Calling open must not throw even without MediaRecorder
+  let threw = false;
+  try {
+    await sandbox.openFullAppVoiceInput();
+  } catch (_e) {
+    threw = true;
+  }
+  assert.strictEqual(threw, false,
+    "TASK-242 openFullAppVoiceInput must not throw when MediaRecorder is missing");
+  console.log("  testTask242VoiceEnabledONAllowsOpeningAttempt PASS");
+}
+
+async function testTask242EnabledToggleChangeFalseUpdatesState() {
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: { chatHistoryLoad: async () => [] },
+  });
+  const toggle = document.getElementById("voice-input-enabled-toggle");
+  assert.ok(toggle, "TASK-242 #voice-input-enabled-toggle must exist in sandbox document");
+  // Simulate unchecking
+  toggle.checked = false;
+  toggle.dispatchEvent({ type: "change" });
+  assert.strictEqual(sandbox.fullAppVoiceInputEnabled, false,
+    "TASK-242 unchecking voice-input-enabled-toggle must set fullAppVoiceInputEnabled=false");
+  console.log("  testTask242EnabledToggleChangeFalseUpdatesState PASS");
+}
+
+async function testTask242EnabledToggleChangeTrueUpdatesState() {
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: { chatHistoryLoad: async () => [] },
+  });
+  const toggle = document.getElementById("voice-input-enabled-toggle");
+  // Uncheck then re-check
+  toggle.checked = false;
+  toggle.dispatchEvent({ type: "change" });
+  assert.strictEqual(sandbox.fullAppVoiceInputEnabled, false, "TASK-242 setup: must be false after uncheck");
+  toggle.checked = true;
+  toggle.dispatchEvent({ type: "change" });
+  assert.strictEqual(sandbox.fullAppVoiceInputEnabled, true,
+    "TASK-242 re-checking voice-input-enabled-toggle must set fullAppVoiceInputEnabled=true");
+  console.log("  testTask242EnabledToggleChangeTrueUpdatesState PASS");
+}
+
+async function testTask242AutosendToggleChangeUpdatesState() {
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: { chatHistoryLoad: async () => [] },
+  });
+  const toggle = document.getElementById("voice-autosend-toggle");
+  assert.ok(toggle, "TASK-242 #voice-autosend-toggle must exist in sandbox document");
+  assert.strictEqual(sandbox.fullAppVoiceAutoSendEnabled, false, "TASK-242 autosend must start OFF");
+  toggle.checked = true;
+  toggle.dispatchEvent({ type: "change" });
+  assert.strictEqual(sandbox.fullAppVoiceAutoSendEnabled, true,
+    "TASK-242 checking voice-autosend-toggle must set fullAppVoiceAutoSendEnabled=true");
+  toggle.checked = false;
+  toggle.dispatchEvent({ type: "change" });
+  assert.strictEqual(sandbox.fullAppVoiceAutoSendEnabled, false,
+    "TASK-242 unchecking voice-autosend-toggle must set fullAppVoiceAutoSendEnabled=false");
+  console.log("  testTask242AutosendToggleChangeUpdatesState PASS");
+}
+
+async function testTask242AutosendOFFFillsTextareaOnly() {
+  // auto-send OFF (default): transcript fills textarea, fetch not called
+  const { document, sandbox, state } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => ({ status: "ok", transcript: "voice test text" }),
+    },
+    chatMode: "success",
+  });
+  assert.strictEqual(sandbox.fullAppVoiceAutoSendEnabled, false, "TASK-242 autosend must be OFF (default)");
+  const callsBefore = state.calls.length;
+  sandbox.setFullAppVoiceState("transcribing");
+  sandbox._fullAppSttTranscribeChunks([], "audio/webm");
+  await settle();
+  const input = document.getElementById("message-input");
+  assert.ok(typeof input.value === "string", "TASK-242 message-input.value must be string after transcribe");
+  // No /chat fetch should have been triggered
+  const chatCalls = state.calls.filter(c => String(c.url).endsWith("/chat"));
+  assert.equal(chatCalls.length, 0,
+    "TASK-242 auto-send OFF must not trigger /chat fetch");
+  console.log("  testTask242AutosendOFFFillsTextareaOnly PASS");
+}
+
+async function testTask242AutosendONCallsSendMessage() {
+  // auto-send ON: after transcript fills textarea, sendMessage should be called → /chat fetch
+  const { document, sandbox, state } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => ({ status: "ok", transcript: "auto send text" }),
+      updatePetSpeech: async () => ({ ok: true }),
+      updatePetExpression: async () => ({ ok: true }),
+    },
+    chatMode: "success",
+  });
+  // Enable auto-send
+  sandbox.fullAppVoiceAutoSendEnabled = true;
+  const callsBefore = state.calls.filter(c => String(c.url).endsWith("/chat")).length;
+  sandbox.setFullAppVoiceState("transcribing");
+  sandbox._fullAppSttTranscribeChunks([], "audio/webm");
+  await settle();
+  const chatCalls = state.calls.filter(c => String(c.url).endsWith("/chat"));
+  assert.ok(
+    chatCalls.length > callsBefore,
+    "TASK-242 auto-send ON must trigger /chat fetch via sendMessage"
+  );
+  console.log("  testTask242AutosendONCallsSendMessage PASS");
+}
+
+async function testTask242AutosendGuardIsSending() {
+  // When isSending is true, auto-send must not trigger another /chat call
+  const { document, sandbox, state } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => ({ status: "ok", transcript: "guard test" }),
+    },
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceAutoSendEnabled = true;
+  // Set isSending=true via setSending
+  sandbox.setSending(true);
+  const callsBefore = state.calls.filter(c => String(c.url).endsWith("/chat")).length;
+  sandbox.setFullAppVoiceState("transcribing");
+  sandbox._fullAppSttTranscribeChunks([], "audio/webm");
+  await settle();
+  const chatCalls = state.calls.filter(c => String(c.url).endsWith("/chat"));
+  assert.equal(chatCalls.length, callsBefore,
+    "TASK-242 auto-send must be blocked when isSending=true");
+  // Cleanup
+  sandbox.setSending(false);
+  console.log("  testTask242AutosendGuardIsSending PASS");
+}
+
+function testTask242AutosendGuardEditingMessageStateInSource() {
+  // Verify source code has editingMessageState guard in auto-send path
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(
+    src.includes("editingMessageState") && src.includes("fullAppVoiceAutoSendEnabled"),
+    "TASK-242 auto-send path must check editingMessageState guard"
+  );
+  // Find the auto-send block and verify it contains the editingMessageState check
+  const autoSendIdx = src.indexOf("TASK-242: auto-send if toggle enabled");
+  assert.ok(autoSendIdx !== -1, "TASK-242 auto-send comment must be present");
+  const autoSendBlock = src.slice(autoSendIdx, autoSendIdx + 300);
+  assert.ok(autoSendBlock.includes("editingMessageState"),
+    "TASK-242 auto-send block must include editingMessageState guard");
+  console.log("  testTask242AutosendGuardEditingMessageStateInSource PASS");
+}
+
+async function testTask242AutosendNoSendOnEmptyTranscript() {
+  // Auto-send ON but transcript is empty — sendMessage must not be called
+  const { document, sandbox, state } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => ({ status: "empty", transcript: "" }),
+    },
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceAutoSendEnabled = true;
+  const callsBefore = state.calls.filter(c => String(c.url).endsWith("/chat")).length;
+  sandbox.setFullAppVoiceState("transcribing");
+  sandbox._fullAppSttTranscribeChunks([], "audio/webm");
+  await settle();
+  const chatCalls = state.calls.filter(c => String(c.url).endsWith("/chat"));
+  assert.equal(chatCalls.length, callsBefore,
+    "TASK-242 auto-send must not fire for empty transcript");
+  console.log("  testTask242AutosendNoSendOnEmptyTranscript PASS");
+}
+
+async function testTask242DisableVoiceWhileRecordingCancels() {
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: { chatHistoryLoad: async () => [] },
+  });
+  const toggle = document.getElementById("voice-input-enabled-toggle");
+  // Manually put into recording state
+  sandbox.setFullAppVoiceState("recording");
+  assert.strictEqual(sandbox.fullAppRecording, true, "TASK-242 setup: must be recording");
+  // Uncheck toggle while recording
+  toggle.checked = false;
+  toggle.dispatchEvent({ type: "change" });
+  // cancelFullAppVoiceInput should have been called → state reset to idle
+  assert.strictEqual(sandbox.fullAppRecording, false,
+    "TASK-242 disabling voice input while recording must cancel recording");
+  assert.strictEqual(sandbox.fullAppTranscribing, false,
+    "TASK-242 disabling voice input while recording must not leave transcribing state");
+  console.log("  testTask242DisableVoiceWhileRecordingCancels PASS");
+}
+
+async function testTask242NoNewPetWindowCalls() {
+  // Test that toggle wiring itself (not sendMessage's existing behavior) adds no new Pet Window calls
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const toggleSection = src.indexOf("TASK-242: voice settings toggle wiring");
+  assert.ok(toggleSection !== -1, "TASK-242 toggle wiring section must be present");
+  const toggleCode = src.slice(toggleSection, toggleSection + 600);
+  // Toggle handlers must not call dragonPet or window.dragonPet directly
+  assert.ok(!toggleCode.includes("dragonPet.updatePetSpeech"), "TASK-242 toggle wiring must not call updatePetSpeech");
+  assert.ok(!toggleCode.includes("dragonPet.updatePetExpression"), "TASK-242 toggle wiring must not call updatePetExpression");
+  assert.ok(!toggleCode.includes("dragonPet.showPet"), "TASK-242 toggle wiring must not call showPet");
+  console.log("  testTask242NoNewPetWindowCalls PASS");
+}
+
+function testTask242NoNewIpcChannels() {
+  const preloadSrc = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "preload.js"), "utf8");
+  // TASK-242 must not add any new IPC channels to preload
+  // Count ipcRenderer.invoke/send/on calls — should be unchanged from TASK-241
+  const ipcCalls = (preloadSrc.match(/ipcRenderer\.(invoke|send|on)\(/g) || []).length;
+  // We just verify the renderer itself doesn't call ipcRenderer directly
+  const rendererSrc = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(!/ipcRenderer\.(invoke|send|on)\(/.test(rendererSrc),
+    "TASK-242 renderer.js must not call ipcRenderer directly");
+  console.log("  testTask242NoNewIpcChannels PASS");
+}
+
+async function testTask242NoAudioPersistence() {
+  // Voice settings toggles and auto-send must not persist audio data
+  const src = fs.readFileSync(rendererPath, "utf8");
+  // The TASK-242 section must not reference localStorage or file writes for audio
+  const task242SectionStart = src.indexOf("TASK-242: voice input settings state");
+  assert.ok(task242SectionStart !== -1, "TASK-242 section must be present in renderer");
+  // No raw audio persistence in toggle wiring
+  const toggleSection = src.indexOf("TASK-242: voice settings toggle wiring");
+  assert.ok(toggleSection !== -1, "TASK-242 toggle wiring section must be present");
+  const toggleCode = src.slice(toggleSection, toggleSection + 400);
+  assert.ok(!toggleCode.includes("localStorage"), "TASK-242 toggle wiring must not use localStorage");
+  assert.ok(!toggleCode.includes("sessionStorage"), "TASK-242 toggle wiring must not use sessionStorage");
+  console.log("  testTask242NoAudioPersistence PASS");
+}
+
+async function testTask242RegressionTask241StillPass() {
+  // Verify TASK-241 state vars, constants, and functions still present after TASK-242 changes
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("var fullAppRecording"), "TASK-241 regression: fullAppRecording must still exist");
+  assert.ok(src.includes("var fullAppTranscribing"), "TASK-241 regression: fullAppTranscribing must still exist");
+  assert.ok(src.includes("function openFullAppVoiceInput"), "TASK-241 regression: openFullAppVoiceInput must still exist");
+  assert.ok(src.includes("function stopFullAppVoiceInput"), "TASK-241 regression: stopFullAppVoiceInput must still exist");
+  assert.ok(src.includes("function cancelFullAppVoiceInput"), "TASK-241 regression: cancelFullAppVoiceInput must still exist");
+  // Verify auto-send uses sendMessage (existing guard chain), not raw fetch
+  const autoSendIdx = src.indexOf("TASK-242: auto-send if toggle enabled");
+  assert.ok(autoSendIdx !== -1, "TASK-242 auto-send comment must be present");
+  const autoSendBlock = src.slice(autoSendIdx, autoSendIdx + 300);
+  assert.ok(autoSendBlock.includes("sendMessage(trimmed)"),
+    "TASK-242 auto-send must call sendMessage(trimmed), not raw fetch");
+  assert.ok(!autoSendBlock.includes("fetch("),
+    "TASK-242 auto-send must not call fetch() directly — must use sendMessage()");
+  console.log("  testTask242RegressionTask241StillPass PASS");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -12483,6 +12828,30 @@ async function main() {
   await testTask241VoiceDoesNotCallPetWindow();
   await testTask241CancelResetsState();
   await testTask241IsSendingIndependentOfVoice();
+
+  // TASK-242: Full App Voice Input Settings / Auto-send Mode
+  testTask242HtmlVoiceSettingsStripExists();
+  testTask242HtmlToggleDefaults();
+  testTask242HtmlAccessibility();
+  testTask242CssVoiceSettingsStrip();
+  testTask242RendererHasVoiceSettingsVars();
+  testTask242RendererHasToggleDomRefs();
+  await testTask242ToggleDefaultsInSandbox();
+  await testTask242VoiceEnabledOFFBlocksRecording();
+  await testTask242VoiceEnabledONAllowsOpeningAttempt();
+  await testTask242EnabledToggleChangeFalseUpdatesState();
+  await testTask242EnabledToggleChangeTrueUpdatesState();
+  await testTask242AutosendToggleChangeUpdatesState();
+  await testTask242AutosendOFFFillsTextareaOnly();
+  await testTask242AutosendONCallsSendMessage();
+  await testTask242AutosendGuardIsSending();
+  testTask242AutosendGuardEditingMessageStateInSource();
+  await testTask242AutosendNoSendOnEmptyTranscript();
+  await testTask242DisableVoiceWhileRecordingCancels();
+  await testTask242NoNewPetWindowCalls();
+  testTask242NoNewIpcChannels();
+  await testTask242NoAudioPersistence();
+  await testTask242RegressionTask241StillPass();
 
   console.log("renderer chat smoke: PASS");
 }

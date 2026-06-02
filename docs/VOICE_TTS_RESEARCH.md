@@ -251,9 +251,12 @@ Suggested research and implementation tasks:
   no always-listening. Narrow `transcribeAudio(arrayBuffer)` bridge in renderer
   preload routes to existing `stt:transcribe` IPC handler. No new IPC channel.
 - TASK-STT-002 Local Whisper / faster-whisper spike.
-- TASK-STT-003 Confirmed transcript to `/chat` flow. **Partially covered by TASK-241:**
-  transcript fills Full App input; user presses Send to trigger existing `/chat` flow.
-  Auto-send mode is a follow-up (TASK-242).
+- TASK-STT-003 Confirmed transcript to `/chat` flow. **Covered by TASK-241 + TASK-242 (DONE - WINDOWS VISUAL SMOKE PASS 2026-06-02):**
+  TASK-241: transcript fills Full App input; user presses Send to trigger existing `/chat` flow.
+  TASK-242: Auto-send Transcript toggle (default OFF) calls `sendMessage(trimmed)` after successful
+  STT, using all existing guards (isSending, editingMessageState, validation, history). Empty
+  transcript blocked. Concurrent send blocked. Auto-send never bypasses sendMessage. No new IPC.
+  No Pet Window calls. Session-only toggle. Windows visual smoke PASS (2026-06-02).
 
 Each future task must explicitly define safety boundaries, user controls,
 provider scope, queue priority, and no-regression checks.

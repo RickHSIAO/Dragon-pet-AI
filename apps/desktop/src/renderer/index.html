@@ -152,6 +152,18 @@ Queue: disabled · Items: 0 · Recent: 0 · Next: none</pre>
     <span id="voice-input-status" class="voice-input-status" role="status" aria-live="polite" hidden></span>
   </footer>
 
+  <!-- TASK-242: Voice input settings strip (session-only, not persisted) -->
+  <div id="voice-settings-strip" class="voice-settings-strip" role="group" aria-label="語音輸入設定">
+    <label class="voice-settings-label" title="啟用語音輸入按鈕">
+      <input type="checkbox" id="voice-input-enabled-toggle" checked aria-label="啟用語音輸入">
+      <span>語音輸入</span>
+    </label>
+    <label class="voice-settings-label" title="語音辨識後自動送出訊息">
+      <input type="checkbox" id="voice-autosend-toggle" aria-label="自動送出轉錄文字">
+      <span>自動送出</span>
+    </label>
+  </div>
+
   <!-- ── Settings sections (below the fold) ────────────────── -->
   <!-- Memory management — collapsed by default; expand to manage -->
   <section id="memory-section" aria-labelledby="memory-title">

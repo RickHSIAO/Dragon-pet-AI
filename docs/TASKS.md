@@ -24917,3 +24917,121 @@ Windows visual smoke PASS (2026-06-02):
   click. Recording stops cleanly. No background monitoring after stop.
 - General regression PASS: text send, edit/delete/clear/copy/export, Pet Window
   Mic / direct input, Diagnostics drawer, Output Queue disabled all normal.
+
+---
+
+## TASK-242 | Full App Voice Input Settings / Auto-send Mode
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-06-02
+**Phase:** Phase 5 - Full App Voice Input
+**Depends on:** TASK-241
+
+### Goal
+
+Add two session-only Voice Input settings toggles to the Full App input area:
+
+1. **Voice Input Enabled** (default: ON) — enables or disables the mic button.
+2. **Auto-send Transcript** (default: OFF) — after successful STT, automatically calls
+   the existing `sendMessage(trimmed)` function if toggled ON.
+
+Both toggles are session-only (not persisted). No new IPC channels. No Pet Window
+changes. No TTS/STT runtime changes. No always-listening. No audio persistence.
+
+### UX Behavior
+
+- A settings strip (`#voice-settings-strip`) appears below the `#input-bar` footer.
+- **Voice Input Enabled** checkbox (`#voice-input-enabled-toggle`, default: checked):
+  - ON: mic button works normally (TASK-241 behavior unchanged).
+  - OFF: `openFullAppVoiceInput()` returns immediately — mic button is a no-op.
+  - Turning OFF while recording: `cancelFullAppVoiceInput()` is called automatically.
+- **Auto-send Transcript** checkbox (`#voice-autosend-toggle`, default: unchecked):
+  - OFF: transcript fills `#message-input` for user review (TASK-241 behavior unchanged).
+  - ON: transcript fills `#message-input` AND `sendMessage(trimmed)` is called if:
+    - `!isSending` (existing guard from sendMessage)
+    - `!editingMessageState` (edit guard — no accidental edit override)
+    - `typeof sendMessage === "function"` (safety guard)
+    - Transcript is non-empty (sendMessage's own `!text.trim()` guard)
+  - Auto-send calls `sendMessage(trimmed)` — uses all existing guards, history, Pet mirror.
+
+### Safety Constraints
+
+- No new IPC channel.
+- No Pet Window calls from toggle handlers.
+- No audio persistence or localStorage writes from toggle code.
+- No always-listening, VAD, or silence detection.
+- Auto-send goes through `sendMessage(trimmed)` only — never raw `fetch`.
+- `editingMessageState` guard prevents accidentally overriding a message edit.
+- Both toggles are session-only (not saved on app close).
+- No TTS side effects.
+- No chat history writes from toggle code.
+
+### Files Modified
+
+| File | Change | Runtime? |
+|---|---|---|
+| `apps/desktop/src/renderer/index.html` | `#voice-settings-strip` div with two checkbox `<label>` elements added after `</footer>` | Yes |
+| `apps/desktop/src/renderer/styles.css` | TASK-242 CSS section: `#voice-settings-strip`, `.voice-settings-label` | CSS only |
+| `apps/desktop/src/renderer/renderer.js` | DOM refs (`voiceInputEnabledToggle`, `voiceAutosendToggle`); state vars (`var fullAppVoiceInputEnabled = true`, `var fullAppVoiceAutoSendEnabled = false`); `openFullAppVoiceInput` guard; auto-send path in `_fullAppSttTranscribeChunks`; toggle change event wiring | Yes |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | 22 TASK-242 smoke tests; `voice-input-enabled-toggle checked=true` in FakeDocument; `Blob` added to sandbox; tests added to `main()` | No |
+
+### Test Coverage (22 TASK-242 tests)
+
+| Test | Type | What it verifies |
+|---|---|---|
+| `testTask242HtmlVoiceSettingsStripExists` | static | `#voice-settings-strip`, both toggle IDs in HTML |
+| `testTask242HtmlToggleDefaults` | static | voice-input-enabled has `checked`, voice-autosend does not |
+| `testTask242HtmlAccessibility` | static | aria-label on strip, `.voice-settings-label` class |
+| `testTask242CssVoiceSettingsStrip` | static | TASK-242 CSS section, `#voice-settings-strip`, `.voice-settings-label` |
+| `testTask242RendererHasVoiceSettingsVars` | static | `var fullAppVoiceInputEnabled = true`, `var fullAppVoiceAutoSendEnabled = false` |
+| `testTask242RendererHasToggleDomRefs` | static | `voiceInputEnabledToggle`, `voiceAutosendToggle` DOM refs |
+| `testTask242ToggleDefaultsInSandbox` | dynamic | defaults are true/false in sandbox |
+| `testTask242VoiceEnabledOFFBlocksRecording` | dynamic | setting enabled=false blocks openFullAppVoiceInput |
+| `testTask242VoiceEnabledONAllowsOpeningAttempt` | dynamic | enabled=true (default) does not throw |
+| `testTask242EnabledToggleChangeFalseUpdatesState` | dynamic | uncheck → fullAppVoiceInputEnabled=false |
+| `testTask242EnabledToggleChangeTrueUpdatesState` | dynamic | re-check → fullAppVoiceInputEnabled=true |
+| `testTask242AutosendToggleChangeUpdatesState` | dynamic | check/uncheck autosend toggle updates state var |
+| `testTask242AutosendOFFFillsTextareaOnly` | dynamic | auto-send OFF: transcript fills textarea, no /chat fetch |
+| `testTask242AutosendONCallsSendMessage` | dynamic | auto-send ON: transcript → sendMessage → /chat fetch |
+| `testTask242AutosendGuardIsSending` | dynamic | auto-send ON but isSending=true: no /chat fetch |
+| `testTask242AutosendGuardEditingMessageStateInSource` | static | editingMessageState guard present in auto-send block |
+| `testTask242AutosendNoSendOnEmptyTranscript` | dynamic | empty transcript → no /chat fetch even with auto-send ON |
+| `testTask242DisableVoiceWhileRecordingCancels` | dynamic | disabling voice while recording calls cancelFullAppVoiceInput |
+| `testTask242NoNewPetWindowCalls` | static | toggle wiring does not call Pet Window APIs directly |
+| `testTask242NoNewIpcChannels` | static | renderer.js still has no direct ipcRenderer calls |
+| `testTask242NoAudioPersistence` | static | toggle wiring has no localStorage/sessionStorage |
+| `testTask242RegressionTask241StillPass` | static | TASK-241 state vars + functions still present; auto-send uses sendMessage not fetch |
+
+### Automated Smoke
+
+- [x] `node apps\desktop\scripts\renderer-chat-smoke.js` PASS (478 PASS, 22 TASK-242 tests).
+- [x] `node apps\desktop\scripts\pet-window-smoke.js` PASS (82 checks).
+- [x] `node apps\desktop\scripts\pet-renderer-smoke.js` PASS (285 checks).
+
+### Windows Visual Smoke
+
+Windows visual smoke PASS (2026-06-02):
+
+- Basic startup PASS: Full App / Pet Window normal. `#voice-settings-strip` visible
+  below input bar. Voice Input Enabled checkbox checked (ON by default). Auto-send
+  Transcript checkbox unchecked (OFF by default). No white screen or fatal error.
+- Auto-send OFF PASS: after STT, transcript fills `#message-input` only. No
+  automatic `/chat` call. User presses Send manually to trigger the existing
+  `/chat` flow. Behavior identical to TASK-241 when Auto-send is OFF.
+- Auto-send ON PASS: after enabling Auto-send Transcript and completing STT,
+  transcript fills `#message-input` and is automatically sent via the existing
+  send flow. Send fires exactly once. No double-send, no raw fetch bypass.
+- Voice Input OFF PASS: unchecking Voice Input Enabled makes the mic button
+  inert — no microphone prompt, no recording, no STT, no `/chat`. Status
+  display remains clean with no raw stack traces or raw payloads.
+- Settings toggle PASS: disabling Voice Input Enabled while recording safely
+  cancels the recording and releases the microphone. No stuck recording state.
+- Guard PASS: empty transcript does not trigger auto-send. Auto-send blocked
+  while a reply is in flight (`isSending`). No concurrent `/chat` send. Error
+  states show clean inline messages, not raw payloads.
+- No always-listening PASS: recording does not start without explicit Mic
+  click. Stopping recording releases the microphone completely. No background
+  monitoring after stop.
+- General regression PASS: text send, edit/delete/clear/copy/export, Pet
+  Window Mic / direct input, Diagnostics drawer, Output Queue disabled all
+  normal. No history/copy/export pollution from voice settings toggles.

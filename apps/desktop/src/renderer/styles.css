@@ -1720,3 +1720,28 @@ textarea {
 .voice-input-status[data-state="transcribing"] {
   color: var(--text-muted);
 }
+
+/* TASK-242: Voice Input Settings Strip */
+#voice-settings-strip {
+  display: flex;
+  gap: 12px;
+  padding: 4px 8px 4px 6px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.voice-settings-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.voice-settings-label input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}

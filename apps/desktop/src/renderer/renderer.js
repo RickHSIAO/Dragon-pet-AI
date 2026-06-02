@@ -124,6 +124,9 @@ const providerTestMsg           = document.getElementById("provider-test-msg");
 // TASK-241: Full App voice input DOM refs
 const voiceInputBtn    = document.getElementById("voice-input-btn");
 const voiceInputStatus = document.getElementById("voice-input-status");
+// TASK-242: voice settings toggle DOM refs
+const voiceInputEnabledToggle = document.getElementById("voice-input-enabled-toggle");
+const voiceAutosendToggle     = document.getElementById("voice-autosend-toggle");
 
 // ---------------------------------------------------------------------------
 // State
@@ -137,6 +140,9 @@ let _fullAppMicStream    = null;
 let _fullAppRecorder     = null;
 let _fullAppChunks       = [];
 let _fullAppRecordingTimer = null;
+// TASK-242: voice input settings state — session-only, not persisted
+var fullAppVoiceInputEnabled    = true;  // var: exposed to vm sandbox for smoke tests
+var fullAppVoiceAutoSendEnabled = false; // var: exposed to vm sandbox for smoke tests
 // TASK-060: track in-flight test connection to prevent double-click
 let isTestingConnection = false;
 // TASK-060: cache last-loaded provider settings for Test Connection enable conditions
@@ -3967,11 +3973,15 @@ function _fullAppSttTranscribeChunks(chunks, mimeType) {
       return;
     }
 
-    // Fill textarea for user review — no auto-send
+    // Fill textarea for user review
     if (msgInput) {
       msgInput.value = trimmed;
       msgInput.dispatchEvent(new Event("input"));
       msgInput.focus();
+    }
+    // TASK-242: auto-send if toggle enabled and not busy
+    if (fullAppVoiceAutoSendEnabled && !isSending && !editingMessageState && typeof sendMessage === "function") {
+      sendMessage(trimmed);
     }
   }).catch(function (err) {
     setFullAppVoiceState("idle");
@@ -4055,6 +4065,11 @@ async function openFullAppVoiceInput() {
 
   // If transcribing, ignore new request
   if (fullAppTranscribing) {
+    return;
+  }
+
+  // TASK-242: respect Voice Input Enabled toggle
+  if (!fullAppVoiceInputEnabled) {
     return;
   }
 
@@ -4174,6 +4189,21 @@ if (voiceInputBtn) {
     } else if (!fullAppTranscribing) {
       openFullAppVoiceInput();
     }
+  });
+}
+
+// TASK-242: voice settings toggle wiring
+if (voiceInputEnabledToggle) {
+  voiceInputEnabledToggle.addEventListener("change", function () {
+    fullAppVoiceInputEnabled = Boolean(voiceInputEnabledToggle.checked);
+    if (!fullAppVoiceInputEnabled && fullAppRecording) {
+      cancelFullAppVoiceInput();
+    }
+  });
+}
+if (voiceAutosendToggle) {
+  voiceAutosendToggle.addEventListener("change", function () {
+    fullAppVoiceAutoSendEnabled = Boolean(voiceAutosendToggle.checked);
   });
 }
 

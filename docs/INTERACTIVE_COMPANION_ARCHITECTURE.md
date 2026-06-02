@@ -543,7 +543,12 @@ Recommended next architecture phase:
   TASK-241 (Full App Voice Input Button — mic button in Full App input bar, toggle-to-record,
   transcript fills textarea no auto-send, narrow transcribeAudio IPC bridge in renderer preload
   routed to existing stt:transcribe handler, no new IPC channel, no Pet Window calls, no
-  always-listening, no audio persistence) DONE - WINDOWS VISUAL SMOKE PASS.
+  always-listening, no audio persistence) DONE - WINDOWS VISUAL SMOKE PASS;
+  TASK-242 (Full App Voice Input Settings / Auto-send Mode — session-only Voice Input Enabled /
+  Auto-send Transcript toggles in voice-settings-strip below input bar; Voice Input OFF blocks mic;
+  auto-send ON calls sendMessage(trimmed) with full isSending/editingMessageState guards; empty
+  transcript blocked; no new IPC, no Pet Window calls from toggle handlers, no localStorage, no
+  always-listening, no VAD, no silence detection, no TTS) DONE - WINDOWS VISUAL SMOKE PASS.
   Based on `docs/RENDERER_MODULARIZATION_PLAN.md`.
 - Relationship state.
 - Mood / attention / energy state beyond the local preview foundation.
