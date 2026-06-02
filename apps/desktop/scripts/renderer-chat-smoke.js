@@ -9015,8 +9015,9 @@ async function testTask230PreviewUpdatesAfterReactionBubbleEnqueue() {
   const preview = document.getElementById("interaction-reaction-preview").textContent;
   assert.ok(preview.includes("Reaction: user_active"), "preview must still show reaction hint");
   assert.ok(preview.includes("Suggestion: focused"), "preview must still show expression suggestion");
-  assert.ok(preview.includes("Queue: disabled · Items: 1 · Recent: 1 · Next: P4_NORMAL_REACTION/pet_bubble/reaction_bubble"),
-    "preview must show disabled queue item summary after user_active");
+  // TASK-231: expression_mirror is enqueued first, so Items:2 and Next shows expression_mirror
+  assert.ok(preview.includes("Queue: disabled · Items: 2 · Recent: 2 · Next: P4_NORMAL_REACTION/visual_expression/expression_mirror"),
+    "preview must show disabled queue item summary after user_active (expression_mirror first, reaction_bubble second)");
   assert.ok(!preview.includes("TASK230_RAW_USER_TEXT_FORBIDDEN"),
     "preview must not include raw user text");
   console.log("  testTask230PreviewUpdatesAfterReactionBubbleEnqueue PASS");
@@ -9159,6 +9160,289 @@ function testTask230RegressionGuards() {
     "TASK-230 must keep edit limited to last formal user message");
   assert.ok(src.includes("showPetWindow"), "TASK-230 must not remove Pet Window entry point");
   console.log("  testTask230RegressionGuards PASS");
+}
+
+// ─── TASK-231: Enqueue Expression Mirror Diagnostics Only ────────────────────
+
+function task231AssertExpressionMirrorQueueItem(item, expression) {
+  const safe = JSON.parse(JSON.stringify(item));
+  assert.equal(safe.source, "expression_mirror");
+  assert.equal(safe.priority, "P4_NORMAL_REACTION");
+  assert.equal(safe.channel, "visual_expression");
+  assert.deepEqual(Object.keys(safe.payload).sort(), ["expression"]);
+  assert.deepEqual(safe.payload, { expression });
+  assert.equal(safe.ttlMs, 0);
+  assert.equal(safe.interruptible, true);
+  assert.equal(safe.ttsEligible, false);
+  assert.equal(safe.historyEligible, false);
+  assert.equal(safe.copyExportEligible, false);
+  assert.equal(safe.reason, "interaction_expression_suggestion");
+}
+
+function testTask231RendererHasExpressionMirrorEnqueueHelper() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("function enqueueExpressionMirrorOutputDiagnostics"),
+    "renderer.js must define enqueueExpressionMirrorOutputDiagnostics");
+  assert.ok(src.includes("enqueueExpressionMirrorOutputDiagnostics(safeExpression)"),
+    "recordInteractionExpressionSuggestion must enqueue diagnostics for safe expression");
+  console.log("  testTask231RendererHasExpressionMirrorEnqueueHelper PASS");
+}
+
+async function testTask231UserActiveExpressionMirrorEnqueuesDiagnosticsItem() {
+  const { sandbox } = await loadRenderer();
+  sandbox.recordInteractionExpressionSuggestion("focused", "user_active");
+  assert.equal(sandbox.outputQueueItems.length, 1);
+  task231AssertExpressionMirrorQueueItem(sandbox.outputQueueItems[0], "focused");
+  assert.equal(sandbox.getOutputQueueSnapshot().enabled, false, "queue must remain disabled");
+  console.log("  testTask231UserActiveExpressionMirrorEnqueuesDiagnosticsItem PASS");
+}
+
+async function testTask231AllSafeExpressionsEnqueue() {
+  const { sandbox } = await loadRenderer();
+  const expressions = ["focused", "neutral", "annoyed", "happy", "proud", "sleepy"];
+  for (const expression of expressions) {
+    sandbox.recordInteractionExpressionSuggestion(expression, "user_active");
+  }
+  assert.equal(sandbox.outputQueueItems.length, expressions.length);
+  for (let i = 0; i < expressions.length; i += 1) {
+    task231AssertExpressionMirrorQueueItem(sandbox.outputQueueItems[i], expressions[i]);
+  }
+  console.log("  testTask231AllSafeExpressionsEnqueue PASS");
+}
+
+async function testTask231UnknownExpressionIsNoop() {
+  const { sandbox } = await loadRenderer();
+  assert.equal(sandbox.enqueueExpressionMirrorOutputDiagnostics("UNKNOWN_INVALID"), null);
+  assert.equal(sandbox.enqueueExpressionMirrorOutputDiagnostics(""), null);
+  assert.equal(sandbox.enqueueExpressionMirrorOutputDiagnostics(null), null);
+  assert.equal(sandbox.enqueueExpressionMirrorOutputDiagnostics(undefined), null);
+  assert.equal(sandbox.outputQueueItems.length, 0, "invalid expressions must not enqueue via direct call");
+  // record path sanitizes unknown → "neutral", which does enqueue
+  sandbox.recordInteractionExpressionSuggestion("INVALID_EXPR_NOT_IN_ALLOWLIST", "user_active");
+  assert.equal(sandbox.outputQueueItems.length, 1, "sanitized neutral must enqueue");
+  task231AssertExpressionMirrorQueueItem(sandbox.outputQueueItems[0], "neutral");
+  console.log("  testTask231UnknownExpressionIsNoop PASS");
+}
+
+async function testTask231QueueStillDisabled() {
+  const { sandbox } = await loadRenderer();
+  sandbox.recordInteractionExpressionSuggestion("focused", "user_active");
+  assert.equal(sandbox.getOutputQueueSnapshot().enabled, false,
+    "queue must remain disabled after expression mirror enqueue");
+  console.log("  testTask231QueueStillDisabled PASS");
+}
+
+async function testTask231PreviewUpdatesAfterExpressionMirrorEnqueue() {
+  const { sandbox } = await loadRenderer();
+  sandbox.recordInteractionExpressionSuggestion("focused", "user_active");
+  const preview = sandbox.formatOutputQueueSnapshotPreview(sandbox.getOutputQueueSnapshot());
+  assert.equal(preview,
+    "Queue: disabled · Items: 1 · Recent: 1 · Next: P4_NORMAL_REACTION/visual_expression/expression_mirror");
+  console.log("  testTask231PreviewUpdatesAfterExpressionMirrorEnqueue PASS");
+}
+
+async function testTask231QueueItemNoForbiddenFields() {
+  const { sandbox } = await loadRenderer();
+  sandbox.enqueueOutputQueueItem({
+    source: "expression_mirror",
+    priority: "P4_NORMAL_REACTION",
+    channel: "visual_expression",
+    payload: {
+      expression: "focused",
+      message: "TASK231_MESSAGE_FORBIDDEN",
+      text: "TASK231_TEXT_FORBIDDEN",
+      body: "TASK231_BODY_FORBIDDEN",
+      rawText: "TASK231_RAWTEXT_FORBIDDEN",
+      content: "TASK231_CONTENT_FORBIDDEN",
+      reply: "TASK231_REPLY_FORBIDDEN",
+      transcript: "TASK231_TRANSCRIPT_FORBIDDEN",
+      audio: "TASK231_AUDIO_FORBIDDEN",
+      html: "TASK231_HTML_FORBIDDEN",
+      innerHTML: "TASK231_INNERHTML_FORBIDDEN",
+      metadata: "TASK231_METADATA_FORBIDDEN",
+      debug: "TASK231_DEBUG_FORBIDDEN",
+      thinking: "TASK231_THINKING_FORBIDDEN",
+    },
+    ttlMs: 0,
+    interruptible: true,
+    ttsEligible: false,
+    historyEligible: false,
+    copyExportEligible: false,
+    reason: "interaction_expression_suggestion",
+  });
+  const serialized = JSON.stringify({
+    item: sandbox.outputQueueItems[0],
+    recent: sandbox.recentOutputQueueItems,
+    snapshot: sandbox.getOutputQueueSnapshot(),
+  });
+  for (const key of TASK228_FORBIDDEN_PAYLOAD_KEYS) {
+    assert.ok(!serialized.includes(`"${key}"`), `queue item must not include forbidden field ${key}`);
+  }
+  for (const token of [
+    "TASK231_MESSAGE_FORBIDDEN",
+    "TASK231_TEXT_FORBIDDEN",
+    "TASK231_DEBUG_FORBIDDEN",
+    "TASK231_THINKING_FORBIDDEN",
+  ]) {
+    assert.ok(!serialized.includes(token), `queue item must not include ${token}`);
+  }
+  task231AssertExpressionMirrorQueueItem(sandbox.outputQueueItems[0], "focused");
+  console.log("  testTask231QueueItemNoForbiddenFields PASS");
+}
+
+async function testTask231PreviewNoRawPayloadOrBadTokens() {
+  const { sandbox } = await loadRenderer();
+  sandbox.enqueueExpressionMirrorOutputDiagnostics("annoyed");
+  const preview = sandbox.formatOutputQueueSnapshotPreview(sandbox.getOutputQueueSnapshot());
+  for (const token of [
+    "payload",
+    "{",
+    "}",
+    "[object Object]",
+    "undefined",
+    "null",
+    "NaN",
+  ]) {
+    assert.ok(!preview.includes(token), `TASK-231 preview must not include ${token}`);
+  }
+  assert.equal(preview,
+    "Queue: disabled · Items: 1 · Recent: 1 · Next: P4_NORMAL_REACTION/visual_expression/expression_mirror");
+  console.log("  testTask231PreviewNoRawPayloadOrBadTokens PASS");
+}
+
+async function testTask231DiagnosticsEnqueueDoesNotDispatch() {
+  const appendCalls = [];
+  const speechCalls = [];
+  const expressionCalls = [];
+  const bubbleCalls = [];
+  const { state, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryAppend(entry) { appendCalls.push(entry); return Promise.resolve({ ok: true }); },
+      updatePetSpeech(payload) { speechCalls.push(payload); return Promise.resolve({ ok: true }); },
+      sendPetExpressionSuggestion(payload) { expressionCalls.push(payload); return Promise.resolve({ ok: true }); },
+      sendPetReactionBubble(payload) { bubbleCalls.push(payload); return Promise.resolve({ ok: true }); },
+    },
+  });
+  await settle();
+  state.calls.length = 0;
+  appendCalls.length = 0;
+  speechCalls.length = 0;
+  expressionCalls.length = 0;
+  bubbleCalls.length = 0;
+  const item = sandbox.enqueueExpressionMirrorOutputDiagnostics("happy");
+  task231AssertExpressionMirrorQueueItem(item, "happy");
+  await settle();
+  assert.equal(sandbox.getOutputQueueSnapshot().enabled, false, "queue must remain disabled");
+  assert.equal(state.calls.filter((call) => String(call.url).endsWith("/chat")).length, 0,
+    "diagnostics enqueue must not call /chat");
+  assert.equal(appendCalls.length, 0, "diagnostics enqueue must not write history");
+  assert.equal(speechCalls.length, 0, "diagnostics enqueue must not call speech/TTS");
+  assert.equal(expressionCalls.length, 0, "diagnostics enqueue must not mirror expression via IPC");
+  assert.equal(bubbleCalls.length, 0, "diagnostics enqueue must not mirror reaction bubble");
+  console.log("  testTask231DiagnosticsEnqueueDoesNotDispatch PASS");
+}
+
+async function testTask231RecordPathKeepsExistingMirrorBehavior() {
+  const expressionCalls = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      sendPetExpressionSuggestion(payload) { expressionCalls.push({ ...payload }); return Promise.resolve({ ok: true }); },
+    },
+  });
+  sandbox.lastInteractionExpressionMirrorAt = 0;
+  expressionCalls.length = 0;
+  sandbox.clearOutputQueue("test");
+  sandbox.recordInteractionExpressionSuggestion("focused", "user_active");
+  assert.equal(expressionCalls.length, 1, "existing expression mirror IPC must still happen");
+  assert.deepEqual(Object.keys(expressionCalls[0]).sort(), ["expression"],
+    "expression mirror IPC payload schema must remain { expression }");
+  assert.equal(expressionCalls[0].expression, "focused");
+  assert.ok(!("payload" in expressionCalls[0]), "IPC mirror payload must not include queue payload wrapper");
+  assert.equal(sandbox.outputQueueItems.length, 1, "diagnostics item must be enqueued alongside mirror");
+  task231AssertExpressionMirrorQueueItem(sandbox.outputQueueItems[0], "focused");
+  console.log("  testTask231RecordPathKeepsExistingMirrorBehavior PASS");
+}
+
+function testTask231NoNewIpcChannelsAndPreservesExisting() {
+  const rendererPreload = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "preload.js"), "utf8");
+  const mainSrc = fs.readFileSync(path.join(desktopRoot, "src", "main.js"), "utf8");
+  const petPreload = fs.readFileSync(path.join(desktopRoot, "src", "pet", "pet-preload.js"), "utf8");
+  for (const src of [rendererPreload, mainSrc, petPreload]) {
+    assert.ok(!src.includes("output-queue"), "TASK-231 must not add output queue IPC");
+    assert.ok(!src.includes("output:queue"), "TASK-231 must not add broad output IPC");
+    assert.ok(!src.includes("task-231"), "TASK-231 must not add task-specific IPC");
+    assert.ok(!src.includes("expression-mirror-output"), "TASK-231 must not add expression mirror output IPC");
+  }
+  assert.ok(rendererPreload.includes('PET_EXPRESSION_SUGGESTION_CHANNEL = "pet:expression-suggestion"'),
+    "TASK-218 narrow renderer invoke channel must remain");
+  assert.ok(mainSrc.includes('PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL = "pet:expression-suggestion-received"'),
+    "TASK-218 narrow main send channel must remain");
+  assert.ok(rendererPreload.includes('PET_REACTION_BUBBLE_CHANNEL = "pet:reaction-bubble"'),
+    "TASK-220 narrow renderer invoke channel must remain");
+  assert.ok(mainSrc.includes('PET_REACTION_BUBBLE_RECEIVED_CHANNEL = "pet:reaction-bubble-received"'),
+    "TASK-220 narrow main send channel must remain");
+  assert.ok(!rendererPreload.includes('PET_EXPRESSION_SUGGESTION_CHANNEL = "pet"'),
+    "TASK-218 expression channel must not be generic pet");
+  assert.ok(!rendererPreload.includes('PET_REACTION_BUBBLE_CHANNEL = "pet"'),
+    "TASK-220 reaction bubble channel must not be generic pet");
+  console.log("  testTask231NoNewIpcChannelsAndPreservesExisting PASS");
+}
+
+async function testTask231ExpressionDebounceStillWorksWithDiagnostics() {
+  const expressionCalls = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      sendPetExpressionSuggestion(payload) { expressionCalls.push({ ...payload }); return Promise.resolve({ ok: true }); },
+    },
+  });
+  sandbox.lastInteractionExpressionMirrorAt = 0;
+  sandbox.pendingInteractionExpressionMirror = null;
+  if (sandbox.interactionExpressionMirrorTimer) {
+    clearTimeout(sandbox.interactionExpressionMirrorTimer);
+    sandbox.interactionExpressionMirrorTimer = null;
+  }
+  expressionCalls.length = 0;
+  sandbox.clearOutputQueue("test");
+  // First call: immediate IPC mirror + immediate diagnostics enqueue
+  sandbox.recordInteractionExpressionSuggestion("focused", "user_active");
+  assert.equal(expressionCalls.length, 1, "first expression mirror must be immediate");
+  assert.equal(expressionCalls[0].expression, "focused");
+  assert.equal(sandbox.outputQueueItems.length, 1, "first expression must enqueue diagnostics immediately");
+  task231AssertExpressionMirrorQueueItem(sandbox.outputQueueItems[0], "focused");
+  // Second call within cooldown: IPC debounced, diagnostics enqueues immediately
+  sandbox.recordInteractionExpressionSuggestion("happy", "attention_returned");
+  assert.equal(expressionCalls.length, 1, "second IPC mirror must be debounced within cooldown");
+  assert.equal(sandbox.pendingInteractionExpressionMirror, "happy", "latest expression must be pending");
+  assert.equal(sandbox.outputQueueItems.length, 2, "second expression must still enqueue diagnostics immediately");
+  task231AssertExpressionMirrorQueueItem(sandbox.outputQueueItems[1], "happy");
+  // Third call within cooldown: last pending wins, diagnostics still enqueues
+  sandbox.recordInteractionExpressionSuggestion("proud", "pet_attention");
+  assert.equal(expressionCalls.length, 1, "third IPC mirror must still be debounced");
+  assert.equal(sandbox.pendingInteractionExpressionMirror, "proud", "latest expression wins in pending");
+  assert.equal(sandbox.outputQueueItems.length, 3, "third expression must enqueue diagnostics immediately");
+  task231AssertExpressionMirrorQueueItem(sandbox.outputQueueItems[2], "proud");
+  console.log("  testTask231ExpressionDebounceStillWorksWithDiagnostics PASS");
+}
+
+function testTask231RegressionGuards() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(!src.includes("hover-action"), "TASK-231 must not restore hover action buttons");
+  assert.ok(src.includes("chat-context-menu"), "TASK-231 must keep context menu");
+  assert.ok(src.includes("複製") && src.includes("刪除") && src.includes("編輯"),
+    "TASK-231 must keep context menu copy/delete/edit actions");
+  assert.ok(src.includes("function isLastEditableUserMessage") && src.includes("entry.role !== \"user\""),
+    "TASK-231 must keep edit limited to last formal user message");
+  assert.ok(src.includes("showPetWindow"), "TASK-231 must not remove Pet Window entry point");
+  assert.ok(src.includes("function mirrorInteractionExpressionSuggestion"),
+    "TASK-231 must not remove expression mirror function");
+  assert.ok(src.includes("function scheduleInteractionExpressionMirror"),
+    "TASK-231 must not remove TASK-219 cooldown/debounce function");
+  assert.ok(src.includes("INTERACTION_EXPRESSION_MIRROR_COOLDOWN_MS"),
+    "TASK-231 must not remove TASK-219 cooldown constant");
+  console.log("  testTask231RegressionGuards PASS");
 }
 
 // ─── TASK-218: Safe Pet Expression Suggestion Mirror ─────────────────────────
@@ -10074,6 +10358,21 @@ async function main() {
   await testTask230RecordPathKeepsExistingMirrorPayloadSeparate();
   testTask230NoNewIpcChannelsAndPreservesExisting();
   testTask230RegressionGuards();
+
+  // TASK-231: Enqueue Expression Mirror Diagnostics Only
+  testTask231RendererHasExpressionMirrorEnqueueHelper();
+  await testTask231UserActiveExpressionMirrorEnqueuesDiagnosticsItem();
+  await testTask231AllSafeExpressionsEnqueue();
+  await testTask231UnknownExpressionIsNoop();
+  await testTask231QueueStillDisabled();
+  await testTask231PreviewUpdatesAfterExpressionMirrorEnqueue();
+  await testTask231QueueItemNoForbiddenFields();
+  await testTask231PreviewNoRawPayloadOrBadTokens();
+  await testTask231DiagnosticsEnqueueDoesNotDispatch();
+  await testTask231RecordPathKeepsExistingMirrorBehavior();
+  testTask231NoNewIpcChannelsAndPreservesExisting();
+  await testTask231ExpressionDebounceStillWorksWithDiagnostics();
+  testTask231RegressionGuards();
 
   // TASK-218: Safe Pet Expression Suggestion Mirror
   testTask218RendererHasMirrorFunction();

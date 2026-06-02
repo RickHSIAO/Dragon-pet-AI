@@ -23054,7 +23054,7 @@ TASK-226 is docs-only:
   SMOKE PASS / DONE - PASS.
 - TASK-230 Enqueue Reaction Bubble Diagnostics Only. DONE - WINDOWS VISUAL
   SMOKE PASS / DONE - PASS.
-- TASK-231 Bubble Priority Enforcement.
+- TASK-231 Enqueue Expression Mirror Diagnostics Only. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
 - TASK-232 TTS-safe segment design.
 - TASK-233 Idle Reaction Policy, fixed only, no LLM.
 - TASK-234 User controls for companion reaction verbosity.
@@ -23878,3 +23878,137 @@ Confirmed:
   runtime, persistence, asset, or edit-scope change.
 - [x] Renderer automated smoke PASS.
 - [x] Windows visual smoke PASS on 2026-06-01.
+
+---
+
+## TASK-231 | Enqueue Expression Mirror Diagnostics Only
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+
+### Summary
+
+TASK-231 connects the existing safe expression mirror record path to the disabled
+output queue as local diagnostics only. When `recordInteractionExpressionSuggestion`
+produces a safe expression, `enqueueExpressionMirrorOutputDiagnostics(expression)`
+is called immediately before `mirrorInteractionExpressionSuggestion`. This enqueues
+one diagnostics-only item per expression mirror event so the disabled output queue
+preview can reflect expression output intent.
+
+This is local diagnostics only. It does not dispatch output, does not affect the
+existing expression mirror (IPC, cooldown, debounce), does not affect TASK-219
+debounce behavior, does not send anything to the Pet Window, does not call `/chat`,
+does not write history, does not trigger TTS/STT/audio, and does not alter any
+Pet Window, Pet Bubble, or reaction bubble behavior.
+
+### Enqueue Item Schema
+
+```js
+{
+  source: "expression_mirror",
+  priority: "P4_NORMAL_REACTION",
+  channel: "visual_expression",
+  payload: { expression: "<safe expression>" },
+  ttlMs: 0,
+  interruptible: true,
+  ttsEligible: false,
+  historyEligible: false,
+  copyExportEligible: false,
+  reason: "interaction_expression_suggestion",
+}
+```
+
+- `payload` contains only `expression`.
+- `expression` must pass `INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST` (neutral /
+  focused / happy / proud / annoyed / sleepy).
+- Calling `enqueueExpressionMirrorOutputDiagnostics` directly with an invalid or
+  unknown expression returns `null` (no-op).
+- `recordInteractionExpressionSuggestion` sanitizes unknown → `"neutral"` before
+  calling the helper, so the record path always enqueues a valid item.
+
+### Queue Preview After TASK-231
+
+After a `chat_message_sent` event (`user_active` hint), the queue now holds both
+an `expression_mirror` item (enqueued first) and a `reaction_bubble` item
+(enqueued second from TASK-230):
+
+```
+Queue: disabled · Items: 2 · Recent: 2 · Next: P4_NORMAL_REACTION/visual_expression/expression_mirror
+```
+
+When calling `recordInteractionExpressionSuggestion` directly (no bubble event),
+the preview shows:
+
+```
+Queue: disabled · Items: 1 · Recent: 1 · Next: P4_NORMAL_REACTION/visual_expression/expression_mirror
+```
+
+### Runtime Boundary
+
+TASK-231 is Full App renderer-only:
+
+- No backend change.
+- No `/chat` API schema change.
+- No chat history persistence format change.
+- No `/chat` call.
+- No history write.
+- No new IPC.
+- No existing IPC modification.
+- No Pet Window side-effect.
+- No Pet Window runtime change.
+- No Pet Bubble visible behavior change.
+- No Pet expression mirror behavior change (IPC payload, scheduling, debounce unchanged).
+- No reaction bubble mirror behavior change.
+- No TASK-219 cooldown / debounce change.
+- No TTS / STT / audio runtime.
+- Queue remains disabled (OUTPUT_QUEUE_ENABLED = false).
+- No queue dispatch.
+- No raw message text storage.
+
+### Smoke Coverage
+
+`renderer-chat-smoke.js` adds TASK-231 coverage for:
+
+- `enqueueExpressionMirrorOutputDiagnostics` existence and record-path call.
+- `user_active` → `focused` expression enqueues with correct schema.
+- All safe expressions (focused / neutral / annoyed / happy / proud / sleepy) enqueue.
+- Unknown / invalid expression direct-call returns null (no-op); record path sanitizes to neutral and enqueues.
+- Queue remains disabled after enqueue.
+- Preview shows `Queue: disabled · Items: 1 · Recent: 1 · Next: P4_NORMAL_REACTION/visual_expression/expression_mirror`.
+- No forbidden payload keys (message / text / body / rawText / content / reply / transcript / audio / html / innerHTML / metadata / debug / thinking).
+- Preview contains no raw payload, `{`, `}`, `[object Object]`, `undefined`, `null`, `NaN`.
+- Direct `enqueueExpressionMirrorOutputDiagnostics` call does not trigger `/chat`, history write, TTS, expression IPC, or reaction bubble IPC.
+- Existing expression mirror IPC still fires with unchanged `{ expression }` payload.
+- IPC channels unchanged (TASK-218 and TASK-220 narrow channels retained; no generic `"pet"` channel).
+- TASK-219 debounce still coalesces: IPC is debounced within cooldown while diagnostics enqueue happens immediately for each call.
+- Regression guards: no hover-action, context menu intact, TASK-219 cooldown constant and functions present.
+
+### Acceptance Criteria
+
+- [x] `function enqueueExpressionMirrorOutputDiagnostics` defined in `renderer.js`.
+- [x] `recordInteractionExpressionSuggestion` calls `enqueueExpressionMirrorOutputDiagnostics(safeExpression)`.
+- [x] Payload contains only `{ expression }`.
+- [x] Invalid expression direct-call returns null (no-op); record path sanitizes to neutral.
+- [x] Queue remains disabled (OUTPUT_QUEUE_ENABLED = false).
+- [x] No IPC added, no existing IPC modified.
+- [x] No Pet Window runtime change.
+- [x] TASK-219 cooldown / debounce behavior unchanged.
+- [x] TASK-218 and TASK-220 narrow IPC retained.
+- [x] Renderer automated smoke PASS.
+- [x] Windows visual smoke PASS on 2026-06-01.
+
+### Windows Visual Smoke Results (2026-06-01)
+
+- Basic startup PASS: Preview shows `Queue: disabled · Items/Recent/Next`; Pet
+  Window remains normal.
+- Send message PASS: expression mirror remains normal, reaction bubble remains
+  normal, Queue enqueues the `expression_mirror` diagnostics item, and `Next`
+  shows `P4_NORMAL_REACTION/visual_expression/expression_mirror`.
+- Delete / Undo PASS: feature remains normal; Queue stays disabled.
+- Edit last user PASS: feature remains normal; Queue stays disabled.
+- Clear Chat PASS: feature remains normal; Queue stays disabled.
+- Focus PASS: feature remains normal; Queue stays disabled.
+- Queue diagnostics format PASS: no `undefined`, `null`, `NaN`,
+  `[object Object]`, raw JSON, user text, bubble text, or payload.
+- General regression PASS: no new IPC side effect, no extra TTS, no extra
+  `/chat`, no history/copy/export pollution, and Pet Window expression plus
+  reaction bubble behavior remains normal.

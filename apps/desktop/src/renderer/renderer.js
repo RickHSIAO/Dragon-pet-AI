@@ -1333,6 +1333,7 @@ function recordInteractionExpressionSuggestion(expression, hint) {
     recentInteractionExpressionSuggestions.shift();
   }
   currentInteractionExpressionSuggestion = safeExpression;
+  enqueueExpressionMirrorOutputDiagnostics(safeExpression); // TASK-231
   mirrorInteractionExpressionSuggestion(safeExpression); // TASK-218
 }
 
@@ -1380,6 +1381,25 @@ function scheduleInteractionExpressionMirror(expression) {
 
 function mirrorInteractionExpressionSuggestion(expression) {
   return scheduleInteractionExpressionMirror(expression);
+}
+
+// TASK-231: Enqueue expression mirror diagnostics item (local only).
+// Does not dispatch, does not affect mirror scheduling or TASK-219 debounce behavior.
+function enqueueExpressionMirrorOutputDiagnostics(expression) {
+  const safeExpression = INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST.has(expression) ? expression : null;
+  if (!safeExpression) return null;
+  return enqueueOutputQueueItem({
+    source: "expression_mirror",
+    priority: "P4_NORMAL_REACTION",
+    channel: "visual_expression",
+    payload: { expression: safeExpression },
+    ttlMs: 0,
+    interruptible: true,
+    ttsEligible: false,
+    historyEligible: false,
+    copyExportEligible: false,
+    reason: "interaction_expression_suggestion",
+  });
 }
 
 // TASK-220: mirror fixed reaction bubble text to Pet Window via narrow IPC.
