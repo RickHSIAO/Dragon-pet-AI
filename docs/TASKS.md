@@ -23063,7 +23063,7 @@ TASK-226 is docs-only:
 - TASK-237 Renderer Modularization Plan / Boundary Map. IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED.
 - TASK-238 Extract Output Queue Module. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
 - TASK-239 Extract Diagnostics Drawer Module. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
-- TASK-240 Extract Interaction Events / Behavior / Character State Modules.
+- TASK-240 Christina Desktop Pet Cutout Stage Foundation. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
 - TASK-241 Extract Pet Bridge Module.
 - TASK-242 Extract Chat Rendering Module.
 - TASK-243 Extract Chat History / Copy / Export Module.
@@ -24670,3 +24670,126 @@ Windows visual smoke PASS (2026-06-01):
   `[object Object]`, raw JSON, user text, reply text, bubble text, or payload.
 - General regression PASS: no new IPC side-effect, no extra TTS, no extra `/chat`,
   no history/copy/export pollution.
+
+---
+
+## TASK-240 | Christina Desktop Pet Cutout Stage Foundation
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-06-02
+**Phase:** Phase 5 - Pet Window Visual Polish
+**Depends on:** TASK-239
+
+### Goal
+
+Pivot the Pet Window visual from a mini app panel to a desktop pet cutout /
+foreground stage. Christina should be the visual subject, with only local glow
+and an avatar-bound oval stage pad beneath her feet. No heavy animation. No IPC.
+No backend. No `/chat`. No TTS.
+
+### Summary
+
+Pure CSS visual change plus automated smoke guard updates. No HTML change. No
+Pet runtime JS change. No runtime behavior change.
+
+### Design Pivot After Windows Visual Feedback
+
+The first TASK-240 visual direction (dark Gothic window skin) did not meet the
+desktop-pet goal. The revised direction is **Christina Desktop Pet Cutout Stage
+Foundation**:
+
+- `.pet-shell` is transparent, with no heavy rectangular panel shadow.
+- `.pet-stage` / `.pet-drag-region` stay transparent and do not paint a
+  full-window panel.
+- Local crimson / ember glow is bound to `.pet-avatar-container::before`.
+- The oval stage pad / ground shadow is bound to `.pet-avatar-container::after`,
+  directly beneath Christina.
+- `.pet-avatar { position: relative; z-index: 2 }` keeps Christina above the
+  cutout glow and stage pad.
+- Chat / Full App / Mic / Menu remain clickable but are visually reduced into
+  compact semi-transparent dock chips.
+- Follow-up chrome polish reduces the top drag handle and close X by default,
+  reveals them only on Pet Window hover / focus-within, and keeps the stage
+  empty area as the primary drag region.
+- The bottom controls now behave as a low-opacity hover dock: compact by
+  default, more visible on hover / focus-within, and still clickable.
+- Interactive controls, direct input, menu, indicators, hint, and speech bubble
+  descendants remain `-webkit-app-region: no-drag`.
+- Speech bubble remains readable and bubble-like, not a full app panel.
+- No HTML change. No JS runtime behavior change. No IPC. No backend. No `/chat`.
+  No TTS/STT/audio. No Output Queue or Diagnostics Drawer change.
+
+This revised direction supersedes the earlier dark panel / window-skin notes
+below. Status remains **IMPLEMENTED - NEEDS WINDOWS VISUAL SMOKE**.
+
+Superseded first-pass notes for `apps/desktop/src/pet/pet.css`:
+
+- `.pet-shell` background changed from warm frosted glass to a dark Gothic
+  linear-gradient (`rgba(22, 9, 9, 0.92)` → `rgba(32, 12, 10, 0.90)` → `rgba(20, 8, 8, 0.92)`).
+  Border changed to crimson tint (`rgba(160, 55, 35, 0.30)`).
+  Box shadow deepened to `0 14px 40px rgba(0, 0, 0, 0.55)`.
+- `.pet-drag-handle` background changed to `rgba(160, 55, 35, 0.15)` (crimson tint).
+- `.pet-drag-handle::before` background changed to `rgba(160, 55, 35, 0.50)`.
+- TASK-240 section appended:
+  - `.pet-stage` / `.pet-drag-region` radial-gradient atmosphere (`rgba(175, 48, 28, 0.12)`).
+  - `.pet-avatar-container::before` — ambient halo / stage glow (radial-gradient, `pointer-events: none`, `z-index: 0`).
+  - `.pet-avatar-container::after` — ellipse ground shadow (radial-gradient, `pointer-events: none`, `z-index: 0`).
+  - `.pet-avatar { position: relative; z-index: 1 }` — avatar sits above stage decor.
+  - Scale overrides for shadow: small (`98×11px`), large (`163×18px`).
+  - Bubble-open shadow shrink variants for all three scale presets.
+
+Speech bubble, hint bar, and button row remain as frosted glass — readable on dark backdrop.
+
+### New / Modified Files
+
+- `apps/desktop/src/pet/pet.css` — revised cutout shell, avatar-bound stage pad/glow, hover-revealed chrome, compact hover dock chips, and bubble polish CSS.
+- `apps/desktop/scripts/pet-renderer-smoke.js` — TASK-240 tests updated for cutout shell, avatar-bound stage, hover dock, chrome reduction, interactive no-drag guards, and safety guards (278 total checks).
+
+### Safety Boundary
+
+- No backend change.
+- No `/chat` schema or request flow change.
+- No chat history persistence format change.
+- No new IPC and no existing IPC channel change.
+- No Pet Window runtime JS change.
+- No pet-renderer.js change.
+- No expression mirror, reaction bubble mirror, or Pet bridge behavior change.
+- No TTS/STT/audio change.
+- No output queue dispatch. `OUTPUT_QUEUE_ENABLED` remains `false`.
+- No HTML change (`pet.html` unmodified).
+- No `@keyframes` added. No heavy animation.
+- No `url()` references in new CSS. No external URLs.
+- `pointer-events: none` on all new pseudo-elements (no click target interference).
+
+### Automated Smoke
+
+- [x] `node apps\desktop\scripts\renderer-chat-smoke.js` PASS (full regression).
+- [x] `node apps\desktop\scripts\pet-window-smoke.js` PASS (82 checks).
+- [x] `node apps\desktop\scripts\pet-renderer-smoke.js` PASS (285 checks, 22 TASK-240 tests).
+
+### Windows Visual Smoke
+
+Windows visual smoke PASS (2026-06-02):
+
+- Basic startup PASS: Full App / Pet Window normal. No white screen or fatal error.
+- Cutout stage visual PASS: large rectangular panel feel reduced. Christina is
+  the visual subject. Local glow / oval shadow / stage pad visible and correct.
+- Chrome noise reduction PASS: top drag handle and close X not prominent by
+  default. X no longer an active main-screen control.
+- Hover dock controls PASS: Chat / Full App / Mic / Menu hidden by default.
+  Visible and operable on hover / focus-within.
+- Drag behavior PASS: dragging the character image / avatar area moves Pet
+  Window. Buttons / bubble / direct input / menu interactive areas not blocked
+  by drag region.
+- Menu / Hide PASS: Hide Pet Window still available via Menu. Not dependent on
+  the close X button.
+- Expression switching PASS: neutral / focused / happy / annoyed and others
+  normal. Fallback not broken.
+- Speech bubble PASS: bubble readable. Long reply / idle / recent reply /
+  details behavior normal.
+- Scale / Quiet / Click-through / Direct Input PASS: no visible layout breakage
+  or function regression.
+- No heavy animation / no side effects PASS: no breathing / bobbing / idle loop.
+  No TTS, extra /chat, proactive speech, or history pollution.
+- General regression PASS: expression mirror, reaction bubble, TTL restore,
+  Diagnostics drawer, Output Queue disabled all normal.

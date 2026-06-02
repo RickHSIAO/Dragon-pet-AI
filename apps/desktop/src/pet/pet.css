@@ -37,11 +37,11 @@ body {
   grid-template-rows: minmax(0, 1fr) auto;
   gap: 8px;
   padding: 12px;
-  border: 1px solid rgba(64, 38, 28, 0.22);
+  border: 1px solid transparent;
   border-radius: 18px;
   overflow: hidden;
-  background: rgba(255, 250, 244, 0.72);
-  box-shadow: 0 12px 30px rgba(33, 24, 20, 0.18);
+  background: transparent;
+  box-shadow: none;
 }
 
 .pet-drag-handle {
@@ -52,21 +52,23 @@ body {
   height: 24px;
   display: grid;
   place-items: center;
-  border-radius: 0 0 12px 12px;
-  background: rgba(72, 45, 34, 0.1);
+  border-radius: 0 0 999px 999px;
+  background: transparent;
   transform: translateX(-50%);
+  opacity: 0;
   z-index: 8;
   pointer-events: auto;
   user-select: none;
+  transition: opacity 120ms ease, background 120ms ease;
   -webkit-app-region: drag;
 }
 
 .pet-drag-handle::before {
   content: "";
-  width: 42px;
-  height: 4px;
+  width: 28px;
+  height: 2px;
   border-radius: 999px;
-  background: rgba(72, 45, 34, 0.34);
+  background: rgba(255, 208, 184, 0.58);
 }
 
 .pet-stage-controls {
@@ -75,6 +77,10 @@ body {
   right: 10px;
   display: flex;
   gap: 4px;
+  opacity: 0;
+  transform: translateY(-3px);
+  pointer-events: none;
+  transition: opacity 120ms ease, transform 120ms ease;
   z-index: 9;
   -webkit-app-region: no-drag;
 }
@@ -87,7 +93,7 @@ body {
   justify-items: center;
   align-content: end;
   gap: 8px;
-  overflow: hidden;
+  overflow: visible;
   padding-top: 18px;
   -webkit-app-region: no-drag;
 }
@@ -152,7 +158,8 @@ body {
 
 .pet-bubble {
   position: relative;
-  width: 100%;
+  width: min(230px, 92%);
+  justify-self: center;
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   gap: 6px;
@@ -161,10 +168,10 @@ body {
   overflow: visible; /* TASK-166C: allow ::after tail to protrude above bubble */
   opacity: 0;
   pointer-events: none;
-  border: 1px solid rgba(72, 45, 34, 0.16);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 10px 22px rgba(33, 24, 20, 0.16);
+  border: 1px solid rgba(90, 52, 42, 0.14);
+  border-radius: 18px 18px 16px 16px;
+  background: rgba(255, 250, 244, 0.88);
+  box-shadow: 0 10px 22px rgba(18, 7, 8, 0.22);
   transition: max-height 140ms ease, opacity 140ms ease;
   z-index: 4;
 }
@@ -178,9 +185,9 @@ body {
   height: 16px;
   border-left: 1px solid rgba(72, 45, 34, 0.28);
   border-top: 1px solid rgba(72, 45, 34, 0.28);
-  background: rgba(255, 255, 255, 0.94);
+  background: rgba(255, 250, 244, 0.88);
   transform: translateX(-50%) rotate(45deg);
-  box-shadow: -2px -2px 4px rgba(33, 24, 20, 0.1); /* contrast on light/dark wallpapers */
+  box-shadow: -2px -2px 4px rgba(18, 7, 8, 0.12); /* contrast on light/dark wallpapers */
   z-index: 3;
 }
 
@@ -341,7 +348,16 @@ body {
 }
 
 .pet-mode-actions {
+  width: fit-content;
+  max-width: calc(100% - 12px);
+  justify-self: center;
   justify-content: center;
+  gap: 4px;
+  padding: 4px 5px;
+  border: 1px solid rgba(255, 196, 168, 0.16);
+  border-radius: 999px;
+  background: rgba(16, 7, 7, 0.34);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.24);
 }
 
 .pet-menu {
@@ -378,12 +394,12 @@ input {
 }
 
 button {
-  min-height: 26px;
-  border: 1px solid rgba(72, 45, 34, 0.22);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.72);
-  color: #4b3128;
-  font-size: 12px;
+  min-height: 24px;
+  border: 1px solid rgba(255, 220, 202, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 248, 240, 0.70);
+  color: #4a2720;
+  font-size: 11px;
 }
 
 button:disabled,
@@ -1018,4 +1034,217 @@ textarea {
 [data-scale="large"] .pet-tts-voice-select {
   font-size: 12px;
   min-height: 28px;
+}
+
+/* TASK-240: Christina Desktop Pet Cutout Stage Foundation */
+
+/* Cutout stage: keep the window transparent; bind atmosphere to the avatar. */
+.pet-stage,
+.pet-drag-region {
+  position: relative;
+  background: transparent;
+  -webkit-app-region: no-drag;
+}
+
+/* Avatar container is the primary drag zone — drag by grabbing Christina */
+.pet-avatar-container,
+.pet-avatar {
+  -webkit-app-region: drag;
+}
+
+.pet-stage::before,
+.pet-stage::after,
+.pet-drag-region::before,
+.pet-drag-region::after {
+  display: none;
+}
+
+.pet-avatar-container {
+  overflow: visible;
+  isolation: isolate;
+}
+
+/* Local avatar glow — no full-window panel, no speech-bubble shape. */
+.pet-avatar-container::before {
+  content: "";
+  position: absolute;
+  top: 46%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 238%;
+  height: 214%;
+  background:
+    radial-gradient(ellipse at center, rgba(218, 64, 38, 0.24) 0%, rgba(128, 25, 22, 0.13) 34%, transparent 66%),
+    radial-gradient(ellipse at center, rgba(255, 145, 82, 0.10) 0%, transparent 42%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Avatar-bound stage pad / ground shadow beneath Christina. */
+.pet-avatar-container::after {
+  content: "";
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 176px;
+  height: 34px;
+  border-radius: 50%;
+  background:
+    radial-gradient(ellipse at center, rgba(0, 0, 0, 0.72) 0%, rgba(18, 3, 4, 0.50) 34%, rgba(120, 22, 18, 0.30) 58%, transparent 78%);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.36), inset 0 0 18px rgba(210, 48, 32, 0.18);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.pet-avatar-container,
+.pet-hint,
+.pet-mode-actions,
+.pet-bubble {
+  position: relative;
+  z-index: 1;
+}
+
+/* Avatar sits above the local cutout glow and ground pad. */
+.pet-avatar {
+  position: relative;
+  z-index: 2;
+  filter: drop-shadow(0 7px 16px rgba(0, 0, 0, 0.42));
+}
+
+.pet-hint {
+  width: fit-content;
+  max-width: min(230px, 92%);
+  min-height: 0;
+  padding: 5px 9px;
+  border: 1px solid rgba(255, 226, 210, 0.16);
+  border-radius: 999px;
+  background: rgba(18, 8, 8, 0.34);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.20);
+  color: rgba(255, 237, 226, 0.92);
+  font-size: 11px;
+}
+
+/* Dock chips: controls stay clickable but stop reading as a web form bar. */
+.pet-shell:hover .pet-drag-handle,
+.pet-shell:focus-within .pet-drag-handle {
+  background: rgba(22, 8, 8, 0.12);
+  opacity: 0.30;
+}
+
+/* Close X permanently hidden — Hide Pet Window action is in Menu */
+.pet-shell:hover .pet-stage-controls,
+.pet-shell:focus-within .pet-stage-controls {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pet-stage-controls .pet-icon-button {
+  width: 20px;
+  min-height: 20px;
+  border-color: rgba(255, 226, 210, 0.12);
+  background: rgba(18, 8, 8, 0.24);
+  color: rgba(255, 237, 226, 0.78);
+  font-size: 10px;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.pet-mode-actions {
+  border-color: rgba(255, 226, 210, 0.10);
+  background: rgba(16, 7, 7, 0.18);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.16);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(6px) scale(0.94);
+  transform-origin: center bottom;
+  transition: opacity 120ms ease, transform 120ms ease, background 120ms ease;
+}
+
+.pet-shell:hover .pet-mode-actions,
+.pet-shell:focus-within .pet-mode-actions {
+  opacity: 0.92;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+.pet-mode-actions button {
+  min-height: 21px;
+  padding: 0 7px;
+  border-color: rgba(255, 226, 210, 0.14);
+  background: rgba(255, 248, 240, 0.52);
+  box-shadow: none;
+  opacity: 0.78;
+  font-size: 10.5px;
+}
+
+.pet-shell:hover .pet-mode-actions button,
+.pet-shell:focus-within .pet-mode-actions button {
+  opacity: 1;
+}
+
+.pet-stage-controls,
+.pet-stage-controls *,
+.pet-mode-actions,
+.pet-mode-actions *,
+.pet-bubble,
+.pet-bubble *,
+.pet-direct-input-panel,
+.pet-direct-input-panel *,
+.pet-menu,
+.pet-menu *,
+.pet-hint,
+.pet-recording-indicator,
+.pet-recording-indicator *,
+.pet-transcribing-indicator,
+.pet-transcribing-indicator *,
+.pet-speaking-indicator,
+.pet-speaking-indicator * {
+  -webkit-app-region: no-drag;
+}
+
+/* Scale overrides: small preset */
+[data-scale="small"] .pet-avatar-container::before {
+  width: 224%;
+  height: 204%;
+}
+
+[data-scale="small"] .pet-avatar-container::after {
+  bottom: -6px;
+  width: 132px;
+  height: 26px;
+}
+
+/* Scale overrides: large preset */
+[data-scale="large"] .pet-avatar-container::before {
+  width: 246%;
+  height: 220%;
+}
+
+[data-scale="large"] .pet-avatar-container::after {
+  bottom: -9px;
+  width: 220px;
+  height: 42px;
+}
+
+/* Bubble-open: avatar shrinks so the local cutout stage follows it. */
+.pet-shell:not([data-bubble-state="collapsed"]) .pet-avatar-container::before {
+  width: 224%;
+  height: 204%;
+}
+
+.pet-shell:not([data-bubble-state="collapsed"]) .pet-avatar-container::after {
+  bottom: -6px;
+  width: 142px;
+  height: 27px;
+}
+
+[data-scale="small"]:not([data-bubble-state="collapsed"]) .pet-avatar-container::after {
+  width: 108px;
+  height: 22px;
+}
+
+[data-scale="large"]:not([data-bubble-state="collapsed"]) .pet-avatar-container::after {
+  width: 184px;
+  height: 36px;
 }

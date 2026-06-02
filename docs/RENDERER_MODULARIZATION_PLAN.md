@@ -91,7 +91,7 @@ changing visible behavior.
 
 1. TASK-238 Extract Output Queue Module. **DONE — WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-02, Windows visual smoke 2026-06-01).**
 2. TASK-239 Extract Diagnostics Drawer Module. **DONE — WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-02, Windows visual smoke 2026-06-01).**
-3. TASK-240 Extract Interaction Events / Behavior / Character State Modules.
+3. TASK-240 Christina Desktop Pet Cutout Stage Foundation. **DONE — WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-02).** Pure Pet Window CSS polish: transparent cutout shell, avatar-bound stage pad/glow, avatar-container as primary drag zone, close X permanently hidden, compact hover dock controls, no runtime behavior change.
 4. TASK-241 Extract Pet Bridge Module.
 5. TASK-242 Extract Chat Rendering Module.
 6. TASK-243 Extract Chat History / Copy / Export Module.
@@ -215,4 +215,3 @@ prompt runtime, TTS/STT/audio runtime, or any IPC channel.
 | [docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md](OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md) | Records current queue runtime state. TASK-237 uses it as the source for the output queue module boundary. |
 | [docs/VOICE_TTS_RESEARCH.md](VOICE_TTS_RESEARCH.md) | Voice/TTS remains a future integration layer. TASK-237 does not add voice runtime. |
 | [docs/CHRISTINA_PERSONA_CONTEXT_PACK.md](CHRISTINA_PERSONA_CONTEXT_PACK.md) | Persona content remains a content-layer input only. TASK-237 does not change prompt/runtime persona behavior. |
-

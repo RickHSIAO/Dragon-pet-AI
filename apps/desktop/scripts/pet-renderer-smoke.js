@@ -268,7 +268,7 @@ function testPetCssUsesStaticPetDimensions() {
   assertIncludes(css, "position: relative", "pet.css");
   assertIncludes(css, "grid-template-columns: 1fr auto", "pet.css");
   assertNotIncludes(css, ".pet-menu-hotspot", "pet.css");
-  assert.equal((css.match(/-webkit-app-region:\s*drag\b/g) || []).length, 1);
+  assert.equal((css.match(/-webkit-app-region:\s*drag\b/g) || []).length, 2);
   assertRegex(css, /\.pet-drag-handle[\s\S]*-webkit-app-region:\s*drag\b/, "pet.css");
   assertRegex(css, /\.pet-drag-handle[\s\S]*height:\s*24px/, "pet.css");
   assertRegex(css, /\.pet-drag-handle[\s\S]*width:\s*156px/, "pet.css");
@@ -334,7 +334,7 @@ function testPetCssUsesStaticPetDimensions() {
   // TASK-169: max-height increased from 144px to 260px to accommodate TTS settings panel
   assertRegex(css, /\.pet-menu[\s\S]*max-height:\s*260px/, "pet.css");
   assertRegex(css, /\.pet-menu[\s\S]*overflow-y:\s*auto/, "pet.css");
-  assertRegex(css, /\.pet-stage,\s*\r?\n\.pet-drag-region[\s\S]*-webkit-app-region:\s*no-drag\b/, "pet.css");
+  assertRegex(css, /\.pet-stage,\s*\r?\n\.pet-drag-region[\s\S]*-webkit-app-region:\s*drag\b/, "pet.css");
   assertRegex(css, /\.pet-avatar[\s\S]*-webkit-app-region:\s*no-drag\b/, "pet.css");
   assertRegex(css, /button,\s*\r?\ninput[\s\S]*-webkit-app-region:\s*no-drag/, "pet.css");
   assertRegex(css, /textarea[\s\S]*-webkit-app-region:\s*no-drag/, "pet.css");
@@ -5115,6 +5115,31 @@ function testTask169ScopeChecks() {
     testTask220ReactionBubbleTtlRestoresRecentReply,
     testTask220ReactionBubbleListenerWiredInInit,
     testTask220RuntimeListenerFlowUpdatesBubble,
+    // TASK-240
+    testTask240StageCssExists,
+    testTask240CutoutWindowShellExists,
+    testTask240AvatarBoundStageAtmosphereCssExists,
+    testTask240DockControlsCssExists,
+    testTask240StagePointerEventsNone,
+    testTask240StageAvatarZIndexAboveDecor,
+    testTask240NoNewKeyframesInStageSection,
+    testTask240ScaleOverridesExist,
+    testTask240ControlsDockShellExists,
+    testTask240HoverChromeReductionCssExists,
+    testTask240StageDragAndInteractiveNoDragCssExists,
+    testTask240NoHeavyMotionAdded,
+    testTask240AvatarExpressionUnchanged,
+    testTask240NoNewIpcOrFetchInCss,
+    testTask240NoExternalUrlInStageSection,
+    // TASK-240 final polish: controls hidden by default
+    testTask240ControlsDefaultHidden,
+    testTask240ControlsHoverFocusVisible,
+    testTask240ControlsPointerEventsManaged,
+    testTask240DragHandleFullyHiddenDefault,
+    // TASK-240 final interaction polish: avatar drag + X hidden
+    testTask240AvatarIsPrimaryDragRegion,
+    testTask240CloseXAlwaysHidden,
+    testTask240HidePetWindowInMenu,
   ];
 
   for (const test of tests) {
@@ -5596,6 +5621,192 @@ function testTask220RuntimeListenerFlowUpdatesBubble() {
   } finally {
     global.window = previousWindow;
   }
+}
+
+// ---------------------------------------------------------------------------
+// TASK-240: Christina Desktop Pet Cutout Stage Foundation tests
+// ---------------------------------------------------------------------------
+
+function task240Section(css) {
+  const idx = css.indexOf("/* TASK-240:");
+  assert(idx !== -1, "pet.css must contain TASK-240 section");
+  return css.slice(idx);
+}
+
+function testTask240StageCssExists() {
+  const section = task240Section(readText(petCssPath));
+  assertIncludes(section, "Christina Desktop Pet Cutout Stage Foundation", "TASK-240 section must use revised cutout stage direction");
+  assertIncludes(section, ".pet-avatar-container::before", "TASK-240 section must define ::before pseudo-element");
+  assertIncludes(section, ".pet-avatar-container::after", "TASK-240 section must define ::after pseudo-element");
+}
+
+function testTask240CutoutWindowShellExists() {
+  const css = readText(petCssPath);
+  const shellIdx = css.indexOf(".pet-shell {");
+  assert(shellIdx !== -1, "pet.css must define .pet-shell");
+  const shellBlock = css.slice(shellIdx, css.indexOf("}", shellIdx));
+  assertIncludes(shellBlock, "background: transparent", "TASK-240 revised direction must keep shell transparent");
+  assertIncludes(shellBlock, "box-shadow: none", "TASK-240 revised direction must remove heavy window-panel shadow");
+  assertIncludes(shellBlock, "border: 1px solid transparent", "TASK-240 revised direction must reduce visible rectangular border");
+}
+
+function testTask240AvatarBoundStageAtmosphereCssExists() {
+  const section = task240Section(readText(petCssPath));
+  assertIncludes(section, "radial-gradient", "TASK-240 section must use radial-gradient for stage/glow/shadow");
+  assertIncludes(section, "background: transparent", "TASK-240 stage must not paint a full-window panel");
+  assertIncludes(section, ".pet-avatar-container::after", "TASK-240 stage pad must be bound to avatar container");
+  assertIncludes(section, "rgba(0, 0, 0, 0.72)", "TASK-240 section must include visible avatar-bound ground shadow");
+  assertIncludes(section, "rgba(218, 64, 38, 0.24)", "TASK-240 section must include local crimson avatar glow");
+}
+
+function testTask240DockControlsCssExists() {
+  const section = task240Section(readText(petCssPath));
+  assertIncludes(section, "Dock chips", "TASK-240 section must document dock-chip control treatment");
+  assertIncludes(section, ".pet-mode-actions button", "TASK-240 must style bottom controls as dock chips");
+  assertIncludes(section, "min-height: 21px", "TASK-240 dock chips must be compact");
+  assertIncludes(section, "background: rgba(255, 248, 240, 0.52)", "TASK-240 dock chips must be semi-transparent");
+  assertIncludes(section, ".pet-shell:hover .pet-mode-actions", "TASK-240 controls must reveal as a hover dock");
+  assertIncludes(section, ".pet-shell:focus-within .pet-mode-actions", "TASK-240 controls must reveal for keyboard focus");
+  assertRegex(section, /\.pet-mode-actions[\s\S]{0,300}opacity:\s*0\s*;/, "TASK-240 dock controls must default to fully hidden (opacity: 0)");
+  assertIncludes(section, "transform: translateY(6px) scale(0.94)", "TASK-240 dock must sit as a compact floating control strip");
+}
+
+function testTask240StagePointerEventsNone() {
+  const section = task240Section(readText(petCssPath));
+  assertIncludes(section, "pointer-events: none", "TASK-240 stage decor must set pointer-events: none");
+}
+
+function testTask240StageAvatarZIndexAboveDecor() {
+  const section = task240Section(readText(petCssPath));
+  assertIncludes(section, "z-index: 2", "TASK-240 section must set avatar above stage decor");
+  assertIncludes(section, "z-index: 0", "TASK-240 section must set decor pseudo-elements to z-index: 0");
+}
+
+function testTask240NoNewKeyframesInStageSection() {
+  const section = task240Section(readText(petCssPath));
+  assert(!section.includes("@keyframes"), "TASK-240 section must not add @keyframes (no heavy animation)");
+}
+
+function testTask240ScaleOverridesExist() {
+  const section = task240Section(readText(petCssPath));
+  assertIncludes(section, '[data-scale="small"] .pet-avatar-container::before', "TASK-240 must include small scale local glow override");
+  assertIncludes(section, '[data-scale="large"] .pet-avatar-container::before', "TASK-240 must include large scale local glow override");
+  assertIncludes(section, '[data-scale="small"] .pet-avatar-container::after', "TASK-240 must include small scale shadow override");
+  assertIncludes(section, '[data-scale="large"] .pet-avatar-container::after', "TASK-240 must include large scale shadow override");
+}
+
+function testTask240ControlsDockShellExists() {
+  const css = readText(petCssPath);
+  assertIncludes(css, ".pet-mode-actions", "pet.css must keep bottom controls available after TASK-240");
+  assertIncludes(css, "background: rgba(16, 7, 7, 0.18)", "TASK-240 controls dock should be lightweight and translucent");
+  assertIncludes(css, "border-radius: 999px", "TASK-240 controls dock should use compact chip geometry");
+}
+
+function testTask240HoverChromeReductionCssExists() {
+  const section = task240Section(readText(petCssPath));
+  assertIncludes(section, ".pet-shell:hover .pet-drag-handle", "TASK-240 must keep drag handle hover-reveal styling");
+  assertIncludes(section, ".pet-shell:focus-within .pet-drag-handle", "TASK-240 must keep drag handle keyboard-focus styling");
+  assertIncludes(section, ".pet-shell:hover .pet-stage-controls", "TASK-240 must have close control CSS (permanently hidden — close action is in Menu)");
+  assertIncludes(section, ".pet-shell:focus-within .pet-stage-controls", "TASK-240 must have focus-within close control CSS (permanently hidden)");
+  assertIncludes(section, ".pet-stage-controls .pet-icon-button", "TASK-240 must define close button style (button DOM preserved, hidden via CSS)");
+
+  const css = readText(petCssPath);
+  assertRegex(css, /\.pet-drag-handle[\s\S]*background:\s*transparent/, "pet.css -- drag handle must not read as a top bar");
+  assertRegex(css, /\.pet-drag-handle[\s\S]{0,300}opacity:\s*0\s*;/, "pet.css -- drag handle must default to opacity: 0 (fully hidden until hover)");
+  assertRegex(css, /\.pet-stage-controls[\s\S]*opacity:\s*0/, "pet.css -- close control must not be strongly visible by default");
+  assertRegex(css, /\.pet-stage-controls[\s\S]*pointer-events:\s*none/, "pet.css -- hidden close control must not intercept clicks");
+}
+
+function testTask240StageDragAndInteractiveNoDragCssExists() {
+  const section = task240Section(readText(petCssPath));
+  // Avatar container is the primary drag zone (not the broad transparent stage)
+  assertRegex(section, /\.pet-avatar-container,\s*\r?\n\.pet-avatar\s*\{[\s\S]{0,200}-webkit-app-region:\s*drag\b/, "TASK-240 avatar container must be the primary drag region");
+  // Stage/drag-region must be no-drag so it doesn't intercept interactive areas
+  assertRegex(section, /\.pet-stage,\s*\r?\n\.pet-drag-region[\s\S]{0,200}-webkit-app-region:\s*no-drag\b/, "TASK-240 broad stage background must not be the primary drag region");
+  // Interactive areas remain no-drag
+  assertIncludes(section, ".pet-stage-controls *", "TASK-240 must keep close control descendants no-drag");
+  assertIncludes(section, ".pet-mode-actions *", "TASK-240 must keep dock button descendants no-drag");
+  assertIncludes(section, ".pet-bubble *", "TASK-240 must keep speech bubble descendants no-drag");
+  assertIncludes(section, ".pet-direct-input-panel *", "TASK-240 must keep direct input descendants no-drag");
+  assertIncludes(section, ".pet-menu *", "TASK-240 must keep menu descendants no-drag");
+}
+
+function testTask240NoHeavyMotionAdded() {
+  const section = task240Section(readText(petCssPath));
+  assert(!section.includes("@keyframes"), "TASK-240 must not add heavy keyframe motion");
+  assert(!/breath|bobbing|idle-loop|idle loop/i.test(section), "TASK-240 must not add idle motion hooks");
+}
+
+function testTask240AvatarExpressionUnchanged() {
+  const { handleInteractionExpressionSuggestion } = require(petRendererPath);
+  const doc = createPetBubbleStateDocument();
+  const avatarEl = doc.getElementById("pet-avatar");
+  handleInteractionExpressionSuggestion(doc, { expression: "happy", source: "interaction_expression_suggestion", ts: 1 });
+  assert(avatarEl.getAttribute("src").includes("happy"), "expression suggestion happy must set avatar src to happy asset after TASK-240");
+  handleInteractionExpressionSuggestion(doc, { expression: "neutral", source: "interaction_expression_suggestion", ts: 2 });
+  assert(avatarEl.getAttribute("src").includes("neutral"), "expression suggestion neutral must set avatar src to neutral asset after TASK-240");
+}
+
+function testTask240NoNewIpcOrFetchInCss() {
+  const section = task240Section(readText(petCssPath));
+  assert(!section.includes("ipc"), "TASK-240 CSS section must not reference ipc");
+  assert(!section.includes("fetch("), "TASK-240 CSS section must not reference fetch(");
+}
+
+function testTask240NoExternalUrlInStageSection() {
+  const section = task240Section(readText(petCssPath));
+  assert(!section.includes("http://") && !section.includes("https://"), "TASK-240 CSS section must not contain external URLs");
+  assert(!section.includes("url("), "TASK-240 CSS section must not use url() references");
+}
+
+// ---------------------------------------------------------------------------
+// TASK-240 final interaction polish: avatar drag + close X permanently hidden
+// ---------------------------------------------------------------------------
+
+function testTask240AvatarIsPrimaryDragRegion() {
+  const section = task240Section(readText(petCssPath));
+  assertRegex(section, /\.pet-avatar-container,\s*\r?\n\.pet-avatar\s*\{[\s\S]{0,200}-webkit-app-region:\s*drag\b/, "TASK-240: avatar-container must be primary drag region");
+  assertRegex(section, /\.pet-stage,\s*\r?\n\.pet-drag-region[\s\S]{0,200}-webkit-app-region:\s*no-drag\b/, "TASK-240: broad stage must be no-drag so it does not intercept bubble/dock interactions");
+}
+
+function testTask240CloseXAlwaysHidden() {
+  const section = task240Section(readText(petCssPath));
+  // Hover/focus-within rule must NOT reveal stage-controls (opacity stays 0)
+  assertRegex(section, /\.pet-shell:hover\s+\.pet-stage-controls[\s\S]{0,200}opacity:\s*0\s*;/, "TASK-240: close X must stay hidden on hover (opacity: 0)");
+  assertRegex(section, /\.pet-shell:hover\s+\.pet-stage-controls[\s\S]{0,200}pointer-events:\s*none/, "TASK-240: close X must not intercept clicks even on hover");
+}
+
+function testTask240HidePetWindowInMenu() {
+  const petHtmlPath = path.join(path.dirname(petCssPath), "pet.html");
+  const html = readText(petHtmlPath);
+  assertIncludes(html, "pet-menu-hide-window", "pet.html menu must retain Hide Pet Window button after X removed from stage controls");
+  assertIncludes(html, "hide-window", "pet.html must have hide-window data-menu-action as the close/hide path");
+}
+
+// ---------------------------------------------------------------------------
+// TASK-240 final polish: controls hidden by default, visible on hover/focus
+// ---------------------------------------------------------------------------
+
+function testTask240ControlsDefaultHidden() {
+  const section = task240Section(readText(petCssPath));
+  assertRegex(section, /\.pet-mode-actions[\s\S]{0,300}opacity:\s*0\s*;/, "TASK-240 final polish: .pet-mode-actions must default to opacity: 0");
+  assertRegex(section, /\.pet-mode-actions[\s\S]{0,300}pointer-events:\s*none/, "TASK-240 final polish: .pet-mode-actions must default to pointer-events: none");
+}
+
+function testTask240ControlsHoverFocusVisible() {
+  const section = task240Section(readText(petCssPath));
+  assertRegex(section, /\.pet-shell:hover\s+\.pet-mode-actions[\s\S]{0,200}opacity:\s*0\.9/, "TASK-240 final polish: hover must restore mode-actions opacity");
+  assertRegex(section, /\.pet-shell:focus-within\s+\.pet-mode-actions|\.pet-shell:hover\s+\.pet-mode-actions,\s*\r?\n\.pet-shell:focus-within\s+\.pet-mode-actions/, "TASK-240 final polish: focus-within must also reveal mode-actions");
+}
+
+function testTask240ControlsPointerEventsManaged() {
+  const section = task240Section(readText(petCssPath));
+  assertRegex(section, /\.pet-shell:(hover|focus-within)[\s\S]{0,300}pointer-events:\s*auto/, "TASK-240 final polish: hover/focus-within state must restore pointer-events: auto so buttons are clickable");
+}
+
+function testTask240DragHandleFullyHiddenDefault() {
+  const css = readText(petCssPath);
+  assertRegex(css, /\.pet-drag-handle\s*\{[\s\S]{0,500}opacity:\s*0\s*;/, "TASK-240 final polish: .pet-drag-handle must default to opacity: 0 (fully hidden until hover)");
 }
 
 run().catch((error) => {
