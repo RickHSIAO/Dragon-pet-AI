@@ -849,3 +849,84 @@ write history, does not enter copy/export, and does not store raw text.
 
 `OUTPUT_QUEUE_ENABLED` remains false. 19 new smoke tests plus 9 updated existing
 tests. All 3 smoke scripts PASS.
+
+## 24. TASK-236 Collapsible Diagnostics Drawer
+
+**Status: DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-01)**
+
+TASK-236 changes the Full App diagnostics preview UI only. The queue model,
+snapshot fields, item schemas, priority winner, and active item behavior remain
+unchanged.
+
+The normal UI now shows a single-line safe summary:
+
+```
+Reaction: <hint> · Suggestion: <expression> · Queue disabled · Items <n>
+```
+
+The full diagnostics are available only after the user clicks the Diagnostics
+toggle:
+
+```
+Reaction: <hint> · Suggestion: <expression>
+Decision: <action> · State: <mood>/<attention>/<energy> · Level: <level>
+Queue: disabled · Items: <n> · Recent: <n> · Next: <P/C/S|none> · Winner: <P/C/S|none> · Active: <P/C/S|none>
+```
+
+TASK-236 behavior summary:
+
+- Creates a Collapsible Diagnostics Drawer as Full App renderer-only UI cleanup.
+- Diagnostics default to collapsed.
+- The normal screen shows one safe summary line only.
+- Clicking Diagnostics expands the full details.
+- Details retain Reaction / Suggestion, Decision / State / Level, and Queue /
+  Items / Recent / Next / Winner / Active.
+- Clicking Diagnostics again collapses the details.
+- No persistence, localStorage, settings page, or `innerHTML`.
+- The drawer does not enter chat history or copy/export transcript.
+- The drawer does not send to the Pet Window, does not add IPC, and does not
+  change Pet Window runtime.
+- The drawer does not change expression mirror, reaction bubble mirror, or chat
+  reply flow.
+- The drawer does not call extra `/chat` and does not trigger TTS/STT/audio.
+- Queue remains disabled.
+- The drawer does not dispatch and does not control any output.
+
+New renderer helpers:
+
+- `formatInteractionDiagnosticsSummary()`
+- `formatInteractionDiagnosticsDetails()`
+- `toggleInteractionDiagnosticsDrawer()`
+
+New renderer state:
+
+- `interactionDiagnosticsExpanded = false`
+
+This is a local Full App renderer presentation change. It does not enable queue
+dispatch, does not add IPC, does not call `/chat`, does not write history, does
+not enter copy/export, does not send to the Pet Window, and does not control
+expression mirror, reaction bubble, chat reply, TTS, STT, or audio.
+
+The drawer uses `textContent`, `hidden`, `aria-expanded`, and `aria-controls`.
+It does not use `innerHTML`, localStorage, persistence, fixed positioning, or an
+overlay. Automated renderer smoke passes.
+
+Windows visual smoke PASS (2026-06-01):
+
+- Basic startup PASS: Diagnostics default collapsed, normal UI shows only one
+  summary line, Pet Window normal.
+- Expand Diagnostics PASS: clicking Diagnostics shows full Reaction / Decision /
+  Queue / Next / Winner / Active.
+- Collapse Diagnostics PASS: clicking again hides details and restores compact UI.
+- Send message PASS: chat / expression / reaction bubble normal, summary/details
+  update normally, Queue remains disabled.
+- Delete / Undo PASS: context menu unaffected; drawer layout consistent with no
+  observed UI abnormality.
+- Edit last user PASS: function normal, Queue remains disabled, no extra `/chat`;
+  drawer layout consistent with no observed UI abnormality.
+- Clear Chat / Focus PASS: function normal; Pet Window expression and reaction
+  bubble remain normal.
+- Diagnostics format PASS: summary/details show no `undefined`, `null`, `NaN`,
+  `[object Object]`, raw JSON, user text, reply text, bubble text, or payload.
+- General regression PASS: no new IPC side effect, no extra TTS, no extra `/chat`,
+  no history/copy/export pollution.

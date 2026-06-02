@@ -7,7 +7,7 @@
 📋 **[完整 Demo 腳本與面試重點](docs/PORTFOLIO_DEMO_SCRIPT.md)**
 📋 **[Phase 4 Provider Settings 摘要](docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md)**
 
-**最新本地狀態（2026-06-01）：** TASK-235 Active Output Item Model 已完成 automated smoke 與 Windows visual smoke PASS，狀態為 **DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS**（附記：manual console helper SKIP，Full App DevTools shortcut 無反應，已由 automated smoke 覆蓋）。Full App renderer-only 新增 Active Output Item 資料模型：Preview 格式完成 `Queue: disabled · Items: N · Recent: N · Next: P/C/S · Winner: P/C/S · Active: P/C/S`。Active 是 diagnostics-only，sendChat 不會自動設置 Active。`OUTPUT_QUEUE_ENABLED` 仍為 false。**觀察到：** diagnostics preview 資訊過長，已干擾正常使用畫面。下一步建議先做 collapsible diagnostics drawer，暫緩 TASK-236 Bubble Priority Enforcement。
+**最新本地狀態（2026-06-01）：** TASK-236 Collapsible Diagnostics Drawer 已完成 automated smoke 與 Windows visual smoke PASS，狀態為 **DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS**。Full App renderer-only 將 diagnostics preview 改為預設收合：正常畫面只顯示一行 safe summary（Reaction / Suggestion / Queue disabled / Items），點擊 `Diagnostics` 後才顯示完整 Reaction / Suggestion、Decision / State / Level、Queue / Items / Recent / Next / Winner / Active；再點一次可收合。`OUTPUT_QUEUE_ENABLED` 仍為 false；drawer 不 dispatch、不控制任何輸出、不新增 IPC、不送 Pet Window、不改 Pet Window runtime / expression mirror / reaction bubble mirror / chat reply flow、不呼叫額外 `/chat`、不寫 history、不進 copy/export、不觸發 TTS / STT / audio、不使用 persistence / localStorage / settings page / innerHTML，也不保存 raw user text / reply text / bubble text / payload。Windows visual smoke PASS：啟動預設收合、展開/收合、送出訊息、Delete/Undo、Edit last user、Clear Chat、Focus、diagnostics 格式與一般回歸皆通過。
 
 ---
 
@@ -99,7 +99,7 @@ ollama serve
 | 本地 Ollama `/chat` smoke | ✅ 通過 — `qwen3:8b`，`source=llm_local`，克莉絲蒂娜人格確認 |
 | Provider Settings 持久化 | ✅ 通過 — 重啟後設定保留，partial PATCH 保留省略欄位 |
 | UI polish | ✅ 通過 — 情緒→表情對應、Christina expression system |
-| Full App chat UX | ✅ TASK-224 DONE - WINDOWS VISUAL SMOKE PASS — 搜尋/高亮、未讀提示、匯出、時間戳、日期分隔線、清除確認、empty state、Undo Clear Chat、單則訊息刪除/復原、右鍵訊息操作 (viewport clamp + a11y)、最後 user message 編輯/重新送出、互動事件 log、reaction hint 層、reaction preview UI、expression suggestion 鏡像至 Pet Window、expression mirror 300ms cooldown/debounce、reaction bubble 鏡像至 Pet Window、companion behavior policy decision preview、character state diagnostics preview |
+| Full App chat UX | ✅ TASK-236 DONE - WINDOWS VISUAL SMOKE PASS — 搜尋/高亮、未讀提示、匯出、時間戳、日期分隔線、清除確認、empty state、Undo Clear Chat、單則訊息刪除/復原、右鍵訊息操作 (viewport clamp + a11y)、最後 user message 編輯/重新送出、互動事件 log、reaction hint 層、reaction preview UI、expression suggestion 鏡像至 Pet Window、expression mirror 300ms cooldown/debounce、reaction bubble 鏡像至 Pet Window、companion behavior policy decision preview、character state diagnostics preview、collapsible diagnostics drawer |
 | 表情系統 | 7/10 real PNG（happy、focused、neutral、proud、annoyed、worried、sleepy）；pending/error/offline 為 SVG fallback |
 | pytest | **586 通過，0 失敗** |
 | Electron smoke | **renderer-chat PASS；pet-renderer 263 PASS；pet-window 82 PASS** |
@@ -397,12 +397,12 @@ python -c "import json, urllib.request; data=json.dumps({'message':'你好！克
 | [docs/PROVIDER_TEST_CONNECTION_DESIGN.md](docs/PROVIDER_TEST_CONNECTION_DESIGN.md) | Test Connection 設計與強化測試結果 |
 | [docs/SECURE_KEY_STORAGE_DESIGN.md](docs/SECURE_KEY_STORAGE_DESIGN.md) | 金鑰儲存威脅模型、儲存選項、遮蔽規則 |
 | [docs/BYOK_PRODUCT_AND_SETTINGS.md](docs/BYOK_PRODUCT_AND_SETTINGS.md) | BYOK 產品設計與安全邊界 |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖；目前 TASK-235 Active Output Item Model 完成 DONE - WINDOWS VISUAL SMOKE PASS |
-| [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄；最新記錄為 TASK-235 Active Output Item Model，DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖；目前 TASK-236 Collapsible Diagnostics Drawer 完成 DONE - WINDOWS VISUAL SMOKE PASS |
+| [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄；最新記錄為 TASK-236 Collapsible Diagnostics Drawer，DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS |
 | [docs/INTERACTIVE_COMPANION_ARCHITECTURE.md](docs/INTERACTIVE_COMPANION_ARCHITECTURE.md) | TASK-222/224 互動陪伴架構 checkpoint：data flow、layer responsibility、IPC inventory、安全邊界、Character State Layer diagnostics 與下一階段 |
 | [docs/CHRISTINA_PERSONA_CONTEXT_PACK.md](docs/CHRISTINA_PERSONA_CONTEXT_PACK.md) | TASK-225 Christina persona context pack：canonical source、runtime-safe adaptation、strength levels、runtime boundary |
-| [docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md](docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md) | TASK-226/TASK-235 Interaction Output Queue：priority design, disabled runtime skeleton, debug snapshot preview, reaction bubble/expression mirror/chat reply diagnostics enqueue, priority winner preview, active output item model |
-| [docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md](docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md) | TASK-233 Output Queue Runtime Checkpoint：completed task chain, current runtime state, diagnostics item schemas, safety boundary, sanitization summary, dispatch readiness checklist, recommended next tasks (TASK-234 DONE, TASK-235 implemented) |
+| [docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md](docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md) | TASK-226/TASK-236 Interaction Output Queue：priority design, disabled runtime skeleton, debug snapshot preview, diagnostics enqueue, priority winner preview, active output item model, collapsible diagnostics drawer |
+| [docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md](docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md) | TASK-233 Output Queue Runtime Checkpoint：completed task chain, current runtime state, diagnostics item schemas, safety boundary, sanitization summary, dispatch readiness checklist, recommended next tasks (TASK-234/TASK-236 done) |
 | [docs/VOICE_TTS_RESEARCH.md](docs/VOICE_TTS_RESEARCH.md) | TASK-227 Voice/TTS research note：local-first speech roadmap、candidate TTS/STT、licensing/safety boundaries |
 | [docs/STREAMER_COMPANION_MODE.md](docs/STREAMER_COMPANION_MODE.md) | 未來支線 — OBS overlay / Twitch 陪伴設計（尚未排程） |
 
@@ -465,8 +465,8 @@ dragon-pet-ai/
 | `docs/ARCHITECTURE.md` | 系統架構 |
 | `docs/INTERACTIVE_COMPANION_ARCHITECTURE.md` | TASK-222/224 互動陪伴架構 checkpoint |
 | `docs/CHRISTINA_PERSONA_CONTEXT_PACK.md` | TASK-225 克莉絲蒂娜 persona context pack |
-| `docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md` | TASK-226 output queue / priority design, TASK-228 disabled runtime skeleton, TASK-229 snapshot preview notes, TASK-230 reaction bubble diagnostics enqueue, TASK-231 expression mirror diagnostics enqueue, and TASK-232 chat reply diagnostics enqueue |
-| `docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md` | TASK-233 Output Queue Runtime Checkpoint：task chain, current state, safety boundary, dispatch readiness checklist, next tasks |
+| `docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md` | TASK-226 output queue / priority design, TASK-228 disabled runtime skeleton, TASK-229 snapshot preview notes, TASK-230/231/232 diagnostics enqueue, TASK-234 winner preview, TASK-235 active item model, and TASK-236 collapsible diagnostics drawer |
+| `docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md` | TASK-233 Output Queue Runtime Checkpoint：task chain, current state, safety boundary, dispatch readiness checklist, next tasks, TASK-236 drawer status |
 | `docs/VOICE_TTS_RESEARCH.md` | TASK-227 Voice/TTS/STT research and local speech roadmap |
 | `docs/CHARACTER_SPEC.md` | 角色人格規格 |
 | `docs/MEMORY_SYSTEM.md` | 記憶系統設計 |

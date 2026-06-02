@@ -23059,10 +23059,11 @@ TASK-226 is docs-only:
 - TASK-233 Output Queue Runtime Checkpoint. IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED.
 - TASK-234 Output Queue Priority Winner Preview, diagnostics only. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
 - TASK-235 Active Output Item Model, disabled. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS (with note: manual console helper SKIP, covered by automated smoke).
-- TASK-236 Bubble Priority Enforcement, guarded and disabled by default.
-- TASK-237 TTS-safe Segment Design, docs-only or helper-only.
-- TASK-238 User Controls for Companion Verbosity.
-- TASK-239 Idle Reaction Policy, fixed only, no LLM.
+- TASK-236 Collapsible Diagnostics Drawer. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
+- TASK-237 Bubble Priority Enforcement, guarded and disabled by default.
+- TASK-238 TTS-safe Segment Design, docs-only or helper-only.
+- TASK-239 User Controls for Companion Verbosity.
+- TASK-240 Idle Reaction Policy, fixed only, no LLM.
 
 ### Acceptance Criteria
 
@@ -24376,3 +24377,97 @@ or next item. Only direct calls to `setActiveOutputItemForDiagnosticsOnly` set i
 **附記：** Full App DevTools shortcut 目前無反應，manual console helper 未測；但 Active helper 已由 automated smoke 完整覆蓋。
 
 **觀察到：** diagnostics preview 現在資訊過長（含 Next/Winner/Active 後），已開始干擾正常使用畫面。建議下一步改做 collapsible diagnostics / debug drawer，把 Reaction / Decision / Queue / Next / Winner / Active 收納起來，需要點開才顯示。Output Queue 功能性任務（TASK-236 Bubble Priority Enforcement）建議暫緩，先解決 diagnostics UX。
+
+## TASK-236 | Collapsible Diagnostics Drawer
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+
+### Summary
+
+TASK-236 converts the Full App diagnostics preview into a collapsible diagnostics
+drawer. The normal character-status area now shows one compact safe summary:
+`Reaction: <hint> · Suggestion: <expression> · Queue disabled · Items <n>`.
+The full multi-line diagnostics are only visible after clicking the Diagnostics
+toggle:
+
+- `Reaction / Suggestion`
+- `Decision / State / Level`
+- `Queue / Items / Recent / Next / Winner / Active`
+
+The existing full formatter remains available through
+`formatInteractionDiagnosticsPreview()`. TASK-236 adds
+`formatInteractionDiagnosticsSummary()`, `formatInteractionDiagnosticsDetails()`,
+`interactionDiagnosticsExpanded = false`, and
+`toggleInteractionDiagnosticsDrawer()`.
+
+Behavior summary:
+
+- Collapsible Diagnostics Drawer created as Full App renderer-only UI cleanup.
+- Diagnostics default to collapsed.
+- Normal UI shows one safe summary line only.
+- Clicking Diagnostics expands the full details.
+- Details retain Reaction / Suggestion, Decision / State / Level, and Queue /
+  Items / Recent / Next / Winner / Active.
+- Clicking Diagnostics again collapses the details.
+- No persistence, localStorage, or settings page.
+- No `innerHTML`.
+- No chat history or copy/export transcript entry.
+- No Pet Window send.
+- No IPC addition.
+- No Pet Window runtime, expression mirror, reaction bubble mirror, or chat reply
+  flow change.
+- No extra `/chat`.
+- No TTS/STT/audio.
+- Queue remains disabled.
+- Drawer does not dispatch and does not control any output.
+
+### New / Modified Files
+
+- `apps/desktop/src/renderer/index.html` — replaces the single diagnostics span
+  with summary, toggle button, and hidden details region.
+- `apps/desktop/src/renderer/styles.css` — adds compact muted drawer styling,
+  no fixed positioning and no overlay.
+- `apps/desktop/src/renderer/renderer.js` — updates summary/details using
+  `textContent`, `hidden`, `aria-expanded`, and session-only expanded state.
+- `apps/desktop/scripts/renderer-chat-smoke.js` — adds TASK-236 smoke coverage
+  for DOM/CSS/helper existence, default collapsed state, open/close, update after
+  sendChat, raw text exclusion, history/copy/export boundary, no side effects,
+  queue behavior, narrow IPC preservation, and regression guards.
+- `README.md`, `docs/ROADMAP.md`, `docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md`,
+  `docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md`,
+  `docs/INTERACTIVE_COMPANION_ARCHITECTURE.md`, `docs/TASKS.md` — sync
+  TASK-236 status and diagnostics drawer behavior.
+
+### Safety Boundary
+
+- No backend change.
+- No `/chat` schema or request flow change.
+- No chat history persistence format change.
+- No new IPC and no existing IPC channel change.
+- No Pet Window runtime change.
+- No Pet Bubble, expression mirror, or reaction bubble mirror behavior change.
+- No TTS/STT/audio change.
+- No queue dispatch.
+- No persistence, localStorage, settings page, background monitoring, screenshot,
+  OCR, provider/Ollama runtime, prompt runtime, hover action buttons, or message
+  edit rule change.
+- Drawer summary/details do not store or render raw user message text, reply text,
+  bubble text, raw event payload, raw JSON, `undefined`, `null`, `NaN`, or
+  `[object Object]`.
+
+### Automated Smoke
+
+- [x] `node apps\desktop\scripts\renderer-chat-smoke.js` PASS.
+
+### Windows Visual Smoke
+
+- [x] PASS (2026-06-01). Status is **DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS**.
+- [x] 基本啟動 PASS：Diagnostics 預設收合，正常畫面只顯示一行 summary，Pet Window 正常。
+- [x] 展開 Diagnostics PASS：點 Diagnostics 後顯示完整 Reaction / Decision / Queue / Next / Winner / Active。
+- [x] 收合 Diagnostics PASS：再點一次後 details 收起，畫面恢復簡潔。
+- [x] 送出訊息 PASS：chat / expression / reaction bubble 正常，summary/details 更新正常，Queue 仍 disabled。
+- [x] Delete / Undo PASS：功能正常，Diagnostics drawer 不干擾 context menu；drawer layout 維持一致，未觀察到 UI 異常。
+- [x] Edit last user PASS：功能正常，Queue 仍 disabled，沒有額外 `/chat`；drawer layout 維持一致，未觀察到 UI 異常。
+- [x] Clear Chat / Focus PASS：功能正常，Pet Window 表情與 reaction bubble 維持正常。
+- [x] Diagnostics 格式 PASS：summary/details 沒有 `undefined`/`null`/`NaN`/`[object Object]`/raw JSON/user text/reply text/bubble text/payload。
+- [x] 一般回歸 PASS：沒有新增 IPC side-effect，沒有額外 TTS，沒有額外 `/chat`，沒有 history/copy/export 污染。

@@ -27,6 +27,10 @@ const moodLabel   = document.getElementById("mood-label");
 const chatSourceStatus = document.getElementById("chat-source-status");
 const chatProviderStatus = document.getElementById("chat-provider-status");
 const chatRuntimeStatus = document.getElementById("chat-runtime-status");
+const interactionDiagnosticsContainer = document.getElementById("interaction-reaction-preview");
+const interactionDiagnosticsSummary = document.getElementById("interaction-diagnostics-summary");
+const interactionDiagnosticsToggle = document.getElementById("interaction-diagnostics-toggle");
+const interactionDiagnosticsDetails = document.getElementById("interaction-diagnostics-details");
 const showPetWindowBtn = document.getElementById("show-pet-window-btn");
 const showPetWindowStatus = document.getElementById("show-pet-window-status");
 // TASK-171A: Full App screenshot capture controls.
@@ -806,6 +810,7 @@ const OUTPUT_PRIORITY_ORDER = [
 var outputQueueItems = [];
 var recentOutputQueueItems = [];
 var currentActiveOutputItem = null;
+var interactionDiagnosticsExpanded = false;
 var currentOutputQueueSnapshot = {
   enabled: OUTPUT_QUEUE_ENABLED,
   length: 0,
@@ -1589,10 +1594,93 @@ function formatInteractionDiagnosticsPreview(context = {}) {
     + "\n" + formatOutputQueueSnapshotPreview(queueSnapshot);
 }
 
+function formatInteractionDiagnosticsSummary(context = {}) {
+  const source = context && typeof context === "object" ? context : {};
+  const rawHint = typeof source.reactionHint === "string"
+    ? source.reactionHint
+    : currentInteractionReactionHint;
+  const rawExpression = typeof source.expression === "string"
+    ? source.expression
+    : currentInteractionExpressionSuggestion;
+  const safeHint = INTERACTION_REACTION_HINT_ALLOWLIST.has(rawHint)
+    ? rawHint
+    : "none";
+  const safeExpression = INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST.has(rawExpression)
+    ? rawExpression
+    : "neutral";
+  const queueSnapshot = source.outputQueueSnapshot && typeof source.outputQueueSnapshot === "object"
+    ? source.outputQueueSnapshot
+    : getOutputQueueSnapshot();
+  const queueEnabled = queueSnapshot && queueSnapshot.enabled === true
+    ? "Queue enabled"
+    : "Queue disabled";
+  const itemCount = queueSnapshot && Number.isFinite(queueSnapshot.length) && queueSnapshot.length >= 0
+    ? queueSnapshot.length
+    : 0;
+  return "Reaction: " + safeHint
+    + " · Suggestion: " + safeExpression
+    + " · " + queueEnabled
+    + " · Items " + itemCount;
+}
+
+function formatInteractionDiagnosticsDetails(context = {}) {
+  const hasContext = context && typeof context === "object" && Object.keys(context).length > 0;
+  return hasContext ? formatInteractionDiagnosticsPreview(context) : formatInteractionDiagnosticsPreview();
+}
+
+function ensureInteractionDiagnosticsDrawerElements(container, summaryEl, toggleEl, detailsEl) {
+  if (!container || !summaryEl || !toggleEl || !detailsEl) return;
+  if (summaryEl.parentNode || toggleEl.parentNode || detailsEl.parentNode) return;
+
+  const row = document.createElement("div");
+  row.className = "diagnostics-summary-row";
+  row.appendChild(summaryEl);
+  row.appendChild(toggleEl);
+  container.appendChild(row);
+  container.appendChild(detailsEl);
+  if (container.dataset) {
+    container.dataset.syntheticDiagnosticsText = "true";
+  }
+}
+
 function renderInteractionReactionPreview() {
-  const el = document.getElementById("interaction-reaction-preview");
+  const el = interactionDiagnosticsContainer || document.getElementById("interaction-reaction-preview");
   if (!el) return;
-  el.textContent = formatInteractionDiagnosticsPreview();
+  const summaryEl = interactionDiagnosticsSummary || document.getElementById("interaction-diagnostics-summary");
+  const toggleEl = interactionDiagnosticsToggle || document.getElementById("interaction-diagnostics-toggle");
+  const detailsEl = interactionDiagnosticsDetails || document.getElementById("interaction-diagnostics-details");
+  const summary = formatInteractionDiagnosticsSummary();
+  const details = formatInteractionDiagnosticsDetails();
+
+  if (!summaryEl || !toggleEl || !detailsEl) {
+    el.textContent = summary;
+    return;
+  }
+
+  ensureInteractionDiagnosticsDrawerElements(el, summaryEl, toggleEl, detailsEl);
+  summaryEl.textContent = summary;
+  detailsEl.textContent = details;
+  detailsEl.hidden = !interactionDiagnosticsExpanded;
+  toggleEl.textContent = interactionDiagnosticsExpanded ? "Diagnostics ▾" : "Diagnostics ▸";
+  toggleEl.setAttribute("aria-expanded", interactionDiagnosticsExpanded ? "true" : "false");
+  toggleEl.setAttribute("aria-controls", "interaction-diagnostics-details");
+  if (toggleEl.type !== "button") toggleEl.type = "button";
+  if (interactionDiagnosticsExpanded) {
+    el.classList.add("is-expanded");
+    el.classList.remove("is-collapsed");
+  } else {
+    el.classList.add("is-collapsed");
+    el.classList.remove("is-expanded");
+  }
+
+  if (el.dataset && el.dataset.syntheticDiagnosticsText === "true") {
+    el.textContent = summary + "\n" + details;
+  }
+}
+
+function toggleInteractionDiagnosticsDrawer() {
+  interactionDiagnosticsExpanded = !interactionDiagnosticsExpanded;
+  renderInteractionReactionPreview();
 }
 
 function recordInteractionEvent(type, payload = {}) {
@@ -3898,6 +3986,7 @@ async function submitEditedUserMessage(text) {
       loadingMessage.remove();
       renderFormalChatEntries(finalEntries);
       enqueueChatReplyOutputDiagnostics({ reply: data.reply, mood: data.mood, source: data.source }); // TASK-232
+      renderInteractionReactionPreview();
       if (document.hidden) markUnread();
       maybeScrollChatToBottom();
 
@@ -4000,6 +4089,7 @@ async function sendMessage(text) {
     loadingMessage.remove();
     appendMessage("pet", data.reply, { source: "full_app", ts: Date.now() });
     enqueueChatReplyOutputDiagnostics({ reply: data.reply, mood: data.mood, source: data.source }); // TASK-232
+    renderInteractionReactionPreview();
     maybeScrollChatToBottom(); // TASK-113: only scroll if user was near the bottom
     const source = data.source || "unknown";
     const isSourceError = source === "llm_local_error" || source === "llm_real_error";
@@ -4118,6 +4208,11 @@ if (copyChatBtn) {
 if (exportChatBtn) {
   exportChatBtn.addEventListener("click", () => {
     exportChatToFile();
+  });
+}
+if (interactionDiagnosticsToggle) {
+  interactionDiagnosticsToggle.addEventListener("click", () => {
+    toggleInteractionDiagnosticsDrawer();
   });
 }
 

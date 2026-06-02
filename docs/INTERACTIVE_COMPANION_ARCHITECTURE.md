@@ -1,6 +1,6 @@
 # Interactive Companion Architecture Checkpoint
 
-**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-230 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-236 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
 **Date:** 2026-06-01
 **Scope:** Architecture checkpoint for TASK-214 through TASK-230.
 
@@ -80,7 +80,7 @@ flowchart TD
   I --> R[deriveCharacterState]
   R --> S[recordCharacterState]
   S --> U[getOutputQueueSnapshot]
-  U --> T[formatInteractionDiagnosticsPreview]
+  U --> T[formatInteractionDiagnosticsSummary / Details]
   G --> V[enqueueReactionBubbleOutputDiagnostics]
   V --> U
   F --> J[mirrorInteractionExpressionSuggestion]
@@ -104,7 +104,7 @@ User interaction
 -> deriveCompanionBehaviorDecision
 -> deriveCharacterState
 -> getOutputQueueSnapshot
--> formatInteractionDiagnosticsPreview
+-> formatInteractionDiagnosticsSummary / formatInteractionDiagnosticsDetails
 -> mirrorExpression / mirrorReactionBubble
 -> Pet Window expression / fixed bubble
 ```
@@ -315,6 +315,7 @@ TASK-228 helpers:
 - `compareOutputPriority(a, b)`
 - `shouldOutputPreempt(activeItem, incomingItem)`
 - `formatOutputQueueSnapshotPreview(snapshot)` (TASK-229)
+- `formatInteractionDiagnosticsSummary()` / `formatInteractionDiagnosticsDetails()` (TASK-236)
 - `enqueueReactionBubbleOutputDiagnostics(bubble)` (TASK-230)
 
 TASK-229 diagnostics preview format:
@@ -509,6 +510,16 @@ All existing execution paths remain unchanged. The queue is a parallel observer:
 - Expression mirror still executes via TASK-218/219 IPC (`sendPetExpressionSuggestion`).
 - Reaction bubble still executes via TASK-220 IPC (`sendPetReactionBubble`).
 - Chat reply still renders via the original `sendMessage` / `submitEditedUserMessage` flow.
+
+TASK-236 presents this diagnostics layer as a collapsed-by-default Full App
+drawer. The summary shows only safe compact state; full Reaction / Decision /
+Queue / Next / Winner / Active details require an explicit toggle. The drawer is
+session-only and does not use persistence, localStorage, settings, IPC, or
+`innerHTML`. Windows visual smoke passed on 2026-06-01: startup default collapsed
+with a single summary line, expand/collapse works, send/delete/undo/edit/clear/focus
+keep chat, Pet Window expression, and reaction bubble normal, diagnostics format
+stays clean, and no extra IPC, TTS, `/chat`, history, copy, or export side effect
+was observed.
 
 `OUTPUT_QUEUE_ENABLED = false`. The queue does not dispatch, does not send to the
 Pet Window, does not add IPC, does not call `/chat`, does not trigger TTS/STT/audio,

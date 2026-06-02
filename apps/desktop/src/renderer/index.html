@@ -84,9 +84,21 @@
     <span id="chat-source-status" class="chat-runtime-pill">—</span>
     <span id="chat-provider-status" class="chat-runtime-pill">Ollama</span>
     <span id="chat-runtime-status" class="status-note">mock mode - no AI connected</span>
-    <span id="interaction-reaction-preview" class="interaction-reaction-preview">Reaction: none · Suggestion: neutral
+    <div id="interaction-reaction-preview" class="interaction-reaction-preview interaction-diagnostics is-collapsed">
+      <div class="diagnostics-summary-row">
+        <span id="interaction-diagnostics-summary">Reaction: none · Suggestion: neutral · Queue disabled · Items 0</span>
+        <button
+          id="interaction-diagnostics-toggle"
+          class="interaction-diagnostics-toggle"
+          type="button"
+          aria-expanded="false"
+          aria-controls="interaction-diagnostics-details"
+        >Diagnostics ▸</button>
+      </div>
+      <pre id="interaction-diagnostics-details" class="interaction-diagnostics-details" hidden>Reaction: none · Suggestion: neutral
 Decision: none · State: neutral/idle/calm · Level: none
-Queue: disabled · Items: 0 · Recent: 0 · Next: none</span>
+Queue: disabled · Items: 0 · Recent: 0 · Next: none</pre>
+    </div>
   </div>
 
   <!-- ── Chat search bar (TASK-198) ───────────────────────── -->

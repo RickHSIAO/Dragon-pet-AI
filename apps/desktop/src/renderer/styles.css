@@ -1589,7 +1589,7 @@ textarea {
 
 }
 
-/* TASK-224: Reaction/state diagnostics preview — low-profile, no fixed position */
+/* TASK-236: Reaction/state diagnostics drawer — low-profile, no fixed position */
 #interaction-reaction-preview {
   font-size: 11px;
   color: var(--text-muted, #8a8a9a);
@@ -1601,4 +1601,52 @@ textarea {
   flex-basis: 100%;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+
+.diagnostics-summary-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+#interaction-diagnostics-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.interaction-diagnostics-toggle {
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 2px 7px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted, #8a8a9a);
+  font: inherit;
+  font-style: normal;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.interaction-diagnostics-toggle:hover,
+.interaction-diagnostics-toggle:focus-visible {
+  color: var(--text-main, #f3f3f5);
+  border-color: rgba(255, 255, 255, 0.24);
+  outline: none;
+}
+
+.interaction-diagnostics-details {
+  margin: 4px 0 0;
+  color: var(--text-muted, #8a8a9a);
+  font: inherit;
+  font-style: normal;
+  line-height: 1.45;
+  opacity: 0.86;
+  white-space: pre-wrap;
+}
+
+.interaction-diagnostics.is-collapsed .interaction-diagnostics-details[hidden] {
+  display: none;
 }

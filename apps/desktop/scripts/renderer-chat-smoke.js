@@ -10489,6 +10489,232 @@ function testTask235RegressionGuards() {
   console.log("  testTask235RegressionGuards PASS");
 }
 
+// ─── TASK-236: Collapsible Diagnostics Drawer ───────────────────────────────
+
+function testTask236HtmlCssAndRendererSymbols() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  const css = fs.readFileSync(cssPath, "utf8");
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(html.includes('id="interaction-diagnostics-summary"'),
+    "TASK-236 HTML must include diagnostics summary element");
+  assert.ok(html.includes('id="interaction-diagnostics-toggle"'),
+    "TASK-236 HTML must include diagnostics toggle button");
+  assert.ok(html.includes('id="interaction-diagnostics-details"'),
+    "TASK-236 HTML must include diagnostics details element");
+  assert.ok(html.includes('type="button"'), "TASK-236 toggle must be a button");
+  assert.ok(html.includes('aria-expanded="false"'), "TASK-236 toggle must default aria-expanded=false");
+  assert.ok(html.includes("hidden"), "TASK-236 details must default hidden");
+  assert.ok(css.includes(".interaction-diagnostics.is-collapsed"),
+    "TASK-236 CSS must include collapsed diagnostics state");
+  assert.ok(css.includes(".interaction-diagnostics-details"),
+    "TASK-236 CSS must style details as muted diagnostics");
+  assert.ok(css.includes("white-space: pre-wrap"),
+    "TASK-236 CSS must preserve safe details wrapping");
+  assert.ok(!css.includes("position: fixed") || !css.slice(css.indexOf("#interaction-reaction-preview"), css.indexOf("#interaction-reaction-preview") + 500).includes("position: fixed"),
+    "TASK-236 diagnostics must not use fixed positioning");
+  assert.ok(src.includes("interactionDiagnosticsExpanded"),
+    "TASK-236 renderer must define expanded/collapsed state");
+  assert.ok(src.includes("function formatInteractionDiagnosticsSummary"),
+    "TASK-236 renderer must define summary formatter");
+  assert.ok(src.includes("function formatInteractionDiagnosticsDetails"),
+    "TASK-236 renderer must define details formatter");
+  assert.ok(src.includes("function toggleInteractionDiagnosticsDrawer"),
+    "TASK-236 renderer must define toggle helper");
+  console.log("  testTask236HtmlCssAndRendererSymbols PASS");
+}
+
+async function testTask236DefaultCollapsedSummaryVisible() {
+  const { document } = await loadRenderer();
+  const container = document.getElementById("interaction-reaction-preview");
+  const summary = document.getElementById("interaction-diagnostics-summary");
+  const toggle = document.getElementById("interaction-diagnostics-toggle");
+  const details = document.getElementById("interaction-diagnostics-details");
+  assert.ok((container.className || "").includes("is-collapsed"), "diagnostics drawer must default collapsed");
+  assert.equal(details.hidden, true, "diagnostics details must be hidden by default");
+  assert.equal(toggle.getAttribute("aria-expanded"), "false", "toggle aria-expanded must default false");
+  assert.ok(summary.textContent.includes("Reaction: none"), "summary must show safe reaction status");
+  assert.ok(summary.textContent.includes("Queue disabled"), "summary must show queue disabled");
+  assert.ok(summary.textContent.includes("Items 0"), "summary must show compact item count");
+  assert.equal(summary.textContent.includes("\n"), false, "summary must be one line");
+  assert.ok(!summary.textContent.includes("Decision:"), "summary must not include full decision block");
+  assert.ok(!summary.textContent.includes("Next:"), "summary must not include full queue block");
+  console.log("  testTask236DefaultCollapsedSummaryVisible PASS");
+}
+
+async function testTask236ToggleOpenAndClose() {
+  const { document } = await loadRenderer();
+  const toggle = document.getElementById("interaction-diagnostics-toggle");
+  const details = document.getElementById("interaction-diagnostics-details");
+  toggle.click();
+  await settle();
+  assert.equal(toggle.getAttribute("aria-expanded"), "true", "opening diagnostics must set aria-expanded=true");
+  assert.equal(details.hidden, false, "opening diagnostics must show details");
+  assert.ok(details.textContent.includes("Reaction:"), "details must contain Reaction");
+  assert.ok(details.textContent.includes("Suggestion:"), "details must contain Suggestion");
+  assert.ok(details.textContent.includes("Decision:"), "details must contain Decision");
+  assert.ok(details.textContent.includes("State:"), "details must contain State");
+  assert.ok(details.textContent.includes("Level:"), "details must contain Level");
+  assert.ok(details.textContent.includes("Queue:"), "details must contain Queue");
+  assert.ok(details.textContent.includes("Items:"), "details must contain Items");
+  assert.ok(details.textContent.includes("Recent:"), "details must contain Recent");
+  assert.ok(details.textContent.includes("Next:"), "details must contain Next");
+  assert.ok(details.textContent.includes("Winner:"), "details must contain Winner");
+  assert.ok(details.textContent.includes("Active:"), "details must contain Active");
+  toggle.click();
+  await settle();
+  assert.equal(toggle.getAttribute("aria-expanded"), "false", "closing diagnostics must set aria-expanded=false");
+  assert.equal(details.hidden, true, "closing diagnostics must hide details");
+  console.log("  testTask236ToggleOpenAndClose PASS");
+}
+
+async function testTask236DetailsUpdateAfterSendWhileCollapsed() {
+  const { document, sandbox } = await loadRenderer();
+  const summary = document.getElementById("interaction-diagnostics-summary");
+  const toggle = document.getElementById("interaction-diagnostics-toggle");
+  const details = document.getElementById("interaction-diagnostics-details");
+  await sendChat(document, "task236 user text forbidden");
+  assert.equal(details.hidden, true, "details must stay hidden after send while collapsed");
+  assert.ok(summary.textContent.includes("Reaction: user_active"), "summary must update reaction after send");
+  assert.ok(summary.textContent.includes("Suggestion: focused"), "summary must update suggestion after send");
+  assert.ok(summary.textContent.includes("Queue disabled"), "summary must keep queue disabled");
+  assert.ok(summary.textContent.includes("Items 3"), "summary must show 3 diagnostics items after send");
+  toggle.click();
+  await settle();
+  assert.ok(details.textContent.includes("Decision: mirror_expression_and_bubble"),
+    "expanded details must show latest behavior decision");
+  assert.ok(details.textContent.includes("Queue: disabled · Items: 3"),
+    "expanded details must show latest queue item count");
+  assert.ok(details.textContent.includes("Next: P4_NORMAL_REACTION/visual_expression/expression_mirror"),
+    "expanded details must preserve queue-order Next");
+  assert.ok(details.textContent.includes("Winner: P2_LLM_REPLY/full_app_chat/chat_reply"),
+    "expanded details must preserve priority Winner");
+  assert.ok(details.textContent.includes("Active: none"),
+    "expanded details must preserve Active none");
+  assert.equal(sandbox.getOutputQueueSnapshot().enabled, false, "queue must remain disabled after send");
+  console.log("  testTask236DetailsUpdateAfterSendWhileCollapsed PASS");
+}
+
+async function testTask236NoRawTextOrPayloadInSummaryOrDetails() {
+  const { document, sandbox } = await loadRenderer();
+  const summary = document.getElementById("interaction-diagnostics-summary");
+  const details = document.getElementById("interaction-diagnostics-details");
+  sandbox.recordInteractionEvent("chat_message_sent", {
+    messageLength: 22,
+    message: "TASK236_RAW_USER_FORBIDDEN",
+    text: "TASK236_RAW_REPLY_FORBIDDEN",
+    bubbleText: "TASK236_RAW_BUBBLE_FORBIDDEN",
+    payload: { raw: "TASK236_RAW_PAYLOAD_FORBIDDEN" },
+  });
+  const combined = summary.textContent + "\n" + details.textContent;
+  for (const token of [
+    "TASK236_RAW_USER_FORBIDDEN",
+    "TASK236_RAW_REPLY_FORBIDDEN",
+    "TASK236_RAW_BUBBLE_FORBIDDEN",
+    "TASK236_RAW_PAYLOAD_FORBIDDEN",
+    "payload",
+    "{",
+    "}",
+    "[object Object]",
+    "undefined",
+    "null",
+    "NaN",
+  ]) {
+    assert.ok(!combined.includes(token), `TASK-236 diagnostics must not include ${token}`);
+  }
+  console.log("  testTask236NoRawTextOrPayloadInSummaryOrDetails PASS");
+}
+
+async function testTask236NotInHistoryTranscriptOrExport() {
+  const appendCalls = [];
+  const saveTextFileCalls = [];
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryAppend(entry) { appendCalls.push(entry); return Promise.resolve({ ok: true }); },
+      saveTextFile(payload) { saveTextFileCalls.push(payload); return Promise.resolve({ ok: true }); },
+    },
+  });
+  appendCalls.length = 0;
+  sandbox.appendMessage("user", "task236 transcript user", { noHistory: true });
+  sandbox.renderInteractionReactionPreview();
+  document.getElementById("interaction-diagnostics-toggle").click();
+  await settle();
+  const transcript = sandbox.buildChatTranscript();
+  document.getElementById("export-chat-btn").click();
+  await settle();
+  assert.equal(appendCalls.length, 0, "TASK-236 render/toggle must not write chat history");
+  for (const token of ["Reaction:", "Suggestion:", "Decision:", "State:", "Level:", "Queue:", "Winner:", "Active:"]) {
+    assert.ok(!transcript.includes(token), `TASK-236 diagnostics must not enter transcript: ${token}`);
+    assert.ok(!saveTextFileCalls[0].content.includes(token), `TASK-236 diagnostics must not enter export: ${token}`);
+  }
+  console.log("  testTask236NotInHistoryTranscriptOrExport PASS");
+}
+
+async function testTask236ToggleHasNoSideEffects() {
+  const appendCalls = [];
+  const speechCalls = [];
+  const expressionCalls = [];
+  const bubbleCalls = [];
+  const { document, state, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryAppend(entry) { appendCalls.push(entry); return Promise.resolve({ ok: true }); },
+      updatePetSpeech(payload) { speechCalls.push(payload); return Promise.resolve({ ok: true }); },
+      sendPetExpressionSuggestion(payload) { expressionCalls.push(payload); return Promise.resolve({ ok: true }); },
+      sendPetReactionBubble(payload) { bubbleCalls.push(payload); return Promise.resolve({ ok: true }); },
+    },
+  });
+  state.calls.length = 0;
+  appendCalls.length = 0;
+  speechCalls.length = 0;
+  expressionCalls.length = 0;
+  bubbleCalls.length = 0;
+  const beforeSnapshot = JSON.stringify(sandbox.getOutputQueueSnapshot());
+  document.getElementById("interaction-diagnostics-toggle").click();
+  document.getElementById("interaction-diagnostics-toggle").click();
+  await settle();
+  assert.equal(state.calls.filter((call) => String(call.url).endsWith("/chat")).length, 0,
+    "TASK-236 toggle must not call /chat");
+  assert.equal(appendCalls.length, 0, "TASK-236 toggle must not write history");
+  assert.equal(speechCalls.length, 0, "TASK-236 toggle must not call updatePetSpeech/TTS");
+  assert.equal(expressionCalls.length, 0, "TASK-236 toggle must not mirror expression");
+  assert.equal(bubbleCalls.length, 0, "TASK-236 toggle must not mirror reaction bubble");
+  assert.equal(JSON.stringify(sandbox.getOutputQueueSnapshot()), beforeSnapshot,
+    "TASK-236 toggle must not dispatch or mutate queue snapshot");
+  console.log("  testTask236ToggleHasNoSideEffects PASS");
+}
+
+function testTask236NoNewIpcChannelsAndRegressionGuards() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const rendererPreload = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "preload.js"), "utf8");
+  const mainSrc = fs.readFileSync(path.join(desktopRoot, "src", "main.js"), "utf8");
+  const petPreload = fs.readFileSync(path.join(desktopRoot, "src", "pet", "pet-preload.js"), "utf8");
+  for (const bridgeSrc of [rendererPreload, mainSrc, petPreload]) {
+    assert.ok(!bridgeSrc.includes("diagnostics-drawer"), "TASK-236 must not add diagnostics drawer IPC");
+    assert.ok(!bridgeSrc.includes("diagnostics:drawer"), "TASK-236 must not add diagnostics drawer IPC channel");
+  }
+  assert.ok(rendererPreload.includes('PET_EXPRESSION_SUGGESTION_CHANNEL = "pet:expression-suggestion"'),
+    "TASK-218 narrow renderer invoke channel must remain");
+  assert.ok(mainSrc.includes('PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL = "pet:expression-suggestion-received"'),
+    "TASK-218 narrow main send channel must remain");
+  assert.ok(rendererPreload.includes('PET_REACTION_BUBBLE_CHANNEL = "pet:reaction-bubble"'),
+    "TASK-220 narrow renderer invoke channel must remain");
+  assert.ok(mainSrc.includes('PET_REACTION_BUBBLE_RECEIVED_CHANNEL = "pet:reaction-bubble-received"'),
+    "TASK-220 narrow main send channel must remain");
+  assert.ok(!rendererPreload.includes('PET_EXPRESSION_SUGGESTION_CHANNEL = "pet"'),
+    "TASK-218 expression channel must not be generic pet");
+  assert.ok(!rendererPreload.includes('PET_REACTION_BUBBLE_CHANNEL = "pet"'),
+    "TASK-220 reaction bubble channel must not be generic pet");
+  assert.ok(!src.includes("hover-action"), "TASK-236 must not restore hover action buttons");
+  assert.ok(src.includes("chat-context-menu"), "TASK-236 must keep context menu");
+  assert.ok(src.includes("複製") && src.includes("刪除") && src.includes("編輯"),
+    "TASK-236 must keep context menu copy/delete/edit actions");
+  assert.ok(src.includes("showPetWindow"), "TASK-236 must not remove Pet Window entry point");
+  assert.ok(src.includes("function isLastEditableUserMessage") && src.includes("entry.role !== \"user\""),
+    "TASK-236 must keep edit limited to last formal user message");
+  console.log("  testTask236NoNewIpcChannelsAndRegressionGuards PASS");
+}
+
 // ─── TASK-218: Safe Pet Expression Suggestion Mirror ─────────────────────────
 
 function testTask218RendererHasMirrorFunction() {
@@ -11489,6 +11715,16 @@ async function main() {
   await testTask235ActiveIndependentOfNextAndWinner();
   testTask235NoNewIpcChannelsAndPreservesExisting();
   testTask235RegressionGuards();
+
+  // TASK-236: Collapsible Diagnostics Drawer
+  testTask236HtmlCssAndRendererSymbols();
+  await testTask236DefaultCollapsedSummaryVisible();
+  await testTask236ToggleOpenAndClose();
+  await testTask236DetailsUpdateAfterSendWhileCollapsed();
+  await testTask236NoRawTextOrPayloadInSummaryOrDetails();
+  await testTask236NotInHistoryTranscriptOrExport();
+  await testTask236ToggleHasNoSideEffects();
+  testTask236NoNewIpcChannelsAndRegressionGuards();
 
   // TASK-218: Safe Pet Expression Suggestion Mirror
   testTask218RendererHasMirrorFunction();

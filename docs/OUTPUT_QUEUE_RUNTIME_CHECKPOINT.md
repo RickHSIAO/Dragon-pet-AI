@@ -76,10 +76,14 @@ All queue state lives in `apps/desktop/src/renderer/renderer.js`.
 | `OUTPUT_QUEUE_RECENT_MAX` | `const number` | `20` — max recent items |
 | `outputQueueItems` | `var array` | Live queue — items accumulate, never dispatched |
 | `recentOutputQueueItems` | `var array` | Rolling history of enqueued item summaries |
-| `currentOutputQueueSnapshot` | `var object` | Latest snapshot (enabled, length, recentLength, nextItem) |
+| `currentOutputQueueSnapshot` | `var object` | Latest snapshot (enabled, length, recentLength, nextItem, winnerItem, activeItem) |
+| `interactionDiagnosticsExpanded` | `var boolean` | `false` — session-only drawer state for TASK-236 |
 | `outputQueueIdCounter` | `var number` | Monotonic ID counter |
 | `getOutputQueueSnapshot()` | `function` | Returns current snapshot with sanitized nextItem |
-| `formatOutputQueueSnapshotPreview()` | `function` | Returns preview string for the diagnostics element |
+| `formatOutputQueueSnapshotPreview()` | `function` | Returns queue preview string for diagnostics details |
+| `formatInteractionDiagnosticsSummary()` | `function` | Returns TASK-236 one-line safe summary |
+| `formatInteractionDiagnosticsDetails()` | `function` | Returns TASK-236 full diagnostics details |
+| `toggleInteractionDiagnosticsDrawer()` | `function` | Toggles local expanded/collapsed diagnostics state |
 | `enqueueOutputQueueItem(item)` | `function` | Validates, sanitizes, appends to queue, updates snapshot |
 | `sanitizeOutputQueueItem(item)` | `function` | Strips forbidden fields, validates source/priority/channel |
 | `sanitizeOutputQueuePayload(payload)` | `function` | Strips forbidden payload keys, validates each allowed key |
@@ -169,9 +173,14 @@ not a current behavior.
 
 ## 5. Current Queue Preview Behavior
 
-The preview string is produced by `formatOutputQueueSnapshotPreview()` and
-embedded in the full diagnostics preview via `formatInteractionDiagnosticsPreview()`.
-It is rendered into `#interaction-reaction-preview` with `textContent`.
+The queue preview string is produced by `formatOutputQueueSnapshotPreview()` and
+embedded in the full diagnostics details via `formatInteractionDiagnosticsPreview()`.
+As of TASK-236, `#interaction-reaction-preview` is a collapsed-by-default drawer:
+`#interaction-diagnostics-summary` shows one compact line, and
+`#interaction-diagnostics-details` holds the full multi-line diagnostics behind
+an explicit `#interaction-diagnostics-toggle` button. Rendering uses
+`textContent`, `hidden`, `aria-expanded`, and `aria-controls`. This drawer is
+debug UI only: Queue diagnostics remain a ledger / preview, not a dispatcher.
 
 Possible preview states:
 
@@ -261,9 +270,26 @@ Each surviving payload key is validated against its own allowlist:
 These flags are intent annotations only. The queue is disabled; no TTS is
 triggered, no history is written, and no copy/export is performed.
 
-The preview renders only a sanitized summary line (enabled/disabled, item counts,
-next item priority/channel/source). It does not render payload values, item ids,
-raw JSON, or any user-generated text.
+The drawer renders only sanitized summary/details strings (enabled/disabled, item
+counts, and sanitized next/winner/active priority/channel/source). It does not
+render payload values, item ids, raw JSON, or any user-generated text.
+
+TASK-236 Windows visual smoke PASS (2026-06-01):
+
+- Startup: Diagnostics default collapsed, normal UI shows only one summary line,
+  Pet Window normal.
+- Expand/collapse: full Reaction / Decision / Queue / Next / Winner / Active
+  details appear only after explicit toggle and hide again on second click.
+- Send: chat / expression / reaction bubble normal, summary/details update,
+  Queue remains disabled.
+- Delete / Undo and Edit last user: normal behavior, context menu unaffected,
+  no extra `/chat`, drawer layout consistent with no observed UI abnormality.
+- Clear Chat / Focus: normal behavior; Pet Window expression and reaction bubble
+  remain normal.
+- Diagnostics format: no `undefined`, `null`, `NaN`, `[object Object]`, raw JSON,
+  user text, reply text, bubble text, or payload.
+- General regression: no new IPC side effect, no extra TTS, no extra `/chat`, no
+  history/copy/export pollution.
 
 ---
 
@@ -293,9 +319,10 @@ The following capabilities are **explicitly absent** from the current queue
 runtime and must not be inferred from the disabled skeleton:
 
 - Output dispatch (queue drain loop, item consumption)
-- Priority winner selection algorithm
+- Queue dispatch based on the priority winner selection algorithm
 - Preemption runtime enforcement (active item replacement)
-- Active item state (`currentOutputItem` or equivalent)
+- Dispatch-owned active item state (`currentOutputItem` or equivalent). TASK-235
+  has a diagnostics-only `currentActiveOutputItem`, but it does not execute.
 - TTL expiration / cleanup runtime
 - Stop / cancel / skip output controls
 - Queue-enabled flag with user or developer control surface
@@ -318,8 +345,9 @@ all of the following must be explicitly reviewed and confirmed:
 
 - [ ] `OUTPUT_QUEUE_ENABLED` control surface defined (dev flag, user setting, or
       guarded by feature flag)
-- [ ] Active output item model defined (`currentOutputItem` or equivalent)
-- [ ] Priority winner selector implemented and smoke-tested
+- [x] Diagnostics-only active output item model defined and smoke-tested
+- [x] Priority winner selector implemented and smoke-tested for diagnostics
+- [ ] Dispatch-owned active output item model defined (`currentOutputItem` or equivalent)
 - [ ] Preemption enforcement logic implemented and smoke-tested
 - [ ] TTL expiration / cleanup loop implemented
 - [ ] Stop / cancel / skip controls defined and tested
@@ -341,10 +369,11 @@ all of the following must be explicitly reviewed and confirmed:
 |------|-------------|------|
 | TASK-234 | Output Queue Priority Winner Preview, diagnostics only | runtime (renderer-only, disabled) — **DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-01)**. Winner preview is diagnostics-only: does not dispatch, does not change queue order or Next, does not control any output channel. |
 | TASK-235 | Active Output Item Model, disabled | runtime (renderer-only, disabled) — **DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-01)**. Adds `currentActiveOutputItem` state, 4 helpers, `activeItem` in snapshot, `· Active:` in preview. Active is diagnostics-only: never auto-set, does not dispatch or control any output channel. Note: manual console helper SKIP (DevTools unavailable); covered by automated smoke. |
-| TASK-236 | Bubble Priority Enforcement, guarded and disabled by default | runtime (renderer-only, guarded) |
-| TASK-237 | TTS-safe Segment Design, docs-only or helper-only | docs or helper-only |
-| TASK-238 | User Controls for Companion Verbosity | runtime (settings UI) |
-| TASK-239 | Idle Reaction Policy, fixed only, no LLM | runtime (renderer-only, guarded) |
+| TASK-236 | Collapsible Diagnostics Drawer | runtime (renderer-only) — **DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-01)**. Summary collapsed by default; details show Reaction/Decision/Queue/Next/Winner/Active only after explicit toggle. No dispatch, no IPC, no `/chat`, no history/copy/export, no Pet Window/Pet Bubble/TTS/STT side effect. Queue diagnostics remain ledger / preview only, not dispatcher. |
+| TASK-237 | Bubble Priority Enforcement, guarded and disabled by default | runtime (renderer-only, guarded) |
+| TASK-238 | TTS-safe Segment Design, docs-only or helper-only | docs or helper-only |
+| TASK-239 | User Controls for Companion Verbosity | runtime (settings UI) |
+| TASK-240 | Idle Reaction Policy, fixed only, no LLM | runtime (renderer-only, guarded) |
 
 Each task should remain narrow and testable with explicit side-effect boundaries
 and Windows visual smoke before any dispatch-related change is considered
