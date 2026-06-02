@@ -7,7 +7,7 @@
 📋 **[完整 Demo 腳本與面試重點](docs/PORTFOLIO_DEMO_SCRIPT.md)**
 📋 **[Phase 4 Provider Settings 摘要](docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md)**
 
-**最新本地狀態（2026-06-01）：** TASK-230 Enqueue Reaction Bubble Diagnostics Only 已完成 automated smoke 與 Windows visual smoke PASS，狀態為 **DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS**。Full App renderer-only 在安全 reaction bubble 產生時新增本地 diagnostics-only output queue item：`source="reaction_bubble"`、`priority="P4_NORMAL_REACTION"`、`channel="pet_bubble"`、`payload={ bubbleId }`、`ttlMs=3000`，且 queue 仍為 `OUTPUT_QUEUE_ENABLED=false`、不 dispatch、不控制 expression/bubble/chat reply。此任務不新增 IPC、不改 Pet Window/backend、不改 `/chat`、不寫 history、不改 reaction bubble mirror payload、不觸發 TTS/STT/audio、不接 prompt runtime、不保存 raw message text。
+**最新本地狀態（2026-06-01）：** TASK-234 Output Queue Priority Winner Preview 已完成 automated smoke 與 Windows visual smoke PASS，狀態為 **DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS**。Full App renderer-only 建立 Output Queue Priority Winner Preview：新增 `getOutputQueuePriorityWinner(items)`，掃描 `outputQueueItems` 並回傳最高優先級 item 摘要（`compareOutputPriority` 排序，同優先級以 queue order 決定）。`getOutputQueueSnapshot()` 與 `updateOutputQueueSnapshot()` 現在包含 `winnerItem`。`formatOutputQueueSnapshotPreview()` 現在附加 `· Winner: P/C/S`（空 queue 時顯示 `· Winner: none`）。Preview 格式：`Queue: disabled · Items: <count> · Recent: <count> · Next: <summary|none> · Winner: <summary|none>`。`Next` = queue-order 第一個 item；`Winner` = 最高優先級 item。`sendChat` 後：Next = `P4_NORMAL_REACTION/visual_expression/expression_mirror`，Winner = `P2_LLM_REPLY/full_app_chat/chat_reply`。Winner 是 diagnostics-only：不 dispatch、不改 queue order、不改 Next、不控制 expression mirror / reaction bubble / chat reply、不送 Pet Window、不新增 IPC、不呼叫 `/chat`、不觸發 TTS/STT/audio、不寫 history、不進 copy/export、不保存 raw user text / reply text / bubble text / payload。`OUTPUT_QUEUE_ENABLED` 仍為 false。
 
 ---
 
@@ -397,12 +397,12 @@ python -c "import json, urllib.request; data=json.dumps({'message':'你好！克
 | [docs/PROVIDER_TEST_CONNECTION_DESIGN.md](docs/PROVIDER_TEST_CONNECTION_DESIGN.md) | Test Connection 設計與強化測試結果 |
 | [docs/SECURE_KEY_STORAGE_DESIGN.md](docs/SECURE_KEY_STORAGE_DESIGN.md) | 金鑰儲存威脅模型、儲存選項、遮蔽規則 |
 | [docs/BYOK_PRODUCT_AND_SETTINGS.md](docs/BYOK_PRODUCT_AND_SETTINGS.md) | BYOK 產品設計與安全邊界 |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖；目前 TASK-233 Output Queue Runtime Checkpoint 完成 docs checkpoint |
-| [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄；最新記錄為 TASK-233 Output Queue Runtime Checkpoint |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖；目前 TASK-234 Output Queue Priority Winner Preview 完成 DONE - WINDOWS VISUAL SMOKE PASS |
+| [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄；最新記錄為 TASK-234 Output Queue Priority Winner Preview，DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS |
 | [docs/INTERACTIVE_COMPANION_ARCHITECTURE.md](docs/INTERACTIVE_COMPANION_ARCHITECTURE.md) | TASK-222/224 互動陪伴架構 checkpoint：data flow、layer responsibility、IPC inventory、安全邊界、Character State Layer diagnostics 與下一階段 |
 | [docs/CHRISTINA_PERSONA_CONTEXT_PACK.md](docs/CHRISTINA_PERSONA_CONTEXT_PACK.md) | TASK-225 Christina persona context pack：canonical source、runtime-safe adaptation、strength levels、runtime boundary |
-| [docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md](docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md) | TASK-226/TASK-232 Interaction Output Queue：priority design, disabled runtime skeleton, debug snapshot preview, reaction bubble diagnostics enqueue, expression mirror diagnostics enqueue, and chat reply diagnostics enqueue |
-| [docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md](docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md) | TASK-233 Output Queue Runtime Checkpoint：completed task chain, current runtime state, diagnostics item schemas, safety boundary, sanitization summary, dispatch readiness checklist, recommended next tasks |
+| [docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md](docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md) | TASK-226/TASK-234 Interaction Output Queue：priority design, disabled runtime skeleton, debug snapshot preview, reaction bubble diagnostics enqueue, expression mirror diagnostics enqueue, chat reply diagnostics enqueue, and priority winner preview |
+| [docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md](docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md) | TASK-233 Output Queue Runtime Checkpoint：completed task chain, current runtime state, diagnostics item schemas, safety boundary, sanitization summary, dispatch readiness checklist, recommended next tasks (TASK-234 now implemented) |
 | [docs/VOICE_TTS_RESEARCH.md](docs/VOICE_TTS_RESEARCH.md) | TASK-227 Voice/TTS research note：local-first speech roadmap、candidate TTS/STT、licensing/safety boundaries |
 | [docs/STREAMER_COMPANION_MODE.md](docs/STREAMER_COMPANION_MODE.md) | 未來支線 — OBS overlay / Twitch 陪伴設計（尚未排程） |
 

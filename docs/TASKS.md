@@ -23057,7 +23057,7 @@ TASK-226 is docs-only:
 - TASK-231 Enqueue Expression Mirror Diagnostics Only. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
 - TASK-232 Enqueue Chat Reply Diagnostics Only. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
 - TASK-233 Output Queue Runtime Checkpoint. IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED.
-- TASK-234 Output Queue Priority Winner Preview, diagnostics only.
+- TASK-234 Output Queue Priority Winner Preview, diagnostics only. DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
 - TASK-235 Active Output Item Model, disabled.
 - TASK-236 Bubble Priority Enforcement, guarded and disabled by default.
 - TASK-237 TTS-safe Segment Design, docs-only or helper-only.
@@ -24213,3 +24213,77 @@ No runtime change. No code change. No IPC. No commit. No push.
       `docs/INTERACTIVE_COMPANION_ARCHITECTURE.md` updated.
 - [x] No code changes.
 - [x] No commit or push.
+
+## TASK-234 | Output Queue Priority Winner Preview, Diagnostics Only
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+
+### Summary
+
+TASK-234 builds the Output Queue Priority Winner Preview. Full App renderer-only.
+Adds diagnostics-only winner preview showing the highest-priority item in the queue.
+
+`getOutputQueuePriorityWinner(items)` — a pure function that scans
+`outputQueueItems` and returns the highest-priority item summary using
+`compareOutputPriority` tie-breaking (earlier queue index wins ties). Result is
+sanitized via `cloneOutputQueueNextItemSummary` (no payload).
+
+`getOutputQueueSnapshot()` and `updateOutputQueueSnapshot()` both now include
+`winnerItem` (sanitized summary — no payload).
+
+`formatOutputQueueSnapshotPreview()` now appends `· Winner: P/C/S` (or
+`· Winner: none` when the queue is empty).
+
+Preview format:
+```
+Queue: disabled · Items: <count> · Recent: <count> · Next: <summary|none> · Winner: <summary|none>
+```
+
+**Key distinction:** `Next` = queue-order first item (`outputQueueItems[0]`);
+`Winner` = highest-priority item. After a `sendChat`:
+- Next: `P4_NORMAL_REACTION/visual_expression/expression_mirror`
+- Winner: `P2_LLM_REPLY/full_app_chat/chat_reply`
+
+Winner is diagnostics-only. It does not dispatch, does not change queue order,
+does not change Next, does not control expression mirror, does not control reaction
+bubble, does not control chat reply, does not send to Pet Window, does not add IPC,
+does not call `/chat`, does not trigger TTS/STT/audio, does not write history, does
+not enter copy/export, and does not store raw user text / reply text / bubble text /
+payload.
+
+`OUTPUT_QUEUE_ENABLED` remains `false`. No dispatch.
+
+### New / Modified Files
+
+- `apps/desktop/src/renderer/renderer.js` — `getOutputQueuePriorityWinner`,
+  updated snapshot functions, updated preview formatter.
+- `apps/desktop/scripts/renderer-chat-smoke.js` — 19 new TASK-234 tests,
+  7 existing preview `assert.equal` tests updated for new `· Winner: X` format,
+  1 TASK-228 snapshot `deepEqual` test updated for new `winnerItem: null` field.
+
+### Acceptance Criteria
+
+- [x] `getOutputQueuePriorityWinner(items)` added to renderer.js.
+- [x] Returns null on empty/invalid input.
+- [x] Uses `compareOutputPriority` for ordering; ties broken by queue order.
+- [x] Result is sanitized via `cloneOutputQueueNextItemSummary` (no payload).
+- [x] `getOutputQueueSnapshot()` includes `winnerItem`.
+- [x] `updateOutputQueueSnapshot()` includes `winnerItem`.
+- [x] `formatOutputQueueSnapshotPreview()` appends `· Winner: P/C/S` or `· Winner: none`.
+- [x] 19 new smoke tests — priority ordering, tie-breaking, safety, regression.
+- [x] All existing smoke tests updated and passing (renderer-chat, pet-renderer, pet-window).
+- [x] `OUTPUT_QUEUE_ENABLED` remains false.
+- [x] No dispatch, no IPC side effects, no chat display changes.
+- [x] No commit or push.
+
+### Windows Visual Smoke Results (2026-06-01)
+
+- [x] 基本啟動 PASS：Preview 顯示 `Queue: disabled · Items: 0 · Recent: 0 · Next: none · Winner: none`，Pet Window 正常。
+- [x] 送出訊息 PASS：Next 顯示 queue order 第一筆（expression_mirror），Winner 顯示 priority winner（chat_reply P2），chat reply、Pet Window 表情與 reaction bubble 正常。
+- [x] Winner 邊界 PASS：Winner 只做 diagnostics preview，不 dispatch、不控制輸出、不改 queue order、不改 Next。
+- [x] Delete / Undo PASS：功能正常，Queue 仍 disabled。
+- [x] Edit last user PASS：功能正常，Queue 仍 disabled，沒有額外 `/chat`。
+- [x] Clear Chat PASS：功能正常，Queue 仍 disabled。
+- [x] Focus PASS：功能正常，Queue 仍 disabled。
+- [x] Diagnostics 格式 PASS：沒有 `undefined`/`null`/`NaN`/`[object Object]`/raw JSON/user text/reply text/bubble text/payload。
+- [x] 一般回歸 PASS：沒有新增 IPC side-effect，沒有額外 TTS，沒有額外 `/chat`，沒有 history/copy/export 污染，Pet Window 表情與 reaction bubble 行為維持正常。

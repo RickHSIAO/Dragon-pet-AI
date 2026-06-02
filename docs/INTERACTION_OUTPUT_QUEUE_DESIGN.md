@@ -770,3 +770,44 @@ TASK-234 through TASK-239 as the next incremental steps.
 
 See [`docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md`](OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md)
 for the full checkpoint.
+
+## 22. TASK-234 Output Queue Priority Winner Preview
+
+**Status: DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-01)**
+
+TASK-234 builds the Output Queue Priority Winner Preview. Full App renderer-only.
+
+`getOutputQueuePriorityWinner(items)` — a pure helper that scans `outputQueueItems`
+and returns the highest-priority item summary, using `compareOutputPriority` for
+ordering (ties broken by earlier queue index). The result is sanitized via
+`cloneOutputQueueNextItemSummary` (no payload).
+
+`getOutputQueueSnapshot()` and `updateOutputQueueSnapshot()` now include
+`winnerItem` (sanitized summary or null).
+
+`formatOutputQueueSnapshotPreview()` now appends `· Winner: P/C/S` (or
+`· Winner: none`), completing the preview format:
+
+```
+Queue: disabled · Items: N · Recent: N · Next: P/C/S · Winner: P/C/S
+```
+
+**Key distinction:**
+- `Next` = `outputQueueItems[0]` (queue-order first item).
+- `Winner` = highest-priority item across all items.
+
+After `sendChat`, the queue holds three items in enqueue order:
+`expression_mirror` [0] → `reaction_bubble` [1] → `chat_reply` [2].
+- Next: `P4_NORMAL_REACTION/visual_expression/expression_mirror`
+- Winner: `P2_LLM_REPLY/full_app_chat/chat_reply`
+
+**Winner is diagnostics-only.** It does not dispatch, does not change queue order,
+does not change Next, does not control expression mirror / reaction bubble / chat
+reply, does not send to Pet Window, does not add IPC, does not call `/chat`, does
+not trigger TTS/STT/audio, does not write history, does not enter copy/export, and
+does not store raw user text / reply text / bubble text / payload.
+
+`OUTPUT_QUEUE_ENABLED` remains false. 19 new smoke tests plus 8 updated existing
+tests. All 3 smoke scripts PASS. Windows visual smoke PASS: startup / send /
+Winner boundary / Delete / Undo / Edit last user / Clear Chat / Focus / diagnostics
+format / general regression all confirmed.

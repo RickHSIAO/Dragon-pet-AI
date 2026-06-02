@@ -890,6 +890,7 @@ function updateOutputQueueSnapshot() {
     length: outputQueueItems.length,
     recentLength: recentOutputQueueItems.length,
     nextItem: outputQueueItems.length ? cloneOutputQueueNextItemSummary(outputQueueItems[0]) : null,
+    winnerItem: getOutputQueuePriorityWinner(outputQueueItems),
   };
   return currentOutputQueueSnapshot;
 }
@@ -947,6 +948,7 @@ function getOutputQueueSnapshot() {
     length: outputQueueItems.length,
     recentLength: recentOutputQueueItems.length,
     nextItem: outputQueueItems.length ? cloneOutputQueueNextItemSummary(outputQueueItems[0]) : null,
+    winnerItem: getOutputQueuePriorityWinner(outputQueueItems),
   };
 }
 
@@ -987,6 +989,22 @@ function shouldOutputPreempt(activeItem, incomingItem) {
   return false;
 }
 
+// TASK-234: Returns the highest-priority sanitized item summary from the queue.
+// Ties broken by queue order (earlier index wins). Diagnostics only — no dispatch.
+function getOutputQueuePriorityWinner(items) {
+  if (!Array.isArray(items) || items.length === 0) return null;
+  let winner = null;
+  for (const item of items) {
+    if (!item || !OUTPUT_SOURCE_ALLOWLIST.has(item.source)
+        || !OUTPUT_PRIORITY_ALLOWLIST.has(item.priority)
+        || !OUTPUT_CHANNEL_ALLOWLIST.has(item.channel)) continue;
+    if (!winner || compareOutputPriority(item, winner) > 0) {
+      winner = item;
+    }
+  }
+  return winner ? cloneOutputQueueNextItemSummary(winner) : null;
+}
+
 function formatOutputQueueSnapshotPreview(snapshot = getOutputQueueSnapshot()) {
   const source = snapshot && typeof snapshot === "object" ? snapshot : {};
   const enabled = source.enabled === true ? "enabled" : "disabled";
@@ -1006,10 +1024,21 @@ function formatOutputQueueSnapshotPreview(snapshot = getOutputQueueSnapshot()) {
   const nextText = hasValidNext
     ? next.priority + "/" + next.channel + "/" + next.source
     : "none";
+  const winner = source.winnerItem && typeof source.winnerItem === "object"
+    ? source.winnerItem
+    : null;
+  const hasValidWinner = winner
+    && OUTPUT_PRIORITY_ALLOWLIST.has(winner.priority)
+    && OUTPUT_CHANNEL_ALLOWLIST.has(winner.channel)
+    && OUTPUT_SOURCE_ALLOWLIST.has(winner.source);
+  const winnerText = hasValidWinner
+    ? winner.priority + "/" + winner.channel + "/" + winner.source
+    : "none";
   return "Queue: " + enabled
     + " · Items: " + length
     + " · Recent: " + recentLength
-    + " · Next: " + nextText;
+    + " · Next: " + nextText
+    + " · Winner: " + winnerText;
 }
 
 function defaultCompanionExpressionForReason(reason) {

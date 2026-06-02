@@ -8298,6 +8298,7 @@ async function testTask228DefaultSnapshotDisabled() {
     length: 0,
     recentLength: 0,
     nextItem: null,
+    winnerItem: null,
   });
   console.log("  testTask228DefaultSnapshotDisabled PASS");
 }
@@ -8650,7 +8651,7 @@ function testTask229RendererHasSnapshotPreviewFormatter() {
 async function testTask229DefaultSnapshotPreview() {
   const { sandbox } = await loadRenderer();
   const preview = sandbox.formatOutputQueueSnapshotPreview(sandbox.getOutputQueueSnapshot());
-  assert.equal(preview, "Queue: disabled · Items: 0 · Recent: 0 · Next: none");
+  assert.equal(preview, "Queue: disabled · Items: 0 · Recent: 0 · Next: none · Winner: none");
   console.log("  testTask229DefaultSnapshotPreview PASS");
 }
 
@@ -8666,7 +8667,7 @@ async function testTask229SafeItemPreviewShowsSummaryOnly() {
   const snapshot = JSON.parse(JSON.stringify(sandbox.getOutputQueueSnapshot()));
   const preview = sandbox.formatOutputQueueSnapshotPreview(snapshot);
   assert.equal(preview,
-    "Queue: disabled · Items: 1 · Recent: 1 · Next: P4_NORMAL_REACTION/pet_bubble/reaction_bubble");
+    "Queue: disabled · Items: 1 · Recent: 1 · Next: P4_NORMAL_REACTION/pet_bubble/reaction_bubble · Winner: P4_NORMAL_REACTION/pet_bubble/reaction_bubble");
   assert.deepEqual(Object.keys(snapshot.nextItem).sort(), [
     "channel",
     "id",
@@ -8754,7 +8755,7 @@ async function testTask229InvalidSnapshotFallbacks() {
     length: "bad",
     recentLength: -1,
     nextItem: "bad",
-  }), "Queue: disabled · Items: 0 · Recent: 0 · Next: none");
+  }), "Queue: disabled · Items: 0 · Recent: 0 · Next: none · Winner: none");
   assert.equal(sandbox.formatOutputQueueSnapshotPreview({
     enabled: false,
     length: 2,
@@ -8764,7 +8765,7 @@ async function testTask229InvalidSnapshotFallbacks() {
       channel: "pet_bubble",
       source: "reaction_bubble",
     },
-  }), "Queue: disabled · Items: 2 · Recent: 1 · Next: none");
+  }), "Queue: disabled · Items: 2 · Recent: 1 · Next: none · Winner: none");
   assert.equal(sandbox.formatOutputQueueSnapshotPreview({
     enabled: false,
     length: 2,
@@ -8774,7 +8775,7 @@ async function testTask229InvalidSnapshotFallbacks() {
       channel: "BAD_CHANNEL",
       source: "reaction_bubble",
     },
-  }), "Queue: disabled · Items: 2 · Recent: 1 · Next: none");
+  }), "Queue: disabled · Items: 2 · Recent: 1 · Next: none · Winner: none");
   assert.equal(sandbox.formatOutputQueueSnapshotPreview({
     enabled: false,
     length: 2,
@@ -8784,7 +8785,7 @@ async function testTask229InvalidSnapshotFallbacks() {
       channel: "pet_bubble",
       source: "BAD_SOURCE",
     },
-  }), "Queue: disabled · Items: 2 · Recent: 1 · Next: none");
+  }), "Queue: disabled · Items: 2 · Recent: 1 · Next: none · Winner: none");
   console.log("  testTask229InvalidSnapshotFallbacks PASS");
 }
 
@@ -8798,7 +8799,7 @@ async function testTask229ClearQueuePreviewResets() {
   });
   sandbox.clearOutputQueue("manual_clear");
   const preview = sandbox.formatOutputQueueSnapshotPreview(sandbox.getOutputQueueSnapshot());
-  assert.equal(preview, "Queue: disabled · Items: 0 · Recent: 1 · Next: none");
+  assert.equal(preview, "Queue: disabled · Items: 0 · Recent: 1 · Next: none · Winner: none");
   console.log("  testTask229ClearQueuePreviewResets PASS");
 }
 
@@ -9071,7 +9072,7 @@ async function testTask230PreviewNoRawPayloadOrBadTokens() {
     assert.ok(!preview.includes(token), `TASK-230 preview must not include ${token}`);
   }
   assert.equal(preview,
-    "Queue: disabled · Items: 1 · Recent: 1 · Next: P4_NORMAL_REACTION/pet_bubble/reaction_bubble");
+    "Queue: disabled · Items: 1 · Recent: 1 · Next: P4_NORMAL_REACTION/pet_bubble/reaction_bubble · Winner: P4_NORMAL_REACTION/pet_bubble/reaction_bubble");
   console.log("  testTask230PreviewNoRawPayloadOrBadTokens PASS");
 }
 
@@ -9237,7 +9238,7 @@ async function testTask231PreviewUpdatesAfterExpressionMirrorEnqueue() {
   sandbox.recordInteractionExpressionSuggestion("focused", "user_active");
   const preview = sandbox.formatOutputQueueSnapshotPreview(sandbox.getOutputQueueSnapshot());
   assert.equal(preview,
-    "Queue: disabled · Items: 1 · Recent: 1 · Next: P4_NORMAL_REACTION/visual_expression/expression_mirror");
+    "Queue: disabled · Items: 1 · Recent: 1 · Next: P4_NORMAL_REACTION/visual_expression/expression_mirror · Winner: P4_NORMAL_REACTION/visual_expression/expression_mirror");
   console.log("  testTask231PreviewUpdatesAfterExpressionMirrorEnqueue PASS");
 }
 
@@ -9306,7 +9307,7 @@ async function testTask231PreviewNoRawPayloadOrBadTokens() {
     assert.ok(!preview.includes(token), `TASK-231 preview must not include ${token}`);
   }
   assert.equal(preview,
-    "Queue: disabled · Items: 1 · Recent: 1 · Next: P4_NORMAL_REACTION/visual_expression/expression_mirror");
+    "Queue: disabled · Items: 1 · Recent: 1 · Next: P4_NORMAL_REACTION/visual_expression/expression_mirror · Winner: P4_NORMAL_REACTION/visual_expression/expression_mirror");
   console.log("  testTask231PreviewNoRawPayloadOrBadTokens PASS");
 }
 
@@ -9753,6 +9754,339 @@ function testTask232RegressionGuards() {
   assert.ok(src.includes("function enqueueReactionBubbleOutputDiagnostics"),
     "TASK-232 must not remove TASK-230 reaction bubble diagnostics helper");
   console.log("  testTask232RegressionGuards PASS");
+}
+
+// ─── TASK-234: Output Queue Priority Winner Preview, Diagnostics Only ─────────
+
+function testTask234RendererHasPriorityWinnerHelper() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("function getOutputQueuePriorityWinner"),
+    "renderer.js must define getOutputQueuePriorityWinner");
+  console.log("  testTask234RendererHasPriorityWinnerHelper PASS");
+}
+
+async function testTask234SnapshotIncludesWinnerItem() {
+  const { sandbox } = await loadRenderer();
+  const snapshot = sandbox.getOutputQueueSnapshot();
+  assert.ok("winnerItem" in snapshot, "getOutputQueueSnapshot must include winnerItem field");
+  assert.equal(snapshot.winnerItem, null, "winnerItem must be null for empty queue");
+  console.log("  testTask234SnapshotIncludesWinnerItem PASS");
+}
+
+async function testTask234DefaultPreviewShowsWinnerNone() {
+  const { sandbox } = await loadRenderer();
+  const preview = sandbox.formatOutputQueueSnapshotPreview(sandbox.getOutputQueueSnapshot());
+  assert.equal(preview,
+    "Queue: disabled · Items: 0 · Recent: 0 · Next: none · Winner: none");
+  console.log("  testTask234DefaultPreviewShowsWinnerNone PASS");
+}
+
+async function testTask234SingleItemNextEqualsWinner() {
+  const { sandbox } = await loadRenderer();
+  sandbox.enqueueOutputQueueItem({
+    source: "reaction_bubble",
+    priority: "P4_NORMAL_REACTION",
+    channel: "pet_bubble",
+    payload: { bubbleId: "user_active" },
+    reason: "test",
+  });
+  const snapshot = sandbox.getOutputQueueSnapshot();
+  assert.ok(snapshot.nextItem !== null, "nextItem must not be null");
+  assert.ok(snapshot.winnerItem !== null, "winnerItem must not be null");
+  assert.equal(snapshot.nextItem.source, snapshot.winnerItem.source,
+    "single item: Next source must equal Winner source");
+  assert.equal(snapshot.nextItem.priority, snapshot.winnerItem.priority,
+    "single item: Next priority must equal Winner priority");
+  assert.equal(snapshot.nextItem.channel, snapshot.winnerItem.channel,
+    "single item: Next channel must equal Winner channel");
+  console.log("  testTask234SingleItemNextEqualsWinner PASS");
+}
+
+async function testTask234ThreeItemsWinnerIsChatReply() {
+  const { document, sandbox } = await loadRenderer();
+  await sendChat(document, "hello");
+  // expression_mirror [0] P4, reaction_bubble [1] P4, chat_reply [2] P2
+  const snapshot = sandbox.getOutputQueueSnapshot();
+  assert.equal(snapshot.nextItem.source, "expression_mirror",
+    "Next must be expression_mirror (first enqueued)");
+  assert.equal(snapshot.winnerItem.source, "chat_reply",
+    "Winner must be chat_reply (P2_LLM_REPLY wins over P4_NORMAL_REACTION)");
+  assert.equal(snapshot.winnerItem.priority, "P2_LLM_REPLY");
+  assert.equal(snapshot.winnerItem.channel, "full_app_chat");
+  const preview = sandbox.formatOutputQueueSnapshotPreview(snapshot);
+  assert.ok(preview.includes("Next: P4_NORMAL_REACTION/visual_expression/expression_mirror"),
+    "preview Next must show first-enqueued item");
+  assert.ok(preview.includes("Winner: P2_LLM_REPLY/full_app_chat/chat_reply"),
+    "preview Winner must show highest-priority item");
+  console.log("  testTask234ThreeItemsWinnerIsChatReply PASS");
+}
+
+async function testTask234PriorityOrderP0WinsAll() {
+  const { sandbox } = await loadRenderer();
+  sandbox.enqueueOutputQueueItem({
+    source: "safety_error",
+    priority: "P0_CRITICAL",
+    channel: "notification",
+    payload: { reason: "critical" },
+    reason: "test_critical",
+  });
+  sandbox.enqueueOutputQueueItem({
+    source: "chat_reply",
+    priority: "P2_LLM_REPLY",
+    channel: "full_app_chat",
+    payload: { source: "llm_local", mood: "focused", replyLength: 10 },
+    reason: "test_reply",
+  });
+  const snapshot = sandbox.getOutputQueueSnapshot();
+  assert.equal(snapshot.winnerItem.priority, "P0_CRITICAL",
+    "P0_CRITICAL must win over P2_LLM_REPLY");
+  assert.equal(snapshot.winnerItem.source, "safety_error");
+  console.log("  testTask234PriorityOrderP0WinsAll PASS");
+}
+
+async function testTask234PriorityOrderP1WinsOverP2ToP6() {
+  const { sandbox } = await loadRenderer();
+  sandbox.enqueueOutputQueueItem({
+    source: "manual_pet_input",
+    priority: "P1_USER_DIRECT",
+    channel: "full_app_chat",
+    payload: { reason: "user_direct" },
+    reason: "test_user_direct",
+  });
+  sandbox.enqueueOutputQueueItem({
+    source: "chat_reply",
+    priority: "P2_LLM_REPLY",
+    channel: "full_app_chat",
+    payload: { source: "llm_local", mood: "focused", replyLength: 5 },
+    reason: "test_reply",
+  });
+  const snapshot = sandbox.getOutputQueueSnapshot();
+  assert.equal(snapshot.winnerItem.priority, "P1_USER_DIRECT",
+    "P1_USER_DIRECT must win over P2_LLM_REPLY");
+  console.log("  testTask234PriorityOrderP1WinsOverP2ToP6 PASS");
+}
+
+async function testTask234PriorityOrderP2WinsOverP3ToP6() {
+  const { sandbox } = await loadRenderer();
+  sandbox.enqueueOutputQueueItem({
+    source: "reaction_bubble",
+    priority: "P3_IMPORTANT_REACTION",
+    channel: "pet_bubble",
+    payload: { bubbleId: "user_active" },
+    reason: "test_p3",
+  });
+  sandbox.enqueueOutputQueueItem({
+    source: "chat_reply",
+    priority: "P2_LLM_REPLY",
+    channel: "full_app_chat",
+    payload: { source: "llm_local", mood: "focused", replyLength: 5 },
+    reason: "test_p2",
+  });
+  const snapshot = sandbox.getOutputQueueSnapshot();
+  assert.equal(snapshot.winnerItem.priority, "P2_LLM_REPLY",
+    "P2_LLM_REPLY must win over P3_IMPORTANT_REACTION");
+  console.log("  testTask234PriorityOrderP2WinsOverP3ToP6 PASS");
+}
+
+async function testTask234PriorityTieBreakQueueOrderWins() {
+  const { sandbox } = await loadRenderer();
+  // Enqueue two P4 items — first one should win
+  sandbox.enqueueOutputQueueItem({
+    source: "expression_mirror",
+    priority: "P4_NORMAL_REACTION",
+    channel: "visual_expression",
+    payload: { expression: "focused" },
+    reason: "test_first",
+  });
+  sandbox.enqueueOutputQueueItem({
+    source: "reaction_bubble",
+    priority: "P4_NORMAL_REACTION",
+    channel: "pet_bubble",
+    payload: { bubbleId: "user_active" },
+    reason: "test_second",
+  });
+  const snapshot = sandbox.getOutputQueueSnapshot();
+  assert.equal(snapshot.winnerItem.source, "expression_mirror",
+    "tie-break: earlier queue order (expression_mirror) must win over reaction_bubble");
+  assert.equal(snapshot.nextItem.source, "expression_mirror",
+    "Next and Winner both point to first item on P4 tie");
+  console.log("  testTask234PriorityTieBreakQueueOrderWins PASS");
+}
+
+async function testTask234InvalidItemIgnoredByWinner() {
+  const { sandbox } = await loadRenderer();
+  // Manually push a bad item into the queue — enqueueOutputQueueItem would reject it,
+  // so we bypass via direct push and call getOutputQueuePriorityWinner directly.
+  const badItem = { source: "BAD_SOURCE", priority: "BAD_PRIORITY", channel: "BAD_CHANNEL" };
+  const goodItem = sandbox.enqueueOutputQueueItem({
+    source: "expression_mirror",
+    priority: "P4_NORMAL_REACTION",
+    channel: "visual_expression",
+    payload: { expression: "happy" },
+    reason: "test_good",
+  });
+  const winner = sandbox.getOutputQueuePriorityWinner([badItem, sandbox.outputQueueItems[0]]);
+  assert.ok(winner !== null, "good item must still produce a winner even with bad item present");
+  assert.equal(winner.source, "expression_mirror", "bad item must be ignored, good item wins");
+  console.log("  testTask234InvalidItemIgnoredByWinner PASS");
+}
+
+async function testTask234WinnerSummaryNoPayload() {
+  const { document, sandbox } = await loadRenderer();
+  await sendChat(document, "hello");
+  const snapshot = sandbox.getOutputQueueSnapshot();
+  assert.ok(snapshot.winnerItem !== null, "winnerItem must be present after sendChat");
+  assert.ok(!("payload" in snapshot.winnerItem),
+    "winnerItem summary must not include payload");
+  console.log("  testTask234WinnerSummaryNoPayload PASS");
+}
+
+async function testTask234WinnerSummaryNoForbiddenFields() {
+  const { document, sandbox } = await loadRenderer();
+  await sendChat(document, "hello");
+  const snapshot = sandbox.getOutputQueueSnapshot();
+  const serialized = JSON.stringify(snapshot.winnerItem || {});
+  for (const key of TASK228_FORBIDDEN_PAYLOAD_KEYS) {
+    assert.ok(!serialized.includes(`"${key}"`),
+      `winnerItem must not include forbidden field: ${key}`);
+  }
+  for (const token of ["prompt", "request", "response", "memory"]) {
+    assert.ok(!serialized.includes(`"${token}"`),
+      `winnerItem must not include additional sensitive field: ${token}`);
+  }
+  console.log("  testTask234WinnerSummaryNoForbiddenFields PASS");
+}
+
+async function testTask234PreviewNoRawPayload() {
+  const { document, sandbox } = await loadRenderer();
+  await sendChat(document, "hello");
+  const preview = sandbox.formatOutputQueueSnapshotPreview();
+  for (const token of [
+    "payload",
+    "bubbleId",
+    "{",
+    "}",
+    "[object Object]",
+    "undefined",
+    "null",
+    "NaN",
+  ]) {
+    assert.ok(!preview.includes(token), `preview must not include token: ${token}`);
+  }
+  console.log("  testTask234PreviewNoRawPayload PASS");
+}
+
+async function testTask234WinnerPreviewNoUserOrReplyText() {
+  const { document, sandbox } = await loadRenderer();
+  await sendChat(document, "hello dragon");
+  const preview = sandbox.formatOutputQueueSnapshotPreview();
+  assert.ok(!preview.includes("hello dragon"), "winner preview must not include user message");
+  assert.ok(!preview.includes("Hmph, local dragon reply."), "winner preview must not include reply text");
+  console.log("  testTask234WinnerPreviewNoUserOrReplyText PASS");
+}
+
+async function testTask234QueueStillDisabledAfterWinnerPreview() {
+  const { document, sandbox } = await loadRenderer();
+  await sendChat(document, "hello");
+  const snapshot = sandbox.getOutputQueueSnapshot();
+  assert.equal(snapshot.enabled, false, "OUTPUT_QUEUE_ENABLED must remain false");
+  assert.ok(snapshot.winnerItem !== null, "winnerItem available even when disabled");
+  console.log("  testTask234QueueStillDisabledAfterWinnerPreview PASS");
+}
+
+async function testTask234WinnerDoesNotDispatch() {
+  const appendCalls = [];
+  const speechCalls = [];
+  const expressionCalls = [];
+  const bubbleCalls = [];
+  const { state, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      chatHistoryAppend(e) { appendCalls.push(e); return Promise.resolve({ ok: true }); },
+      updatePetSpeech(p) { speechCalls.push(p); return Promise.resolve({ ok: true }); },
+      sendPetExpressionSuggestion(p) { expressionCalls.push(p); return Promise.resolve({ ok: true }); },
+      sendPetReactionBubble(p) { bubbleCalls.push(p); return Promise.resolve({ ok: true }); },
+    },
+  });
+  await settle();
+  appendCalls.length = 0;
+  speechCalls.length = 0;
+  expressionCalls.length = 0;
+  bubbleCalls.length = 0;
+  state.calls.length = 0;
+  sandbox.enqueueOutputQueueItem({
+    source: "chat_reply",
+    priority: "P2_LLM_REPLY",
+    channel: "full_app_chat",
+    payload: { source: "llm_local", mood: "focused", replyLength: 5 },
+    reason: "test",
+  });
+  const snapshot = sandbox.getOutputQueueSnapshot();
+  const preview = sandbox.formatOutputQueueSnapshotPreview(snapshot);
+  await settle();
+  assert.ok(preview.includes("Winner: P2_LLM_REPLY/full_app_chat/chat_reply"),
+    "winner must appear in preview");
+  assert.equal(state.calls.filter((c) => String(c.url).endsWith("/chat")).length, 0,
+    "winner preview must not trigger /chat");
+  assert.equal(appendCalls.length, 0, "winner preview must not write history");
+  assert.equal(speechCalls.length, 0, "winner preview must not update pet speech");
+  assert.equal(expressionCalls.length, 0, "winner preview must not mirror expression");
+  assert.equal(bubbleCalls.length, 0, "winner preview must not mirror reaction bubble");
+  console.log("  testTask234WinnerDoesNotDispatch PASS");
+}
+
+async function testTask234WinnerDoesNotChangeChatDisplay() {
+  const { document } = await loadRenderer();
+  await sendChat(document, "hello dragon");
+  const rendered = document.getElementById("chat-area").children
+    .map((m) => m.children.map((c) => c.textContent).join(" ")).join(" ");
+  assert.match(rendered, /Hmph, local dragon reply/, "chat reply must still render normally");
+  console.log("  testTask234WinnerDoesNotChangeChatDisplay PASS");
+}
+
+function testTask234NoNewIpcChannelsAndPreservesExisting() {
+  const rendererPreload = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "preload.js"), "utf8");
+  const mainSrc = fs.readFileSync(path.join(desktopRoot, "src", "main.js"), "utf8");
+  const petPreload = fs.readFileSync(path.join(desktopRoot, "src", "pet", "pet-preload.js"), "utf8");
+  for (const src of [rendererPreload, mainSrc, petPreload]) {
+    assert.ok(!src.includes("output-queue"), "TASK-234 must not add output queue IPC");
+    assert.ok(!src.includes("output:queue"), "TASK-234 must not add broad output IPC");
+    assert.ok(!src.includes("task-234"), "TASK-234 must not add task-specific IPC");
+    assert.ok(!src.includes("priority-winner"), "TASK-234 must not add priority winner IPC");
+  }
+  assert.ok(rendererPreload.includes('PET_EXPRESSION_SUGGESTION_CHANNEL = "pet:expression-suggestion"'),
+    "TASK-218 narrow renderer invoke channel must remain");
+  assert.ok(mainSrc.includes('PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL = "pet:expression-suggestion-received"'),
+    "TASK-218 narrow main send channel must remain");
+  assert.ok(rendererPreload.includes('PET_REACTION_BUBBLE_CHANNEL = "pet:reaction-bubble"'),
+    "TASK-220 narrow renderer invoke channel must remain");
+  assert.ok(mainSrc.includes('PET_REACTION_BUBBLE_RECEIVED_CHANNEL = "pet:reaction-bubble-received"'),
+    "TASK-220 narrow main send channel must remain");
+  console.log("  testTask234NoNewIpcChannelsAndPreservesExisting PASS");
+}
+
+function testTask234RegressionGuards() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(!src.includes("hover-action"), "TASK-234 must not restore hover action buttons");
+  assert.ok(src.includes("chat-context-menu"), "TASK-234 must keep context menu");
+  assert.ok(src.includes("複製") && src.includes("刪除") && src.includes("編輯"),
+    "TASK-234 must keep context menu copy/delete/edit actions");
+  assert.ok(src.includes("function isLastEditableUserMessage") && src.includes("entry.role !== \"user\""),
+    "TASK-234 must keep edit limited to last formal user message");
+  assert.ok(src.includes("showPetWindow"), "TASK-234 must not remove Pet Window entry point");
+  assert.ok(src.includes("function mirrorInteractionExpressionSuggestion"),
+    "TASK-234 must not remove expression mirror function");
+  assert.ok(src.includes("function scheduleInteractionExpressionMirror"),
+    "TASK-234 must not remove TASK-219 cooldown/debounce function");
+  assert.ok(src.includes("INTERACTION_EXPRESSION_MIRROR_COOLDOWN_MS"),
+    "TASK-234 must not remove TASK-219 cooldown constant");
+  assert.ok(src.includes("function enqueueExpressionMirrorOutputDiagnostics"),
+    "TASK-234 must not remove TASK-231 expression mirror diagnostics helper");
+  assert.ok(src.includes("function enqueueReactionBubbleOutputDiagnostics"),
+    "TASK-234 must not remove TASK-230 reaction bubble diagnostics helper");
+  assert.ok(src.includes("function enqueueChatReplyOutputDiagnostics"),
+    "TASK-234 must not remove TASK-232 chat reply diagnostics helper");
+  console.log("  testTask234RegressionGuards PASS");
 }
 
 // ─── TASK-218: Safe Pet Expression Suggestion Mirror ─────────────────────────
@@ -10713,6 +11047,27 @@ async function main() {
   await testTask232ChatFailureDoesNotEnqueue();
   testTask232NoNewIpcChannelsAndPreservesExisting();
   testTask232RegressionGuards();
+
+  // TASK-234: Output Queue Priority Winner Preview, Diagnostics Only
+  testTask234RendererHasPriorityWinnerHelper();
+  await testTask234SnapshotIncludesWinnerItem();
+  await testTask234DefaultPreviewShowsWinnerNone();
+  await testTask234SingleItemNextEqualsWinner();
+  await testTask234ThreeItemsWinnerIsChatReply();
+  await testTask234PriorityOrderP0WinsAll();
+  await testTask234PriorityOrderP1WinsOverP2ToP6();
+  await testTask234PriorityOrderP2WinsOverP3ToP6();
+  await testTask234PriorityTieBreakQueueOrderWins();
+  await testTask234InvalidItemIgnoredByWinner();
+  await testTask234WinnerSummaryNoPayload();
+  await testTask234WinnerSummaryNoForbiddenFields();
+  await testTask234PreviewNoRawPayload();
+  await testTask234WinnerPreviewNoUserOrReplyText();
+  await testTask234QueueStillDisabledAfterWinnerPreview();
+  await testTask234WinnerDoesNotDispatch();
+  await testTask234WinnerDoesNotChangeChatDisplay();
+  testTask234NoNewIpcChannelsAndPreservesExisting();
+  testTask234RegressionGuards();
 
   // TASK-218: Safe Pet Expression Suggestion Mirror
   testTask218RendererHasMirrorFunction();
