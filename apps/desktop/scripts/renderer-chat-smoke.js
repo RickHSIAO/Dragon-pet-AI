@@ -230,6 +230,9 @@ class FakeDocument {
       if (id === "voice-input-status") element.hidden = true;
       // TASK-242: voice-input-enabled-toggle starts checked (matches HTML `checked` attribute)
       if (id === "voice-input-enabled-toggle") element.checked = true;
+      // TASK-243: conversation-mode-status starts hidden; btn starts data-state="off"
+      if (id === "conversation-mode-status") element.hidden = true;
+      if (id === "conversation-mode-btn") element.dataset = { state: "off" };
       this.elements.set(id, element);
     }
     return this.elements.get(id);
@@ -12098,6 +12101,272 @@ async function testTask242RegressionTask241StillPass() {
   console.log("  testTask242RegressionTask241StillPass PASS");
 }
 
+// ---------------------------------------------------------------------------
+// TASK-243: Voice Conversation Mode / Silence Detection
+// ---------------------------------------------------------------------------
+
+function testTask243HtmlConversationStripExists() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes('id="voice-conversation-strip"'), "TASK-243 HTML must have #voice-conversation-strip");
+  assert.ok(html.includes('id="conversation-mode-btn"'), "TASK-243 HTML must have #conversation-mode-btn");
+  assert.ok(html.includes('id="conversation-mode-status"'), "TASK-243 HTML must have #conversation-mode-status");
+  assert.ok(html.includes('class="voice-conversation-strip"'), "TASK-243 HTML must have .voice-conversation-strip class");
+  console.log("  testTask243HtmlConversationStripExists PASS");
+}
+
+function testTask243HtmlConversationBtnAccessibility() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes('type="button"'), "TASK-243 conversation-mode-btn must be type=button");
+  assert.ok(html.includes('aria-label="開始語音對話模式"'), "TASK-243 conversation-mode-btn must have Chinese aria-label");
+  assert.ok(html.includes('aria-label="語音對話模式"'), "TASK-243 voice-conversation-strip must have Chinese aria-label");
+  assert.ok(html.includes('aria-live="polite"'), "TASK-243 conversation-mode-status must have aria-live=polite");
+  console.log("  testTask243HtmlConversationBtnAccessibility PASS");
+}
+
+function testTask243CssConversationStrip() {
+  const css = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "styles.css"), "utf8");
+  assert.ok(css.includes("TASK-243"), "TASK-243 CSS section comment must be present");
+  assert.ok(css.includes("#voice-conversation-strip"), "TASK-243 CSS must include #voice-conversation-strip rule");
+  assert.ok(css.includes(".conversation-mode-btn"), "TASK-243 CSS must include .conversation-mode-btn rule");
+  assert.ok(css.includes(".conversation-mode-status"), "TASK-243 CSS must include .conversation-mode-status rule");
+  assert.ok(css.includes('data-state="waiting"') || css.includes('[data-state="waiting"]'),
+    "TASK-243 CSS must have active state selector for btn");
+  console.log("  testTask243CssConversationStrip PASS");
+}
+
+function testTask243RendererHasConversationConstants() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("FULL_APP_CONVERSATION_SILENCE_MS"), "TASK-243 renderer must define FULL_APP_CONVERSATION_SILENCE_MS");
+  assert.ok(src.includes("FULL_APP_CONVERSATION_MIN_SPEECH_MS"), "TASK-243 renderer must define FULL_APP_CONVERSATION_MIN_SPEECH_MS");
+  assert.ok(src.includes("FULL_APP_CONVERSATION_MAX_UTTERANCE_MS"), "TASK-243 renderer must define FULL_APP_CONVERSATION_MAX_UTTERANCE_MS");
+  assert.ok(src.includes("FULL_APP_CONVERSATION_VAD_INTERVAL_MS"), "TASK-243 renderer must define FULL_APP_CONVERSATION_VAD_INTERVAL_MS");
+  assert.ok(src.includes("FULL_APP_CONVERSATION_RMS_THRESHOLD"), "TASK-243 renderer must define FULL_APP_CONVERSATION_RMS_THRESHOLD");
+  console.log("  testTask243RendererHasConversationConstants PASS");
+}
+
+function testTask243RendererHasConversationStateVars() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("var fullAppVoiceConversationEnabled"), "TASK-243 renderer must declare fullAppVoiceConversationEnabled with var");
+  assert.ok(src.includes("var fullAppVoiceConversationState"), "TASK-243 renderer must declare fullAppVoiceConversationState with var");
+  assert.ok(src.includes("var fullAppVoiceConversationStream"), "TASK-243 renderer must declare fullAppVoiceConversationStream with var");
+  assert.ok(src.includes("var fullAppVoiceConversationVadTimer"), "TASK-243 renderer must declare fullAppVoiceConversationVadTimer with var");
+  assert.ok(src.includes("var fullAppVoiceConversationAnalyser"), "TASK-243 renderer must declare fullAppVoiceConversationAnalyser with var");
+  console.log("  testTask243RendererHasConversationStateVars PASS");
+}
+
+function testTask243RendererHasConversationFunctions() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("function setConversationState"), "TASK-243 renderer must define setConversationState");
+  assert.ok(src.includes("function computeConversationRms"), "TASK-243 renderer must define computeConversationRms");
+  assert.ok(src.includes("function _conversationReleaseResources"), "TASK-243 renderer must define _conversationReleaseResources");
+  assert.ok(src.includes("function _startConversationUtteranceRecorder"), "TASK-243 renderer must define _startConversationUtteranceRecorder");
+  assert.ok(src.includes("function _stopConversationUtteranceRecorder"), "TASK-243 renderer must define _stopConversationUtteranceRecorder");
+  assert.ok(src.includes("function _transcribeConversationChunks"), "TASK-243 renderer must define _transcribeConversationChunks");
+  assert.ok(src.includes("function _conversationVadTick"), "TASK-243 renderer must define _conversationVadTick");
+  assert.ok(src.includes("async function startConversationMode"), "TASK-243 renderer must define startConversationMode");
+  assert.ok(src.includes("function stopConversationMode"), "TASK-243 renderer must define stopConversationMode");
+  console.log("  testTask243RendererHasConversationFunctions PASS");
+}
+
+async function testTask243ConversationStateDefaultsOff() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  assert.strictEqual(sandbox.fullAppVoiceConversationState, "off",
+    "TASK-243 fullAppVoiceConversationState must default to 'off'");
+  console.log("  testTask243ConversationStateDefaultsOff PASS");
+}
+
+async function testTask243ConversationEnabledDefaultsFalse() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  assert.strictEqual(sandbox.fullAppVoiceConversationEnabled, false,
+    "TASK-243 fullAppVoiceConversationEnabled must default to false");
+  console.log("  testTask243ConversationEnabledDefaultsFalse PASS");
+}
+
+async function testTask243ConversationBtnExistsInSandbox() {
+  const { document } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  const btn = document.getElementById("conversation-mode-btn");
+  assert.ok(btn, "TASK-243 sandbox: #conversation-mode-btn must resolve");
+  console.log("  testTask243ConversationBtnExistsInSandbox PASS");
+}
+
+async function testTask243SetConversationStateWaiting() {
+  const { document, sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  sandbox.setConversationState("waiting");
+  assert.strictEqual(sandbox.fullAppVoiceConversationState, "waiting",
+    "TASK-243 setConversationState('waiting') must update state var");
+  const btn = document.getElementById("conversation-mode-btn");
+  assert.ok(btn.textContent.includes("停止對話"),
+    "TASK-243 setConversationState('waiting') must set btn text to 停止對話");
+  console.log("  testTask243SetConversationStateWaiting PASS");
+}
+
+async function testTask243SetConversationStateOff() {
+  const { document, sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  sandbox.setConversationState("waiting");
+  sandbox.setConversationState("off");
+  assert.strictEqual(sandbox.fullAppVoiceConversationState, "off",
+    "TASK-243 setConversationState('off') must update state var");
+  const btn = document.getElementById("conversation-mode-btn");
+  assert.ok(btn.textContent.includes("開始對話"),
+    "TASK-243 setConversationState('off') must set btn text to 開始對話");
+  console.log("  testTask243SetConversationStateOff PASS");
+}
+
+async function testTask243ComputeRmsReturnsNumber() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  const fakeAnalyser = {
+    fftSize: 256,
+    getFloatTimeDomainData(buf) {
+      for (let i = 0; i < buf.length; i++) buf[i] = 0.5;
+    }
+  };
+  const rms = sandbox.computeConversationRms(fakeAnalyser);
+  assert.strictEqual(typeof rms, "number", "TASK-243 computeConversationRms must return a number");
+  assert.ok(rms > 0, "TASK-243 non-zero signal must produce rms > 0");
+  console.log("  testTask243ComputeRmsReturnsNumber PASS");
+}
+
+async function testTask243ComputeRmsSilenceNearZero() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  const fakeAnalyser = {
+    fftSize: 256,
+    getFloatTimeDomainData(buf) {
+      for (let i = 0; i < buf.length; i++) buf[i] = 0.0;
+    }
+  };
+  const rms = sandbox.computeConversationRms(fakeAnalyser);
+  assert.ok(rms < 0.001, "TASK-243 silence (all zeros) must produce rms near 0, well below threshold");
+  console.log("  testTask243ComputeRmsSilenceNearZero PASS");
+}
+
+async function testTask243StartConversationNoMediaRecorder() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  // MediaRecorder is not in sandbox by default — must gracefully set error state
+  assert.strictEqual(sandbox.fullAppVoiceConversationState, "off",
+    "TASK-243 state must start off");
+  await sandbox.startConversationMode();
+  assert.strictEqual(sandbox.fullAppVoiceConversationState, "error",
+    "TASK-243 startConversationMode without MediaRecorder must set error state");
+  assert.strictEqual(sandbox.fullAppVoiceConversationEnabled, false,
+    "TASK-243 fullAppVoiceConversationEnabled must remain false after error");
+  console.log("  testTask243StartConversationNoMediaRecorder PASS");
+}
+
+async function testTask243StartConversationVoiceInputDisabled() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  sandbox.fullAppVoiceInputEnabled = false;
+  await sandbox.startConversationMode();
+  assert.strictEqual(sandbox.fullAppVoiceConversationState, "off",
+    "TASK-243 startConversationMode with voice input disabled must return early (state stays off)");
+  assert.strictEqual(sandbox.fullAppVoiceConversationEnabled, false,
+    "TASK-243 fullAppVoiceConversationEnabled must remain false when voice input disabled");
+  console.log("  testTask243StartConversationVoiceInputDisabled PASS");
+}
+
+async function testTask243StopConversationMode() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  // Manually set state to simulate an active conversation session
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("waiting");
+  assert.strictEqual(sandbox.fullAppVoiceConversationState, "waiting",
+    "TASK-243 precondition: state must be waiting");
+  sandbox.stopConversationMode();
+  assert.strictEqual(sandbox.fullAppVoiceConversationState, "off",
+    "TASK-243 stopConversationMode must set state to off");
+  assert.strictEqual(sandbox.fullAppVoiceConversationEnabled, false,
+    "TASK-243 stopConversationMode must set enabled to false");
+  console.log("  testTask243StopConversationMode PASS");
+}
+
+async function testTask243VadTickHalfDuplexSendingGuard() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  let analyserCalled = false;
+  sandbox.fullAppVoiceConversationAnalyser = {
+    fftSize: 256,
+    getFloatTimeDomainData(_buf) { analyserCalled = true; }
+  };
+  sandbox.fullAppVoiceConversationState = "sending";
+  sandbox._conversationVadTick();
+  assert.strictEqual(analyserCalled, false,
+    "TASK-243 VAD tick must not call analyser when state is sending (half-duplex guard)");
+  console.log("  testTask243VadTickHalfDuplexSendingGuard PASS");
+}
+
+async function testTask243VadTickHalfDuplexTranscribingGuard() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  let analyserCalled = false;
+  sandbox.fullAppVoiceConversationAnalyser = {
+    fftSize: 256,
+    getFloatTimeDomainData(_buf) { analyserCalled = true; }
+  };
+  sandbox.fullAppVoiceConversationState = "transcribing";
+  sandbox._conversationVadTick();
+  assert.strictEqual(analyserCalled, false,
+    "TASK-243 VAD tick must not call analyser when state is transcribing (half-duplex guard)");
+  console.log("  testTask243VadTickHalfDuplexTranscribingGuard PASS");
+}
+
+async function testTask243VadTickWaitingBelowThreshold() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  sandbox.fullAppVoiceConversationState = "waiting";
+  sandbox.fullAppVoiceConversationAnalyser = {
+    fftSize: 256,
+    getFloatTimeDomainData(buf) { /* all zeros — silent */ }
+  };
+  sandbox._conversationVadTick();
+  assert.strictEqual(sandbox.fullAppVoiceConversationState, "waiting",
+    "TASK-243 VAD tick below RMS threshold must keep state as waiting");
+  console.log("  testTask243VadTickWaitingBelowThreshold PASS");
+}
+
+function testTask243NoNewIpcChannels() {
+  const preloadSrc = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "preload.js"), "utf8");
+  // TASK-243 must not add any new IPC channels — conversation mode uses existing transcribeAudio bridge
+  // Verify renderer.js doesn't call ipcRenderer directly
+  const rendererSrc = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(!/ipcRenderer\.(invoke|send|on)\(/.test(rendererSrc),
+    "TASK-243 renderer.js must not call ipcRenderer directly");
+  // Verify no new ipc channel names were added beyond what TASK-241 established
+  assert.ok(preloadSrc.includes("stt:transcribe"),
+    "TASK-243 preload must still expose stt:transcribe (TASK-241 channel)");
+  console.log("  testTask243NoNewIpcChannels PASS");
+}
+
+function testTask243NoPetWindowCallsInConversationFunctions() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  // Isolate the TASK-243 section
+  const sectionStart = src.indexOf("TASK-243: Voice Conversation Mode\n");
+  const sectionEnd   = src.indexOf("TASK-243: conversation mode button wiring");
+  assert.ok(sectionStart !== -1, "TASK-243 section start comment must be present");
+  assert.ok(sectionEnd !== -1, "TASK-243 button wiring comment must be present");
+  const section = src.slice(sectionStart, sectionEnd + 200);
+  assert.ok(!section.includes("updatePetSpeech"),
+    "TASK-243 conversation functions must not call updatePetSpeech");
+  assert.ok(!section.includes("updatePetExpression"),
+    "TASK-243 conversation functions must not call updatePetExpression");
+  assert.ok(!section.includes("showPet("),
+    "TASK-243 conversation functions must not call showPet");
+  console.log("  testTask243NoPetWindowCallsInConversationFunctions PASS");
+}
+
+async function testTask243RegressionTask242StillPass() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("var fullAppVoiceInputEnabled"),
+    "TASK-243 regression: fullAppVoiceInputEnabled must still exist");
+  assert.ok(src.includes("var fullAppVoiceAutoSendEnabled"),
+    "TASK-243 regression: fullAppVoiceAutoSendEnabled must still exist");
+  assert.ok(src.includes("TASK-242: voice settings toggle wiring"),
+    "TASK-243 regression: TASK-242 toggle wiring section must still be present");
+  assert.ok(src.includes("TASK-242: auto-send if toggle enabled"),
+    "TASK-243 regression: TASK-242 auto-send guard must still be present");
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  assert.strictEqual(sandbox.fullAppVoiceInputEnabled, true,
+    "TASK-243 regression: fullAppVoiceInputEnabled must still default to true");
+  assert.strictEqual(sandbox.fullAppVoiceAutoSendEnabled, false,
+    "TASK-243 regression: fullAppVoiceAutoSendEnabled must still default to false");
+  console.log("  testTask243RegressionTask242StillPass PASS");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -12852,6 +13121,30 @@ async function main() {
   testTask242NoNewIpcChannels();
   await testTask242NoAudioPersistence();
   await testTask242RegressionTask241StillPass();
+
+  // TASK-243: Voice Conversation Mode / Silence Detection
+  testTask243HtmlConversationStripExists();
+  testTask243HtmlConversationBtnAccessibility();
+  testTask243CssConversationStrip();
+  testTask243RendererHasConversationConstants();
+  testTask243RendererHasConversationStateVars();
+  testTask243RendererHasConversationFunctions();
+  await testTask243ConversationStateDefaultsOff();
+  await testTask243ConversationEnabledDefaultsFalse();
+  await testTask243ConversationBtnExistsInSandbox();
+  await testTask243SetConversationStateWaiting();
+  await testTask243SetConversationStateOff();
+  await testTask243ComputeRmsReturnsNumber();
+  await testTask243ComputeRmsSilenceNearZero();
+  await testTask243StartConversationNoMediaRecorder();
+  await testTask243StartConversationVoiceInputDisabled();
+  await testTask243StopConversationMode();
+  await testTask243VadTickHalfDuplexSendingGuard();
+  await testTask243VadTickHalfDuplexTranscribingGuard();
+  await testTask243VadTickWaitingBelowThreshold();
+  testTask243NoNewIpcChannels();
+  testTask243NoPetWindowCallsInConversationFunctions();
+  await testTask243RegressionTask242StillPass();
 
   console.log("renderer chat smoke: PASS");
 }

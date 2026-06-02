@@ -94,9 +94,10 @@ changing visible behavior.
 3. TASK-240 Christina Desktop Pet Cutout Stage Foundation. **DONE — WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-02).** Pure Pet Window CSS polish: transparent cutout shell, avatar-bound stage pad/glow, avatar-container as primary drag zone, close X permanently hidden, compact hover dock controls, no runtime behavior change.
 4. TASK-241 Full App Voice Input Button. **DONE — WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-02).** Narrow `transcribeAudio` bridge added to renderer preload; mic button + toggle-to-record UI in Full App input bar; transcript fills textarea, no auto-send, no always-listening. 22 TASK-241 smoke tests PASS. Windows visual smoke PASS (2026-06-02).
 5. TASK-242 Full App Voice Input Settings / Auto-send Mode. **DONE — WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-02).** Session-only Voice Input Enabled / Auto-send Transcript toggles added below input bar. Voice Input OFF blocks mic. Auto-send ON calls `sendMessage(trimmed)` with full isSending/editingMessageState guards; empty transcript blocked. No new IPC, no Pet Window calls from toggle handlers, no localStorage, no VAD, no always-listening.
-6. TASK-243 Extract Chat History / Copy / Export Module.
-7. TASK-244 Extract Context Menu / Search Modules.
-8. TASK-245 Renderer Core Cleanup.
+6. TASK-243 Voice Conversation Mode / Silence Detection. **DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-03, Windows visual smoke 2026-06-02).** Explicit conversation session with VAD (Web Audio API / AnalyserNode amplitude). Start/stop button; defaults OFF; states: off/waiting/speaking/transcribing/sending/error. Silence about 1 s after speech stops the utterance, STT fills input, and existing `sendMessage(trimmed)` sends once. Half-duplex guard prevents recording while transcribing/sending and prevents concurrent `/chat`. Voice Input OFF blocks start. Stop releases mic stream, VAD timer, recorder, and audio context. No new IPC, no Pet Window calls, no TTS, no Output Queue or Diagnostics Drawer change, no audio persistence, no background listening, no always-listening. 22 TASK-243 smoke tests PASS (500 renderer-chat total). Windows visual smoke PASS.
+7. TASK-244 Voice Conversation Polish / Turn Feedback / Safety Tuning.
+8. TASK-245 Extract Context Menu / Search Modules.
+9. TASK-246 Renderer Core Cleanup.
 
 ## 6. Module Contract Rules
 

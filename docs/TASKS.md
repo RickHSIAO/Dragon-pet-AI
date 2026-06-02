@@ -25035,3 +25035,136 @@ Windows visual smoke PASS (2026-06-02):
 - General regression PASS: text send, edit/delete/clear/copy/export, Pet
   Window Mic / direct input, Diagnostics drawer, Output Queue disabled all
   normal. No history/copy/export pollution from voice settings toggles.
+
+## TASK-243 | Voice Conversation Mode / Silence Detection
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-06-03
+**Phase:** Phase 5 - Full App Voice Input
+**Depends on:** TASK-242
+
+### Goal
+
+Add explicit Voice Conversation Mode to the Full App with amplitude-based VAD (Voice
+Activity Detection). User presses **Start Conversation** to begin a session; pressing
+**Stop Conversation** (or the same button) ends it. VAD uses the Web Audio API
+`AnalyserNode` to detect silence after speech and auto-triggers one STT → send cycle
+per utterance, then re-arms to wait for the next one.
+
+### UX Behavior
+
+- A conversation strip (`#voice-conversation-strip`) appears below `#voice-settings-strip`.
+- **Start Conversation** button (`#conversation-mode-btn`, `data-state="off"` initially):
+  - Click → `startConversationMode()` → requests mic, creates `AudioContext`/`AnalyserNode`,
+    starts VAD `setInterval`, sets state to `waiting`.
+  - During session the button shows `停止對話`; clicking stops the session.
+- Status span (`#conversation-mode-status`) shows live state label.
+- **States:** `off` | `waiting` | `speaking` | `transcribing` | `sending` | `error`.
+- **VAD cycle:** while `waiting`, each tick checks RMS vs threshold. RMS ≥ threshold
+  → `speaking`, starts `MediaRecorder` for this utterance. While `speaking`, silence
+  ≥ `FULL_APP_CONVERSATION_SILENCE_MS` (after min speech time) or max utterance time →
+  stops recorder → `transcribing` → STT → fills textarea → `sendMessage(trimmed)` →
+  `sending` → re-arms to `waiting` after reply.
+- **Half-duplex guard:** VAD tick returns early when state is `sending` or `transcribing`.
+- Respects **Voice Input Enabled** toggle (TASK-242): `startConversationMode` returns
+  early if `fullAppVoiceInputEnabled` is false.
+
+### Constants
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `FULL_APP_CONVERSATION_SILENCE_MS` | 1000 | Silence duration (ms) after min speech to stop utterance |
+| `FULL_APP_CONVERSATION_MIN_SPEECH_MS` | 300 | Min speech time (ms) before silence counts |
+| `FULL_APP_CONVERSATION_MAX_UTTERANCE_MS` | 30000 | Max utterance duration (ms) before forced stop |
+| `FULL_APP_CONVERSATION_VAD_INTERVAL_MS` | 100 | VAD polling interval (ms) |
+| `FULL_APP_CONVERSATION_RMS_THRESHOLD` | 0.035 | RMS amplitude threshold for speech detection |
+
+### Safety Constraints
+
+- No new IPC channel (reuses `stt:transcribe` from TASK-241).
+- No Pet Window calls from conversation functions.
+- No audio persistence, no localStorage, no sessionStorage.
+- No always-listening — session only active while user pressed Start.
+- No background listening and no mic startup on app launch.
+- No audio exported without user action.
+- `sendMessage(trimmed)` via existing guard chain — never raw `fetch`.
+- Half-duplex: no recording while `sending` or `transcribing`.
+- `fullAppVoiceInputEnabled` guard respected (TASK-242 integration).
+- No TTS trigger.
+- No Output Queue or Diagnostics Drawer change.
+- No history / copy / export pollution unless a transcript is actually sent through the existing send flow as a formal user message.
+- Error states set `fullAppVoiceConversationEnabled = false` and release resources.
+- All resources (stream, AudioContext, VAD timer, recorder) released on stop or error.
+
+### Files Modified
+
+| File | Change | Runtime? |
+|---|---|---|
+| `apps/desktop/src/renderer/index.html` | `#voice-conversation-strip` with `#conversation-mode-btn` and `#conversation-mode-status` added after `#voice-settings-strip` | Yes |
+| `apps/desktop/src/renderer/styles.css` | TASK-243 CSS section: `#voice-conversation-strip`, `.conversation-mode-btn`, `.conversation-mode-status` with state-based selectors | CSS only |
+| `apps/desktop/src/renderer/renderer.js` | 5 TASK-243 constants; 2 DOM refs; 10 state vars (`var`); 9 functions: `setConversationState`, `computeConversationRms`, `_conversationReleaseResources`, `_startConversationUtteranceRecorder`, `_stopConversationUtteranceRecorder`, `_transcribeConversationChunks`, `_conversationVadTick`, `startConversationMode`, `stopConversationMode`; button click wiring | Yes |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | 22 TASK-243 smoke tests; `conversation-mode-status hidden=true` and `conversation-mode-btn dataset.state="off"` in FakeDocument; tests added to `main()` | No |
+
+### Test Coverage (22 TASK-243 tests)
+
+| Test | Type | What it verifies |
+|---|---|---|
+| `testTask243HtmlConversationStripExists` | static | `#voice-conversation-strip`, both element IDs, class in HTML |
+| `testTask243HtmlConversationBtnAccessibility` | static | `type=button`, Chinese aria-labels, `aria-live=polite` |
+| `testTask243CssConversationStrip` | static | TASK-243 CSS section, `#voice-conversation-strip`, `.conversation-mode-btn`, `.conversation-mode-status` |
+| `testTask243RendererHasConversationConstants` | static | all 5 TASK-243 constants present in renderer |
+| `testTask243RendererHasConversationStateVars` | static | all key `var` state vars declared with `var` |
+| `testTask243RendererHasConversationFunctions` | static | all 9 TASK-243 functions defined in renderer |
+| `testTask243ConversationStateDefaultsOff` | dynamic | `fullAppVoiceConversationState` defaults to `"off"` |
+| `testTask243ConversationEnabledDefaultsFalse` | dynamic | `fullAppVoiceConversationEnabled` defaults to `false` |
+| `testTask243ConversationBtnExistsInSandbox` | dynamic | `#conversation-mode-btn` DOM element resolves |
+| `testTask243SetConversationStateWaiting` | dynamic | `setConversationState("waiting")` updates state var and btn text |
+| `testTask243SetConversationStateOff` | dynamic | `setConversationState("off")` restores btn text to 開始對話 |
+| `testTask243ComputeRmsReturnsNumber` | dynamic | non-zero signal → RMS > 0 |
+| `testTask243ComputeRmsSilenceNearZero` | dynamic | silence (all zeros) → RMS < 0.001 |
+| `testTask243StartConversationNoMediaRecorder` | dynamic | no MediaRecorder in sandbox → error state, enabled stays false |
+| `testTask243StartConversationVoiceInputDisabled` | dynamic | `fullAppVoiceInputEnabled=false` → state stays off |
+| `testTask243StopConversationMode` | dynamic | `stopConversationMode()` sets state=off, enabled=false |
+| `testTask243VadTickHalfDuplexSendingGuard` | dynamic | VAD tick skips analyser when state=sending |
+| `testTask243VadTickHalfDuplexTranscribingGuard` | dynamic | VAD tick skips analyser when state=transcribing |
+| `testTask243VadTickWaitingBelowThreshold` | dynamic | RMS below threshold → state stays waiting |
+| `testTask243NoNewIpcChannels` | static | no direct ipcRenderer calls; `stt:transcribe` still present |
+| `testTask243NoPetWindowCallsInConversationFunctions` | static | TASK-243 section has no Pet Window API calls |
+| `testTask243RegressionTask242StillPass` | static+dynamic | TASK-242 state vars, wiring, auto-send guard all still present |
+
+### Automated Smoke
+
+- [x] `node apps\desktop\scripts\renderer-chat-smoke.js` PASS (500 PASS, 22 TASK-243 tests).
+- [x] `node apps\desktop\scripts\pet-window-smoke.js` PASS (82 checks).
+- [x] `node apps\desktop\scripts\pet-renderer-smoke.js` PASS (285 checks).
+
+### Windows Visual Smoke
+
+PASS confirmed by user on 2026-06-02.
+
+Confirmed items:
+
+- Basic startup PASS: Full App and Pet Window normal; Conversation Mode defaults OFF; no automatic microphone start.
+- Start Conversation PASS: user manually starts the session; state enters waiting/listening; no immediate STT, `/chat`, or history write.
+- Silence detection PASS: after one spoken sentence and about 1 second of pause, the utterance recorder stops and state enters transcribing.
+- Auto STT + send PASS: transcript fills the input and then uses the existing send flow exactly once; Christina replies normally.
+- Half-duplex PASS: no next utterance recording and no concurrent `/chat` while the AI reply is in progress; mode returns to waiting only after the reply completes.
+- Consecutive utterances PASS: a second sentence can be spoken after the first reply completes; order is correct, with no mixed utterances and no duplicate sends.
+- Stop Conversation PASS: stopping releases the microphone and stops detection; no further STT or send occurs.
+- Voice Input OFF guard PASS: Conversation Mode cannot start while voice input is disabled; no microphone, STT, or `/chat`.
+- Empty / short audio PASS: empty transcript is not sent; UI does not get stuck; error text is clean.
+- General regression PASS: TASK-241 Mic, TASK-242 Auto-send, typed send, edit/delete/clear/copy/export, Pet Window, Diagnostics Drawer, and disabled Output Queue all remain normal.
+
+### Follow-up Direction
+
+Recommended next task:
+
+TASK-244 — Voice Conversation Polish / Turn Feedback / Safety Tuning.
+
+Future polish notes:
+
+- VAD threshold / silence duration can be tuned.
+- Speaking volume / listening feedback can be made clearer.
+- Conversation Mode state can be more explicit.
+- Still no background listening.
+- Still no raw audio persistence.

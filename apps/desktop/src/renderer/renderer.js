@@ -63,6 +63,12 @@ const EDIT_SEND_BUTTON_TEXT = "送出修改";
 const FULL_APP_RECORDING_MAX_MS    = 30000;
 const FULL_APP_STT_TIMEOUT_MS      = 30000;
 const FULL_APP_VOICE_CHAT_MAX_CHARS = 2000;
+// TASK-243: Voice Conversation Mode constants
+const FULL_APP_CONVERSATION_SILENCE_MS       = 1000;
+const FULL_APP_CONVERSATION_MIN_SPEECH_MS    = 300;
+const FULL_APP_CONVERSATION_MAX_UTTERANCE_MS = 30000;
+const FULL_APP_CONVERSATION_VAD_INTERVAL_MS  = 100;
+const FULL_APP_CONVERSATION_RMS_THRESHOLD    = 0.035;
 // TASK-179: gentle hint shown after OCR summary exists.
 const ocrAskHintEl = document.getElementById("ocr-ask-hint");
 const memoryForm  = document.getElementById("memory-form");
@@ -127,6 +133,9 @@ const voiceInputStatus = document.getElementById("voice-input-status");
 // TASK-242: voice settings toggle DOM refs
 const voiceInputEnabledToggle = document.getElementById("voice-input-enabled-toggle");
 const voiceAutosendToggle     = document.getElementById("voice-autosend-toggle");
+// TASK-243: Voice Conversation Mode DOM refs
+const conversationModeBtn    = document.getElementById("conversation-mode-btn");
+const conversationModeStatus = document.getElementById("conversation-mode-status");
 
 // ---------------------------------------------------------------------------
 // State
@@ -143,6 +152,17 @@ let _fullAppRecordingTimer = null;
 // TASK-242: voice input settings state — session-only, not persisted
 var fullAppVoiceInputEnabled    = true;  // var: exposed to vm sandbox for smoke tests
 var fullAppVoiceAutoSendEnabled = false; // var: exposed to vm sandbox for smoke tests
+// TASK-243: Voice Conversation Mode state — session-only, not persisted
+var fullAppVoiceConversationEnabled         = false; // var: exposed to vm sandbox
+var fullAppVoiceConversationState           = "off"; // off|waiting|speaking|transcribing|sending|error — var: exposed to vm sandbox
+var fullAppVoiceConversationStream          = null;
+var fullAppVoiceConversationAudioContext    = null;
+var fullAppVoiceConversationAnalyser        = null;
+var fullAppVoiceConversationVadTimer        = null;
+var fullAppVoiceConversationRecorder        = null;
+var fullAppVoiceConversationChunks          = [];
+var fullAppVoiceConversationSpeechStartedAt = 0;
+var fullAppVoiceConversationLastVoiceAt     = 0;
 // TASK-060: track in-flight test connection to prevent double-click
 let isTestingConnection = false;
 // TASK-060: cache last-loaded provider settings for Test Connection enable conditions
@@ -4204,6 +4224,239 @@ if (voiceInputEnabledToggle) {
 if (voiceAutosendToggle) {
   voiceAutosendToggle.addEventListener("change", function () {
     fullAppVoiceAutoSendEnabled = Boolean(voiceAutosendToggle.checked);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// TASK-243: Voice Conversation Mode
+// ---------------------------------------------------------------------------
+
+function setConversationState(state) {
+  fullAppVoiceConversationState = state;
+  if (!conversationModeBtn) return;
+  var statusMap = {
+    "off":          { btn: "開始對話",       status: "",             hidden: true  },
+    "waiting":      { btn: "停止對話",       status: "等待語音…",    hidden: false },
+    "speaking":     { btn: "停止對話",       status: "偵測到聲音…",  hidden: false },
+    "transcribing": { btn: "停止對話",       status: "辨識中…",      hidden: false },
+    "sending":      { btn: "停止對話",       status: "傳送中…",      hidden: false },
+    "error":        { btn: "開始對話",       status: "發生錯誤，請重試。", hidden: false }
+  };
+  var entry = statusMap[state] || statusMap["off"];
+  conversationModeBtn.textContent = entry.btn;
+  conversationModeBtn.dataset.state = state;
+  conversationModeBtn.disabled = false;
+  if (conversationModeStatus) {
+    conversationModeStatus.textContent = entry.status;
+    conversationModeStatus.hidden = entry.hidden;
+    if (!entry.hidden) conversationModeStatus.dataset.state = state;
+  }
+}
+
+function computeConversationRms(analyserNode) {
+  var buf = new Float32Array(analyserNode.fftSize);
+  analyserNode.getFloatTimeDomainData(buf);
+  var sum = 0;
+  for (var i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+  return Math.sqrt(sum / buf.length);
+}
+
+function _conversationReleaseResources() {
+  if (fullAppVoiceConversationVadTimer !== null) {
+    clearInterval(fullAppVoiceConversationVadTimer);
+    fullAppVoiceConversationVadTimer = null;
+  }
+  try {
+    if (fullAppVoiceConversationRecorder && fullAppVoiceConversationRecorder.state !== "inactive") {
+      fullAppVoiceConversationRecorder.stop();
+    }
+  } catch (_e) {}
+  fullAppVoiceConversationRecorder = null;
+  fullAppVoiceConversationChunks = [];
+  try {
+    if (fullAppVoiceConversationStream) {
+      fullAppVoiceConversationStream.getTracks().forEach(function (t) { t.stop(); });
+    }
+  } catch (_e) {}
+  fullAppVoiceConversationStream = null;
+  try {
+    if (fullAppVoiceConversationAudioContext && fullAppVoiceConversationAudioContext.state !== "closed") {
+      fullAppVoiceConversationAudioContext.close();
+    }
+  } catch (_e) {}
+  fullAppVoiceConversationAudioContext = null;
+  fullAppVoiceConversationAnalyser = null;
+}
+
+function _startConversationUtteranceRecorder() {
+  fullAppVoiceConversationChunks = [];
+  var mimeType = (typeof MediaRecorder !== "undefined" &&
+    typeof MediaRecorder.isTypeSupported === "function" &&
+    MediaRecorder.isTypeSupported("audio/webm")) ? "audio/webm" : "";
+  var recorder;
+  try {
+    recorder = new MediaRecorder(
+      fullAppVoiceConversationStream,
+      mimeType ? { mimeType: mimeType } : {}
+    );
+  } catch (_e) {
+    setConversationState("error");
+    return;
+  }
+  fullAppVoiceConversationRecorder = recorder;
+  var chunks = fullAppVoiceConversationChunks;
+  var capturedMimeType = recorder.mimeType || mimeType || "audio/webm";
+  recorder.addEventListener("dataavailable", function (ev) {
+    if (ev.data && ev.data.size > 0) chunks.push(ev.data);
+  });
+  recorder.addEventListener("stop", function () {
+    _transcribeConversationChunks(chunks.slice(), capturedMimeType);
+  });
+  recorder.start();
+}
+
+function _stopConversationUtteranceRecorder() {
+  setConversationState("transcribing");
+  try {
+    if (fullAppVoiceConversationRecorder && fullAppVoiceConversationRecorder.state !== "inactive") {
+      fullAppVoiceConversationRecorder.stop();
+    }
+  } catch (_e) {
+    setConversationState("error");
+  }
+}
+
+function _transcribeConversationChunks(chunks, mimeType) {
+  var audioBlob;
+  try {
+    audioBlob = new Blob(chunks || [], { type: mimeType || "audio/webm" });
+  } catch (_e) {
+    if (fullAppVoiceConversationEnabled) setConversationState("waiting");
+    return;
+  }
+
+  transcribeFullAppAudioBlob(audioBlob).then(function (transcript) {
+    if (!fullAppVoiceConversationEnabled) return;
+
+    if (transcript === null || !transcript) {
+      setConversationState("waiting");
+      return;
+    }
+
+    var trimmed = transcript.trim();
+    if (!trimmed || trimmed.length > FULL_APP_VOICE_CHAT_MAX_CHARS) {
+      setConversationState("waiting");
+      return;
+    }
+
+    if (msgInput) {
+      msgInput.value = trimmed;
+      msgInput.dispatchEvent(new Event("input"));
+    }
+
+    if (!isSending && !editingMessageState && typeof sendMessage === "function") {
+      setConversationState("sending");
+      var result = sendMessage(trimmed);
+      if (result && typeof result.then === "function") {
+        result.then(function () {
+          if (fullAppVoiceConversationEnabled) setConversationState("waiting");
+        }).catch(function () {
+          if (fullAppVoiceConversationEnabled) setConversationState("waiting");
+        });
+      } else {
+        if (fullAppVoiceConversationEnabled) setConversationState("waiting");
+      }
+    } else {
+      setConversationState("waiting");
+    }
+  }).catch(function () {
+    if (fullAppVoiceConversationEnabled) setConversationState("waiting");
+  });
+}
+
+function _conversationVadTick() {
+  var state = fullAppVoiceConversationState;
+  if (state === "sending" || state === "transcribing") return;
+  if (!fullAppVoiceConversationAnalyser) return;
+
+  var rms = computeConversationRms(fullAppVoiceConversationAnalyser);
+  var now = Date.now();
+
+  if (state === "waiting") {
+    if (rms >= FULL_APP_CONVERSATION_RMS_THRESHOLD) {
+      fullAppVoiceConversationSpeechStartedAt = now;
+      fullAppVoiceConversationLastVoiceAt = now;
+      setConversationState("speaking");
+      _startConversationUtteranceRecorder();
+    }
+  } else if (state === "speaking") {
+    if (rms >= FULL_APP_CONVERSATION_RMS_THRESHOLD) {
+      fullAppVoiceConversationLastVoiceAt = now;
+    }
+    var silenceDuration = now - fullAppVoiceConversationLastVoiceAt;
+    var speechDuration  = now - fullAppVoiceConversationSpeechStartedAt;
+    var minMet   = speechDuration >= FULL_APP_CONVERSATION_MIN_SPEECH_MS;
+    var timedOut = speechDuration >= FULL_APP_CONVERSATION_MAX_UTTERANCE_MS;
+    if (timedOut || (minMet && silenceDuration >= FULL_APP_CONVERSATION_SILENCE_MS)) {
+      _stopConversationUtteranceRecorder();
+    }
+  }
+}
+
+async function startConversationMode() {
+  if (!fullAppVoiceInputEnabled) return;
+  if (fullAppVoiceConversationEnabled) return;
+  if (typeof MediaRecorder === "undefined") {
+    setConversationState("error");
+    return;
+  }
+
+  var stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  } catch (_e) {
+    setConversationState("error");
+    return;
+  }
+
+  var audioContext;
+  try {
+    audioContext = new AudioContext();
+  } catch (_e) {
+    try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (_e2) {}
+    setConversationState("error");
+    return;
+  }
+
+  var source = audioContext.createMediaStreamSource(stream);
+  var analyser = audioContext.createAnalyser();
+  analyser.fftSize = 256;
+  source.connect(analyser);
+
+  fullAppVoiceConversationStream       = stream;
+  fullAppVoiceConversationAudioContext = audioContext;
+  fullAppVoiceConversationAnalyser     = analyser;
+  fullAppVoiceConversationEnabled      = true;
+
+  setConversationState("waiting");
+
+  fullAppVoiceConversationVadTimer = setInterval(_conversationVadTick, FULL_APP_CONVERSATION_VAD_INTERVAL_MS);
+}
+
+function stopConversationMode() {
+  fullAppVoiceConversationEnabled = false;
+  _conversationReleaseResources();
+  setConversationState("off");
+}
+
+// TASK-243: conversation mode button wiring
+if (conversationModeBtn) {
+  conversationModeBtn.addEventListener("click", function () {
+    if (fullAppVoiceConversationEnabled) {
+      stopConversationMode();
+    } else {
+      startConversationMode();
+    }
   });
 }
 

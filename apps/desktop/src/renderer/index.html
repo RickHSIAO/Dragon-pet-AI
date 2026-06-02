@@ -164,6 +164,15 @@ Queue: disabled · Items: 0 · Recent: 0 · Next: none</pre>
     </label>
   </div>
 
+  <!-- TASK-243: Voice Conversation Mode strip (session-only, not persisted) -->
+  <div id="voice-conversation-strip" class="voice-conversation-strip" role="group" aria-label="語音對話模式">
+    <button id="conversation-mode-btn" class="conversation-mode-btn" type="button"
+      data-state="off" aria-label="開始語音對話模式" title="開始語音對話 (VAD 自動偵測靜音)">
+      開始對話
+    </button>
+    <span id="conversation-mode-status" class="conversation-mode-status" role="status" aria-live="polite" hidden></span>
+  </div>
+
   <!-- ── Settings sections (below the fold) ────────────────── -->
   <!-- Memory management — collapsed by default; expand to manage -->
   <section id="memory-section" aria-labelledby="memory-title">

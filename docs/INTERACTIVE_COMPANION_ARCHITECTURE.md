@@ -548,8 +548,21 @@ Recommended next architecture phase:
   Auto-send Transcript toggles in voice-settings-strip below input bar; Voice Input OFF blocks mic;
   auto-send ON calls sendMessage(trimmed) with full isSending/editingMessageState guards; empty
   transcript blocked; no new IPC, no Pet Window calls from toggle handlers, no localStorage, no
-  always-listening, no VAD, no silence detection, no TTS) DONE - WINDOWS VISUAL SMOKE PASS.
+  always-listening, no VAD, no silence detection, no TTS) DONE - WINDOWS VISUAL SMOKE PASS;
+  TASK-243 (Voice Conversation Mode / Silence Detection — explicit conversation session with
+  amplitude-based VAD via Web Audio API AnalyserNode; Start/Stop button; states:
+  off/waiting/speaking/transcribing/sending/error; half-duplex guard while sending or transcribing;
+  VAD RMS threshold 0.035; silence 1 s after min 300 ms speech stops utterance → STT →
+  sendMessage(trimmed) → re-arms to waiting; reuses stt:transcribe bridge from TASK-241; no new
+  IPC, no Pet Window calls, no audio persistence, no always-listening, no localStorage, no TTS;
+  fullAppVoiceInputEnabled guard respected; Windows visual smoke PASS on 2026-06-02: startup OFF/no
+  auto mic, manual start, silence detection, auto STT + single send, half-duplex, consecutive
+  utterances, stop, Voice Input OFF guard, empty/short audio handling, and general regression)
+  DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS.
   Based on `docs/RENDERER_MODULARIZATION_PLAN.md`.
+- TASK-244 recommended next: Voice Conversation Polish / Turn Feedback / Safety Tuning, including
+  VAD threshold / silence duration tuning, speaking volume / listening feedback, and clearer
+  Conversation Mode state while preserving no background listening and no raw audio persistence.
 - Relationship state.
 - Mood / attention / energy state beyond the local preview foundation.
 - Idle reaction policy.

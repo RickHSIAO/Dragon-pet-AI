@@ -257,6 +257,24 @@ Suggested research and implementation tasks:
   STT, using all existing guards (isSending, editingMessageState, validation, history). Empty
   transcript blocked. Concurrent send blocked. Auto-send never bypasses sendMessage. No new IPC.
   No Pet Window calls. Session-only toggle. Windows visual smoke PASS (2026-06-02).
+- TASK-STT-004 Silence detection / VAD loop. **Covered by TASK-243 (DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS; implemented 2026-06-03, Windows visual smoke 2026-06-02):**
+  Explicit conversation session (Start/Stop button). VAD via Web Audio API `AnalyserNode` RMS
+  amplitude. States: off/waiting/speaking/transcribing/sending/error. Half-duplex guard: no
+  recording while sending or transcribing. Auto-transcribe utterance after silence ≥ 1000 ms
+  (after ≥ 300 ms speech). Max utterance 30 s. Reuses `transcribeFullAppAudioBlob` bridge
+  (TASK-241 `stt:transcribe`). Fills textarea → `sendMessage(trimmed)` → re-arms to waiting.
+  No direct `/chat` fetch and no sendMessage / isSending bypass. Conversation Mode defaults OFF,
+  never starts on app launch, and cannot start when Voice Input is OFF. Stop Conversation releases
+  mic stream, VAD timer, recorder, and audio context. No new IPC. No Pet Window calls. No TTS.
+  No Output Queue or Diagnostics Drawer change. No audio persistence. No background listening.
+  No always-listening. Session-only. 22 TASK-243 smoke tests PASS. Windows visual smoke PASS
+  (2026-06-02): startup OFF/no auto mic, manual start, silence detection, auto STT + single send,
+  half-duplex, consecutive utterances, stop, Voice Input OFF guard, empty/short audio handling, and
+  general regression all confirmed.
+
+Recommended follow-up: TASK-244 — Voice Conversation Polish / Turn Feedback / Safety Tuning.
+Future tuning can adjust VAD threshold / silence duration and improve speaking volume / listening
+feedback while preserving no background listening and no raw audio persistence.
 
 Each future task must explicitly define safety boundaries, user controls,
 provider scope, queue priority, and no-regression checks.
