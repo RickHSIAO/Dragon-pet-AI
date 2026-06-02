@@ -59,6 +59,10 @@ const chatNewMsgBtn      = document.getElementById("chat-new-message-btn");  // 
 const chatEmptyState     = document.getElementById("chat-empty-state");      // TASK-208
 const SEND_BUTTON_DEFAULT_TEXT = sendBtn ? (sendBtn.textContent || "Send") : "Send";
 const EDIT_SEND_BUTTON_TEXT = "送出修改";
+// TASK-241: Full App voice input constants
+const FULL_APP_RECORDING_MAX_MS    = 30000;
+const FULL_APP_STT_TIMEOUT_MS      = 30000;
+const FULL_APP_VOICE_CHAT_MAX_CHARS = 2000;
 // TASK-179: gentle hint shown after OCR summary exists.
 const ocrAskHintEl = document.getElementById("ocr-ask-hint");
 const memoryForm  = document.getElementById("memory-form");
@@ -117,12 +121,22 @@ const saveProviderSettingsBtn   = document.getElementById("save-provider-setting
 const testProviderConnectionBtn = document.getElementById("test-provider-connection-btn");
 const providerKeyMsg            = document.getElementById("provider-key-msg");
 const providerTestMsg           = document.getElementById("provider-test-msg");
+// TASK-241: Full App voice input DOM refs
+const voiceInputBtn    = document.getElementById("voice-input-btn");
+const voiceInputStatus = document.getElementById("voice-input-status");
 
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 let currentMood = "neutral";
 let isSending   = false;
+// TASK-241: Full App voice input state — isolated from isSending / chat state
+var fullAppRecording    = false; // var: exposed to vm sandbox for smoke tests
+var fullAppTranscribing = false; // var: exposed to vm sandbox for smoke tests
+let _fullAppMicStream    = null;
+let _fullAppRecorder     = null;
+let _fullAppChunks       = [];
+let _fullAppRecordingTimer = null;
 // TASK-060: track in-flight test connection to prevent double-click
 let isTestingConnection = false;
 // TASK-060: cache last-loaded provider settings for Test Connection enable conditions
@@ -3822,6 +3836,344 @@ if (chatNewMsgBtn) {
   chatNewMsgBtn.addEventListener("click", () => {
     scrollChatToBottom();
     hideNewMessageBtn();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// TASK-241: Full App Voice Input
+// Toggle-to-record mic button. Transcript fills #message-input for user review.
+// No auto-send. No Pet Window calls. No audio persistence. No new IPC channels.
+// ---------------------------------------------------------------------------
+
+function setFullAppVoiceState(state) {
+  // state: "idle" | "recording" | "transcribing"
+  var isIdle         = state === "idle";
+  var isRecording    = state === "recording";
+  var isTranscribing = state === "transcribing";
+
+  fullAppRecording    = isRecording;
+  fullAppTranscribing = isTranscribing;
+
+  if (voiceInputBtn) {
+    if (isIdle) {
+      delete voiceInputBtn.dataset.state;
+      voiceInputBtn.disabled = false;
+    } else {
+      voiceInputBtn.dataset.state = state;
+      voiceInputBtn.disabled = isTranscribing;
+    }
+  }
+
+  if (voiceInputStatus) {
+    if (isRecording) {
+      voiceInputStatus.textContent = "錄音中… 再按停止";
+      voiceInputStatus.dataset.state = "recording";
+      voiceInputStatus.hidden = false;
+    } else if (isTranscribing) {
+      voiceInputStatus.textContent = "辨識中…";
+      voiceInputStatus.dataset.state = "transcribing";
+      voiceInputStatus.hidden = false;
+    } else {
+      voiceInputStatus.textContent = "";
+      delete voiceInputStatus.dataset.state;
+      voiceInputStatus.hidden = true;
+    }
+  }
+}
+
+async function transcribeFullAppAudioBlob(blob) {
+  var api = (typeof window !== "undefined" && window !== null) ? window.dragonPet : null;
+  if (!api || typeof api.transcribeAudio !== "function") {
+    return null; // IPC bridge not wired — silent no-op
+  }
+
+  var arrayBuffer;
+  try {
+    arrayBuffer = await blob.arrayBuffer();
+  } catch (_e) {
+    throw new Error("stt_error");
+  }
+
+  var timeoutId;
+  var timeoutPromise = new Promise(function (_, reject) {
+    timeoutId = setTimeout(function () {
+      reject(new Error("stt_timeout"));
+    }, FULL_APP_STT_TIMEOUT_MS);
+  });
+
+  var result;
+  try {
+    result = await Promise.race([api.transcribeAudio(arrayBuffer), timeoutPromise]);
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err && (err.message === "stt_timeout" || err.message === "stt_offline")) throw err;
+    throw new Error("stt_error");
+  }
+  clearTimeout(timeoutId);
+
+  if (!result || typeof result !== "object") throw new Error("stt_error");
+  var status = result.status || "error";
+  if (status === "unavailable") throw new Error("stt_unavailable");
+  if (status === "offline")     throw new Error("stt_offline");
+  if (status === "error")       throw new Error("stt_error");
+  if (status === "empty" || !result.transcript) return "";
+  return String(result.transcript);
+}
+
+function _fullAppSttTranscribeChunks(chunks, mimeType) {
+  var audioBlob;
+  try {
+    audioBlob = new Blob(chunks || [], { type: mimeType || "audio/webm" });
+  } catch (_e) {
+    setFullAppVoiceState("idle");
+    return;
+  }
+
+  transcribeFullAppAudioBlob(audioBlob).then(function (transcript) {
+    setFullAppVoiceState("idle");
+
+    if (transcript === null) {
+      return; // IPC bridge not available — silent no-op
+    }
+
+    if (!transcript) {
+      var emptyMsg = "未偵測到語音，請重試。";
+      if (voiceInputStatus) {
+        voiceInputStatus.textContent = emptyMsg;
+        voiceInputStatus.hidden = false;
+        setTimeout(function () {
+          if (voiceInputStatus.textContent === emptyMsg) {
+            voiceInputStatus.textContent = "";
+            voiceInputStatus.hidden = true;
+          }
+        }, 3000);
+      }
+      return;
+    }
+
+    var trimmed = transcript.trim();
+    if (trimmed.length > FULL_APP_VOICE_CHAT_MAX_CHARS) {
+      var longMsg = "語音太長，請縮短後再試。";
+      if (voiceInputStatus) {
+        voiceInputStatus.textContent = longMsg;
+        voiceInputStatus.hidden = false;
+        setTimeout(function () {
+          if (voiceInputStatus.textContent === longMsg) {
+            voiceInputStatus.textContent = "";
+            voiceInputStatus.hidden = true;
+          }
+        }, 4000);
+      }
+      return;
+    }
+
+    // Fill textarea for user review — no auto-send
+    if (msgInput) {
+      msgInput.value = trimmed;
+      msgInput.dispatchEvent(new Event("input"));
+      msgInput.focus();
+    }
+  }).catch(function (err) {
+    setFullAppVoiceState("idle");
+    var errCode = (err && err.message) ? err.message : "";
+    var errText;
+    if (errCode === "stt_unavailable") {
+      errText = "語音辨識服務不可用。";
+    } else if (errCode === "stt_timeout") {
+      errText = "語音辨識逾時，請再試一次。";
+    } else if (errCode === "stt_offline") {
+      errText = "語音辨識服務離線。";
+    } else {
+      errText = "語音辨識失敗，請再試一次。";
+    }
+    if (voiceInputStatus) {
+      voiceInputStatus.textContent = errText;
+      voiceInputStatus.hidden = false;
+      setTimeout(function () {
+        if (voiceInputStatus.textContent === errText) {
+          voiceInputStatus.textContent = "";
+          voiceInputStatus.hidden = true;
+        }
+      }, 4000);
+    }
+  });
+}
+
+function stopFullAppVoiceInput() {
+  var recorder = _fullAppRecorder;
+  var mimeType = (recorder && recorder.mimeType) ? recorder.mimeType : "audio/webm";
+
+  if (_fullAppRecordingTimer !== null) {
+    clearTimeout(_fullAppRecordingTimer);
+    _fullAppRecordingTimer = null;
+  }
+
+  if (recorder && recorder.state !== "inactive") {
+    recorder._stopAndTranscribe = true;
+    setFullAppVoiceState("transcribing");
+    try {
+      recorder.stop();
+    } catch (_e) {
+      recorder._stopAndTranscribe = false;
+      _fullAppRecorder = null;
+      setFullAppVoiceState("idle");
+    }
+  } else {
+    var savedChunks = _fullAppChunks.slice();
+    setFullAppVoiceState("transcribing");
+    _fullAppSttTranscribeChunks(savedChunks, mimeType);
+  }
+}
+
+function cancelFullAppVoiceInput() {
+  var recorder = _fullAppRecorder;
+  if (recorder && recorder.state !== "inactive") {
+    try { recorder.stop(); } catch (_e) { /* ignore */ }
+  }
+  // Release microphone tracks
+  if (_fullAppMicStream) {
+    try {
+      _fullAppMicStream.getTracks().forEach(function (t) { t.stop(); });
+    } catch (_e) { /* ignore */ }
+    _fullAppMicStream = null;
+  }
+  if (_fullAppRecordingTimer !== null) {
+    clearTimeout(_fullAppRecordingTimer);
+    _fullAppRecordingTimer = null;
+  }
+  _fullAppRecorder = null;
+  _fullAppChunks = [];
+  setFullAppVoiceState("idle");
+}
+
+async function openFullAppVoiceInput() {
+  // Toggle: if already recording, stop and transcribe
+  if (fullAppRecording) {
+    stopFullAppVoiceInput();
+    return;
+  }
+
+  // If transcribing, ignore new request
+  if (fullAppTranscribing) {
+    return;
+  }
+
+  // Check MediaRecorder availability (not present in all environments)
+  if (typeof MediaRecorder === "undefined") {
+    if (voiceInputStatus) {
+      voiceInputStatus.textContent = "此環境不支援語音輸入。";
+      voiceInputStatus.hidden = false;
+    }
+    return;
+  }
+
+  // Request microphone access
+  var stream;
+  try {
+    var navObj = typeof navigator !== "undefined" ? navigator : null;
+    if (!navObj || !navObj.mediaDevices || typeof navObj.mediaDevices.getUserMedia !== "function") {
+      throw new Error("no_mic");
+    }
+    stream = await navObj.mediaDevices.getUserMedia({ audio: true });
+  } catch (err) {
+    var errName    = err && err.name    ? err.name    : "";
+    var errMsgStr  = err && err.message ? err.message : "";
+    var statusText;
+    if (errName === "NotAllowedError" || errName === "PermissionDeniedError") {
+      statusText = "麥克風權限被拒絕。";
+    } else if (errName === "NotFoundError" || errName === "DevicesNotFoundError" || errMsgStr === "no_mic") {
+      statusText = "找不到麥克風裝置。";
+    } else {
+      statusText = "無法啟動語音輸入。";
+    }
+    if (voiceInputStatus) {
+      voiceInputStatus.textContent = statusText;
+      voiceInputStatus.hidden = false;
+      setTimeout(function () {
+        if (voiceInputStatus.textContent === statusText) {
+          voiceInputStatus.textContent = "";
+          voiceInputStatus.hidden = true;
+        }
+      }, 4000);
+    }
+    return;
+  }
+
+  // Build MediaRecorder — prefer webm/opus for Whisper compatibility
+  var mimeType = "audio/webm;codecs=opus";
+  if (typeof MediaRecorder.isTypeSupported === "function" && !MediaRecorder.isTypeSupported(mimeType)) {
+    mimeType = "audio/webm";
+    if (typeof MediaRecorder.isTypeSupported === "function" && !MediaRecorder.isTypeSupported(mimeType)) {
+      mimeType = "";
+    }
+  }
+  var recorder;
+  try {
+    recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+  } catch (_e) {
+    try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (_e2) { /* ignore */ }
+    if (voiceInputStatus) {
+      voiceInputStatus.textContent = "此環境不支援語音輸入。";
+      voiceInputStatus.hidden = false;
+    }
+    return;
+  }
+
+  _fullAppMicStream = stream;
+  _fullAppRecorder  = recorder;
+  _fullAppChunks    = [];
+  recorder._stopAndTranscribe = false;
+
+  var chunks         = _fullAppChunks;
+  var mimeTypeForStop = recorder.mimeType || "audio/webm";
+
+  recorder.addEventListener("dataavailable", function (event) {
+    if (event.data && event.data.size > 0) {
+      chunks.push(event.data);
+    }
+  });
+
+  recorder.addEventListener("stop", function () {
+    try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (_e) { /* ignore */ }
+    _fullAppMicStream = null;
+    if (_fullAppRecorder && _fullAppRecorder._stopAndTranscribe) {
+      _fullAppRecorder._stopAndTranscribe = false;
+      _fullAppSttTranscribeChunks(chunks, mimeTypeForStop);
+    }
+  });
+
+  setFullAppVoiceState("recording");
+
+  try {
+    recorder.start();
+  } catch (_e) {
+    try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (_e2) { /* ignore */ }
+    _fullAppMicStream = null;
+    _fullAppRecorder  = null;
+    setFullAppVoiceState("idle");
+    if (voiceInputStatus) {
+      voiceInputStatus.textContent = "此環境不支援語音輸入。";
+      voiceInputStatus.hidden = false;
+    }
+    return;
+  }
+
+  // Hard timeout — auto-stop after FULL_APP_RECORDING_MAX_MS
+  _fullAppRecordingTimer = setTimeout(function () {
+    if (fullAppRecording) {
+      stopFullAppVoiceInput();
+    }
+  }, FULL_APP_RECORDING_MAX_MS);
+}
+
+// TASK-241: voice input button wiring
+if (voiceInputBtn) {
+  voiceInputBtn.addEventListener("click", function () {
+    if (fullAppRecording) {
+      stopFullAppVoiceInput();
+    } else if (!fullAppTranscribing) {
+      openFullAppVoiceInput();
+    }
   });
 }
 

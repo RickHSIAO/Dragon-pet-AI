@@ -24793,3 +24793,127 @@ Windows visual smoke PASS (2026-06-02):
   No TTS, extra /chat, proactive speech, or history pollution.
 - General regression PASS: expression mirror, reaction bubble, TTL restore,
   Diagnostics drawer, Output Queue disabled all normal.
+
+
+---
+
+## TASK-241 | Full App Voice Input Button
+
+**Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
+**Date:** 2026-06-02
+**Phase:** Phase 5 - Full App Voice Input
+**Depends on:** TASK-240
+
+### Goal
+
+Add a mic button to the Full App input bar. Users can press to start recording,
+press again to stop and transcribe. The transcript fills the message textarea for
+review — no auto-send. Reuses the existing `stt:transcribe` IPC channel already
+in `main.js` via a narrow bridge added to `renderer/preload.js`.
+
+### Architecture: Situation B → Hybrid A
+
+Architecture detection result:
+
+- `apps/desktop/src/pet/pet-preload.js` exposes `dragonPet.transcribeAudio(arrayBuffer)`
+  → `stt:transcribe` IPC.
+- `apps/desktop/src/main.js` has `stt:transcribe` ipcMain handler (existing, narrow,
+  posts to backend `/stt/transcribe`, returns `{ transcript, status }`).
+- `apps/desktop/src/renderer/preload.js` (Full App) had NO STT bridge.
+- `apps/desktop/src/renderer/renderer.js` had NO voice/STT logic.
+
+TASK-241 adds a narrow bridge to Full App `preload.js` and implements the mic button
+UI in `renderer.js` — no new IPC channels created.
+
+### UX Behavior
+
+- Mic button (`#voice-input-btn`) added to `#input-bar` after `#send-btn`.
+- **Toggle-to-record**: click to start; click again while recording to stop + transcribe.
+- **Transcribing state**: button disabled, status shows "辨識中…".
+- **Transcript fills textarea**: fills `#message-input` for user review. No auto-send.
+- **Empty transcript**: status shows "未偵測到語音，請重試。" (auto-clears after 3s).
+- **Too-long transcript**: status shows "語音太長，請縮短後再試。" (auto-clears after 4s).
+- **Errors**: inline status text for denied/no-mic/timeout/offline/error (auto-clears after 4s).
+- **Hard timeout**: 30s auto-stop (FULL_APP_RECORDING_MAX_MS).
+- **Microphone release**: stream.getTracks().forEach(t => t.stop()) after every recording.
+
+### Safety Constraints
+
+- No new IPC channel — reuses existing `stt:transcribe` from main.js.
+- No audio file storage — ArrayBuffer only, in-flight.
+- No auto-send — fills textarea only.
+- No Pet Window calls from voice module.
+- No TTS in Full App voice flow.
+- Microphone released after every recording (no stream leak).
+- `FULL_APP_RECORDING_MAX_MS = 30000` hard cap.
+- `FULL_APP_VOICE_CHAT_MAX_CHARS = 2000` transcript limit.
+- `FULL_APP_STT_TIMEOUT_MS = 30000` IPC timeout.
+- `fullAppRecording` / `fullAppTranscribing` isolated from `isSending` (chat state).
+- No innerHTML for user-controlled content.
+- Status shown as inline text, not alerts.
+
+### Files Modified
+
+| File | Change | Runtime? |
+|---|---|---|
+| `apps/desktop/src/renderer/preload.js` | `STT_TRANSCRIBE_CHANNEL` constant; `transcribeAudio(arrayBuffer)` narrow bridge added to `window.dragonPet` | Yes — Electron preload |
+| `apps/desktop/src/renderer/index.html` | `#voice-input-btn` + `#voice-input-status` added to `#input-bar` | Yes |
+| `apps/desktop/src/renderer/styles.css` | TASK-241 CSS section: `#voice-input-btn` states, `@keyframes voice-pulse`, `.voice-input-status`, `#input-bar` flex-wrap override | CSS only |
+| `apps/desktop/src/renderer/renderer.js` | Constants (`FULL_APP_RECORDING_MAX_MS`, `FULL_APP_STT_TIMEOUT_MS`, `FULL_APP_VOICE_CHAT_MAX_CHARS`); DOM refs; state (`var fullAppRecording`, `var fullAppTranscribing`, `_fullAppMicStream`, `_fullAppRecorder`, `_fullAppChunks`, `_fullAppRecordingTimer`); functions (`setFullAppVoiceState`, `openFullAppVoiceInput`, `stopFullAppVoiceInput`, `cancelFullAppVoiceInput`, `transcribeFullAppAudioBlob`, `_fullAppSttTranscribeChunks`); button event wiring | Yes |
+| `apps/desktop/scripts/renderer-chat-smoke.js` | 22 TASK-241 smoke tests; `voice-input-status hidden=true` added to FakeDocument; tests added to `main()` | No |
+
+### Test Coverage (22 TASK-241 tests)
+
+| Test | Type | What it verifies |
+|---|---|---|
+| `testTask241HtmlMicButtonExists` | static | `#voice-input-btn` in HTML, type=button, aria-label |
+| `testTask241HtmlVoiceStatusExists` | static | `#voice-input-status` in HTML, class, aria-live |
+| `testTask241CssMicButtonStyles` | static | TASK-241 CSS section, `#voice-input-btn`, `.voice-input-status` |
+| `testTask241CssRecordingStateAnimation` | static | `[data-state="recording"]`, `@keyframes voice-pulse` |
+| `testTask241PreloadHasTranscribeAudio` | static | `transcribeAudio` + `stt:transcribe` in preload.js |
+| `testTask241RendererHasVoiceConstants` | static | `FULL_APP_RECORDING_MAX_MS`, `FULL_APP_STT_TIMEOUT_MS`, `FULL_APP_VOICE_CHAT_MAX_CHARS` |
+| `testTask241RendererHasVoiceStateBooleans` | static | `var fullAppRecording`, `var fullAppTranscribing` |
+| `testTask241RendererHasVoiceFunctions` | static | all 6 voice functions present |
+| `testTask241MicBtnExistsInSandbox` | dynamic | `#voice-input-btn` resolves in sandbox |
+| `testTask241MicBtnNotDisabledOnLoad` | dynamic | btn.disabled = false on load |
+| `testTask241VoiceStatusHiddenOnLoad` | dynamic | voice-input-status.hidden = true on load |
+| `testTask241SetVoiceStateRecordingUpdatesBtn` | dynamic | btn data-state=recording, fullAppRecording=true, status visible |
+| `testTask241SetVoiceStateTranscribingDisablesBtn` | dynamic | btn disabled, fullAppTranscribing=true |
+| `testTask241SetVoiceStateIdleResetsBtn` | dynamic | idle clears data-state, re-enables btn, hides status |
+| `testTask241TranscribeFillesTextarea` | dynamic | transcript fills #message-input |
+| `testTask241TranscribeNoAutoSend` | dynamic | no /chat calls after transcribe |
+| `testTask241NoBridgeNoThrow` | dynamic | absent transcribeAudio bridge does not throw |
+| `testTask241NoVoiceCallsOnLoad` | dynamic | transcribeAudio not called on renderer load |
+| `testTask241NoNewIpcChannels` | static | stt:transcribe in preload/main; no ipcRenderer.invoke/send/on in renderer.js |
+| `testTask241VoiceDoesNotCallPetWindow` | dynamic | no updatePetSpeech calls from voice transcription |
+| `testTask241CancelResetsState` | dynamic | cancel resets fullAppRecording to false |
+| `testTask241IsSendingIndependentOfVoice` | dynamic | voice state does not affect chat send flow |
+
+### Automated Smoke
+
+- [x] `node apps\desktop\scripts\renderer-chat-smoke.js` PASS (456 PASS, 22 TASK-241 tests).
+- [x] `node apps\desktop\scripts\pet-window-smoke.js` PASS (82 checks).
+- [x] `node apps\desktop\scripts\pet-renderer-smoke.js` PASS (285 checks).
+
+### Windows Visual Smoke
+
+Windows visual smoke PASS (2026-06-02):
+
+- Basic startup PASS: Full App / Pet Window normal. Full App input bar shows Mic
+  button alongside textarea and Send button. No white screen or fatal error.
+- Mic button UI PASS: Mic button does not squeeze the textarea or Send button.
+  Send and normal text input function normally.
+- Start recording PASS: clicking Mic enters recording state (button visual
+  feedback). No automatic `/chat` call, TTS, Pet Window update, or history
+  write triggered by pressing Mic.
+- Stop and transcribe PASS: clicking Mic again while recording enters
+  transcribing state. After transcription completes, transcript is filled into
+  the Full App input box.
+- No auto-send PASS: transcript is placed in the input box only. User must press
+  Send manually to trigger the existing `/chat` flow.
+- Error / empty transcript PASS: clean error or hint displayed with no raw
+  stack traces or raw payloads. State recovers normally.
+- No always-listening PASS: recording does not start without explicit Mic
+  click. Recording stops cleanly. No background monitoring after stop.
+- General regression PASS: text send, edit/delete/clear/copy/export, Pet Window
+  Mic / direct input, Diagnostics drawer, Output Queue disabled all normal.

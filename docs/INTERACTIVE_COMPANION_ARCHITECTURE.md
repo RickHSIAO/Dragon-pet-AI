@@ -539,7 +539,11 @@ Recommended next architecture phase:
   TASK-239 (diagnostics drawer module) DONE - WINDOWS VISUAL SMOKE PASS;
   TASK-240 (Christina Desktop Pet Cutout Stage Foundation — transparent cutout CSS visual,
   avatar-container as primary drag zone, avatar-bound stage pad/glow, close X permanently
-  hidden, compact hover dock controls) DONE - WINDOWS VISUAL SMOKE PASS.
+  hidden, compact hover dock controls) DONE - WINDOWS VISUAL SMOKE PASS;
+  TASK-241 (Full App Voice Input Button — mic button in Full App input bar, toggle-to-record,
+  transcript fills textarea no auto-send, narrow transcribeAudio IPC bridge in renderer preload
+  routed to existing stt:transcribe handler, no new IPC channel, no Pet Window calls, no
+  always-listening, no audio persistence) DONE - WINDOWS VISUAL SMOKE PASS.
   Based on `docs/RENDERER_MODULARIZATION_PLAN.md`.
 - Relationship state.
 - Mood / attention / energy state beyond the local preview foundation.

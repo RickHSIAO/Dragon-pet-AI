@@ -7,7 +7,7 @@
 📋 **[完整 Demo 腳本與面試重點](docs/PORTFOLIO_DEMO_SCRIPT.md)**
 📋 **[Phase 4 Provider Settings 摘要](docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md)**
 
-**最新本地狀態（2026-06-02）：** TASK-240 Christina Desktop Pet Cutout Stage Foundation 已完成，狀態為 **DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS**。透明 cutout shell；角色圖片 / avatar container 為主要 drag 區；底部 Chat / Full App / Mic / Menu 預設隱藏，hover / focus-within 才顯示且可操作；close X 永久隱藏，Hide Pet Window 保留在 Menu；局部 crimson glow + oval stage pad 綁定於角色；無 HTML / JS / IPC / @keyframes 更動。pet-renderer-smoke.js 285 checks PASS（22 TASK-240 tests）。Windows visual smoke PASS (2026-06-02)：11 項確認項目全部 PASS。未 commit、未 push。
+**最新本地狀態（2026-06-02）：** TASK-241 Full App Voice Input Button 已完成，狀態為 **DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS**。Full App input bar 新增 mic 按鈕（`#voice-input-btn`），toggle-to-record 模式；STT 結果填入 `#message-input`，不自動送出；窄 `transcribeAudio` IPC bridge 加入 renderer preload.js，路由至既有 `stt:transcribe` handler；無新 IPC channel、無 Pet Window 呼叫、無自動送出、無音訊持久化、無 always listening。renderer-chat-smoke.js 456 PASS（22 TASK-241 tests）；pet-renderer 285 PASS；pet-window 82 PASS。Windows visual smoke PASS (2026-06-02)：8 項確認項目全部 PASS。未 commit、未 push。
 
 ---
 
@@ -99,15 +99,15 @@ ollama serve
 | 本地 Ollama `/chat` smoke | ✅ 通過 — `qwen3:8b`，`source=llm_local`，克莉絲蒂娜人格確認 |
 | Provider Settings 持久化 | ✅ 通過 — 重啟後設定保留，partial PATCH 保留省略欄位 |
 | UI polish | ✅ 通過 — 情緒→表情對應、Christina expression system |
-| Full App chat UX | ✅ TASK-236 DONE；TASK-237 docs-only modularization plan complete；TASK-238 DONE - WINDOWS VISUAL SMOKE PASS；TASK-239 DONE - WINDOWS VISUAL SMOKE PASS；TASK-240 DONE - WINDOWS VISUAL SMOKE PASS — 搜尋/高亮、未讀提示、匯出、時間戳、日期分隔線、清除確認、empty state、Undo Clear Chat、單則訊息刪除/復原、右鍵訊息操作 (viewport clamp + a11y)、最後 user message 編輯/重新送出、互動事件 log、reaction hint 層、reaction preview UI、expression suggestion 鏡像至 Pet Window、expression mirror 300ms cooldown/debounce、reaction bubble 鏡像至 Pet Window、companion behavior policy decision preview、character state diagnostics preview、collapsible diagnostics drawer、output queue module extraction、diagnostics drawer module extraction、Pet Window cutout stage + hover dock / chrome reduction |
+| Full App chat UX | ✅ TASK-236 DONE；TASK-237 docs-only modularization plan complete；TASK-238 DONE - WINDOWS VISUAL SMOKE PASS；TASK-239 DONE - WINDOWS VISUAL SMOKE PASS；TASK-240 DONE - WINDOWS VISUAL SMOKE PASS；TASK-241 DONE - WINDOWS VISUAL SMOKE PASS — 搜尋/高亮、未讀提示、匯出、時間戳、日期分隔線、清除確認、empty state、Undo Clear Chat、單則訊息刪除/復原、右鍵訊息操作 (viewport clamp + a11y)、最後 user message 編輯/重新送出、互動事件 log、reaction hint 層、reaction preview UI、expression suggestion 鏡像至 Pet Window、expression mirror 300ms cooldown/debounce、reaction bubble 鏡像至 Pet Window、companion behavior policy decision preview、character state diagnostics preview、collapsible diagnostics drawer、output queue module extraction、diagnostics drawer module extraction、Pet Window cutout stage + hover dock / chrome reduction、Full App 語音輸入按鈕 (TASK-241 DONE - WINDOWS VISUAL SMOKE PASS) |
 | 表情系統 | 7/10 real PNG（happy、focused、neutral、proud、annoyed、worried、sleepy）；pending/error/offline 為 SVG fallback |
 | pytest | **586 通過，0 失敗** |
-| Electron smoke | **renderer-chat PASS；pet-renderer 285 PASS；pet-window 82 PASS** |
+| Electron smoke | **renderer-chat 456 PASS；pet-renderer 285 PASS；pet-window 82 PASS** |
 | 外部 provider 呼叫 | ❌ 無 — 刻意封鎖 |
 | 真實 API Key 使用 | ❌ 無 — 所有測試使用 mocked runner |
 | 生產就緒 | ❌ 尚未 — prototype / portfolio 階段 |
 | Demo 可用（本地 Ollama） | ✅ 是 |
-| 下一個任務 | TASK-241 Full App Voice Input Button |
+| 下一個任務 | TASK-242 — Full App Voice Input Settings / Auto-send Mode |
 
 ---
 
@@ -397,8 +397,8 @@ python -c "import json, urllib.request; data=json.dumps({'message':'你好！克
 | [docs/PROVIDER_TEST_CONNECTION_DESIGN.md](docs/PROVIDER_TEST_CONNECTION_DESIGN.md) | Test Connection 設計與強化測試結果 |
 | [docs/SECURE_KEY_STORAGE_DESIGN.md](docs/SECURE_KEY_STORAGE_DESIGN.md) | 金鑰儲存威脅模型、儲存選項、遮蔽規則 |
 | [docs/BYOK_PRODUCT_AND_SETTINGS.md](docs/BYOK_PRODUCT_AND_SETTINGS.md) | BYOK 產品設計與安全邊界 |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖；目前 TASK-240 Christina Desktop Pet Cutout Stage Foundation DONE - WINDOWS VISUAL SMOKE PASS，下一步 TASK-241 |
-| [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄；最新記錄為 TASK-240 Christina Desktop Pet Cutout Stage Foundation，DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖；目前 TASK-241 Full App Voice Input Button DONE - WINDOWS VISUAL SMOKE PASS，下一步 TASK-242 |
+| [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄；最新記錄為 TASK-241 Full App Voice Input Button，DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS |
 | [docs/RENDERER_MODULARIZATION_PLAN.md](docs/RENDERER_MODULARIZATION_PLAN.md) | TASK-237 renderer modularization boundary map：current renderer responsibilities, proposed modules, extraction order (TASK-238 done, TASK-239 DONE - WINDOWS VISUAL SMOKE PASS), contracts, risks, validation strategy |
 | [docs/INTERACTIVE_COMPANION_ARCHITECTURE.md](docs/INTERACTIVE_COMPANION_ARCHITECTURE.md) | TASK-222/224 互動陪伴架構 checkpoint：data flow、layer responsibility、IPC inventory、安全邊界、Character State Layer diagnostics、TASK-237 renderer modularization phase |
 | [docs/CHRISTINA_PERSONA_CONTEXT_PACK.md](docs/CHRISTINA_PERSONA_CONTEXT_PACK.md) | TASK-225 Christina persona context pack：canonical source、runtime-safe adaptation、strength levels、runtime boundary |

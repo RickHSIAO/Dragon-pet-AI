@@ -1650,3 +1650,73 @@ textarea {
 .interaction-diagnostics.is-collapsed .interaction-diagnostics-details[hidden] {
   display: none;
 }
+
+/* TASK-241: Full App Voice Input Button */
+/* Allow voice-input-status to wrap to a second row when shown */
+#input-bar {
+  flex-wrap: wrap;
+}
+
+#voice-input-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 18px;
+  min-height: 40px;
+  min-width: 40px;
+  padding: 0 10px;
+  flex-shrink: 0;
+  line-height: 1;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+#voice-input-btn:hover:not(:disabled) {
+  background: var(--surface-alt);
+  color: var(--text);
+  border-color: var(--accent-soft);
+}
+
+#voice-input-btn:disabled {
+  opacity: 0.40;
+  cursor: default;
+}
+
+#voice-input-btn[data-state="recording"] {
+  background: rgba(233, 69, 96, 0.14);
+  border-color: var(--accent);
+  color: var(--accent);
+  animation: voice-pulse 1.1s ease-in-out infinite;
+}
+
+#voice-input-btn[data-state="transcribing"] {
+  background: rgba(22, 33, 62, 0.60);
+  border-color: var(--text-muted);
+  color: var(--text-muted);
+  opacity: 0.72;
+  cursor: default;
+}
+
+@keyframes voice-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.52; }
+}
+
+.voice-input-status {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 2px 0 0 2px;
+  line-height: 1.3;
+  min-height: 0;
+  transition: color 0.15s;
+}
+
+.voice-input-status[data-state="recording"] {
+  color: var(--accent);
+}
+
+.voice-input-status[data-state="transcribing"] {
+  color: var(--text-muted);
+}

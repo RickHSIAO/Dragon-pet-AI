@@ -138,6 +138,7 @@ Queue: disabled · Items: 0 · Recent: 0 · Next: none</pre>
   <!-- ── Input bar (sticky composer) ──────────────────────── -->
   <!-- TASK-113: positioned here (before settings sections) so it is always   -->
   <!-- visible above the fold. CSS makes it sticky at the viewport bottom.    -->
+  <!-- TASK-241: voice input button added after send-btn; status below on wrap row -->
   <footer id="input-bar">
     <textarea
       id="message-input"
@@ -147,6 +148,8 @@ Queue: disabled · Items: 0 · Recent: 0 · Next: none</pre>
       spellcheck="true"
     ></textarea>
     <button id="send-btn">Send</button>
+    <button id="voice-input-btn" class="voice-input-btn" type="button" aria-label="語音輸入" title="語音輸入 (按下開始，再按停止)">🎤</button>
+    <span id="voice-input-status" class="voice-input-status" role="status" aria-live="polite" hidden></span>
   </footer>
 
   <!-- ── Settings sections (below the fold) ────────────────── -->

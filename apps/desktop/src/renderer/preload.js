@@ -15,6 +15,7 @@ const PET_UNREAD_DOT_CHANNEL = "pet:unread-dot";                // TASK-204
 const CHAT_EXPORT_CHANNEL    = "chat:export-transcript";        // TASK-205
 const PET_EXPRESSION_SUGGESTION_CHANNEL = "pet:expression-suggestion"; // TASK-218
 const PET_REACTION_BUBBLE_CHANNEL = "pet:reaction-bubble"; // TASK-220
+const STT_TRANSCRIBE_CHANNEL = "stt:transcribe";            // TASK-241
 const EXPRESSION_SUGGESTION_ALLOWLIST = new Set([               // TASK-218: preload-side allowlist
   "neutral", "focused", "happy", "proud", "annoyed", "sleepy",
 ]);
@@ -122,6 +123,15 @@ contextBridge.exposeInMainWorld(
     // TASK-220: narrow reaction bubble IPC — fixed allowlist text only, no raw user text.
     sendPetReactionBubble: (payload) =>
       ipcRenderer.invoke(PET_REACTION_BUBBLE_CHANNEL, sanitizeReactionBubblePayload(payload)),
+    // TASK-241: narrow STT IPC bridge for Full App voice input.
+    // Accepts ArrayBuffer only — no file paths, no audio storage, no path traversal.
+    // Returns { transcript, status } from backend /stt/transcribe via existing handler.
+    transcribeAudio: (arrayBuffer) => {
+      if (!(arrayBuffer instanceof ArrayBuffer)) {
+        return Promise.resolve({ status: "error", transcript: "" });
+      }
+      return ipcRenderer.invoke(STT_TRANSCRIBE_CHANNEL, arrayBuffer);
+    },
     // TASK-205: narrow file save IPC — opens Save Dialog via main, writes plain text only.
     // Content capped at 200000 chars; defaultPath capped at 255 chars.
     saveTextFile: ({ defaultPath, content } = {}) => {

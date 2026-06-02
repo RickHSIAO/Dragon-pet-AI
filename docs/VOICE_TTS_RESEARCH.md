@@ -246,9 +246,14 @@ Suggested research and implementation tasks:
 - TASK-TTS-004 TTS provider interface design, docs-only.
 - TASK-TTS-005 Dragon Pet AI audio skeleton, disabled by default.
 - TASK-TTS-006 Local TTS provider integration behind user controls.
-- TASK-STT-001 Push-to-talk STT design.
+- TASK-STT-001 Push-to-talk STT design. **Covered by TASK-241 (DONE - WINDOWS VISUAL SMOKE PASS 2026-06-02).**
+  Full App mic button: toggle-to-record, stop → STT → fills textarea, no auto-send,
+  no always-listening. Narrow `transcribeAudio(arrayBuffer)` bridge in renderer
+  preload routes to existing `stt:transcribe` IPC handler. No new IPC channel.
 - TASK-STT-002 Local Whisper / faster-whisper spike.
-- TASK-STT-003 Confirmed transcript to `/chat` flow.
+- TASK-STT-003 Confirmed transcript to `/chat` flow. **Partially covered by TASK-241:**
+  transcript fills Full App input; user presses Send to trigger existing `/chat` flow.
+  Auto-send mode is a follow-up (TASK-242).
 
 Each future task must explicitly define safety boundaries, user controls,
 provider scope, queue priority, and no-regression checks.

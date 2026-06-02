@@ -92,7 +92,7 @@ changing visible behavior.
 1. TASK-238 Extract Output Queue Module. **DONE — WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-02, Windows visual smoke 2026-06-01).**
 2. TASK-239 Extract Diagnostics Drawer Module. **DONE — WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-02, Windows visual smoke 2026-06-01).**
 3. TASK-240 Christina Desktop Pet Cutout Stage Foundation. **DONE — WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-02).** Pure Pet Window CSS polish: transparent cutout shell, avatar-bound stage pad/glow, avatar-container as primary drag zone, close X permanently hidden, compact hover dock controls, no runtime behavior change.
-4. TASK-241 Extract Pet Bridge Module.
+4. TASK-241 Full App Voice Input Button. **DONE — WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-02).** Narrow `transcribeAudio` bridge added to renderer preload; mic button + toggle-to-record UI in Full App input bar; transcript fills textarea, no auto-send, no always-listening. 22 TASK-241 smoke tests PASS. Windows visual smoke PASS (2026-06-02).
 5. TASK-242 Extract Chat Rendering Module.
 6. TASK-243 Extract Chat History / Copy / Export Module.
 7. TASK-244 Extract Context Menu / Search Modules.
