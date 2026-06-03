@@ -570,19 +570,23 @@ Recommended next architecture phase:
   manual_stop; no new IPC, no Pet Window calls in diagnostics section, no localStorage, no audio
   persistence, no TTS, no always-listening; 22 TASK-244 smoke tests PASS, 522 renderer-chat total)
   IMPLEMENTED - NEEDS WINDOWS VOICE QUALITY SMOKE.
-  TASK-245 (STT Language Lock — `_STT_DEFAULT_LANGUAGE = "zh"` constant locks language in route;
-  `transcribe_audio_bytes` receives `language="zh"`; response augmented with `language`,
-  `languageLocked: true`, `task: "transcribe"`, `provider`, `model`, `detectedLanguage`;
-  fullAppVoiceDiagnostics gains 6 new fields updated after each IPC call; renderFullAppVoiceDiagnostics
-  displays STT 語言 / 已鎖定 / STT 任務 / STT 提供者 / 模型 / 偵測語言 via textContent; reset on
-  every recording start; safe "unknown"/"none" fallbacks for missing metadata; 10 renderer-chat smoke
-  tests + 9 backend pytest tests; no new IPC, no new endpoint, no Pet Window / Output Queue /
-  Diagnostics Drawer change, no audio persistence, no TTS, no always-listening; 576 renderer-chat-smoke
-  PASS; Windows smoke 2026-06-03: language lock PASS — no more Thai/Malay/Indonesian; BUT faster-whisper
-  `tiny` zh accuracy poor — follow-up TASK-246 needed for model upgrade)
+  TASK-245 (STT Language Lock — language lock PASS / needs model quality follow-up)
   DONE - LANGUAGE LOCK PASS / NEEDS STT MODEL QUALITY FOLLOW-UP.
+  TASK-246 (STT Model Quality / Whisper Model Upgrade — `DRAGON_PET_STT_MODEL` env var
+  support; allowed `tiny`/`base`/`small`; default `tiny`; safe fallback; `_resolve_stt_model_name()`
+  resolved at process start; `_STT_MODEL_LOAD_STATUS` / `_STT_MODEL_LOAD_ERROR` tracked;
+  `_get_model_metadata()` helper; ok/unavailable/error responses include `requestedModel`,
+  `resolvedModel`, `modelSource`, `modelLoadStatus`, `modelLoadError`; renderer
+  `fullAppVoiceDiagnostics` gains 5 new fields; diagnostics shows 請求模型/解析模型/模型來源/
+  載入狀態/模型載入錯誤 via textContent; reset on every recording start; 10 renderer-chat +
+  13 backend pytest tests; no new IPC, no new endpoint, no Pet Window / Output Queue /
+  Diagnostics Drawer change, no audio persistence, no TTS, no always-listening; 586 renderer-chat-smoke
+  PASS; Windows smoke 2026-06-03: model config PASS — env var switches model; diagnostics correct;
+  BUT tiny→base/small does not sufficiently improve zh accuracy; root cause is raw Whisper output
+  lacking context-aware correction — follow-up TASK-247 needed)
+  DONE - MODEL CONFIG PASS / NEEDS TRANSCRIPT CORRECTION FOLLOW-UP.
   Based on `docs/RENDERER_MODULARIZATION_PLAN.md`.
-- TASK-246 recommended next: STT Model Quality / Whisper Model Upgrade (`small` or `base` for improved zh accuracy).
+- TASK-247 recommended next: STT Transcript Correction / Context-Aware Normalization (deterministic hotword / phrase correction layer; rawTranscript / correctedTranscript / correctionApplied diagnostics; no LLM rewrite; no new IPC).
 - Relationship state.
 - Mood / attention / energy state beyond the local preview foundation.
 - Idle reaction policy.

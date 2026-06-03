@@ -353,3 +353,179 @@ def test_stt_service_language_param_passed_to_whisper(monkeypatch):
     assert received_kwargs.get("language") == "zh", (
         "language kwarg must be forwarded to model.transcribe, got: %r" % received_kwargs
     )
+
+
+# -- TASK-246: STT Model Quality / Whisper Model Upgrade tests ----------------
+
+
+def test_stt_service_allowed_models_constant_exists():
+    """TASK-246: stt_service must expose _STT_ALLOWED_MODELS with supported model names."""
+    assert hasattr(stt_service, "_STT_ALLOWED_MODELS"), (
+        "_STT_ALLOWED_MODELS must exist in stt_service"
+    )
+    assert "tiny"  in stt_service._STT_ALLOWED_MODELS
+    assert "base"  in stt_service._STT_ALLOWED_MODELS
+    assert "small" in stt_service._STT_ALLOWED_MODELS
+
+
+def test_stt_service_default_model_constant_exists():
+    """TASK-246: stt_service must expose _STT_DEFAULT_MODEL = 'tiny'."""
+    assert hasattr(stt_service, "_STT_DEFAULT_MODEL"), (
+        "_STT_DEFAULT_MODEL must exist in stt_service"
+    )
+    assert stt_service._STT_DEFAULT_MODEL == "tiny", (
+        "_STT_DEFAULT_MODEL must be 'tiny' (conservative default)"
+    )
+
+
+def test_stt_service_model_env_constant_exists():
+    """TASK-246: stt_service must expose _STT_MODEL_ENV = 'DRAGON_PET_STT_MODEL'."""
+    assert hasattr(stt_service, "_STT_MODEL_ENV"), (
+        "_STT_MODEL_ENV must exist in stt_service"
+    )
+    assert stt_service._STT_MODEL_ENV == "DRAGON_PET_STT_MODEL", (
+        "_STT_MODEL_ENV must be 'DRAGON_PET_STT_MODEL'"
+    )
+
+
+def test_stt_service_model_resolution_constant_exists():
+    """TASK-246: stt_service must expose _STT_MODEL_RESOLUTION dict at module level."""
+    assert hasattr(stt_service, "_STT_MODEL_RESOLUTION"), (
+        "_STT_MODEL_RESOLUTION must exist in stt_service"
+    )
+    res = stt_service._STT_MODEL_RESOLUTION
+    assert "requested_model" in res
+    assert "resolved_model"  in res
+    assert "model_source"    in res
+    assert "fallback_reason" in res
+
+
+def test_stt_service_model_resolver_default(monkeypatch):
+    """TASK-246: _resolve_stt_model_name without env var defaults to 'tiny'."""
+    monkeypatch.delenv("DRAGON_PET_STT_MODEL", raising=False)
+    result = stt_service._resolve_stt_model_name()
+    assert result["resolved_model"] == "tiny", (
+        "Default resolved model must be 'tiny', got %r" % result["resolved_model"]
+    )
+    assert result["model_source"] == "default"
+    assert result["fallback_reason"] == "none"
+
+
+def test_stt_service_model_resolver_env_small(monkeypatch):
+    """TASK-246: DRAGON_PET_STT_MODEL=small resolves to 'small'."""
+    monkeypatch.setenv("DRAGON_PET_STT_MODEL", "small")
+    result = stt_service._resolve_stt_model_name()
+    assert result["resolved_model"] == "small", (
+        "Env 'small' must resolve to 'small', got %r" % result["resolved_model"]
+    )
+    assert result["model_source"] == "env"
+    assert result["fallback_reason"] == "none"
+
+
+def test_stt_service_model_resolver_env_base(monkeypatch):
+    """TASK-246: DRAGON_PET_STT_MODEL=base resolves to 'base'."""
+    monkeypatch.setenv("DRAGON_PET_STT_MODEL", "base")
+    result = stt_service._resolve_stt_model_name()
+    assert result["resolved_model"] == "base", (
+        "Env 'base' must resolve to 'base', got %r" % result["resolved_model"]
+    )
+    assert result["model_source"] == "env"
+    assert result["fallback_reason"] == "none"
+
+
+def test_stt_service_model_resolver_invalid_fallback(monkeypatch):
+    """TASK-246: invalid DRAGON_PET_STT_MODEL falls back to 'tiny' safely — no crash."""
+    monkeypatch.setenv("DRAGON_PET_STT_MODEL", "large-v3")
+    result = stt_service._resolve_stt_model_name()
+    assert result["resolved_model"] == "tiny", (
+        "Invalid model must fall back to 'tiny', got %r" % result["resolved_model"]
+    )
+    assert result["model_source"] == "fallback"
+    assert result["fallback_reason"] == "invalid_model"
+
+
+def test_stt_service_ok_includes_model_quality_metadata(monkeypatch):
+    """TASK-246: ok response from transcribe_audio_bytes must include model quality fields."""
+    from types import SimpleNamespace
+
+    class _GoodModel:
+        def transcribe(self, _buf, **_kwargs):
+            seg = SimpleNamespace(text="你好")
+            info = SimpleNamespace(language="zh")
+            return iter([seg]), info
+
+    monkeypatch.setattr(stt_service, "_WHISPER_AVAILABLE", True)
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(stt_service, "_load_model", lambda: _GoodModel())
+    result = stt_service.transcribe_audio_bytes(b"\x01\x02\x03", language="zh")
+    assert result["status"] == "ok"
+    assert "requestedModel"  in result, "ok result must include 'requestedModel'"
+    assert "resolvedModel"   in result, "ok result must include 'resolvedModel'"
+    assert "modelSource"     in result, "ok result must include 'modelSource'"
+    assert "modelLoadStatus" in result, "ok result must include 'modelLoadStatus'"
+
+
+def test_stt_service_unavailable_has_model_metadata(monkeypatch):
+    """TASK-246: unavailable response must include model metadata for diagnostics."""
+    monkeypatch.setattr(stt_service, "_WHISPER_AVAILABLE", False)
+    stt_service._reset_model_for_tests()
+    result = stt_service.transcribe_audio_bytes(b"\x01\x02\x03")
+    assert result["status"] == "unavailable"
+    assert "requestedModel"  in result, "unavailable result must include 'requestedModel'"
+    assert "resolvedModel"   in result, "unavailable result must include 'resolvedModel'"
+    assert "modelLoadStatus" in result, "unavailable result must include 'modelLoadStatus'"
+    assert result["modelLoadStatus"] == "unavailable"
+
+
+def test_stt_route_response_includes_model_quality_fields():
+    """TASK-246: /stt/transcribe response must include model quality metadata fields."""
+    with TestClient(app) as client:
+        response = client.post(
+            "/stt/transcribe",
+            files={"audio": ("audio.webm", io.BytesIO(b"\x01\x02\x03"), "audio/webm")},
+        )
+    assert response.status_code == 200
+    data = response.json()
+    # TASK-245 language lock fields must still be present
+    assert data.get("language") == "zh", "language must still be 'zh'"
+    assert data.get("languageLocked") is True, "languageLocked must still be True"
+    assert data.get("task") == "transcribe", "task must still be 'transcribe'"
+    # TASK-246 model quality fields
+    assert "requestedModel"  in data, "Response must include 'requestedModel'"
+    assert "resolvedModel"   in data, "Response must include 'resolvedModel'"
+    assert "modelSource"     in data, "Response must include 'modelSource'"
+    assert "modelLoadStatus" in data, "Response must include 'modelLoadStatus'"
+
+
+def test_stt_service_no_raw_stack_in_model_error(monkeypatch):
+    """TASK-246: modelLoadError in response must be a short string, not a raw stack trace."""
+    monkeypatch.setattr(stt_service, "_WHISPER_AVAILABLE", True)
+    stt_service._reset_model_for_tests()
+
+    def _bad_load():
+        stt_service._STT_MODEL_LOAD_STATUS = "error"
+        stt_service._STT_MODEL_LOAD_ERROR = "simulated load failure"
+        return None
+
+    monkeypatch.setattr(stt_service, "_load_model", _bad_load)
+    result = stt_service.transcribe_audio_bytes(b"\x01\x02\x03")
+    assert result["status"] == "unavailable"
+    if result.get("modelLoadError"):
+        assert len(result["modelLoadError"]) <= 200, (
+            "modelLoadError must be truncated, not a raw stack trace"
+        )
+        assert "Traceback" not in result["modelLoadError"], (
+            "modelLoadError must not contain Python stack traces"
+        )
+
+
+def test_stt_route_no_new_stt_endpoint():
+    """TASK-246: no new /stt/* endpoint added beyond /stt/transcribe."""
+    import inspect
+    import app.api.routes as routes_module
+
+    source = inspect.getsource(routes_module)
+    stt_routes = [line for line in source.splitlines() if '"/stt/' in line]
+    assert len(stt_routes) == 1, (
+        "Only one /stt/ route allowed (TASK-246 restriction), found: %r" % stt_routes
+    )

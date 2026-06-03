@@ -25497,40 +25497,191 @@ Eliminate STT mis-classification of Chinese speech as Thai / Malay / Indonesian 
 
 ## TASK-246 | STT Model Quality / Whisper Model Upgrade
 
-Status: PLANNED (2026-06-03)
+Status: DONE - MODEL CONFIG PASS / NEEDS TRANSCRIPT CORRECTION FOLLOW-UP (2026-06-03)
 
 ### Goal
 
-Improve zh speech recognition accuracy by evaluating faster-whisper model sizes (tiny → small / base). faster-whisper `tiny` is confirmed too low quality for practical Chinese speech after TASK-245 language lock. The language lock is already in place; this task focuses purely on model quality.
+Improve zh speech recognition accuracy by making the faster-whisper model name configurable
+via `DRAGON_PET_STT_MODEL` env var (allowed: `tiny`, `base`, `small`; default: `tiny`; safe
+fallback on invalid value). Enables smoke testing `small` / `base` without code changes.
 
-### Scope
+### Implementation Summary
 
-- Evaluate faster-whisper `tiny` vs `small` vs `base` for zh speech quality on the local Windows machine.
-- If `small` significantly improves accuracy without unacceptable cold-start / RAM penalty: update `_whisper_model` load to use `small` (or make it configurable).
-- Optionally surface the loaded model name in `_STT_MODEL_NAME` constant and in diagnostics.
-- Compare Manual Mic zh recognition quality before/after.
-- Keep `language = "zh"` lock from TASK-245 unchanged.
+**`backend/app/stt/stt_service.py`:**
+- Added constants: `_STT_ALLOWED_MODELS`, `_STT_DEFAULT_MODEL`, `_STT_MODEL_ENV`
+- Added `_resolve_stt_model_name()` — reads `DRAGON_PET_STT_MODEL` env var; validates against
+  allowed set; falls back to `"tiny"` on invalid value; returns dict with `requested_model`,
+  `resolved_model`, `model_source` (`env`/`default`/`fallback`), `fallback_reason`.
+- `_STT_MODEL_RESOLUTION` computed at process start; `_STT_MODEL_NAME` = resolved model.
+- `_STT_MODEL_LOAD_STATUS` and `_STT_MODEL_LOAD_ERROR` tracked as module-level state; updated
+  by `_load_model()` (`loaded` / `unavailable` / `error`).
+- `_get_model_metadata()` helper returns model resolution + load status for diagnostics.
+- `transcribe_audio_bytes()` ok/unavailable/error responses include full model metadata.
+- `_reset_model_for_tests()` also resets load status/error.
+- No new IPC, no new endpoint, no raw audio, no always-listening.
 
-### Restrictions
+**`backend/app/api/routes.py`:**
+- Docstring updated to document new response fields; no logic change (new fields flow through
+  from `transcribe_audio_bytes` automatically).
 
-- **No new IPC channels.**
-- **No new `/chat` schema change.**
-- **No raw audio persistence.**
-- **No background / always-listening.**
-- **No changes to Pet Window, Output Queue, or Diagnostics Drawer.**
-- **No new external packages** beyond faster-whisper (already installed).
-- **Local-first only** — no cloud STT API (Whisper API, Azure, Google).
+**`apps/desktop/src/renderer/renderer.js`:**
+- `fullAppVoiceDiagnostics` gains 5 new fields: `sttRequestedModel`, `sttResolvedModel`,
+  `sttModelSource`, `sttModelLoadStatus`, `sttModelLoadError` (all default `""`).
+- `transcribeFullAppAudioBlob()` populates new fields from IPC response; safe fallbacks:
+  `"unknown"` for missing model fields, `"none"` for missing error field.
+- `renderFullAppVoiceDiagnostics()` displays `請求模型`, `解析模型`, `模型來源`, `載入狀態`,
+  `模型載入錯誤` via textContent (no innerHTML, no raw stack).
+- `resetFullAppVoiceDiagnosticsForRecording()` resets new fields to `""`.
+
+**`apps/desktop/scripts/renderer-chat-smoke.js`:**
+- 10 new TASK-246 smoke tests (all PASS).
+
+**`backend/tests/test_stt_routes.py`:**
+- 13 new TASK-246 pytest tests (all PASS).
+
+### How to Switch Model for Windows STT Quality Smoke
+
+```powershell
+# Start backend with small model (in terminal 2):
+$env:DRAGON_PET_STT_MODEL="small"
+.\scripts\dev-start-backend.ps1
+
+# Start Electron app (in terminal 3):
+.\scripts\dev-start-desktop.ps1
+```
+
+Or set env before launching desktop:
+```powershell
+$env:DRAGON_PET_STT_MODEL="small"
+cd F:\RickHSIAO\Python\dragon-pet-ai\apps\desktop
+npm.cmd start
+```
+
+Restore default:
+```powershell
+Remove-Item Env:\DRAGON_PET_STT_MODEL
+# or:
+$env:DRAGON_PET_STT_MODEL="tiny"
+```
+
+Notes:
+- Model change requires **restarting the backend** — env is read at process start only.
+- `small` first load may take longer (downloads/caches model file via faster-whisper).
+- Model files are NOT committed to the repo.
+- Diagnostics panel shows `請求模型` / `解析模型` / `模型來源` / `載入狀態` after first STT call.
+
+### Validation Results (Automated)
+
+- renderer-chat-smoke.js: **10 TASK-246 tests PASS** (586 total PASS)
+- backend pytest test_stt_routes.py: **13 TASK-246 tests PASS** (37 total PASS)
+- pet-renderer smoke: **285 PASS**
+- pet-window smoke: **82 PASS**
+- git diff --check: CLEAN
 
 ### Acceptance Criteria
 
-- Manual Mic: saying「這是中文語音辨識測試」produces a recognizable zh transcript (majority of characters correct).
-- Diagnostics panel shows the updated model name (e.g. `模型: small`).
-- Existing smoke suites still PASS.
-- Cold-start time and RAM usage documented in task notes.
+- ✅ `DRAGON_PET_STT_MODEL=small` resolves to `small` (verified via pytest)
+- ✅ `DRAGON_PET_STT_MODEL=large-v3` falls back to `tiny` safely (verified via pytest)
+- ✅ `/stt/transcribe` response includes `requestedModel`, `resolvedModel`, `modelSource`, `modelLoadStatus`
+- ✅ Diagnostics panel shows model quality fields (verified via smoke)
+- ✅ TASK-245 language lock fields still present (regression verified)
+- ✅ Windows smoke PASS: `DRAGON_PET_STT_MODEL` env var switches model correctly; diagnostics show requestedModel / resolvedModel / modelSource / modelLoadStatus
+- ⚠️ Windows model quality smoke PARTIAL: switching tiny → base / small does NOT sufficiently improve zh transcript accuracy
+- ⚠️ Remaining issue: raw Whisper transcript lacks context-aware correction / hotword normalization / semantic post-processing. Root cause is not model size alone — output needs intelligent post-processing layer.
+
+### Windows Smoke Results (2026-06-03)
+
+1. `DRAGON_PET_STT_MODEL` env var works — model can be switched to `base` / `small` without code changes.
+2. Diagnostics correctly display requestedModel / resolvedModel / modelSource / modelLoadStatus after each STT call.
+3. Language lock still active (zh, languageLocked: true) — no regression from TASK-245.
+4. Manual Mic: switching tiny → small / base does NOT produce sufficiently accurate zh transcripts.
+5. Language auto-detect issue is solved (TASK-245); model size alone does not solve the accuracy problem.
+6. Root cause: raw Whisper output lacks context-aware post-processing — no hotword correction, no semantic normalization, no project vocabulary awareness. "感覺沒有智能辨字系統".
+7. Next step: TASK-247 — STT Transcript Correction / Context-Aware Normalization (deterministic / dictionary / phrase-based, no LLM rewrite for Conversation Mode auto-send).
 
 ### Out of Scope
 
-- Switching to a cloud STT provider — separate TASK-245b.
+- Switching to a cloud STT provider.
 - Per-user model selection UI.
-- Voice Pre-roll Buffer — separate task.
+- Voice Pre-roll Buffer.
 - Multi-language support.
+- Runtime hot-reload of model (restart required after env change).
+- Transcript correction / semantic post-processing (→ TASK-247).
+
+---
+
+## TASK-247 | STT Transcript Correction / Context-Aware Normalization
+
+Status: PLANNED (2026-06-03)
+
+### Background
+
+TASK-245 solved language auto-detect misclassification (zh locked).
+TASK-246 solved model configurability (tiny / base / small via env var).
+Windows smoke confirmed: even with model switch, raw Whisper output still garbled for zh.
+Root cause: Whisper outputs raw acoustic transcription without project vocabulary awareness,
+hotword normalization, or semantic correction. "感覺沒有智能辨字系統".
+
+### Goal
+
+Add a STT post-processing correction layer that applies deterministic / dictionary /
+phrase-based corrections to raw Whisper transcripts before they reach the chat send flow.
+Improve practical accuracy for project-specific vocabulary without rewriting the audio
+pipeline or adding any new network calls.
+
+### Core Requirements
+
+1. Post-processing correction happens **in the renderer** (or optionally in a stt_service helper),
+   after `transcribeFullAppAudioBlob()` returns the raw transcript.
+2. Correction applies a hotword / phrase substitution list covering at minimum:
+   - 克莉絲蒂娜 (and common misrecognitions)
+   - 中文語音辨識
+   - 語音輸入
+   - 對話模式
+   - 桌面寵物
+   - Dragon Pet AI
+   - TASK
+   - Claude
+   - Whisper
+3. Correction must be **safe and deterministic** — no probabilistic LLM rewrite in this task.
+4. Diagnostics panel to display:
+   - `rawTranscript` — original Whisper output (capped preview, no full raw dump)
+   - `correctedTranscript` — post-processed output (capped preview)
+   - `correctionApplied` — boolean
+   - `correctionMode` — e.g. `"dictionary"` / `"phrase"` / `"none"`
+   - `correctionReason` — short string describing which correction was applied
+5. Conversation Mode auto-send uses **corrected transcript** (safe correction only).
+6. Manual Mic fills textarea with corrected transcript; user reviews before sending.
+7. `rawTranscript` and `correctedTranscript` do **not** enter history/copy/export unless user
+   sends the message (same rule as existing transcript).
+
+### Restrictions
+
+1. No new IPC channel.
+2. No new backend endpoint.
+3. No `/chat` schema change.
+4. No raw audio persistence.
+5. No background / always-listening.
+6. No Pet Window / Output Queue / Diagnostics Drawer changes.
+7. No new cloud API (no LLM-based rewrite in this task).
+8. No always-on network calls for correction.
+9. Correction list must be clearly documented — not opaque logic.
+10. Conversation Mode auto-send only uses safe (deterministic) correction.
+11. LLM-based semantic correction is **out of scope** for this task (future TASK-248+).
+
+### Acceptance Criteria
+
+- Saying「克莉絲蒂娜」produces correct or near-correct output in correctedTranscript.
+- Saying「中文語音辨識測試」maps recognizable result via correction.
+- Diagnostics show rawTranscript / correctedTranscript / correctionApplied / correctionMode.
+- No raw transcript, raw audio, or correction metadata enters history/copy/export unless user sends.
+- Existing smoke suites still PASS.
+- Correction logic is deterministic and unit-testable.
+
+### Out of Scope
+
+- LLM-based semantic rewrite (→ TASK-248).
+- Per-user hotword customization UI.
+- Online correction services.
+- VAD tuning (already closed in TASK-244).
+- Model upgrade beyond TASK-246 configurability.

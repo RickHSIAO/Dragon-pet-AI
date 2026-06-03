@@ -218,7 +218,13 @@ var fullAppVoiceDiagnostics = {
   sttTask: "",
   sttProvider: "",
   sttModel: "",
-  detectedLanguage: ""
+  detectedLanguage: "",
+  // TASK-246: STT model quality diagnostics — populated from /stt/transcribe response metadata
+  sttRequestedModel: "",
+  sttResolvedModel: "",
+  sttModelSource: "",
+  sttModelLoadStatus: "",
+  sttModelLoadError: ""
 };
 // TASK-244: session-only VAD tuning vars — override constants for this session only, not persisted
 var fullAppConversationRmsThreshold = FULL_APP_CONVERSATION_RMS_THRESHOLD;
@@ -4001,16 +4007,21 @@ async function transcribeFullAppAudioBlob(blob) {
   }
   clearTimeout(timeoutId);
 
-  // TASK-245: update STT language-lock diagnostics from backend metadata.
+  // TASK-245/246: update STT language-lock and model quality diagnostics from backend metadata.
   // Done before status checks so the fields are populated even for error/empty
   // responses — the caller's renderFullAppVoiceDiagnostics() will pick them up.
   if (result && typeof result === "object") {
-    fullAppVoiceDiagnostics.sttLanguage      = result.language       ? String(result.language)       : "unknown";
-    fullAppVoiceDiagnostics.languageLocked   = Boolean(result.languageLocked);
-    fullAppVoiceDiagnostics.sttTask          = result.task           ? String(result.task)           : "unknown";
-    fullAppVoiceDiagnostics.sttProvider      = result.provider       ? String(result.provider)       : "unknown";
-    fullAppVoiceDiagnostics.sttModel         = result.model          ? String(result.model)          : "unknown";
-    fullAppVoiceDiagnostics.detectedLanguage = result.detectedLanguage ? String(result.detectedLanguage) : "none";
+    fullAppVoiceDiagnostics.sttLanguage          = result.language         ? String(result.language)         : "unknown";
+    fullAppVoiceDiagnostics.languageLocked        = Boolean(result.languageLocked);
+    fullAppVoiceDiagnostics.sttTask               = result.task             ? String(result.task)             : "unknown";
+    fullAppVoiceDiagnostics.sttProvider           = result.provider         ? String(result.provider)         : "unknown";
+    fullAppVoiceDiagnostics.sttModel              = result.model             ? String(result.model)             : "unknown";
+    fullAppVoiceDiagnostics.detectedLanguage       = result.detectedLanguage  ? String(result.detectedLanguage)  : "none";
+    fullAppVoiceDiagnostics.sttRequestedModel      = result.requestedModel    ? String(result.requestedModel)    : "unknown";
+    fullAppVoiceDiagnostics.sttResolvedModel       = result.resolvedModel     ? String(result.resolvedModel)     : "unknown";
+    fullAppVoiceDiagnostics.sttModelSource         = result.modelSource       ? String(result.modelSource)       : "unknown";
+    fullAppVoiceDiagnostics.sttModelLoadStatus     = result.modelLoadStatus   ? String(result.modelLoadStatus)   : "unknown";
+    fullAppVoiceDiagnostics.sttModelLoadError      = result.modelLoadError    ? String(result.modelLoadError)    : "none";
   }
 
   if (!result || typeof result !== "object") throw new Error("stt_error");
@@ -4807,6 +4818,9 @@ function renderFullAppVoiceDiagnostics() {
     "STT 任務: " + (d.sttTask || "unknown"),
     "STT 提供者: " + (d.sttProvider || "unknown") + "  模型: " + (d.sttModel || "unknown"),
     "偵測語言: " + (d.detectedLanguage || "none"),
+    "請求模型: " + (d.sttRequestedModel || "unknown") + "  解析模型: " + (d.sttResolvedModel || "unknown"),
+    "模型來源: " + (d.sttModelSource || "unknown") + "  載入狀態: " + (d.sttModelLoadStatus || "unknown"),
+    "模型載入錯誤: " + (d.sttModelLoadError || "none"),
     "---",
     "VAD 最後 RMS: " + d.lastRms.toFixed(4),
     "VAD 最高 RMS: " + d.maxRms.toFixed(4),
@@ -4889,6 +4903,12 @@ function resetFullAppVoiceDiagnosticsForRecording(mode) {
   fullAppVoiceDiagnostics.sttProvider      = "";
   fullAppVoiceDiagnostics.sttModel         = "";
   fullAppVoiceDiagnostics.detectedLanguage = "";
+  // TASK-246: reset model quality fields — repopulated after each STT call
+  fullAppVoiceDiagnostics.sttRequestedModel  = "";
+  fullAppVoiceDiagnostics.sttResolvedModel   = "";
+  fullAppVoiceDiagnostics.sttModelSource     = "";
+  fullAppVoiceDiagnostics.sttModelLoadStatus = "";
+  fullAppVoiceDiagnostics.sttModelLoadError  = "";
   // constraintsEchoCancellation/NoiseSuppression/AutoGainControl: not reset (carry over from stream)
   revokeLastAudioObjectUrl();
   if (voicePreviewPlayBtn) voicePreviewPlayBtn.disabled = true;

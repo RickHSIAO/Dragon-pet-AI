@@ -89,7 +89,10 @@ async def stt_transcribe(audio: UploadFile = File(...)):
     Accepts any audio format Whisper supports (webm, wav, ogg, mp4 …).
     Returns {"transcript": str, "status": "ok" | "unavailable" | "empty" | "error",
              "language": str, "languageLocked": bool, "task": str,
-             "provider": str | None, "model": str | None, "detectedLanguage": str | None}.
+             "provider": str | None, "model": str | None, "detectedLanguage": str | None,
+             "requestedModel": str | None, "resolvedModel": str | None,
+             "modelSource": str | None, "modelLoadStatus": str | None,
+             "modelLoadError": str | None}.
 
     Scope limits (TASK-167B / TASK-245):
     - Local Whisper only — no external STT API calls.

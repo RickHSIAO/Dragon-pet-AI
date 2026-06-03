@@ -312,7 +312,24 @@ Suggested research and implementation tasks:
   (「這是中文語音辨識測試」→「這文中位與英編輯測試」). Language lock fix validated; model quality
   issue is a separate problem requiring TASK-246 (Whisper model upgrade to `small` or `base`).
 
-Recommended follow-up: TASK-246 — STT Model Quality / Whisper Model Upgrade (`small` or `base` for improved zh accuracy).
+- TASK-STT-007 Configurable STT model via env var. **Covered by TASK-246 (DONE - MODEL CONFIG
+  PASS / NEEDS TRANSCRIPT CORRECTION FOLLOW-UP; 2026-06-03):** Added `DRAGON_PET_STT_MODEL`
+  env var support; allowed `tiny`/`base`/`small`; safe fallback; model resolution + load status
+  surfaced in diagnostics. 10 renderer-chat + 13 backend pytest tests PASS. **Windows smoke
+  result (2026-06-03):** env var model switching works; diagnostics show requestedModel /
+  resolvedModel correctly. BUT switching tiny → base/small does NOT sufficiently improve zh
+  accuracy. Root cause: raw Whisper output lacks context-aware post-processing / hotword
+  normalization. "感覺沒有智能辨字系統". Language lock (TASK-245) not regressed.
+
+- TASK-STT-008 STT transcript correction / context-aware normalization. **Covered by TASK-247
+  (PLANNED; 2026-06-03):** Add deterministic hotword / phrase-based correction layer to raw
+  Whisper output in renderer. No LLM rewrite, no new IPC, no cloud API. Hotwords include
+  克莉絲蒂娜, Dragon Pet AI, Claude, Whisper, TASK, 桌面寵物, 語音輸入 etc. Diagnostics to show
+  rawTranscript / correctedTranscript / correctionApplied / correctionMode / correctionReason.
+  Conversation Mode auto-send uses safe deterministic correction only. LLM semantic rewrite
+  deferred to TASK-248+.
+
+Recommended next: implement TASK-247 deterministic correction layer; evaluate whether model upgrade to `small` is still worthwhile after correction is in place.
 
 Each future task must explicitly define safety boundaries, user controls,
 provider scope, queue priority, and no-regression checks.

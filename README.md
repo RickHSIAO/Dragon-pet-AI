@@ -7,7 +7,7 @@
 📋 **[完整 Demo 腳本與面試重點](docs/PORTFOLIO_DEMO_SCRIPT.md)**
 📋 **[Phase 4 Provider Settings 摘要](docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md)**
 
-**最新本地狀態（2026-06-03）：** TASK-245 STT Language Lock **DONE - LANGUAGE LOCK PASS / NEEDS STT MODEL QUALITY FOLLOW-UP**。Windows smoke 結果：語言鎖定成功（zh），不再誤判為泰文/馬來文/印尼文；但 faster-whisper `tiny` 模型中文辨識準確度不足（說「這是中文語音辨識測試」，得到「這文中位與英編輯測試」）。語言鎖定修正已驗證；下一步為 TASK-246 STT Model Quality — 升級 Whisper 模型（`small` 或 `base`）。renderer-chat-smoke.js **576 PASS**；backend pytest **PASS**。未 commit、未 push。
+**最新本地狀態（2026-06-03）：** TASK-246 STT Model Quality **DONE - MODEL CONFIG PASS / NEEDS TRANSCRIPT CORRECTION FOLLOW-UP**。Windows smoke：`DRAGON_PET_STT_MODEL` env var 切換 model 成功，diagnostics 正確顯示 requestedModel / resolvedModel；但切換 tiny → base / small 未充分改善中文辨識準確度。根本原因：raw Whisper output 缺少 context-aware correction / hotword normalization。語言鎖定（TASK-245）無回歸。下一步：TASK-247 STT Transcript Correction / Context-Aware Normalization。
 
 ---
 
@@ -99,7 +99,7 @@ ollama serve
 | 本地 Ollama `/chat` smoke | ✅ 通過 — `qwen3:8b`，`source=llm_local`，克莉絲蒂娜人格確認 |
 | Provider Settings 持久化 | ✅ 通過 — 重啟後設定保留，partial PATCH 保留省略欄位 |
 | UI polish | ✅ 通過 — 情緒→表情對應、Christina expression system |
-| Full App chat UX | ✅ TASK-236 DONE；TASK-237 docs-only modularization plan complete；TASK-238 DONE - WINDOWS VISUAL SMOKE PASS；TASK-239 DONE - WINDOWS VISUAL SMOKE PASS；TASK-240 DONE - WINDOWS VISUAL SMOKE PASS；TASK-241 DONE - WINDOWS VISUAL SMOKE PASS；TASK-242 DONE - WINDOWS VISUAL SMOKE PASS；TASK-243 DONE - WINDOWS VISUAL SMOKE PASS；TASK-244 IMPLEMENTED - NEEDS WINDOWS VOICE QUALITY SMOKE；TASK-245 DONE - LANGUAGE LOCK PASS / NEEDS STT MODEL QUALITY FOLLOW-UP — 搜尋/高亮、未讀提示、匯出、時間戳、日期分隔線、清除確認、empty state、Undo Clear Chat、單則訊息刪除/復原、右鍵訊息操作 (viewport clamp + a11y)、最後 user message 編輯/重新送出、互動事件 log、reaction hint 層、reaction preview UI、expression suggestion 鏡像至 Pet Window、expression mirror 300ms cooldown/debounce、reaction bubble 鏡像至 Pet Window、companion behavior policy decision preview、character state diagnostics preview、collapsible diagnostics drawer、output queue module extraction、diagnostics drawer module extraction、Pet Window cutout stage + hover dock / chrome reduction、Full App 語音輸入按鈕 (TASK-241)、Full App 語音輸入設定 + 自動送出 (TASK-242)、Voice Conversation Mode / VAD 靜音偵測 (TASK-243)、Voice Quality Diagnostics + VAD 調參 (TASK-244 NEEDS WINDOWS SMOKE)、STT Language Lock (TASK-245 DONE - LANGUAGE LOCK PASS / NEEDS STT MODEL QUALITY FOLLOW-UP) |
+| Full App chat UX | ✅ TASK-236 DONE；TASK-237 docs-only modularization plan complete；TASK-238~243 DONE - WINDOWS VISUAL/VOICE SMOKE PASS；TASK-244 IMPLEMENTED；TASK-245 DONE - LANGUAGE LOCK PASS；TASK-246 DONE - MODEL CONFIG PASS / NEEDS TRANSCRIPT CORRECTION FOLLOW-UP — 搜尋/高亮、未讀提示、匯出、時間戳、日期分隔線、清除確認、empty state、Undo Clear Chat、單則訊息刪除/復原、右鍵訊息操作 (viewport clamp + a11y)、最後 user message 編輯/重新送出、互動事件 log、reaction hint 層、reaction preview UI、expression suggestion 鏡像至 Pet Window、expression mirror 300ms cooldown/debounce、reaction bubble 鏡像至 Pet Window、companion behavior policy decision preview、character state diagnostics preview、collapsible diagnostics drawer、output queue module extraction、diagnostics drawer module extraction、Pet Window cutout stage + hover dock / chrome reduction、Full App 語音輸入按鈕 (TASK-241)、Full App 語音輸入設定 + 自動送出 (TASK-242)、Voice Conversation Mode / VAD 靜音偵測 (TASK-243)、Voice Quality Diagnostics + VAD 調參 (TASK-244)、STT Language Lock (TASK-245)、STT Model Configurable via Env (TASK-246 DONE - MODEL CONFIG PASS) |
 | 表情系統 | 7/10 real PNG（happy、focused、neutral、proud、annoyed、worried、sleepy）；pending/error/offline 為 SVG fallback |
 | pytest | **586 通過，0 失敗** |
 | Electron smoke | **renderer-chat 540 PASS；pet-renderer 285 PASS；pet-window 82 PASS** |
@@ -107,7 +107,7 @@ ollama serve
 | 真實 API Key 使用 | ❌ 無 — 所有測試使用 mocked runner |
 | 生產就緒 | ❌ 尚未 — prototype / portfolio 階段 |
 | Demo 可用（本地 Ollama） | ✅ 是 |
-| 下一個任務 | TASK-246 STT Model Quality / Whisper Model Upgrade (升級 faster-whisper 至 `small` 或 `base`，改善中文辨識準確度) |
+| 下一個任務 | TASK-247 STT Transcript Correction / Context-Aware Normalization (deterministic hotword/phrase correction，不改 runtime audio pipeline) |
 
 ---
 
@@ -397,8 +397,8 @@ python -c "import json, urllib.request; data=json.dumps({'message':'你好！克
 | [docs/PROVIDER_TEST_CONNECTION_DESIGN.md](docs/PROVIDER_TEST_CONNECTION_DESIGN.md) | Test Connection 設計與強化測試結果 |
 | [docs/SECURE_KEY_STORAGE_DESIGN.md](docs/SECURE_KEY_STORAGE_DESIGN.md) | 金鑰儲存威脅模型、儲存選項、遮蔽規則 |
 | [docs/BYOK_PRODUCT_AND_SETTINGS.md](docs/BYOK_PRODUCT_AND_SETTINGS.md) | BYOK 產品設計與安全邊界 |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖；TASK-245 DONE - LANGUAGE LOCK PASS / NEEDS STT MODEL QUALITY FOLLOW-UP；下一步 TASK-246 STT Model Quality |
-| [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄；最新記錄為 TASK-245 DONE - LANGUAGE LOCK PASS / NEEDS STT MODEL QUALITY FOLLOW-UP；TASK-246 定義已加入 |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖；TASK-246 DONE - MODEL CONFIG PASS / NEEDS TRANSCRIPT CORRECTION FOLLOW-UP；下一步 TASK-247 STT Transcript Correction |
+| [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄；TASK-246 DONE；TASK-247 STT Transcript Correction PLANNED |
 | [docs/RENDERER_MODULARIZATION_PLAN.md](docs/RENDERER_MODULARIZATION_PLAN.md) | TASK-237 renderer modularization boundary map：current renderer responsibilities, proposed modules, extraction order (TASK-238 done, TASK-239 DONE - WINDOWS VISUAL SMOKE PASS), contracts, risks, validation strategy |
 | [docs/INTERACTIVE_COMPANION_ARCHITECTURE.md](docs/INTERACTIVE_COMPANION_ARCHITECTURE.md) | TASK-222/224 互動陪伴架構 checkpoint：data flow、layer responsibility、IPC inventory、安全邊界、Character State Layer diagnostics、TASK-237 renderer modularization phase |
 | [docs/CHRISTINA_PERSONA_CONTEXT_PACK.md](docs/CHRISTINA_PERSONA_CONTEXT_PACK.md) | TASK-225 Christina persona context pack：canonical source、runtime-safe adaptation、strength levels、runtime boundary |

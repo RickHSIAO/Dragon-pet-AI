@@ -12603,6 +12603,147 @@ function testTask244CssDiagnosticsPanel() {
 }
 
 // ---------------------------------------------------------------------------
+// TASK-246: STT Model Quality / Whisper Model Upgrade
+// ---------------------------------------------------------------------------
+
+function testTask246RendererHasModelQualityFields() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes('sttRequestedModel: ""'), "TASK-246 fullAppVoiceDiagnostics must have sttRequestedModel field");
+  assert.ok(src.includes('sttResolvedModel: ""'),  "TASK-246 fullAppVoiceDiagnostics must have sttResolvedModel field");
+  assert.ok(src.includes('sttModelSource: ""'),    "TASK-246 fullAppVoiceDiagnostics must have sttModelSource field");
+  assert.ok(src.includes('sttModelLoadStatus: ""'),"TASK-246 fullAppVoiceDiagnostics must have sttModelLoadStatus field");
+  assert.ok(src.includes('sttModelLoadError: ""'), "TASK-246 fullAppVoiceDiagnostics must have sttModelLoadError field");
+  console.log("  testTask246RendererHasModelQualityFields PASS");
+}
+
+function testTask246DiagnosticsRenderIncludesModelFields() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const renderFnStart = src.indexOf("function renderFullAppVoiceDiagnostics");
+  const renderFnEnd   = src.indexOf("\n}", renderFnStart) + 2;
+  const renderFn = src.slice(renderFnStart, renderFnEnd);
+  assert.ok(renderFn.includes("sttRequestedModel"),  "TASK-246 render must include sttRequestedModel");
+  assert.ok(renderFn.includes("sttResolvedModel"),   "TASK-246 render must include sttResolvedModel");
+  assert.ok(renderFn.includes("sttModelSource"),     "TASK-246 render must include sttModelSource");
+  assert.ok(renderFn.includes("sttModelLoadStatus"), "TASK-246 render must include sttModelLoadStatus");
+  assert.ok(renderFn.includes("sttModelLoadError"),  "TASK-246 render must include sttModelLoadError");
+  assert.ok(!renderFn.includes("innerHTML"), "TASK-246 render must not use innerHTML");
+  assert.ok(renderFn.includes("textContent"), "TASK-246 render must use textContent for safe output");
+  console.log("  testTask246DiagnosticsRenderIncludesModelFields PASS");
+}
+
+async function testTask246DiagnosticsDefaultsNewFields() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  const d = sandbox.fullAppVoiceDiagnostics;
+  assert.ok("sttRequestedModel"  in d, "TASK-246 diagnostics must have sttRequestedModel");
+  assert.ok("sttResolvedModel"   in d, "TASK-246 diagnostics must have sttResolvedModel");
+  assert.ok("sttModelSource"     in d, "TASK-246 diagnostics must have sttModelSource");
+  assert.ok("sttModelLoadStatus" in d, "TASK-246 diagnostics must have sttModelLoadStatus");
+  assert.ok("sttModelLoadError"  in d, "TASK-246 diagnostics must have sttModelLoadError");
+  assert.strictEqual(d.sttRequestedModel,  "", "TASK-246 sttRequestedModel must default to empty string");
+  assert.strictEqual(d.sttResolvedModel,   "", "TASK-246 sttResolvedModel must default to empty string");
+  assert.strictEqual(d.sttModelSource,     "", "TASK-246 sttModelSource must default to empty string");
+  assert.strictEqual(d.sttModelLoadStatus, "", "TASK-246 sttModelLoadStatus must default to empty string");
+  assert.strictEqual(d.sttModelLoadError,  "", "TASK-246 sttModelLoadError must default to empty string");
+  console.log("  testTask246DiagnosticsDefaultsNewFields PASS");
+}
+
+async function testTask246ResetClearsModelFields() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  sandbox.fullAppVoiceDiagnostics.sttRequestedModel  = "small";
+  sandbox.fullAppVoiceDiagnostics.sttResolvedModel   = "small";
+  sandbox.fullAppVoiceDiagnostics.sttModelSource     = "env";
+  sandbox.fullAppVoiceDiagnostics.sttModelLoadStatus = "loaded";
+  sandbox.fullAppVoiceDiagnostics.sttModelLoadError  = "none";
+  sandbox.resetFullAppVoiceDiagnosticsForRecording("manual_mic");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttRequestedModel,  "", "TASK-246 reset must clear sttRequestedModel");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttResolvedModel,   "", "TASK-246 reset must clear sttResolvedModel");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttModelSource,     "", "TASK-246 reset must clear sttModelSource");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttModelLoadStatus, "", "TASK-246 reset must clear sttModelLoadStatus");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttModelLoadError,  "", "TASK-246 reset must clear sttModelLoadError");
+  console.log("  testTask246ResetClearsModelFields PASS");
+}
+
+async function testTask246UpdateDiagnosticsHandlesModelFields() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  sandbox.updateFullAppVoiceDiagnostics({
+    sttRequestedModel:  "base",
+    sttResolvedModel:   "base",
+    sttModelSource:     "env",
+    sttModelLoadStatus: "loaded",
+    sttModelLoadError:  "none"
+  });
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttRequestedModel,  "base",   "TASK-246 update must patch sttRequestedModel");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttResolvedModel,   "base",   "TASK-246 update must patch sttResolvedModel");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttModelSource,     "env",    "TASK-246 update must patch sttModelSource");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttModelLoadStatus, "loaded", "TASK-246 update must patch sttModelLoadStatus");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttModelLoadError,  "none",   "TASK-246 update must patch sttModelLoadError");
+  console.log("  testTask246UpdateDiagnosticsHandlesModelFields PASS");
+}
+
+function testTask246TranscribeFnExtractsModelMetadata() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const fnStart = src.indexOf("async function transcribeFullAppAudioBlob");
+  const fnEnd   = src.indexOf("\n}", fnStart) + 2;
+  const fnBody  = src.slice(fnStart, fnEnd);
+  assert.ok(fnBody.includes("sttRequestedModel"),  "TASK-246 transcribeFn must update sttRequestedModel");
+  assert.ok(fnBody.includes("sttResolvedModel"),   "TASK-246 transcribeFn must update sttResolvedModel");
+  assert.ok(fnBody.includes("sttModelSource"),     "TASK-246 transcribeFn must update sttModelSource");
+  assert.ok(fnBody.includes("sttModelLoadStatus"), "TASK-246 transcribeFn must update sttModelLoadStatus");
+  assert.ok(fnBody.includes("sttModelLoadError"),  "TASK-246 transcribeFn must update sttModelLoadError");
+  assert.ok(fnBody.includes('"unknown"'), "TASK-246 transcribeFn must have 'unknown' fallback for missing model fields");
+  assert.ok(fnBody.includes('"none"'),   "TASK-246 transcribeFn must have 'none' fallback for missing error field");
+  console.log("  testTask246TranscribeFnExtractsModelMetadata PASS");
+}
+
+function testTask246NoNewIpcChannels() {
+  const preloadSrc = fs.readFileSync(
+    path.join(desktopRoot, "src", "renderer", "preload.js"), "utf8"
+  );
+  const sttChannelCount = (preloadSrc.match(/stt:/g) || []).length;
+  assert.ok(sttChannelCount <= 2,
+    "TASK-246 preload must not add new stt: IPC channels, found " + sttChannelCount + " occurrences");
+  assert.ok(preloadSrc.includes("stt:transcribe"),
+    "TASK-246 preload must still expose stt:transcribe");
+  console.log("  testTask246NoNewIpcChannels PASS");
+}
+
+function testTask246NoRawStackInDiagnostics() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const renderFnStart = src.indexOf("function renderFullAppVoiceDiagnostics");
+  const renderFnEnd   = src.indexOf("\n}", renderFnStart) + 2;
+  const renderFn = src.slice(renderFnStart, renderFnEnd);
+  assert.ok(!renderFn.includes("JSON.stringify"), "TASK-246 render must not JSON.stringify result");
+  assert.ok(!renderFn.includes(".stack"),         "TASK-246 render must not expose stack traces");
+  console.log("  testTask246NoRawStackInDiagnostics PASS");
+}
+
+function testTask246NoPetWindowCallsInTranscribeFn() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const fnStart = src.indexOf("async function transcribeFullAppAudioBlob");
+  const fnEnd   = src.indexOf("\n}", fnStart) + 2;
+  const fnBody  = src.slice(fnStart, fnEnd);
+  assert.ok(!fnBody.includes("updatePetSpeech"),    "TASK-246 transcribeFn must not call updatePetSpeech");
+  assert.ok(!fnBody.includes("updatePetExpression"), "TASK-246 transcribeFn must not call updatePetExpression");
+  assert.ok(!fnBody.includes("speechSynthesis"),     "TASK-246 transcribeFn must not trigger TTS");
+  console.log("  testTask246NoPetWindowCallsInTranscribeFn PASS");
+}
+
+async function testTask246RegressionTask245StillPass() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes('sttLanguage: ""'),    "TASK-246 regression: sttLanguage field must still exist");
+  assert.ok(src.includes("languageLocked: false"), "TASK-246 regression: languageLocked field must still exist");
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  const d = sandbox.fullAppVoiceDiagnostics;
+  assert.ok("sttLanguage" in d,      "TASK-246 regression: sttLanguage must still exist");
+  assert.ok("languageLocked" in d,   "TASK-246 regression: languageLocked must still exist");
+  assert.ok("sttTask" in d,          "TASK-246 regression: sttTask must still exist");
+  assert.ok("sttProvider" in d,      "TASK-246 regression: sttProvider must still exist");
+  assert.ok("sttModel" in d,         "TASK-246 regression: sttModel must still exist");
+  assert.ok("detectedLanguage" in d, "TASK-246 regression: detectedLanguage must still exist");
+  console.log("  testTask246RegressionTask245StillPass PASS");
+}
+
+// ---------------------------------------------------------------------------
 // TASK-245: STT Language Lock / Provider Quality Check
 // ---------------------------------------------------------------------------
 
@@ -14063,6 +14204,18 @@ async function main() {
   await testTask244dDiagnosticsDefaultsNewFields();
   await testTask244dPlayFnSetsObjectUrlActive();
   await testTask244dResetSandboxClearsPreviewState();
+
+  // TASK-246: STT Model Quality / Whisper Model Upgrade
+  testTask246RendererHasModelQualityFields();
+  testTask246DiagnosticsRenderIncludesModelFields();
+  await testTask246DiagnosticsDefaultsNewFields();
+  await testTask246ResetClearsModelFields();
+  await testTask246UpdateDiagnosticsHandlesModelFields();
+  testTask246TranscribeFnExtractsModelMetadata();
+  testTask246NoNewIpcChannels();
+  testTask246NoRawStackInDiagnostics();
+  testTask246NoPetWindowCallsInTranscribeFn();
+  await testTask246RegressionTask245StillPass();
 
   // TASK-245: STT Language Lock / Provider Quality Check
   testTask245RendererHasSttLanguageLockFields();
