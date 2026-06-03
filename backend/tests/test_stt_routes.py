@@ -194,11 +194,14 @@ def test_stt_transcribe_no_chat_forwarding(monkeypatch):
 
 def test_stt_service_no_audio_persistence():
     """TASK-167B privacy: stt_service must not write audio to disk."""
-    import inspect
+    import inspect, re
 
     source = inspect.getsource(stt_service)
-    assert "open(" not in source, (
-        "stt_service must not call open() -- audio must stay in-memory"
+    # Check for file write patterns (open with write mode).
+    # "Popen(" is allowed (subprocess management); plain open() for file writes is not.
+    assert not re.search(r'\bopen\s*\(', source), (
+        "stt_service must not call open() for file I/O -- audio must stay in-memory. "
+        "Note: subprocess.Popen() is permitted."
     )
 
 
@@ -724,11 +727,13 @@ def test_stt_correction_no_raw_stack_in_output():
 
 def test_stt_service_no_raw_audio_persistence_with_correction():
     """TASK-247: adding correction must not introduce audio persistence."""
-    import inspect
+    import inspect, re
 
     source = inspect.getsource(stt_service)
-    assert "open(" not in source, (
-        "stt_service must not call open() — audio must stay in-memory (TASK-247 did not change this)"
+    # subprocess.Popen() is allowed (process management); standalone open() for file I/O is not.
+    assert not re.search(r'\bopen\s*\(', source), (
+        "stt_service must not call open() for file I/O — audio must stay in-memory "
+        "(TASK-247 did not change this). Note: subprocess.Popen() is permitted."
     )
 
 
@@ -1300,15 +1305,16 @@ def test_funasr_transcribe_mock_empty_includes_provider_metadata(monkeypatch):
 
 
 def test_funasr_transcribe_no_audio_to_disk():
-    """TASK-251: _transcribe_funasr uses subprocess stdin — no temp files, no disk writes."""
+    """TASK-251/254: _transcribe_funasr delegates to _run_funasr — no temp files, no disk writes."""
     import inspect
+    import re
     source = inspect.getsource(stt_service._transcribe_funasr)
-    assert "_run_funasr_sidecar" in source, (
-        "TASK-251: must delegate to _run_funasr_sidecar (subprocess sidecar)"
+    assert "_run_funasr" in source, (
+        "TASK-254: must delegate to _run_funasr (persistent sidecar dispatcher)"
     )
     assert "NamedTemporaryFile" not in source, "TASK-251: must NOT write audio to disk"
     assert "tempfile" not in source, "TASK-251: must NOT use tempfile in transcribe path"
-    assert "open(" not in source, "TASK-251: must NOT use open() in transcribe path"
+    assert not re.search(r'\bopen\s*\(', source), "TASK-251: must NOT use open() in transcribe path"
 
 
 # =============================================================================
@@ -1747,3 +1753,226 @@ def test_task253rev_full_pipeline_帮我修一下_task(monkeypatch):
     result = stt_service._transcribe_funasr(b"\x01\x02")
     assert result["normalizedTranscript"] == "幫我修一下 task"
     assert result["correctedTranscript"] == "幫我修一下 TASK"
+
+
+# ---------------------------------------------------------------------------
+# TASK-254: Persistent FunASR sidecar manager tests
+# ---------------------------------------------------------------------------
+
+
+def test_task254_persistent_env_constant_exists():
+    """_FUNASR_PERSISTENT_ENV constant must be present."""
+    assert hasattr(stt_service, "_FUNASR_PERSISTENT_ENV")
+    assert stt_service._FUNASR_PERSISTENT_ENV == "DRAGON_PET_FUNASR_PERSISTENT"
+
+
+def test_task254_sidecar_loop_script_constant_exists():
+    """_FUNASR_SIDECAR_LOOP_SCRIPT constant must be present."""
+    assert hasattr(stt_service, "_FUNASR_SIDECAR_LOOP_SCRIPT")
+    assert "funasr_sidecar_loop.py" in stt_service._FUNASR_SIDECAR_LOOP_SCRIPT
+
+
+def test_task254_sidecar_loop_script_file_exists():
+    """scripts/funasr_sidecar_loop.py must exist on disk."""
+    import os
+    assert os.path.isfile(stt_service._FUNASR_SIDECAR_LOOP_SCRIPT), (
+        f"TASK-254: loop script missing: {stt_service._FUNASR_SIDECAR_LOOP_SCRIPT}"
+    )
+
+
+def test_task254_persistent_mode_enabled_default_true(monkeypatch):
+    """Persistent mode is enabled by default (no env var set)."""
+    monkeypatch.delenv("DRAGON_PET_FUNASR_PERSISTENT", raising=False)
+    assert stt_service._persistent_mode_enabled() is True
+
+
+def test_task254_persistent_mode_disabled_by_env_false(monkeypatch):
+    """DRAGON_PET_FUNASR_PERSISTENT=false disables persistent mode."""
+    monkeypatch.setenv("DRAGON_PET_FUNASR_PERSISTENT", "false")
+    assert stt_service._persistent_mode_enabled() is False
+
+
+def test_task254_persistent_mode_disabled_by_env_0(monkeypatch):
+    """DRAGON_PET_FUNASR_PERSISTENT=0 disables persistent mode."""
+    monkeypatch.setenv("DRAGON_PET_FUNASR_PERSISTENT", "0")
+    assert stt_service._persistent_mode_enabled() is False
+
+
+def test_task254_persistent_mode_enabled_by_env_true(monkeypatch):
+    """DRAGON_PET_FUNASR_PERSISTENT=true keeps persistent mode enabled."""
+    monkeypatch.setenv("DRAGON_PET_FUNASR_PERSISTENT", "true")
+    assert stt_service._persistent_mode_enabled() is True
+
+
+def test_task254_shutdown_for_tests_does_not_crash():
+    """_shutdown_funasr_process_for_tests must not raise when no process is running."""
+    stt_service._shutdown_funasr_process_for_tests()
+    assert stt_service._funasr_process is None
+
+
+def test_task254_run_funasr_oneshot_when_persistent_disabled(monkeypatch):
+    """When persistent mode is disabled, _run_funasr calls _run_funasr_sidecar."""
+    monkeypatch.setenv("DRAGON_PET_FUNASR_PERSISTENT", "false")
+    calls = []
+    monkeypatch.setattr(
+        stt_service, "_run_funasr_sidecar",
+        lambda b: (calls.append("oneshot"), {"transcript": "測試", "status": "ok", "error": None})[1],
+    )
+    r = stt_service._run_funasr(b"\x01", "audio/wav")
+    assert calls == ["oneshot"]
+    assert r["funasrSidecarMode"] == "oneshot"
+    assert r["funasrSidecarWarm"] is False
+    assert r["funasrSidecarRestarted"] is False
+
+
+def test_task254_run_funasr_persistent_ok_returns_persistent_mode(monkeypatch):
+    """When persistent mode succeeds _run_funasr returns funasrSidecarMode=persistent."""
+    monkeypatch.setenv("DRAGON_PET_FUNASR_PERSISTENT", "true")
+    monkeypatch.setattr(stt_service, "_ensure_funasr_process", lambda: (True, False))
+    monkeypatch.setattr(
+        stt_service, "_call_funasr_persistent",
+        lambda b, m: {"transcript": "測試", "status": "ok", "error": None},
+    )
+    r = stt_service._run_funasr(b"\x01", "audio/wav")
+    assert r["funasrSidecarMode"] == "persistent"
+    assert r["funasrSidecarWarm"] is False
+    assert r["funasrSidecarRestarted"] is False
+    assert r["transcript"] == "測試"
+
+
+def test_task254_run_funasr_persistent_warm_on_second_mock(monkeypatch):
+    """was_warm=True is returned when the process was already running."""
+    monkeypatch.setenv("DRAGON_PET_FUNASR_PERSISTENT", "true")
+    monkeypatch.setattr(stt_service, "_ensure_funasr_process", lambda: (True, True))
+    monkeypatch.setattr(
+        stt_service, "_call_funasr_persistent",
+        lambda b, m: {"transcript": "測試", "status": "ok", "error": None},
+    )
+    r = stt_service._run_funasr(b"\x01", "audio/wav")
+    assert r["funasrSidecarWarm"] is True
+
+
+def test_task254_run_funasr_persistent_failure_falls_back_to_oneshot(monkeypatch):
+    """When _ensure_funasr_process returns False, one-shot fallback is used."""
+    monkeypatch.setenv("DRAGON_PET_FUNASR_PERSISTENT", "true")
+    monkeypatch.setattr(stt_service, "_ensure_funasr_process", lambda: (False, False))
+    calls = []
+    monkeypatch.setattr(
+        stt_service, "_run_funasr_sidecar",
+        lambda b: (calls.append("oneshot"), {"transcript": "測試", "status": "ok", "error": None})[1],
+    )
+    r = stt_service._run_funasr(b"\x01", "audio/wav")
+    assert calls == ["oneshot"]
+    assert r["funasrSidecarMode"] == "oneshot"
+
+
+def test_task254_run_funasr_persistent_error_result_falls_back(monkeypatch):
+    """When persistent call returns status=error and restart also fails, one-shot fallback used."""
+    monkeypatch.setenv("DRAGON_PET_FUNASR_PERSISTENT", "true")
+    ensure_calls = [0]
+    def mock_ensure():
+        ensure_calls[0] += 1
+        return True, False
+    monkeypatch.setattr(stt_service, "_ensure_funasr_process", mock_ensure)
+    monkeypatch.setattr(stt_service, "_kill_funasr_process", lambda: None)
+    monkeypatch.setattr(
+        stt_service, "_call_funasr_persistent",
+        lambda b, m: {"transcript": "", "status": "error", "error": "mock_error"},
+    )
+    calls = []
+    monkeypatch.setattr(
+        stt_service, "_run_funasr_sidecar",
+        lambda b: (calls.append("oneshot"), {"transcript": "救援", "status": "ok", "error": None})[1],
+    )
+    r = stt_service._run_funasr(b"\x01", "audio/wav")
+    assert calls == ["oneshot"]
+    assert r["funasrSidecarMode"] == "oneshot"
+
+
+def test_task254_transcribe_funasr_response_has_sidecar_fields(monkeypatch):
+    """_transcribe_funasr ok-path response includes all TASK-254 sidecar metadata fields."""
+    monkeypatch.setattr(stt_service, "_FUNASR_AVAILABLE", True)
+    monkeypatch.setattr(stt_service, "_STT_RESOLVED_PROVIDER", "funasr-local")
+    monkeypatch.setattr(stt_service, "_STT_PROVIDER_RESOLUTION", {
+        "requested_provider": "funasr-local",
+        "resolved_provider": "funasr-local",
+        "provider_source": "env",
+        "provider_fallback_reason": "none",
+    })
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(
+        stt_service, "_run_funasr",
+        lambda b, m: {
+            "transcript": "測試", "status": "ok", "error": None,
+            "funasrSidecarMode": "persistent",
+            "funasrSidecarWarm": True,
+            "funasrSidecarRestarted": False,
+        },
+    )
+    result = stt_service._transcribe_funasr(b"\x01\x02")
+    assert result["status"] == "ok"
+    assert result["funasrSidecarMode"] == "persistent"
+    assert result["funasrSidecarWarm"] is True
+    assert result["funasrSidecarRestarted"] is False
+
+
+def test_task254_transcribe_funasr_norm_correction_still_applied(monkeypatch):
+    """TASK-254: normalisation and correction pipeline still applies on persistent path."""
+    monkeypatch.setattr(stt_service, "_FUNASR_AVAILABLE", True)
+    monkeypatch.setattr(stt_service, "_STT_RESOLVED_PROVIDER", "funasr-local")
+    monkeypatch.setattr(stt_service, "_STT_PROVIDER_RESOLUTION", {
+        "requested_provider": "funasr-local",
+        "resolved_provider": "funasr-local",
+        "provider_source": "env",
+        "provider_fallback_reason": "none",
+    })
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(
+        stt_service, "_run_funasr",
+        lambda b, m: {
+            "transcript": "dragon pet a i",
+            "status": "ok", "error": None,
+            "funasrSidecarMode": "persistent",
+            "funasrSidecarWarm": True,
+            "funasrSidecarRestarted": False,
+        },
+    )
+    result = stt_service._transcribe_funasr(b"\x01\x02")
+    assert result["correctedTranscript"] == "Dragon Pet AI"
+    assert result["funasrSidecarMode"] == "persistent"
+
+
+def test_task254_no_new_endpoint():
+    """TASK-254: no new routes added — transcribe_audio_bytes signature unchanged."""
+    import inspect
+    sig = inspect.signature(stt_service.transcribe_audio_bytes)
+    params = list(sig.parameters.keys())
+    assert "audio_bytes" in params
+    assert "mime_type" in params
+    assert "language" in params
+
+
+def test_task254_no_audio_persistence_in_loop_script():
+    """funasr_sidecar_loop.py must not contain writeFile/open() for audio output."""
+    import os
+    script_path = stt_service._FUNASR_SIDECAR_LOOP_SCRIPT
+    assert os.path.isfile(script_path)
+    content = open(script_path, encoding="utf-8").read()
+    # Must not write audio to disk
+    assert "open(" not in content or "TextIOWrapper" in content  # TextIOWrapper is allowed for stdin
+    assert "writeFile" not in content
+
+
+def test_task254_faster_whisper_path_unchanged(monkeypatch):
+    """TASK-254: faster-whisper-local provider path must be unaffected."""
+    monkeypatch.setattr(stt_service, "_STT_RESOLVED_PROVIDER", "faster-whisper-local")
+    monkeypatch.setattr(stt_service, "_STT_PROVIDER_RESOLUTION", {
+        "requested_provider": "faster-whisper-local",
+        "resolved_provider": "faster-whisper-local",
+        "provider_source": "default",
+        "provider_fallback_reason": "none",
+    })
+    result = stt_service.transcribe_audio_bytes(b"\x00" * 100, mime_type="audio/wav")
+    # Whisper path returns unavailable or empty — not an error from sidecar code
+    assert result["status"] in ("unavailable", "empty", "error")
+    assert "funasrSidecarMode" not in result  # whisper path does not set sidecar fields

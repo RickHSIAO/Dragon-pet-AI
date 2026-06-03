@@ -633,8 +633,15 @@ Recommended next architecture phase:
   Nine Paraformer-specific entries added to `_STT_CORRECTION_MAP`. Response adds normalizedTranscript,
   normalizationApplied, normalizationSteps, cjkSpacingRemoved, traditionalApplied, tradMethod;
   rawTranscript = pre-norm sidecar output. 133 pytest + 86 smoke PASS. Windows manual smoke PASS:
-  OpenCC s2tw active; all 5 test sentences normalised and corrected. Remaining: cold-start latency → TASK-254.
-- TASK-254 recommended next: Persistent FunASR Sidecar / Warm Model Server.
+  OpenCC s2tw active; all 5 test sentences normalised and corrected.
+- TASK-254 DONE - WINDOWS WARM SIDECAR SMOKE PASS / NEEDS WINDOW UX FOLLOW-UP (2026-06-03):
+  Persistent FunASR Sidecar / Warm Model Server. `scripts/funasr_sidecar_loop.py` (new) — persistent
+  stdin/stdout JSON loop; paraformer-zh loaded once, stays warm. Backend `_run_funasr()` dispatcher
+  with 1-restart + one-shot fallback. `DRAGON_PET_FUNASR_PERSISTENT=false` env disables. Response
+  adds `funasrSidecarMode`, `funasrSidecarWarm`, `funasrSidecarRestarted`. Windows smoke PASS: first
+  call slower (warmup), subsequent calls clearly faster; normalisation/correction regression PASS;
+  no raw stack; no raw audio. 151 pytest + 109 smoke PASS. Follow-ups: TASK-255 voice capture
+  focus/minimize; TASK-256 Pet Window click / Show Pet idempotent.
 - Relationship state.
 - Mood / attention / energy state beyond the local preview foundation.
 - Idle reaction policy.

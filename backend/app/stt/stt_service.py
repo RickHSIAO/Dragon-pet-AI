@@ -9,13 +9,18 @@ Design boundaries:
 - Returns {"transcript": str, "status": "ok" | "unavailable" | "empty" | "error"}.
 """
 
+import base64
 import io
 import json
 import logging
 import os
 import pathlib
+import queue
 import re
 import subprocess
+import threading
+import time
+import uuid
 from typing import Any
 
 try:
@@ -268,6 +273,284 @@ def _run_funasr_sidecar(audio_bytes: bytes) -> dict:
         )
         raise ValueError(f"sidecar_no_json exit={proc.returncode}")
     return json.loads(json_line)
+
+
+# ---------------------------------------------------------------------------
+# TASK-254: Persistent FunASR sidecar manager
+# ---------------------------------------------------------------------------
+
+# Env var to enable/disable persistent mode.  Default: true.
+# Set DRAGON_PET_FUNASR_PERSISTENT=false to fall back to one-shot for every call.
+_FUNASR_PERSISTENT_ENV = "DRAGON_PET_FUNASR_PERSISTENT"
+
+# Path to the persistent loop sidecar script (TASK-254).
+_FUNASR_SIDECAR_LOOP_SCRIPT = str(_REPO_ROOT / "scripts" / "funasr_sidecar_loop.py")
+
+# Module-level persistent-process state.
+_funasr_process: "subprocess.Popen[bytes] | None" = None
+_funasr_stdout_queue: queue.Queue = queue.Queue()
+_funasr_stdout_thread: "threading.Thread | None" = None
+_funasr_lock = threading.Lock()
+
+
+def _persistent_mode_enabled() -> bool:
+    """Return True unless DRAGON_PET_FUNASR_PERSISTENT is set to a falsy value."""
+    val = os.environ.get(_FUNASR_PERSISTENT_ENV, "true").lower().strip()
+    return val not in ("false", "0", "no", "off")
+
+
+def _funasr_stdout_reader(proc: "subprocess.Popen[bytes]", q: queue.Queue) -> None:
+    """Daemon thread: reads stdout lines from the sidecar and enqueues them."""
+    try:
+        for raw_line in proc.stdout:  # type: ignore[union-attr]
+            line = raw_line.rstrip(b"\r\n").decode("utf-8", errors="replace")
+            if line:
+                q.put(line)
+    except Exception:  # noqa: BLE001
+        pass
+    finally:
+        q.put(None)  # sentinel: stream closed / process died
+
+
+def _drain_stdout_queue() -> None:
+    """Discard all pending items from the shared stdout queue."""
+    while True:
+        try:
+            _funasr_stdout_queue.get_nowait()
+        except queue.Empty:
+            break
+
+
+def _kill_funasr_process() -> None:
+    """
+    Attempt graceful shutdown then hard-kill the persistent sidecar.
+    Resets _funasr_process / _funasr_stdout_thread to None.
+    Must be called with _funasr_lock held.
+    """
+    global _funasr_process, _funasr_stdout_thread
+    if _funasr_process is not None:
+        try:
+            if _funasr_process.poll() is None:
+                try:
+                    _funasr_process.stdin.write(  # type: ignore[union-attr]
+                        (json.dumps({"type": "shutdown"}) + "\n").encode("utf-8")
+                    )
+                    _funasr_process.stdin.flush()  # type: ignore[union-attr]
+                    _funasr_process.wait(timeout=3)
+                except Exception:  # noqa: BLE001
+                    _funasr_process.kill()
+        except Exception:  # noqa: BLE001
+            pass
+        _funasr_process = None
+    _funasr_stdout_thread = None
+    _drain_stdout_queue()
+
+
+def _ensure_funasr_process() -> "tuple[bool, bool]":
+    """
+    Ensure the persistent sidecar is running and ready.
+    Returns (success, was_warm).
+      was_warm=True  — process was already alive when this call arrived.
+      was_warm=False — a new process was started.
+    Must be called with _funasr_lock held.
+    """
+    global _funasr_process, _funasr_stdout_thread
+
+    # Fast path: process is alive.
+    if _funasr_process is not None and _funasr_process.poll() is None:
+        return True, True
+
+    _funasr_process = None  # clear dead reference
+
+    py_path = _resolve_funasr_python()
+    if not os.path.isfile(py_path):
+        return False, False
+    if not os.path.isfile(_FUNASR_SIDECAR_LOOP_SCRIPT):
+        logger.warning("TASK-254: loop script not found: %s", _FUNASR_SIDECAR_LOOP_SCRIPT)
+        return False, False
+
+    _drain_stdout_queue()
+
+    try:
+        proc: "subprocess.Popen[bytes]" = subprocess.Popen(
+            [py_path, _FUNASR_SIDECAR_LOOP_SCRIPT, "--hotwords", _FUNASR_HOTWORDS],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            bufsize=0,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("TASK-254: Popen persistent sidecar failed: %s", exc)
+        return False, False
+
+    t = threading.Thread(
+        target=_funasr_stdout_reader,
+        args=(proc, _funasr_stdout_queue),
+        daemon=True,
+        name="funasr-stdout-reader",
+    )
+    t.start()
+
+    # Wait for the ready signal (120 s — first-run model download can be slow).
+    deadline = time.monotonic() + 120.0
+    ready = False
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        try:
+            line = _funasr_stdout_queue.get(timeout=min(remaining, 2.0))
+        except queue.Empty:
+            if proc.poll() is not None:
+                break
+            continue
+        if line is None:
+            break
+        try:
+            msg = json.loads(line)
+            if msg.get("type") == "ready" and msg.get("status") == "ok":
+                ready = True
+                break
+        except json.JSONDecodeError:
+            continue
+
+    if not ready:
+        logger.warning("TASK-254: persistent sidecar did not become ready (120 s timeout)")
+        try:
+            proc.terminate()
+            proc.wait(timeout=5)
+        except Exception:  # noqa: BLE001
+            proc.kill()
+        return False, False
+
+    _funasr_process = proc
+    _funasr_stdout_thread = t
+    logger.info("TASK-254: persistent funasr sidecar ready (pid=%d)", proc.pid)
+    return True, False
+
+
+def _call_funasr_persistent(audio_bytes: bytes, mime_type: str) -> dict:
+    """
+    Send one transcription request to the running persistent sidecar and wait for the result.
+    Must be called with _funasr_lock held and _funasr_process alive.
+
+    Raises
+    ------
+    subprocess.TimeoutExpired  — no result within 60 s
+    ValueError                 — sidecar process died or stdout closed mid-request
+    """
+    req_id = str(uuid.uuid4())
+    request = (json.dumps({
+        "type": "transcribe",
+        "requestId": req_id,
+        "audioBase64": base64.b64encode(audio_bytes).decode("ascii"),
+        "mimeType": mime_type,
+    }) + "\n").encode("utf-8")
+
+    _funasr_process.stdin.write(request)  # type: ignore[union-attr]
+    _funasr_process.stdin.flush()  # type: ignore[union-attr]
+
+    deadline = time.monotonic() + 60.0
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise subprocess.TimeoutExpired("persistent_sidecar_request", 60)
+        try:
+            line = _funasr_stdout_queue.get(timeout=min(remaining, 1.0))
+        except queue.Empty:
+            if _funasr_process.poll() is not None:  # type: ignore[union-attr]
+                raise ValueError("persistent_sidecar_died_during_request")
+            continue
+        if line is None:
+            raise ValueError("persistent_sidecar_stdout_closed")
+        try:
+            msg = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if msg.get("type") == "result" and msg.get("requestId") == req_id:
+            return {
+                "transcript": msg.get("transcript", ""),
+                "status": msg.get("status", "error"),
+                "error": msg.get("error"),
+            }
+
+
+def _run_funasr(audio_bytes: bytes, mime_type: str) -> dict:
+    """
+    TASK-254: FunASR call dispatcher.
+
+    Uses persistent sidecar loop when enabled; falls back to one-shot sidecar on failure.
+    Augments result dict with:
+      funasrSidecarMode      — "persistent" | "oneshot"
+      funasrSidecarWarm      — True if model was already loaded at call time
+      funasrSidecarRestarted — True if the sidecar was restarted during this call
+
+    Raises subprocess.TimeoutExpired or Exception on unrecoverable one-shot failure.
+    """
+    if not _persistent_mode_enabled():
+        r = _run_funasr_sidecar(audio_bytes)
+        r.update({"funasrSidecarMode": "oneshot",
+                   "funasrSidecarWarm": False,
+                   "funasrSidecarRestarted": False})
+        return r
+
+    use_oneshot = False
+    result: "dict | None" = None
+    was_warm = False
+    restarted = False
+
+    with _funasr_lock:
+        ok, was_warm = _ensure_funasr_process()
+        if not ok:
+            use_oneshot = True
+        else:
+            try:
+                result = _call_funasr_persistent(audio_bytes, mime_type)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("TASK-254: persistent call raised: %s", exc)
+                _kill_funasr_process()
+                use_oneshot = True
+            else:
+                if result.get("status") == "error":
+                    # Attempt one restart before giving up.
+                    _kill_funasr_process()
+                    ok2, _ = _ensure_funasr_process()
+                    if ok2:
+                        restarted = True
+                        try:
+                            result = _call_funasr_persistent(audio_bytes, mime_type)
+                        except Exception as exc2:  # noqa: BLE001
+                            logger.warning("TASK-254: restart call raised: %s", exc2)
+                            _kill_funasr_process()
+                            use_oneshot = True
+                        else:
+                            if result.get("status") == "error":
+                                _kill_funasr_process()
+                                use_oneshot = True
+                    else:
+                        use_oneshot = True
+
+    if use_oneshot:
+        logger.info("TASK-254: persistent sidecar unavailable — falling back to one-shot")
+        r = _run_funasr_sidecar(audio_bytes)  # may raise
+        r.update({"funasrSidecarMode": "oneshot",
+                   "funasrSidecarWarm": False,
+                   "funasrSidecarRestarted": False})
+        return r
+
+    assert result is not None
+    result.update({
+        "funasrSidecarMode": "persistent",
+        "funasrSidecarWarm": was_warm,
+        "funasrSidecarRestarted": restarted,
+    })
+    return result
+
+
+def _shutdown_funasr_process_for_tests() -> None:
+    """Kill the persistent sidecar and reset all state. Only for test isolation."""
+    with _funasr_lock:
+        _kill_funasr_process()
 
 
 def _get_model_metadata() -> dict:
@@ -637,11 +920,11 @@ def _transcribe_funasr(
         }
 
     try:
-        sidecar_result = _run_funasr_sidecar(audio_bytes)
+        sidecar_result = _run_funasr(audio_bytes, mime_type)
     except subprocess.TimeoutExpired:
         _FUNASR_LOAD_STATUS = "error"
         _FUNASR_LOAD_ERROR = "sidecar_timeout"
-        logger.warning("TASK-251: funasr sidecar timed out mime=%s", mime_type)
+        logger.warning("TASK-254: funasr sidecar timed out mime=%s", mime_type)
         return {
             "transcript": "",
             "status": "error",
@@ -651,7 +934,7 @@ def _transcribe_funasr(
     except Exception as exc:  # noqa: BLE001
         _FUNASR_LOAD_STATUS = "error"
         _FUNASR_LOAD_ERROR = str(exc)[:100]
-        logger.warning("TASK-251: funasr sidecar error mime=%s exc=%s", mime_type, exc)
+        logger.warning("TASK-254: funasr sidecar error mime=%s exc=%s", mime_type, exc)
         return {
             "transcript": "",
             "status": "error",
@@ -709,6 +992,9 @@ def _transcribe_funasr(
         "correctionReason": correction["correctionReason"],
         "matchedAlias": correction["matchedAlias"],
         "canonicalTerm": correction["canonicalTerm"],
+        "funasrSidecarMode": sidecar_result.get("funasrSidecarMode", "oneshot"),
+        "funasrSidecarWarm": sidecar_result.get("funasrSidecarWarm", False),
+        "funasrSidecarRestarted": sidecar_result.get("funasrSidecarRestarted", False),
     }
 
 

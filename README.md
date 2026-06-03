@@ -107,7 +107,7 @@ ollama serve
 | 真實 API Key 使用 | ❌ 無 — 所有測試使用 mocked runner |
 | 生產就緒 | ❌ 尚未 — prototype / portfolio 階段 |
 | Demo 可用（本地 Ollama） | ✅ 是 |
-| 下一個任務 | TASK-254 — Persistent FunASR Sidecar / Warm Model Server（TASK-253 DONE - WINDOWS NORMALIZATION SMOKE PASS：OpenCC s2tw 簡繁轉換 + CJK 空格清除 + Paraformer 熱詞 normalisation；cold-start latency 10–30s pending）|
+| 下一個任務 | TASK-255 Voice Capture Focus/Minimize Resilience；TASK-256 Pet Window Click/Show Idempotent（TASK-254 DONE - WINDOWS WARM SIDECAR SMOKE PASS：persistent sidecar warm，後續 call 明顯變快，normalisation/correction regression PASS）|
 
 ---
 

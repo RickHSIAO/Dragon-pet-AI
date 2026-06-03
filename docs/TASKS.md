@@ -26226,13 +26226,11 @@ Core audio format blocker resolved.
 - ✅ No new IPC channels
 - ✅ Windows FunASR WAV mic smoke PASS
 - ✅ Transcript normalisation (spaces, simplified → traditional): TASK-253
-- ⏳ Persistent warm sidecar / reduced latency: TASK-254
+- ✅ Persistent warm sidecar / reduced latency: TASK-254
 
 ### Next Task
 
-TASK-254 — Persistent FunASR Sidecar / Warm Model Server.
-  Keep paraformer-zh model loaded between requests to eliminate cold-start latency.
-  Options: long-running sidecar process with stdin loop, or local HTTP server inside `.venv-funasr`.
+TASK-255 (TBD)
 
 ---
 
@@ -26349,8 +26347,107 @@ Tested sentences and confirmed behaviour:
 - ✅ Whisper path unmodified
 - ✅ opencc-python-reimplemented installed in backend\.venv
 - ✅ Windows normalization manual smoke PASS
-- ⏳ Persistent warm sidecar / reduced latency: TASK-254
+- ✅ Persistent warm sidecar / reduced latency: TASK-254
 
 ### Next Task
 
-TASK-254 — Persistent FunASR Sidecar / Warm Model Server.
+TASK-255 (TBD)
+
+---
+
+## TASK-254 | Persistent FunASR Sidecar / Warm Model Server
+
+Status: DONE - WINDOWS WARM SIDECAR SMOKE PASS / NEEDS WINDOW UX FOLLOW-UP (2026-06-03)
+
+### Goal
+
+Eliminate cold-start latency (~10–30 s) on each FunASR call by keeping paraformer-zh model loaded
+in a persistent subprocess between requests. Backend dispatches through a new `_run_funasr()`
+function that manages the sidecar lifecycle.
+
+### Design Constraints
+
+1. Files: `backend/app/stt/stt_service.py`, `backend/tests/test_stt_routes.py`,
+   `scripts/stt_provider_smoke.py`, `scripts/funasr_sidecar_loop.py`, 5 docs. No other files.
+2. No cloud API, no IPC, no `/chat` schema change, no new endpoints.
+3. No audio persistence; sidecar receives audio as base64 over stdin only.
+4. No TTS, no frontend changes, no Pet Window / Output Queue / Diagnostics Drawer change.
+5. Preserve one-shot `_run_funasr_sidecar()` fallback; preserve faster-whisper path.
+6. One restart attempt on sidecar failure; fallback to one-shot if second attempt fails.
+7. Env `DRAGON_PET_FUNASR_PERSISTENT=false` disables persistent mode (default: true).
+8. No commit/push.
+
+### Implementation (2026-06-03)
+
+**`scripts/funasr_sidecar_loop.py`** (new file):
+
+Persistent sidecar loop. Loads `paraformer-zh` once at startup, then serves JSON transcription
+requests from stdin. Model stays warm between calls.
+
+Protocol:
+- Startup → stdout: `{"type":"ready","status":"ok"}` or `{"type":"ready","status":"error","error":"..."}`
+- Request ← stdin: `{"type":"transcribe","requestId":"<uuid>","audioBase64":"<b64>","mimeType":"audio/wav"}`
+- Response → stdout: `{"type":"result","requestId":"...","status":"ok|empty|error","transcript":"...","error":null}`
+- Shutdown ← stdin: `{"type":"shutdown"}`
+
+Safety: `_PROTO_BUF` saved before any redirect; `sys.stdout = sys.stderr` during model load
+suppresses progress noise; never writes audio to disk; all stdout = valid JSON lines.
+
+**`backend/app/stt/stt_service.py`** — persistent sidecar manager:
+
+- `_FUNASR_PERSISTENT_ENV`, `_FUNASR_SIDECAR_LOOP_SCRIPT`, module-level process/queue/thread/lock state
+- `_persistent_mode_enabled()`, `_funasr_stdout_reader()` (daemon thread), `_drain_stdout_queue()`
+- `_kill_funasr_process()`, `_ensure_funasr_process()` → `(is_new, was_warm)`, 120 s startup timeout
+- `_call_funasr_persistent()` — serialized via lock; 60 s per-request timeout
+- `_run_funasr()` — persistent + 1-restart + one-shot fallback; adds `funasrSidecarMode/Warm/Restarted`
+- `_shutdown_funasr_process_for_tests()` — test helper
+
+`_transcribe_funasr()` now delegates to `_run_funasr()`. Response includes
+`funasrSidecarMode`, `funasrSidecarWarm`, `funasrSidecarRestarted`.
+
+**`backend/tests/test_stt_routes.py`** — 18 new TASK-254 tests; 151 total; all pass.
+
+**`scripts/stt_provider_smoke.py`** — [8/8] TASK-254 section added.
+
+### Checklist
+
+- ✅ `scripts/funasr_sidecar_loop.py` created with protocol and safety rules
+- ✅ Persistent state vars and lock at module level
+- ✅ `_ensure_funasr_process()`, `_call_funasr_persistent()`, `_run_funasr()` implemented
+- ✅ Persistent mode default=True; `DRAGON_PET_FUNASR_PERSISTENT=false` disables
+- ✅ One restart attempt on error; fallback to one-shot outside lock
+- ✅ `_shutdown_funasr_process_for_tests()` test helper
+- ✅ `funasrSidecarMode`, `funasrSidecarWarm`, `funasrSidecarRestarted` in response
+- ✅ `_transcribe_funasr()` delegates to `_run_funasr()`
+- ✅ TASK-253 normalisation + TASK-247/248 correction still applied on ok-path
+- ✅ faster-whisper path unmodified
+- ✅ No audio to disk
+- ✅ No cloud API, no IPC, no schema change
+- ✅ 18 new pytest (151 total); [8/8] smoke section
+- ✅ Windows warm sidecar smoke PASS (2026-06-03)
+
+### Windows Smoke Results (2026-06-03)
+
+1. ✅ Backend provider: STT Provider = funasr-local / source = env
+2. ✅ Persistent sidecar active: DRAGON_PET_FUNASR_PERSISTENT=1
+3. ✅ First call: slower (model warmup) but transcript produced successfully
+4. ✅ Warm call: second Manual Mic call clearly faster
+5. ✅ Conversation Mode: second utterance clearly faster
+6. ✅ Normalisation regression: OpenCC s2tw / CJK spacing / proper noun correction all pass
+7. ✅ Fallback boundary: no raw stack, no raw audio persistence
+8. ⏳ Latency improved; further fine-tuning possible in future tasks
+
+### Follow-up Issues (recorded, not fixed in TASK-254)
+
+**Issue A → TASK-255 — Voice Capture Focus/Minimize Resilience:**
+Voice recognition stops or fails to continue when Full App loses focus or is minimized mid-recording.
+Preliminary direction: check `visibilitychange`/`blur`/`minimize` event handlers; check Electron
+`backgroundThrottling`; Manual Mic and Conversation Mode should not be interrupted by window switch
+after user explicitly starts recording. No always-listening, no background listening, no raw audio,
+no STT/sidecar/schema changes.
+
+**Issue B → TASK-256 — Pet Window Click / Show Pet Idempotent Behavior:**
+(B) Left-clicking Pet Window avatar unexpectedly hides the pet.
+(C) Show Pet button acts as toggle — hides when pet is already visible; should be idempotent
+show/focus/restore. Hide Pet should only be triggered by explicit Hide action / context menu / Menu.
+Left-click on avatar should not hide; drag still draggable; right-click/Menu may keep Hide Pet.

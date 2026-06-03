@@ -234,8 +234,11 @@ print("  [5c] mock transcription with correction (TASK-251 sidecar mock)")
 
 stt._FUNASR_AVAILABLE = True
 stt._reset_model_for_tests()
-original_sidecar = stt._run_funasr_sidecar
-stt._run_funasr_sidecar = lambda b: {"transcript": "克里斯蒂娜你好世界", "status": "ok", "error": None}
+original_run_funasr = stt._run_funasr
+stt._run_funasr = lambda b, m="audio/wav": {
+    "transcript": "克里斯蒂娜你好世界", "status": "ok", "error": None,
+    "funasrSidecarMode": "oneshot", "funasrSidecarWarm": False, "funasrSidecarRestarted": False,
+}
 
 try:
     resp = stt._transcribe_funasr(WAV)
@@ -248,7 +251,7 @@ try:
     check("sttProviderResolved" in resp,
           "provider metadata present on mock ok result")
 finally:
-    stt._run_funasr_sidecar = original_sidecar
+    stt._run_funasr = original_run_funasr
     stt._reset_model_for_tests()
 
 # ---------------------------------------------------------------------------
@@ -352,11 +355,12 @@ check("task"         in aliases,    "task in _STT_CORRECTION_MAP")
 print("  [7e] normalise + correct pipeline via mock _transcribe_funasr")
 stt._FUNASR_AVAILABLE = True
 stt._reset_model_for_tests()
-original_sidecar = stt._run_funasr_sidecar
-stt._run_funasr_sidecar = lambda b: {
+original_run_funasr2 = stt._run_funasr
+stt._run_funasr = lambda b, m="audio/wav": {
     "transcript": "dragon pet a i",
     "status": "ok",
     "error": None,
+    "funasrSidecarMode": "oneshot", "funasrSidecarWarm": False, "funasrSidecarRestarted": False,
 }
 try:
     resp = stt._transcribe_funasr(WAV)
@@ -379,8 +383,110 @@ try:
     check(resp.get("tradMethod") in ("opencc", "static"),
           f"tradMethod in (opencc, static) (got {resp.get('tradMethod')!r})")
 finally:
-    stt._run_funasr_sidecar = original_sidecar
+    stt._run_funasr = original_run_funasr2
     stt._reset_model_for_tests()
+
+# ---------------------------------------------------------------------------
+# TASK-254: Persistent FunASR sidecar manager smoke
+# ---------------------------------------------------------------------------
+print("\n[8/8] TASK-254 — Persistent FunASR sidecar manager")
+stt = reload_stt("funasr-local")
+
+print("  [8a] constants and script")
+check(hasattr(stt, "_FUNASR_PERSISTENT_ENV"),
+      "_FUNASR_PERSISTENT_ENV constant exists")
+check(stt._FUNASR_PERSISTENT_ENV == "DRAGON_PET_FUNASR_PERSISTENT",
+      f"_FUNASR_PERSISTENT_ENV == 'DRAGON_PET_FUNASR_PERSISTENT' (got {stt._FUNASR_PERSISTENT_ENV!r})")
+check(hasattr(stt, "_FUNASR_SIDECAR_LOOP_SCRIPT"),
+      "_FUNASR_SIDECAR_LOOP_SCRIPT constant exists")
+check("funasr_sidecar_loop.py" in stt._FUNASR_SIDECAR_LOOP_SCRIPT,
+      "_FUNASR_SIDECAR_LOOP_SCRIPT contains funasr_sidecar_loop.py")
+check(_os.path.isfile(stt._FUNASR_SIDECAR_LOOP_SCRIPT),
+      f"funasr_sidecar_loop.py exists on disk: {stt._FUNASR_SIDECAR_LOOP_SCRIPT}")
+
+print("  [8b] persistent mode toggle")
+_prev_env = _os.environ.get("DRAGON_PET_FUNASR_PERSISTENT")
+_os.environ.pop("DRAGON_PET_FUNASR_PERSISTENT", None)
+check(stt._persistent_mode_enabled() is True,
+      "persistent mode enabled by default (no env var)")
+_os.environ["DRAGON_PET_FUNASR_PERSISTENT"] = "false"
+check(stt._persistent_mode_enabled() is False,
+      "persistent mode disabled by DRAGON_PET_FUNASR_PERSISTENT=false")
+_os.environ["DRAGON_PET_FUNASR_PERSISTENT"] = "true"
+check(stt._persistent_mode_enabled() is True,
+      "persistent mode enabled by DRAGON_PET_FUNASR_PERSISTENT=true")
+if _prev_env is None:
+    _os.environ.pop("DRAGON_PET_FUNASR_PERSISTENT", None)
+else:
+    _os.environ["DRAGON_PET_FUNASR_PERSISTENT"] = _prev_env
+
+print("  [8c] state variables and helpers")
+check(hasattr(stt, "_funasr_process"),
+      "_funasr_process module-level var exists")
+check(hasattr(stt, "_funasr_stdout_queue"),
+      "_funasr_stdout_queue module-level var exists")
+check(hasattr(stt, "_funasr_lock"),
+      "_funasr_lock module-level var exists")
+check(hasattr(stt, "_shutdown_funasr_process_for_tests"),
+      "_shutdown_funasr_process_for_tests helper exists")
+# Shutdown when no process is running must not raise
+try:
+    stt._shutdown_funasr_process_for_tests()
+    check(True, "_shutdown_funasr_process_for_tests does not crash when no process")
+except Exception as e:
+    check(False, f"_shutdown_funasr_process_for_tests raised: {e}")
+check(stt._funasr_process is None,
+      "_funasr_process is None after shutdown")
+
+print("  [8d] _run_funasr mock — persistent path")
+_os.environ["DRAGON_PET_FUNASR_PERSISTENT"] = "true"
+stt._FUNASR_AVAILABLE = True
+stt._reset_model_for_tests()
+original_ensure = stt._ensure_funasr_process
+original_call   = stt._call_funasr_persistent
+stt._ensure_funasr_process = lambda: (True, True)
+stt._call_funasr_persistent = lambda b, m: {"transcript": "語音測試", "status": "ok", "error": None}
+try:
+    r = stt._run_funasr(WAV, "audio/wav")
+    check(r.get("funasrSidecarMode") == "persistent",
+          f"mock persistent: funasrSidecarMode=persistent (got {r.get('funasrSidecarMode')!r})")
+    check(r.get("funasrSidecarWarm") is True,
+          f"mock persistent: funasrSidecarWarm=True (got {r.get('funasrSidecarWarm')!r})")
+    check(r.get("funasrSidecarRestarted") is False,
+          f"mock persistent: funasrSidecarRestarted=False")
+    check(r.get("status") == "ok",
+          f"mock persistent: status=ok (got {r.get('status')!r})")
+finally:
+    stt._ensure_funasr_process = original_ensure
+    stt._call_funasr_persistent = original_call
+    stt._reset_model_for_tests()
+
+print("  [8e] _run_funasr mock — oneshot fallback path")
+_os.environ["DRAGON_PET_FUNASR_PERSISTENT"] = "false"
+stt._FUNASR_AVAILABLE = True
+stt._reset_model_for_tests()
+original_sidecar2 = stt._run_funasr_sidecar
+stt._run_funasr_sidecar = lambda b: {"transcript": "語音測試", "status": "ok", "error": None}
+try:
+    r = stt._run_funasr(WAV, "audio/wav")
+    check(r.get("funasrSidecarMode") == "oneshot",
+          f"disabled persistent: funasrSidecarMode=oneshot (got {r.get('funasrSidecarMode')!r})")
+    check(r.get("funasrSidecarWarm") is False,
+          f"disabled persistent: funasrSidecarWarm=False")
+finally:
+    stt._run_funasr_sidecar = original_sidecar2
+    stt._reset_model_for_tests()
+
+print("  [8f] one-shot sidecar still exists (backward-compat)")
+check(hasattr(stt, "_run_funasr_sidecar"),
+      "_run_funasr_sidecar one-shot function still present")
+check(hasattr(stt, "_FUNASR_SIDECAR_SCRIPT"),
+      "_FUNASR_SIDECAR_SCRIPT still present")
+check(_os.path.isfile(stt._FUNASR_SIDECAR_SCRIPT),
+      "funasr_sidecar_transcribe.py still exists")
+
+# Restore env
+_os.environ.pop("DRAGON_PET_FUNASR_PERSISTENT", None)
 
 # ---------------------------------------------------------------------------
 # Clean up env so test leaves no side effects
@@ -394,8 +500,8 @@ print()
 print("=" * 65)
 print(f"  {_pass_count} PASS  {_fail_count} FAIL")
 if _fail_count == 0:
-    print("  TASK-249/250/253/253rev STT Provider Smoke: PASS")
+    print("  TASK-249/250/253/253rev/254 STT Provider Smoke: PASS")
 else:
-    print("  TASK-249/250/253/253rev STT Provider Smoke: FAIL")
+    print("  TASK-249/250/253/253rev/254 STT Provider Smoke: FAIL")
 print("=" * 65)
 sys.exit(0 if _fail_count == 0 else 1)

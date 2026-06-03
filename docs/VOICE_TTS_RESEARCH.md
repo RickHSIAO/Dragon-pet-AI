@@ -388,18 +388,28 @@ Suggested research and implementation tasks:
   (86/86 PASS). Windows manual smoke PASS: OpenCC s2tw active, all tested sentences normalised
   correctly. Remaining: cold-start latency 10–30 s → TASK-254.
 
-- **TASK-STT-015 (TASK-254) Persistent FunASR Sidecar / Warm Model Server. (PLANNED):**
-  Current sidecar (`funasr_sidecar_transcribe.py`) loads paraformer-zh (~500 MB) on every call,
-  causing 10–30 s cold-start delay. Solution: long-running sidecar subprocess that keeps model
-  in memory and accepts audio via a stdin request loop (or a minimal local HTTP server inside
-  `.venv-funasr`). Reduces per-utterance latency from ~30 s to ~1–3 s after first call.
+- **TASK-STT-015 (TASK-254) Persistent FunASR Sidecar / Warm Model Server. DONE - WINDOWS WARM SIDECAR SMOKE PASS / NEEDS WINDOW UX FOLLOW-UP (2026-06-03):**
+  New `scripts/funasr_sidecar_loop.py` — persistent stdin/stdout JSON loop that loads paraformer-zh
+  once at startup and stays warm between calls. Protocol: ready → transcribe → result JSON messages;
+  audio sent as base64 over stdin (never written to disk). `_PROTO_BUF = sys.stdout.buffer` saved before
+  `sys.stdout = sys.stderr` redirect suppresses funasr/modelscope progress noise on protocol stream.
+  `--hotwords` argparse arg passed at launch. Backend `_run_funasr()` dispatcher: persistent sidecar
+  with 1 restart attempt → one-shot `_run_funasr_sidecar()` fallback. Module-level lock serializes
+  concurrent calls; daemon stdout-reader thread + `queue.Queue`; 120 s startup timeout; 60 s
+  per-request timeout. `DRAGON_PET_FUNASR_PERSISTENT=false` env disables (default: true). Response
+  adds `funasrSidecarMode`, `funasrSidecarWarm`, `funasrSidecarRestarted`. `_transcribe_funasr()`
+  delegates to `_run_funasr()`. TASK-253 normalisation + TASK-247/248 correction still apply on ok-path.
+  18 new pytest (151 total); [8/8] smoke section. No audio to disk, no IPC, no schema change,
+  Whisper path unmodified. Windows smoke PASS (2026-06-03): first call slower (warmup), subsequent
+  Manual Mic and Conversation Mode clearly faster; OpenCC/correction regression PASS; no raw stack;
+  no raw audio persistence. Follow-up: TASK-255 voice capture focus/minimize; TASK-256 Pet click/Show.
 
 - TASK-STT-016 LLM-based semantic correction. **(PLANNED; future):** Optional
   follow-up to apply a local LLM pass over the corrected transcript for further semantic
   accuracy. Must be guarded by explicit user opt-in and must not replace the deterministic
   layer from TASK-247/248.
 
-Recommended next: TASK-254 — Persistent FunASR Sidecar / Warm Model Server.
+Recommended next: TASK-255 — Voice Capture Focus/Minimize Resilience; TASK-256 — Pet Window Click / Show Pet Idempotent Behavior.
 
 Each future task must explicitly define safety boundaries, user controls,
 provider scope, queue priority, and no-regression checks.
