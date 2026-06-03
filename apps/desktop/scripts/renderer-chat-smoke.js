@@ -12603,6 +12603,150 @@ function testTask244CssDiagnosticsPanel() {
 }
 
 // ---------------------------------------------------------------------------
+// TASK-247: STT Transcript Correction / Context-Aware Normalization
+// ---------------------------------------------------------------------------
+
+function testTask247RendererHasCorrectionFields() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes('sttRawTranscriptPreview: ""'),       "TASK-247 fullAppVoiceDiagnostics must have sttRawTranscriptPreview field");
+  assert.ok(src.includes('sttCorrectedTranscriptPreview: ""'), "TASK-247 fullAppVoiceDiagnostics must have sttCorrectedTranscriptPreview field");
+  assert.ok(src.includes('sttCorrectionApplied: false'),       "TASK-247 fullAppVoiceDiagnostics must have sttCorrectionApplied field");
+  assert.ok(src.includes('sttCorrectionMode: ""'),             "TASK-247 fullAppVoiceDiagnostics must have sttCorrectionMode field");
+  assert.ok(src.includes('sttCorrectionReason: ""'),           "TASK-247 fullAppVoiceDiagnostics must have sttCorrectionReason field");
+  console.log("  testTask247RendererHasCorrectionFields PASS");
+}
+
+function testTask247DiagnosticsRenderIncludesCorrectionLines() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const renderFnStart = src.indexOf("function renderFullAppVoiceDiagnostics");
+  const renderFnEnd   = src.indexOf("\n}", renderFnStart) + 2;
+  const renderFn = src.slice(renderFnStart, renderFnEnd);
+  assert.ok(renderFn.includes("sttRawTranscriptPreview"),       "TASK-247 render must include sttRawTranscriptPreview");
+  assert.ok(renderFn.includes("sttCorrectedTranscriptPreview"), "TASK-247 render must include sttCorrectedTranscriptPreview");
+  assert.ok(renderFn.includes("sttCorrectionApplied"),          "TASK-247 render must include sttCorrectionApplied");
+  assert.ok(renderFn.includes("sttCorrectionMode"),             "TASK-247 render must include sttCorrectionMode");
+  assert.ok(renderFn.includes("sttCorrectionReason"),           "TASK-247 render must include sttCorrectionReason");
+  assert.ok(!renderFn.includes("innerHTML"), "TASK-247 render must not use innerHTML");
+  assert.ok(renderFn.includes("textContent"), "TASK-247 render must use textContent for safe output");
+  console.log("  testTask247DiagnosticsRenderIncludesCorrectionLines PASS");
+}
+
+async function testTask247DiagnosticsDefaultsNewFields() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  const d = sandbox.fullAppVoiceDiagnostics;
+  assert.ok("sttRawTranscriptPreview"       in d, "TASK-247 diagnostics must have sttRawTranscriptPreview");
+  assert.ok("sttCorrectedTranscriptPreview" in d, "TASK-247 diagnostics must have sttCorrectedTranscriptPreview");
+  assert.ok("sttCorrectionApplied"          in d, "TASK-247 diagnostics must have sttCorrectionApplied");
+  assert.ok("sttCorrectionMode"             in d, "TASK-247 diagnostics must have sttCorrectionMode");
+  assert.ok("sttCorrectionReason"           in d, "TASK-247 diagnostics must have sttCorrectionReason");
+  assert.strictEqual(d.sttRawTranscriptPreview,       "", "TASK-247 sttRawTranscriptPreview must default to empty string");
+  assert.strictEqual(d.sttCorrectedTranscriptPreview, "", "TASK-247 sttCorrectedTranscriptPreview must default to empty string");
+  assert.strictEqual(d.sttCorrectionApplied,          false, "TASK-247 sttCorrectionApplied must default to false");
+  assert.strictEqual(d.sttCorrectionMode,             "", "TASK-247 sttCorrectionMode must default to empty string");
+  assert.strictEqual(d.sttCorrectionReason,           "", "TASK-247 sttCorrectionReason must default to empty string");
+  console.log("  testTask247DiagnosticsDefaultsNewFields PASS");
+}
+
+async function testTask247ResetClearsCorrectionFields() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  sandbox.fullAppVoiceDiagnostics.sttRawTranscriptPreview       = "中文語音編輯";
+  sandbox.fullAppVoiceDiagnostics.sttCorrectedTranscriptPreview = "中文語音辨識";
+  sandbox.fullAppVoiceDiagnostics.sttCorrectionApplied          = true;
+  sandbox.fullAppVoiceDiagnostics.sttCorrectionMode             = "safe_dictionary";
+  sandbox.fullAppVoiceDiagnostics.sttCorrectionReason           = "phrase_map";
+  sandbox.resetFullAppVoiceDiagnosticsForRecording("manual_mic");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttRawTranscriptPreview,       "", "TASK-247 reset must clear sttRawTranscriptPreview");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttCorrectedTranscriptPreview, "", "TASK-247 reset must clear sttCorrectedTranscriptPreview");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttCorrectionApplied,          false, "TASK-247 reset must clear sttCorrectionApplied");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttCorrectionMode,             "", "TASK-247 reset must clear sttCorrectionMode");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttCorrectionReason,           "", "TASK-247 reset must clear sttCorrectionReason");
+  console.log("  testTask247ResetClearsCorrectionFields PASS");
+}
+
+async function testTask247UpdateDiagnosticsHandlesCorrectionFields() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  sandbox.updateFullAppVoiceDiagnostics({
+    sttRawTranscriptPreview: "raw preview",
+    sttCorrectedTranscriptPreview: "corrected preview",
+    sttCorrectionApplied: true,
+    sttCorrectionMode: "safe_dictionary",
+    sttCorrectionReason: "phrase_map"
+  });
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttRawTranscriptPreview,       "raw preview",       "TASK-247 update must set sttRawTranscriptPreview");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttCorrectedTranscriptPreview, "corrected preview", "TASK-247 update must set sttCorrectedTranscriptPreview");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttCorrectionApplied,          true,                "TASK-247 update must set sttCorrectionApplied");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttCorrectionMode,             "safe_dictionary",   "TASK-247 update must set sttCorrectionMode");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttCorrectionReason,           "phrase_map",        "TASK-247 update must set sttCorrectionReason");
+  console.log("  testTask247UpdateDiagnosticsHandlesCorrectionFields PASS");
+}
+
+function testTask247TranscribeFnExtractsCorrectionMetadata() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const fnStart = src.indexOf("async function transcribeFullAppAudioBlob");
+  const fnEnd   = src.indexOf("\n}", fnStart) + 2;
+  const fnBody  = src.slice(fnStart, fnEnd);
+  assert.ok(fnBody.includes("sttRawTranscriptPreview"),       "TASK-247 transcribeFn must populate sttRawTranscriptPreview");
+  assert.ok(fnBody.includes("sttCorrectedTranscriptPreview"), "TASK-247 transcribeFn must populate sttCorrectedTranscriptPreview");
+  assert.ok(fnBody.includes("sttCorrectionApplied"),          "TASK-247 transcribeFn must populate sttCorrectionApplied");
+  assert.ok(fnBody.includes("sttCorrectionMode"),             "TASK-247 transcribeFn must populate sttCorrectionMode");
+  assert.ok(fnBody.includes("sttCorrectionReason"),           "TASK-247 transcribeFn must populate sttCorrectionReason");
+  assert.ok(fnBody.includes("result.correctionApplied"),      "TASK-247 transcribeFn must read correctionApplied from result");
+  assert.ok(fnBody.includes("result.rawTranscript"),          "TASK-247 transcribeFn must read rawTranscript from result");
+  assert.ok(fnBody.includes("makeSafeTranscriptPreview"),     "TASK-247 transcribeFn must use makeSafeTranscriptPreview for raw/corrected previews");
+  console.log("  testTask247TranscribeFnExtractsCorrectionMetadata PASS");
+}
+
+function testTask247NoNewIpcChannels() {
+  const preloadSrc = fs.readFileSync(
+    path.join(desktopRoot, "src", "renderer", "preload.js"), "utf8"
+  );
+  const sttChannelCount = (preloadSrc.match(/stt:/g) || []).length;
+  assert.ok(sttChannelCount <= 2,
+    "TASK-247 preload must not add new stt: IPC channels, found " + sttChannelCount + " occurrences");
+  assert.ok(preloadSrc.includes("stt:transcribe"),
+    "TASK-247 preload must still expose stt:transcribe");
+  console.log("  testTask247NoNewIpcChannels PASS");
+}
+
+function testTask247NoPetWindowCallsInCorrectionFlow() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const fnStart = src.indexOf("async function transcribeFullAppAudioBlob");
+  const fnEnd   = src.indexOf("\n}", fnStart) + 2;
+  const fnBody  = src.slice(fnStart, fnEnd);
+  assert.ok(!fnBody.includes("updatePetSpeech"),     "TASK-247 transcribeFn must not call updatePetSpeech");
+  assert.ok(!fnBody.includes("updatePetExpression"), "TASK-247 transcribeFn must not call updatePetExpression");
+  assert.ok(!fnBody.includes("speechSynthesis"),     "TASK-247 transcribeFn must not trigger TTS");
+  console.log("  testTask247NoPetWindowCallsInCorrectionFlow PASS");
+}
+
+function testTask247RawTranscriptNotExposedInHistory() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  // rawTranscript must only appear in diagnostics/transcribeFn context, not in history/chat flow
+  assert.ok(!src.includes("chatHistory.push(rawTranscript)"),
+    "TASK-247 rawTranscript must not be pushed into chatHistory");
+  assert.ok(!src.includes("sendMessage(rawTranscript)"),
+    "TASK-247 rawTranscript must not be sent directly via sendMessage");
+  console.log("  testTask247RawTranscriptNotExposedInHistory PASS");
+}
+
+async function testTask247RegressionTask246StillPass() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  // TASK-246 fields must still exist in the source
+  assert.ok(src.includes('sttRequestedModel: ""'),  "TASK-247 regression: sttRequestedModel must still exist");
+  assert.ok(src.includes('sttResolvedModel: ""'),   "TASK-247 regression: sttResolvedModel must still exist");
+  assert.ok(src.includes('sttModelLoadStatus: ""'), "TASK-247 regression: sttModelLoadStatus must still exist");
+  // TASK-246 sandbox fields must still be present
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  assert.ok("sttRequestedModel"  in sandbox.fullAppVoiceDiagnostics, "TASK-247 regression: sttRequestedModel must still exist in diagnostics");
+  assert.ok("sttResolvedModel"   in sandbox.fullAppVoiceDiagnostics, "TASK-247 regression: sttResolvedModel must still exist in diagnostics");
+  assert.ok("sttModelLoadStatus" in sandbox.fullAppVoiceDiagnostics, "TASK-247 regression: sttModelLoadStatus must still exist in diagnostics");
+  // TASK-245 fields must also still be present
+  assert.ok("sttLanguage"    in sandbox.fullAppVoiceDiagnostics, "TASK-247 regression: sttLanguage must still exist");
+  assert.ok("languageLocked" in sandbox.fullAppVoiceDiagnostics, "TASK-247 regression: languageLocked must still exist");
+  console.log("  testTask247RegressionTask246StillPass PASS");
+}
+
+// ---------------------------------------------------------------------------
 // TASK-246: STT Model Quality / Whisper Model Upgrade
 // ---------------------------------------------------------------------------
 
@@ -14204,6 +14348,18 @@ async function main() {
   await testTask244dDiagnosticsDefaultsNewFields();
   await testTask244dPlayFnSetsObjectUrlActive();
   await testTask244dResetSandboxClearsPreviewState();
+
+  // TASK-247: STT Transcript Correction / Context-Aware Normalization
+  testTask247RendererHasCorrectionFields();
+  testTask247DiagnosticsRenderIncludesCorrectionLines();
+  await testTask247DiagnosticsDefaultsNewFields();
+  await testTask247ResetClearsCorrectionFields();
+  await testTask247UpdateDiagnosticsHandlesCorrectionFields();
+  testTask247TranscribeFnExtractsCorrectionMetadata();
+  testTask247NoNewIpcChannels();
+  testTask247NoPetWindowCallsInCorrectionFlow();
+  testTask247RawTranscriptNotExposedInHistory();
+  await testTask247RegressionTask246StillPass();
 
   // TASK-246: STT Model Quality / Whisper Model Upgrade
   testTask246RendererHasModelQualityFields();

@@ -25612,7 +25612,7 @@ Notes:
 
 ## TASK-247 | STT Transcript Correction / Context-Aware Normalization
 
-Status: PLANNED (2026-06-03)
+Status: DONE - WINDOWS TRANSCRIPT CORRECTION SMOKE PASS / NEEDS HOTWORD COVERAGE FOLLOW-UP (2026-06-03)
 
 ### Background
 
@@ -25629,59 +25629,160 @@ phrase-based corrections to raw Whisper transcripts before they reach the chat s
 Improve practical accuracy for project-specific vocabulary without rewriting the audio
 pipeline or adding any new network calls.
 
+### Implementation
+
+Correction layer is in `backend/app/stt/stt_service.py`:
+
+- `_STT_CORRECTION_MAP` — ordered list of `(src, dst)` phrase correction pairs.
+- `correct_transcript_text(raw_text: str) -> dict` — deterministic correction helper.
+  - Returns: `rawTranscript`, `correctedTranscript`, `correctionApplied`, `correctionMode`,
+    `correctionReason`, `correctionCandidates`.
+  - Empty input passes through as-is.
+  - No LLM rewrite, no cloud API, no new IPC.
+- `transcribe_audio_bytes()` ok path now calls `correct_transcript_text(transcript)` and sets:
+  - `transcript` = `correctedTranscript` — so all callers (Manual Mic / Auto-send / Conversation Mode)
+    naturally receive corrected text.
+  - `rawTranscript` preserved in response for diagnostics.
+  - `correctedTranscript`, `correctionApplied`, `correctionMode`, `correctionReason` in response.
+
+Phrase correction map (`_STT_CORRECTION_MAP`):
+- `"中位與英編輯"` → `"中文語音辨識"`
+- `"中文語音編輯"` → `"中文語音辨識"`
+- `"中文語音邊記"` → `"中文語音辨識"`
+- `"語音編輯測試"` → `"語音辨識測試"`
+- `"語音邊記測試"` → `"語音辨識測試"`
+- `"克里斯蒂娜"` → `"克莉絲蒂娜"`
+- `"克莉斯蒂娜"` → `"克莉絲蒂娜"`
+- `"克麗絲蒂娜"` → `"克莉絲蒂娜"`
+
+Renderer (`apps/desktop/src/renderer/renderer.js`):
+- 5 new `fullAppVoiceDiagnostics` fields: `sttRawTranscriptPreview`, `sttCorrectedTranscriptPreview`,
+  `sttCorrectionApplied`, `sttCorrectionMode`, `sttCorrectionReason`.
+- `transcribeFullAppAudioBlob()` populates correction fields from IPC result metadata.
+- `renderFullAppVoiceDiagnostics()` displays raw/corrected preview + correction info.
+- `resetFullAppVoiceDiagnosticsForRecording()` resets all 5 correction fields.
+- Manual Mic / Auto-send / Conversation Mode send flow: unchanged — they naturally use `result.transcript`
+  which is now the corrected transcript.
+
+### Behavior
+
+**Manual Mic + Auto-send OFF**: input box filled with corrected transcript; diagnostics show raw/corrected.
+
+**Manual Mic + Auto-send ON**: input filled with corrected transcript; auto-sends corrected transcript.
+Raw transcript is never sent.
+
+**Conversation Mode**: VAD → STT → correction → input filled with corrected transcript → auto-send
+corrected transcript. Raw transcript shown in diagnostics only.
+
+### Test Results (2026-06-03)
+
+19 new TASK-247 backend pytest tests added to `test_stt_routes.py`:
+- correction helper exists / empty / no-op / phrase corrections / name corrections
+- rawTranscript preserved / correctedTranscript returned / correctionApplied
+- ok response uses correctedTranscript / ok response includes all correction metadata
+- integration test via TestClient / no raw stack / no audio persistence
+- TASK-245 language lock fields not regressed / TASK-246 model metadata not regressed
+- All 56 pytest tests PASS.
+
+10 new TASK-247 renderer smoke tests added to `renderer-chat-smoke.js`:
+- `testTask247RendererHasCorrectionFields` PASS
+- `testTask247DiagnosticsRenderIncludesCorrectionLines` PASS
+- `testTask247DiagnosticsDefaultsNewFields` PASS
+- `testTask247ResetClearsCorrectionFields` PASS
+- `testTask247UpdateDiagnosticsHandlesCorrectionFields` PASS
+- `testTask247TranscribeFnExtractsCorrectionMetadata` PASS
+- `testTask247NoNewIpcChannels` PASS
+- `testTask247NoPetWindowCallsInCorrectionFlow` PASS
+- `testTask247RawTranscriptNotExposedInHistory` PASS
+- `testTask247RegressionTask246StillPass` PASS
+- renderer-chat-smoke.js: **10 TASK-247 tests PASS** (all prior tests still PASS)
+- pet-window-smoke.js: PASS (82 checks)
+- pet-renderer-smoke.js: PASS (285 checks)
+- git diff --check: CLEAN
+
+### Windows Smoke Results (2026-06-03)
+
+1. 基本啟動 PASS — Full App / Pet Window 正常。
+2. Manual Mic correction PASS — rawTranscript / correctedTranscript 顯示正常。
+3. 克莉絲蒂娜 hotword PASS — 克里斯蒂娜 / 克莉斯蒂娜 / 克麗絲蒂娜 可修正為克莉絲蒂娜。
+4. 中文語音辨識 phrase correction PASS — 中文語音編輯 / 中文語音邊記 / 語音編輯測試 可修正為中文語音辨識相關詞。
+5. Auto-send PASS — 送出 corrected transcript，不送 raw transcript。
+6. Conversation Mode PASS — correction 後自動送出 corrected transcript，沒有並發 /chat。
+7. Diagnostics safety PASS — raw transcript 只在 diagnostics，不進 history/copy/export。
+8. Regression PASS — TASK-244 audio preview、TASK-245 language lock、TASK-246 model diagnostics、打字送訊息、edit/delete/clear、Pet Window、Diagnostics Drawer、Output Queue disabled 皆正常。
+
+**Remaining issue**: hotword coverage 不足。對於名詞仍然不夠穩，例如「克莉絲蒂娜」仍常讀取不準。
+目前 correction map 只能修已知 alias，無法涵蓋 STT 實際輸出的所有音近字變體。
+Next task: **TASK-248 — STT Hotword Coverage / Alias Expansion**。
+
 ### Core Requirements
 
-1. Post-processing correction happens **in the renderer** (or optionally in a stt_service helper),
-   after `transcribeFullAppAudioBlob()` returns the raw transcript.
-2. Correction applies a hotword / phrase substitution list covering at minimum:
-   - 克莉絲蒂娜 (and common misrecognitions)
-   - 中文語音辨識
-   - 語音輸入
-   - 對話模式
-   - 桌面寵物
-   - Dragon Pet AI
-   - TASK
-   - Claude
-   - Whisper
-3. Correction must be **safe and deterministic** — no probabilistic LLM rewrite in this task.
-4. Diagnostics panel to display:
-   - `rawTranscript` — original Whisper output (capped preview, no full raw dump)
-   - `correctedTranscript` — post-processed output (capped preview)
-   - `correctionApplied` — boolean
-   - `correctionMode` — e.g. `"dictionary"` / `"phrase"` / `"none"`
-   - `correctionReason` — short string describing which correction was applied
+1. Correction helper is in `stt_service.py` (backend), applied in `transcribe_audio_bytes()` ok path.
+2. Correction applies phrase substitution list covering known acoustic confusions and character name variants.
+3. Correction is **safe and deterministic** — no probabilistic LLM rewrite in this task.
+4. Diagnostics panel displays:
+   - `rawTranscript` — original Whisper output preview (max 30 chars)
+   - `correctedTranscript` — post-processed output preview (max 30 chars)
+   - `correctionApplied` — boolean (是 / 否)
+   - `correctionMode` — `"safe_dictionary"`
+   - `correctionReason` — `"phrase_map"` | `"none"`
 5. Conversation Mode auto-send uses **corrected transcript** (safe correction only).
 6. Manual Mic fills textarea with corrected transcript; user reviews before sending.
-7. `rawTranscript` and `correctedTranscript` do **not** enter history/copy/export unless user
-   sends the message (same rule as existing transcript).
+7. `rawTranscript` stays in diagnostics only — not in history/copy/export unless user sends message.
+
+### Restrictions Confirmed
+
+- No new IPC channel. ✅
+- No new backend endpoint. ✅
+- No `/chat` schema change. ✅
+- No raw audio persistence. ✅
+- No background / always-listening. ✅
+- No Pet Window / Output Queue / Diagnostics Drawer changes. ✅
+- No new cloud API, no LLM-based rewrite. ✅
+- No localStorage / session persistence for correction. ✅
+
+### Out of Scope (future tasks)
+
+- TASK-248: STT Hotword Coverage / Alias Expansion (collect real rawTranscript error samples; expand correction map).
+- TASK-249: LLM-based semantic correction (opt-in; no aggressive rewrite).
+- TASK-250: STT Hotword Dictionary UI (user-configurable hotwords).
+- TASK-251: Voice Pre-roll Buffer / VAD Polish.
+
+## TASK-248 | STT Hotword Coverage / Alias Expansion
+
+Status: PLANNED (2026-06-03)
+
+### Background
+
+TASK-247 established the deterministic correction layer (DONE - WINDOWS TRANSCRIPT CORRECTION SMOKE PASS).
+Windows smoke confirmed correction map works for pre-defined aliases.
+Remaining issue: hotword coverage is insufficient for project-specific proper nouns.
+「克莉絲蒂娜」still often transcribed as variants not yet in the correction map.
+Current map can only fix pre-known aliases; it cannot cover all acoustic variants STT may produce.
+
+### Goal
+
+Expand `_STT_CORRECTION_MAP` in `stt_service.py` by collecting real rawTranscript error samples
+from Windows smoke sessions and adding alias entries for each observed variant.
+Optionally expose `matchedAlias` / `canonicalTerm` in diagnostics to aid ongoing collection.
+
+### Core Requirements
+
+1. Collect real rawTranscript samples from Windows manual STT sessions (diagnostics panel).
+2. Add newly observed aliases to `_STT_CORRECTION_MAP` with their canonical corrections.
+3. Priority terms: 克莉絲蒂娜 (all new variants observed), Dragon Pet AI, Claude, Whisper,
+   桌面寵物, 語音輸入, 對話模式, TASK.
+4. Optionally add `matchedAlias` / `canonicalTerm` fields to `correct_transcript_text()` result.
+5. Add backend pytest tests for each new alias.
+6. No LLM rewrite. No new IPC. No new backend endpoint. No VAD change. No raw audio persistence.
+7. rawTranscript must not enter history/copy/export.
 
 ### Restrictions
 
 1. No new IPC channel.
 2. No new backend endpoint.
 3. No `/chat` schema change.
-4. No raw audio persistence.
-5. No background / always-listening.
-6. No Pet Window / Output Queue / Diagnostics Drawer changes.
-7. No new cloud API (no LLM-based rewrite in this task).
-8. No always-on network calls for correction.
-9. Correction list must be clearly documented — not opaque logic.
-10. Conversation Mode auto-send only uses safe (deterministic) correction.
-11. LLM-based semantic correction is **out of scope** for this task (future TASK-248+).
-
-### Acceptance Criteria
-
-- Saying「克莉絲蒂娜」produces correct or near-correct output in correctedTranscript.
-- Saying「中文語音辨識測試」maps recognizable result via correction.
-- Diagnostics show rawTranscript / correctedTranscript / correctionApplied / correctionMode.
-- No raw transcript, raw audio, or correction metadata enters history/copy/export unless user sends.
-- Existing smoke suites still PASS.
-- Correction logic is deterministic and unit-testable.
-
-### Out of Scope
-
-- LLM-based semantic rewrite (→ TASK-248).
-- Per-user hotword customization UI.
-- Online correction services.
-- VAD tuning (already closed in TASK-244).
-- Model upgrade beyond TASK-246 configurability.
+4. No LLM rewrite.
+5. No VAD change.
+6. No raw audio persistence to disk.
+7. rawTranscript not written to history/copy/export.

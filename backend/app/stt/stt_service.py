@@ -130,6 +130,72 @@ def _get_model_metadata() -> dict:
     }
 
 
+# TASK-247: STT transcript correction — deterministic phrase/hotword correction map.
+# Order matters: longer / more specific phrases first to prevent partial-match shadowing.
+# All entries are conservative: only correct well-known acoustic confusions in this project.
+_STT_CORRECTION_MAP: list[tuple[str, str]] = [
+    # Phrase-level corrections — Whisper acoustic confusions for project vocabulary
+    ("中位與英編輯", "中文語音辨識"),
+    ("中文語音編輯", "中文語音辨識"),
+    ("中文語音邊記", "中文語音辨識"),
+    ("語音編輯測試", "語音辨識測試"),
+    ("語音邊記測試", "語音辨識測試"),
+    # Character name normalization
+    ("克里斯蒂娜", "克莉絲蒂娜"),
+    ("克莉斯蒂娜", "克莉絲蒂娜"),
+    ("克麗絲蒂娜", "克莉絲蒂娜"),
+]
+
+
+def correct_transcript_text(raw_text: str) -> dict:
+    """
+    Apply deterministic phrase/hotword correction to a raw STT transcript.
+
+    TASK-247 design boundaries:
+    - No LLM rewrite.  No cloud API.  No new IPC.
+    - Safe, conservative corrections only — known acoustic confusions and project vocabulary.
+    - Returns rawTranscript unchanged so callers can surface both original and corrected text
+      in diagnostics without losing the raw evidence.
+    - Empty input passes through as-is (correctionApplied=False).
+
+    Returns
+    -------
+    dict with keys:
+        rawTranscript        -- original input, unmodified
+        correctedTranscript  -- text after applying phrase map (equals rawTranscript if no match)
+        correctionApplied    -- True when at least one substitution was made
+        correctionMode       -- always "safe_dictionary" for this layer
+        correctionReason     -- pipe-separated reason tags ("phrase_map" | "none")
+        correctionCandidates -- reserved for future use; always empty list in this task
+    """
+    if not raw_text:
+        return {
+            "rawTranscript": "",
+            "correctedTranscript": "",
+            "correctionApplied": False,
+            "correctionMode": "safe_dictionary",
+            "correctionReason": "none",
+            "correctionCandidates": [],
+        }
+    corrected = raw_text
+    applied_reasons: list[str] = []
+    for src, dst in _STT_CORRECTION_MAP:
+        if src in corrected:
+            corrected = corrected.replace(src, dst)
+            if "phrase_map" not in applied_reasons:
+                applied_reasons.append("phrase_map")
+    applied = corrected != raw_text
+    reason_str = "|".join(applied_reasons) if applied_reasons else "none"
+    return {
+        "rawTranscript": raw_text,
+        "correctedTranscript": corrected,
+        "correctionApplied": applied,
+        "correctionMode": "safe_dictionary",
+        "correctionReason": reason_str,
+        "correctionCandidates": [],
+    }
+
+
 def _reset_model_for_tests() -> None:
     """Reset the cached model and load status -- only for test isolation. Not for production use."""
     global _whisper_model, _STT_MODEL_LOAD_STATUS, _STT_MODEL_LOAD_ERROR
@@ -169,6 +235,13 @@ def transcribe_audio_bytes(
         "modelSource"     : str   -- "env" | "default" | "fallback"
         "modelLoadStatus" : str   -- "loaded" | "unavailable" | "error" | "not_loaded"
         "modelLoadError"  : str | None  -- short error string, no raw stack
+
+    TASK-247 transcript correction (present for ok only):
+        "rawTranscript"      : str  -- original Whisper output, unmodified
+        "correctedTranscript": str  -- after deterministic phrase/hotword correction
+        "correctionApplied"  : bool -- True when at least one substitution was made
+        "correctionMode"     : str  -- "safe_dictionary"
+        "correctionReason"   : str  -- "phrase_map" | "none"
     """
     # Empty-bytes check comes first so it is independent of Whisper availability.
     if not audio_bytes:
@@ -200,11 +273,19 @@ def transcribe_audio_bytes(
         detected_language: str | None = getattr(_info, "language", None)
         if not transcript:
             return {"transcript": "", "status": "empty"}
+        # TASK-247: apply deterministic correction layer before returning.
+        # text/transcript use correctedTranscript; rawTranscript preserved for diagnostics.
+        correction = correct_transcript_text(transcript)
         return {
-            "transcript": transcript,
+            "transcript": correction["correctedTranscript"],
             "status": "ok",
             **_get_model_metadata(),
             "detectedLanguage": detected_language,
+            "rawTranscript": correction["rawTranscript"],
+            "correctedTranscript": correction["correctedTranscript"],
+            "correctionApplied": correction["correctionApplied"],
+            "correctionMode": correction["correctionMode"],
+            "correctionReason": correction["correctionReason"],
         }
     except Exception as exc:  # noqa: BLE001
         logger.warning("TASK-167B: STT error mime=%s exc=%s", mime_type, exc)

@@ -529,3 +529,233 @@ def test_stt_route_no_new_stt_endpoint():
     assert len(stt_routes) == 1, (
         "Only one /stt/ route allowed (TASK-246 restriction), found: %r" % stt_routes
     )
+
+
+# -- TASK-247: STT Transcript Correction / Context-Aware Normalization tests ----
+
+
+def test_stt_correction_helper_exists():
+    """TASK-247: stt_service must expose correct_transcript_text helper."""
+    assert hasattr(stt_service, "correct_transcript_text"), (
+        "correct_transcript_text must exist in stt_service"
+    )
+    assert callable(stt_service.correct_transcript_text)
+
+
+def test_stt_correction_empty_input_returns_empty():
+    """TASK-247: empty input passes through unchanged — no correction, no crash."""
+    result = stt_service.correct_transcript_text("")
+    assert result["rawTranscript"] == "", "rawTranscript must be empty string"
+    assert result["correctedTranscript"] == "", "correctedTranscript must be empty string"
+    assert result["correctionApplied"] is False, "correctionApplied must be False for empty input"
+    assert result["correctionMode"] == "safe_dictionary"
+    assert result["correctionReason"] == "none"
+
+
+def test_stt_correction_no_change_returns_same():
+    """TASK-247: text with no matching phrase returns unchanged with correctionApplied=False."""
+    text = "今天天氣很好"
+    result = stt_service.correct_transcript_text(text)
+    assert result["rawTranscript"] == text
+    assert result["correctedTranscript"] == text
+    assert result["correctionApplied"] is False
+    assert result["correctionReason"] == "none"
+
+
+def test_stt_correction_phrase_map_zhong_wen_bian_ji():
+    """TASK-247: '中文語音編輯' → '中文語音辨識'."""
+    result = stt_service.correct_transcript_text("這是中文語音編輯測試")
+    assert "中文語音辨識" in result["correctedTranscript"], (
+        "Expected '中文語音辨識' in corrected, got %r" % result["correctedTranscript"]
+    )
+    assert result["correctionApplied"] is True
+    assert "phrase_map" in result["correctionReason"]
+
+
+def test_stt_correction_phrase_map_zhong_wen_bian_ji2():
+    """TASK-247: '中文語音邊記' → '中文語音辨識'."""
+    result = stt_service.correct_transcript_text("中文語音邊記")
+    assert result["correctedTranscript"] == "中文語音辨識", (
+        "Expected '中文語音辨識', got %r" % result["correctedTranscript"]
+    )
+    assert result["correctionApplied"] is True
+
+
+def test_stt_correction_phrase_map_mid_wei():
+    """TASK-247: '中位與英編輯' → '中文語音辨識'."""
+    result = stt_service.correct_transcript_text("這文中位與英編輯測試")
+    assert "中文語音辨識" in result["correctedTranscript"], (
+        "Expected '中文語音辨識' in corrected, got %r" % result["correctedTranscript"]
+    )
+    assert result["correctionApplied"] is True
+
+
+def test_stt_correction_name_ke_li_si():
+    """TASK-247: '克里斯蒂娜' → '克莉絲蒂娜'."""
+    result = stt_service.correct_transcript_text("你好克里斯蒂娜")
+    assert "克莉絲蒂娜" in result["correctedTranscript"], (
+        "Expected '克莉絲蒂娜' in corrected, got %r" % result["correctedTranscript"]
+    )
+    assert result["correctionApplied"] is True
+
+
+def test_stt_correction_name_ke_li_si2():
+    """TASK-247: '克莉斯蒂娜' → '克莉絲蒂娜'."""
+    result = stt_service.correct_transcript_text("克莉斯蒂娜你好")
+    assert "克莉絲蒂娜" in result["correctedTranscript"]
+    assert result["correctionApplied"] is True
+
+
+def test_stt_correction_name_ke_li_si3():
+    """TASK-247: '克麗絲蒂娜' → '克莉絲蒂娜'."""
+    result = stt_service.correct_transcript_text("克麗絲蒂娜")
+    assert result["correctedTranscript"] == "克莉絲蒂娜"
+    assert result["correctionApplied"] is True
+
+
+def test_stt_correction_raw_transcript_preserved():
+    """TASK-247: rawTranscript must always equal the original unmodified input."""
+    raw = "中文語音編輯"
+    result = stt_service.correct_transcript_text(raw)
+    assert result["rawTranscript"] == raw, (
+        "rawTranscript must equal original input, got %r" % result["rawTranscript"]
+    )
+    assert result["correctedTranscript"] != raw  # correction was applied
+
+
+def test_stt_correction_corrected_transcript_returned():
+    """TASK-247: correctedTranscript key must be present in result."""
+    result = stt_service.correct_transcript_text("test")
+    assert "correctedTranscript" in result
+    assert "rawTranscript" in result
+    assert "correctionApplied" in result
+    assert "correctionMode" in result
+    assert "correctionReason" in result
+
+
+def test_stt_correction_applied_true_false_correct():
+    """TASK-247: correctionApplied is True only when text was actually changed."""
+    changed = stt_service.correct_transcript_text("克里斯蒂娜")
+    assert changed["correctionApplied"] is True
+    unchanged = stt_service.correct_transcript_text("好的謝謝")
+    assert unchanged["correctionApplied"] is False
+
+
+def test_stt_service_ok_uses_corrected_transcript(monkeypatch):
+    """TASK-247: transcript field in ok response must equal correctedTranscript."""
+    from types import SimpleNamespace
+
+    class _CorrectableModel:
+        def transcribe(self, _buf, **_kwargs):
+            seg = SimpleNamespace(text="中文語音編輯")
+            info = SimpleNamespace(language="zh")
+            return iter([seg]), info
+
+    monkeypatch.setattr(stt_service, "_WHISPER_AVAILABLE", True)
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(stt_service, "_load_model", lambda: _CorrectableModel())
+    result = stt_service.transcribe_audio_bytes(b"\x01\x02\x03", language="zh")
+    assert result["status"] == "ok"
+    assert result["transcript"] == result["correctedTranscript"], (
+        "transcript must equal correctedTranscript, got transcript=%r corrected=%r"
+        % (result["transcript"], result["correctedTranscript"])
+    )
+    assert result["transcript"] != result["rawTranscript"], (
+        "transcript (corrected) must differ from rawTranscript when correction applied"
+    )
+    assert result["correctionApplied"] is True
+
+
+def test_stt_service_ok_includes_correction_metadata(monkeypatch):
+    """TASK-247: ok response must include all correction metadata fields."""
+    from types import SimpleNamespace
+
+    class _GoodModel:
+        def transcribe(self, _buf, **_kwargs):
+            seg = SimpleNamespace(text="你好")
+            info = SimpleNamespace(language="zh")
+            return iter([seg]), info
+
+    monkeypatch.setattr(stt_service, "_WHISPER_AVAILABLE", True)
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(stt_service, "_load_model", lambda: _GoodModel())
+    result = stt_service.transcribe_audio_bytes(b"\x01\x02\x03", language="zh")
+    assert result["status"] == "ok"
+    assert "rawTranscript"       in result, "ok result must include 'rawTranscript'"
+    assert "correctedTranscript" in result, "ok result must include 'correctedTranscript'"
+    assert "correctionApplied"   in result, "ok result must include 'correctionApplied'"
+    assert "correctionMode"      in result, "ok result must include 'correctionMode'"
+    assert "correctionReason"    in result, "ok result must include 'correctionReason'"
+
+
+def test_stt_route_response_includes_correction_fields():
+    """TASK-247: /stt/transcribe response must include correction metadata fields."""
+    with TestClient(app) as client:
+        response = client.post(
+            "/stt/transcribe",
+            files={"audio": ("audio.webm", io.BytesIO(b"\x01\x02\x03"), "audio/webm")},
+        )
+    assert response.status_code == 200
+    data = response.json()
+    # TASK-245 language lock fields must still be present
+    assert data.get("language") == "zh", "TASK-245 language must still be 'zh'"
+    assert data.get("languageLocked") is True, "TASK-245 languageLocked must still be True"
+    # TASK-246 model quality fields must still be present
+    assert "requestedModel"  in data, "TASK-246 requestedModel must still be present"
+    assert "resolvedModel"   in data, "TASK-246 resolvedModel must still be present"
+    assert "modelLoadStatus" in data, "TASK-246 modelLoadStatus must still be present"
+    # TASK-247 correction fields (present when status is ok; unavailable if whisper absent)
+    if data.get("status") == "ok":
+        assert "rawTranscript"       in data, "TASK-247 rawTranscript must be present for ok status"
+        assert "correctedTranscript" in data, "TASK-247 correctedTranscript must be present for ok status"
+        assert "correctionApplied"   in data, "TASK-247 correctionApplied must be present for ok status"
+        assert "correctionMode"      in data, "TASK-247 correctionMode must be present for ok status"
+        assert "correctionReason"    in data, "TASK-247 correctionReason must be present for ok status"
+
+
+def test_stt_correction_no_raw_stack_in_output():
+    """TASK-247: correction output must not contain Python stack traces or raw payloads."""
+    result = stt_service.correct_transcript_text("test input")
+    for key, val in result.items():
+        if isinstance(val, str):
+            assert "Traceback" not in val, "correction output must not contain stack traces"
+            assert "File \"" not in val, "correction output must not contain file paths"
+
+
+def test_stt_service_no_raw_audio_persistence_with_correction():
+    """TASK-247: adding correction must not introduce audio persistence."""
+    import inspect
+
+    source = inspect.getsource(stt_service)
+    assert "open(" not in source, (
+        "stt_service must not call open() — audio must stay in-memory (TASK-247 did not change this)"
+    )
+
+
+def test_stt_correction_language_lock_still_present(monkeypatch):
+    """TASK-247: language lock (TASK-245) fields must not be regressed."""
+    import app.api.routes as routes_module
+
+    assert routes_module._STT_DEFAULT_LANGUAGE == "zh", "TASK-245 language lock must still be 'zh'"
+    assert routes_module._STT_DEFAULT_TASK == "transcribe", "TASK-245 task must still be 'transcribe'"
+
+
+def test_stt_correction_model_metadata_still_present(monkeypatch):
+    """TASK-247: TASK-246 model metadata fields must not be regressed."""
+    from types import SimpleNamespace
+
+    class _GoodModel:
+        def transcribe(self, _buf, **_kwargs):
+            seg = SimpleNamespace(text="test")
+            info = SimpleNamespace(language="zh")
+            return iter([seg]), info
+
+    monkeypatch.setattr(stt_service, "_WHISPER_AVAILABLE", True)
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(stt_service, "_load_model", lambda: _GoodModel())
+    result = stt_service.transcribe_audio_bytes(b"\x01\x02\x03", language="zh")
+    assert result["status"] == "ok"
+    assert "requestedModel"  in result, "TASK-246 requestedModel must not be regressed"
+    assert "resolvedModel"   in result, "TASK-246 resolvedModel must not be regressed"
+    assert "modelSource"     in result, "TASK-246 modelSource must not be regressed"
+    assert "modelLoadStatus" in result, "TASK-246 modelLoadStatus must not be regressed"

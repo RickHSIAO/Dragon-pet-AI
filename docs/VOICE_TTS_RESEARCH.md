@@ -322,14 +322,32 @@ Suggested research and implementation tasks:
   normalization. "感覺沒有智能辨字系統". Language lock (TASK-245) not regressed.
 
 - TASK-STT-008 STT transcript correction / context-aware normalization. **Covered by TASK-247
-  (PLANNED; 2026-06-03):** Add deterministic hotword / phrase-based correction layer to raw
-  Whisper output in renderer. No LLM rewrite, no new IPC, no cloud API. Hotwords include
-  克莉絲蒂娜, Dragon Pet AI, Claude, Whisper, TASK, 桌面寵物, 語音輸入 etc. Diagnostics to show
-  rawTranscript / correctedTranscript / correctionApplied / correctionMode / correctionReason.
-  Conversation Mode auto-send uses safe deterministic correction only. LLM semantic rewrite
-  deferred to TASK-248+.
+  (DONE - WINDOWS TRANSCRIPT CORRECTION SMOKE PASS / NEEDS HOTWORD COVERAGE FOLLOW-UP; 2026-06-03):**
+  Added deterministic phrase/hotword correction helper `correct_transcript_text(raw_text)` to
+  `stt_service.py`. `_STT_CORRECTION_MAP` covers known acoustic confusions: 中文語音編輯/邊記/
+  中位與英編輯 → 中文語音辨識; 語音編輯/邊記測試 → 語音辨識測試; 克里斯蒂娜/克莉斯蒂娜/克麗絲蒂娜 →
+  克莉絲蒂娜. `transcribe_audio_bytes()` ok path applies correction; `transcript` =
+  `correctedTranscript`; `rawTranscript` preserved for diagnostics. 19 backend pytest + 10 renderer
+  smoke tests PASS. Windows smoke PASS (2026-06-03): correction layer works; Auto-send / Conversation
+  Mode use corrected transcript; raw not in history; regressions clear. Remaining issue: hotword
+  coverage insufficient — proper nouns (esp. 克莉絲蒂娜) still produced as STT variants not yet in
+  correction map. LLM semantic rewrite deferred to TASK-249+.
 
-Recommended next: implement TASK-247 deterministic correction layer; evaluate whether model upgrade to `small` is still worthwhile after correction is in place.
+- TASK-STT-009 STT hotword coverage / alias expansion. **Covered by TASK-248 (PLANNED; 2026-06-03):**
+  Collect real rawTranscript error samples from Windows diagnostics panel; expand `_STT_CORRECTION_MAP`
+  with newly observed aliases for 克莉絲蒂娜, Dragon Pet AI, Claude, Whisper, 桌面寵物, TASK etc.
+  Optionally add `matchedAlias` / `canonicalTerm` fields to diagnostics. No LLM rewrite, no new IPC,
+  no new backend endpoint.
+
+- TASK-STT-010 LLM-based semantic correction. **(PLANNED; future TASK-249+):** Optional
+  follow-up to apply a local or API-based LLM pass over the corrected transcript for
+  further semantic accuracy. Must be guarded by explicit user opt-in and must not replace
+  the safe deterministic layer from TASK-247.
+
+Recommended next: TASK-248 Hotword Coverage / Alias Expansion (expand correction map from real STT samples).
+
+Each future task must explicitly define safety boundaries, user controls,
+provider scope, queue priority, and no-regression checks.
 
 Each future task must explicitly define safety boundaries, user controls,
 provider scope, queue priority, and no-regression checks.

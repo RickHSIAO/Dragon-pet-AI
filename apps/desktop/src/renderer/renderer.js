@@ -224,7 +224,13 @@ var fullAppVoiceDiagnostics = {
   sttResolvedModel: "",
   sttModelSource: "",
   sttModelLoadStatus: "",
-  sttModelLoadError: ""
+  sttModelLoadError: "",
+  // TASK-247: STT transcript correction diagnostics — populated from /stt/transcribe response metadata
+  sttRawTranscriptPreview: "",
+  sttCorrectedTranscriptPreview: "",
+  sttCorrectionApplied: false,
+  sttCorrectionMode: "",
+  sttCorrectionReason: ""
 };
 // TASK-244: session-only VAD tuning vars — override constants for this session only, not persisted
 var fullAppConversationRmsThreshold = FULL_APP_CONVERSATION_RMS_THRESHOLD;
@@ -4022,6 +4028,12 @@ async function transcribeFullAppAudioBlob(blob) {
     fullAppVoiceDiagnostics.sttModelSource         = result.modelSource       ? String(result.modelSource)       : "unknown";
     fullAppVoiceDiagnostics.sttModelLoadStatus     = result.modelLoadStatus   ? String(result.modelLoadStatus)   : "unknown";
     fullAppVoiceDiagnostics.sttModelLoadError      = result.modelLoadError    ? String(result.modelLoadError)    : "none";
+    // TASK-247: correction diagnostics — raw/corrected preview, max 30 chars, textContent only
+    fullAppVoiceDiagnostics.sttRawTranscriptPreview      = result.rawTranscript      ? makeSafeTranscriptPreview(String(result.rawTranscript))      : "";
+    fullAppVoiceDiagnostics.sttCorrectedTranscriptPreview = result.correctedTranscript ? makeSafeTranscriptPreview(String(result.correctedTranscript)) : "";
+    fullAppVoiceDiagnostics.sttCorrectionApplied         = Boolean(result.correctionApplied);
+    fullAppVoiceDiagnostics.sttCorrectionMode            = result.correctionMode  ? String(result.correctionMode)  : "";
+    fullAppVoiceDiagnostics.sttCorrectionReason          = result.correctionReason ? String(result.correctionReason) : "";
   }
 
   if (!result || typeof result !== "object") throw new Error("stt_error");
@@ -4821,6 +4833,10 @@ function renderFullAppVoiceDiagnostics() {
     "請求模型: " + (d.sttRequestedModel || "unknown") + "  解析模型: " + (d.sttResolvedModel || "unknown"),
     "模型來源: " + (d.sttModelSource || "unknown") + "  載入狀態: " + (d.sttModelLoadStatus || "unknown"),
     "模型載入錯誤: " + (d.sttModelLoadError || "none"),
+    "原始 Transcript: " + (d.sttRawTranscriptPreview || "—"),
+    "修正 Transcript: " + (d.sttCorrectedTranscriptPreview || "—"),
+    "已修正: " + (d.sttCorrectionApplied ? "是" : "否") + "  修正模式: " + (d.sttCorrectionMode || "—"),
+    "修正原因: " + (d.sttCorrectionReason || "—"),
     "---",
     "VAD 最後 RMS: " + d.lastRms.toFixed(4),
     "VAD 最高 RMS: " + d.maxRms.toFixed(4),
@@ -4909,6 +4925,12 @@ function resetFullAppVoiceDiagnosticsForRecording(mode) {
   fullAppVoiceDiagnostics.sttModelSource     = "";
   fullAppVoiceDiagnostics.sttModelLoadStatus = "";
   fullAppVoiceDiagnostics.sttModelLoadError  = "";
+  // TASK-247: reset correction diagnostics — repopulated after each STT call
+  fullAppVoiceDiagnostics.sttRawTranscriptPreview       = "";
+  fullAppVoiceDiagnostics.sttCorrectedTranscriptPreview  = "";
+  fullAppVoiceDiagnostics.sttCorrectionApplied           = false;
+  fullAppVoiceDiagnostics.sttCorrectionMode              = "";
+  fullAppVoiceDiagnostics.sttCorrectionReason            = "";
   // constraintsEchoCancellation/NoiseSuppression/AutoGainControl: not reset (carry over from stream)
   revokeLastAudioObjectUrl();
   if (voicePreviewPlayBtn) voicePreviewPlayBtn.disabled = true;

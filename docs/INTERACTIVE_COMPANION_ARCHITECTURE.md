@@ -586,7 +586,20 @@ Recommended next architecture phase:
   lacking context-aware correction — follow-up TASK-247 needed)
   DONE - MODEL CONFIG PASS / NEEDS TRANSCRIPT CORRECTION FOLLOW-UP.
   Based on `docs/RENDERER_MODULARIZATION_PLAN.md`.
-- TASK-247 recommended next: STT Transcript Correction / Context-Aware Normalization (deterministic hotword / phrase correction layer; rawTranscript / correctedTranscript / correctionApplied diagnostics; no LLM rewrite; no new IPC).
+  TASK-247 (STT Transcript Correction / Context-Aware Normalization — `correct_transcript_text(raw_text)`
+  helper in `stt_service.py`; `_STT_CORRECTION_MAP` phrase correction list; `transcribe_audio_bytes()`
+  ok path applies correction; `transcript` = `correctedTranscript`; `rawTranscript` in response for
+  diagnostics; renderer `fullAppVoiceDiagnostics` gains 5 new fields: `sttRawTranscriptPreview`,
+  `sttCorrectedTranscriptPreview`, `sttCorrectionApplied`, `sttCorrectionMode`, `sttCorrectionReason`;
+  diagnostics shows 原始/修正 Transcript preview / 已修正 / 修正原因 via textContent; reset on every
+  recording start; 19 backend pytest + 10 renderer smoke tests PASS; no LLM rewrite, no new IPC,
+  no new endpoint, no Pet Window / Output Queue / Diagnostics Drawer change, no audio persistence,
+  no TTS, no always-listening; Windows smoke PASS 2026-06-03: correction layer works, known aliases
+  corrected, Auto-send / Conversation Mode use corrected transcript, raw not in history/copy/export,
+  all regressions clear; remaining issue: hotword coverage insufficient for proper nouns not yet in map)
+  DONE - WINDOWS TRANSCRIPT CORRECTION SMOKE PASS / NEEDS HOTWORD COVERAGE FOLLOW-UP.
+- TASK-248 recommended next: STT Hotword Coverage / Alias Expansion (collect real rawTranscript error
+  samples; expand `_STT_CORRECTION_MAP`; no LLM rewrite, no new IPC).
 - Relationship state.
 - Mood / attention / energy state beyond the local preview foundation.
 - Idle reaction policy.
