@@ -1014,7 +1014,7 @@ ipcMain.handle(PET_STT_TRANSCRIBE_CHANNEL, (_event, arrayBuffer) => {
 
     const boundary = "----DragonPetSTT" + Date.now();
     const partHeader = Buffer.from(
-      `--${boundary}\r\nContent-Disposition: form-data; name="audio"; filename="audio.webm"\r\nContent-Type: audio/webm\r\n\r\n`,
+      `--${boundary}\r\nContent-Disposition: form-data; name="audio"; filename="audio.wav"\r\nContent-Type: audio/wav\r\n\r\n`,
       "utf8"
     );
     const partFooter = Buffer.from(`\r\n--${boundary}--\r\n`, "utf8");

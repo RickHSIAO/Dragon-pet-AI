@@ -72,6 +72,9 @@ const FULL_APP_CONVERSATION_RMS_THRESHOLD    = 0.035;
 // TASK-244b: Voice Pipeline Diagnostics constants
 const FULL_APP_VOICE_MIME_PRIORITY = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"];
 const FULL_APP_VOICE_AUDIO_CONSTRAINTS = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+// TASK-252: PCM capture constants for FunASR WAV input
+const FULL_APP_STT_PCM_SAMPLE_RATE = 16000;
+const FULL_APP_STT_PCM_BUFFER_SIZE = 4096;
 // TASK-179: gentle hint shown after OCR summary exists.
 const ocrAskHintEl = document.getElementById("ocr-ask-hint");
 const memoryForm  = document.getElementById("memory-form");
@@ -174,6 +177,15 @@ var fullAppVoiceConversationRecorder        = null;
 var fullAppVoiceConversationChunks          = [];
 var fullAppVoiceConversationSpeechStartedAt = 0;
 var fullAppVoiceConversationLastVoiceAt     = 0;
+// TASK-252: PCM capture state — manual mic and conversation modes
+let _fullAppPcmChunks    = [];
+let _fullAppPcmCtx       = null;
+let _fullAppPcmSource    = null;
+let _fullAppPcmProcessor = null;
+let _convPcmChunks       = [];
+let _convPcmCtx          = null;
+let _convPcmSource       = null;
+let _convPcmProcessor    = null;
 // TASK-244: Voice Quality Diagnostics state — session-only, not persisted
 var fullAppVoiceDiagnostics = {
   mode: "none",
@@ -4184,6 +4196,88 @@ function _fullAppSttTranscribeChunks(chunks, mimeType) {
   });
 }
 
+// TASK-252: WAV PCM capture helpers — encode Float32Array chunks as 16-bit mono WAV blob
+function _encodeWavPcm(pcmChunks, sampleRate) {
+  var numSamples = 0;
+  for (var i = 0; i < pcmChunks.length; i++) numSamples += pcmChunks[i].length;
+  var buffer = new ArrayBuffer(44 + numSamples * 2);
+  var view   = new DataView(buffer);
+  var writeStr = function (off, str) {
+    for (var si = 0; si < str.length; si++) view.setUint8(off + si, str.charCodeAt(si));
+  };
+  writeStr(0, "RIFF");
+  view.setUint32(4,  36 + numSamples * 2, true);
+  writeStr(8,  "WAVE");
+  writeStr(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1,  true);  // PCM
+  view.setUint16(22, 1,  true);  // mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2,  true);
+  view.setUint16(34, 16, true);
+  writeStr(36, "data");
+  view.setUint32(40, numSamples * 2, true);
+  var offset = 44;
+  for (var c = 0; c < pcmChunks.length; c++) {
+    var chunk = pcmChunks[c];
+    for (var s = 0; s < chunk.length; s++) {
+      var sample = Math.max(-1, Math.min(1, chunk[s]));
+      view.setInt16(offset, sample < 0 ? sample * 32768 : sample * 32767, true);
+      offset += 2;
+    }
+  }
+  return new Blob([buffer], { type: "audio/wav" });
+}
+
+function _startPcmCapture(stream) {
+  try {
+    _fullAppPcmChunks = [];
+    var ctx = new AudioContext({ sampleRate: FULL_APP_STT_PCM_SAMPLE_RATE });
+    _fullAppPcmCtx = ctx;
+    _fullAppPcmSource = ctx.createMediaStreamSource(stream);
+    _fullAppPcmProcessor = ctx.createScriptProcessor(FULL_APP_STT_PCM_BUFFER_SIZE, 1, 1);
+    _fullAppPcmProcessor.onaudioprocess = function (ev) {
+      _fullAppPcmChunks.push(new Float32Array(ev.inputBuffer.getChannelData(0)));
+    };
+    _fullAppPcmSource.connect(_fullAppPcmProcessor);
+    _fullAppPcmProcessor.connect(ctx.destination);
+  } catch (_e) { /* PCM capture unavailable — WAV encoding will produce silence */ }
+}
+
+function _stopPcmCapture() {
+  try { if (_fullAppPcmProcessor) _fullAppPcmProcessor.disconnect(); } catch (_e) {}
+  try { if (_fullAppPcmSource)    _fullAppPcmSource.disconnect();    } catch (_e) {}
+  try { if (_fullAppPcmCtx && _fullAppPcmCtx.state !== "closed") _fullAppPcmCtx.close(); } catch (_e) {}
+  _fullAppPcmProcessor = null;
+  _fullAppPcmSource    = null;
+  _fullAppPcmCtx       = null;
+}
+
+function _startConvPcmCapture(stream) {
+  try {
+    _convPcmChunks = [];
+    var ctx = new AudioContext({ sampleRate: FULL_APP_STT_PCM_SAMPLE_RATE });
+    _convPcmCtx = ctx;
+    _convPcmSource = ctx.createMediaStreamSource(stream);
+    _convPcmProcessor = ctx.createScriptProcessor(FULL_APP_STT_PCM_BUFFER_SIZE, 1, 1);
+    _convPcmProcessor.onaudioprocess = function (ev) {
+      _convPcmChunks.push(new Float32Array(ev.inputBuffer.getChannelData(0)));
+    };
+    _convPcmSource.connect(_convPcmProcessor);
+    _convPcmProcessor.connect(ctx.destination);
+  } catch (_e) { /* PCM capture unavailable */ }
+}
+
+function _stopConvPcmCapture() {
+  try { if (_convPcmProcessor) _convPcmProcessor.disconnect(); } catch (_e) {}
+  try { if (_convPcmSource)    _convPcmSource.disconnect();    } catch (_e) {}
+  try { if (_convPcmCtx && _convPcmCtx.state !== "closed") _convPcmCtx.close(); } catch (_e) {}
+  _convPcmProcessor = null;
+  _convPcmSource    = null;
+  _convPcmCtx       = null;
+}
+
 function stopFullAppVoiceInput() {
   var recorder = _fullAppRecorder;
   var mimeType = (recorder && recorder.mimeType) ? recorder.mimeType : "audio/webm";
@@ -4207,9 +4301,11 @@ function stopFullAppVoiceInput() {
       setFullAppVoiceState("idle");
     }
   } else {
-    var savedChunks = _fullAppChunks.slice();
+    _stopPcmCapture();
+    var savedWav = _encodeWavPcm(_fullAppPcmChunks, FULL_APP_STT_PCM_SAMPLE_RATE);
+    _fullAppPcmChunks = [];
     setFullAppVoiceState("transcribing");
-    _fullAppSttTranscribeChunks(savedChunks, mimeType);
+    _fullAppSttTranscribeChunks([savedWav], "audio/wav");
   }
 }
 
@@ -4218,6 +4314,8 @@ function cancelFullAppVoiceInput() {
   if (recorder && recorder.state !== "inactive") {
     try { recorder.stop(); } catch (_e) { /* ignore */ }
   }
+  _stopPcmCapture();
+  _fullAppPcmChunks = [];
   // Release microphone tracks
   if (_fullAppMicStream) {
     try {
@@ -4323,12 +4421,9 @@ async function openFullAppVoiceInput() {
   _fullAppChunks    = [];
   recorder._stopAndTranscribe = false;
 
-  var chunks         = _fullAppChunks;
-  var mimeTypeForStop = recorder.mimeType || "audio/webm";
-
   recorder.addEventListener("dataavailable", function (event) {
     if (event.data && event.data.size > 0) {
-      chunks.push(event.data);
+      _fullAppChunks.push(event.data);
     }
   });
 
@@ -4337,13 +4432,23 @@ async function openFullAppVoiceInput() {
     _fullAppMicStream = null;
     if (_fullAppRecorder && _fullAppRecorder._stopAndTranscribe) {
       _fullAppRecorder._stopAndTranscribe = false;
-      _fullAppSttTranscribeChunks(chunks, mimeTypeForStop);
+      // TASK-252: encode PCM chunks as WAV for FunASR compatibility
+      _stopPcmCapture();
+      var wavBlob = _encodeWavPcm(_fullAppPcmChunks, FULL_APP_STT_PCM_SAMPLE_RATE);
+      _fullAppPcmChunks = [];
+      _fullAppSttTranscribeChunks([wavBlob], "audio/wav");
+    } else {
+      _stopPcmCapture();
+      _fullAppPcmChunks = [];
     }
   });
 
   setFullAppVoiceState("recording");
   // TASK-244: reset diagnostics for this manual recording
   resetFullAppVoiceDiagnosticsForRecording(fullAppVoiceAutoSendEnabled ? "manual_auto_send" : "manual_mic");
+
+  // TASK-252: start PCM capture in parallel with MediaRecorder
+  _startPcmCapture(stream);
 
   try {
     recorder.start();
@@ -4452,6 +4557,9 @@ function _conversationReleaseResources() {
   } catch (_e) {}
   fullAppVoiceConversationAudioContext = null;
   fullAppVoiceConversationAnalyser = null;
+  // TASK-252: release conv PCM capture resources
+  _stopConvPcmCapture();
+  _convPcmChunks = [];
 }
 
 function _startConversationUtteranceRecorder() {
@@ -4475,14 +4583,18 @@ function _startConversationUtteranceRecorder() {
     return;
   }
   fullAppVoiceConversationRecorder = recorder;
-  var chunks = fullAppVoiceConversationChunks;
-  var capturedMimeType = recorder.mimeType || mimeType || "audio/webm";
   recorder.addEventListener("dataavailable", function (ev) {
-    if (ev.data && ev.data.size > 0) chunks.push(ev.data);
+    if (ev.data && ev.data.size > 0) fullAppVoiceConversationChunks.push(ev.data);
   });
   recorder.addEventListener("stop", function () {
-    _transcribeConversationChunks(chunks.slice(), capturedMimeType);
+    // TASK-252: encode PCM chunks as WAV for FunASR compatibility
+    _stopConvPcmCapture();
+    var wavBlob = _encodeWavPcm(_convPcmChunks, FULL_APP_STT_PCM_SAMPLE_RATE);
+    _convPcmChunks = [];
+    _transcribeConversationChunks([wavBlob], "audio/wav");
   });
+  // TASK-252: start PCM capture in parallel with MediaRecorder
+  _startConvPcmCapture(fullAppVoiceConversationStream);
   recorder.start();
 }
 

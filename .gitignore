@@ -5,6 +5,7 @@ __pycache__/
 .pytest-tmp/
 .pytest-tmp*/
 .venv/
+.venv-funasr/
 venv/
 
 # SQLite

@@ -25963,5 +25963,277 @@ zero effect on the already-running backend process.
 
 ### Next Task
 
-TASK-250 — FunASR Local Runtime Integration (pending Windows smoke result; activate if Paraformer
-accuracy is adequate; otherwise evaluate sherpa-onnx or faster-whisper model upgrade).
+TASK-251 — FunASR Windows quality smoke (install funasr modelscope, set env var in backend terminal,
+speak test sentences, verify Paraformer accuracy; or evaluate sherpa-onnx if Paraformer inadequate).
+
+## TASK-250 | FunASR Local Runtime Integration
+
+Status: BLOCKED - WINDOWS FUNASR INSTALL FAILED / PYTHON 3.14 EDITDISTANCE BUILD ISSUE (2026-06-03)
+
+### Goal
+
+Make `funasr-local` provider actually transcribe audio using Paraformer-zh.
+No paid API. No cloud. No new IPC. No new endpoints. No audio persistence. No Pet Window changes.
+
+### Design Constraints (inherited from TASK-249 + additional)
+
+1. Files allowed: `stt_service.py`, `test_stt_routes.py`, `scripts/dev-start-backend.ps1`,
+   `scripts/stt_provider_smoke.py`, new `scripts/funasr_probe.py`, new `scripts/install-funasr.ps1`,
+   new `scripts/create-funasr-venv.ps1`, `.gitignore`, 4 docs.
+2. No new IPC channel, no new endpoint, no `/chat` schema change.
+3. No raw audio persistence to disk — BytesIO in-memory only.
+4. No Pet Window / Output Queue / Diagnostics Drawer change.
+5. TASK-247/248 correction layer must apply to FunASR results.
+
+### Implementation (2026-06-03) — Python/runtime layer DONE; install BLOCKED
+
+**`backend/app/stt/stt_service.py`** — FunASR runtime complete:
+- `_FUNASR_HOTWORDS`: hotword boosting string with pet name, project name, tool names.
+  Passed as `hotword=` kwarg to `model.generate()`; `TypeError` fallback for older FunASR versions.
+- `_parse_funasr_result()`: robust multi-format parser — handles `list[dict{text}]`, `dict{text}`,
+  `str`, empty list, `None`; returns joined stripped transcript string; never raises.
+- `_transcribe_funasr()` full implementation: uses `io.BytesIO(audio_bytes)` (no tempfile);
+  tries hotword boosting, falls back on `TypeError`; calls `_parse_funasr_result()`; applies
+  correction layer; includes provider metadata in ALL return paths including `status=empty`.
+- `_load_funasr_model()`: `AutoModel(model="paraformer-zh", device="cpu", disable_update=True)`;
+  auto-downloads ~500 MB model from ModelScope on first call; cached in `~/.cache/modelscope/`.
+  `model_revision` removed for compatibility (was `v2.0.4`).
+
+**`backend/tests/test_stt_routes.py`** — 11 new TASK-250 tests; 96 total; all pass:
+- `test_funasr_parse_result_list_dict` — standard paraformer-zh output format
+- `test_funasr_parse_result_dict` — single dict{text}
+- `test_funasr_parse_result_str` — raw string return
+- `test_funasr_parse_result_empty_list` — empty list and None return ""
+- `test_funasr_parse_result_dict_missing_text` — dict without 'text' key returns ""
+- `test_funasr_hotword_constant_exists` — constant exists and is non-empty string
+- `test_funasr_hotword_includes_expected_terms` — 克莉絲蒂娜, Dragon Pet AI, Claude Code present
+- `test_funasr_transcribe_mock_ok_response` — mocked model, status=ok, provider metadata present
+- `test_funasr_transcribe_mock_correction_applies` — 克里斯蒂娜 → 克莉絲蒂娜 correction
+- `test_funasr_transcribe_mock_empty_includes_provider_metadata` — status=empty includes metadata
+- `test_funasr_transcribe_no_audio_to_disk` — source inspection: BytesIO yes, NamedTemporaryFile no
+
+**`scripts/funasr_probe.py`** (new):
+  3-step probe: (1) import funasr + modelscope, (2) load AutoModel(paraformer-zh), (3) generate()
+  with silence WAV. Exit codes: 0=usable, 1=import fail, 2=load fail, 3=infer fail.
+
+**`scripts/install-funasr.ps1`** (updated):
+  Now detects Python version before attempting pip install. If Python >= 3.14 (cp314):
+  aborts immediately with explanation + recommendation to use `create-funasr-venv.ps1`.
+
+**`scripts/create-funasr-venv.ps1`** (new — TASK-250 blocker workaround):
+  Creates `.venv-funasr\` at repo root; tries `py -3.11` first, falls back to `py -3.10`.
+  Note: on the development machine, `py -3.11` resolved to a non-functional `D:\Tool\python.exe`;
+  `.venv-funasr` was successfully created with Python 3.10
+  (`C:\Users\雪狼丸\AppData\Local\Programs\Python\Python310\python.exe`).
+  cp310/cp311 wheels for `editdistance` exist on PyPI (unlike cp314).
+  Does NOT touch `backend\.venv` (which stays on Python 3.14).
+  `.venv-funasr\` is listed in `.gitignore`.
+
+**`scripts/stt_provider_smoke.py`** — TASK-250 section [5/5] added:
+  Parser tests, hotword constant tests, mock transcription + correction test. 50/50 PASS.
+
+**`.gitignore`** — added `.venv-funasr/` entry.
+
+### Windows Install Failure (2026-06-03)
+
+**Command run**: `.\scripts\install-funasr.ps1`
+
+**Root cause**: `backend\.venv` uses Python 3.14 (cp314). FunASR depends on `editdistance`,
+which is a C extension. No pre-built cp314 wheels exist on PyPI. Build requires
+Microsoft Visual C++ 14.0+ which is not installed. Error:
+```
+error: Microsoft Visual C++ 14.0 or greater is required.
+```
+
+**Remediation**:
+- Option A (recommended): `scripts/create-funasr-venv.ps1` — creates `.venv-funasr\` with
+  Python 3.10 or 3.11 (cp310/cp311 pre-built wheels for `editdistance` exist on PyPI).
+  **Actual result on dev machine**: `py -3.11` resolved to non-functional `D:\Tool\python.exe`;
+  `.venv-funasr` was built with Python 3.10. funasr/modelscope/torch CPU + paraformer-zh all
+  installed and probe PASS under Python 3.10.
+  Note: `.venv-funasr` is for probe / quality smoke only. The live backend runs on
+  `backend\.venv` (Python 3.14). FunASR integration with the backend requires resolving
+  the Python version gap (subprocess bridge, or migrating backend to 3.10/3.11, or waiting for
+  cp314 wheels).
+- Option B (heavy fallback): install Microsoft C++ Build Tools 14.0+, then re-run
+  `install-funasr.ps1`. Not recommended — requires ~5 GB install.
+- Option C: if FunASR Windows native dependency risk too high, evaluate sherpa-onnx next
+  (ONNX-based; fewer C extension deps; may have cp314 wheels or pure-Python fallback).
+
+### Smoke Results (2026-06-03)
+
+- 96/96 pytest PASS
+- 50/50 stt_provider_smoke PASS (including [5/5] TASK-250 section)
+- renderer-chat-smoke.js: PASS
+- pet-window-smoke.js: 82 checks PASS
+- pet-renderer-smoke.js: 285 checks PASS
+- git diff --check: exit 0 (CRLF warnings only, expected on Windows)
+- funasr not installed (blocked): `loadStatus=unavailable` — expected PASS
+
+### Acceptance Criteria
+
+- ✅ `_FUNASR_HOTWORDS` constant with pet/project/tool vocabulary
+- ✅ `_parse_funasr_result()` handles all FunASR output formats
+- ✅ `_transcribe_funasr()` full runtime: BytesIO, hotword boosting, robust parsing
+- ✅ Provider metadata in ALL return paths including `status=empty`
+- ✅ TASK-247/248 correction layer applies to FunASR results
+- ✅ 11 new pytest tests; 96 total; all pass
+- ✅ 50/50 smoke pass
+- ✅ `scripts/funasr_probe.py` created (exit codes 0-3)
+- ✅ `scripts/install-funasr.ps1` updated — Python >= 3.14 guard, aborts cleanly with guidance
+- ✅ `scripts/create-funasr-venv.ps1` created — Option A workaround for cp314 blocker
+- ✅ `.gitignore` updated — `.venv-funasr/` excluded from repo
+- ❌ Windows install blocked: Python 3.14 / cp314 + missing editdistance wheel
+- ⏳ Quality smoke pending: run `create-funasr-venv.ps1` → `funasr_probe.py` → speak test sentences
+
+### Next Task
+
+TASK-252 — FunASR Audio Format Bridge / WAV PCM Input.
+
+## TASK-251 | FunASR Sidecar / Dedicated Venv Runtime Bridge
+
+Status: DONE (2026-06-03)
+
+### Goal
+
+Allow the backend (Python 3.14, `backend\.venv`) to use FunASR (Python 3.10, `.venv-funasr`)
+for transcription via a subprocess sidecar — no cross-venv import, no temp files.
+
+### Design Constraints
+
+1. Files: `stt_service.py`, `test_stt_routes.py`, `scripts/stt_provider_smoke.py`,
+   new `scripts/funasr_sidecar_transcribe.py`, `.gitignore`, 4 docs.
+2. No new IPC channel, no new endpoint, no `/chat` schema change.
+3. No raw audio persistence — audio bytes passed via stdin only.
+4. No Pet Window / Output Queue / Diagnostics Drawer change.
+5. `DRAGON_PET_FUNASR_PYTHON` env var overrides sidecar Python path.
+
+### Implementation (2026-06-03)
+
+**`scripts/funasr_sidecar_transcribe.py`** (new):
+- Runs under `.venv-funasr` Python; reads raw audio bytes from `sys.stdin.buffer`
+- Writes single-line JSON to stdout: `{"transcript": str, "status": "ok"|"empty"|"error", "error": str|null}`
+- JSON parsed from last `{`-prefixed line in stdout (robust to funasr progress noise)
+- Exit codes: 0=success, 1=import_error, 2=load_error, 3=infer_error
+
+**`backend/app/stt/stt_service.py`** — redesigned funasr-local path:
+- `_FUNASR_PYTHON_ENV = "DRAGON_PET_FUNASR_PYTHON"`, `_FUNASR_SIDECAR_SCRIPT` constants
+- `_resolve_funasr_python()` — env override or default `.venv-funasr\Scripts\python.exe`
+- `_detect_funasr_sidecar()` — checks sidecar Python executable exists (not funasr importability)
+- `_run_funasr_sidecar(audio_bytes)` — `subprocess.run(input=audio_bytes, capture_output=True, timeout=300)`
+- `_transcribe_funasr()` — calls sidecar, handles timeout/error, updates `_FUNASR_LOAD_STATUS`
+- Removed `_funasr_model` and `_load_funasr_model()` (model lives in sidecar subprocess)
+
+### Smoke Results (2026-06-03)
+
+- 106/106 pytest PASS
+- 56/56 stt_provider_smoke PASS (including [6/6] TASK-251 sidecar section)
+- renderer-chat-smoke.js: PASS; pet-window-smoke.js: 82; pet-renderer-smoke.js: 285
+- Live sidecar: `status='ok'`, `sttProviderLoadStatus='loaded'` with `.venv-funasr`
+
+### Acceptance Criteria
+
+- ✅ `funasr_sidecar_transcribe.py`: stdin audio → stdout JSON, no temp files
+- ✅ Sidecar subprocess bridge in `stt_service.py`: `_run_funasr_sidecar()`
+- ✅ `DRAGON_PET_FUNASR_PYTHON` env var override
+- ✅ JSON robustness: scan stdout from end for last `{`-prefixed line
+- ✅ `_FUNASR_LOAD_STATUS` lifecycle: not_loaded → loaded/error/unavailable
+- ✅ 106 pytest PASS; 56 smoke PASS
+- ✅ Live sidecar smoke: status=ok, loadStatus=loaded
+
+### Next Task
+
+TASK-252 — FunASR Audio Format Bridge / WAV PCM Input.
+
+## TASK-252 | FunASR Audio Format Bridge / WAV PCM Input
+
+Status: DONE - WINDOWS FUNASR WAV MIC SMOKE PASS / NEEDS NORMALIZATION + LATENCY FOLLOW-UP (2026-06-03)
+
+### Goal
+
+Fix Full App voice input failure with FunASR sidecar: MediaRecorder produces `audio/webm;codecs=opus`
+which torchaudio (without ffmpeg) cannot decode. Replace with Web Audio API PCM capture at 16 kHz,
+encode as WAV blob before sending to STT. Update main.js Content-Type to `audio/wav`.
+
+### Design Constraints
+
+1. Files: `renderer.js`, `main.js`, `renderer-chat-smoke.js`, 4 docs. No other files.
+2. No new IPC channel, no endpoint change, no `/chat` schema change.
+3. No raw audio persistence to disk.
+4. No Pet Window / Output Queue / Diagnostics Drawer change.
+5. `ArrayBuffer` passed to `api.transcribeAudio()` unchanged (still raw bytes, now WAV).
+
+### Implementation (2026-06-03)
+
+**`apps/desktop/src/renderer/renderer.js`**:
+- Constants: `FULL_APP_STT_PCM_SAMPLE_RATE = 16000`, `FULL_APP_STT_PCM_BUFFER_SIZE = 4096`
+- State vars: `_fullAppPcmChunks/Ctx/Source/Processor`, `_convPcmChunks/Ctx/Source/Processor`
+- `_encodeWavPcm(pcmChunks, sampleRate)` — Float32Array chunks → 16-bit mono WAV Blob
+- `_startPcmCapture(stream)` / `_stopPcmCapture()` — manual mic PCM capture
+- `_startConvPcmCapture(stream)` / `_stopConvPcmCapture()` — conversation PCM capture
+- `openFullAppVoiceInput()`: `_startPcmCapture(stream)` before `recorder.start()`; stop event
+  encodes PCM as WAV, calls `_fullAppSttTranscribeChunks([wavBlob], "audio/wav")`
+- `stopFullAppVoiceInput()` else branch: same WAV encoding path
+- `cancelFullAppVoiceInput()`: `_stopPcmCapture(); _fullAppPcmChunks = []`
+- `_startConversationUtteranceRecorder()`: `_startConvPcmCapture()` before `recorder.start()`;
+  stop event encodes PCM as WAV, calls `_transcribeConversationChunks([wavBlob], "audio/wav")`
+- `_conversationReleaseResources()`: `_stopConvPcmCapture(); _convPcmChunks = []`
+
+**`apps/desktop/src/main.js`** (line 1017):
+- `filename="audio.webm"` → `filename="audio.wav"`
+- `Content-Type: audio/webm` → `Content-Type: audio/wav`
+
+### Smoke Results (2026-06-03)
+
+- 106/106 pytest PASS
+- 56/56 stt_provider_smoke PASS
+- renderer-chat-smoke.js: PASS (6 new TASK-252 tests)
+- pet-window-smoke.js: 82 PASS; pet-renderer-smoke.js: 285 PASS
+- git diff --check: CRLF warnings only (expected on Windows)
+
+### Windows FunASR Manual Mic Smoke (2026-06-03)
+
+**Result: PASS — FunASR sidecar successfully receives Full App WAV audio and produces Chinese transcript.**
+
+Tested sentences and observations:
+- 「克莉絲蒂娜，這是中文語音辨識測試」— recognisable output; spaces between characters; simplified Chinese
+- 「Dragon Pet AI 的對話模式開始」— may transcribe as "jdden pet ai" / "dragon pet ai"; needs hotword normalisation
+- 「Claude Code 幫我修一下 TASK」— may transcribe as "cloud code" / "task"; needs hotword normalisation
+- 「我現在要測試語音輸入和桌面寵物」— usable; simplified Chinese output
+- 「這段話用來測試普通中文口語辨識」— usable; simplified Chinese output
+
+**Conclusion:** WAV PCM bridge works. FunASR sidecar decodes Full App mic audio correctly.
+FunASR Paraformer-zh accuracy significantly better than faster-whisper-local for Chinese.
+Core audio format blocker resolved.
+
+**Remaining issues identified:**
+1. **空格 / 簡體字**: Paraformer-zh output contains inter-character spaces and simplified Chinese.
+   Requires post-processing: strip spaces, convert simplified → traditional Chinese (OpenCC).
+2. **專有名詞 normalisation**: Dragon Pet AI, Claude Code, TASK still transcribed with errors.
+   Existing TASK-247/248 correction map covers some aliases but not Paraformer-specific variants.
+3. **Sidecar cold-start latency**: FunASR sidecar loads the paraformer-zh model (~500 MB) on
+   every call. Cold-start adds 10–30 s first-call delay. Warm model server needed.
+
+### Acceptance Criteria
+
+- ✅ PCM constants, state vars, 5 PCM helper functions in renderer.js
+- ✅ `_encodeWavPcm` produces correct 44-byte RIFF header + 16-bit PCM
+- ✅ Both manual mic and conversation recorder paths produce WAV blob
+- ✅ main.js Content-Type/filename updated to audio/wav
+- ✅ No raw audio persistence to disk
+- ✅ 6 new smoke tests; all suites PASS
+- ✅ No Pet Window / Output Queue / Diagnostics Drawer change
+- ✅ No new IPC channels
+- ✅ Windows FunASR WAV mic smoke PASS
+- ⏳ Transcript normalisation (spaces, simplified → traditional): TASK-253
+- ⏳ Persistent warm sidecar / reduced latency: TASK-254
+
+### Next Task
+
+TASK-253 — FunASR Transcript Normalisation / Traditional Chinese Output.
+  Strip inter-character spaces; convert simplified → traditional (OpenCC or mapping table);
+  expand TASK-247/248 correction map with Paraformer-specific acoustic variants.
+
+TASK-254 — Persistent FunASR Sidecar / Warm Model Server.
+  Keep paraformer-zh model loaded between requests to eliminate cold-start latency.
+  Options: long-running sidecar process with stdin loop, or local HTTP server inside `.venv-funasr`.

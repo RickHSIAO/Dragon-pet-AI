@@ -10,8 +10,11 @@ Design boundaries:
 """
 
 import io
+import json
 import logging
 import os
+import pathlib
+import subprocess
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -34,11 +37,30 @@ _STT_DEFAULT_PROVIDER = "faster-whisper-local"
 _STT_PROVIDER_CANDIDATE_NOTES: dict = {
     "faster-whisper-local": "production; default fallback",
     "funasr-local": (
-        "evaluation candidate; requires `pip install funasr modelscope` "
-        "and pre-downloaded paraformer-zh model"
+        "TASK-251 sidecar / dedicated venv; "
+        "calls .venv-funasr Python via subprocess (stdin audio bytes → stdout JSON); "
+        "set DRAGON_PET_FUNASR_PYTHON to override python path; "
+        "paraformer-zh served from ModelScope cache (~500 MB on first download)"
     ),
-    "sherpa-onnx-local": "evaluation candidate; design-only in TASK-249 — not yet implemented",
+    "sherpa-onnx-local": "evaluation candidate; design-only in TASK-249/250 — not yet implemented",
 }
+
+# TASK-251: FunASR sidecar — dedicated venv Python path configuration.
+# Default points to .venv-funasr at repo root (Windows Scripts path).
+# Override with DRAGON_PET_FUNASR_PYTHON env var for non-standard installs.
+_REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent.parent
+_FUNASR_PYTHON_ENV = "DRAGON_PET_FUNASR_PYTHON"
+_FUNASR_PYTHON_DEFAULT = str(_REPO_ROOT / ".venv-funasr" / "Scripts" / "python.exe")
+_FUNASR_SIDECAR_SCRIPT = str(_REPO_ROOT / "scripts" / "funasr_sidecar_transcribe.py")
+
+
+def _resolve_funasr_python() -> str:
+    """Return the Python executable for the funasr sidecar venv.
+
+    Priority: DRAGON_PET_FUNASR_PYTHON env var → .venv-funasr/Scripts/python.exe (default).
+    """
+    from_env = os.environ.get(_FUNASR_PYTHON_ENV, "").strip()
+    return from_env if from_env else _FUNASR_PYTHON_DEFAULT
 
 
 def _resolve_stt_model_name() -> dict:
@@ -182,53 +204,62 @@ def _load_model() -> Any:
     return _whisper_model
 
 
-# TASK-249: FunASR candidate — safe unavailable if package not installed
-def _detect_funasr() -> bool:
-    """Check whether funasr is importable without loading the model."""
-    try:
-        import funasr  # noqa: F401  # type: ignore
-        return True
-    except ImportError:
-        return False
+# TASK-251: FunASR sidecar — availability check: does the dedicated venv Python exist?
+def _detect_funasr_sidecar() -> bool:
+    """Check whether the .venv-funasr sidecar Python executable exists."""
+    return os.path.isfile(_resolve_funasr_python())
 
 
-_FUNASR_AVAILABLE: bool = _detect_funasr()
-_funasr_model: Any = None
-# Load status — updated by _load_funasr_model(); initialized based on availability
+_FUNASR_AVAILABLE: bool = _detect_funasr_sidecar()
+# Load status — updated by _transcribe_funasr() on first call; initialized based on availability
 _FUNASR_LOAD_STATUS: str = "not_loaded" if _FUNASR_AVAILABLE else "unavailable"
 _FUNASR_LOAD_ERROR: str | None = None
 
+# TASK-250: hotword list surfaced in diagnostics and passed to the sidecar.
+_FUNASR_HOTWORDS: str = (
+    "克莉絲蒂娜 Dragon Pet AI Claude Code CodeX Whisper faster-whisper "
+    "語音辨識 語音輸入 對話模式 桌面寵物"
+)
 
-def _load_funasr_model() -> Any:
+
+def _run_funasr_sidecar(audio_bytes: bytes) -> dict:
     """
-    Lazily load the FunASR Paraformer model on first use.
-    Model must be pre-downloaded manually — this code does NOT auto-download.
-    Updates _FUNASR_LOAD_STATUS and _FUNASR_LOAD_ERROR as side-effects.
-    Returns None if funasr not installed or loading fails.
+    TASK-251: Invoke the funasr sidecar subprocess with audio bytes on stdin.
+
+    The sidecar runs inside .venv-funasr (or DRAGON_PET_FUNASR_PYTHON) and returns
+    a single-line JSON result on stdout:
+      {"transcript": str, "status": "ok"|"empty"|"error", "error": str|null}
+
+    Raises
+    ------
+    subprocess.TimeoutExpired   if sidecar does not complete within 300 s
+    json.JSONDecodeError        if stdout is not valid JSON
+    ValueError                  if stdout is empty (sidecar crashed before writing)
     """
-    global _funasr_model, _FUNASR_LOAD_STATUS, _FUNASR_LOAD_ERROR
-    if _funasr_model is not None:
-        return _funasr_model
-    if not _FUNASR_AVAILABLE:
-        _FUNASR_LOAD_STATUS = "unavailable"
-        return None
-    try:
-        from funasr import AutoModel  # type: ignore
-        _funasr_model = AutoModel(
-            model="paraformer-zh",
-            model_revision="v2.0.4",
-            disable_update=True,
-            device="cpu",
+    py_exec = _resolve_funasr_python()
+    proc = subprocess.run(
+        [py_exec, _FUNASR_SIDECAR_SCRIPT],
+        input=audio_bytes,
+        capture_output=True,
+        timeout=300,
+    )
+    stdout_text = proc.stdout.decode("utf-8", errors="replace")
+    # funasr/modelscope may write progress text to stdout before our JSON line;
+    # find the last line that looks like a JSON object.
+    json_line = ""
+    for line in reversed(stdout_text.splitlines()):
+        line = line.strip()
+        if line.startswith("{"):
+            json_line = line
+            break
+    if not json_line:
+        stderr_snippet = proc.stderr.decode("utf-8", errors="replace")[:200]
+        logger.warning(
+            "TASK-251: sidecar no JSON in stdout exit=%d stdout_tail=%r stderr=%r",
+            proc.returncode, stdout_text[-300:], stderr_snippet,
         )
-        _FUNASR_LOAD_STATUS = "loaded"
-        _FUNASR_LOAD_ERROR = None
-        logger.info("TASK-249: funasr paraformer-zh model loaded.")
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("TASK-249: Failed to load FunASR model: %s", exc)
-        _FUNASR_LOAD_STATUS = "error"
-        _FUNASR_LOAD_ERROR = str(exc)[:100]  # truncated — no raw stack trace
-        _funasr_model = None
-    return _funasr_model
+        raise ValueError(f"sidecar_no_json exit={proc.returncode}")
+    return json.loads(json_line)
 
 
 def _get_model_metadata() -> dict:
@@ -422,13 +453,44 @@ def correct_transcript_text(raw_text: str) -> dict:
 def _reset_model_for_tests() -> None:
     """Reset cached models and load status — only for test isolation. Not for production use."""
     global _whisper_model, _STT_MODEL_LOAD_STATUS, _STT_MODEL_LOAD_ERROR
-    global _funasr_model, _FUNASR_LOAD_STATUS, _FUNASR_LOAD_ERROR
+    global _FUNASR_LOAD_STATUS, _FUNASR_LOAD_ERROR
     _whisper_model = None
     _STT_MODEL_LOAD_STATUS = "not_loaded" if _WHISPER_AVAILABLE else "unavailable"
     _STT_MODEL_LOAD_ERROR = None
-    _funasr_model = None
     _FUNASR_LOAD_STATUS = "not_loaded" if _FUNASR_AVAILABLE else "unavailable"
     _FUNASR_LOAD_ERROR = None
+
+
+def _parse_funasr_result(raw_result) -> str:
+    """
+    TASK-250: Robust FunASR output parser.
+
+    FunASR generate() may return:
+      list[dict{text, ...}]  — standard paraformer-zh output
+      dict{text, ...}        — single-segment result
+      str                    — raw transcript string (some model variants)
+      empty list / None      — no speech detected
+
+    Returns the joined transcript string (stripped), or "" if no text found.
+    Does not raise; all paths are safe.
+    """
+    if not raw_result:
+        return ""
+    if isinstance(raw_result, str):
+        return raw_result.strip()
+    if isinstance(raw_result, dict):
+        return str(raw_result.get("text", "")).strip()
+    if isinstance(raw_result, list):
+        parts: list[str] = []
+        for item in raw_result:
+            if isinstance(item, dict):
+                text = item.get("text", "")
+                if text:
+                    parts.append(str(text))
+            elif isinstance(item, str) and item:
+                parts.append(item)
+        return "".join(parts).strip()
+    return str(raw_result).strip()
 
 
 def _transcribe_funasr(
@@ -437,16 +499,14 @@ def _transcribe_funasr(
     language: str | None = None,
 ) -> dict:
     """
-    TASK-249: FunASR Paraformer transcription candidate.
+    TASK-251: FunASR Paraformer transcription via sidecar subprocess.
 
-    Returns clean unavailable if funasr package is not installed or model not pre-downloaded.
-    No auto-download; no cloud calls; no raw audio persistence to disk.
+    Invokes .venv-funasr Python with audio bytes on stdin; reads JSON result from stdout.
+    No raw audio persistence to disk; no funasr import in the backend venv.
     TASK-247/248 correction layer applies when transcription succeeds.
-
-    Manual install steps (not done automatically):
-      pip install funasr modelscope
-      # Then pre-download the model via FunASR's download utility or HuggingFace
     """
+    global _FUNASR_LOAD_STATUS, _FUNASR_LOAD_ERROR
+
     if not _FUNASR_AVAILABLE:
         return {
             "transcript": "",
@@ -455,46 +515,73 @@ def _transcribe_funasr(
             **_get_provider_metadata(),
         }
 
-    model = _load_funasr_model()
-    if model is None:
-        return {
-            "transcript": "",
-            "status": "unavailable",
-            **_get_model_metadata(),
-            **_get_provider_metadata(),
-        }
-
     try:
-        audio_buf = io.BytesIO(audio_bytes)
-        result_list = model.generate(input=audio_buf, batch_size_s=300)
-        transcript = "".join(
-            r.get("text", "") for r in (result_list or [])
-        ).strip()
-        if not transcript:
-            return {"transcript": "", "status": "empty"}
-        correction = correct_transcript_text(transcript)
-        return {
-            "transcript": correction["correctedTranscript"],
-            "status": "ok",
-            **_get_model_metadata(),
-            **_get_provider_metadata(),
-            "detectedLanguage": language or "zh",
-            "rawTranscript": correction["rawTranscript"],
-            "correctedTranscript": correction["correctedTranscript"],
-            "correctionApplied": correction["correctionApplied"],
-            "correctionMode": correction["correctionMode"],
-            "correctionReason": correction["correctionReason"],
-            "matchedAlias": correction["matchedAlias"],
-            "canonicalTerm": correction["canonicalTerm"],
-        }
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("TASK-249: FunASR error mime=%s exc=%s", mime_type, exc)
+        sidecar_result = _run_funasr_sidecar(audio_bytes)
+    except subprocess.TimeoutExpired:
+        _FUNASR_LOAD_STATUS = "error"
+        _FUNASR_LOAD_ERROR = "sidecar_timeout"
+        logger.warning("TASK-251: funasr sidecar timed out mime=%s", mime_type)
         return {
             "transcript": "",
             "status": "error",
             **_get_model_metadata(),
             **_get_provider_metadata(),
         }
+    except Exception as exc:  # noqa: BLE001
+        _FUNASR_LOAD_STATUS = "error"
+        _FUNASR_LOAD_ERROR = str(exc)[:100]
+        logger.warning("TASK-251: funasr sidecar error mime=%s exc=%s", mime_type, exc)
+        return {
+            "transcript": "",
+            "status": "error",
+            **_get_model_metadata(),
+            **_get_provider_metadata(),
+        }
+
+    sidecar_status = sidecar_result.get("status", "error")
+    transcript = sidecar_result.get("transcript", "")
+    sidecar_error = sidecar_result.get("error")
+
+    if sidecar_error:
+        logger.warning("TASK-251: sidecar reported error: %s", sidecar_error)
+
+    if sidecar_status == "error":
+        _FUNASR_LOAD_STATUS = "error"
+        _FUNASR_LOAD_ERROR = (sidecar_error or "sidecar_error")[:100]
+        return {
+            "transcript": "",
+            "status": "error",
+            **_get_model_metadata(),
+            **_get_provider_metadata(),
+        }
+
+    if sidecar_status == "empty" or not transcript:
+        _FUNASR_LOAD_STATUS = "loaded"
+        _FUNASR_LOAD_ERROR = None
+        return {
+            "transcript": "",
+            "status": "empty",
+            **_get_model_metadata(),
+            **_get_provider_metadata(),
+        }
+
+    _FUNASR_LOAD_STATUS = "loaded"
+    _FUNASR_LOAD_ERROR = None
+    correction = correct_transcript_text(transcript)
+    return {
+        "transcript": correction["correctedTranscript"],
+        "status": "ok",
+        **_get_model_metadata(),
+        **_get_provider_metadata(),
+        "detectedLanguage": language or "zh",
+        "rawTranscript": correction["rawTranscript"],
+        "correctedTranscript": correction["correctedTranscript"],
+        "correctionApplied": correction["correctionApplied"],
+        "correctionMode": correction["correctionMode"],
+        "correctionReason": correction["correctionReason"],
+        "matchedAlias": correction["matchedAlias"],
+        "canonicalTerm": correction["canonicalTerm"],
+    }
 
 
 def transcribe_audio_bytes(

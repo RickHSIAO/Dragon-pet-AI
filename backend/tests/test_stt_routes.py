@@ -1178,3 +1178,271 @@ def test_stt_correction_metadata_still_present_after_task249(monkeypatch):
     assert "correctionApplied"   in result, "TASK-249 regression: correctionApplied must still be present"
     assert "matchedAlias"        in result, "TASK-249 regression: matchedAlias must still be present"
     assert "canonicalTerm"       in result, "TASK-249 regression: canonicalTerm must still be present"
+
+
+# -- TASK-250: FunASR parser unit tests ----------------------------------------
+
+
+def test_funasr_parse_result_list_dict():
+    """TASK-250: _parse_funasr_result handles list[dict{text}] — standard paraformer-zh output."""
+    result = stt_service._parse_funasr_result([{"text": "你好世界"}, {"text": " 測試"}])
+    assert result == "你好世界 測試"
+
+
+def test_funasr_parse_result_dict():
+    """TASK-250: _parse_funasr_result handles single dict{text}."""
+    result = stt_service._parse_funasr_result({"text": "你好"})
+    assert result == "你好"
+
+
+def test_funasr_parse_result_str():
+    """TASK-250: _parse_funasr_result handles raw string return."""
+    result = stt_service._parse_funasr_result("直接字串")
+    assert result == "直接字串"
+
+
+def test_funasr_parse_result_empty_list():
+    """TASK-250: _parse_funasr_result handles empty list and None — returns empty string."""
+    assert stt_service._parse_funasr_result([]) == ""
+    assert stt_service._parse_funasr_result(None) == ""
+
+
+def test_funasr_parse_result_dict_missing_text():
+    """TASK-250: _parse_funasr_result handles dict without 'text' key — returns empty string."""
+    result = stt_service._parse_funasr_result({"score": 0.9})
+    assert result == ""
+
+
+def test_funasr_hotword_constant_exists():
+    """TASK-250: _FUNASR_HOTWORDS constant must exist on stt_service module."""
+    assert hasattr(stt_service, "_FUNASR_HOTWORDS")
+    assert isinstance(stt_service._FUNASR_HOTWORDS, str)
+    assert len(stt_service._FUNASR_HOTWORDS) > 0
+
+
+def test_funasr_hotword_includes_expected_terms():
+    """TASK-250: _FUNASR_HOTWORDS must include project-specific vocabulary terms."""
+    hw = stt_service._FUNASR_HOTWORDS
+    assert "克莉絲蒂娜" in hw, "pet name must be in hotword list"
+    assert "Dragon Pet AI" in hw, "project name must be in hotword list"
+    assert "Claude Code" in hw, "tool name must be in hotword list"
+
+
+def test_funasr_transcribe_mock_ok_response(monkeypatch):
+    """TASK-250/251: _transcribe_funasr with mocked sidecar returns status=ok + provider metadata."""
+    monkeypatch.setattr(stt_service, "_FUNASR_AVAILABLE", True)
+    monkeypatch.setattr(stt_service, "_STT_RESOLVED_PROVIDER", "funasr-local")
+    monkeypatch.setattr(stt_service, "_STT_PROVIDER_RESOLUTION", {
+        "requested_provider": "funasr-local",
+        "resolved_provider": "funasr-local",
+        "provider_source": "env",
+        "provider_fallback_reason": "none",
+    })
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(
+        stt_service, "_run_funasr_sidecar",
+        lambda b: {"transcript": "你好世界", "status": "ok", "error": None},
+    )
+
+    result = stt_service._transcribe_funasr(b"\x01\x02\x03")
+    assert result["status"] == "ok"
+    assert result["transcript"] == "你好世界"
+    assert result["rawTranscript"] == "你好世界"
+    assert "sttProviderResolved" in result
+    assert result["sttProviderResolved"] == "funasr-local"
+
+
+def test_funasr_transcribe_mock_correction_applies(monkeypatch):
+    """TASK-250/251: correction layer applies to FunASR sidecar result — 克里斯蒂娜 → 克莉絲蒂娜."""
+    monkeypatch.setattr(stt_service, "_FUNASR_AVAILABLE", True)
+    monkeypatch.setattr(stt_service, "_STT_RESOLVED_PROVIDER", "funasr-local")
+    monkeypatch.setattr(stt_service, "_STT_PROVIDER_RESOLUTION", {
+        "requested_provider": "funasr-local",
+        "resolved_provider": "funasr-local",
+        "provider_source": "env",
+        "provider_fallback_reason": "none",
+    })
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(
+        stt_service, "_run_funasr_sidecar",
+        lambda b: {"transcript": "克里斯蒂娜你好", "status": "ok", "error": None},
+    )
+
+    result = stt_service._transcribe_funasr(b"\x01\x02\x03")
+    assert result["status"] == "ok"
+    assert result["correctedTranscript"] == "克莉絲蒂娜你好"
+    assert result["rawTranscript"] == "克里斯蒂娜你好"
+    assert result["correctionApplied"] is True
+
+
+def test_funasr_transcribe_mock_empty_includes_provider_metadata(monkeypatch):
+    """TASK-250/251: status=empty from sidecar must still include provider metadata fields."""
+    monkeypatch.setattr(stt_service, "_FUNASR_AVAILABLE", True)
+    monkeypatch.setattr(stt_service, "_STT_RESOLVED_PROVIDER", "funasr-local")
+    monkeypatch.setattr(stt_service, "_STT_PROVIDER_RESOLUTION", {
+        "requested_provider": "funasr-local",
+        "resolved_provider": "funasr-local",
+        "provider_source": "env",
+        "provider_fallback_reason": "none",
+    })
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(
+        stt_service, "_run_funasr_sidecar",
+        lambda b: {"transcript": "", "status": "empty", "error": None},
+    )
+
+    result = stt_service._transcribe_funasr(b"\x01\x02\x03")
+    assert result["status"] == "empty"
+    assert result["transcript"] == ""
+    assert "sttProviderResolved"       in result, "TASK-251: provider metadata missing on status=empty"
+    assert "sttProviderLoadStatus"     in result
+    assert "sttProviderFallbackReason" in result
+
+
+def test_funasr_transcribe_no_audio_to_disk():
+    """TASK-251: _transcribe_funasr uses subprocess stdin — no temp files, no disk writes."""
+    import inspect
+    source = inspect.getsource(stt_service._transcribe_funasr)
+    assert "_run_funasr_sidecar" in source, (
+        "TASK-251: must delegate to _run_funasr_sidecar (subprocess sidecar)"
+    )
+    assert "NamedTemporaryFile" not in source, "TASK-251: must NOT write audio to disk"
+    assert "tempfile" not in source, "TASK-251: must NOT use tempfile in transcribe path"
+    assert "open(" not in source, "TASK-251: must NOT use open() in transcribe path"
+
+
+# =============================================================================
+# TASK-251: FunASR Sidecar / Dedicated Venv Runtime Bridge tests
+# =============================================================================
+
+def test_funasr_python_env_constant_exists():
+    """TASK-251: _FUNASR_PYTHON_ENV must be 'DRAGON_PET_FUNASR_PYTHON'."""
+    assert hasattr(stt_service, "_FUNASR_PYTHON_ENV")
+    assert stt_service._FUNASR_PYTHON_ENV == "DRAGON_PET_FUNASR_PYTHON"
+
+
+def test_funasr_sidecar_script_constant_exists():
+    """TASK-251: _FUNASR_SIDECAR_SCRIPT must point to the sidecar script."""
+    assert hasattr(stt_service, "_FUNASR_SIDECAR_SCRIPT")
+    assert "funasr_sidecar_transcribe.py" in stt_service._FUNASR_SIDECAR_SCRIPT
+
+
+def test_funasr_resolve_python_default():
+    """TASK-251: _resolve_funasr_python returns a path containing .venv-funasr and python."""
+    old = os.environ.pop("DRAGON_PET_FUNASR_PYTHON", None)
+    try:
+        path = stt_service._resolve_funasr_python()
+        assert ".venv-funasr" in path
+        assert "python" in path.lower()
+    finally:
+        if old is not None:
+            os.environ["DRAGON_PET_FUNASR_PYTHON"] = old
+
+
+def test_funasr_resolve_python_env_override(monkeypatch):
+    """TASK-251: DRAGON_PET_FUNASR_PYTHON env overrides default path."""
+    monkeypatch.setenv("DRAGON_PET_FUNASR_PYTHON", "/custom/venv/bin/python")
+    path = stt_service._resolve_funasr_python()
+    assert path == "/custom/venv/bin/python"
+
+
+def test_funasr_run_sidecar_function_exists():
+    """TASK-251: _run_funasr_sidecar helper must be callable on stt_service."""
+    assert hasattr(stt_service, "_run_funasr_sidecar")
+    assert callable(stt_service._run_funasr_sidecar)
+
+
+def test_funasr_sidecar_timeout_returns_error(monkeypatch):
+    """TASK-251: sidecar timeout → status=error, clean no-crash."""
+    import subprocess as _sp
+
+    def _timeout(b):
+        raise _sp.TimeoutExpired(cmd=["python"], timeout=300)
+
+    monkeypatch.setattr(stt_service, "_FUNASR_AVAILABLE", True)
+    monkeypatch.setattr(stt_service, "_STT_RESOLVED_PROVIDER", "funasr-local")
+    monkeypatch.setattr(stt_service, "_STT_PROVIDER_RESOLUTION", {
+        "requested_provider": "funasr-local",
+        "resolved_provider": "funasr-local",
+        "provider_source": "env",
+        "provider_fallback_reason": "none",
+    })
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(stt_service, "_run_funasr_sidecar", _timeout)
+
+    result = stt_service._transcribe_funasr(b"\x01\x02\x03")
+    assert result["status"] == "error"
+    assert result["transcript"] == ""
+    assert "Traceback" not in str(result)
+
+
+def test_funasr_sidecar_error_status_propagates(monkeypatch):
+    """TASK-251: sidecar returning status=error propagates as status=error, no crash."""
+    monkeypatch.setattr(stt_service, "_FUNASR_AVAILABLE", True)
+    monkeypatch.setattr(stt_service, "_STT_RESOLVED_PROVIDER", "funasr-local")
+    monkeypatch.setattr(stt_service, "_STT_PROVIDER_RESOLUTION", {
+        "requested_provider": "funasr-local",
+        "resolved_provider": "funasr-local",
+        "provider_source": "env",
+        "provider_fallback_reason": "none",
+    })
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(
+        stt_service, "_run_funasr_sidecar",
+        lambda b: {"transcript": "", "status": "error", "error": "load_failed: test"},
+    )
+
+    result = stt_service._transcribe_funasr(b"\x01\x02\x03")
+    assert result["status"] == "error"
+    assert result["transcript"] == ""
+    assert "Traceback" not in str(result)
+
+
+def test_funasr_sidecar_unavailable_no_subprocess(monkeypatch):
+    """TASK-251: _FUNASR_AVAILABLE=False → clean unavailable, sidecar never called."""
+    called = []
+
+    monkeypatch.setattr(stt_service, "_FUNASR_AVAILABLE", False)
+    monkeypatch.setattr(stt_service, "_STT_RESOLVED_PROVIDER", "funasr-local")
+    monkeypatch.setattr(stt_service, "_STT_PROVIDER_RESOLUTION", {
+        "requested_provider": "funasr-local",
+        "resolved_provider": "funasr-local",
+        "provider_source": "env",
+        "provider_fallback_reason": "none",
+    })
+    monkeypatch.setattr(stt_service, "_run_funasr_sidecar", lambda b: called.append(b) or {})
+
+    result = stt_service._transcribe_funasr(b"\x01\x02\x03")
+    assert result["status"] == "unavailable"
+    assert len(called) == 0, "sidecar must not be called when _FUNASR_AVAILABLE=False"
+
+
+def test_funasr_sidecar_ok_sets_load_status_loaded(monkeypatch):
+    """TASK-251: successful sidecar call sets _FUNASR_LOAD_STATUS='loaded'."""
+    monkeypatch.setattr(stt_service, "_FUNASR_AVAILABLE", True)
+    monkeypatch.setattr(stt_service, "_STT_RESOLVED_PROVIDER", "funasr-local")
+    monkeypatch.setattr(stt_service, "_STT_PROVIDER_RESOLUTION", {
+        "requested_provider": "funasr-local",
+        "resolved_provider": "funasr-local",
+        "provider_source": "env",
+        "provider_fallback_reason": "none",
+    })
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(
+        stt_service, "_run_funasr_sidecar",
+        lambda b: {"transcript": "測試", "status": "ok", "error": None},
+    )
+
+    stt_service._transcribe_funasr(b"\x01\x02\x03")
+    assert stt_service._FUNASR_LOAD_STATUS == "loaded"
+
+
+def test_funasr_sidecar_candidate_notes_updated():
+    """TASK-251: sttProviderCandidateNotes for funasr-local must mention sidecar."""
+    notes = stt_service._STT_PROVIDER_CANDIDATE_NOTES.get("funasr-local", "")
+    assert "sidecar" in notes.lower(), (
+        "TASK-251: funasr-local candidate notes must mention 'sidecar'"
+    )
+    assert "DRAGON_PET_FUNASR_PYTHON" in notes, (
+        "TASK-251: funasr-local candidate notes must mention DRAGON_PET_FUNASR_PYTHON"
+    )

@@ -13772,6 +13772,76 @@ async function testTask243RegressionTask242StillPass() {
   console.log("  testTask243RegressionTask242StillPass PASS");
 }
 
+// TASK-252: FunASR Audio Format Bridge / WAV PCM Input smoke tests
+
+function testTask252RendererHasPcmConstants() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("FULL_APP_STT_PCM_SAMPLE_RATE"), "TASK-252 renderer must define FULL_APP_STT_PCM_SAMPLE_RATE");
+  assert.ok(src.includes("FULL_APP_STT_PCM_BUFFER_SIZE"), "TASK-252 renderer must define FULL_APP_STT_PCM_BUFFER_SIZE");
+  assert.ok(src.includes("16000"), "TASK-252 PCM sample rate must be 16000");
+  assert.ok(src.includes("4096"), "TASK-252 PCM buffer size must be 4096");
+  console.log("  testTask252RendererHasPcmConstants PASS");
+}
+
+function testTask252RendererHasPcmStateVars() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("_fullAppPcmChunks"), "TASK-252 renderer must declare _fullAppPcmChunks");
+  assert.ok(src.includes("_fullAppPcmCtx"), "TASK-252 renderer must declare _fullAppPcmCtx");
+  assert.ok(src.includes("_fullAppPcmSource"), "TASK-252 renderer must declare _fullAppPcmSource");
+  assert.ok(src.includes("_fullAppPcmProcessor"), "TASK-252 renderer must declare _fullAppPcmProcessor");
+  assert.ok(src.includes("_convPcmChunks"), "TASK-252 renderer must declare _convPcmChunks");
+  assert.ok(src.includes("_convPcmCtx"), "TASK-252 renderer must declare _convPcmCtx");
+  assert.ok(src.includes("_convPcmSource"), "TASK-252 renderer must declare _convPcmSource");
+  assert.ok(src.includes("_convPcmProcessor"), "TASK-252 renderer must declare _convPcmProcessor");
+  console.log("  testTask252RendererHasPcmStateVars PASS");
+}
+
+function testTask252RendererHasPcmFunctions() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("function _encodeWavPcm"), "TASK-252 renderer must define _encodeWavPcm");
+  assert.ok(src.includes("function _startPcmCapture"), "TASK-252 renderer must define _startPcmCapture");
+  assert.ok(src.includes("function _stopPcmCapture"), "TASK-252 renderer must define _stopPcmCapture");
+  assert.ok(src.includes("function _startConvPcmCapture"), "TASK-252 renderer must define _startConvPcmCapture");
+  assert.ok(src.includes("function _stopConvPcmCapture"), "TASK-252 renderer must define _stopConvPcmCapture");
+  assert.ok(src.includes("createScriptProcessor"), "TASK-252 renderer must use createScriptProcessor for PCM capture");
+  assert.ok(src.includes("audio/wav"), "TASK-252 renderer must produce audio/wav blobs");
+  console.log("  testTask252RendererHasPcmFunctions PASS");
+}
+
+function testTask252MainUsesWavContentType() {
+  const mainSrc = fs.readFileSync(path.join(desktopRoot, "src", "main.js"), "utf8");
+  assert.ok(mainSrc.includes("audio/wav"), "TASK-252 main.js must use audio/wav Content-Type");
+  assert.ok(mainSrc.includes("audio.wav"), "TASK-252 main.js must use audio.wav filename");
+  assert.ok(!mainSrc.includes("audio/webm") || !mainSrc.includes("audio.webm"),
+    "TASK-252 main.js must not send audio/webm for STT");
+  console.log("  testTask252MainUsesWavContentType PASS");
+}
+
+async function testTask252EncodeWavPcmProducesValidHeader() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  // Build two 100-sample chunks of silence
+  const chunk1 = new Float32Array(100);
+  const chunk2 = new Float32Array(100);
+  const blob = sandbox._encodeWavPcm([chunk1, chunk2], 16000);
+  assert.ok(blob instanceof sandbox.Blob, "TASK-252 _encodeWavPcm must return a Blob");
+  assert.strictEqual(blob.type, "audio/wav", "TASK-252 _encodeWavPcm blob type must be audio/wav");
+  // 44-byte WAV header + 200 samples * 2 bytes = 444 bytes
+  assert.strictEqual(blob.size, 44 + 200 * 2, "TASK-252 _encodeWavPcm size must match 44 + samples*2");
+  console.log("  testTask252EncodeWavPcmProducesValidHeader PASS");
+}
+
+function testTask252NoPcmAudioPersistence() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const pcmStart = src.indexOf("function _encodeWavPcm");
+  const pcmEnd   = src.indexOf("function stopFullAppVoiceInput");
+  assert.ok(pcmStart !== -1, "TASK-252 _encodeWavPcm must be present");
+  const pcmSection = src.slice(pcmStart, pcmEnd);
+  assert.ok(!pcmSection.includes("writeFile"), "TASK-252 PCM helpers must not write files");
+  assert.ok(!pcmSection.includes("appendFile"), "TASK-252 PCM helpers must not append files");
+  assert.ok(!pcmSection.includes("localStorage"), "TASK-252 PCM helpers must not use localStorage");
+  console.log("  testTask252NoPcmAudioPersistence PASS");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -14684,6 +14754,14 @@ async function main() {
   testTask243NoNewIpcChannels();
   testTask243NoPetWindowCallsInConversationFunctions();
   await testTask243RegressionTask242StillPass();
+
+  // TASK-252: FunASR Audio Format Bridge / WAV PCM Input
+  testTask252RendererHasPcmConstants();
+  testTask252RendererHasPcmStateVars();
+  testTask252RendererHasPcmFunctions();
+  testTask252MainUsesWavContentType();
+  await testTask252EncodeWavPcmProducesValidHeader();
+  testTask252NoPcmAudioPersistence();
 
   console.log("renderer chat smoke: PASS");
 }

@@ -609,8 +609,23 @@ Recommended next architecture phase:
 - TASK-249 DONE - WINDOWS STT PROVIDER SMOKE PASS (2026-06-03): Free Local Chinese STT
   Provider Evaluation. `DRAGON_PET_STT_PROVIDER` env var resolver; FunASR skeleton (safe unavailable if
   not installed; `paraformer-zh`; no auto-download); sherpa-onnx design-only. 7 provider metadata fields
-  in response; 6 renderer diagnostics fields. 85 pytest + 11 renderer smoke PASS. Windows smoke pending.
-- TASK-250 recommended next: FunASR Local Runtime Integration (pending TASK-249 Windows smoke result).
+  in response; 6 renderer diagnostics fields. 85 pytest + 11 renderer smoke PASS. 35/35 provider smoke PASS.
+- TASK-250 IMPLEMENTED - NEEDS WINDOWS FUNASR QUALITY SMOKE (2026-06-03): FunASR Local Runtime
+  Integration. `_parse_funasr_result()` multi-format parser; `_FUNASR_HOTWORDS` constant; `_transcribe_funasr()`
+  full implementation (BytesIO, hotword boosting, correction layer, provider metadata in all paths).
+  `scripts/funasr_probe.py` + `scripts/install-funasr.ps1`. 11 new pytest (96 total); 50/50 smoke PASS.
+- TASK-251 DONE (2026-06-03): FunASR Sidecar / Dedicated Venv Runtime Bridge. `scripts/funasr_sidecar_transcribe.py`
+  runs under `.venv-funasr` Python 3.10 (dev machine: py -3.11 → non-functional D:\Tool\python.exe; built with Python 3.10);
+  audio bytes via stdin; JSON result via stdout. `_run_funasr_sidecar()`
+  subprocess bridge with 300 s timeout; JSON parsed from last `{`-prefixed stdout line (robust to funasr
+  progress noise). `DRAGON_PET_FUNASR_PYTHON` env var override. 106/106 pytest + 56/56 smoke PASS.
+- TASK-252 DONE - WINDOWS FUNASR WAV MIC SMOKE PASS (2026-06-03): FunASR Audio Format Bridge / WAV PCM Input.
+  Fixed Full App mic failure: MediaRecorder `audio/webm;codecs=opus` cannot be decoded by torchaudio without
+  ffmpeg. Web Audio API `ScriptProcessorNode` PCM capture at 16 kHz; `_encodeWavPcm()` encodes Float32Array →
+  16-bit mono WAV Blob. Both manual mic and conversation mode produce WAV. main.js Content-Type updated to
+  `audio/wav`. Windows mic smoke PASS: FunASR sidecar receives Full App audio; Paraformer-zh accuracy clearly
+  better than faster-whisper-local. Remaining: spaces + simplified Chinese (→ TASK-253); cold-start latency (→ TASK-254).
+- TASK-253 recommended next: FunASR Transcript Normalisation / Traditional Chinese Output.
 - Relationship state.
 - Mood / attention / energy state beyond the local preview foundation.
 - Idle reaction policy.

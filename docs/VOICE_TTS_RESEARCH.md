@@ -348,14 +348,51 @@ Suggested research and implementation tasks:
   `DRAGON_PET_STT_PROVIDER` env var resolver; FunASR `_transcribe_funasr()` skeleton (safe unavailable
   if not installed; `paraformer-zh` model; no auto-download); sherpa-onnx design-only (always unavailable).
   7 provider metadata fields in every response. 6 renderer diagnostics fields. 85 pytest + 11 renderer
-  smoke tests pass. Windows smoke pending: install `funasr modelscope`, set env var, pre-download model.
+  smoke tests pass. Windows smoke: 35/35 PASS (provider resolution + metadata + clean unavailable).
 
-- TASK-STT-011 LLM-based semantic correction. **(PLANNED; future TASK-250+):** Optional
+  **Extended by TASK-250 (BLOCKED - WINDOWS FUNASR INSTALL FAILED / PYTHON 3.14 EDITDISTANCE BUILD ISSUE; 2026-06-03):**
+  FunASR full runtime DONE in Python: `_parse_funasr_result()` multi-format parser; `_FUNASR_HOTWORDS` constant;
+  `_transcribe_funasr()` complete (BytesIO, hotword boosting with TypeError fallback, correction layer,
+  provider metadata in all paths). `scripts/funasr_probe.py` + `scripts/install-funasr.ps1` (with Python >= 3.14 guard).
+  `scripts/create-funasr-venv.ps1` (new, Option A: py -3.11 / py -3.10 fallback venv to bypass cp314 editdistance build failure; dev machine used Python 3.10 — py -3.11 pointed to non-functional D:\Tool\python.exe).
+  `.gitignore` updated (`.venv-funasr/` excluded). 11 new pytest (96 total); 50/50 provider smoke PASS.
+  BLOCKED: `backend\.venv` is Python 3.14 (cp314); no pre-built editdistance wheel; build requires MSVC 14.0+.
+
+- **TASK-STT-012 (TASK-251) FunASR Sidecar Bridge. DONE (2026-06-03):** Subprocess sidecar
+  (`scripts/funasr_sidecar_transcribe.py`) runs under `.venv-funasr` Python 3.10 (dev machine:
+  py -3.11 pointed to non-functional D:\Tool\python.exe; `.venv-funasr` built with Python 3.10);
+  audio bytes via stdin; JSON result via stdout. `_run_funasr_sidecar()` in `stt_service.py` with
+  300-second timeout. JSON parsed from last `{`-prefixed stdout line (robust to funasr progress noise).
+  `DRAGON_PET_FUNASR_PYTHON` env var override. Live sidecar: status=ok, loadStatus=loaded.
+
+- **TASK-STT-013 (TASK-252) WAV PCM Input for FunASR. DONE - WINDOWS MIC SMOKE PASS (2026-06-03):**
+  Fixed Full App voice failure: MediaRecorder `audio/webm;codecs=opus` cannot be decoded by
+  torchaudio (no ffmpeg). Solution: Web Audio API `ScriptProcessorNode` PCM capture at 16 kHz.
+  `_encodeWavPcm()` encodes `Float32Array` → 16-bit mono WAV Blob. Both manual mic and
+  conversation mode produce WAV. main.js Content-Type updated to `audio/wav`.
+  **Windows mic smoke PASS**: FunASR sidecar receives Full App mic audio, Paraformer-zh
+  produces Chinese transcript, accuracy clearly better than faster-whisper-local.
+  Remaining: inter-character spaces + simplified Chinese → TASK-253; cold-start latency → TASK-254.
+
+- **TASK-STT-014 (TASK-253) FunASR Transcript Normalisation / Traditional Chinese Output. (PLANNED):**
+  Paraformer-zh output contains inter-character spaces (e.g. 「克 莉 絲 蒂 娜」) and uses
+  simplified Chinese characters. Post-processing needed: strip spaces between CJK characters;
+  convert simplified → traditional (OpenCC library or a static mapping table for common chars);
+  expand TASK-247/248 correction map with Paraformer-specific acoustic variants for Dragon Pet AI,
+  Claude Code, TASK, etc.
+
+- **TASK-STT-015 (TASK-254) Persistent FunASR Sidecar / Warm Model Server. (PLANNED):**
+  Current sidecar (`funasr_sidecar_transcribe.py`) loads paraformer-zh (~500 MB) on every call,
+  causing 10–30 s cold-start delay. Solution: long-running sidecar subprocess that keeps model
+  in memory and accepts audio via a stdin request loop (or a minimal local HTTP server inside
+  `.venv-funasr`). Reduces per-utterance latency from ~30 s to ~1–3 s after first call.
+
+- TASK-STT-016 LLM-based semantic correction. **(PLANNED; future):** Optional
   follow-up to apply a local LLM pass over the corrected transcript for further semantic
   accuracy. Must be guarded by explicit user opt-in and must not replace the deterministic
   layer from TASK-247/248.
 
-Recommended next: TASK-250 FunASR Local Runtime Integration (pending TASK-249 Windows smoke result).
+Recommended next: TASK-253 — FunASR Transcript Normalisation / Traditional Chinese Output.
 
 Each future task must explicitly define safety boundaries, user controls,
 provider scope, queue priority, and no-regression checks.
