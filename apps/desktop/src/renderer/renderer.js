@@ -230,7 +230,10 @@ var fullAppVoiceDiagnostics = {
   sttCorrectedTranscriptPreview: "",
   sttCorrectionApplied: false,
   sttCorrectionMode: "",
-  sttCorrectionReason: ""
+  sttCorrectionReason: "",
+  // TASK-248: matched alias / canonical term diagnostics
+  sttMatchedAlias: "",
+  sttCanonicalTerm: ""
 };
 // TASK-244: session-only VAD tuning vars — override constants for this session only, not persisted
 var fullAppConversationRmsThreshold = FULL_APP_CONVERSATION_RMS_THRESHOLD;
@@ -4034,6 +4037,9 @@ async function transcribeFullAppAudioBlob(blob) {
     fullAppVoiceDiagnostics.sttCorrectionApplied         = Boolean(result.correctionApplied);
     fullAppVoiceDiagnostics.sttCorrectionMode            = result.correctionMode  ? String(result.correctionMode)  : "";
     fullAppVoiceDiagnostics.sttCorrectionReason          = result.correctionReason ? String(result.correctionReason) : "";
+    // TASK-248: matched alias / canonical term diagnostics
+    fullAppVoiceDiagnostics.sttMatchedAlias  = result.matchedAlias  ? String(result.matchedAlias)  : "";
+    fullAppVoiceDiagnostics.sttCanonicalTerm = result.canonicalTerm ? String(result.canonicalTerm) : "";
   }
 
   if (!result || typeof result !== "object") throw new Error("stt_error");
@@ -4837,6 +4843,7 @@ function renderFullAppVoiceDiagnostics() {
     "修正 Transcript: " + (d.sttCorrectedTranscriptPreview || "—"),
     "已修正: " + (d.sttCorrectionApplied ? "是" : "否") + "  修正模式: " + (d.sttCorrectionMode || "—"),
     "修正原因: " + (d.sttCorrectionReason || "—"),
+    "命中 alias: " + (d.sttMatchedAlias || "—") + "  canonical: " + (d.sttCanonicalTerm || "—"),
     "---",
     "VAD 最後 RMS: " + d.lastRms.toFixed(4),
     "VAD 最高 RMS: " + d.maxRms.toFixed(4),
@@ -4931,6 +4938,9 @@ function resetFullAppVoiceDiagnosticsForRecording(mode) {
   fullAppVoiceDiagnostics.sttCorrectionApplied           = false;
   fullAppVoiceDiagnostics.sttCorrectionMode              = "";
   fullAppVoiceDiagnostics.sttCorrectionReason            = "";
+  // TASK-248: reset matched alias / canonical term diagnostics
+  fullAppVoiceDiagnostics.sttMatchedAlias                = "";
+  fullAppVoiceDiagnostics.sttCanonicalTerm               = "";
   // constraintsEchoCancellation/NoiseSuppression/AutoGainControl: not reset (carry over from stream)
   revokeLastAudioObjectUrl();
   if (voicePreviewPlayBtn) voicePreviewPlayBtn.disabled = true;

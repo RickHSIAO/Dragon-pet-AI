@@ -598,8 +598,17 @@ Recommended next architecture phase:
   corrected, Auto-send / Conversation Mode use corrected transcript, raw not in history/copy/export,
   all regressions clear; remaining issue: hotword coverage insufficient for proper nouns not yet in map)
   DONE - WINDOWS TRANSCRIPT CORRECTION SMOKE PASS / NEEDS HOTWORD COVERAGE FOLLOW-UP.
-- TASK-248 recommended next: STT Hotword Coverage / Alias Expansion (collect real rawTranscript error
-  samples; expand `_STT_CORRECTION_MAP`; no LLM rewrite, no new IPC).
+- TASK-248 (STT Hotword Coverage / Alias Expansion — `_STT_CORRECTION_MAP` expanded from 8 to 48 entries:
+  19 克莉絲蒂娜 aliases, 7 Dragon Pet AI, 4 Claude/Claude Code, 4 CodeX, 3 faster-whisper/Whisper,
+  6 feature terms; `correct_transcript_text()` returns `matchedAlias` / `canonicalTerm`; renderer
+  diagnostics shows "命中 alias / canonical" line; 13 backend pytest + 9 renderer smoke tests PASS;
+  Windows smoke PARTIAL: alias map correct but faster-whisper `tiny` produces incoherent zh errors
+  (「可以是DNA按」、「墨鯰墨鯰」) beyond correction map scope; root cause is STT provider ASR quality;
+  no LLM rewrite, no new IPC, no audio persistence)
+  DONE - HOTWORD MAP EXPANDED / NEEDS STT PROVIDER FOLLOW-UP.
+- TASK-249 recommended next: Free Local Chinese STT Provider Evaluation (FunASR / Paraformer preferred;
+  sherpa-onnx + Paraformer/Zipformer second candidate; faster-whisper retained as fallback;
+  no paid API, no cloud, no new IPC, provider selection via env var).
 - Relationship state.
 - Mood / attention / energy state beyond the local preview foundation.
 - Idle reaction policy.

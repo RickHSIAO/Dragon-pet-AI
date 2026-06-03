@@ -7,7 +7,7 @@
 📋 **[完整 Demo 腳本與面試重點](docs/PORTFOLIO_DEMO_SCRIPT.md)**
 📋 **[Phase 4 Provider Settings 摘要](docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md)**
 
-**最新本地狀態（2026-06-03）：** TASK-247 STT Transcript Correction **DONE - WINDOWS TRANSCRIPT CORRECTION SMOKE PASS / NEEDS HOTWORD COVERAGE FOLLOW-UP**。Windows smoke：correction layer 成立、已知 alias 可修正、Auto-send / Conversation Mode 使用 corrected transcript、raw 不進 history、regression 全數通過。Remaining issue：hotword coverage 不足，「克莉絲蒂娜」仍常無法修正（STT 輸出的音近字未在 map 中）。下一步：TASK-248 STT Hotword Coverage / Alias Expansion。
+**最新本地狀態（2026-06-03）：** TASK-248 STT Hotword Coverage **DONE - HOTWORD MAP EXPANDED / NEEDS STT PROVIDER FOLLOW-UP**。Windows smoke PARTIAL：alias map 邏輯正確，但 faster-whisper `tiny` 產生整句錯亂（「可以是DNA按」、「墨鯰墨鯰」、「先跟佩套AI」），超出 correction map 能修復的範圍。Root cause：STT provider 中文 ASR 品質不足，非 hotword coverage 問題。下一步：TASK-249 Free Local Chinese STT Provider Evaluation（FunASR / Paraformer 優先）。
 
 ---
 
@@ -99,15 +99,15 @@ ollama serve
 | 本地 Ollama `/chat` smoke | ✅ 通過 — `qwen3:8b`，`source=llm_local`，克莉絲蒂娜人格確認 |
 | Provider Settings 持久化 | ✅ 通過 — 重啟後設定保留，partial PATCH 保留省略欄位 |
 | UI polish | ✅ 通過 — 情緒→表情對應、Christina expression system |
-| Full App chat UX | ✅ TASK-236 DONE；TASK-237 docs-only modularization plan complete；TASK-238~243 DONE - WINDOWS VISUAL/VOICE SMOKE PASS；TASK-244 IMPLEMENTED；TASK-245 DONE - LANGUAGE LOCK PASS；TASK-246 DONE - MODEL CONFIG PASS；TASK-247 DONE - TRANSCRIPT CORRECTION SMOKE PASS / NEEDS HOTWORD COVERAGE FOLLOW-UP — 搜尋/高亮、未讀提示、匯出、時間戳、日期分隔線、清除確認、empty state、Undo Clear Chat、單則訊息刪除/復原、右鍵訊息操作 (viewport clamp + a11y)、最後 user message 編輯/重新送出、互動事件 log、reaction hint 層、reaction preview UI、expression suggestion 鏡像至 Pet Window、expression mirror 300ms cooldown/debounce、reaction bubble 鏡像至 Pet Window、companion behavior policy decision preview、character state diagnostics preview、collapsible diagnostics drawer、output queue module extraction、diagnostics drawer module extraction、Pet Window cutout stage + hover dock / chrome reduction、Full App 語音輸入按鈕 (TASK-241)、Full App 語音輸入設定 + 自動送出 (TASK-242)、Voice Conversation Mode / VAD 靜音偵測 (TASK-243)、Voice Quality Diagnostics + VAD 調參 (TASK-244)、STT Language Lock (TASK-245)、STT Model Configurable via Env (TASK-246)、STT Transcript Correction / Context-Aware Normalization (TASK-247 IMPLEMENTED) |
+| Full App chat UX | ✅ TASK-236 DONE；TASK-237 docs-only modularization plan complete；TASK-238~243 DONE - WINDOWS VISUAL/VOICE SMOKE PASS；TASK-244 IMPLEMENTED；TASK-245 DONE - LANGUAGE LOCK PASS；TASK-246 DONE - MODEL CONFIG PASS；TASK-247 DONE - TRANSCRIPT CORRECTION SMOKE PASS；TASK-248 DONE - HOTWORD MAP EXPANDED / NEEDS STT PROVIDER FOLLOW-UP — 搜尋/高亮、未讀提示、匯出、時間戳、日期分隔線、清除確認、empty state、Undo Clear Chat、單則訊息刪除/復原、右鍵訊息操作 (viewport clamp + a11y)、最後 user message 編輯/重新送出、互動事件 log、reaction hint 層、reaction preview UI、expression suggestion 鏡像至 Pet Window、expression mirror 300ms cooldown/debounce、reaction bubble 鏡像至 Pet Window、companion behavior policy decision preview、character state diagnostics preview、collapsible diagnostics drawer、output queue module extraction、diagnostics drawer module extraction、Pet Window cutout stage + hover dock / chrome reduction、Full App 語音輸入按鈕 (TASK-241)、Full App 語音輸入設定 + 自動送出 (TASK-242)、Voice Conversation Mode / VAD 靜音偵測 (TASK-243)、Voice Quality Diagnostics + VAD 調參 (TASK-244)、STT Language Lock (TASK-245)、STT Model Configurable via Env (TASK-246)、STT Transcript Correction (TASK-247)、STT Hotword Coverage (TASK-248 DONE) |
 | 表情系統 | 7/10 real PNG（happy、focused、neutral、proud、annoyed、worried、sleepy）；pending/error/offline 為 SVG fallback |
-| pytest | **586 通過，0 失敗** |
-| Electron smoke | **renderer-chat 540 PASS；pet-renderer 285 PASS；pet-window 82 PASS** |
+| pytest | **69 通過，0 失敗** |
+| Electron smoke | **renderer-chat PASS；pet-renderer 285 PASS；pet-window 82 PASS** |
 | 外部 provider 呼叫 | ❌ 無 — 刻意封鎖 |
 | 真實 API Key 使用 | ❌ 無 — 所有測試使用 mocked runner |
 | 生產就緒 | ❌ 尚未 — prototype / portfolio 階段 |
 | Demo 可用（本地 Ollama） | ✅ 是 |
-| 下一個任務 | TASK-248 STT Hotword Coverage / Alias Expansion（收集實際 rawTranscript 錯誤樣本、擴充 correction map，不改 runtime audio pipeline） |
+| 下一個任務 | TASK-249 — Free Local Chinese STT Provider Evaluation（FunASR / Paraformer 優先；sherpa-onnx 備選；不用付費 API；不新增 IPC）|
 
 ---
 
@@ -397,8 +397,8 @@ python -c "import json, urllib.request; data=json.dumps({'message':'你好！克
 | [docs/PROVIDER_TEST_CONNECTION_DESIGN.md](docs/PROVIDER_TEST_CONNECTION_DESIGN.md) | Test Connection 設計與強化測試結果 |
 | [docs/SECURE_KEY_STORAGE_DESIGN.md](docs/SECURE_KEY_STORAGE_DESIGN.md) | 金鑰儲存威脅模型、儲存選項、遮蔽規則 |
 | [docs/BYOK_PRODUCT_AND_SETTINGS.md](docs/BYOK_PRODUCT_AND_SETTINGS.md) | BYOK 產品設計與安全邊界 |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖；TASK-247 DONE - TRANSCRIPT CORRECTION SMOKE PASS / NEEDS HOTWORD COVERAGE FOLLOW-UP；下一步 TASK-248 Hotword Coverage / Alias Expansion |
-| [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄；TASK-247 DONE；TASK-248 STT Hotword Coverage / Alias Expansion PLANNED |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖；TASK-248 DONE - HOTWORD MAP EXPANDED / NEEDS STT PROVIDER FOLLOW-UP；下一步 TASK-249 Free Local Chinese STT Provider Evaluation |
+| [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄；TASK-248 DONE；TASK-249 Free Local Chinese STT Provider Evaluation PLANNED |
 | [docs/RENDERER_MODULARIZATION_PLAN.md](docs/RENDERER_MODULARIZATION_PLAN.md) | TASK-237 renderer modularization boundary map：current renderer responsibilities, proposed modules, extraction order (TASK-238 done, TASK-239 DONE - WINDOWS VISUAL SMOKE PASS), contracts, risks, validation strategy |
 | [docs/INTERACTIVE_COMPANION_ARCHITECTURE.md](docs/INTERACTIVE_COMPANION_ARCHITECTURE.md) | TASK-222/224 互動陪伴架構 checkpoint：data flow、layer responsibility、IPC inventory、安全邊界、Character State Layer diagnostics、TASK-237 renderer modularization phase |
 | [docs/CHRISTINA_PERSONA_CONTEXT_PACK.md](docs/CHRISTINA_PERSONA_CONTEXT_PACK.md) | TASK-225 Christina persona context pack：canonical source、runtime-safe adaptation、strength levels、runtime boundary |

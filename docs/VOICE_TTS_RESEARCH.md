@@ -333,18 +333,31 @@ Suggested research and implementation tasks:
   coverage insufficient — proper nouns (esp. 克莉絲蒂娜) still produced as STT variants not yet in
   correction map. LLM semantic rewrite deferred to TASK-249+.
 
-- TASK-STT-009 STT hotword coverage / alias expansion. **Covered by TASK-248 (PLANNED; 2026-06-03):**
-  Collect real rawTranscript error samples from Windows diagnostics panel; expand `_STT_CORRECTION_MAP`
-  with newly observed aliases for 克莉絲蒂娜, Dragon Pet AI, Claude, Whisper, 桌面寵物, TASK etc.
-  Optionally add `matchedAlias` / `canonicalTerm` fields to diagnostics. No LLM rewrite, no new IPC,
-  no new backend endpoint.
+- TASK-STT-009 STT hotword coverage / alias expansion. **Covered by TASK-248
+  (DONE - HOTWORD MAP EXPANDED / NEEDS STT PROVIDER FOLLOW-UP; 2026-06-03):**
+  `_STT_CORRECTION_MAP` expanded from 8 to 48 entries: 19 克莉絲蒂娜 aliases (16 new),
+  7 Dragon Pet AI, 4 Claude/Claude Code, 4 CodeX, 3 faster-whisper/Whisper, 6 feature terms.
+  `correct_transcript_text()` returns `matchedAlias` / `canonicalTerm`. Renderer diagnostics
+  shows "命中 alias / canonical" line. 13 backend pytest + 9 renderer smoke tests PASS.
+  Windows smoke PARTIAL (2026-06-03): alias map logic correct; but faster-whisper `tiny`
+  produces incoherent whole-sentence zh errors (「可以是DNA按」、「墨鯰墨鯰」、「先跟佩套AI」)
+  that no correction map can fix. Root cause: STT provider ASR quality, not hotword coverage.
+  Hotword map preserved as complement; STT provider replacement needed.
 
-- TASK-STT-010 LLM-based semantic correction. **(PLANNED; future TASK-249+):** Optional
-  follow-up to apply a local or API-based LLM pass over the corrected transcript for
-  further semantic accuracy. Must be guarded by explicit user opt-in and must not replace
-  the safe deterministic layer from TASK-247.
+- TASK-STT-010 Free local Chinese STT provider evaluation. **Covered by TASK-249 (PLANNED; 2026-06-03):**
+  Evaluate FunASR / Paraformer (Alibaba DAMO; non-autoregressive CTC; free, local, offline)
+  as primary candidate; sherpa-onnx + Paraformer/Zipformer as second candidate.
+  faster-whisper-local retained as fallback. No paid API, no cloud, no new IPC channel,
+  no new backend endpoint. Provider selection via env var (`DRAGON_PET_STT_PROVIDER`);
+  safe fallback to faster-whisper if new provider absent. TASK-247/248 correction map
+  remains active regardless of provider.
 
-Recommended next: TASK-248 Hotword Coverage / Alias Expansion (expand correction map from real STT samples).
+- TASK-STT-011 LLM-based semantic correction. **(PLANNED; future TASK-250+):** Optional
+  follow-up to apply a local LLM pass over the corrected transcript for further semantic
+  accuracy. Must be guarded by explicit user opt-in and must not replace the deterministic
+  layer from TASK-247/248.
+
+Recommended next: TASK-249 Free Local Chinese STT Provider Evaluation (FunASR / Paraformer).
 
 Each future task must explicitly define safety boundaries, user controls,
 provider scope, queue priority, and no-regression checks.

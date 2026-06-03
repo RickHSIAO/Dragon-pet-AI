@@ -130,20 +130,93 @@ def _get_model_metadata() -> dict:
     }
 
 
-# TASK-247: STT transcript correction — deterministic phrase/hotword correction map.
-# Order matters: longer / more specific phrases first to prevent partial-match shadowing.
-# All entries are conservative: only correct well-known acoustic confusions in this project.
+# TASK-247/248: STT transcript correction — deterministic phrase/hotword correction map.
+# Design rules:
+#   - Longer / more specific phrases come first to prevent partial-match shadowing.
+#   - Compound forms (e.g. "faster whisper") come before their components (e.g. "Whisper")
+#     to avoid corrupting already-corrected compound targets.
+#   - More specific multi-word forms (e.g. "克勞德 code") come before standalone components
+#     (e.g. "克勞德") to avoid leaving two-step corrections stranded.
+#   - All entries are conservative: only well-known acoustic confusions in this project.
 _STT_CORRECTION_MAP: list[tuple[str, str]] = [
-    # Phrase-level corrections — Whisper acoustic confusions for project vocabulary
+    # -------------------------------------------------------------------------
+    # TASK-247: Phrase-level corrections — project vocabulary acoustic confusions
+    # -------------------------------------------------------------------------
     ("中位與英編輯", "中文語音辨識"),
     ("中文語音編輯", "中文語音辨識"),
     ("中文語音邊記", "中文語音辨識"),
     ("語音編輯測試", "語音辨識測試"),
     ("語音邊記測試", "語音辨識測試"),
-    # Character name normalization
-    ("克里斯蒂娜", "克莉絲蒂娜"),
-    ("克莉斯蒂娜", "克莉絲蒂娜"),
-    ("克麗絲蒂娜", "克莉絲蒂娜"),
+
+    # -------------------------------------------------------------------------
+    # TASK-247 + TASK-248: 克莉絲蒂娜 — extended alias list
+    # Canonical: 克莉絲蒂娜
+    # -------------------------------------------------------------------------
+    ("克里斯蒂娜",  "克莉絲蒂娜"),  # TASK-247
+    ("克莉斯蒂娜",  "克莉絲蒂娜"),  # TASK-247
+    ("克麗絲蒂娜",  "克莉絲蒂娜"),  # TASK-247
+    ("克利斯蒂娜",  "克莉絲蒂娜"),
+    ("克里斯提娜",  "克莉絲蒂娜"),
+    ("克莉絲提娜",  "克莉絲蒂娜"),
+    ("可莉絲蒂娜",  "克莉絲蒂娜"),
+    ("葛莉絲蒂娜",  "克莉絲蒂娜"),
+    ("格莉絲蒂娜",  "克莉絲蒂娜"),
+    ("格里斯蒂娜",  "克莉絲蒂娜"),
+    ("可麗絲蒂娜",  "克莉絲蒂娜"),
+    ("克麗絲提娜",  "克莉絲蒂娜"),
+    ("克莉絲緹娜",  "克莉絲蒂娜"),
+    ("克里斯緹娜",  "克莉絲蒂娜"),
+    ("克莉斯緹娜",  "克莉絲蒂娜"),
+    ("克莉絲蒂那",  "克莉絲蒂娜"),
+    ("克里斯蒂那",  "克莉絲蒂娜"),
+    ("克莉絲蒂納",  "克莉絲蒂娜"),
+    ("克里斯蒂納",  "克莉絲蒂娜"),
+
+    # -------------------------------------------------------------------------
+    # TASK-248: faster-whisper — compound before standalone to avoid partial corruption
+    # Note: "whisper" (standalone lowercase) is intentionally omitted — it is a substring
+    # of the canonical "faster-whisper" target and would corrupt it post-correction.
+    # -------------------------------------------------------------------------
+    ("faster whisper",   "faster-whisper"),
+    ("faster Whisper",   "faster-whisper"),
+    ("威斯伯",           "Whisper"),
+
+    # -------------------------------------------------------------------------
+    # TASK-248: Claude Code — multi-word form before standalone to allow single-pass match
+    # -------------------------------------------------------------------------
+    ("克勞德 code",   "Claude Code"),
+    ("克勞德 Code",   "Claude Code"),
+    ("Claude code",   "Claude Code"),
+    ("克勞德",        "Claude"),
+
+    # -------------------------------------------------------------------------
+    # TASK-248: CodeX
+    # -------------------------------------------------------------------------
+    ("扣得 X",   "CodeX"),
+    ("Code X",   "CodeX"),
+    ("code x",   "CodeX"),
+    ("Codex",    "CodeX"),
+
+    # -------------------------------------------------------------------------
+    # TASK-248: Dragon Pet AI — more specific forms first
+    # -------------------------------------------------------------------------
+    ("Dragon Pet A I",   "Dragon Pet AI"),
+    ("DragonPet AI",     "Dragon Pet AI"),
+    ("Dragon pet AI",    "Dragon Pet AI"),
+    ("dragon pet AI",    "Dragon Pet AI"),
+    ("dragon pet ai",    "Dragon Pet AI"),
+    ("龍寵 AI",          "Dragon Pet AI"),
+    ("龍寵AI",           "Dragon Pet AI"),
+
+    # -------------------------------------------------------------------------
+    # TASK-248: Common feature terms
+    # -------------------------------------------------------------------------
+    ("語音輸人",    "語音輸入"),
+    ("語音書入",    "語音輸入"),
+    ("對話糢式",    "對話模式"),
+    ("對話模式式",  "對話模式"),
+    ("桌面重物",    "桌面寵物"),
+    ("桌面從物",    "桌面寵物"),
 ]
 
 
@@ -151,7 +224,7 @@ def correct_transcript_text(raw_text: str) -> dict:
     """
     Apply deterministic phrase/hotword correction to a raw STT transcript.
 
-    TASK-247 design boundaries:
+    TASK-247/248 design boundaries:
     - No LLM rewrite.  No cloud API.  No new IPC.
     - Safe, conservative corrections only — known acoustic confusions and project vocabulary.
     - Returns rawTranscript unchanged so callers can surface both original and corrected text
@@ -166,6 +239,8 @@ def correct_transcript_text(raw_text: str) -> dict:
         correctionApplied    -- True when at least one substitution was made
         correctionMode       -- always "safe_dictionary" for this layer
         correctionReason     -- pipe-separated reason tags ("phrase_map" | "none")
+        matchedAlias         -- first alias that triggered a correction (empty if none)
+        canonicalTerm        -- canonical target for the first matched alias (empty if none)
         correctionCandidates -- reserved for future use; always empty list in this task
     """
     if not raw_text:
@@ -175,15 +250,22 @@ def correct_transcript_text(raw_text: str) -> dict:
             "correctionApplied": False,
             "correctionMode": "safe_dictionary",
             "correctionReason": "none",
+            "matchedAlias": "",
+            "canonicalTerm": "",
             "correctionCandidates": [],
         }
     corrected = raw_text
     applied_reasons: list[str] = []
+    first_matched_alias: str = ""
+    first_canonical_term: str = ""
     for src, dst in _STT_CORRECTION_MAP:
         if src in corrected:
             corrected = corrected.replace(src, dst)
             if "phrase_map" not in applied_reasons:
                 applied_reasons.append("phrase_map")
+            if not first_matched_alias:
+                first_matched_alias = src
+                first_canonical_term = dst
     applied = corrected != raw_text
     reason_str = "|".join(applied_reasons) if applied_reasons else "none"
     return {
@@ -192,6 +274,8 @@ def correct_transcript_text(raw_text: str) -> dict:
         "correctionApplied": applied,
         "correctionMode": "safe_dictionary",
         "correctionReason": reason_str,
+        "matchedAlias": first_matched_alias if applied else "",
+        "canonicalTerm": first_canonical_term if applied else "",
         "correctionCandidates": [],
     }
 
@@ -236,12 +320,14 @@ def transcribe_audio_bytes(
         "modelLoadStatus" : str   -- "loaded" | "unavailable" | "error" | "not_loaded"
         "modelLoadError"  : str | None  -- short error string, no raw stack
 
-    TASK-247 transcript correction (present for ok only):
+    TASK-247/248 transcript correction (present for ok only):
         "rawTranscript"      : str  -- original Whisper output, unmodified
         "correctedTranscript": str  -- after deterministic phrase/hotword correction
         "correctionApplied"  : bool -- True when at least one substitution was made
         "correctionMode"     : str  -- "safe_dictionary"
         "correctionReason"   : str  -- "phrase_map" | "none"
+        "matchedAlias"       : str  -- first alias that fired (empty if no correction)
+        "canonicalTerm"      : str  -- canonical target for matchedAlias (empty if no correction)
     """
     # Empty-bytes check comes first so it is independent of Whisper availability.
     if not audio_bytes:
@@ -286,6 +372,8 @@ def transcribe_audio_bytes(
             "correctionApplied": correction["correctionApplied"],
             "correctionMode": correction["correctionMode"],
             "correctionReason": correction["correctionReason"],
+            "matchedAlias": correction["matchedAlias"],
+            "canonicalTerm": correction["canonicalTerm"],
         }
     except Exception as exc:  # noqa: BLE001
         logger.warning("TASK-167B: STT error mime=%s exc=%s", mime_type, exc)

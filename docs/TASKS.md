@@ -25750,7 +25750,7 @@ Next task: **TASK-248 — STT Hotword Coverage / Alias Expansion**。
 
 ## TASK-248 | STT Hotword Coverage / Alias Expansion
 
-Status: PLANNED (2026-06-03)
+Status: DONE - HOTWORD MAP EXPANDED / NEEDS STT PROVIDER FOLLOW-UP (2026-06-03)
 
 ### Background
 
@@ -25764,25 +25764,123 @@ Current map can only fix pre-known aliases; it cannot cover all acoustic variant
 
 Expand `_STT_CORRECTION_MAP` in `stt_service.py` by collecting real rawTranscript error samples
 from Windows smoke sessions and adding alias entries for each observed variant.
-Optionally expose `matchedAlias` / `canonicalTerm` in diagnostics to aid ongoing collection.
+Expose `matchedAlias` / `canonicalTerm` in diagnostics to aid ongoing collection.
+
+### What Was Implemented
+
+**`backend/app/stt/stt_service.py`**:
+- `_STT_CORRECTION_MAP` expanded from 8 entries to 48 entries across 7 categories:
+  - 5 phrase corrections (中文語音辨識, 語音辨識測試)
+  - 19 克莉絲蒂娜 aliases (3 from TASK-247, 16 new)
+  - 3 faster-whisper / Whisper aliases (compound before standalone; "whisper" standalone omitted — substring safety)
+  - 4 Claude / Claude Code aliases (multi-word before standalone)
+  - 4 CodeX aliases
+  - 7 Dragon Pet AI aliases
+  - 6 feature term aliases (語音輸入, 對話模式, 桌面寵物)
+- `correct_transcript_text()` updated to track and return `matchedAlias` / `canonicalTerm`
+  (first matched alias/canonical; empty string when no correction applied)
+- `transcribe_audio_bytes()` ok path includes `matchedAlias` / `canonicalTerm` in response
+
+**`backend/tests/test_stt_routes.py`** (+13 tests, 69 total):
+- All 16 new 克莉絲蒂娜 aliases loop-tested
+- Dragon Pet AI, Claude Code, CodeX, faster-whisper, feature term alias groups
+- matchedAlias / canonicalTerm population and empty-on-no-match tests
+- "faster-whisper not corrupted" safety test
+
+**`apps/desktop/src/renderer/renderer.js`**:
+- `fullAppVoiceDiagnostics` has 2 new fields: `sttMatchedAlias: ""`, `sttCanonicalTerm: ""`
+- `transcribeFullAppAudioBlob()` populates them from IPC result
+- `renderFullAppVoiceDiagnostics()` shows "命中 alias: … canonical: …" line
+- `resetFullAppVoiceDiagnosticsForRecording()` clears both fields
+
+**`apps/desktop/scripts/renderer-chat-smoke.js`** (+9 tests):
+- Field existence, render inclusion, defaults, reset, update, transcribeFn extraction
+- IPC channel regression, matchedAlias-not-in-history, TASK-247 regression
+
+All validations PASS: renderer-chat-smoke.js ✓, pet-window-smoke.js ✓, pet-renderer-smoke.js ✓, pytest 69 passed ✓
 
 ### Core Requirements
 
-1. Collect real rawTranscript samples from Windows manual STT sessions (diagnostics panel).
-2. Add newly observed aliases to `_STT_CORRECTION_MAP` with their canonical corrections.
-3. Priority terms: 克莉絲蒂娜 (all new variants observed), Dragon Pet AI, Claude, Whisper,
-   桌面寵物, 語音輸入, 對話模式, TASK.
-4. Optionally add `matchedAlias` / `canonicalTerm` fields to `correct_transcript_text()` result.
-5. Add backend pytest tests for each new alias.
-6. No LLM rewrite. No new IPC. No new backend endpoint. No VAD change. No raw audio persistence.
-7. rawTranscript must not enter history/copy/export.
+1. ✅ Expanded `_STT_CORRECTION_MAP` (48 entries) with 40 new alias entries across 6 term groups.
+2. ✅ `matchedAlias` / `canonicalTerm` fields added to `correct_transcript_text()` and ok response.
+3. ✅ 13 new backend pytest tests covering all new alias groups.
+4. ✅ 9 new renderer smoke tests covering new diagnostics fields.
+5. ✅ No LLM rewrite. No new IPC. No new backend endpoint. No VAD change. No raw audio persistence.
+6. ✅ rawTranscript does not enter history/copy/export.
 
-### Restrictions
+### Restrictions Confirmed
 
-1. No new IPC channel.
-2. No new backend endpoint.
-3. No `/chat` schema change.
-4. No LLM rewrite.
-5. No VAD change.
-6. No raw audio persistence to disk.
-7. rawTranscript not written to history/copy/export.
+- No new IPC channel. ✅
+- No new backend endpoint. ✅
+- No `/chat` schema change. ✅
+- No LLM rewrite. ✅
+- No VAD change. ✅
+- No raw audio persistence to disk. ✅
+- rawTranscript not written to history/copy/export. ✅
+
+### Windows Smoke Result (2026-06-03) — PARTIAL
+
+- [x] 1. 基本啟動 PASS — Full App / Pet Window 正常
+- [x] 2. Hotword alias map 邏輯 PASS — correction map 本身可修正已知 alias
+- [x] 3. matchedAlias / canonicalTerm diagnostics 顯示正常
+- [x] 4. Auto-send / Conversation Mode — 送出 corrected transcript，raw 不進 history
+- [x] 5. Regression PASS — TASK-247 correction / TASK-245 language lock / TASK-244 audio preview
+- [~] 6. **整體中文辨識品質 FAIL** — STT 產生整句錯亂結果，correction map 無法修復：
+  - 例：「可以是DNA按」、「墨鯰墨鯰」、「先跟佩套AI」（全不合理，非音近字偏移）
+  - Root cause：faster-whisper `tiny` 模型整體中文 ASR 品質不足，非 hotword coverage 問題
+
+**結論：** TASK-248 hotword alias map 已完成其設計目標（補救已知專有名詞音近字）。
+但 STT provider 本體品質不足，會產生整句錯亂結果，超出 correction map 能修復的範圍。
+下一步需評估能替換的本地中文 STT provider。
+
+### Out of Scope / Follow-up
+
+- TASK-249: Free Local Chinese STT Provider Evaluation (FunASR / Paraformer; sherpa-onnx).
+- TASK-250: STT Hotword Dictionary UI (user-configurable hotwords; future).
+- TASK-251: LLM-based semantic correction (opt-in; no aggressive rewrite; future).
+
+## TASK-249 | Free Local Chinese STT Provider Evaluation
+
+Status: PLANNED (2026-06-03)
+
+### Background
+
+TASK-248 Windows smoke revealed that faster-whisper `tiny` produces incoherent whole-sentence
+Chinese transcription errors (e.g. 「可以是DNA按」、「墨鯰墨鯰」、「先跟佩套AI」) that cannot
+be fixed by any hotword correction map. Root cause: the model's overall Chinese ASR quality is
+insufficient — not a hotword coverage problem.
+
+TASK-248 hotword alias map is preserved as a complement, not a solution.
+The next required step is to evaluate a replacement STT provider with adequate Chinese accuracy.
+
+### Goal
+
+Research, evaluate, and (if suitable) integrate a free, local, Chinese-first STT provider
+as a replacement or upgrade path for faster-whisper-local.
+
+### Provider Candidates (priority order)
+
+1. **FunASR / Paraformer** — Alibaba DAMO Academy; Paraformer non-autoregressive CTC model;
+   state-of-the-art Chinese ASR; `funasr` Python package; free, local, offline.
+2. **sherpa-onnx + Paraformer or Zipformer** — ONNX-based runtime; no Python runtime dependency;
+   cross-platform; Paraformer or Zipformer model; free, local, offline.
+3. **faster-whisper `base`/`small` with zh prompt** — already supported via DRAGON_PET_STT_MODEL;
+   limited improvement but zero new dependency.
+
+### Design Constraints
+
+1. No paid API (no OpenAI STT, no cloud STT).
+2. No new cloud endpoint.
+3. No new IPC channel (reuse existing `stt:transcribe`).
+4. No `/chat` schema change.
+5. No raw audio persistence to disk.
+6. No background / always-listening.
+7. No Pet Window / Output Queue / Diagnostics Drawer change.
+8. faster-whisper-local must be preserved as fallback (graceful degradation if new provider absent).
+9. Provider selection via env var (e.g. `DRAGON_PET_STT_PROVIDER`); safe fallback to faster-whisper.
+10. Correction map from TASK-247/248 must remain active regardless of provider.
+
+### Scope (docs-only for now; implementation in follow-up task)
+
+This task is research + design only unless explicitly scoped to implementation.
+Output: provider comparison table, integration plan, env var design, fallback strategy.

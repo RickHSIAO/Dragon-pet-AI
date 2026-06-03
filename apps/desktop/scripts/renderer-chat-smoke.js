@@ -12603,6 +12603,97 @@ function testTask244CssDiagnosticsPanel() {
 }
 
 // ---------------------------------------------------------------------------
+// TASK-248: STT Hotword Coverage / Alias Expansion
+// ---------------------------------------------------------------------------
+
+function testTask248RendererHasMatchedAliasFields() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes('sttMatchedAlias: ""'),  "TASK-248 fullAppVoiceDiagnostics must have sttMatchedAlias field");
+  assert.ok(src.includes('sttCanonicalTerm: ""'), "TASK-248 fullAppVoiceDiagnostics must have sttCanonicalTerm field");
+  console.log("  testTask248RendererHasMatchedAliasFields PASS");
+}
+
+function testTask248DiagnosticsRenderIncludesAliasLine() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const renderFnStart = src.indexOf("function renderFullAppVoiceDiagnostics");
+  const renderFnEnd   = src.indexOf("\n}", renderFnStart) + 2;
+  const renderFn = src.slice(renderFnStart, renderFnEnd);
+  assert.ok(renderFn.includes("sttMatchedAlias"),  "TASK-248 render must include sttMatchedAlias");
+  assert.ok(renderFn.includes("sttCanonicalTerm"), "TASK-248 render must include sttCanonicalTerm");
+  assert.ok(renderFn.includes("命中 alias"),       "TASK-248 render must include '命中 alias' label");
+  console.log("  testTask248DiagnosticsRenderIncludesAliasLine PASS");
+}
+
+async function testTask248DiagnosticsDefaultsNewFields() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  assert.ok("sttMatchedAlias"  in sandbox.fullAppVoiceDiagnostics, "TASK-248: sttMatchedAlias must exist in diagnostics");
+  assert.ok("sttCanonicalTerm" in sandbox.fullAppVoiceDiagnostics, "TASK-248: sttCanonicalTerm must exist in diagnostics");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttMatchedAlias,  "", "TASK-248: sttMatchedAlias default must be empty string");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttCanonicalTerm, "", "TASK-248: sttCanonicalTerm default must be empty string");
+  console.log("  testTask248DiagnosticsDefaultsNewFields PASS");
+}
+
+async function testTask248ResetClearsAliasFields() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  sandbox.fullAppVoiceDiagnostics.sttMatchedAlias  = "克里斯蒂娜";
+  sandbox.fullAppVoiceDiagnostics.sttCanonicalTerm = "克莉絲蒂娜";
+  sandbox.resetFullAppVoiceDiagnosticsForRecording("manual");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttMatchedAlias,  "", "TASK-248: reset must clear sttMatchedAlias");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttCanonicalTerm, "", "TASK-248: reset must clear sttCanonicalTerm");
+  console.log("  testTask248ResetClearsAliasFields PASS");
+}
+
+async function testTask248UpdateDiagnosticsHandlesAliasFields() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  sandbox.updateFullAppVoiceDiagnostics({ sttMatchedAlias: "Codex", sttCanonicalTerm: "CodeX" });
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttMatchedAlias,  "Codex", "TASK-248: updateDiagnostics must patch sttMatchedAlias");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttCanonicalTerm, "CodeX", "TASK-248: updateDiagnostics must patch sttCanonicalTerm");
+  console.log("  testTask248UpdateDiagnosticsHandlesAliasFields PASS");
+}
+
+function testTask248TranscribeFnExtractsAliasFields() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("result.matchedAlias"),  "TASK-248: transcribeFn must extract result.matchedAlias");
+  assert.ok(src.includes("result.canonicalTerm"), "TASK-248: transcribeFn must extract result.canonicalTerm");
+  assert.ok(src.includes("sttMatchedAlias"),      "TASK-248: transcribeFn must assign sttMatchedAlias");
+  assert.ok(src.includes("sttCanonicalTerm"),     "TASK-248: transcribeFn must assign sttCanonicalTerm");
+  console.log("  testTask248TranscribeFnExtractsAliasFields PASS");
+}
+
+function testTask248NoNewIpcChannels() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(!src.includes("ipcRenderer.on(\"stt-alias"),   "TASK-248 must not add stt-alias IPC channel");
+  assert.ok(!src.includes("ipcRenderer.on(\"stt-hotword"), "TASK-248 must not add stt-hotword IPC channel");
+  console.log("  testTask248NoNewIpcChannels PASS");
+}
+
+function testTask248MatchedAliasNotInChatHistory() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  // matchedAlias is a diagnostics field — must not end up in chat history
+  const historyIdx = src.indexOf("chatHistoryPush") !== -1 ? src.indexOf("chatHistoryPush") : -1;
+  if (historyIdx !== -1) {
+    const historySection = src.slice(Math.max(0, historyIdx - 200), historyIdx + 200);
+    assert.ok(!historySection.includes("matchedAlias"), "TASK-248: matchedAlias must not be in chatHistoryPush call");
+  }
+  console.log("  testTask248MatchedAliasNotInChatHistory PASS");
+}
+
+async function testTask248RegressionTask247StillPass() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  // TASK-247 correction fields must still exist
+  assert.ok(src.includes('sttRawTranscriptPreview: ""'),       "TASK-248 regression: sttRawTranscriptPreview must still exist");
+  assert.ok(src.includes('sttCorrectedTranscriptPreview: ""'), "TASK-248 regression: sttCorrectedTranscriptPreview must still exist");
+  assert.ok(src.includes('sttCorrectionApplied: false'),       "TASK-248 regression: sttCorrectionApplied must still exist");
+  assert.ok(src.includes('sttCorrectionMode: ""'),             "TASK-248 regression: sttCorrectionMode must still exist");
+  assert.ok(src.includes('sttCorrectionReason: ""'),           "TASK-248 regression: sttCorrectionReason must still exist");
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  assert.ok("sttRawTranscriptPreview"       in sandbox.fullAppVoiceDiagnostics, "TASK-248 regression: sttRawTranscriptPreview must still exist");
+  assert.ok("sttCorrectedTranscriptPreview" in sandbox.fullAppVoiceDiagnostics, "TASK-248 regression: sttCorrectedTranscriptPreview must still exist");
+  assert.ok("sttCorrectionApplied"          in sandbox.fullAppVoiceDiagnostics, "TASK-248 regression: sttCorrectionApplied must still exist");
+  console.log("  testTask248RegressionTask247StillPass PASS");
+}
+
+// ---------------------------------------------------------------------------
 // TASK-247: STT Transcript Correction / Context-Aware Normalization
 // ---------------------------------------------------------------------------
 
@@ -14348,6 +14439,17 @@ async function main() {
   await testTask244dDiagnosticsDefaultsNewFields();
   await testTask244dPlayFnSetsObjectUrlActive();
   await testTask244dResetSandboxClearsPreviewState();
+
+  // TASK-248: STT Hotword Coverage / Alias Expansion
+  testTask248RendererHasMatchedAliasFields();
+  testTask248DiagnosticsRenderIncludesAliasLine();
+  await testTask248DiagnosticsDefaultsNewFields();
+  await testTask248ResetClearsAliasFields();
+  await testTask248UpdateDiagnosticsHandlesAliasFields();
+  testTask248TranscribeFnExtractsAliasFields();
+  testTask248NoNewIpcChannels();
+  testTask248MatchedAliasNotInChatHistory();
+  await testTask248RegressionTask247StillPass();
 
   // TASK-247: STT Transcript Correction / Context-Aware Normalization
   testTask247RendererHasCorrectionFields();

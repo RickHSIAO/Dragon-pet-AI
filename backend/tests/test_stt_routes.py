@@ -759,3 +759,227 @@ def test_stt_correction_model_metadata_still_present(monkeypatch):
     assert "resolvedModel"   in result, "TASK-246 resolvedModel must not be regressed"
     assert "modelSource"     in result, "TASK-246 modelSource must not be regressed"
     assert "modelLoadStatus" in result, "TASK-246 modelLoadStatus must not be regressed"
+
+
+# =============================================================================
+# TASK-248: STT Hotword Coverage / Alias Expansion tests
+# =============================================================================
+
+# --- 克莉絲蒂娜 new aliases (16 added in TASK-248) ---
+
+_CHRISTIANA_NEW_ALIASES = [
+    "克利斯蒂娜",
+    "克里斯提娜",
+    "克莉絲提娜",
+    "可莉絲蒂娜",
+    "葛莉絲蒂娜",
+    "格莉絲蒂娜",
+    "格里斯蒂娜",
+    "可麗絲蒂娜",
+    "克麗絲提娜",
+    "克莉絲緹娜",
+    "克里斯緹娜",
+    "克莉斯緹娜",
+    "克莉絲蒂那",
+    "克里斯蒂那",
+    "克莉絲蒂納",
+    "克里斯蒂納",
+]
+
+
+def test_stt_correction_christiana_all_new_aliases():
+    """TASK-248: all 16 new aliases must correct to canonical 克莉絲蒂娜."""
+    canonical = "克莉絲蒂娜"
+    for alias in _CHRISTIANA_NEW_ALIASES:
+        result = stt_service.correct_transcript_text(alias)
+        assert result["correctedTranscript"] == canonical, (
+            f"TASK-248: {alias!r} must correct to {canonical!r}, got {result['correctedTranscript']!r}"
+        )
+        assert result["correctionApplied"] is True, (
+            f"TASK-248: correctionApplied must be True for alias {alias!r}"
+        )
+
+
+# --- Dragon Pet AI aliases ---
+
+_DRAGON_PET_ALIASES = [
+    ("Dragon Pet A I",  "Dragon Pet AI"),
+    ("DragonPet AI",    "Dragon Pet AI"),
+    ("Dragon pet AI",   "Dragon Pet AI"),
+    ("dragon pet AI",   "Dragon Pet AI"),
+    ("dragon pet ai",   "Dragon Pet AI"),
+    ("龍寵 AI",         "Dragon Pet AI"),
+    ("龍寵AI",          "Dragon Pet AI"),
+]
+
+
+def test_stt_correction_dragon_pet_ai_aliases():
+    """TASK-248: all Dragon Pet AI alias forms must correct to canonical."""
+    for alias, canonical in _DRAGON_PET_ALIASES:
+        result = stt_service.correct_transcript_text(alias)
+        assert result["correctedTranscript"] == canonical, (
+            f"TASK-248: {alias!r} must correct to {canonical!r}, got {result['correctedTranscript']!r}"
+        )
+        assert result["correctionApplied"] is True
+
+
+# --- Claude / Claude Code aliases ---
+
+_CLAUDE_ALIASES = [
+    ("克勞德 code",  "Claude Code"),
+    ("克勞德 Code",  "Claude Code"),
+    ("Claude code",  "Claude Code"),
+    ("克勞德",       "Claude"),
+]
+
+
+def test_stt_correction_claude_code_aliases():
+    """TASK-248: Claude / Claude Code aliases must correct to canonical forms."""
+    for alias, canonical in _CLAUDE_ALIASES:
+        result = stt_service.correct_transcript_text(alias)
+        assert result["correctedTranscript"] == canonical, (
+            f"TASK-248: {alias!r} must correct to {canonical!r}, got {result['correctedTranscript']!r}"
+        )
+        assert result["correctionApplied"] is True
+
+
+# --- CodeX aliases ---
+
+_CODEX_ALIASES_248 = [
+    ("扣得 X",  "CodeX"),
+    ("Code X",  "CodeX"),
+    ("code x",  "CodeX"),
+    ("Codex",   "CodeX"),
+]
+
+
+def test_stt_correction_codex_aliases():
+    """TASK-248: CodeX alias forms must correct to canonical 'CodeX'."""
+    for alias, canonical in _CODEX_ALIASES_248:
+        result = stt_service.correct_transcript_text(alias)
+        assert result["correctedTranscript"] == canonical, (
+            f"TASK-248: {alias!r} must correct to {canonical!r}, got {result['correctedTranscript']!r}"
+        )
+        assert result["correctionApplied"] is True
+
+
+# --- faster-whisper / Whisper aliases ---
+
+def test_stt_correction_faster_whisper_aliases():
+    """TASK-248: faster-whisper alias forms and 威斯伯 must correct correctly."""
+    cases = [
+        ("faster whisper",  "faster-whisper"),
+        ("faster Whisper",  "faster-whisper"),
+        ("威斯伯",          "Whisper"),
+    ]
+    for alias, canonical in cases:
+        result = stt_service.correct_transcript_text(alias)
+        assert result["correctedTranscript"] == canonical, (
+            f"TASK-248: {alias!r} must correct to {canonical!r}, got {result['correctedTranscript']!r}"
+        )
+        assert result["correctionApplied"] is True
+
+
+def test_stt_correction_whisper_not_corrupted_in_compound():
+    """TASK-248: 'faster-whisper' (canonical) must not be re-corrupted after correction."""
+    result = stt_service.correct_transcript_text("我在測試 faster whisper 模型")
+    assert "faster-whisper" in result["correctedTranscript"], (
+        "TASK-248: 'faster whisper' must become 'faster-whisper'"
+    )
+    assert "faster-Whisper" not in result["correctedTranscript"], (
+        "TASK-248: canonical 'faster-whisper' must not be corrupted to 'faster-Whisper'"
+    )
+
+
+# --- Common feature term aliases ---
+
+_FEATURE_TERM_ALIASES = [
+    ("語音輸人",   "語音輸入"),
+    ("語音書入",   "語音輸入"),
+    ("對話糢式",   "對話模式"),
+    ("對話模式式", "對話模式"),
+    ("桌面重物",   "桌面寵物"),
+    ("桌面從物",   "桌面寵物"),
+]
+
+
+def test_stt_correction_feature_terms():
+    """TASK-248: common feature term aliases must correct to canonical."""
+    for alias, canonical in _FEATURE_TERM_ALIASES:
+        result = stt_service.correct_transcript_text(alias)
+        assert result["correctedTranscript"] == canonical, (
+            f"TASK-248: {alias!r} must correct to {canonical!r}, got {result['correctedTranscript']!r}"
+        )
+        assert result["correctionApplied"] is True
+
+
+# --- matchedAlias / canonicalTerm fields ---
+
+def test_stt_correction_matched_alias_populated():
+    """TASK-248: matchedAlias must be populated when a correction fires."""
+    result = stt_service.correct_transcript_text("克里斯蒂娜來了")
+    assert result["correctionApplied"] is True
+    assert result["matchedAlias"] == "克里斯蒂娜", (
+        f"TASK-248: matchedAlias must be the first alias that fired, got {result['matchedAlias']!r}"
+    )
+
+
+def test_stt_correction_canonical_term_populated():
+    """TASK-248: canonicalTerm must be the canonical target when a correction fires."""
+    result = stt_service.correct_transcript_text("克里斯蒂娜來了")
+    assert result["correctionApplied"] is True
+    assert result["canonicalTerm"] == "克莉絲蒂娜", (
+        f"TASK-248: canonicalTerm must be the canonical target, got {result['canonicalTerm']!r}"
+    )
+
+
+def test_stt_correction_no_match_matched_alias_empty():
+    """TASK-248: matchedAlias and canonicalTerm must be empty when no correction fires."""
+    result = stt_service.correct_transcript_text("沒有需要修正的文字")
+    assert result["correctionApplied"] is False
+    assert result["matchedAlias"] == "", (
+        f"TASK-248: matchedAlias must be empty when no correction, got {result['matchedAlias']!r}"
+    )
+    assert result["canonicalTerm"] == "", (
+        f"TASK-248: canonicalTerm must be empty when no correction, got {result['canonicalTerm']!r}"
+    )
+
+
+def test_stt_correction_empty_input_matched_alias_empty():
+    """TASK-248: matchedAlias and canonicalTerm must be empty for empty input."""
+    result = stt_service.correct_transcript_text("")
+    assert result["matchedAlias"] == ""
+    assert result["canonicalTerm"] == ""
+
+
+def test_stt_service_ok_includes_matched_alias(monkeypatch):
+    """TASK-248: ok response from transcribe_audio_bytes must include matchedAlias/canonicalTerm."""
+    from types import SimpleNamespace
+
+    class _GoodModel:
+        def transcribe(self, _buf, **_kwargs):
+            seg = SimpleNamespace(text="你好")
+            info = SimpleNamespace(language="zh")
+            return iter([seg]), info
+
+    monkeypatch.setattr(stt_service, "_WHISPER_AVAILABLE", True)
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(stt_service, "_load_model", lambda: _GoodModel())
+    result = stt_service.transcribe_audio_bytes(b"\x01\x02\x03", language="zh")
+    assert result["status"] == "ok"
+    assert "matchedAlias"  in result, "TASK-248: ok result must include 'matchedAlias'"
+    assert "canonicalTerm" in result, "TASK-248: ok result must include 'canonicalTerm'"
+
+
+def test_stt_route_response_includes_matched_alias():
+    """TASK-248: /stt/transcribe ok response must include matchedAlias/canonicalTerm."""
+    with TestClient(app) as client:
+        response = client.post(
+            "/stt/transcribe",
+            files={"audio": ("audio.webm", io.BytesIO(b"\x01\x02\x03"), "audio/webm")},
+        )
+    assert response.status_code == 200
+    data = response.json()
+    if data.get("status") == "ok":
+        assert "matchedAlias"  in data, "TASK-248: ok response must include 'matchedAlias'"
+        assert "canonicalTerm" in data, "TASK-248: ok response must include 'canonicalTerm'"

@@ -95,7 +95,8 @@ async def stt_transcribe(audio: UploadFile = File(...)):
              "modelLoadError": str | None,
              "rawTranscript": str | None, "correctedTranscript": str | None,
              "correctionApplied": bool | None, "correctionMode": str | None,
-             "correctionReason": str | None}.
+             "correctionReason": str | None, "matchedAlias": str | None,
+             "canonicalTerm": str | None}.
 
     Scope limits (TASK-167B / TASK-245):
     - Local Whisper only — no external STT API calls.
