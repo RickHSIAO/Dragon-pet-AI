@@ -26,6 +26,20 @@ _STT_ALLOWED_MODELS = frozenset({"tiny", "base", "small"})
 _STT_DEFAULT_MODEL = "tiny"
 _STT_MODEL_ENV = "DRAGON_PET_STT_MODEL"
 
+# TASK-249: configurable provider via DRAGON_PET_STT_PROVIDER env var
+_STT_PROVIDER_ENV = "DRAGON_PET_STT_PROVIDER"
+_STT_ALLOWED_PROVIDERS = frozenset({"faster-whisper-local", "funasr-local", "sherpa-onnx-local"})
+_STT_DEFAULT_PROVIDER = "faster-whisper-local"
+# Design notes for each candidate (surfaced in sttProviderCandidateNotes diagnostics field)
+_STT_PROVIDER_CANDIDATE_NOTES: dict = {
+    "faster-whisper-local": "production; default fallback",
+    "funasr-local": (
+        "evaluation candidate; requires `pip install funasr modelscope` "
+        "and pre-downloaded paraformer-zh model"
+    ),
+    "sherpa-onnx-local": "evaluation candidate; design-only in TASK-249 — not yet implemented",
+}
+
 
 def _resolve_stt_model_name() -> dict:
     """
@@ -68,9 +82,60 @@ def _resolve_stt_model_name() -> dict:
     }
 
 
+def _resolve_stt_provider() -> dict:
+    """
+    Resolve the STT provider from DRAGON_PET_STT_PROVIDER env var.
+
+    Resolved once at process start — restart required to pick up env changes.
+    Falls back to 'faster-whisper-local' on invalid or missing value; never crashes.
+
+    Returns dict with keys:
+        requested_provider       -- raw env value (or default when env is unset)
+        resolved_provider        -- the provider that will actually be used
+        provider_source          -- "env" | "default" | "fallback"
+        provider_fallback_reason -- "invalid_provider" | "none"
+    """
+    requested = os.environ.get(_STT_PROVIDER_ENV, "").strip()
+    if not requested:
+        return {
+            "requested_provider": _STT_DEFAULT_PROVIDER,
+            "resolved_provider": _STT_DEFAULT_PROVIDER,
+            "provider_source": "default",
+            "provider_fallback_reason": "none",
+        }
+    if requested in _STT_ALLOWED_PROVIDERS:
+        return {
+            "requested_provider": requested,
+            "resolved_provider": requested,
+            "provider_source": "env",
+            "provider_fallback_reason": "none",
+        }
+    logger.warning(
+        "TASK-249: invalid %s=%r, falling back to %r. Allowed: %s",
+        _STT_PROVIDER_ENV, requested, _STT_DEFAULT_PROVIDER,
+        ", ".join(sorted(_STT_ALLOWED_PROVIDERS)),
+    )
+    return {
+        "requested_provider": requested,
+        "resolved_provider": _STT_DEFAULT_PROVIDER,
+        "provider_source": "fallback",
+        "provider_fallback_reason": "invalid_provider",
+    }
+
+
 # Resolved at process start — restart required to pick up env changes
 _STT_MODEL_RESOLUTION: dict = _resolve_stt_model_name()
 _STT_MODEL_NAME: str = _STT_MODEL_RESOLUTION["resolved_model"]
+
+_STT_PROVIDER_RESOLUTION: dict = _resolve_stt_provider()
+_STT_RESOLVED_PROVIDER: str = _STT_PROVIDER_RESOLUTION["resolved_provider"]
+logger.info(
+    "[stt_service] STT provider resolved=%r  source=%r  requested=%r  fallback_reason=%r",
+    _STT_RESOLVED_PROVIDER,
+    _STT_PROVIDER_RESOLUTION["provider_source"],
+    _STT_PROVIDER_RESOLUTION["requested_provider"],
+    _STT_PROVIDER_RESOLUTION["provider_fallback_reason"],
+)
 
 
 def _detect_whisper() -> bool:
@@ -117,8 +182,57 @@ def _load_model() -> Any:
     return _whisper_model
 
 
+# TASK-249: FunASR candidate — safe unavailable if package not installed
+def _detect_funasr() -> bool:
+    """Check whether funasr is importable without loading the model."""
+    try:
+        import funasr  # noqa: F401  # type: ignore
+        return True
+    except ImportError:
+        return False
+
+
+_FUNASR_AVAILABLE: bool = _detect_funasr()
+_funasr_model: Any = None
+# Load status — updated by _load_funasr_model(); initialized based on availability
+_FUNASR_LOAD_STATUS: str = "not_loaded" if _FUNASR_AVAILABLE else "unavailable"
+_FUNASR_LOAD_ERROR: str | None = None
+
+
+def _load_funasr_model() -> Any:
+    """
+    Lazily load the FunASR Paraformer model on first use.
+    Model must be pre-downloaded manually — this code does NOT auto-download.
+    Updates _FUNASR_LOAD_STATUS and _FUNASR_LOAD_ERROR as side-effects.
+    Returns None if funasr not installed or loading fails.
+    """
+    global _funasr_model, _FUNASR_LOAD_STATUS, _FUNASR_LOAD_ERROR
+    if _funasr_model is not None:
+        return _funasr_model
+    if not _FUNASR_AVAILABLE:
+        _FUNASR_LOAD_STATUS = "unavailable"
+        return None
+    try:
+        from funasr import AutoModel  # type: ignore
+        _funasr_model = AutoModel(
+            model="paraformer-zh",
+            model_revision="v2.0.4",
+            disable_update=True,
+            device="cpu",
+        )
+        _FUNASR_LOAD_STATUS = "loaded"
+        _FUNASR_LOAD_ERROR = None
+        logger.info("TASK-249: funasr paraformer-zh model loaded.")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("TASK-249: Failed to load FunASR model: %s", exc)
+        _FUNASR_LOAD_STATUS = "error"
+        _FUNASR_LOAD_ERROR = str(exc)[:100]  # truncated — no raw stack trace
+        _funasr_model = None
+    return _funasr_model
+
+
 def _get_model_metadata() -> dict:
-    """Return current model resolution and load status metadata for diagnostics."""
+    """Return current faster-whisper model resolution and load status metadata for diagnostics."""
     return {
         "provider": _STT_PROVIDER,
         "model": _STT_MODEL_NAME,
@@ -127,6 +241,31 @@ def _get_model_metadata() -> dict:
         "modelSource": _STT_MODEL_RESOLUTION["model_source"],
         "modelLoadStatus": _STT_MODEL_LOAD_STATUS,
         "modelLoadError": _STT_MODEL_LOAD_ERROR,
+    }
+
+
+def _get_provider_metadata() -> dict:
+    """Return TASK-249 provider resolution and load status metadata for diagnostics."""
+    resolved = _STT_RESOLVED_PROVIDER
+    if resolved == "funasr-local":
+        load_status = _FUNASR_LOAD_STATUS
+        load_error = _FUNASR_LOAD_ERROR
+    elif resolved == "sherpa-onnx-local":
+        # Design-only in TASK-249 — always unavailable
+        load_status = "unavailable"
+        load_error = "sherpa-onnx-local not yet implemented (TASK-249 design-only)"
+    else:
+        # faster-whisper-local
+        load_status = _STT_MODEL_LOAD_STATUS
+        load_error = _STT_MODEL_LOAD_ERROR
+    return {
+        "sttProviderRequested": _STT_PROVIDER_RESOLUTION["requested_provider"],
+        "sttProviderResolved": resolved,
+        "sttProviderSource": _STT_PROVIDER_RESOLUTION["provider_source"],
+        "sttProviderLoadStatus": load_status,
+        "sttProviderLoadError": load_error,
+        "sttProviderFallbackReason": _STT_PROVIDER_RESOLUTION["provider_fallback_reason"],
+        "sttProviderCandidateNotes": _STT_PROVIDER_CANDIDATE_NOTES.get(resolved, ""),
     }
 
 
@@ -281,11 +420,81 @@ def correct_transcript_text(raw_text: str) -> dict:
 
 
 def _reset_model_for_tests() -> None:
-    """Reset the cached model and load status -- only for test isolation. Not for production use."""
+    """Reset cached models and load status — only for test isolation. Not for production use."""
     global _whisper_model, _STT_MODEL_LOAD_STATUS, _STT_MODEL_LOAD_ERROR
+    global _funasr_model, _FUNASR_LOAD_STATUS, _FUNASR_LOAD_ERROR
     _whisper_model = None
     _STT_MODEL_LOAD_STATUS = "not_loaded" if _WHISPER_AVAILABLE else "unavailable"
     _STT_MODEL_LOAD_ERROR = None
+    _funasr_model = None
+    _FUNASR_LOAD_STATUS = "not_loaded" if _FUNASR_AVAILABLE else "unavailable"
+    _FUNASR_LOAD_ERROR = None
+
+
+def _transcribe_funasr(
+    audio_bytes: bytes,
+    mime_type: str = "audio/webm",
+    language: str | None = None,
+) -> dict:
+    """
+    TASK-249: FunASR Paraformer transcription candidate.
+
+    Returns clean unavailable if funasr package is not installed or model not pre-downloaded.
+    No auto-download; no cloud calls; no raw audio persistence to disk.
+    TASK-247/248 correction layer applies when transcription succeeds.
+
+    Manual install steps (not done automatically):
+      pip install funasr modelscope
+      # Then pre-download the model via FunASR's download utility or HuggingFace
+    """
+    if not _FUNASR_AVAILABLE:
+        return {
+            "transcript": "",
+            "status": "unavailable",
+            **_get_model_metadata(),
+            **_get_provider_metadata(),
+        }
+
+    model = _load_funasr_model()
+    if model is None:
+        return {
+            "transcript": "",
+            "status": "unavailable",
+            **_get_model_metadata(),
+            **_get_provider_metadata(),
+        }
+
+    try:
+        audio_buf = io.BytesIO(audio_bytes)
+        result_list = model.generate(input=audio_buf, batch_size_s=300)
+        transcript = "".join(
+            r.get("text", "") for r in (result_list or [])
+        ).strip()
+        if not transcript:
+            return {"transcript": "", "status": "empty"}
+        correction = correct_transcript_text(transcript)
+        return {
+            "transcript": correction["correctedTranscript"],
+            "status": "ok",
+            **_get_model_metadata(),
+            **_get_provider_metadata(),
+            "detectedLanguage": language or "zh",
+            "rawTranscript": correction["rawTranscript"],
+            "correctedTranscript": correction["correctedTranscript"],
+            "correctionApplied": correction["correctionApplied"],
+            "correctionMode": correction["correctionMode"],
+            "correctionReason": correction["correctionReason"],
+            "matchedAlias": correction["matchedAlias"],
+            "canonicalTerm": correction["canonicalTerm"],
+        }
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("TASK-249: FunASR error mime=%s exc=%s", mime_type, exc)
+        return {
+            "transcript": "",
+            "status": "error",
+            **_get_model_metadata(),
+            **_get_provider_metadata(),
+        }
 
 
 def transcribe_audio_bytes(
@@ -294,16 +503,20 @@ def transcribe_audio_bytes(
     language: str | None = None,
 ) -> dict:
     """
-    Transcribe raw audio bytes using a local Whisper model.
+    Transcribe raw audio bytes using the resolved local STT provider.
+
+    Provider is selected by DRAGON_PET_STT_PROVIDER env var (default: faster-whisper-local).
+    Falls back to faster-whisper-local for invalid provider values.
+    TASK-247/248 correction layer applies regardless of provider.
 
     Parameters
     ----------
     audio_bytes : bytes
-        Raw audio content (any format Whisper supports: webm, wav, ogg, mp4 ...).
+        Raw audio content (any format the provider supports: webm, wav, ogg, mp4 ...).
     mime_type : str
         MIME type hint -- not used for routing, only for logging.
     language : str | None
-        Language hint passed to Whisper (e.g. "zh"). None = auto-detect.
+        Language hint (e.g. "zh"). None = auto-detect.
 
     Returns
     -------
@@ -311,33 +524,56 @@ def transcribe_audio_bytes(
         "transcript"    : str   -- transcribed text (empty string on failure/empty audio)
         "status"        : str   -- one of "ok", "unavailable", "empty", "error"
 
-    TASK-246 model metadata (present for ok / unavailable / error, absent for empty-bytes early exit):
+    TASK-246 model metadata (present for ok / unavailable / error):
         "provider"        : str
-        "model"           : str   -- resolved model name
+        "model"           : str
         "requestedModel"  : str
         "resolvedModel"   : str
         "modelSource"     : str   -- "env" | "default" | "fallback"
         "modelLoadStatus" : str   -- "loaded" | "unavailable" | "error" | "not_loaded"
-        "modelLoadError"  : str | None  -- short error string, no raw stack
+        "modelLoadError"  : str | None
 
     TASK-247/248 transcript correction (present for ok only):
-        "rawTranscript"      : str  -- original Whisper output, unmodified
-        "correctedTranscript": str  -- after deterministic phrase/hotword correction
-        "correctionApplied"  : bool -- True when at least one substitution was made
+        "rawTranscript"      : str
+        "correctedTranscript": str
+        "correctionApplied"  : bool
         "correctionMode"     : str  -- "safe_dictionary"
         "correctionReason"   : str  -- "phrase_map" | "none"
-        "matchedAlias"       : str  -- first alias that fired (empty if no correction)
-        "canonicalTerm"      : str  -- canonical target for matchedAlias (empty if no correction)
+        "matchedAlias"       : str
+        "canonicalTerm"      : str
+
+    TASK-249 provider selection metadata (present for ok / unavailable / error):
+        "sttProviderRequested"     : str
+        "sttProviderResolved"      : str
+        "sttProviderSource"        : str   -- "env" | "default" | "fallback"
+        "sttProviderLoadStatus"    : str   -- "loaded" | "unavailable" | "error" | "not_loaded"
+        "sttProviderLoadError"     : str | None
+        "sttProviderFallbackReason": str   -- "invalid_provider" | "none"
+        "sttProviderCandidateNotes": str
     """
-    # Empty-bytes check comes first so it is independent of Whisper availability.
+    # Empty-bytes check is provider-independent.
     if not audio_bytes:
         return {"transcript": "", "status": "empty"}
 
+    resolved = _STT_RESOLVED_PROVIDER
+    if resolved == "funasr-local":
+        return _transcribe_funasr(audio_bytes, mime_type=mime_type, language=language)
+    if resolved == "sherpa-onnx-local":
+        # TASK-249: design-only in this release — clean unavailable, no crash.
+        return {
+            "transcript": "",
+            "status": "unavailable",
+            **_get_model_metadata(),
+            **_get_provider_metadata(),
+        }
+
+    # Default path: faster-whisper-local
     if not _WHISPER_AVAILABLE:
         return {
             "transcript": "",
             "status": "unavailable",
             **_get_model_metadata(),
+            **_get_provider_metadata(),
         }
 
     model = _load_model()
@@ -346,6 +582,7 @@ def transcribe_audio_bytes(
             "transcript": "",
             "status": "unavailable",
             **_get_model_metadata(),
+            **_get_provider_metadata(),
         }
 
     try:
@@ -360,12 +597,12 @@ def transcribe_audio_bytes(
         if not transcript:
             return {"transcript": "", "status": "empty"}
         # TASK-247: apply deterministic correction layer before returning.
-        # text/transcript use correctedTranscript; rawTranscript preserved for diagnostics.
         correction = correct_transcript_text(transcript)
         return {
             "transcript": correction["correctedTranscript"],
             "status": "ok",
             **_get_model_metadata(),
+            **_get_provider_metadata(),
             "detectedLanguage": detected_language,
             "rawTranscript": correction["rawTranscript"],
             "correctedTranscript": correction["correctedTranscript"],
@@ -381,4 +618,5 @@ def transcribe_audio_bytes(
             "transcript": "",
             "status": "error",
             **_get_model_metadata(),
+            **_get_provider_metadata(),
         }

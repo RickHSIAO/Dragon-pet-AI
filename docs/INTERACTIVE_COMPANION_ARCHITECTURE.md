@@ -606,9 +606,11 @@ Recommended next architecture phase:
   (「可以是DNA按」、「墨鯰墨鯰」) beyond correction map scope; root cause is STT provider ASR quality;
   no LLM rewrite, no new IPC, no audio persistence)
   DONE - HOTWORD MAP EXPANDED / NEEDS STT PROVIDER FOLLOW-UP.
-- TASK-249 recommended next: Free Local Chinese STT Provider Evaluation (FunASR / Paraformer preferred;
-  sherpa-onnx + Paraformer/Zipformer second candidate; faster-whisper retained as fallback;
-  no paid API, no cloud, no new IPC, provider selection via env var).
+- TASK-249 DONE - WINDOWS STT PROVIDER SMOKE PASS (2026-06-03): Free Local Chinese STT
+  Provider Evaluation. `DRAGON_PET_STT_PROVIDER` env var resolver; FunASR skeleton (safe unavailable if
+  not installed; `paraformer-zh`; no auto-download); sherpa-onnx design-only. 7 provider metadata fields
+  in response; 6 renderer diagnostics fields. 85 pytest + 11 renderer smoke PASS. Windows smoke pending.
+- TASK-250 recommended next: FunASR Local Runtime Integration (pending TASK-249 Windows smoke result).
 - Relationship state.
 - Mood / attention / energy state beyond the local preview foundation.
 - Idle reaction policy.

@@ -103,6 +103,17 @@ $env:LLM_LOCAL_CHAT_TIMEOUT_SECONDS = "90"
 # DB and settings files live inside backend/data/ (git-ignored).
 # Leaving DB_PATH and SETTINGS_FILE_PATH unset uses the production defaults.
 
+# STT provider (TASK-249): read from calling shell; safe default is faster-whisper-local.
+# To use funasr-local or sherpa-onnx-local, set this env var BEFORE running this script
+# in *this* terminal (not the Electron terminal), then restart the backend:
+#   $env:DRAGON_PET_STT_PROVIDER = "funasr-local"
+#   .\scripts\dev-start-backend.ps1
+$sttProviderDisplay = if ($env:DRAGON_PET_STT_PROVIDER) {
+    $env:DRAGON_PET_STT_PROVIDER
+} else {
+    "(not set — default: faster-whisper-local)"
+}
+
 # ---------------------------------------------------------------------------
 # Start backend
 # ---------------------------------------------------------------------------
@@ -110,15 +121,20 @@ Write-Host ""
 Write-Host "==========================================" -ForegroundColor Green
 Write-Host " dragon-pet-ai — backend (Ollama mode)   " -ForegroundColor Green
 Write-Host "==========================================" -ForegroundColor Green
-Write-Host "  Provider : ollama (qwen3:8b)"
-Write-Host "  Port     : 8000"
-Write-Host "  Reload   : enabled"
-Write-Host "  DB       : backend/data/dragon_pet.db (default)"
-Write-Host "  Settings : backend/data/provider_settings.json (default)"
+Write-Host "  LLM Provider : ollama (qwen3:8b)"
+Write-Host "  STT Provider : $sttProviderDisplay" -ForegroundColor $(if ($env:DRAGON_PET_STT_PROVIDER) { "Cyan" } else { "DarkGray" })
+Write-Host "  Port         : 8000"
+Write-Host "  Reload       : enabled"
+Write-Host "  DB           : backend/data/dragon_pet.db (default)"
+Write-Host "  Settings     : backend/data/provider_settings.json (default)"
 Write-Host ""
 Write-Host "Tip: Make sure 'ollama serve' is running in another terminal."
 Write-Host "     If this is the first chat after a model pull, the first"
 Write-Host "     request may take up to 90 s while the model loads."
+Write-Host ""
+Write-Host "STT Tip: DRAGON_PET_STT_PROVIDER must be set in THIS terminal before starting" -ForegroundColor DarkYellow
+Write-Host "         the backend. Setting it in the Electron terminal has no effect." -ForegroundColor DarkYellow
+Write-Host "         Uvicorn startup log will show: [stt_service] STT provider resolved=..." -ForegroundColor DarkYellow
 Write-Host ""
 Write-Host "Press Ctrl+C to stop." -ForegroundColor DarkGray
 Write-Host ""

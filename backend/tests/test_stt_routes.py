@@ -983,3 +983,198 @@ def test_stt_route_response_includes_matched_alias():
     if data.get("status") == "ok":
         assert "matchedAlias"  in data, "TASK-248: ok response must include 'matchedAlias'"
         assert "canonicalTerm" in data, "TASK-248: ok response must include 'canonicalTerm'"
+
+
+# =============================================================================
+# TASK-249: Free Local Chinese STT Provider Evaluation tests
+# =============================================================================
+
+def test_stt_provider_env_constant_exists():
+    """TASK-249: DRAGON_PET_STT_PROVIDER env constant must be defined."""
+    assert hasattr(stt_service, "_STT_PROVIDER_ENV"), "TASK-249: _STT_PROVIDER_ENV must exist"
+    assert stt_service._STT_PROVIDER_ENV == "DRAGON_PET_STT_PROVIDER"
+
+
+def test_stt_allowed_providers_includes_expected():
+    """TASK-249: allowed providers must include all three candidates."""
+    allowed = stt_service._STT_ALLOWED_PROVIDERS
+    assert "faster-whisper-local" in allowed, "TASK-249: faster-whisper-local must be allowed"
+    assert "funasr-local"         in allowed, "TASK-249: funasr-local must be allowed"
+    assert "sherpa-onnx-local"    in allowed, "TASK-249: sherpa-onnx-local must be allowed"
+
+
+def test_stt_default_provider_is_faster_whisper():
+    """TASK-249: default provider must be faster-whisper-local."""
+    assert stt_service._STT_DEFAULT_PROVIDER == "faster-whisper-local"
+
+
+def test_stt_provider_resolution_default(monkeypatch):
+    """TASK-249: no env var → resolved provider is faster-whisper-local, source is default."""
+    monkeypatch.delenv("DRAGON_PET_STT_PROVIDER", raising=False)
+    result = stt_service._resolve_stt_provider()
+    assert result["resolved_provider"]        == "faster-whisper-local"
+    assert result["provider_source"]          == "default"
+    assert result["provider_fallback_reason"] == "none"
+
+
+def test_stt_provider_resolution_env_valid(monkeypatch):
+    """TASK-249: valid env var → resolved provider matches env, source is env."""
+    monkeypatch.setenv("DRAGON_PET_STT_PROVIDER", "funasr-local")
+    result = stt_service._resolve_stt_provider()
+    assert result["requested_provider"]       == "funasr-local"
+    assert result["resolved_provider"]        == "funasr-local"
+    assert result["provider_source"]          == "env"
+    assert result["provider_fallback_reason"] == "none"
+
+
+def test_stt_provider_resolution_invalid_fallback(monkeypatch):
+    """TASK-249: invalid env var → fallback to faster-whisper-local, fallback reason set."""
+    monkeypatch.setenv("DRAGON_PET_STT_PROVIDER", "openai-cloud-invalid")
+    result = stt_service._resolve_stt_provider()
+    assert result["resolved_provider"]        == "faster-whisper-local"
+    assert result["provider_source"]          == "fallback"
+    assert result["provider_fallback_reason"] == "invalid_provider"
+
+
+def test_stt_provider_resolution_sherpa_onnx(monkeypatch):
+    """TASK-249: sherpa-onnx-local is a valid allowed provider value."""
+    monkeypatch.setenv("DRAGON_PET_STT_PROVIDER", "sherpa-onnx-local")
+    result = stt_service._resolve_stt_provider()
+    assert result["resolved_provider"]  == "sherpa-onnx-local"
+    assert result["provider_source"]    == "env"
+
+
+def test_stt_funasr_unavailable_returns_clean_unavailable(monkeypatch):
+    """TASK-249: funasr-local provider when funasr not installed → clean unavailable, no crash."""
+    monkeypatch.setattr(stt_service, "_FUNASR_AVAILABLE", False)
+    monkeypatch.setattr(stt_service, "_STT_RESOLVED_PROVIDER", "funasr-local")
+    monkeypatch.setattr(stt_service, "_STT_PROVIDER_RESOLUTION", {
+        "requested_provider": "funasr-local",
+        "resolved_provider": "funasr-local",
+        "provider_source": "env",
+        "provider_fallback_reason": "none",
+    })
+    stt_service._reset_model_for_tests()
+    result = stt_service.transcribe_audio_bytes(b"\x01\x02\x03", language="zh")
+    assert result["status"] == "unavailable", "TASK-249: funasr unavailable must return status=unavailable"
+    assert result["transcript"] == "", "TASK-249: transcript must be empty for unavailable"
+    assert "Traceback" not in str(result), "TASK-249: no raw stack trace in unavailable response"
+
+
+def test_stt_sherpa_onnx_unavailable_returns_clean_unavailable(monkeypatch):
+    """TASK-249: sherpa-onnx-local provider → clean unavailable (design-only), no crash."""
+    monkeypatch.setattr(stt_service, "_STT_RESOLVED_PROVIDER", "sherpa-onnx-local")
+    monkeypatch.setattr(stt_service, "_STT_PROVIDER_RESOLUTION", {
+        "requested_provider": "sherpa-onnx-local",
+        "resolved_provider": "sherpa-onnx-local",
+        "provider_source": "env",
+        "provider_fallback_reason": "none",
+    })
+    result = stt_service.transcribe_audio_bytes(b"\x01\x02\x03", language="zh")
+    assert result["status"] == "unavailable", "TASK-249: sherpa-onnx-local must return status=unavailable"
+    assert result["transcript"] == ""
+    assert "Traceback" not in str(result)
+
+
+def test_stt_provider_metadata_in_response_faster_whisper(monkeypatch):
+    """TASK-249: ok response must include all provider metadata fields."""
+    from types import SimpleNamespace
+
+    class _GoodModel:
+        def transcribe(self, _buf, **_kwargs):
+            seg = SimpleNamespace(text="你好")
+            info = SimpleNamespace(language="zh")
+            return iter([seg]), info
+
+    monkeypatch.setattr(stt_service, "_WHISPER_AVAILABLE", True)
+    monkeypatch.setattr(stt_service, "_STT_RESOLVED_PROVIDER", "faster-whisper-local")
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(stt_service, "_load_model", lambda: _GoodModel())
+    result = stt_service.transcribe_audio_bytes(b"\x01\x02\x03", language="zh")
+    assert result["status"] == "ok"
+    assert "sttProviderRequested"      in result, "TASK-249: sttProviderRequested must be present"
+    assert "sttProviderResolved"       in result, "TASK-249: sttProviderResolved must be present"
+    assert "sttProviderSource"         in result, "TASK-249: sttProviderSource must be present"
+    assert "sttProviderLoadStatus"     in result, "TASK-249: sttProviderLoadStatus must be present"
+    assert "sttProviderFallbackReason" in result, "TASK-249: sttProviderFallbackReason must be present"
+
+
+def test_stt_provider_metadata_in_unavailable_response(monkeypatch):
+    """TASK-249: unavailable response (no whisper) must include provider metadata."""
+    monkeypatch.setattr(stt_service, "_WHISPER_AVAILABLE", False)
+    monkeypatch.setattr(stt_service, "_STT_RESOLVED_PROVIDER", "faster-whisper-local")
+    result = stt_service.transcribe_audio_bytes(b"\x01\x02\x03", language="zh")
+    assert result["status"] == "unavailable"
+    assert "sttProviderResolved" in result, "TASK-249: sttProviderResolved must be in unavailable response"
+    assert "sttProviderSource"   in result, "TASK-249: sttProviderSource must be in unavailable response"
+
+
+def test_stt_provider_no_raw_stack_in_unavailable():
+    """TASK-249: provider unavailable response must not contain raw stack traces."""
+    result = stt_service._get_provider_metadata()
+    for val in result.values():
+        if isinstance(val, str):
+            assert "Traceback" not in val, "TASK-249: provider metadata must not contain stack traces"
+            assert 'File "' not in val,   "TASK-249: provider metadata must not contain file paths"
+
+
+def test_stt_no_new_endpoint_added():
+    """TASK-249: no new STT endpoint must be added — only /stt/transcribe exists."""
+    import app.api.routes as routes_module
+    route_paths = [r.path for r in routes_module.router.routes]
+    stt_routes = [p for p in route_paths if "stt" in p]
+    assert "/stt/transcribe" in stt_routes, "TASK-249: /stt/transcribe must still exist"
+    # Only one STT route allowed
+    assert len(stt_routes) == 1, (
+        f"TASK-249: only /stt/transcribe allowed; found {stt_routes}"
+    )
+
+
+def test_stt_language_lock_still_zh_after_task249():
+    """TASK-249 regression: language lock (TASK-245) must not be regressed."""
+    import app.api.routes as routes_module
+    assert routes_module._STT_DEFAULT_LANGUAGE == "zh", "TASK-249 regression: language lock must still be zh"
+
+
+def test_stt_model_metadata_still_present_after_task249(monkeypatch):
+    """TASK-249 regression: TASK-246 model metadata fields must not be regressed."""
+    from types import SimpleNamespace
+
+    class _GoodModel:
+        def transcribe(self, _buf, **_kwargs):
+            seg = SimpleNamespace(text="test")
+            info = SimpleNamespace(language="zh")
+            return iter([seg]), info
+
+    monkeypatch.setattr(stt_service, "_WHISPER_AVAILABLE", True)
+    monkeypatch.setattr(stt_service, "_STT_RESOLVED_PROVIDER", "faster-whisper-local")
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(stt_service, "_load_model", lambda: _GoodModel())
+    result = stt_service.transcribe_audio_bytes(b"\x01\x02\x03", language="zh")
+    assert result["status"] == "ok"
+    assert "requestedModel"  in result, "TASK-249 regression: requestedModel must still be present"
+    assert "resolvedModel"   in result, "TASK-249 regression: resolvedModel must still be present"
+    assert "modelLoadStatus" in result, "TASK-249 regression: modelLoadStatus must still be present"
+
+
+def test_stt_correction_metadata_still_present_after_task249(monkeypatch):
+    """TASK-249 regression: TASK-247/248 correction metadata must not be regressed."""
+    from types import SimpleNamespace
+
+    class _GoodModel:
+        def transcribe(self, _buf, **_kwargs):
+            seg = SimpleNamespace(text="test transcript")
+            info = SimpleNamespace(language="zh")
+            return iter([seg]), info
+
+    monkeypatch.setattr(stt_service, "_WHISPER_AVAILABLE", True)
+    monkeypatch.setattr(stt_service, "_STT_RESOLVED_PROVIDER", "faster-whisper-local")
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(stt_service, "_load_model", lambda: _GoodModel())
+    result = stt_service.transcribe_audio_bytes(b"\x01\x02\x03", language="zh")
+    assert result["status"] == "ok"
+    assert "rawTranscript"       in result, "TASK-249 regression: rawTranscript must still be present"
+    assert "correctedTranscript" in result, "TASK-249 regression: correctedTranscript must still be present"
+    assert "correctionApplied"   in result, "TASK-249 regression: correctionApplied must still be present"
+    assert "matchedAlias"        in result, "TASK-249 regression: matchedAlias must still be present"
+    assert "canonicalTerm"       in result, "TASK-249 regression: canonicalTerm must still be present"

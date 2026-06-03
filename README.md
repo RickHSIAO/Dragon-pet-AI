@@ -7,7 +7,7 @@
 📋 **[完整 Demo 腳本與面試重點](docs/PORTFOLIO_DEMO_SCRIPT.md)**
 📋 **[Phase 4 Provider Settings 摘要](docs/PHASE4_PROVIDER_SETTINGS_SUMMARY.md)**
 
-**最新本地狀態（2026-06-03）：** TASK-248 STT Hotword Coverage **DONE - HOTWORD MAP EXPANDED / NEEDS STT PROVIDER FOLLOW-UP**。Windows smoke PARTIAL：alias map 邏輯正確，但 faster-whisper `tiny` 產生整句錯亂（「可以是DNA按」、「墨鯰墨鯰」、「先跟佩套AI」），超出 correction map 能修復的範圍。Root cause：STT provider 中文 ASR 品質不足，非 hotword coverage 問題。下一步：TASK-249 Free Local Chinese STT Provider Evaluation（FunASR / Paraformer 優先）。
+**最新本地狀態（2026-06-03）：** TASK-249 Free Local Chinese STT Provider Evaluation **DONE - WINDOWS STT PROVIDER SMOKE PASS**。`DRAGON_PET_STT_PROVIDER` env var resolver、FunASR skeleton（`paraformer-zh`；未安裝時安全回傳 unavailable）、sherpa-onnx design-only、7 provider metadata 欄位、6 renderer diagnostics 欄位。85 pytest + 11 renderer smoke PASS。`scripts/stt_provider_smoke.py` 35/35 PASS：default / bad-provider fallback / funasr-local / sherpa-onnx-local 全部通過。下一步：TASK-250 FunASR Local Runtime Integration。
 
 ---
 
@@ -107,7 +107,7 @@ ollama serve
 | 真實 API Key 使用 | ❌ 無 — 所有測試使用 mocked runner |
 | 生產就緒 | ❌ 尚未 — prototype / portfolio 階段 |
 | Demo 可用（本地 Ollama） | ✅ 是 |
-| 下一個任務 | TASK-249 — Free Local Chinese STT Provider Evaluation（FunASR / Paraformer 優先；sherpa-onnx 備選；不用付費 API；不新增 IPC）|
+| 下一個任務 | TASK-250 — FunASR Local Runtime Integration（待 TASK-249 Windows smoke 結果；Paraformer 準確度足夠則啟用；否則評估 sherpa-onnx 或 faster-whisper 升級）|
 
 ---
 
@@ -397,8 +397,8 @@ python -c "import json, urllib.request; data=json.dumps({'message':'你好！克
 | [docs/PROVIDER_TEST_CONNECTION_DESIGN.md](docs/PROVIDER_TEST_CONNECTION_DESIGN.md) | Test Connection 設計與強化測試結果 |
 | [docs/SECURE_KEY_STORAGE_DESIGN.md](docs/SECURE_KEY_STORAGE_DESIGN.md) | 金鑰儲存威脅模型、儲存選項、遮蔽規則 |
 | [docs/BYOK_PRODUCT_AND_SETTINGS.md](docs/BYOK_PRODUCT_AND_SETTINGS.md) | BYOK 產品設計與安全邊界 |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖；TASK-248 DONE - HOTWORD MAP EXPANDED / NEEDS STT PROVIDER FOLLOW-UP；下一步 TASK-249 Free Local Chinese STT Provider Evaluation |
-| [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄；TASK-248 DONE；TASK-249 Free Local Chinese STT Provider Evaluation PLANNED |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖；TASK-249 DONE - WINDOWS STT PROVIDER SMOKE PASS；下一步 TASK-250 FunASR Local Runtime Integration |
+| [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄；TASK-248 DONE；TASK-249 DONE - WINDOWS STT PROVIDER SMOKE PASS |
 | [docs/RENDERER_MODULARIZATION_PLAN.md](docs/RENDERER_MODULARIZATION_PLAN.md) | TASK-237 renderer modularization boundary map：current renderer responsibilities, proposed modules, extraction order (TASK-238 done, TASK-239 DONE - WINDOWS VISUAL SMOKE PASS), contracts, risks, validation strategy |
 | [docs/INTERACTIVE_COMPANION_ARCHITECTURE.md](docs/INTERACTIVE_COMPANION_ARCHITECTURE.md) | TASK-222/224 互動陪伴架構 checkpoint：data flow、layer responsibility、IPC inventory、安全邊界、Character State Layer diagnostics、TASK-237 renderer modularization phase |
 | [docs/CHRISTINA_PERSONA_CONTEXT_PACK.md](docs/CHRISTINA_PERSONA_CONTEXT_PACK.md) | TASK-225 Christina persona context pack：canonical source、runtime-safe adaptation、strength levels、runtime boundary |

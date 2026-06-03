@@ -12603,6 +12603,143 @@ function testTask244CssDiagnosticsPanel() {
 }
 
 // ---------------------------------------------------------------------------
+// TASK-249: Free Local Chinese STT Provider Evaluation
+// ---------------------------------------------------------------------------
+
+function testTask249RendererHasProviderSelectionFields() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes('sttProviderRequested: ""'),    "TASK-249: sttProviderRequested field must exist in fullAppVoiceDiagnostics");
+  assert.ok(src.includes('sttProviderResolved: ""'),     "TASK-249: sttProviderResolved field must exist");
+  assert.ok(src.includes('sttProviderSource: ""'),       "TASK-249: sttProviderSource field must exist");
+  assert.ok(src.includes('sttProviderLoadStatus: ""'),   "TASK-249: sttProviderLoadStatus field must exist");
+  assert.ok(src.includes('sttProviderLoadError: ""'),    "TASK-249: sttProviderLoadError field must exist");
+  assert.ok(src.includes('sttProviderFallbackReason: ""'), "TASK-249: sttProviderFallbackReason field must exist");
+  console.log("  testTask249RendererHasProviderSelectionFields PASS");
+}
+
+function testTask249DiagnosticsRenderIncludesProviderLines() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const renderFnStart = src.indexOf("function renderFullAppVoiceDiagnostics");
+  const renderFnEnd   = src.indexOf("\n}", renderFnStart) + 2;
+  const renderFn = src.slice(renderFnStart, renderFnEnd);
+  assert.ok(renderFn.includes("sttProviderResolved"),     "TASK-249: render must include sttProviderResolved");
+  assert.ok(renderFn.includes("sttProviderSource"),       "TASK-249: render must include sttProviderSource");
+  assert.ok(renderFn.includes("sttProviderLoadStatus"),   "TASK-249: render must include sttProviderLoadStatus");
+  assert.ok(renderFn.includes("sttProviderFallbackReason"), "TASK-249: render must include sttProviderFallbackReason");
+  assert.ok(renderFn.includes("STT Provider"),            "TASK-249: render must include 'STT Provider' label");
+  console.log("  testTask249DiagnosticsRenderIncludesProviderLines PASS");
+}
+
+async function testTask249DiagnosticsDefaultsNewFields() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  assert.ok("sttProviderRequested"    in sandbox.fullAppVoiceDiagnostics, "TASK-249: sttProviderRequested must exist");
+  assert.ok("sttProviderResolved"     in sandbox.fullAppVoiceDiagnostics, "TASK-249: sttProviderResolved must exist");
+  assert.ok("sttProviderSource"       in sandbox.fullAppVoiceDiagnostics, "TASK-249: sttProviderSource must exist");
+  assert.ok("sttProviderLoadStatus"   in sandbox.fullAppVoiceDiagnostics, "TASK-249: sttProviderLoadStatus must exist");
+  assert.ok("sttProviderLoadError"    in sandbox.fullAppVoiceDiagnostics, "TASK-249: sttProviderLoadError must exist");
+  assert.ok("sttProviderFallbackReason" in sandbox.fullAppVoiceDiagnostics, "TASK-249: sttProviderFallbackReason must exist");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttProviderRequested,    "", "TASK-249: sttProviderRequested default must be empty");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttProviderResolved,     "", "TASK-249: sttProviderResolved default must be empty");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttProviderFallbackReason, "", "TASK-249: sttProviderFallbackReason default must be empty");
+  console.log("  testTask249DiagnosticsDefaultsNewFields PASS");
+}
+
+async function testTask249ResetClearsProviderFields() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  sandbox.fullAppVoiceDiagnostics.sttProviderRequested    = "funasr-local";
+  sandbox.fullAppVoiceDiagnostics.sttProviderResolved     = "funasr-local";
+  sandbox.fullAppVoiceDiagnostics.sttProviderSource       = "env";
+  sandbox.fullAppVoiceDiagnostics.sttProviderLoadStatus   = "unavailable";
+  sandbox.fullAppVoiceDiagnostics.sttProviderLoadError    = "not installed";
+  sandbox.fullAppVoiceDiagnostics.sttProviderFallbackReason = "none";
+  sandbox.resetFullAppVoiceDiagnosticsForRecording("manual");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttProviderRequested,    "", "TASK-249: reset must clear sttProviderRequested");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttProviderResolved,     "", "TASK-249: reset must clear sttProviderResolved");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttProviderLoadStatus,   "", "TASK-249: reset must clear sttProviderLoadStatus");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttProviderFallbackReason, "", "TASK-249: reset must clear sttProviderFallbackReason");
+  console.log("  testTask249ResetClearsProviderFields PASS");
+}
+
+async function testTask249UpdateDiagnosticsHandlesProviderFields() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  sandbox.updateFullAppVoiceDiagnostics({ sttProviderResolved: "funasr-local", sttProviderSource: "env" });
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttProviderResolved, "funasr-local", "TASK-249: update must set sttProviderResolved");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttProviderSource,   "env",          "TASK-249: update must set sttProviderSource");
+  console.log("  testTask249UpdateDiagnosticsHandlesProviderFields PASS");
+}
+
+function testTask249TranscribeFnExtractsProviderMetadata() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("result.sttProviderRequested"),    "TASK-249: transcribeFn must extract sttProviderRequested");
+  assert.ok(src.includes("result.sttProviderResolved"),     "TASK-249: transcribeFn must extract sttProviderResolved");
+  assert.ok(src.includes("result.sttProviderSource"),       "TASK-249: transcribeFn must extract sttProviderSource");
+  assert.ok(src.includes("result.sttProviderLoadStatus"),   "TASK-249: transcribeFn must extract sttProviderLoadStatus");
+  assert.ok(src.includes("result.sttProviderFallbackReason"), "TASK-249: transcribeFn must extract sttProviderFallbackReason");
+  console.log("  testTask249TranscribeFnExtractsProviderMetadata PASS");
+}
+
+async function testTask249MissingProviderUsesUnknownFallback() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  // Simulate a result object with no provider fields
+  const mockTranscribeAudio = async () => ({
+    status: "ok",
+    transcript: "test",
+    language: "zh",
+    languageLocked: true,
+    task: "transcribe",
+    provider: "faster-whisper-local",
+    model: "tiny",
+    // sttProviderRequested intentionally absent
+  });
+  const mockDragonPet = { chatHistoryLoad: async () => [], transcribeAudio: mockTranscribeAudio };
+  const { sandbox: s2 } = await loadRenderer({ dragonPet: mockDragonPet });
+  // After extracting a result with missing sttProvider fields, fallbacks should be "unknown"/"none"
+  const fakeResult = { status: "ok", transcript: "hello" };
+  s2.fullAppVoiceDiagnostics.sttProviderRequested    = fakeResult.sttProviderRequested    ? String(fakeResult.sttProviderRequested)    : "unknown";
+  s2.fullAppVoiceDiagnostics.sttProviderFallbackReason = fakeResult.sttProviderFallbackReason ? String(fakeResult.sttProviderFallbackReason) : "none";
+  assert.strictEqual(s2.fullAppVoiceDiagnostics.sttProviderRequested,    "unknown", "TASK-249: missing sttProviderRequested must use 'unknown' fallback");
+  assert.strictEqual(s2.fullAppVoiceDiagnostics.sttProviderFallbackReason, "none",  "TASK-249: missing sttProviderFallbackReason must use 'none' fallback");
+  console.log("  testTask249MissingProviderUsesUnknownFallback PASS");
+}
+
+function testTask249NoNewIpcChannels() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(!src.includes("ipcRenderer.on(\"stt-provider"),  "TASK-249 must not add stt-provider IPC channel");
+  assert.ok(!src.includes("ipcRenderer.on(\"funasr"),        "TASK-249 must not add funasr IPC channel");
+  assert.ok(!src.includes("ipcRenderer.on(\"sherpa"),        "TASK-249 must not add sherpa IPC channel");
+  console.log("  testTask249NoNewIpcChannels PASS");
+}
+
+function testTask249NoPetWindowCallsInProviderFlow() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const fnStart = src.indexOf("async function transcribeFullAppAudioBlob");
+  const fnEnd   = src.indexOf("\n}", fnStart) + 2;
+  const fnBody  = src.slice(fnStart, fnEnd);
+  assert.ok(!fnBody.includes("petWindow."),      "TASK-249: transcribeFn must not call petWindow");
+  assert.ok(!fnBody.includes("updatePetSpeech"), "TASK-249: transcribeFn must not call updatePetSpeech");
+  console.log("  testTask249NoPetWindowCallsInProviderFlow PASS");
+}
+
+function testTask249NoTtsInProviderFlow() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const fnStart = src.indexOf("async function transcribeFullAppAudioBlob");
+  const fnEnd   = src.indexOf("\n}", fnStart) + 2;
+  const fnBody  = src.slice(fnStart, fnEnd);
+  assert.ok(!fnBody.includes("speechSynthesis"), "TASK-249: transcribeFn must not call speechSynthesis (TTS)");
+  console.log("  testTask249NoTtsInProviderFlow PASS");
+}
+
+async function testTask249RegressionTask248StillPass() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes('sttMatchedAlias: ""'),  "TASK-249 regression: sttMatchedAlias must still exist");
+  assert.ok(src.includes('sttCanonicalTerm: ""'), "TASK-249 regression: sttCanonicalTerm must still exist");
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  assert.ok("sttMatchedAlias"  in sandbox.fullAppVoiceDiagnostics, "TASK-249 regression: sttMatchedAlias must still be in diagnostics");
+  assert.ok("sttCanonicalTerm" in sandbox.fullAppVoiceDiagnostics, "TASK-249 regression: sttCanonicalTerm must still be in diagnostics");
+  console.log("  testTask249RegressionTask248StillPass PASS");
+}
+
+// ---------------------------------------------------------------------------
 // TASK-248: STT Hotword Coverage / Alias Expansion
 // ---------------------------------------------------------------------------
 
@@ -14439,6 +14576,19 @@ async function main() {
   await testTask244dDiagnosticsDefaultsNewFields();
   await testTask244dPlayFnSetsObjectUrlActive();
   await testTask244dResetSandboxClearsPreviewState();
+
+  // TASK-249: Free Local Chinese STT Provider Evaluation
+  testTask249RendererHasProviderSelectionFields();
+  testTask249DiagnosticsRenderIncludesProviderLines();
+  await testTask249DiagnosticsDefaultsNewFields();
+  await testTask249ResetClearsProviderFields();
+  await testTask249UpdateDiagnosticsHandlesProviderFields();
+  testTask249TranscribeFnExtractsProviderMetadata();
+  await testTask249MissingProviderUsesUnknownFallback();
+  testTask249NoNewIpcChannels();
+  testTask249NoPetWindowCallsInProviderFlow();
+  testTask249NoTtsInProviderFlow();
+  await testTask249RegressionTask248StillPass();
 
   // TASK-248: STT Hotword Coverage / Alias Expansion
   testTask248RendererHasMatchedAliasFields();

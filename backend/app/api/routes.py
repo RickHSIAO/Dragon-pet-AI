@@ -96,7 +96,11 @@ async def stt_transcribe(audio: UploadFile = File(...)):
              "rawTranscript": str | None, "correctedTranscript": str | None,
              "correctionApplied": bool | None, "correctionMode": str | None,
              "correctionReason": str | None, "matchedAlias": str | None,
-             "canonicalTerm": str | None}.
+             "canonicalTerm": str | None,
+             "sttProviderRequested": str | None, "sttProviderResolved": str | None,
+             "sttProviderSource": str | None, "sttProviderLoadStatus": str | None,
+             "sttProviderLoadError": str | None, "sttProviderFallbackReason": str | None,
+             "sttProviderCandidateNotes": str | None}.
 
     Scope limits (TASK-167B / TASK-245):
     - Local Whisper only — no external STT API calls.

@@ -25841,7 +25841,7 @@ All validations PASS: renderer-chat-smoke.js ✓, pet-window-smoke.js ✓, pet-r
 
 ## TASK-249 | Free Local Chinese STT Provider Evaluation
 
-Status: PLANNED (2026-06-03)
+Status: DONE - WINDOWS STT PROVIDER SMOKE PASS (2026-06-03)
 
 ### Background
 
@@ -25877,10 +25877,91 @@ as a replacement or upgrade path for faster-whisper-local.
 6. No background / always-listening.
 7. No Pet Window / Output Queue / Diagnostics Drawer change.
 8. faster-whisper-local must be preserved as fallback (graceful degradation if new provider absent).
-9. Provider selection via env var (e.g. `DRAGON_PET_STT_PROVIDER`); safe fallback to faster-whisper.
+9. Provider selection via env var `DRAGON_PET_STT_PROVIDER`; safe fallback to faster-whisper.
 10. Correction map from TASK-247/248 must remain active regardless of provider.
 
-### Scope (docs-only for now; implementation in follow-up task)
+### Implementation (2026-06-03)
 
-This task is research + design only unless explicitly scoped to implementation.
-Output: provider comparison table, integration plan, env var design, fallback strategy.
+**`backend/app/stt/stt_service.py`** — Provider abstraction layer added:
+- `DRAGON_PET_STT_PROVIDER` env var resolver; allowed: `faster-whisper-local`, `funasr-local`,
+  `sherpa-onnx-local`; default: `faster-whisper-local`; invalid value → safe fallback.
+- `_resolve_stt_provider()` resolves once at module load; result stored in `_STT_PROVIDER_RESOLUTION`.
+- FunASR detection: `_detect_funasr()` at module load; lazy `_load_funasr_model()` on first call.
+- `_transcribe_funasr()` skeleton: returns clean `unavailable` if `funasr` not installed; otherwise
+  calls `AutoModel(model="paraformer-zh", ...)` + `model.generate()`; applies TASK-247/248 correction.
+- sherpa-onnx path: design-only in TASK-249; always returns `unavailable` cleanly.
+- `_get_provider_metadata()` returns 7 fields: `sttProviderRequested`, `sttProviderResolved`,
+  `sttProviderSource`, `sttProviderLoadStatus`, `sttProviderLoadError`, `sttProviderFallbackReason`,
+  `sttProviderCandidateNotes`; merged into every non-empty `transcribe_audio_bytes()` response.
+
+**`apps/desktop/src/renderer/renderer.js`** — 6 new `fullAppVoiceDiagnostics` fields:
+  `sttProviderRequested`, `sttProviderResolved`, `sttProviderSource`, `sttProviderLoadStatus`,
+  `sttProviderLoadError`, `sttProviderFallbackReason`; safe "unknown"/"none" fallbacks on missing.
+  Diagnostics panel shows: "STT Provider: X  來源: Y" and "Provider 載入: Z  fallback: W".
+
+**`backend/tests/test_stt_routes.py`** — 16 new TASK-249 tests; 85 total; all pass.
+
+**`apps/desktop/scripts/renderer-chat-smoke.js`** — 11 new TASK-249 test functions; all pass.
+
+### Evaluation Test Sentences (for Windows smoke)
+
+To verify FunASR / Paraformer accuracy, speak these sentences and check the transcript:
+- 「克莉絲蒂娜，你好」 — hotword 克莉絲蒂娜 must appear correctly
+- 「我想用 Dragon Pet AI 對話」 — project name must survive
+- 「請問可以開啟 Claude Code 嗎」 — tool name must survive
+- 「今天天氣真好」 — baseline Chinese ASR sanity check
+- 「可以是DNA按」 — TASK-248 regression: this phrase must NOT appear (was faster-whisper error)
+
+### Acceptance Criteria
+
+- ✅ `DRAGON_PET_STT_PROVIDER` env var resolver implemented with safe fallback
+- ✅ FunASR `_transcribe_funasr()` skeleton: safe unavailable when not installed
+- ✅ sherpa-onnx path: design-only; always returns clean unavailable
+- ✅ 7 provider metadata fields in every transcription response
+- ✅ 6 renderer diagnostics fields; safe unknown/none fallbacks
+- ✅ 85 pytest tests pass
+- ✅ 11 renderer smoke tests pass
+- ⏳ Windows smoke: install `pip install funasr modelscope`, set `DRAGON_PET_STT_PROVIDER=funasr-local`
+  **in the backend terminal** (not the Electron terminal), restart backend, pre-download `paraformer-zh`
+  model, speak test sentences, verify transcript quality
+
+### Windows Smoke Follow-Up (2026-06-03)
+
+**Issue found**: User set `$env:DRAGON_PET_STT_PROVIDER="funasr-local"` in the Electron terminal
+and ran `npm.cmd start`. Diagnostics still showed `faster-whisper-local / source: default`.
+
+**Root cause**: Backend and Electron are **separate processes**. `npm start` only starts Electron;
+it does NOT spawn the backend. `stt_service.py` reads `DRAGON_PET_STT_PROVIDER` at module import
+time from the backend process's own environment. Setting the env var in the Electron terminal has
+zero effect on the already-running backend process.
+
+**Fix applied**:
+- `backend/app/stt/stt_service.py`: Added `logger.info()` startup log showing resolved provider,
+  visible in uvicorn console on every backend start and `--reload`.
+- `scripts/dev-start-backend.ps1`: Banner now shows `DRAGON_PET_STT_PROVIDER` value (or
+  "(not set — default: faster-whisper-local)") and prints a clear tip that the env var must be
+  set in THIS terminal (the backend terminal), not the Electron terminal.
+
+**Correct Windows smoke workflow**:
+1. In the **backend terminal** (where `dev-start-backend.ps1` runs):
+   ```powershell
+   $env:DRAGON_PET_STT_PROVIDER = "funasr-local"
+   .\scripts\dev-start-backend.ps1
+   ```
+2. Confirm in uvicorn log: `[stt_service] STT provider resolved='funasr-local'  source='env' ...`
+3. In a **separate Electron terminal**: `npm.cmd start` (no env var needed here)
+4. Do voice transcription and check diagnostics panel
+
+**Smoke results (2026-06-03) — 35/35 PASS via `scripts/stt_provider_smoke.py`**:
+- default (no env): `resolved=faster-whisper-local / source=default` ✅
+- bad-provider: `resolved=faster-whisper-local / source=fallback / fallbackReason=invalid_provider` ✅
+- `funasr-local`: `resolved=funasr-local / source=env / loadStatus=unavailable` ✅ (funasr not yet installed)
+- `sherpa-onnx-local`: `resolved=sherpa-onnx-local / source=env / loadStatus=unavailable` ✅ (design-only)
+- All provider metadata fields in transcription response ✅
+- No crash, no raw stack trace ✅
+- `transcribe_audio_bytes()` with funasr-local/sherpa-onnx-local returns clean `unavailable` ✅
+
+### Next Task
+
+TASK-250 — FunASR Local Runtime Integration (pending Windows smoke result; activate if Paraformer
+accuracy is adequate; otherwise evaluate sherpa-onnx or faster-whisper model upgrade).

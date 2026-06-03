@@ -233,7 +233,14 @@ var fullAppVoiceDiagnostics = {
   sttCorrectionReason: "",
   // TASK-248: matched alias / canonical term diagnostics
   sttMatchedAlias: "",
-  sttCanonicalTerm: ""
+  sttCanonicalTerm: "",
+  // TASK-249: STT provider selection diagnostics — populated from /stt/transcribe response
+  sttProviderRequested: "",
+  sttProviderResolved: "",
+  sttProviderSource: "",
+  sttProviderLoadStatus: "",
+  sttProviderLoadError: "",
+  sttProviderFallbackReason: ""
 };
 // TASK-244: session-only VAD tuning vars — override constants for this session only, not persisted
 var fullAppConversationRmsThreshold = FULL_APP_CONVERSATION_RMS_THRESHOLD;
@@ -4040,6 +4047,13 @@ async function transcribeFullAppAudioBlob(blob) {
     // TASK-248: matched alias / canonical term diagnostics
     fullAppVoiceDiagnostics.sttMatchedAlias  = result.matchedAlias  ? String(result.matchedAlias)  : "";
     fullAppVoiceDiagnostics.sttCanonicalTerm = result.canonicalTerm ? String(result.canonicalTerm) : "";
+    // TASK-249: provider selection diagnostics
+    fullAppVoiceDiagnostics.sttProviderRequested    = result.sttProviderRequested    ? String(result.sttProviderRequested)    : "unknown";
+    fullAppVoiceDiagnostics.sttProviderResolved     = result.sttProviderResolved     ? String(result.sttProviderResolved)     : "unknown";
+    fullAppVoiceDiagnostics.sttProviderSource       = result.sttProviderSource       ? String(result.sttProviderSource)       : "unknown";
+    fullAppVoiceDiagnostics.sttProviderLoadStatus   = result.sttProviderLoadStatus   ? String(result.sttProviderLoadStatus)   : "unknown";
+    fullAppVoiceDiagnostics.sttProviderLoadError    = result.sttProviderLoadError    ? String(result.sttProviderLoadError)    : "none";
+    fullAppVoiceDiagnostics.sttProviderFallbackReason = result.sttProviderFallbackReason ? String(result.sttProviderFallbackReason) : "none";
   }
 
   if (!result || typeof result !== "object") throw new Error("stt_error");
@@ -4844,6 +4858,8 @@ function renderFullAppVoiceDiagnostics() {
     "已修正: " + (d.sttCorrectionApplied ? "是" : "否") + "  修正模式: " + (d.sttCorrectionMode || "—"),
     "修正原因: " + (d.sttCorrectionReason || "—"),
     "命中 alias: " + (d.sttMatchedAlias || "—") + "  canonical: " + (d.sttCanonicalTerm || "—"),
+    "STT Provider: " + (d.sttProviderResolved || "unknown") + "  來源: " + (d.sttProviderSource || "unknown"),
+    "Provider 載入: " + (d.sttProviderLoadStatus || "unknown") + "  fallback: " + (d.sttProviderFallbackReason || "none"),
     "---",
     "VAD 最後 RMS: " + d.lastRms.toFixed(4),
     "VAD 最高 RMS: " + d.maxRms.toFixed(4),
@@ -4941,6 +4957,13 @@ function resetFullAppVoiceDiagnosticsForRecording(mode) {
   // TASK-248: reset matched alias / canonical term diagnostics
   fullAppVoiceDiagnostics.sttMatchedAlias                = "";
   fullAppVoiceDiagnostics.sttCanonicalTerm               = "";
+  // TASK-249: reset provider selection diagnostics — repopulated after each STT call
+  fullAppVoiceDiagnostics.sttProviderRequested           = "";
+  fullAppVoiceDiagnostics.sttProviderResolved            = "";
+  fullAppVoiceDiagnostics.sttProviderSource              = "";
+  fullAppVoiceDiagnostics.sttProviderLoadStatus          = "";
+  fullAppVoiceDiagnostics.sttProviderLoadError           = "";
+  fullAppVoiceDiagnostics.sttProviderFallbackReason      = "";
   // constraintsEchoCancellation/NoiseSuppression/AutoGainControl: not reset (carry over from stream)
   revokeLastAudioObjectUrl();
   if (voicePreviewPlayBtn) voicePreviewPlayBtn.disabled = true;
