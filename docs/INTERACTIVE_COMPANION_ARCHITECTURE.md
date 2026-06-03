@@ -570,8 +570,19 @@ Recommended next architecture phase:
   manual_stop; no new IPC, no Pet Window calls in diagnostics section, no localStorage, no audio
   persistence, no TTS, no always-listening; 22 TASK-244 smoke tests PASS, 522 renderer-chat total)
   IMPLEMENTED - NEEDS WINDOWS VOICE QUALITY SMOKE.
+  TASK-245 (STT Language Lock — `_STT_DEFAULT_LANGUAGE = "zh"` constant locks language in route;
+  `transcribe_audio_bytes` receives `language="zh"`; response augmented with `language`,
+  `languageLocked: true`, `task: "transcribe"`, `provider`, `model`, `detectedLanguage`;
+  fullAppVoiceDiagnostics gains 6 new fields updated after each IPC call; renderFullAppVoiceDiagnostics
+  displays STT 語言 / 已鎖定 / STT 任務 / STT 提供者 / 模型 / 偵測語言 via textContent; reset on
+  every recording start; safe "unknown"/"none" fallbacks for missing metadata; 10 renderer-chat smoke
+  tests + 9 backend pytest tests; no new IPC, no new endpoint, no Pet Window / Output Queue /
+  Diagnostics Drawer change, no audio persistence, no TTS, no always-listening; 576 renderer-chat-smoke
+  PASS; Windows smoke 2026-06-03: language lock PASS — no more Thai/Malay/Indonesian; BUT faster-whisper
+  `tiny` zh accuracy poor — follow-up TASK-246 needed for model upgrade)
+  DONE - LANGUAGE LOCK PASS / NEEDS STT MODEL QUALITY FOLLOW-UP.
   Based on `docs/RENDERER_MODULARIZATION_PLAN.md`.
-- TASK-245 recommended next: Extract Context Menu / Search Modules.
+- TASK-246 recommended next: STT Model Quality / Whisper Model Upgrade (`small` or `base` for improved zh accuracy).
 - Relationship state.
 - Mood / attention / energy state beyond the local preview foundation.
 - Idle reaction policy.

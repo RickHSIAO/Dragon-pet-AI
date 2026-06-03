@@ -25385,7 +25385,7 @@ Next task: **TASK-245 — STT Language Lock / Provider Quality Check** (see belo
 
 ## TASK-245 | STT Language Lock / Provider Quality Check
 
-Status: PLANNED (2026-06-03)
+Status: DONE - LANGUAGE LOCK PASS / NEEDS STT MODEL QUALITY FOLLOW-UP (2026-06-03)
 
 ### Goal
 
@@ -25393,35 +25393,144 @@ Eliminate STT mis-classification of Chinese speech as Thai / Malay / Indonesian 
 
 ### Scope
 
-- Audit the `stt:transcribe` IPC handler in `apps/desktop/src/main.js` and the backend `/stt/transcribe` route in `backend/app/api/routes.py` → confirm the current language argument path (currently the route does **not** pass `language` to `transcribe_audio_bytes`, so Whisper auto-detects).
-- Force STT `language = "zh"` (or `"zh-TW"` if the provider supports it) end-to-end. Pick the wire mechanism that does not add a new IPC channel.
-- Confirm Whisper `task = "transcribe"` (not `"translate"`) — current code uses the default which is `transcribe`, but add an explicit assertion / test so a regression cannot silently flip it.
-- Add diagnostics fields surfaced in the existing Voice Diagnostics panel:
+- Audit the `stt:transcribe` IPC handler in `apps/desktop/src/main.js` and the backend `/stt/transcribe` route in `backend/app/api/routes.py` → confirmed: the route did **not** pass `language` to `transcribe_audio_bytes`, so Whisper auto-detected — causing zh speech to be misclassified as Thai / Malay / Indonesian.
+- Force STT `language = "zh"` end-to-end. Mechanism: backend route constant `_STT_DEFAULT_LANGUAGE = "zh"`, passed to `transcribe_audio_bytes(..., language="zh")`.  No new IPC channel.
+- Confirm Whisper `task = "transcribe"` (not `"translate"`) — explicit constant `_STT_DEFAULT_TASK = "transcribe"` added to route and included in response.
+- Added diagnostics fields surfaced in the existing Voice Diagnostics panel:
   - `sttLanguage` (e.g. `"zh"`)
-  - `languageLocked` (boolean)
+  - `languageLocked` (`true`)
   - `sttTask` (e.g. `"transcribe"`)
   - `sttProvider` (e.g. `"faster-whisper-local"`)
   - `sttModel` (e.g. `"tiny"`)
+  - `detectedLanguage` (from `TranscriptionInfo.language` on success, else `"none"`)
 
-### Restrictions
+### Implementation
 
-- **No new IPC channels** — reuse existing `stt:transcribe`.
-- **No new backend endpoints or services** — modifying the existing `/stt/transcribe` route + `transcribe_audio_bytes` signature is allowed; adding new modules is not.
-- **No raw audio persistence** — in-memory only, same as TASK-167B / TASK-244b.
-- **No background / always-listening.**
-- **No changes to Pet Window, Output Queue, or Diagnostics Drawer.**
-- **No localStorage / sessionStorage** for the language setting in this task (session-default only; persistent settings deferred).
+**Backend (`backend/app/api/routes.py`)**
+- Added `_STT_DEFAULT_LANGUAGE = "zh"` and `_STT_DEFAULT_TASK = "transcribe"` module-level constants.
+- `/stt/transcribe` now calls `transcribe_audio_bytes(..., language=_STT_DEFAULT_LANGUAGE)`.
+- Response augmented: `language`, `languageLocked: True`, `task` always included regardless of STT status.
+
+**Backend (`backend/app/stt/stt_service.py`)**
+- Added `_STT_PROVIDER = "faster-whisper-local"` and `_STT_MODEL_NAME = "tiny"` constants.
+- `status == "ok"` response now includes `provider`, `model`, `detectedLanguage` (from `_info.language`, None-safe).
+- Non-ok paths (empty / unavailable / error) do not include provider/model — renderer uses safe fallbacks.
+
+**Renderer (`apps/desktop/src/renderer/renderer.js`)**
+- `fullAppVoiceDiagnostics` state: added 6 new fields (`sttLanguage`, `languageLocked`, `sttTask`, `sttProvider`, `sttModel`, `detectedLanguage`), all defaulting to `""` / `false` / `""`.
+- `resetFullAppVoiceDiagnosticsForRecording()`: resets the 6 new fields on every new recording.
+- `transcribeFullAppAudioBlob()`: after IPC result returned, updates all 6 diagnostics fields before status checks — uses safe `"unknown"` / `"none"` fallbacks for missing metadata.
+- `renderFullAppVoiceDiagnostics()`: displays new fields after STT 狀態 line using textContent (no innerHTML):
+  - `STT 語言: zh  已鎖定: 是`
+  - `STT 任務: transcribe`
+  - `STT 提供者: faster-whisper-local  模型: tiny`
+  - `偵測語言: zh`
+
+**Smoke tests (`apps/desktop/scripts/renderer-chat-smoke.js`)**
+10 new TASK-245 tests added:
+- `testTask245RendererHasSttLanguageLockFields` — source has all 6 new fields in init state
+- `testTask245DiagnosticsRenderIncludesLanguageLines` — renderFn includes all 6, uses textContent
+- `testTask245DiagnosticsDefaultsNewFields` — sandbox defaults empty/false
+- `testTask245ResetClearsLanguageLockFields` — reset clears all 6 fields
+- `testTask245UpdateDiagnosticsHandlesLanguageLockFields` — updateFn patches new fields
+- `testTask245TranscribeFnExtractsMetadata` — transcribeFn body updates all 6 with fallbacks
+- `testTask245NoNewIpcChannels` — preload has only stt:transcribe
+- `testTask245NoRawResponsePayloadInDiagnostics` — renderFn has no JSON.stringify / result. access
+- `testTask245NoPetWindowCallsInTranscribeFn` — no TTS / Pet calls
+- `testTask245RegressionTask244StillPass` — pre-TASK-245 fields intact
+
+**Backend tests (`backend/tests/test_stt_routes.py`)**
+9 new TASK-245 tests added:
+- Constants exist and have correct values
+- Route passes `language="zh"` to transcribe
+- Response includes `language`, `languageLocked`, `task`
+- No new endpoint
+- No raw audio persistence
+- Service constants exposed
+- Service ok response includes provider/model/detectedLanguage
+- Language kwarg forwarded to Whisper
+
+### Restrictions (all satisfied)
+
+- No new IPC channels — reused existing `stt:transcribe`.
+- No new backend endpoints.
+- No raw audio persistence.
+- No background / always-listening.
+- No changes to Pet Window, Output Queue, or Diagnostics Drawer.
+- No localStorage / sessionStorage.
+- No new external packages.
 
 ### Acceptance Criteria
 
-- Recording Chinese into Manual Mic produces a Chinese transcript (Hanzi), not Thai / Malay / Indonesian characters.
-- Voice Diagnostics panel shows `sttLanguage = zh`, `languageLocked = true`, `sttTask = transcribe`, `sttProvider`, `sttModel`.
-- Existing smoke suites still PASS (renderer-chat, pet-renderer, pet-window, backend tests).
-- New tests cover: backend transcribe call receives `language="zh"`; route accepts the language; renderer displays the diagnostics fields; no new IPC channel introduced.
+- ✅ `language = "zh"` now passed to `transcribe_audio_bytes` — Whisper auto-detect disabled.
+- ✅ Route returns `language`, `languageLocked: true`, `task: "transcribe"` in response.
+- ✅ Service returns `provider`, `model`, `detectedLanguage` on successful transcription.
+- ✅ Voice Diagnostics panel shows all 6 new fields via textContent (no innerHTML).
+- ✅ All new fields reset on each recording start; safe fallbacks on missing metadata.
+- ✅ Recording Chinese into Manual Mic: no longer produces Thai / Malay / Indonesian characters — language lock confirmed.
+- ⚠️ zh transcript accuracy still insufficient — faster-whisper `tiny` model quality too low (see remaining issue below).
+
+### Windows Smoke Results (2026-06-03)
+
+1. ✅ STT language lock confirmed: `STT 語言: zh  已鎖定: 是` shown in diagnostics.
+2. ✅ Transcript is Hanzi — no longer Thai / Malay / Indonesian.
+3. ✅ `STT 任務: transcribe`, `STT 提供者: faster-whisper-local`, `模型: tiny`, `偵測語言: zh` all visible.
+4. ✅ Voice Conversation Mode: same language fields appear per utterance.
+5. ✅ TASK-241/242/243/244 regression: no regression.
+6. ✅ Typed chat send / edit / delete / clear: no regression.
+7. ⚠️ **Remaining issue**: example: said「這是中文語音辨識測試」, got something like「這文中位與英編輯測試」. Language auto-detect misclassification is fixed but faster-whisper `tiny` zh accuracy is too low for practical use.
+
+### Remaining Issue — STT Model Quality
+
+- **Root cause candidate**: faster-whisper `tiny` model has limited Chinese speech recognition quality. The model is optimized for fast inference over accuracy; for zh speech, the `small` or `base` model is expected to perform significantly better.
+- **Not fixed by language lock alone**: language lock prevents wrong-language output; it does not improve acoustic model quality within the forced language.
+- **Next task**: TASK-246 — STT Model Quality / Whisper Model Upgrade.
 
 ### Out of Scope
 
-- Switching STT provider (e.g. cloud Whisper, Azure, Google) — that is a separate evaluation (TASK-245b candidate).
+- Switching STT provider (e.g. cloud Whisper, Azure, Google) — separate evaluation (TASK-245b candidate).
 - Pre-roll audio buffer for Conversation Mode VAD clipping.
 - Per-recording language override UI.
 - Multi-language support (English / Japanese toggle).
+
+---
+
+## TASK-246 | STT Model Quality / Whisper Model Upgrade
+
+Status: PLANNED (2026-06-03)
+
+### Goal
+
+Improve zh speech recognition accuracy by evaluating faster-whisper model sizes (tiny → small / base). faster-whisper `tiny` is confirmed too low quality for practical Chinese speech after TASK-245 language lock. The language lock is already in place; this task focuses purely on model quality.
+
+### Scope
+
+- Evaluate faster-whisper `tiny` vs `small` vs `base` for zh speech quality on the local Windows machine.
+- If `small` significantly improves accuracy without unacceptable cold-start / RAM penalty: update `_whisper_model` load to use `small` (or make it configurable).
+- Optionally surface the loaded model name in `_STT_MODEL_NAME` constant and in diagnostics.
+- Compare Manual Mic zh recognition quality before/after.
+- Keep `language = "zh"` lock from TASK-245 unchanged.
+
+### Restrictions
+
+- **No new IPC channels.**
+- **No new `/chat` schema change.**
+- **No raw audio persistence.**
+- **No background / always-listening.**
+- **No changes to Pet Window, Output Queue, or Diagnostics Drawer.**
+- **No new external packages** beyond faster-whisper (already installed).
+- **Local-first only** — no cloud STT API (Whisper API, Azure, Google).
+
+### Acceptance Criteria
+
+- Manual Mic: saying「這是中文語音辨識測試」produces a recognizable zh transcript (majority of characters correct).
+- Diagnostics panel shows the updated model name (e.g. `模型: small`).
+- Existing smoke suites still PASS.
+- Cold-start time and RAM usage documented in task notes.
+
+### Out of Scope
+
+- Switching to a cloud STT provider — separate TASK-245b.
+- Per-user model selection UI.
+- Voice Pre-roll Buffer — separate task.
+- Multi-language support.

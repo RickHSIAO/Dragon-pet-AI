@@ -295,7 +295,24 @@ Suggested research and implementation tasks:
   audio persistence. No TTS. No always-listening. 22 TASK-244 smoke tests PASS (522 renderer-chat
   total). Windows voice quality smoke NEEDED.
 
-Recommended follow-up: TASK-245 — Extract Context Menu / Search Modules.
+- TASK-STT-006 STT language lock to prevent zh auto-detect misclassification. **Covered by TASK-245
+  (DONE - LANGUAGE LOCK PASS / NEEDS STT MODEL QUALITY FOLLOW-UP; 2026-06-03):** Root cause confirmed:
+  `/stt/transcribe` route did not pass `language` to `transcribe_audio_bytes` — Whisper auto-detected
+  and misclassified short Chinese utterances as Thai/Malay/Indonesian. Fix: `_STT_DEFAULT_LANGUAGE =
+  "zh"` constant added to `routes.py`; route now calls `transcribe_audio_bytes(..., language="zh")`;
+  response augmented with `language`, `languageLocked: true`, `task: "transcribe"`. `stt_service.py`
+  adds `_STT_PROVIDER` / `_STT_MODEL_NAME` constants; ok response includes `provider`, `model`,
+  `detectedLanguage` (from `TranscriptionInfo.language`). Renderer `fullAppVoiceDiagnostics` gains 6
+  new fields populated after each IPC call; `renderFullAppVoiceDiagnostics` shows `STT 語言`,
+  `已鎖定`, `STT 任務`, `STT 提供者`, `模型`, `偵測語言` via textContent. No new IPC; no new
+  endpoint; no Pet Window / Output Queue / Diagnostics Drawer change; no audio persistence; no TTS;
+  no always-listening. 10 renderer-chat smoke tests + 9 backend pytest tests. renderer-chat-smoke
+  PASS; backend pytest PASS. **Windows smoke result (2026-06-03):** language lock PASS — no more
+  Thai/Malay/Indonesian misclassification; BUT faster-whisper `tiny` model Chinese accuracy poor
+  (「這是中文語音辨識測試」→「這文中位與英編輯測試」). Language lock fix validated; model quality
+  issue is a separate problem requiring TASK-246 (Whisper model upgrade to `small` or `base`).
+
+Recommended follow-up: TASK-246 — STT Model Quality / Whisper Model Upgrade (`small` or `base` for improved zh accuracy).
 
 Each future task must explicitly define safety boundaries, user controls,
 provider scope, queue priority, and no-regression checks.

@@ -12602,6 +12602,160 @@ function testTask244CssDiagnosticsPanel() {
   console.log("  testTask244CssDiagnosticsPanel PASS");
 }
 
+// ---------------------------------------------------------------------------
+// TASK-245: STT Language Lock / Provider Quality Check
+// ---------------------------------------------------------------------------
+
+function testTask245RendererHasSttLanguageLockFields() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("sttLanguage: \"\""), "TASK-245 fullAppVoiceDiagnostics must have sttLanguage field");
+  assert.ok(src.includes("languageLocked: false"), "TASK-245 fullAppVoiceDiagnostics must have languageLocked field");
+  assert.ok(src.includes("sttTask: \"\""), "TASK-245 fullAppVoiceDiagnostics must have sttTask field");
+  assert.ok(src.includes("sttProvider: \"\""), "TASK-245 fullAppVoiceDiagnostics must have sttProvider field");
+  assert.ok(src.includes("sttModel: \"\""), "TASK-245 fullAppVoiceDiagnostics must have sttModel field");
+  assert.ok(src.includes("detectedLanguage: \"\""), "TASK-245 fullAppVoiceDiagnostics must have detectedLanguage field");
+  console.log("  testTask245RendererHasSttLanguageLockFields PASS");
+}
+
+function testTask245DiagnosticsRenderIncludesLanguageLines() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const renderFnStart = src.indexOf("function renderFullAppVoiceDiagnostics");
+  const renderFnEnd   = src.indexOf("\n}", renderFnStart) + 2;
+  const renderFn = src.slice(renderFnStart, renderFnEnd);
+  assert.ok(renderFn.includes("sttLanguage"),       "TASK-245 renderFullAppVoiceDiagnostics must include sttLanguage");
+  assert.ok(renderFn.includes("languageLocked"),     "TASK-245 renderFullAppVoiceDiagnostics must include languageLocked");
+  assert.ok(renderFn.includes("sttTask"),            "TASK-245 renderFullAppVoiceDiagnostics must include sttTask");
+  assert.ok(renderFn.includes("sttProvider"),        "TASK-245 renderFullAppVoiceDiagnostics must include sttProvider");
+  assert.ok(renderFn.includes("sttModel"),           "TASK-245 renderFullAppVoiceDiagnostics must include sttModel");
+  assert.ok(renderFn.includes("detectedLanguage"),   "TASK-245 renderFullAppVoiceDiagnostics must include detectedLanguage");
+  assert.ok(!renderFn.includes("innerHTML"), "TASK-245 render must not use innerHTML");
+  assert.ok(renderFn.includes("textContent"), "TASK-245 render must use textContent for safe output");
+  console.log("  testTask245DiagnosticsRenderIncludesLanguageLines PASS");
+}
+
+async function testTask245DiagnosticsDefaultsNewFields() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  const d = sandbox.fullAppVoiceDiagnostics;
+  assert.ok("sttLanguage" in d,      "TASK-245 diagnostics must have sttLanguage property");
+  assert.ok("languageLocked" in d,   "TASK-245 diagnostics must have languageLocked property");
+  assert.ok("sttTask" in d,          "TASK-245 diagnostics must have sttTask property");
+  assert.ok("sttProvider" in d,      "TASK-245 diagnostics must have sttProvider property");
+  assert.ok("sttModel" in d,         "TASK-245 diagnostics must have sttModel property");
+  assert.ok("detectedLanguage" in d, "TASK-245 diagnostics must have detectedLanguage property");
+  assert.strictEqual(d.sttLanguage,    "", "TASK-245 sttLanguage must default to empty string");
+  assert.strictEqual(d.languageLocked, false, "TASK-245 languageLocked must default to false");
+  assert.strictEqual(d.sttTask,        "", "TASK-245 sttTask must default to empty string");
+  assert.strictEqual(d.sttProvider,    "", "TASK-245 sttProvider must default to empty string");
+  assert.strictEqual(d.sttModel,       "", "TASK-245 sttModel must default to empty string");
+  assert.strictEqual(d.detectedLanguage, "", "TASK-245 detectedLanguage must default to empty string");
+  console.log("  testTask245DiagnosticsDefaultsNewFields PASS");
+}
+
+async function testTask245ResetClearsLanguageLockFields() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  // Simulate metadata having been populated
+  sandbox.fullAppVoiceDiagnostics.sttLanguage    = "zh";
+  sandbox.fullAppVoiceDiagnostics.languageLocked = true;
+  sandbox.fullAppVoiceDiagnostics.sttTask        = "transcribe";
+  sandbox.fullAppVoiceDiagnostics.sttProvider    = "faster-whisper-local";
+  sandbox.fullAppVoiceDiagnostics.sttModel       = "tiny";
+  sandbox.fullAppVoiceDiagnostics.detectedLanguage = "zh";
+  // Reset for next recording
+  sandbox.resetFullAppVoiceDiagnosticsForRecording("manual_mic");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttLanguage,    "", "TASK-245 reset must clear sttLanguage");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.languageLocked, false, "TASK-245 reset must clear languageLocked");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttTask,        "", "TASK-245 reset must clear sttTask");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttProvider,    "", "TASK-245 reset must clear sttProvider");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttModel,       "", "TASK-245 reset must clear sttModel");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.detectedLanguage, "", "TASK-245 reset must clear detectedLanguage");
+  console.log("  testTask245ResetClearsLanguageLockFields PASS");
+}
+
+async function testTask245UpdateDiagnosticsHandlesLanguageLockFields() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  // updateFullAppVoiceDiagnostics must patch the new fields (they exist in state now)
+  sandbox.updateFullAppVoiceDiagnostics({
+    sttLanguage: "zh",
+    languageLocked: true,
+    sttTask: "transcribe",
+    sttProvider: "faster-whisper-local",
+    sttModel: "tiny",
+    detectedLanguage: "zh",
+  });
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttLanguage, "zh", "TASK-245 update must patch sttLanguage");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.languageLocked, true, "TASK-245 update must patch languageLocked");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttTask, "transcribe", "TASK-245 update must patch sttTask");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttProvider, "faster-whisper-local", "TASK-245 update must patch sttProvider");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttModel, "tiny", "TASK-245 update must patch sttModel");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.detectedLanguage, "zh", "TASK-245 update must patch detectedLanguage");
+  console.log("  testTask245UpdateDiagnosticsHandlesLanguageLockFields PASS");
+}
+
+function testTask245TranscribeFnExtractsMetadata() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const fnStart = src.indexOf("async function transcribeFullAppAudioBlob");
+  const fnEnd   = src.indexOf("\n}", fnStart) + 2;
+  const fnBody  = src.slice(fnStart, fnEnd);
+  assert.ok(fnBody.includes("sttLanguage"),    "TASK-245 transcribeFullAppAudioBlob must update sttLanguage");
+  assert.ok(fnBody.includes("languageLocked"), "TASK-245 transcribeFullAppAudioBlob must update languageLocked");
+  assert.ok(fnBody.includes("sttTask"),        "TASK-245 transcribeFullAppAudioBlob must update sttTask");
+  assert.ok(fnBody.includes("sttProvider"),    "TASK-245 transcribeFullAppAudioBlob must update sttProvider");
+  assert.ok(fnBody.includes("sttModel"),       "TASK-245 transcribeFullAppAudioBlob must update sttModel");
+  assert.ok(fnBody.includes("detectedLanguage"), "TASK-245 transcribeFullAppAudioBlob must update detectedLanguage");
+  // Must use safe fallbacks (unknown / none) — not raw JSON
+  assert.ok(fnBody.includes("\"unknown\""), "TASK-245 transcribeFn must have 'unknown' fallback for missing language fields");
+  assert.ok(fnBody.includes("\"none\""),    "TASK-245 transcribeFn must have 'none' fallback for missing detectedLanguage");
+  console.log("  testTask245TranscribeFnExtractsMetadata PASS");
+}
+
+function testTask245NoNewIpcChannels() {
+  const preloadSrc = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "preload.js"), "utf8");
+  // stt:transcribe must still be the only STT channel
+  const sttChannelCount = (preloadSrc.match(/stt:/g) || []).length;
+  assert.ok(sttChannelCount <= 2, // one constant declaration + one usage
+    "TASK-245 preload must not add new stt: IPC channels, found " + sttChannelCount + " occurrences");
+  assert.ok(preloadSrc.includes("stt:transcribe"),
+    "TASK-245 preload must still expose stt:transcribe");
+  console.log("  testTask245NoNewIpcChannels PASS");
+}
+
+function testTask245NoRawResponsePayloadInDiagnostics() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const renderFnStart = src.indexOf("function renderFullAppVoiceDiagnostics");
+  const renderFnEnd   = src.indexOf("\n}", renderFnStart) + 2;
+  const renderFn = src.slice(renderFnStart, renderFnEnd);
+  // Must not dump raw result object or JSON in diagnostics
+  assert.ok(!renderFn.includes("JSON.stringify"), "TASK-245 render must not JSON.stringify the result");
+  assert.ok(!renderFn.includes("result."), "TASK-245 render must not expose raw result object fields");
+  console.log("  testTask245NoRawResponsePayloadInDiagnostics PASS");
+}
+
+function testTask245NoPetWindowCallsInTranscribeFn() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const fnStart = src.indexOf("async function transcribeFullAppAudioBlob");
+  const fnEnd   = src.indexOf("\n}", fnStart) + 2;
+  const fnBody  = src.slice(fnStart, fnEnd);
+  assert.ok(!fnBody.includes("updatePetSpeech"),    "TASK-245 transcribeFn must not call updatePetSpeech");
+  assert.ok(!fnBody.includes("updatePetExpression"), "TASK-245 transcribeFn must not call updatePetExpression");
+  assert.ok(!fnBody.includes("speechSynthesis"),     "TASK-245 transcribeFn must not trigger TTS");
+  console.log("  testTask245NoPetWindowCallsInTranscribeFn PASS");
+}
+
+async function testTask245RegressionTask244StillPass() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("var fullAppVoiceDiagnostics"), "TASK-245 regression: fullAppVoiceDiagnostics must still exist");
+  assert.ok(src.includes("function renderFullAppVoiceDiagnostics"), "TASK-245 regression: render helper must still exist");
+  assert.ok(src.includes("function resetFullAppVoiceDiagnosticsForRecording"), "TASK-245 regression: reset helper must still exist");
+  assert.ok(src.includes("sttStatus: \"none\""), "TASK-245 regression: sttStatus default must still be present");
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  // Pre-existing TASK-244 fields must still exist
+  assert.ok("mode" in sandbox.fullAppVoiceDiagnostics, "TASK-245 regression: diagnostics.mode must still exist");
+  assert.ok("sttStatus" in sandbox.fullAppVoiceDiagnostics, "TASK-245 regression: diagnostics.sttStatus must still exist");
+  assert.ok("lastRms" in sandbox.fullAppVoiceDiagnostics, "TASK-245 regression: diagnostics.lastRms must still exist");
+  assert.ok("lastAudioPreviewAvailable" in sandbox.fullAppVoiceDiagnostics, "TASK-245 regression: lastAudioPreviewAvailable must still exist");
+  console.log("  testTask245RegressionTask244StillPass PASS");
+}
+
 function testTask244RendererHasDiagnosticsState() {
   const src = fs.readFileSync(rendererPath, "utf8");
   assert.ok(src.includes("var fullAppVoiceDiagnostics"), "TASK-244 renderer must declare fullAppVoiceDiagnostics with var");
@@ -13909,6 +14063,18 @@ async function main() {
   await testTask244dDiagnosticsDefaultsNewFields();
   await testTask244dPlayFnSetsObjectUrlActive();
   await testTask244dResetSandboxClearsPreviewState();
+
+  // TASK-245: STT Language Lock / Provider Quality Check
+  testTask245RendererHasSttLanguageLockFields();
+  testTask245DiagnosticsRenderIncludesLanguageLines();
+  await testTask245DiagnosticsDefaultsNewFields();
+  await testTask245ResetClearsLanguageLockFields();
+  await testTask245UpdateDiagnosticsHandlesLanguageLockFields();
+  testTask245TranscribeFnExtractsMetadata();
+  testTask245NoNewIpcChannels();
+  testTask245NoRawResponsePayloadInDiagnostics();
+  testTask245NoPetWindowCallsInTranscribeFn();
+  await testTask245RegressionTask244StillPass();
 
   // TASK-244: Voice Quality Diagnostics / VAD Tuning
   testTask244HtmlDiagnosticsPanelExists();

@@ -200,3 +200,156 @@ def test_stt_service_no_audio_persistence():
     assert "open(" not in source, (
         "stt_service must not call open() -- audio must stay in-memory"
     )
+
+
+# -- TASK-245: STT language lock tests ----------------------------------------
+
+
+def test_stt_default_language_constant_exists():
+    """TASK-245: routes module must expose _STT_DEFAULT_LANGUAGE constant."""
+    import app.api.routes as routes_module
+
+    assert hasattr(routes_module, "_STT_DEFAULT_LANGUAGE"), (
+        "_STT_DEFAULT_LANGUAGE constant must exist in routes.py"
+    )
+    assert routes_module._STT_DEFAULT_LANGUAGE == "zh", (
+        "_STT_DEFAULT_LANGUAGE must be 'zh'"
+    )
+
+
+def test_stt_default_task_constant_exists():
+    """TASK-245: routes module must expose _STT_DEFAULT_TASK constant."""
+    import app.api.routes as routes_module
+
+    assert hasattr(routes_module, "_STT_DEFAULT_TASK"), (
+        "_STT_DEFAULT_TASK constant must exist in routes.py"
+    )
+    assert routes_module._STT_DEFAULT_TASK == "transcribe", (
+        "_STT_DEFAULT_TASK must be 'transcribe'"
+    )
+
+
+def test_stt_route_passes_language_to_transcribe(monkeypatch):
+    """TASK-245: /stt/transcribe route must pass language='zh' to transcribe_audio_bytes."""
+    import app.api.routes as routes_module
+
+    captured_kwargs: dict = {}
+
+    def _mock_transcribe(audio_bytes, mime_type="audio/webm", language=None):
+        captured_kwargs["language"] = language
+        return {"transcript": "test", "status": "ok"}
+
+    monkeypatch.setattr(routes_module, "transcribe_audio_bytes", _mock_transcribe)
+    with TestClient(app) as client:
+        client.post(
+            "/stt/transcribe",
+            files={"audio": ("audio.webm", io.BytesIO(b"\x01\x02\x03"), "audio/webm")},
+        )
+    assert captured_kwargs.get("language") == "zh", (
+        "Route must pass language='zh' to transcribe_audio_bytes, got %r" % captured_kwargs.get("language")
+    )
+
+
+def test_stt_route_response_includes_language_metadata():
+    """TASK-245: /stt/transcribe response must include language/languageLocked/task fields."""
+    with TestClient(app) as client:
+        response = client.post(
+            "/stt/transcribe",
+            files={"audio": ("audio.webm", io.BytesIO(b"\x01\x02\x03"), "audio/webm")},
+        )
+    assert response.status_code == 200
+    data = response.json()
+    assert "language" in data, "Response must include 'language' field"
+    assert data["language"] == "zh", "language must be 'zh'"
+    assert "languageLocked" in data, "Response must include 'languageLocked' field"
+    assert data["languageLocked"] is True, "languageLocked must be True"
+    assert "task" in data, "Response must include 'task' field"
+    assert data["task"] == "transcribe", "task must be 'transcribe'"
+
+
+def test_stt_route_no_new_endpoint():
+    """TASK-245: no new /stt/* endpoint added beyond /stt/transcribe."""
+    import inspect
+    import app.api.routes as routes_module
+
+    source = inspect.getsource(routes_module)
+    # Count /stt/ route decorators — must remain exactly 1
+    stt_routes = [line for line in source.splitlines() if '"/stt/' in line]
+    assert len(stt_routes) == 1, (
+        "Only one /stt/ route allowed (TASK-245 restriction), found: %r" % stt_routes
+    )
+
+
+def test_stt_route_no_raw_audio_persistence():
+    """TASK-245: /stt/transcribe handler must not write audio to disk."""
+    import inspect
+    import app.api.routes as routes_module
+
+    source = inspect.getsource(routes_module.stt_transcribe)
+    assert "open(" not in source, "stt_transcribe must not call open()"
+    assert ".write(" not in source or "audio_bytes" not in source, (
+        "stt_transcribe must not write audio_bytes to disk"
+    )
+
+
+def test_stt_service_provider_constant_exists():
+    """TASK-245: stt_service must expose _STT_PROVIDER constant."""
+    assert hasattr(stt_service, "_STT_PROVIDER"), (
+        "_STT_PROVIDER must exist in stt_service"
+    )
+    assert isinstance(stt_service._STT_PROVIDER, str) and stt_service._STT_PROVIDER, (
+        "_STT_PROVIDER must be a non-empty string"
+    )
+
+
+def test_stt_service_model_name_constant_exists():
+    """TASK-245: stt_service must expose _STT_MODEL_NAME constant."""
+    assert hasattr(stt_service, "_STT_MODEL_NAME"), (
+        "_STT_MODEL_NAME must exist in stt_service"
+    )
+    assert isinstance(stt_service._STT_MODEL_NAME, str) and stt_service._STT_MODEL_NAME, (
+        "_STT_MODEL_NAME must be a non-empty string"
+    )
+
+
+def test_stt_service_ok_includes_provider_metadata(monkeypatch):
+    """TASK-245: ok response from transcribe_audio_bytes must include provider/model."""
+    from types import SimpleNamespace
+
+    class _GoodModel:
+        def transcribe(self, _buf, **_kwargs):
+            seg = SimpleNamespace(text="你好")
+            info = SimpleNamespace(language="zh")
+            return iter([seg]), info
+
+    monkeypatch.setattr(stt_service, "_WHISPER_AVAILABLE", True)
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(stt_service, "_load_model", lambda: _GoodModel())
+    result = stt_service.transcribe_audio_bytes(b"\x01\x02\x03", language="zh")
+    assert result["status"] == "ok"
+    assert "provider" in result, "ok result must include 'provider'"
+    assert "model" in result, "ok result must include 'model'"
+    assert "detectedLanguage" in result, "ok result must include 'detectedLanguage'"
+    assert result["detectedLanguage"] == "zh"
+
+
+def test_stt_service_language_param_passed_to_whisper(monkeypatch):
+    """TASK-245: language kwarg must be forwarded to model.transcribe."""
+    from types import SimpleNamespace
+
+    received_kwargs: dict = {}
+
+    class _KwargsModel:
+        def transcribe(self, _buf, **kwargs):
+            received_kwargs.update(kwargs)
+            seg = SimpleNamespace(text="test")
+            info = SimpleNamespace(language=kwargs.get("language", "unknown"))
+            return iter([seg]), info
+
+    monkeypatch.setattr(stt_service, "_WHISPER_AVAILABLE", True)
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(stt_service, "_load_model", lambda: _KwargsModel())
+    stt_service.transcribe_audio_bytes(b"\x01\x02\x03", language="zh")
+    assert received_kwargs.get("language") == "zh", (
+        "language kwarg must be forwarded to model.transcribe, got: %r" % received_kwargs
+    )

@@ -211,7 +211,14 @@ var fullAppVoiceDiagnostics = {
   previewErrorMessage: "",
   audioElementErrorCode: -1,
   audioCanPlayTypeResult: "",
-  audioBlobTypeCanPlayResult: ""
+  audioBlobTypeCanPlayResult: "",
+  // TASK-245: STT language-lock diagnostics — populated from /stt/transcribe response metadata
+  sttLanguage: "",
+  languageLocked: false,
+  sttTask: "",
+  sttProvider: "",
+  sttModel: "",
+  detectedLanguage: ""
 };
 // TASK-244: session-only VAD tuning vars — override constants for this session only, not persisted
 var fullAppConversationRmsThreshold = FULL_APP_CONVERSATION_RMS_THRESHOLD;
@@ -3994,6 +4001,18 @@ async function transcribeFullAppAudioBlob(blob) {
   }
   clearTimeout(timeoutId);
 
+  // TASK-245: update STT language-lock diagnostics from backend metadata.
+  // Done before status checks so the fields are populated even for error/empty
+  // responses — the caller's renderFullAppVoiceDiagnostics() will pick them up.
+  if (result && typeof result === "object") {
+    fullAppVoiceDiagnostics.sttLanguage      = result.language       ? String(result.language)       : "unknown";
+    fullAppVoiceDiagnostics.languageLocked   = Boolean(result.languageLocked);
+    fullAppVoiceDiagnostics.sttTask          = result.task           ? String(result.task)           : "unknown";
+    fullAppVoiceDiagnostics.sttProvider      = result.provider       ? String(result.provider)       : "unknown";
+    fullAppVoiceDiagnostics.sttModel         = result.model          ? String(result.model)          : "unknown";
+    fullAppVoiceDiagnostics.detectedLanguage = result.detectedLanguage ? String(result.detectedLanguage) : "none";
+  }
+
   if (!result || typeof result !== "object") throw new Error("stt_error");
   var status = result.status || "error";
   if (status === "unavailable") throw new Error("stt_unavailable");
@@ -4784,6 +4803,10 @@ function renderFullAppVoiceDiagnostics() {
     "對話狀態: " + d.conversationState,
     "停止原因: " + d.stopReason,
     "STT 狀態: " + d.sttStatus,
+    "STT 語言: " + (d.sttLanguage || "unknown") + "  已鎖定: " + (d.languageLocked ? "是" : "否"),
+    "STT 任務: " + (d.sttTask || "unknown"),
+    "STT 提供者: " + (d.sttProvider || "unknown") + "  模型: " + (d.sttModel || "unknown"),
+    "偵測語言: " + (d.detectedLanguage || "none"),
     "---",
     "VAD 最後 RMS: " + d.lastRms.toFixed(4),
     "VAD 最高 RMS: " + d.maxRms.toFixed(4),
@@ -4859,6 +4882,13 @@ function resetFullAppVoiceDiagnosticsForRecording(mode) {
   fullAppVoiceDiagnostics.audioElementErrorCode = -1;
   fullAppVoiceDiagnostics.audioCanPlayTypeResult = "";
   fullAppVoiceDiagnostics.audioBlobTypeCanPlayResult = "";
+  // TASK-245: reset language-lock fields — repopulated after each STT call
+  fullAppVoiceDiagnostics.sttLanguage      = "";
+  fullAppVoiceDiagnostics.languageLocked   = false;
+  fullAppVoiceDiagnostics.sttTask          = "";
+  fullAppVoiceDiagnostics.sttProvider      = "";
+  fullAppVoiceDiagnostics.sttModel         = "";
+  fullAppVoiceDiagnostics.detectedLanguage = "";
   // constraintsEchoCancellation/NoiseSuppression/AutoGainControl: not reset (carry over from stream)
   revokeLastAudioObjectUrl();
   if (voicePreviewPlayBtn) voicePreviewPlayBtn.disabled = true;

@@ -73,6 +73,12 @@ from app.ocr.ocr_service import extract_text_from_dataurl, get_ocr_status  # TAS
 router = APIRouter()
 
 _STT_MAX_BYTES = 10 * 1024 * 1024  # 10 MB — guard against runaway uploads
+# TASK-245: lock STT language to prevent Whisper auto-detect from misclassifying
+# short Chinese speech as Thai / Malay / Indonesian.  Hard-coded here — no UI,
+# no persistence, no new IPC channel.  "zh" is the ISO-639-1 code that
+# faster-whisper / Whisper accept for Mandarin Chinese (Simplified + Traditional).
+_STT_DEFAULT_LANGUAGE = "zh"
+_STT_DEFAULT_TASK = "transcribe"  # explicit assertion — never "translate"
 
 
 @router.post("/stt/transcribe")
@@ -81,19 +87,31 @@ async def stt_transcribe(audio: UploadFile = File(...)):
     TASK-167B: Transcribe a short audio clip using local Whisper.
 
     Accepts any audio format Whisper supports (webm, wav, ogg, mp4 …).
-    Returns {"transcript": str, "status": "ok" | "unavailable" | "empty" | "error"}.
+    Returns {"transcript": str, "status": "ok" | "unavailable" | "empty" | "error",
+             "language": str, "languageLocked": bool, "task": str,
+             "provider": str | None, "model": str | None, "detectedLanguage": str | None}.
 
-    Scope limits (TASK-167B):
+    Scope limits (TASK-167B / TASK-245):
     - Local Whisper only — no external STT API calls.
     - No audio persistence — bytes are processed in-memory only.
     - No always-listening, wake-word, TTS, screen capture, or vision logic.
     - /chat handoff is deferred to TASK-167C; this endpoint stops at transcript.
+    - Language is locked to _STT_DEFAULT_LANGUAGE ("zh") — no UI or persistence.
     """
     audio_bytes = await audio.read(_STT_MAX_BYTES + 1)
     if len(audio_bytes) > _STT_MAX_BYTES:
         raise HTTPException(status_code=413, detail="Audio file too large (max 10 MB).")
     mime_type = audio.content_type or "audio/webm"
-    result = transcribe_audio_bytes(audio_bytes, mime_type=mime_type)
+    result = transcribe_audio_bytes(
+        audio_bytes,
+        mime_type=mime_type,
+        language=_STT_DEFAULT_LANGUAGE,
+    )
+    # TASK-245: augment with language-lock metadata so the renderer diagnostics
+    # panel can surface it without a new endpoint or IPC channel.
+    result["language"] = _STT_DEFAULT_LANGUAGE
+    result["languageLocked"] = True
+    result["task"] = _STT_DEFAULT_TASK
     return result
 
 

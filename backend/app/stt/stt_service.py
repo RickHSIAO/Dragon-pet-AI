@@ -17,6 +17,9 @@ logger = logging.getLogger(__name__)
 
 _WHISPER_AVAILABLE: bool = False
 _whisper_model: Any = None
+# TASK-245: static metadata surfaced in diagnostics — update if model changes.
+_STT_PROVIDER = "faster-whisper-local"
+_STT_MODEL_NAME = "tiny"
 
 
 def _detect_whisper() -> bool:
@@ -98,9 +101,17 @@ def transcribe_audio_bytes(
             transcribe_kwargs["language"] = language
         segments, _info = model.transcribe(audio_buf, **transcribe_kwargs)
         transcript = "".join(seg.text for seg in segments).strip()
+        # TASK-245: extract detected language from TranscriptionInfo (None-safe).
+        detected_language: str | None = getattr(_info, "language", None)
         if not transcript:
             return {"transcript": "", "status": "empty"}
-        return {"transcript": transcript, "status": "ok"}
+        return {
+            "transcript": transcript,
+            "status": "ok",
+            "provider": _STT_PROVIDER,
+            "model": _STT_MODEL_NAME,
+            "detectedLanguage": detected_language,
+        }
     except Exception as exc:  # noqa: BLE001
         logger.warning("TASK-167B: STT error mime=%s exc=%s", mime_type, exc)
         return {"transcript": "", "status": "error"}
