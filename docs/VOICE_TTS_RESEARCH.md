@@ -374,12 +374,19 @@ Suggested research and implementation tasks:
   produces Chinese transcript, accuracy clearly better than faster-whisper-local.
   Remaining: inter-character spaces + simplified Chinese → TASK-253; cold-start latency → TASK-254.
 
-- **TASK-STT-014 (TASK-253) FunASR Transcript Normalisation / Traditional Chinese Output. (PLANNED):**
-  Paraformer-zh output contains inter-character spaces (e.g. 「克 莉 絲 蒂 娜」) and uses
-  simplified Chinese characters. Post-processing needed: strip spaces between CJK characters;
-  convert simplified → traditional (OpenCC library or a static mapping table for common chars);
-  expand TASK-247/248 correction map with Paraformer-specific acoustic variants for Dragon Pet AI,
-  Claude Code, TASK, etc.
+- **TASK-STT-014 (TASK-253) FunASR Transcript Normalisation / Traditional Chinese Output. DONE - WINDOWS NORMALIZATION SMOKE PASS (2026-06-03):**
+  Deterministic normalisation layer on `_transcribe_funasr()` ok-path. Two-stage pipeline:
+  (1) `_remove_cjk_spaces()` — regex lookbehind/lookahead strips spaces between CJK Unified
+  Ideographs (Unicode ranges 4E00–9FFF, 3400–4DBF, F900–FAFF); (2) `_simp_to_trad()` —
+  `opencc-python-reimplemented` with `OpenCC("s2tw")` preferred (Simplified → Traditional Taiwan);
+  falls back to 20-char static `str.maketrans()` map if opencc unavailable. Returns `(text, method)`
+  tuple; `tradMethod` field surfaces "opencc" or "static" in every response. Nine new
+  Paraformer-specific `_STT_CORRECTION_MAP` entries: jdden/jden pet ai, dragon pet a i,
+  cloud/claud code, codex, t a s k, task, 克莉莉. Response adds normalizedTranscript,
+  normalizationApplied, normalizationSteps, cjkSpacingRemoved, traditionalApplied, tradMethod;
+  rawTranscript = pre-norm sidecar output. 27 new pytest (133 total); [7/7] smoke section
+  (86/86 PASS). Windows manual smoke PASS: OpenCC s2tw active, all tested sentences normalised
+  correctly. Remaining: cold-start latency 10–30 s → TASK-254.
 
 - **TASK-STT-015 (TASK-254) Persistent FunASR Sidecar / Warm Model Server. (PLANNED):**
   Current sidecar (`funasr_sidecar_transcribe.py`) loads paraformer-zh (~500 MB) on every call,
@@ -392,7 +399,7 @@ Suggested research and implementation tasks:
   accuracy. Must be guarded by explicit user opt-in and must not replace the deterministic
   layer from TASK-247/248.
 
-Recommended next: TASK-253 — FunASR Transcript Normalisation / Traditional Chinese Output.
+Recommended next: TASK-254 — Persistent FunASR Sidecar / Warm Model Server.
 
 Each future task must explicitly define safety boundaries, user controls,
 provider scope, queue priority, and no-regression checks.

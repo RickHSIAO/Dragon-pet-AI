@@ -1446,3 +1446,304 @@ def test_funasr_sidecar_candidate_notes_updated():
     assert "DRAGON_PET_FUNASR_PYTHON" in notes, (
         "TASK-251: funasr-local candidate notes must mention DRAGON_PET_FUNASR_PYTHON"
     )
+
+
+# ---------------------------------------------------------------------------
+# TASK-253: FunASR transcript normalisation tests
+# ---------------------------------------------------------------------------
+
+
+def test_task253_remove_cjk_spaces_removes_inter_cjk_spaces():
+    """_remove_cjk_spaces strips spaces between CJK characters."""
+    result = stt_service._remove_cjk_spaces("語 音 辨 識")
+    assert result == "語音辨識"
+
+
+def test_task253_remove_cjk_spaces_preserves_latin_spaces():
+    """_remove_cjk_spaces does not touch spaces adjacent to latin chars."""
+    result = stt_service._remove_cjk_spaces("Dragon Pet AI")
+    assert result == "Dragon Pet AI"
+
+
+def test_task253_remove_cjk_spaces_mixed_text():
+    """_remove_cjk_spaces removes spaces between CJK chars but preserves CJK-Latin boundaries."""
+    result = stt_service._remove_cjk_spaces("語 音 Dragon Pet AI 辨 識")
+    # 語[space]音 — both CJK → space removed
+    # 音[space]Dragon — Latin boundary → space preserved
+    # AI[space]辨 — Latin boundary → space preserved
+    # 辨[space]識 — both CJK → space removed
+    assert result == "語音 Dragon Pet AI 辨識"
+
+
+def test_task253_simp_to_trad_converts_known_chars():
+    """_simp_to_trad converts simplified chars; returns (text, method) tuple."""
+    simplified = "语音识别测试对话宠物帮输这现简体开们时会说来"
+    text, method = stt_service._simp_to_trad(simplified)
+    assert method in ("opencc", "static")
+    # All 20 chars in _SIMP_CHAR_MAP must be converted by both paths
+    assert "語" in text and "音" in text and "識" in text and "別" in text
+
+
+def test_task253_simp_to_trad_passthrough_unmapped():
+    """_simp_to_trad leaves latin and already-traditional chars unchanged."""
+    text, method = stt_service._simp_to_trad("Dragon Pet AI 克莉絲蒂娜")
+    assert text == "Dragon Pet AI 克莉絲蒂娜"
+    assert method in ("opencc", "static")
+
+
+def test_task253_normalize_funasr_transcript_cjk_spaces_flag():
+    """_normalize_funasr_transcript sets cjkSpacingRemoved=True when spaces removed."""
+    result = stt_service._normalize_funasr_transcript("語 音 辨 識")
+    assert result["cjkSpacingRemoved"] is True
+    assert "cjk_space_removal" in result["normalizationSteps"]
+    assert result["normalizationApplied"] is True
+
+
+def test_task253_normalize_funasr_transcript_trad_flag():
+    """_normalize_funasr_transcript sets traditionalApplied=True when trad conversion fires."""
+    result = stt_service._normalize_funasr_transcript("语音识别")
+    assert result["traditionalApplied"] is True
+    # step name is simp_to_trad_opencc or simp_to_trad_static depending on availability
+    assert any(s.startswith("simp_to_trad_") for s in result["normalizationSteps"])
+    assert result["normalizedTranscript"] == "語音識別"
+
+
+def test_task253_normalize_funasr_transcript_no_change():
+    """_normalize_funasr_transcript returns flags=False for already-normalised text."""
+    result = stt_service._normalize_funasr_transcript("語音辨識測試")
+    assert result["normalizationApplied"] is False
+    assert result["cjkSpacingRemoved"] is False
+    assert result["traditionalApplied"] is False
+    assert result["normalizationSteps"] == []
+    assert result["normalizedTranscript"] == "語音辨識測試"
+
+
+def test_task253_normalize_funasr_transcript_both_steps():
+    """_normalize_funasr_transcript applies CJK space removal then simp→trad in order."""
+    result = stt_service._normalize_funasr_transcript("语 音 识 别")
+    assert result["cjkSpacingRemoved"] is True
+    assert result["traditionalApplied"] is True
+    assert result["normalizedTranscript"] == "語音識別"
+    steps = result["normalizationSteps"]
+    assert steps[0] == "cjk_space_removal"
+    assert steps[1].startswith("simp_to_trad_")
+    assert len(steps) == 2
+
+
+def test_task253_transcribe_funasr_response_has_norm_fields(monkeypatch):
+    """_transcribe_funasr ok-path includes all TASK-253 normalisation fields."""
+    monkeypatch.setattr(stt_service, "_FUNASR_AVAILABLE", True)
+    monkeypatch.setattr(stt_service, "_STT_RESOLVED_PROVIDER", "funasr-local")
+    monkeypatch.setattr(stt_service, "_STT_PROVIDER_RESOLUTION", {
+        "requested_provider": "funasr-local",
+        "resolved_provider": "funasr-local",
+        "provider_source": "env",
+        "provider_fallback_reason": "none",
+    })
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(
+        stt_service, "_run_funasr_sidecar",
+        lambda b: {"transcript": "语音识别", "status": "ok", "error": None},
+    )
+
+    result = stt_service._transcribe_funasr(b"\x01\x02")
+    assert result["status"] == "ok"
+    assert "normalizedTranscript" in result
+    assert "normalizationApplied" in result
+    assert "normalizationSteps" in result
+    assert "cjkSpacingRemoved" in result
+    assert "traditionalApplied" in result
+
+
+def test_task253_transcribe_funasr_raw_transcript_is_original(monkeypatch):
+    """_transcribe_funasr rawTranscript must be the pre-normalisation text."""
+    monkeypatch.setattr(stt_service, "_FUNASR_AVAILABLE", True)
+    monkeypatch.setattr(stt_service, "_STT_RESOLVED_PROVIDER", "funasr-local")
+    monkeypatch.setattr(stt_service, "_STT_PROVIDER_RESOLUTION", {
+        "requested_provider": "funasr-local",
+        "resolved_provider": "funasr-local",
+        "provider_source": "env",
+        "provider_fallback_reason": "none",
+    })
+    stt_service._reset_model_for_tests()
+    raw = "语 音 识 别"
+    monkeypatch.setattr(
+        stt_service, "_run_funasr_sidecar",
+        lambda b: {"transcript": raw, "status": "ok", "error": None},
+    )
+
+    result = stt_service._transcribe_funasr(b"\x01\x02")
+    assert result["rawTranscript"] == raw
+    assert result["normalizedTranscript"] == "語音識別"
+
+
+def test_task253_correction_map_has_paraformer_variants():
+    """TASK-253: _STT_CORRECTION_MAP must include Paraformer-specific entries."""
+    aliases = [alias for alias, _ in stt_service._STT_CORRECTION_MAP]
+    assert "jdden pet ai" in aliases
+    assert "jden pet ai" in aliases
+    assert "cloud code" in aliases
+    assert "claud code" in aliases
+    assert "克莉莉" in aliases
+    assert "t a s k" in aliases
+    assert "task" in aliases
+
+
+def test_task253_correction_map_task_maps_to_uppercase(monkeypatch):
+    """TASK-253: 'task' alias must correct to 'TASK'."""
+    result = stt_service.correct_transcript_text("task 253")
+    assert result["correctedTranscript"] == "TASK 253"
+
+
+def test_task253_correction_map_cloud_code_maps_to_claude_code():
+    """TASK-253: 'cloud code' must correct to 'Claude Code'."""
+    result = stt_service.correct_transcript_text("cloud code")
+    assert result["correctedTranscript"] == "Claude Code"
+
+
+def test_task253_correction_map_克莉莉_maps_to_full_name():
+    """TASK-253: '克莉莉' Paraformer collapse must correct to '克莉絲蒂娜'."""
+    result = stt_service.correct_transcript_text("克莉莉")
+    assert result["correctedTranscript"] == "克莉絲蒂娜"
+
+
+def test_task253_normalise_then_correct_pipeline(monkeypatch):
+    """TASK-253: normalisation output feeds phrase correction in _transcribe_funasr."""
+    monkeypatch.setattr(stt_service, "_FUNASR_AVAILABLE", True)
+    monkeypatch.setattr(stt_service, "_STT_RESOLVED_PROVIDER", "funasr-local")
+    monkeypatch.setattr(stt_service, "_STT_PROVIDER_RESOLUTION", {
+        "requested_provider": "funasr-local",
+        "resolved_provider": "funasr-local",
+        "provider_source": "env",
+        "provider_fallback_reason": "none",
+    })
+    stt_service._reset_model_for_tests()
+    # Sidecar returns simplified Chinese with spaces; pipeline should normalise then correct
+    monkeypatch.setattr(
+        stt_service, "_run_funasr_sidecar",
+        lambda b: {"transcript": "dragon pet a i", "status": "ok", "error": None},
+    )
+
+    result = stt_service._transcribe_funasr(b"\x01\x02")
+    assert result["correctedTranscript"] == "Dragon Pet AI"
+
+
+# ---------------------------------------------------------------------------
+# TASK-253 revision: OpenCC s2tw integration
+# ---------------------------------------------------------------------------
+
+
+def test_task253rev_opencc_available():
+    """opencc-python-reimplemented must be installed in the backend venv."""
+    assert stt_service._OPENCC_AVAILABLE is True, (
+        "opencc not installed — run: pip install opencc-python-reimplemented"
+    )
+
+
+def test_task253rev_simp_to_trad_returns_tuple():
+    """_simp_to_trad must return (str, method_str) where method is 'opencc' or 'static'."""
+    result = stt_service._simp_to_trad("语音")
+    assert isinstance(result, tuple) and len(result) == 2
+    text, method = result
+    assert isinstance(text, str)
+    assert method in ("opencc", "static")
+
+
+def test_task253rev_trad_method_opencc_when_available():
+    """When opencc is installed _simp_to_trad reports method='opencc'."""
+    if not stt_service._OPENCC_AVAILABLE:
+        pytest.skip("opencc not installed")
+    _, method = stt_service._simp_to_trad("语音识别")
+    assert method == "opencc"
+
+
+def test_task253rev_opencc_converts_broader_chars():
+    """OpenCC s2tw converts chars outside the static _SIMP_CHAR_MAP (e.g. 处 → 處)."""
+    if not stt_service._OPENCC_AVAILABLE:
+        pytest.skip("opencc not installed")
+    text, method = stt_service._simp_to_trad("处理")
+    assert method == "opencc"
+    assert text == "處理", f"expected 處理, got {text!r}"
+
+
+def test_task253rev_normalize_tradmethod_field():
+    """_normalize_funasr_transcript includes tradMethod field."""
+    result = stt_service._normalize_funasr_transcript("语音识别")
+    assert "tradMethod" in result
+    assert result["tradMethod"] in ("opencc", "static")
+
+
+def test_task253rev_transcribe_funasr_has_tradmethod(monkeypatch):
+    """_transcribe_funasr ok-path response includes tradMethod field."""
+    monkeypatch.setattr(stt_service, "_FUNASR_AVAILABLE", True)
+    monkeypatch.setattr(stt_service, "_STT_RESOLVED_PROVIDER", "funasr-local")
+    monkeypatch.setattr(stt_service, "_STT_PROVIDER_RESOLUTION", {
+        "requested_provider": "funasr-local",
+        "resolved_provider": "funasr-local",
+        "provider_source": "env",
+        "provider_fallback_reason": "none",
+    })
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(
+        stt_service, "_run_funasr_sidecar",
+        lambda b: {"transcript": "语音识别", "status": "ok", "error": None},
+    )
+    result = stt_service._transcribe_funasr(b"\x01\x02")
+    assert "tradMethod" in result
+    assert result["tradMethod"] in ("opencc", "static")
+
+
+def test_task253rev_fallback_static_when_opencc_unavailable(monkeypatch):
+    """When _OPENCC_AVAILABLE=False, _simp_to_trad falls back to static map."""
+    monkeypatch.setattr(stt_service, "_OPENCC_AVAILABLE", False)
+    monkeypatch.setattr(stt_service, "_opencc_converter", None)
+    text, method = stt_service._simp_to_trad("语音识别")
+    assert method == "static"
+    assert text == "語音識別"
+
+
+def test_task253rev_fallback_normalize_uses_static(monkeypatch):
+    """When opencc unavailable, _normalize_funasr_transcript uses static path without crash."""
+    monkeypatch.setattr(stt_service, "_OPENCC_AVAILABLE", False)
+    monkeypatch.setattr(stt_service, "_opencc_converter", None)
+    result = stt_service._normalize_funasr_transcript("语音识别")
+    assert result["normalizedTranscript"] == "語音識別"
+    assert result["tradMethod"] == "static"
+    trad_step = next((s for s in result["normalizationSteps"] if s.startswith("simp_to_trad_")), None)
+    assert trad_step == "simp_to_trad_static"
+
+
+def test_task253rev_opencc_对话模式():
+    """OpenCC s2tw converts 对话模式 → 對話模式."""
+    if not stt_service._OPENCC_AVAILABLE:
+        pytest.skip("opencc not installed")
+    text, _ = stt_service._simp_to_trad("对话模式")
+    assert text == "對話模式"
+
+
+def test_task253rev_opencc_桌面宠物():
+    """OpenCC s2tw converts 桌面宠物 → 桌面寵物."""
+    if not stt_service._OPENCC_AVAILABLE:
+        pytest.skip("opencc not installed")
+    text, _ = stt_service._simp_to_trad("桌面宠物")
+    assert text == "桌面寵物"
+
+
+def test_task253rev_full_pipeline_帮我修一下_task(monkeypatch):
+    """Full pipeline: 帮我修一下 task → 幫我修一下 TASK (norm then correction)."""
+    monkeypatch.setattr(stt_service, "_FUNASR_AVAILABLE", True)
+    monkeypatch.setattr(stt_service, "_STT_RESOLVED_PROVIDER", "funasr-local")
+    monkeypatch.setattr(stt_service, "_STT_PROVIDER_RESOLUTION", {
+        "requested_provider": "funasr-local",
+        "resolved_provider": "funasr-local",
+        "provider_source": "env",
+        "provider_fallback_reason": "none",
+    })
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(
+        stt_service, "_run_funasr_sidecar",
+        lambda b: {"transcript": "帮我修一下 task", "status": "ok", "error": None},
+    )
+    result = stt_service._transcribe_funasr(b"\x01\x02")
+    assert result["normalizedTranscript"] == "幫我修一下 task"
+    assert result["correctedTranscript"] == "幫我修一下 TASK"

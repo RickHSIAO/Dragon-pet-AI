@@ -14,8 +14,16 @@ import json
 import logging
 import os
 import pathlib
+import re
 import subprocess
 from typing import Any
+
+try:
+    import opencc as _opencc_lib
+    _OPENCC_AVAILABLE: bool = True
+except ImportError:
+    _opencc_lib = None  # type: ignore[assignment]
+    _OPENCC_AVAILABLE: bool = False
 
 logger = logging.getLogger(__name__)
 
@@ -387,6 +395,28 @@ _STT_CORRECTION_MAP: list[tuple[str, str]] = [
     ("對話模式式",  "對話模式"),
     ("桌面重物",    "桌面寵物"),
     ("桌面從物",    "桌面寵物"),
+
+    # -------------------------------------------------------------------------
+    # TASK-253: Paraformer-specific acoustic variants
+    # Dragon Pet AI — Paraformer romanisation variants (compound before standalone)
+    # -------------------------------------------------------------------------
+    ("jdden pet ai",     "Dragon Pet AI"),
+    ("jden pet ai",      "Dragon Pet AI"),
+    ("dragon pet a i",   "Dragon Pet AI"),
+
+    # Claude Code — Paraformer romanisation variants
+    ("cloud code",   "Claude Code"),
+    ("claud code",   "Claude Code"),
+
+    # CodeX
+    ("codex",   "CodeX"),
+
+    # TASK — Paraformer spells out letters or lowercases
+    ("t a s k",   "TASK"),
+    ("task",      "TASK"),
+
+    # 克莉莉 — Paraformer short-form collapse of 克莉絲蒂娜
+    ("克莉莉",   "克莉絲蒂娜"),
 ]
 
 
@@ -493,6 +523,97 @@ def _parse_funasr_result(raw_result) -> str:
     return str(raw_result).strip()
 
 
+# ---------------------------------------------------------------------------
+# TASK-253: FunASR transcript normalisation
+# ---------------------------------------------------------------------------
+
+# Matches a single ASCII space that sits between two CJK Unified Ideograph codepoints.
+# Paraformer-zh frequently inserts spaces between characters in its output.
+_CJK_SPACE_RE = re.compile(
+    r"(?<=[一-鿿㐀-䶿豈-﫿])"
+    r" "
+    r"(?=[一-鿿㐀-䶿豈-﫿])"
+)
+
+# Fallback: static simplified→traditional character map used when OpenCC is unavailable.
+# Covers only chars commonly emitted by Paraformer-zh that differ from Traditional Chinese.
+_SIMP_CHAR_MAP: dict[str, str] = {
+    "语": "語", "识": "識", "别": "別", "测": "測", "试": "試",
+    "对": "對", "话": "話", "宠": "寵", "帮": "幫", "输": "輸",
+    "这": "這", "现": "現", "简": "簡", "体": "體", "开": "開",
+    "们": "們", "时": "時", "会": "會", "说": "說", "来": "來",
+}
+_SIMP_TRAD_TABLE = str.maketrans(_SIMP_CHAR_MAP)
+
+# Lazy-initialised OpenCC converter (s2tw = Simplified → Traditional Taiwan).
+# None until first call; avoids loading the conversion tables at import time.
+_opencc_converter: Any = None
+
+
+def _remove_cjk_spaces(text: str) -> str:
+    return _CJK_SPACE_RE.sub("", text)
+
+
+def _get_opencc_converter() -> Any:
+    """Return a cached OpenCC("s2tw") instance, or None if opencc is not installed."""
+    global _opencc_converter
+    if not _OPENCC_AVAILABLE:
+        return None
+    if _opencc_converter is None:
+        try:
+            _opencc_converter = _opencc_lib.OpenCC("s2tw")
+        except Exception:  # noqa: BLE001
+            return None
+    return _opencc_converter
+
+
+def _simp_to_trad(text: str) -> tuple[str, str]:
+    """
+    Convert simplified Chinese to Traditional Chinese.
+
+    Returns (converted_text, method) where method is one of:
+      "opencc"  — OpenCC s2tw was used
+      "static"  — static _SIMP_CHAR_MAP fallback was used
+    """
+    converter = _get_opencc_converter()
+    if converter is not None:
+        return converter.convert(text), "opencc"
+    return text.translate(_SIMP_TRAD_TABLE), "static"
+
+
+def _normalize_funasr_transcript(text: str) -> dict:
+    """
+    TASK-253/rev: Apply Paraformer-specific normalisation before phrase correction.
+
+    Pipeline order:
+      1. CJK inter-character space removal
+      2. Simplified→Traditional conversion (OpenCC s2tw preferred; static map fallback)
+
+    Returns a dict with the normalised text and per-step metadata.
+    Does not modify the correction map; callers chain this before correct_transcript_text().
+    """
+    steps: list[str] = []
+    after_spaces = _remove_cjk_spaces(text)
+    cjk_spacing_removed = after_spaces != text
+    if cjk_spacing_removed:
+        steps.append("cjk_space_removal")
+
+    after_trad, trad_method = _simp_to_trad(after_spaces)
+    traditional_applied = after_trad != after_spaces
+    if traditional_applied:
+        steps.append(f"simp_to_trad_{trad_method}")
+
+    normalised = after_trad
+    return {
+        "normalizedTranscript": normalised,
+        "normalizationApplied": bool(steps),
+        "normalizationSteps": steps,
+        "cjkSpacingRemoved": cjk_spacing_removed,
+        "traditionalApplied": traditional_applied,
+        "tradMethod": trad_method,
+    }
+
+
 def _transcribe_funasr(
     audio_bytes: bytes,
     mime_type: str = "audio/webm",
@@ -567,14 +688,21 @@ def _transcribe_funasr(
 
     _FUNASR_LOAD_STATUS = "loaded"
     _FUNASR_LOAD_ERROR = None
-    correction = correct_transcript_text(transcript)
+    norm = _normalize_funasr_transcript(transcript)
+    correction = correct_transcript_text(norm["normalizedTranscript"])
     return {
         "transcript": correction["correctedTranscript"],
         "status": "ok",
         **_get_model_metadata(),
         **_get_provider_metadata(),
         "detectedLanguage": language or "zh",
-        "rawTranscript": correction["rawTranscript"],
+        "rawTranscript": transcript,
+        "normalizedTranscript": norm["normalizedTranscript"],
+        "normalizationApplied": norm["normalizationApplied"],
+        "normalizationSteps": norm["normalizationSteps"],
+        "cjkSpacingRemoved": norm["cjkSpacingRemoved"],
+        "traditionalApplied": norm["traditionalApplied"],
+        "tradMethod": norm["tradMethod"],
         "correctedTranscript": correction["correctedTranscript"],
         "correctionApplied": correction["correctionApplied"],
         "correctionMode": correction["correctionMode"],

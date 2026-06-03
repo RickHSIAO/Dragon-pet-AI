@@ -624,8 +624,17 @@ Recommended next architecture phase:
   ffmpeg. Web Audio API `ScriptProcessorNode` PCM capture at 16 kHz; `_encodeWavPcm()` encodes Float32Array →
   16-bit mono WAV Blob. Both manual mic and conversation mode produce WAV. main.js Content-Type updated to
   `audio/wav`. Windows mic smoke PASS: FunASR sidecar receives Full App audio; Paraformer-zh accuracy clearly
-  better than faster-whisper-local. Remaining: spaces + simplified Chinese (→ TASK-253); cold-start latency (→ TASK-254).
-- TASK-253 recommended next: FunASR Transcript Normalisation / Traditional Chinese Output.
+  better than faster-whisper-local. Remaining: spaces + simplified Chinese (→ TASK-253 DONE); cold-start latency (→ TASK-254).
+- TASK-253 DONE - WINDOWS NORMALIZATION SMOKE PASS (2026-06-03): FunASR Transcript Normalisation /
+  Traditional Chinese Output. Normalisation layer on `_transcribe_funasr()` ok-path: (1) CJK
+  inter-character space removal via regex lookbehind/lookahead; (2) `_simp_to_trad()` uses
+  `OpenCC("s2tw")` (`opencc-python-reimplemented` in backend\.venv); falls back to 20-char static
+  `str.maketrans()` map; returns `(text, method)` tuple; `tradMethod` field in every response.
+  Nine Paraformer-specific entries added to `_STT_CORRECTION_MAP`. Response adds normalizedTranscript,
+  normalizationApplied, normalizationSteps, cjkSpacingRemoved, traditionalApplied, tradMethod;
+  rawTranscript = pre-norm sidecar output. 133 pytest + 86 smoke PASS. Windows manual smoke PASS:
+  OpenCC s2tw active; all 5 test sentences normalised and corrected. Remaining: cold-start latency → TASK-254.
+- TASK-254 recommended next: Persistent FunASR Sidecar / Warm Model Server.
 - Relationship state.
 - Mood / attention / energy state beyond the local preview foundation.
 - Idle reaction policy.

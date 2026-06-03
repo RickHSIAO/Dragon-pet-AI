@@ -286,6 +286,103 @@ else:
     print(f"      funasr-local will return status=unavailable until python is found")
 
 # ---------------------------------------------------------------------------
+# TASK-253: FunASR transcript normalisation smoke
+# ---------------------------------------------------------------------------
+print("\n[7/7] TASK-253 — FunASR transcript normalisation")
+stt = reload_stt("funasr-local")
+
+print("  [7a] _remove_cjk_spaces")
+check(stt._remove_cjk_spaces("語 音 辨 識") == "語音辨識",
+      "inter-CJK spaces removed")
+check(stt._remove_cjk_spaces("Dragon Pet AI") == "Dragon Pet AI",
+      "latin-only string unchanged")
+check(stt._remove_cjk_spaces("語 音 Dragon Pet AI 辨 識") == "語音 Dragon Pet AI 辨識",
+      "CJK spaces removed, Latin boundary spaces preserved")
+
+print("  [7b] _simp_to_trad — returns (text, method) tuple")
+simp_in  = "语音识别"  # 语音识别
+trad_out = "語音識別"  # 語音識別
+trad_text, trad_method = stt._simp_to_trad(simp_in)
+check(trad_text == trad_out,
+      f"simplified yuyin shibie -> traditional (method={trad_method!r})")
+check(trad_method in ("opencc", "static"),
+      f"method is 'opencc' or 'static' (got {trad_method!r})")
+if stt._OPENCC_AVAILABLE:
+    check(trad_method == "opencc",
+          f"opencc installed -> method=opencc (got {trad_method!r})")
+    print(f"      OpenCC available: method={trad_method!r}")
+else:
+    print(f"      OpenCC not installed: using static fallback")
+
+latin_text, latin_method = stt._simp_to_trad("Dragon Pet AI")
+check(latin_text == "Dragon Pet AI", "latin passthrough unchanged")
+
+print("  [7c] _normalize_funasr_transcript")
+norm_in  = "语 音 识 别"   # 语 音 识 别
+norm_out = "語音識別"       # 語音識別
+result = stt._normalize_funasr_transcript(norm_in)
+check(result["normalizedTranscript"] == norm_out,
+      f"full norm: simp+spaces -> trad+joined (got {result['normalizedTranscript']!r})")
+check(result["normalizationApplied"] is True,
+      "normalizationApplied=True for modified text")
+check(result["cjkSpacingRemoved"] is True,
+      "cjkSpacingRemoved=True")
+check(result["traditionalApplied"] is True,
+      "traditionalApplied=True")
+check("tradMethod" in result,
+      "tradMethod field present in normalize result")
+steps = result["normalizationSteps"]
+check(steps[0] == "cjk_space_removal" and steps[1].startswith("simp_to_trad_"),
+      f"normalizationSteps order correct (got {steps!r})")
+
+result_clean = stt._normalize_funasr_transcript("語音辨識測試")
+check(result_clean["normalizationApplied"] is False,
+      "normalizationApplied=False for already-normalised text")
+
+print("  [7d] Paraformer-specific correction map entries")
+aliases = [alias for alias, _ in stt._STT_CORRECTION_MAP]
+check("jdden pet ai" in aliases,    "jdden pet ai in _STT_CORRECTION_MAP")
+check("jden pet ai"  in aliases,    "jden pet ai in _STT_CORRECTION_MAP")
+check("cloud code"   in aliases,    "cloud code in _STT_CORRECTION_MAP")
+check("claud code"   in aliases,    "claud code in _STT_CORRECTION_MAP")
+check("克莉莉"       in aliases,    "克莉莉 in _STT_CORRECTION_MAP")
+check("t a s k"      in aliases,    "t a s k in _STT_CORRECTION_MAP")
+check("task"         in aliases,    "task in _STT_CORRECTION_MAP")
+
+print("  [7e] normalise + correct pipeline via mock _transcribe_funasr")
+stt._FUNASR_AVAILABLE = True
+stt._reset_model_for_tests()
+original_sidecar = stt._run_funasr_sidecar
+stt._run_funasr_sidecar = lambda b: {
+    "transcript": "dragon pet a i",
+    "status": "ok",
+    "error": None,
+}
+try:
+    resp = stt._transcribe_funasr(WAV)
+    check(resp.get("status") == "ok",
+          f"mock pipeline status=ok (got {resp.get('status')!r})")
+    check(resp.get("correctedTranscript") == "Dragon Pet AI",
+          f"dragon pet a i → Dragon Pet AI (got {resp.get('correctedTranscript')!r})")
+    check("normalizedTranscript" in resp,
+          "normalizedTranscript present in response")
+    check("normalizationApplied" in resp,
+          "normalizationApplied present in response")
+    check("cjkSpacingRemoved"    in resp,
+          "cjkSpacingRemoved present in response")
+    check("traditionalApplied"   in resp,
+          "traditionalApplied present in response")
+    check(resp.get("rawTranscript") == "dragon pet a i",
+          f"rawTranscript preserved as original (got {resp.get('rawTranscript')!r})")
+    check("tradMethod" in resp,
+          "tradMethod present in _transcribe_funasr response")
+    check(resp.get("tradMethod") in ("opencc", "static"),
+          f"tradMethod in (opencc, static) (got {resp.get('tradMethod')!r})")
+finally:
+    stt._run_funasr_sidecar = original_sidecar
+    stt._reset_model_for_tests()
+
+# ---------------------------------------------------------------------------
 # Clean up env so test leaves no side effects
 # ---------------------------------------------------------------------------
 os.environ.pop("DRAGON_PET_STT_PROVIDER", None)
@@ -297,8 +394,8 @@ print()
 print("=" * 65)
 print(f"  {_pass_count} PASS  {_fail_count} FAIL")
 if _fail_count == 0:
-    print("  TASK-249/250 STT Provider Smoke: PASS")
+    print("  TASK-249/250/253/253rev STT Provider Smoke: PASS")
 else:
-    print("  TASK-249/250 STT Provider Smoke: FAIL")
+    print("  TASK-249/250/253/253rev STT Provider Smoke: FAIL")
 print("=" * 65)
 sys.exit(0 if _fail_count == 0 else 1)

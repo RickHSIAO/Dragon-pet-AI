@@ -26225,15 +26225,132 @@ Core audio format blocker resolved.
 - ✅ No Pet Window / Output Queue / Diagnostics Drawer change
 - ✅ No new IPC channels
 - ✅ Windows FunASR WAV mic smoke PASS
-- ⏳ Transcript normalisation (spaces, simplified → traditional): TASK-253
+- ✅ Transcript normalisation (spaces, simplified → traditional): TASK-253
 - ⏳ Persistent warm sidecar / reduced latency: TASK-254
 
 ### Next Task
 
-TASK-253 — FunASR Transcript Normalisation / Traditional Chinese Output.
-  Strip inter-character spaces; convert simplified → traditional (OpenCC or mapping table);
-  expand TASK-247/248 correction map with Paraformer-specific acoustic variants.
-
 TASK-254 — Persistent FunASR Sidecar / Warm Model Server.
   Keep paraformer-zh model loaded between requests to eliminate cold-start latency.
   Options: long-running sidecar process with stdin loop, or local HTTP server inside `.venv-funasr`.
+
+---
+
+## TASK-253 | FunASR Transcript Normalisation / Traditional Chinese Output
+
+Status: DONE - WINDOWS NORMALIZATION SMOKE PASS / NEEDS LATENCY FOLLOW-UP (2026-06-03)
+
+### Goal
+
+Post-process Paraformer-zh output to produce clean Traditional Chinese suitable for the Dragon Pet AI
+project vocabulary. Paraformer-zh emits inter-character spaces and simplified Chinese characters;
+this task adds a deterministic normalisation layer before the existing TASK-247/248 phrase correction.
+
+### Design Constraints
+
+1. Files: `backend/app/stt/stt_service.py`, `backend/tests/test_stt_routes.py`,
+   `scripts/stt_provider_smoke.py`, 5 docs. No other files.
+2. No cloud API, no IPC, no `/chat` schema change, no new endpoints.
+3. No OpenCC dependency — static `str.maketrans()` table only (20 chars for Paraformer-specific set).
+4. No audio persistence, no Pet Window / Output Queue / Diagnostics Drawer change.
+5. No LLM rewrite. No TTS. No frontend changes.
+6. Normalisation applies only to `_transcribe_funasr()` ok-path; Whisper path unchanged.
+
+### Implementation (2026-06-03)
+
+**`backend/app/stt/stt_service.py`**:
+
+Layer architecture — deterministic pipeline on `_transcribe_funasr()` ok-path:
+```
+rawTranscript (sidecar output)
+  → _normalize_funasr_transcript()
+      1. _remove_cjk_spaces()     — CJK inter-char space removal (regex lookbehind/lookahead)
+      2. _simp_to_trad()          — OpenCC s2tw preferred; static 20-char map fallback
+  → normalizedTranscript
+  → correct_transcript_text()    — existing TASK-247/248 phrase correction
+  → correctedTranscript
+```
+
+New constants and functions (added after `_parse_funasr_result()`):
+- `_CJK_SPACE_RE` — Unicode range covers CJK Unified Ideographs (4E00–9FFF),
+  Extension A (3400–4DBF), Compatibility (F900–FAFF)
+- `_SIMP_CHAR_MAP` / `_SIMP_TRAD_TABLE` — 20-char static fallback map (opencc not installed)
+- `_OPENCC_AVAILABLE` — bool; set at import from `try: import opencc`
+- `_opencc_converter` — lazy `OpenCC("s2tw")` instance; `None` until first call
+- `_get_opencc_converter()` — returns cached converter or `None`
+- `_remove_cjk_spaces(text)` — `_CJK_SPACE_RE.sub("", text)`
+- `_simp_to_trad(text)` → `(converted_text, method)` — method = `"opencc"` or `"static"`
+- `_normalize_funasr_transcript(text)` → dict with normalizedTranscript, normalizationApplied,
+  normalizationSteps (`["cjk_space_removal", "simp_to_trad_opencc|static"]`),
+  cjkSpacingRemoved, traditionalApplied, tradMethod
+
+Extended `_STT_CORRECTION_MAP` with Paraformer-specific entries (TASK-253 block):
+- ("jdden pet ai", "Dragon Pet AI"), ("jden pet ai", "Dragon Pet AI"), ("dragon pet a i", "Dragon Pet AI")
+- ("cloud code", "Claude Code"), ("claud code", "Claude Code")
+- ("codex", "CodeX")
+- ("t a s k", "TASK"), ("task", "TASK")
+- ("克莉莉", "克莉絲蒂娜")
+
+`_transcribe_funasr()` ok-path: rawTranscript = sidecar output; response adds normalizedTranscript,
+normalizationApplied, normalizationSteps, cjkSpacingRemoved, traditionalApplied, tradMethod.
+
+**`backend/tests/test_stt_routes.py`** — 27 new TASK-253/rev tests; 133 total; all pass.
+
+**`scripts/stt_provider_smoke.py`** — TASK-253 section [7/7] updated; 86/86 PASS.
+
+### Revision: OpenCC s2tw integration (2026-06-03)
+
+Replaced hand-written `_SIMP_CHAR_MAP` (20 chars) with `opencc-python-reimplemented` using
+`OpenCC("s2tw")` (Simplified → Traditional Taiwan). Installed in `backend\.venv` (Python 3.14).
+`_simp_to_trad()` now returns `(text, method)` tuple for diagnostics. If `import opencc` fails,
+static map fallback is used without crash. `tradMethod` field surfaces which path ran.
+
+### Automated Smoke Results (2026-06-03)
+
+- 133/133 pytest PASS
+- 86/86 stt_provider_smoke PASS (including [7/7] TASK-253/rev section)
+- renderer-chat-smoke.js: PASS (all checks including TASK-252 PCM tests)
+- pet-window-smoke.js: 82 checks PASS
+- pet-renderer-smoke.js: 285 checks PASS
+- git diff --check: CRLF warnings only (expected on Windows)
+
+### Windows Normalization Manual Smoke (2026-06-03)
+
+**Result: PASS — FunASR transcript normalisation pipeline fully operational.**
+
+Tested sentences and confirmed behaviour:
+- 「克莉絲蒂娜，這是中文語音辨識測試」— OpenCC s2tw converts simplified chars; CJK spaces removed; rawTranscript preserved; correctedTranscript correct
+- 「Dragon Pet AI 的對話模式開始」— 对话模式 → 對話模式 via OpenCC; Dragon Pet AI correction applied
+- 「Claude Code 幫我修一下 TASK」— 帮 → 幫 via OpenCC; TASK correction applied
+- 「我現在要測試語音輸入和桌面寵物」— 语音输入 / 桌面宠物 → 語音輸入 / 桌面寵物 via OpenCC
+- 「這段話用來測試普通中文口語辨識」— general Chinese; clean normalisation
+
+**Pipeline behaviour confirmed:**
+1. rawTranscript = FunASR sidecar output (preserved unchanged)
+2. normalizedTranscript = CJK space removal + OpenCC s2tw applied
+3. correctedTranscript = proper noun correction (Dragon Pet AI / Claude Code / TASK / 克莉絲蒂娜)
+4. tradMethod = "opencc" (confirmed OpenCC path active)
+
+**Remaining issue:** Cold-start sidecar latency 10–30 s on first call — paraformer-zh model load. Subsequent calls faster but still not real-time. → TASK-254 Persistent Sidecar.
+
+### Acceptance Criteria
+
+- ✅ `_CJK_SPACE_RE`, `_SIMP_CHAR_MAP`, `_SIMP_TRAD_TABLE` constants in stt_service.py
+- ✅ `_OPENCC_AVAILABLE`, `_opencc_converter`, `_get_opencc_converter()` for lazy OpenCC init
+- ✅ `_simp_to_trad()` returns `(text, method)` — "opencc" when installed, "static" as fallback
+- ✅ `_remove_cjk_spaces()`, `_normalize_funasr_transcript()` functions
+- ✅ `_transcribe_funasr()` ok-path chains norm → correction; rawTranscript = pre-norm original
+- ✅ 9 Paraformer-specific entries added to `_STT_CORRECTION_MAP`
+- ✅ Response includes normalizedTranscript, normalizationApplied, normalizationSteps,
+     cjkSpacingRemoved, traditionalApplied, tradMethod
+- ✅ 27 new pytest tests (16 base + 11 OpenCC revision); all 133 pass
+- ✅ [7/7] smoke section; 86/86 pass
+- ✅ No cloud API, no IPC, no schema change, no audio persistence
+- ✅ Whisper path unmodified
+- ✅ opencc-python-reimplemented installed in backend\.venv
+- ✅ Windows normalization manual smoke PASS
+- ⏳ Persistent warm sidecar / reduced latency: TASK-254
+
+### Next Task
+
+TASK-254 — Persistent FunASR Sidecar / Warm Model Server.

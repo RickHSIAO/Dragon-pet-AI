@@ -107,7 +107,7 @@ ollama serve
 | 真實 API Key 使用 | ❌ 無 — 所有測試使用 mocked runner |
 | 生產就緒 | ❌ 尚未 — prototype / portfolio 階段 |
 | Demo 可用（本地 Ollama） | ✅ 是 |
-| 下一個任務 | TASK-253 — FunASR Transcript Normalisation / Traditional Chinese Output（TASK-252 WAV PCM mic smoke PASS；簡體轉繁體 + 空格清除 + 熱詞 normalisation pending）|
+| 下一個任務 | TASK-254 — Persistent FunASR Sidecar / Warm Model Server（TASK-253 DONE - WINDOWS NORMALIZATION SMOKE PASS：OpenCC s2tw 簡繁轉換 + CJK 空格清除 + Paraformer 熱詞 normalisation；cold-start latency 10–30s pending）|
 
 ---
 
@@ -397,8 +397,8 @@ python -c "import json, urllib.request; data=json.dumps({'message':'你好！克
 | [docs/PROVIDER_TEST_CONNECTION_DESIGN.md](docs/PROVIDER_TEST_CONNECTION_DESIGN.md) | Test Connection 設計與強化測試結果 |
 | [docs/SECURE_KEY_STORAGE_DESIGN.md](docs/SECURE_KEY_STORAGE_DESIGN.md) | 金鑰儲存威脅模型、儲存選項、遮蔽規則 |
 | [docs/BYOK_PRODUCT_AND_SETTINGS.md](docs/BYOK_PRODUCT_AND_SETTINGS.md) | BYOK 產品設計與安全邊界 |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖；TASK-251 DONE FunASR sidecar；TASK-252 DONE WAV PCM 輸入 |
-| [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄；TASK-251 DONE FunASR sidecar；TASK-252 DONE WAV PCM 輸入 |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | 完整階段開發路線圖；TASK-253 DONE FunASR normalisation；TASK-252 DONE WAV PCM 輸入 |
+| [docs/TASKS.md](docs/TASKS.md) | 完整任務歷史記錄；TASK-253 DONE FunASR normalisation；TASK-252 DONE WAV PCM 輸入 |
 | [docs/RENDERER_MODULARIZATION_PLAN.md](docs/RENDERER_MODULARIZATION_PLAN.md) | TASK-237 renderer modularization boundary map：current renderer responsibilities, proposed modules, extraction order (TASK-238 done, TASK-239 DONE - WINDOWS VISUAL SMOKE PASS), contracts, risks, validation strategy |
 | [docs/INTERACTIVE_COMPANION_ARCHITECTURE.md](docs/INTERACTIVE_COMPANION_ARCHITECTURE.md) | TASK-222/224 互動陪伴架構 checkpoint：data flow、layer responsibility、IPC inventory、安全邊界、Character State Layer diagnostics、TASK-237 renderer modularization phase |
 | [docs/CHRISTINA_PERSONA_CONTEXT_PACK.md](docs/CHRISTINA_PERSONA_CONTEXT_PACK.md) | TASK-225 Christina persona context pack：canonical source、runtime-safe adaptation、strength levels、runtime boundary |
