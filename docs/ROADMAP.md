@@ -445,8 +445,10 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 **Screen Context v0.4 COMPLETE** ??see `docs/SCREEN_CONTEXT_V04_RELEASE_SUMMARY.md`
 
 **Next planned tasks:**
-- TASK-255 — Voice Capture Focus/Minimize Resilience (Issue A from TASK-254 smoke)
-- TASK-256 — Pet Window Click / Show Pet Idempotent Behavior (Issues B+C from TASK-254 smoke)
+- TASK-256 — Startup Warmup / STT + Ollama Preload
+- TASK-257 — Pet Window Click / Show Pet Idempotent Behavior
+
+- TASK-255 DONE - WINDOWS FOCUS/MINIMIZE VOICE SMOKE PASS / NEEDS STARTUP WARMUP FOLLOW-UP (2026-06-04): Voice Capture Focus/Minimize Resilience. Root causes: Chromium background throttling pauses 100 ms VAD setInterval; AudioContext auto-suspended when window not focused. Fixes: `backgroundThrottling: false` in fullAppWindow webPreferences (Pet Window excluded). `_resumeConversationAudioContextIfSuspended()` helper called from VAD tick + visibilitychange/focus. Blur/visibilitychange hidden never cancel voice. Six new fullAppVoiceDiagnostics fields. Windows smoke PASS: Manual Mic cut-window/minimize not interrupted; Conversation Mode cut-window/minimize not stopped; Stop Conversation still works; FunASR/OpenCC/Pet Window/Output Queue regression PASS. 17 renderer smoke tests PASS. No always-listening, no new IPC, no raw audio, no Pet Window / Output Queue / Diagnostics Drawer changes.
 
 - TASK-254 DONE - WINDOWS WARM SIDECAR SMOKE PASS / NEEDS WINDOW UX FOLLOW-UP (2026-06-03): Persistent FunASR Sidecar / Warm Model Server. New `scripts/funasr_sidecar_loop.py` — persistent stdin/stdout JSON loop that loads paraformer-zh once and stays warm between requests. Protocol: ready/transcribe/result/shutdown JSON messages; base64 audio over stdin; `_PROTO_BUF` saves real stdout before redirecting `sys.stdout = sys.stderr` during model load. Backend `_run_funasr()` dispatcher: persistent sidecar (with 1 restart attempt) → one-shot fallback. `DRAGON_PET_FUNASR_PERSISTENT=false` env disables (default: true). Response adds `funasrSidecarMode`, `funasrSidecarWarm`, `funasrSidecarRestarted`. Windows smoke PASS: first call slower (warmup), subsequent Manual Mic and Conversation Mode clearly faster; OpenCC/correction regression PASS; no raw stack; no raw audio. 18 new pytest (151 total); [8/8] smoke section. Follow-ups: TASK-255 voice capture focus/minimize resilience; TASK-256 Pet Window click / Show Pet idempotent behavior.
 

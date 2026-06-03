@@ -252,7 +252,14 @@ var fullAppVoiceDiagnostics = {
   sttProviderSource: "",
   sttProviderLoadStatus: "",
   sttProviderLoadError: "",
-  sttProviderFallbackReason: ""
+  sttProviderFallbackReason: "",
+  // TASK-255: voice capture focus/minimize resilience diagnostics
+  voiceCaptureFocusSafe: true,
+  lastVisibilityState: "visible",
+  lastWindowFocusState: "focused",
+  audioContextState: "none",
+  captureInterruptedReason: null,
+  captureInterruptedByVisibility: false
 };
 // TASK-244: session-only VAD tuning vars — override constants for this session only, not persisted
 var fullAppConversationRmsThreshold = FULL_APP_CONVERSATION_RMS_THRESHOLD;
@@ -4696,7 +4703,24 @@ function _transcribeConversationChunks(chunks, mimeType) {
   });
 }
 
+// TASK-255: resume conversation AudioContext if it was auto-suspended by browser background
+// policy (Chromium suspends AudioContext when page is hidden or backgrounded). Call this from
+// the VAD tick and from focus/visibility restore handlers so VAD stays alive across focus changes.
+function _resumeConversationAudioContextIfSuspended() {
+  var ctx = fullAppVoiceConversationAudioContext;
+  if (ctx) {
+    fullAppVoiceDiagnostics.audioContextState = ctx.state || "unknown";
+    if (ctx.state === "suspended") {
+      ctx.resume().catch(function () {});
+    }
+  } else {
+    fullAppVoiceDiagnostics.audioContextState = "none";
+  }
+}
+
 function _conversationVadTick() {
+  // TASK-255: resume AudioContext if throttled/suspended during background/minimize
+  _resumeConversationAudioContextIfSuspended();
   var state = fullAppVoiceConversationState;
   if (state === "sending" || state === "transcribing") return;
   if (!fullAppVoiceConversationAnalyser) return;
@@ -4972,6 +4996,8 @@ function renderFullAppVoiceDiagnostics() {
     "命中 alias: " + (d.sttMatchedAlias || "—") + "  canonical: " + (d.sttCanonicalTerm || "—"),
     "STT Provider: " + (d.sttProviderResolved || "unknown") + "  來源: " + (d.sttProviderSource || "unknown"),
     "Provider 載入: " + (d.sttProviderLoadStatus || "unknown") + "  fallback: " + (d.sttProviderFallbackReason || "none"),
+    "焦點安全: " + (d.voiceCaptureFocusSafe ? "是" : "否") + "  可見: " + (d.lastVisibilityState || "visible") + "  焦點: " + (d.lastWindowFocusState || "focused"),
+    "AudioCtx 狀態: " + (d.audioContextState || "none") + "  中斷原因: " + (d.captureInterruptedReason || "none") + "  因可見性: " + (d.captureInterruptedByVisibility ? "是" : "否"),
     "---",
     "VAD 最後 RMS: " + d.lastRms.toFixed(4),
     "VAD 最高 RMS: " + d.maxRms.toFixed(4),
@@ -5246,12 +5272,26 @@ if (typeof document !== "undefined" && typeof document.addEventListener === "fun
 // TASK-200: clear unread indicator when Full App regains focus or becomes visible.
 document.addEventListener("visibilitychange", () => {
   closeChatContextMenu();
-  if (!document.hidden) clearUnread();
+  // TASK-255: track visibility state; do NOT cancel voice capture on hidden
+  fullAppVoiceDiagnostics.lastVisibilityState = document.hidden ? "hidden" : "visible";
+  if (!document.hidden) {
+    clearUnread();
+    // TASK-255: resume conversation AudioContext suspended by browser background policy
+    _resumeConversationAudioContextIfSuspended();
+  }
 });
 if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
   window.addEventListener("focus", clearUnread);
   window.addEventListener("blur", closeChatContextMenu);
   window.addEventListener("focus", () => recordInteractionEvent("full_app_focused")); // TASK-214
+  // TASK-255: resume AudioContext and track focus state — never cancel voice on blur
+  window.addEventListener("focus", function () {
+    fullAppVoiceDiagnostics.lastWindowFocusState = "focused";
+    _resumeConversationAudioContextIfSuspended();
+  });
+  window.addEventListener("blur", function () {
+    fullAppVoiceDiagnostics.lastWindowFocusState = "blurred";
+  });
 }
 
 // ---------------------------------------------------------------------------

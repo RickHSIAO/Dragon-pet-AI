@@ -359,6 +359,12 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, "renderer", "preload.js"),
+      // TASK-255: keep voice capture active when Full App loses focus or is minimized.
+      // This is NOT always-listening — mic only opens after user explicitly starts Manual Mic
+      // or Conversation Mode. Without this, Chromium background throttling can pause the
+      // VAD setInterval (100 ms) and auto-suspend the AudioContext, causing voice capture
+      // to silently stall mid-utterance. Pet Window intentionally does NOT get this flag.
+      backgroundThrottling: false,
     },
     resizable: true,
     // alwaysOnTop can be enabled by user preference in a later task

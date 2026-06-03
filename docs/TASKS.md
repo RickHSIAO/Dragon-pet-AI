@@ -26230,7 +26230,155 @@ Core audio format blocker resolved.
 
 ### Next Task
 
-TASK-255 (TBD)
+TASK-256 — Startup Warmup / STT + Ollama Preload
+
+---
+
+## TASK-256 | Startup Warmup / STT + Ollama Preload
+
+Status: PLANNED (2026-06-04)
+
+### Goal
+
+Reduce first-utterance latency by automatically warming up the STT sidecar and Ollama after
+app startup. This is NOT always-listening, NOT auto-recording, NOT auto-sending messages.
+Only model / sidecar / provider warmup — no microphone access, no raw audio, no /chat user messages.
+
+### Design Constraints
+
+1. No always-listening, no auto-recording, no microphone access.
+2. No raw audio persistence.
+3. No new IPC channels unless existing preload API is insufficient (prefer renderer fetch).
+4. No changes to Pet Window runtime, Output Queue, Diagnostics Drawer.
+5. No /chat schema change.
+6. Warmup must not block App startup.
+7. Warmup must not interfere with Manual Mic / Conversation Mode / typed chat flow.
+8. Warmup toggle: Startup Warmup ON/OFF; STT Warmup ON/OFF; Ollama Warmup ON/OFF.
+
+### Preliminary Direction
+
+1. Backend `/stt/warmup` — starts FunASR persistent sidecar, waits for ready signal, returns
+   status without touching audio. Uses existing persistent sidecar infrastructure.
+2. Backend `/llm/warmup` or provider keep_alive ping — lightweight Ollama ping (no user content).
+3. Renderer triggers warmup fetch after 2–5 s delay post-startup (health check PASS).
+4. Warmup diagnostics in `fullAppVoiceDiagnostics`:
+   `sttWarmupStatus`, `sttWarmupLatencyMs`, `ollamaWarmupStatus`, `ollamaWarmupLatencyMs`.
+5. Failures show clean status only — no raw stack exposed.
+
+---
+
+## TASK-257 | Pet Window Click / Show Pet Idempotent Behavior
+
+Status: PLANNED (2026-06-04)
+
+### Goal
+
+Fix two related Pet Window UX issues discovered during TASK-254/255 Windows smoke:
+(B) Left-clicking Pet Window avatar unexpectedly hides the pet.
+(C) Show Pet button acts as toggle — should be idempotent show/focus/restore.
+
+### Preliminary Direction
+
+- Left-click on Pet avatar: no-op or focus/bring-to-front; drag still works.
+- Show Pet: if already visible → focus/restore (not hide); Hide Pet only via explicit Hide action / context menu / Menu.
+- Right-click / Menu may keep Hide Pet option.
+
+---
+
+## TASK-255 | Voice Capture Focus / Minimize Resilience
+
+Status: DONE - WINDOWS FOCUS/MINIMIZE VOICE SMOKE PASS / NEEDS STARTUP WARMUP FOLLOW-UP (2026-06-04)
+
+### Goal
+
+Prevent voice capture (Manual Mic / Conversation Mode) from stalling when Full App loses focus,
+is minimized, or the system background-throttles the renderer. User-initiated recording must
+complete cleanly even if the window is switched away from mid-utterance.
+
+### Design Constraints
+
+1. No always-listening. No background microphone access.
+2. No new IPC channels.
+3. No changes to FunASR sidecar, STT provider, /chat schema.
+4. No changes to Pet Window, Output Queue, Diagnostics Drawer.
+5. No raw audio persistence.
+6. No LLM transcript rewrite.
+7. No automatic commit/push.
+
+### Root Causes
+
+1. `backgroundThrottling` not set to false — Chromium's default throttles `setInterval` and
+   may auto-suspend `AudioContext` when the window is not focused or minimized.
+   VAD timer runs every 100 ms; throttled to 1 s+ when backgrounded → VAD stalls mid-utterance.
+2. No `AudioContext.resume()` on page visibility restore or window focus — once Chromium
+   auto-suspends the AudioContext, VAD analyser returns zero RMS and recording appears silent.
+
+### Implementation (2026-06-03)
+
+**`apps/desktop/src/main.js`:**
+- Added `backgroundThrottling: false` to fullAppWindow webPreferences only. Pet Window
+  intentionally does NOT get this flag. Comment explains this is NOT always-listening — it
+  only keeps user-initiated voice capture alive across focus/minimize transitions.
+
+**`apps/desktop/src/renderer/renderer.js`:**
+- New `_resumeConversationAudioContextIfSuspended()` helper: checks context state, calls
+  `ctx.resume().catch()` if suspended, updates `audioContextState` diagnostic.
+- `_conversationVadTick` — calls `_resumeConversationAudioContextIfSuspended()` at start of
+  every tick (100 ms) so context recovers automatically without user intervention.
+- `visibilitychange` handler — tracks `lastVisibilityState`; calls resume when page becomes
+  visible again; does NOT cancel/stop recording when page goes hidden.
+- New `focus` listener — tracks `lastWindowFocusState = "focused"`, calls resume.
+- New `blur` listener — tracks `lastWindowFocusState = "blurred"` only; does NOT cancel voice.
+- Six new `fullAppVoiceDiagnostics` fields: `voiceCaptureFocusSafe`, `lastVisibilityState`,
+  `lastWindowFocusState`, `audioContextState`, `captureInterruptedReason`,
+  `captureInterruptedByVisibility`.
+- `renderFullAppVoiceDiagnostics` — two new display lines for focus/AudioContext state.
+
+**`apps/desktop/scripts/renderer-chat-smoke.js`** — 17 new TASK-255 tests.
+
+### Checklist
+
+- ✅ `backgroundThrottling: false` in fullAppWindow only
+- ✅ Pet Window does NOT have backgroundThrottling
+- ✅ `_resumeConversationAudioContextIfSuspended()` helper
+- ✅ VAD tick resumes AudioContext every 100 ms if suspended
+- ✅ `visibilitychange` handler: tracks state; resumes on visible; does NOT cancel on hidden
+- ✅ `focus` listener: resumes AudioContext; tracks focus state
+- ✅ `blur` listener: tracks blur state only; does NOT cancel voice
+- ✅ 6 new diagnostics fields
+- ✅ Manual Mic not cancelled by visibilitychange hidden or blur
+- ✅ Conversation Mode not stopped by visibilitychange hidden or blur
+- ✅ Explicit `stopConversationMode()` still works
+- ✅ Voice Input OFF still blocks recording
+- ✅ No always-listening regression
+- ✅ No raw audio persistence
+- ✅ No new IPC channels
+- ✅ No Pet Window / Output Queue / Diagnostics Drawer changes
+- ✅ 17 new renderer smoke tests; all pass
+- ✅ Windows focus/minimize voice smoke PASS (2026-06-04)
+
+### Windows Smoke Results (2026-06-04)
+
+1. ✅ Manual Mic 切換視窗：錄音不中斷，transcript / correctedTranscript 正常
+2. ✅ Manual Mic 縮小 Full App：回來後可正常停止與辨識
+3. ✅ Conversation Mode 切換視窗：不自動 Stop Conversation
+4. ✅ Conversation Mode 縮小 Full App：回來後第二句仍可辨識與送出
+5. ✅ Stop Conversation：可明確停止 mic / VAD / recorder
+6. ✅ Regression：FunASR persistent sidecar、OpenCC normalization、Pet Window、Output Queue、Diagnostics Drawer 皆正常
+
+### Follow-up Issues (recorded, not fixed in TASK-255)
+
+**TASK-256 — Startup Warmup / STT + Ollama Preload:**
+App 啟動後自動 warmup STT 和 Ollama，降低第一次語音辨識和第一次 LLM 回覆延遲。
+Direction: /stt/warmup endpoint (start FunASR persistent sidecar, await ready, no audio);
+/llm/warmup or provider keep_alive ping. Renderer triggers warmup after 2–5 s delay.
+Toggle: Startup Warmup ON/OFF / STT Warmup ON/OFF / Ollama Warmup ON/OFF.
+Diagnostics: sttWarmupStatus, sttWarmupLatencyMs, ollamaWarmupStatus, ollamaWarmupLatencyMs.
+No IPC (use renderer fetch), no always-listening, no raw audio, no Pet Window / Output Queue changes.
+
+**TASK-257 — Pet Window Click / Show Pet Idempotent Behavior:**
+(B) Left-click Pet avatar should not hide pet.
+(C) Show Pet = idempotent show/focus/restore; Hide Pet only via explicit Hide action / Menu.
 
 ---
 

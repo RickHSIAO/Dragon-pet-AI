@@ -13842,6 +13842,239 @@ function testTask252NoPcmAudioPersistence() {
   console.log("  testTask252NoPcmAudioPersistence PASS");
 }
 
+// =============================================================================
+// TASK-255: Voice Capture Focus / Minimize Resilience
+// =============================================================================
+
+function testTask255RendererHasResumeHelper() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("function _resumeConversationAudioContextIfSuspended"),
+    "TASK-255: renderer must define _resumeConversationAudioContextIfSuspended");
+  assert.ok(src.includes("ctx.resume()"),
+    "TASK-255: resume helper must call ctx.resume()");
+  console.log("  testTask255RendererHasResumeHelper PASS");
+}
+
+function testTask255DiagnosticsHasFocusSafeFields() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("voiceCaptureFocusSafe"),
+    "TASK-255: diagnostics must have voiceCaptureFocusSafe field");
+  assert.ok(src.includes("lastVisibilityState"),
+    "TASK-255: diagnostics must have lastVisibilityState field");
+  assert.ok(src.includes("lastWindowFocusState"),
+    "TASK-255: diagnostics must have lastWindowFocusState field");
+  assert.ok(src.includes("audioContextState"),
+    "TASK-255: diagnostics must have audioContextState field");
+  assert.ok(src.includes("captureInterruptedReason"),
+    "TASK-255: diagnostics must have captureInterruptedReason field");
+  assert.ok(src.includes("captureInterruptedByVisibility"),
+    "TASK-255: diagnostics must have captureInterruptedByVisibility field");
+  console.log("  testTask255DiagnosticsHasFocusSafeFields PASS");
+}
+
+async function testTask255DiagnosticsDefaultFocusSafeFields() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.voiceCaptureFocusSafe, true,
+    "TASK-255: voiceCaptureFocusSafe must default to true");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.lastVisibilityState, "visible",
+    "TASK-255: lastVisibilityState must default to visible");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.lastWindowFocusState, "focused",
+    "TASK-255: lastWindowFocusState must default to focused");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.audioContextState, "none",
+    "TASK-255: audioContextState must default to none");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.captureInterruptedReason, null,
+    "TASK-255: captureInterruptedReason must default to null");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.captureInterruptedByVisibility, false,
+    "TASK-255: captureInterruptedByVisibility must default to false");
+  console.log("  testTask255DiagnosticsDefaultFocusSafeFields PASS");
+}
+
+async function testTask255ManualMicNotCancelledByVisibilityHidden() {
+  const { document, sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  // Simulate active recording state
+  sandbox.fullAppRecording = true;
+  // Simulate visibilitychange to hidden
+  document.hidden = true;
+  document.dispatchEvent({ type: "visibilitychange" });
+  assert.strictEqual(sandbox.fullAppRecording, true,
+    "TASK-255: Manual Mic must not be cancelled by visibilitychange hidden");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.lastVisibilityState, "hidden",
+    "TASK-255: lastVisibilityState must update to hidden");
+  console.log("  testTask255ManualMicNotCancelledByVisibilityHidden PASS");
+}
+
+async function testTask255ManualMicNotCancelledByBlur() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  sandbox.fullAppRecording = true;
+  sandbox.window.dispatchEvent({ type: "blur" });
+  assert.strictEqual(sandbox.fullAppRecording, true,
+    "TASK-255: Manual Mic must not be cancelled by window blur");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.lastWindowFocusState, "blurred",
+    "TASK-255: lastWindowFocusState must update to blurred");
+  console.log("  testTask255ManualMicNotCancelledByBlur PASS");
+}
+
+async function testTask255ConversationModeNotStoppedByVisibilityHidden() {
+  const { document, sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.fullAppVoiceConversationState = "waiting";
+  document.hidden = true;
+  document.dispatchEvent({ type: "visibilitychange" });
+  assert.strictEqual(sandbox.fullAppVoiceConversationEnabled, true,
+    "TASK-255: Conversation Mode must not be stopped by visibilitychange hidden");
+  assert.strictEqual(sandbox.fullAppVoiceConversationState, "waiting",
+    "TASK-255: Conversation Mode state must remain waiting after visibilitychange hidden");
+  console.log("  testTask255ConversationModeNotStoppedByVisibilityHidden PASS");
+}
+
+async function testTask255ConversationModeNotStoppedByBlur() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.fullAppVoiceConversationState = "waiting";
+  sandbox.window.dispatchEvent({ type: "blur" });
+  assert.strictEqual(sandbox.fullAppVoiceConversationEnabled, true,
+    "TASK-255: Conversation Mode must not be stopped by window blur");
+  assert.strictEqual(sandbox.fullAppVoiceConversationState, "waiting",
+    "TASK-255: Conversation Mode state must remain waiting after blur");
+  console.log("  testTask255ConversationModeNotStoppedByBlur PASS");
+}
+
+async function testTask255ExplicitStopConversationModeWorks() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.fullAppVoiceConversationState = "waiting";
+  sandbox.stopConversationMode();
+  assert.strictEqual(sandbox.fullAppVoiceConversationEnabled, false,
+    "TASK-255: explicit stopConversationMode() must stop conversation");
+  console.log("  testTask255ExplicitStopConversationModeWorks PASS");
+}
+
+async function testTask255VoiceInputOffBlocksRecording() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  sandbox.fullAppVoiceInputEnabled = false;
+  await sandbox.openFullAppVoiceInput();
+  assert.strictEqual(sandbox.fullAppRecording, false,
+    "TASK-255: Voice Input OFF must not start recording");
+  console.log("  testTask255VoiceInputOffBlocksRecording PASS");
+}
+
+async function testTask255AudioContextResumedOnVisibilityRestore() {
+  const { document, sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  // Set up a fake suspended AudioContext in conversation state
+  let resumeCalled = false;
+  sandbox.fullAppVoiceConversationAudioContext = {
+    state: "suspended",
+    resume: function () { resumeCalled = true; return Promise.resolve(); },
+    close: function () {},
+  };
+  sandbox.fullAppVoiceConversationEnabled = true;
+  // Page goes hidden then becomes visible again
+  document.hidden = true;
+  document.dispatchEvent({ type: "visibilitychange" });
+  document.hidden = false;
+  document.dispatchEvent({ type: "visibilitychange" });
+  assert.ok(resumeCalled,
+    "TASK-255: AudioContext.resume() must be called when page becomes visible with suspended context");
+  console.log("  testTask255AudioContextResumedOnVisibilityRestore PASS");
+}
+
+async function testTask255AudioContextResumedOnWindowFocus() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  let resumeCalled = false;
+  sandbox.fullAppVoiceConversationAudioContext = {
+    state: "suspended",
+    resume: function () { resumeCalled = true; return Promise.resolve(); },
+    close: function () {},
+  };
+  sandbox.window.dispatchEvent({ type: "focus" });
+  assert.ok(resumeCalled,
+    "TASK-255: AudioContext.resume() must be called when window regains focus with suspended context");
+  console.log("  testTask255AudioContextResumedOnWindowFocus PASS");
+}
+
+function testTask255NoAlwaysListeningRegression() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  // visibilitychange handler must NOT start new recording / getUserMedia
+  const vcIdx = src.indexOf("document.addEventListener(\"visibilitychange\"");
+  const vcSection = src.slice(vcIdx, vcIdx + 400);
+  assert.ok(!vcSection.includes("getUserMedia"),
+    "TASK-255: visibilitychange must not call getUserMedia");
+  assert.ok(!vcSection.includes("openFullAppVoiceInput"),
+    "TASK-255: visibilitychange must not call openFullAppVoiceInput");
+  assert.ok(!vcSection.includes("startConversationMode"),
+    "TASK-255: visibilitychange must not call startConversationMode");
+  // blur listener must NOT start new recording
+  const blurIdx = src.indexOf("\"blur\", function ()");
+  const blurSection = src.slice(blurIdx, blurIdx + 200);
+  assert.ok(!blurSection.includes("getUserMedia"),
+    "TASK-255: blur listener must not call getUserMedia");
+  assert.ok(!blurSection.includes("openFullAppVoiceInput"),
+    "TASK-255: blur listener must not call openFullAppVoiceInput");
+  console.log("  testTask255NoAlwaysListeningRegression PASS");
+}
+
+function testTask255NoRawAudioPersistence() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const resumeIdx = src.indexOf("function _resumeConversationAudioContextIfSuspended");
+  assert.ok(resumeIdx !== -1, "TASK-255: _resumeConversationAudioContextIfSuspended must be present");
+  const resumeSection = src.slice(resumeIdx, resumeIdx + 400);
+  assert.ok(!resumeSection.includes("writeFile"),
+    "TASK-255: resume helper must not write files");
+  assert.ok(!resumeSection.includes("localStorage"),
+    "TASK-255: resume helper must not use localStorage");
+  assert.ok(!resumeSection.includes("sessionStorage"),
+    "TASK-255: resume helper must not use sessionStorage");
+  console.log("  testTask255NoRawAudioPersistence PASS");
+}
+
+function testTask255NoNewIpcChannel() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  // TASK-255 must not add new dragonPet IPC channels beyond what already existed
+  assert.ok(src.includes("_resumeConversationAudioContextIfSuspended"),
+    "TASK-255: resume helper must be present in renderer");
+  assert.ok(!src.includes("voiceFocusIpc") && !src.includes("voice-focus-channel"),
+    "TASK-255: must not add new IPC channel names");
+  console.log("  testTask255NoNewIpcChannel PASS");
+}
+
+function testTask255MainHasBackgroundThrottlingFalse() {
+  const mainSrc = fs.readFileSync(path.join(desktopRoot, "src", "main.js"), "utf8");
+  assert.ok(mainSrc.includes("backgroundThrottling: false"),
+    "TASK-255: main.js must set backgroundThrottling: false for Full App window");
+  // Pet Window must NOT have backgroundThrottling: false
+  const petWindowIdx = mainSrc.indexOf("petWindow = new BrowserWindow");
+  assert.ok(petWindowIdx !== -1, "TASK-255: petWindow BrowserWindow must be present in main.js");
+  const petWindowSection = mainSrc.slice(petWindowIdx, petWindowIdx + 600);
+  assert.ok(!petWindowSection.includes("backgroundThrottling"),
+    "TASK-255: backgroundThrottling must NOT be applied to Pet Window");
+  console.log("  testTask255MainHasBackgroundThrottlingFalse PASS");
+}
+
+function testTask255NoPetWindowChanges() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  // TASK-255 resume logic must live in renderer.js, not in pet-related code paths
+  assert.ok(src.includes("function _resumeConversationAudioContextIfSuspended"),
+    "TASK-255: resume helper in renderer.js");
+  // pet-renderer.js must be unchanged (no TASK-255 marker)
+  const petRendererSrc = fs.readFileSync(
+    path.join(desktopRoot, "src", "pet", "pet-renderer.js"), "utf8");
+  assert.ok(!petRendererSrc.includes("_resumeConversationAudioContextIfSuspended"),
+    "TASK-255: resume helper must NOT appear in pet-renderer.js");
+  console.log("  testTask255NoPetWindowChanges PASS");
+}
+
+function testTask255NoOutputQueueDiagnosticsDrawerChanges() {
+  const outputQueueSrc = fs.readFileSync(
+    path.join(desktopRoot, "src", "renderer", "modules", "output-queue.js"), "utf8");
+  const diagDrawerSrc = fs.readFileSync(
+    path.join(desktopRoot, "src", "renderer", "modules", "diagnostics-drawer.js"), "utf8");
+  assert.ok(!outputQueueSrc.includes("_resumeConversationAudioContextIfSuspended"),
+    "TASK-255: output-queue.js must not be modified by TASK-255");
+  assert.ok(!diagDrawerSrc.includes("_resumeConversationAudioContextIfSuspended"),
+    "TASK-255: diagnostics-drawer.js must not be modified by TASK-255");
+  console.log("  testTask255NoOutputQueueDiagnosticsDrawerChanges PASS");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -14762,6 +14995,25 @@ async function main() {
   testTask252MainUsesWavContentType();
   await testTask252EncodeWavPcmProducesValidHeader();
   testTask252NoPcmAudioPersistence();
+
+  // TASK-255: Voice Capture Focus / Minimize Resilience
+  testTask255RendererHasResumeHelper();
+  testTask255DiagnosticsHasFocusSafeFields();
+  await testTask255DiagnosticsDefaultFocusSafeFields();
+  await testTask255ManualMicNotCancelledByVisibilityHidden();
+  await testTask255ManualMicNotCancelledByBlur();
+  await testTask255ConversationModeNotStoppedByVisibilityHidden();
+  await testTask255ConversationModeNotStoppedByBlur();
+  await testTask255ExplicitStopConversationModeWorks();
+  await testTask255VoiceInputOffBlocksRecording();
+  await testTask255AudioContextResumedOnVisibilityRestore();
+  await testTask255AudioContextResumedOnWindowFocus();
+  testTask255NoAlwaysListeningRegression();
+  testTask255NoRawAudioPersistence();
+  testTask255NoNewIpcChannel();
+  testTask255MainHasBackgroundThrottlingFalse();
+  testTask255NoPetWindowChanges();
+  testTask255NoOutputQueueDiagnosticsDrawerChanges();
 
   console.log("renderer chat smoke: PASS");
 }

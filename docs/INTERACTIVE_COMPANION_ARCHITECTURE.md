@@ -642,6 +642,12 @@ Recommended next architecture phase:
   call slower (warmup), subsequent calls clearly faster; normalisation/correction regression PASS;
   no raw stack; no raw audio. 151 pytest + 109 smoke PASS. Follow-ups: TASK-255 voice capture
   focus/minimize; TASK-256 Pet Window click / Show Pet idempotent.
+- TASK-255 DONE - WINDOWS FOCUS/MINIMIZE VOICE SMOKE PASS / NEEDS STARTUP WARMUP FOLLOW-UP (2026-06-04):
+  Voice Capture Focus/Minimize Resilience. `backgroundThrottling: false` in fullAppWindow only.
+  `_resumeConversationAudioContextIfSuspended()` from VAD tick + visibilitychange/focus.
+  Blur/visibilitychange hidden never cancel voice. 6 diagnostics fields. 17 renderer smoke PASS.
+  Windows smoke PASS: Manual Mic + Conversation Mode cut-window/minimize not interrupted;
+  regression PASS. Follow-ups: TASK-256 startup warmup; TASK-257 Pet Window click/Show idempotent.
 - Relationship state.
 - Mood / attention / energy state beyond the local preview foundation.
 - Idle reaction policy.

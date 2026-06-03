@@ -404,12 +404,22 @@ Suggested research and implementation tasks:
   Manual Mic and Conversation Mode clearly faster; OpenCC/correction regression PASS; no raw stack;
   no raw audio persistence. Follow-up: TASK-255 voice capture focus/minimize; TASK-256 Pet click/Show.
 
+- **TASK-STT-016-adjacent (TASK-255) Voice Capture Focus/Minimize Resilience. DONE - WINDOWS FOCUS/MINIMIZE VOICE SMOKE PASS / NEEDS STARTUP WARMUP FOLLOW-UP (2026-06-04):**
+  Root causes: (1) Chromium background throttling pauses 100 ms VAD `setInterval`; (2) `AudioContext`
+  auto-suspended when window loses focus or is minimized. Fixes: `backgroundThrottling: false` in
+  fullAppWindow webPreferences only (Pet Window excluded). `_resumeConversationAudioContextIfSuspended()`
+  helper called every VAD tick and on `visibilitychange`/`focus` events. Does NOT cancel voice on
+  hidden/blur. Six new `fullAppVoiceDiagnostics` fields: `voiceCaptureFocusSafe`, `lastVisibilityState`,
+  `lastWindowFocusState`, `audioContextState`, `captureInterruptedReason`, `captureInterruptedByVisibility`.
+  17 new renderer smoke tests PASS. No always-listening, no new IPC, no raw audio, no Pet Window /
+  Output Queue / Diagnostics Drawer changes.
+
 - TASK-STT-016 LLM-based semantic correction. **(PLANNED; future):** Optional
   follow-up to apply a local LLM pass over the corrected transcript for further semantic
   accuracy. Must be guarded by explicit user opt-in and must not replace the deterministic
   layer from TASK-247/248.
 
-Recommended next: TASK-255 — Voice Capture Focus/Minimize Resilience; TASK-256 — Pet Window Click / Show Pet Idempotent Behavior.
+Recommended next: TASK-256 — Startup Warmup / STT + Ollama Preload; TASK-257 — Pet Window Click / Show Pet Idempotent Behavior.
 
 Each future task must explicitly define safety boundaries, user controls,
 provider scope, queue priority, and no-regression checks.
