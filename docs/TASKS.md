@@ -26236,7 +26236,7 @@ TASK-256 — Startup Warmup / STT + Ollama Preload
 
 ## TASK-256 | Startup Warmup / STT + Ollama Preload
 
-Status: PLANNED (2026-06-04)
+Status: DONE - WINDOWS STARTUP WARMUP SMOKE PASS (2026-06-04)
 
 ### Goal
 
@@ -26264,6 +26264,31 @@ Only model / sidecar / provider warmup — no microphone access, no raw audio, n
 4. Warmup diagnostics in `fullAppVoiceDiagnostics`:
    `sttWarmupStatus`, `sttWarmupLatencyMs`, `ollamaWarmupStatus`, `ollamaWarmupLatencyMs`.
 5. Failures show clean status only — no raw stack exposed.
+
+---
+
+## TASK-256b | Diagnostics / Voice Panel Readability Polish
+
+Status: DONE - WINDOWS DIAGNOSTICS READABILITY SMOKE PASS (2026-06-04)
+
+### Goal
+
+CSS-only readability improvements to the Full App Voice Diagnostics / VAD panel.
+No STT provider, warmup runtime, IPC, Pet Window, Output Queue, or backend changes.
+
+### Changes (styles.css only)
+
+- `.voice-diagnostics-display`: 10px → 13px font, line-height 1.55, max-height 200px → 340px, word-break → break-word, Consolas monospace
+- `.voice-diagnostics-summary`: 12px → 14px, font-weight 500, padding 4px → 6px
+- `.voice-diagnostics-panel`: padding 4px 8px → 8px 12px
+- `.voice-tuning-label/input/select`: 11px → 13px
+- `.voice-tuning-hint`: 10px → 12px, line-height 1.4 → 1.5
+- `.voice-preview-hint/status`: 10px → 12px
+- `.voice-preview-play-btn`: 11px → 13px, padding tighter
+- `.voice-preview-audio-el`: height 28px → 32px
+- `.voice-tuning-section`: margin-bottom 6px → 10px; `.voice-tuning-row`: gap 6px → 8px, margin 4px → 6px
+
+10 new renderer CSS smoke tests PASS.
 
 ---
 

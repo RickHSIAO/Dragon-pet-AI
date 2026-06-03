@@ -553,6 +553,51 @@ def _shutdown_funasr_process_for_tests() -> None:
         _kill_funasr_process()
 
 
+def warmup_funasr_sidecar() -> dict:
+    """
+    TASK-256: Best-effort warmup for the persistent FunASR sidecar.
+
+    No audio bytes. No mic. No disk writes.
+    Ensures the persistent sidecar process is running and ready.
+
+    Returns dict with keys:
+        status       -- "ok" | "skipped" | "error"
+        warmupStatus -- "loaded" | "already_loaded" | "skipped" | "error"
+        sidecarMode  -- "persistent" | "disabled"
+        message      -- short human-readable description
+    """
+    if not _persistent_mode_enabled():
+        return {
+            "status": "skipped",
+            "warmupStatus": "skipped",
+            "sidecarMode": "disabled",
+            "message": "persistent mode disabled (DRAGON_PET_FUNASR_PERSISTENT=false)",
+        }
+
+    with _funasr_lock:
+        if _funasr_process is not None and _funasr_process.poll() is None:
+            return {
+                "status": "ok",
+                "warmupStatus": "already_loaded",
+                "sidecarMode": "persistent",
+                "message": "sidecar already warm",
+            }
+        ok, _ = _ensure_funasr_process()
+    if ok:
+        return {
+            "status": "ok",
+            "warmupStatus": "loaded",
+            "sidecarMode": "persistent",
+            "message": "sidecar loaded and ready",
+        }
+    return {
+        "status": "error",
+        "warmupStatus": "error",
+        "sidecarMode": "persistent",
+        "message": "sidecar failed to start",
+    }
+
+
 def _get_model_metadata() -> dict:
     """Return current faster-whisper model resolution and load status metadata for diagnostics."""
     return {

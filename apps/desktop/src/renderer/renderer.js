@@ -75,6 +75,11 @@ const FULL_APP_VOICE_AUDIO_CONSTRAINTS = { echoCancellation: true, noiseSuppress
 // TASK-252: PCM capture constants for FunASR WAV input
 const FULL_APP_STT_PCM_SAMPLE_RATE = 16000;
 const FULL_APP_STT_PCM_BUFFER_SIZE = 4096;
+// TASK-256: Startup Warmup constants — best-effort preload, no mic, no chat
+var STARTUP_WARMUP_ENABLED        = true;  // var: exposed to vm sandbox for smoke tests
+var STARTUP_STT_WARMUP_ENABLED    = true;  // var: exposed to vm sandbox
+var STARTUP_OLLAMA_WARMUP_ENABLED = true;  // var: exposed to vm sandbox
+const STARTUP_WARMUP_DELAY_MS     = 3000;  // delay after health check before warmup fires
 // TASK-179: gentle hint shown after OCR summary exists.
 const ocrAskHintEl = document.getElementById("ocr-ask-hint");
 const memoryForm  = document.getElementById("memory-form");
@@ -259,7 +264,16 @@ var fullAppVoiceDiagnostics = {
   lastWindowFocusState: "focused",
   audioContextState: "none",
   captureInterruptedReason: null,
-  captureInterruptedByVisibility: false
+  captureInterruptedByVisibility: false,
+  // TASK-256: startup warmup diagnostics — populated by _triggerStartupWarmup()
+  startupWarmupEnabled: true,
+  sttWarmupStatus: "pending",
+  sttWarmupLatencyMs: 0,
+  sttWarmupError: null,
+  ollamaWarmupStatus: "pending",
+  ollamaWarmupLatencyMs: 0,
+  ollamaWarmupError: null,
+  lastStartupWarmupAt: 0
 };
 // TASK-244: session-only VAD tuning vars — override constants for this session only, not persisted
 var fullAppConversationRmsThreshold = FULL_APP_CONVERSATION_RMS_THRESHOLD;
@@ -4703,6 +4717,58 @@ function _transcribeConversationChunks(chunks, mimeType) {
   });
 }
 
+// TASK-256: Best-effort startup warmup — fires once, 3s after backend health OK.
+// No mic. No getUserMedia. No chat history. No Pet Window / TTS / Output Queue.
+// Calls /stt/warmup and /llm/warmup in parallel; updates diagnostics; ignores errors.
+function _triggerStartupWarmup() {
+  if (!STARTUP_WARMUP_ENABLED) {
+    fullAppVoiceDiagnostics.startupWarmupEnabled = false;
+    fullAppVoiceDiagnostics.sttWarmupStatus = "disabled";
+    fullAppVoiceDiagnostics.ollamaWarmupStatus = "disabled";
+    return;
+  }
+  fullAppVoiceDiagnostics.startupWarmupEnabled = true;
+  fullAppVoiceDiagnostics.lastStartupWarmupAt = Date.now();
+
+  if (STARTUP_STT_WARMUP_ENABLED) {
+    var sttT0 = Date.now();
+    fullAppVoiceDiagnostics.sttWarmupStatus = "running";
+    fetch(BACKEND_URL + "/stt/warmup", { method: "POST" })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        fullAppVoiceDiagnostics.sttWarmupStatus  = (data && data.warmupStatus) ? String(data.warmupStatus) : "unknown";
+        fullAppVoiceDiagnostics.sttWarmupLatencyMs = Date.now() - sttT0;
+        fullAppVoiceDiagnostics.sttWarmupError   = null;
+      })
+      .catch(function (err) {
+        fullAppVoiceDiagnostics.sttWarmupStatus  = "error";
+        fullAppVoiceDiagnostics.sttWarmupLatencyMs = Date.now() - sttT0;
+        fullAppVoiceDiagnostics.sttWarmupError   = (err && err.name) ? err.name : "fetch_error";
+      });
+  } else {
+    fullAppVoiceDiagnostics.sttWarmupStatus = "disabled";
+  }
+
+  if (STARTUP_OLLAMA_WARMUP_ENABLED) {
+    var llmT0 = Date.now();
+    fullAppVoiceDiagnostics.ollamaWarmupStatus = "running";
+    fetch(BACKEND_URL + "/llm/warmup", { method: "POST" })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        fullAppVoiceDiagnostics.ollamaWarmupStatus  = (data && data.warmupStatus) ? String(data.warmupStatus) : "unknown";
+        fullAppVoiceDiagnostics.ollamaWarmupLatencyMs = Date.now() - llmT0;
+        fullAppVoiceDiagnostics.ollamaWarmupError   = null;
+      })
+      .catch(function (err) {
+        fullAppVoiceDiagnostics.ollamaWarmupStatus  = "error";
+        fullAppVoiceDiagnostics.ollamaWarmupLatencyMs = Date.now() - llmT0;
+        fullAppVoiceDiagnostics.ollamaWarmupError   = (err && err.name) ? err.name : "fetch_error";
+      });
+  } else {
+    fullAppVoiceDiagnostics.ollamaWarmupStatus = "disabled";
+  }
+}
+
 // TASK-255: resume conversation AudioContext if it was auto-suspended by browser background
 // policy (Chromium suspends AudioContext when page is hidden or backgrounded). Call this from
 // the VAD tick and from focus/visibility restore handlers so VAD stays alive across focus changes.
@@ -4998,6 +5064,7 @@ function renderFullAppVoiceDiagnostics() {
     "Provider 載入: " + (d.sttProviderLoadStatus || "unknown") + "  fallback: " + (d.sttProviderFallbackReason || "none"),
     "焦點安全: " + (d.voiceCaptureFocusSafe ? "是" : "否") + "  可見: " + (d.lastVisibilityState || "visible") + "  焦點: " + (d.lastWindowFocusState || "focused"),
     "AudioCtx 狀態: " + (d.audioContextState || "none") + "  中斷原因: " + (d.captureInterruptedReason || "none") + "  因可見性: " + (d.captureInterruptedByVisibility ? "是" : "否"),
+    "Warmup: " + (d.startupWarmupEnabled ? "ON" : "OFF") + "  STT: " + (d.sttWarmupStatus || "pending") + " " + d.sttWarmupLatencyMs + "ms  Ollama: " + (d.ollamaWarmupStatus || "pending") + " " + d.ollamaWarmupLatencyMs + "ms",
     "---",
     "VAD 最後 RMS: " + d.lastRms.toFixed(4),
     "VAD 最高 RMS: " + d.maxRms.toFixed(4),
@@ -5474,6 +5541,8 @@ async function checkLocalProviderLiveness() {
       // TASK-197: async Ollama liveness probe — runs in background, no await.
       // Does not write chat history, does not trigger Pet, does not call /chat.
       checkLocalProviderLiveness();
+      // TASK-256: best-effort startup warmup — fires after short delay, no mic, no chat.
+      setTimeout(function () { _triggerStartupWarmup(); }, STARTUP_WARMUP_DELAY_MS);
     } else {
       throw new Error("Unexpected health response");
     }

@@ -107,7 +107,7 @@ ollama serve
 | 真實 API Key 使用 | ❌ 無 — 所有測試使用 mocked runner |
 | 生產就緒 | ❌ 尚未 — prototype / portfolio 階段 |
 | Demo 可用（本地 Ollama） | ✅ 是 |
-| 下一個任務 | TASK-256 Startup Warmup / STT + Ollama Preload；TASK-257 Pet Window Click/Show Idempotent（TASK-255 DONE - WINDOWS FOCUS/MINIMIZE VOICE SMOKE PASS：切窗/縮小不中斷；backgroundThrottling:false + AudioContext resume；17 renderer smoke PASS）|
+| 下一個任務 | TASK-257 Pet Window Click/Show Idempotent（TASK-256 DONE - WINDOWS STARTUP WARMUP SMOKE PASS：STT warmup PASS，Ollama warmup PASS，first-utterance latency improved，app startup does not open mic or auto-send；TASK-256b DONE - diagnostics readability PASS）|
 
 ---
 

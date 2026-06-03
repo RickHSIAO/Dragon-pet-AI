@@ -11,9 +11,15 @@ Safety boundaries:
 - /chat only writes local conversation history and internal MVP state to SQLite.
 """
 
+import logging
+import time
+
+import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import ValidationError
 from sqlmodel import Session
+
+_logger = logging.getLogger(__name__)
 
 from app.core.config import is_memory_injection_enabled
 from app.db.database import get_session
@@ -67,7 +73,8 @@ from app.services.provider_settings_service import (
 )
 from app.services.state_service import get_chat_state_context, update_state_after_chat_turn
 from app.services.usage_meter_service import UsageRecord, estimate_text_tokens, record_usage
-from app.stt.stt_service import transcribe_audio_bytes  # TASK-167B
+from app.stt.stt_service import transcribe_audio_bytes, warmup_funasr_sidecar  # TASK-167B / TASK-256
+from app.stt.stt_service import _STT_RESOLVED_PROVIDER as _stt_resolved_provider  # TASK-256
 from app.ocr.ocr_service import extract_text_from_dataurl, get_ocr_status  # TASK-172A-OCR-BACKEND, TASK-177
 
 router = APIRouter()
@@ -124,6 +131,133 @@ async def stt_transcribe(audio: UploadFile = File(...)):
     result["languageLocked"] = True
     result["task"] = _STT_DEFAULT_TASK
     return result
+
+
+@router.post("/stt/warmup")
+def stt_warmup():
+    """
+    TASK-256: Best-effort STT sidecar warmup.
+
+    No audio upload. No mic. No disk writes.
+    Warms the persistent funasr-local sidecar only.
+    Returns skipped for non-funasr-local providers.
+
+    Safety boundaries:
+    - Does NOT open the microphone.
+    - Does NOT accept or process audio bytes.
+    - Does NOT persist anything to disk.
+    - Does NOT write chat history.
+    - Does NOT trigger Pet Window / TTS / Output Queue.
+    """
+    provider = _stt_resolved_provider
+    if provider != "funasr-local":
+        return {
+            "status": "skipped",
+            "provider": provider,
+            "warmupStatus": "skipped",
+            "elapsedMs": 0,
+            "sidecarMode": None,
+            "message": f"unsupported_provider: {provider}",
+        }
+
+    t0 = time.monotonic()
+    try:
+        result = warmup_funasr_sidecar()
+    except Exception as exc:  # noqa: BLE001
+        elapsed_ms = int((time.monotonic() - t0) * 1000)
+        _logger.warning("TASK-256: STT warmup error: %s", type(exc).__name__)
+        return {
+            "status": "error",
+            "provider": provider,
+            "warmupStatus": "error",
+            "elapsedMs": elapsed_ms,
+            "sidecarMode": "persistent",
+            "message": "warmup_error",
+        }
+    elapsed_ms = int((time.monotonic() - t0) * 1000)
+    return {
+        "status": result["status"],
+        "provider": provider,
+        "warmupStatus": result["warmupStatus"],
+        "elapsedMs": elapsed_ms,
+        "sidecarMode": result.get("sidecarMode"),
+        "message": result.get("message", ""),
+    }
+
+
+@router.post("/llm/warmup")
+async def llm_warmup():
+    """
+    TASK-256: Best-effort Ollama model warmup.
+
+    Loads the configured Ollama model into memory without generating a response.
+    Uses Ollama's /api/generate with keep_alive and no prompt.
+
+    Safety boundaries:
+    - Does NOT write chat history.
+    - Does NOT go through the normal /chat flow.
+    - Does NOT trigger Pet Window / TTS / Output Queue.
+    - Does NOT forward raw Ollama response bodies to the caller.
+    - Returns skipped for non-ollama or mock providers.
+    - Never returns raw stack traces.
+    """
+    from app.core.config import get_ollama_base_url, get_ollama_keep_alive
+    from app.llm.ollama_provider import DEFAULT_OLLAMA_MODEL
+
+    settings = get_provider_settings()
+    provider = settings.get("provider", "mock")
+    real_enabled = bool(settings.get("real_provider_enabled", False))
+
+    if provider != "ollama" or not real_enabled:
+        return {
+            "status": "skipped",
+            "provider": provider,
+            "model": settings.get("model") or "",
+            "warmupStatus": "skipped",
+            "elapsedMs": 0,
+            "message": "not_applicable",
+        }
+
+    model = (settings.get("model") or DEFAULT_OLLAMA_MODEL).strip() or DEFAULT_OLLAMA_MODEL
+    base_url = get_ollama_base_url()
+    keep_alive = get_ollama_keep_alive()
+
+    t0 = time.monotonic()
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            resp = await client.post(
+                f"{base_url}/api/generate",
+                json={"model": model, "keep_alive": keep_alive, "stream": False},
+            )
+        elapsed_ms = int((time.monotonic() - t0) * 1000)
+        if resp.status_code < 300:
+            return {
+                "status": "ok",
+                "provider": "ollama",
+                "model": model,
+                "warmupStatus": "loaded",
+                "elapsedMs": elapsed_ms,
+                "message": "model loaded",
+            }
+        return {
+            "status": "error",
+            "provider": "ollama",
+            "model": model,
+            "warmupStatus": "error",
+            "elapsedMs": elapsed_ms,
+            "message": "ollama_error",
+        }
+    except Exception as exc:  # noqa: BLE001
+        elapsed_ms = int((time.monotonic() - t0) * 1000)
+        _logger.warning("TASK-256: LLM warmup error: %s", type(exc).__name__)
+        return {
+            "status": "error",
+            "provider": "ollama",
+            "model": model,
+            "warmupStatus": "error",
+            "elapsedMs": elapsed_ms,
+            "message": "warmup_error",
+        }
 
 
 @router.post("/ocr/extract")

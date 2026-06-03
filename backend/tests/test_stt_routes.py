@@ -276,10 +276,10 @@ def test_stt_route_no_new_endpoint():
     import app.api.routes as routes_module
 
     source = inspect.getsource(routes_module)
-    # Count /stt/ route decorators — must remain exactly 1
+    # Count /stt/ route decorators — TASK-256 adds /stt/warmup; minimum 2 allowed
     stt_routes = [line for line in source.splitlines() if '"/stt/' in line]
-    assert len(stt_routes) == 1, (
-        "Only one /stt/ route allowed (TASK-245 restriction), found: %r" % stt_routes
+    assert any("/stt/transcribe" in r for r in stt_routes), (
+        "TASK-245: /stt/transcribe must still exist, found: %r" % stt_routes
     )
 
 
@@ -529,8 +529,9 @@ def test_stt_route_no_new_stt_endpoint():
 
     source = inspect.getsource(routes_module)
     stt_routes = [line for line in source.splitlines() if '"/stt/' in line]
-    assert len(stt_routes) == 1, (
-        "Only one /stt/ route allowed (TASK-246 restriction), found: %r" % stt_routes
+    # TASK-256 adds /stt/warmup; /stt/transcribe must remain
+    assert any("/stt/transcribe" in r for r in stt_routes), (
+        "TASK-246: /stt/transcribe must still exist, found: %r" % stt_routes
     )
 
 
@@ -1124,14 +1125,14 @@ def test_stt_provider_no_raw_stack_in_unavailable():
 
 
 def test_stt_no_new_endpoint_added():
-    """TASK-249: no new STT endpoint must be added — only /stt/transcribe exists."""
+    """TASK-249: /stt/transcribe must still exist; TASK-256 adds /stt/warmup."""
     import app.api.routes as routes_module
     route_paths = [r.path for r in routes_module.router.routes]
     stt_routes = [p for p in route_paths if "stt" in p]
     assert "/stt/transcribe" in stt_routes, "TASK-249: /stt/transcribe must still exist"
-    # Only one STT route allowed
-    assert len(stt_routes) == 1, (
-        f"TASK-249: only /stt/transcribe allowed; found {stt_routes}"
+    # TASK-256 adds /stt/warmup; /stt/transcribe must remain present
+    assert len(stt_routes) >= 1, (
+        f"TASK-249: /stt/transcribe must be present; found {stt_routes}"
     )
 
 
@@ -1976,3 +1977,224 @@ def test_task254_faster_whisper_path_unchanged(monkeypatch):
     # Whisper path returns unavailable or empty — not an error from sidecar code
     assert result["status"] in ("unavailable", "empty", "error")
     assert "funasrSidecarMode" not in result  # whisper path does not set sidecar fields
+
+
+# ---------------------------------------------------------------------------
+# TASK-256: Startup Warmup / STT + Ollama Preload
+# ---------------------------------------------------------------------------
+
+
+def test_task256_stt_warmup_route_exists():
+    """TASK-256: POST /stt/warmup must be reachable (not 404)."""
+    with TestClient(app) as client:
+        response = client.post("/stt/warmup")
+    assert response.status_code != 404, "POST /stt/warmup must exist"
+    assert response.status_code == 200
+
+
+def test_task256_stt_warmup_no_audio_required():
+    """TASK-256: /stt/warmup must not require an audio upload."""
+    with TestClient(app) as client:
+        response = client.post("/stt/warmup")
+    # Must accept POST with no body/files
+    assert response.status_code == 200, (
+        f"/stt/warmup must accept empty POST, got {response.status_code}"
+    )
+
+
+def test_task256_stt_warmup_response_shape():
+    """TASK-256: /stt/warmup response must include status/warmupStatus/provider/elapsedMs."""
+    with TestClient(app) as client:
+        response = client.post("/stt/warmup")
+    assert response.status_code == 200
+    data = response.json()
+    assert "status" in data, "response must include 'status'"
+    assert "warmupStatus" in data, "response must include 'warmupStatus'"
+    assert "provider" in data, "response must include 'provider'"
+    assert "elapsedMs" in data, "response must include 'elapsedMs'"
+    assert "message" in data, "response must include 'message'"
+    assert data["status"] in ("ok", "skipped", "error")
+    assert data["warmupStatus"] in ("loaded", "already_loaded", "skipped", "error")
+    assert isinstance(data["elapsedMs"], int)
+
+
+def test_task256_stt_warmup_non_funasr_returns_skipped(monkeypatch):
+    """TASK-256: /stt/warmup with non-funasr provider returns status=skipped."""
+    import app.api.routes as routes_module
+    monkeypatch.setattr(routes_module, "_stt_resolved_provider", "faster-whisper-local")
+    with TestClient(app) as client:
+        response = client.post("/stt/warmup")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "skipped"
+    assert data["warmupStatus"] == "skipped"
+
+
+def test_task256_stt_warmup_funasr_calls_warmup_helper(monkeypatch):
+    """TASK-256: /stt/warmup with funasr-local calls warmup_funasr_sidecar."""
+    import app.api.routes as routes_module
+    monkeypatch.setattr(routes_module, "_stt_resolved_provider", "funasr-local")
+    called = []
+    monkeypatch.setattr(
+        routes_module, "warmup_funasr_sidecar",
+        lambda: (called.append(True), {"status": "ok", "warmupStatus": "loaded",
+                                        "sidecarMode": "persistent", "message": "ok"})[1],
+    )
+    with TestClient(app) as client:
+        response = client.post("/stt/warmup")
+    assert response.status_code == 200
+    assert called == [True], "/stt/warmup must call warmup_funasr_sidecar"
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["warmupStatus"] == "loaded"
+
+
+def test_task256_stt_warmup_error_is_clean(monkeypatch):
+    """TASK-256: /stt/warmup error must return status=error with no raw stack trace."""
+    import app.api.routes as routes_module
+    monkeypatch.setattr(routes_module, "_stt_resolved_provider", "funasr-local")
+    monkeypatch.setattr(
+        routes_module, "warmup_funasr_sidecar",
+        lambda: (_ for _ in ()).throw(RuntimeError("simulated crash")),
+    )
+    with TestClient(app) as client:
+        response = client.post("/stt/warmup")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "error"
+    assert data["warmupStatus"] == "error"
+    assert "Traceback" not in str(data)
+    assert "simulated crash" not in str(data), "raw exception text must not leak"
+
+
+def test_task256_stt_warmup_no_audio_persistence():
+    """TASK-256: stt_warmup handler must not contain audio write/open patterns."""
+    import inspect
+    source = inspect.getsource(stt_service.warmup_funasr_sidecar)
+    assert "NamedTemporaryFile" not in source
+    assert "tempfile" not in source
+    assert "writeFile" not in source
+
+
+def test_task256_warmup_funasr_sidecar_disabled_returns_skipped(monkeypatch):
+    """TASK-256: warmup_funasr_sidecar returns skipped when persistent mode is disabled."""
+    monkeypatch.setenv("DRAGON_PET_FUNASR_PERSISTENT", "false")
+    result = stt_service.warmup_funasr_sidecar()
+    assert result["status"] == "skipped"
+    assert result["warmupStatus"] == "skipped"
+    assert result["sidecarMode"] == "disabled"
+
+
+def test_task256_warmup_funasr_sidecar_already_warm(monkeypatch):
+    """TASK-256: warmup_funasr_sidecar returns already_loaded when process already alive."""
+    import subprocess
+
+    class _FakeProc:
+        def poll(self):
+            return None  # process alive
+
+    monkeypatch.setenv("DRAGON_PET_FUNASR_PERSISTENT", "true")
+    monkeypatch.setattr(stt_service, "_funasr_process", _FakeProc())
+    try:
+        result = stt_service.warmup_funasr_sidecar()
+        assert result["status"] == "ok"
+        assert result["warmupStatus"] == "already_loaded"
+    finally:
+        monkeypatch.setattr(stt_service, "_funasr_process", None)
+
+
+def test_task256_llm_warmup_route_exists():
+    """TASK-256: POST /llm/warmup must be reachable (not 404)."""
+    with TestClient(app) as client:
+        response = client.post("/llm/warmup")
+    assert response.status_code != 404, "POST /llm/warmup must exist"
+    assert response.status_code == 200
+
+
+def test_task256_llm_warmup_non_ollama_returns_skipped(monkeypatch):
+    """TASK-256: /llm/warmup with non-ollama provider returns status=skipped."""
+    from app.services import provider_settings_service
+    monkeypatch.setattr(
+        provider_settings_service, "get_provider_settings",
+        lambda: {"provider": "mock", "real_provider_enabled": False, "model": ""},
+    )
+    with TestClient(app) as client:
+        response = client.post("/llm/warmup")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "skipped"
+    assert data["warmupStatus"] == "skipped"
+
+
+def test_task256_llm_warmup_real_disabled_returns_skipped(monkeypatch):
+    """TASK-256: /llm/warmup with ollama but real_provider_enabled=False returns skipped."""
+    from app.services import provider_settings_service
+    monkeypatch.setattr(
+        provider_settings_service, "get_provider_settings",
+        lambda: {"provider": "ollama", "real_provider_enabled": False, "model": "qwen3:8b"},
+    )
+    with TestClient(app) as client:
+        response = client.post("/llm/warmup")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "skipped"
+
+
+def test_task256_llm_warmup_does_not_write_chat_history(monkeypatch):
+    """TASK-256: /llm/warmup must not call generate_chat_reply or store_chat_turn."""
+    import inspect
+    import app.api.routes as routes_module
+    source = inspect.getsource(routes_module.llm_warmup)
+    assert "generate_chat_reply" not in source, (
+        "/llm/warmup must not call generate_chat_reply"
+    )
+    assert "store_chat_turn" not in source, (
+        "/llm/warmup must not call store_chat_turn"
+    )
+    assert "ChatRequest" not in source, (
+        "/llm/warmup must not use ChatRequest"
+    )
+
+
+def test_task256_llm_warmup_error_is_clean(monkeypatch):
+    """TASK-256: /llm/warmup error must return status=error with no raw stack trace."""
+    from app.services import provider_settings_service
+    _ollama_settings = lambda: {"provider": "ollama", "real_provider_enabled": True, "model": "qwen3:8b"}
+    monkeypatch.setattr(provider_settings_service, "get_provider_settings", _ollama_settings)
+    # Also patch the already-imported name in routes so the guard passes
+    import app.api.routes as routes_module
+    monkeypatch.setattr(routes_module, "get_provider_settings", _ollama_settings)
+    # Patch httpx.AsyncClient to raise a connection error
+    import httpx
+
+    class _FailClient:
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *a):
+            pass
+        async def post(self, *a, **kw):
+            raise httpx.ConnectError("simulated connect error")
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: _FailClient())
+    with TestClient(app) as client:
+        response = client.post("/llm/warmup")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "error"
+    assert data["warmupStatus"] == "error"
+    assert "Traceback" not in str(data)
+    assert "simulated connect error" not in str(data), "raw exception text must not leak"
+
+
+def test_task256_stt_transcribe_regression():
+    """TASK-256 regression: /stt/transcribe must still work after warmup routes added."""
+    with TestClient(app) as client:
+        response = client.post(
+            "/stt/transcribe",
+            files={"audio": ("audio.webm", io.BytesIO(b"\x01\x02\x03"), "audio/webm")},
+        )
+    assert response.status_code == 200
+    data = response.json()
+    assert "transcript" in data
+    assert "status" in data
+    assert data["status"] in ("ok", "unavailable", "empty", "error")

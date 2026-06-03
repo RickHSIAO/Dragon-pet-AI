@@ -82,7 +82,7 @@ WAV = create_minimal_wav()
 
 print()
 print("=" * 65)
-print("  TASK-249  STT Provider Smoke")
+print("  TASK-249/256  STT Provider Smoke")
 print("=" * 65)
 
 # ── 1 / default ─────────────────────────────────────────────────────────────
@@ -489,6 +489,37 @@ check(_os.path.isfile(stt._FUNASR_SIDECAR_SCRIPT),
 _os.environ.pop("DRAGON_PET_FUNASR_PERSISTENT", None)
 
 # ---------------------------------------------------------------------------
+# TASK-256: warmup_funasr_sidecar helper smoke
+# ---------------------------------------------------------------------------
+print("\n[9/9] TASK-256 — warmup_funasr_sidecar helper")
+stt = reload_stt("funasr-local")
+
+check(hasattr(stt, "warmup_funasr_sidecar"),
+      "warmup_funasr_sidecar function exists")
+check(callable(getattr(stt, "warmup_funasr_sidecar", None)),
+      "warmup_funasr_sidecar is callable")
+
+# Persistent mode disabled → must return skipped
+_os.environ["DRAGON_PET_FUNASR_PERSISTENT"] = "false"
+result = stt.warmup_funasr_sidecar()
+check(result.get("status") == "skipped",
+      f"warmup returns status=skipped when persistent disabled (got {result.get('status')!r})")
+check(result.get("warmupStatus") == "skipped",
+      f"warmup returns warmupStatus=skipped (got {result.get('warmupStatus')!r})")
+check(result.get("sidecarMode") == "disabled",
+      f"warmup returns sidecarMode=disabled (got {result.get('sidecarMode')!r})")
+check("message" in result,
+      "warmup result has message field")
+
+# Required keys always present
+required_keys = {"status", "warmupStatus", "sidecarMode", "message"}
+missing = required_keys - set(result.keys())
+check(len(missing) == 0,
+      f"all required keys present (missing: {missing!r})")
+
+_os.environ.pop("DRAGON_PET_FUNASR_PERSISTENT", None)
+
+# ---------------------------------------------------------------------------
 # Clean up env so test leaves no side effects
 # ---------------------------------------------------------------------------
 os.environ.pop("DRAGON_PET_STT_PROVIDER", None)
@@ -500,8 +531,8 @@ print()
 print("=" * 65)
 print(f"  {_pass_count} PASS  {_fail_count} FAIL")
 if _fail_count == 0:
-    print("  TASK-249/250/253/253rev/254 STT Provider Smoke: PASS")
+    print("  TASK-249/250/253/253rev/254/256 STT Provider Smoke: PASS")
 else:
-    print("  TASK-249/250/253/253rev/254 STT Provider Smoke: FAIL")
+    print("  TASK-249/250/253/253rev/254/256 STT Provider Smoke: FAIL")
 print("=" * 65)
 sys.exit(0 if _fail_count == 0 else 1)

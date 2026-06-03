@@ -414,12 +414,30 @@ Suggested research and implementation tasks:
   17 new renderer smoke tests PASS. No always-listening, no new IPC, no raw audio, no Pet Window /
   Output Queue / Diagnostics Drawer changes.
 
+- **TASK-STT-016-adjacent (TASK-256) Startup Warmup / STT + Ollama Preload. DONE - WINDOWS STARTUP WARMUP SMOKE PASS (2026-06-04):**
+  New `POST /stt/warmup` — starts funasr-local persistent sidecar without audio; skipped for other
+  providers. New `POST /llm/warmup` — pings Ollama `/api/generate` with `keep_alive` and no prompt
+  to load model into VRAM; skipped for non-Ollama/mock providers. Renderer fires both in parallel
+  3 s after health-check PASS; best-effort, never throws. `STARTUP_WARMUP_ENABLED`,
+  `STARTUP_STT_WARMUP_ENABLED`, `STARTUP_OLLAMA_WARMUP_ENABLED` constants. Eight new
+  `fullAppVoiceDiagnostics` warmup fields. 12 new pytest; 15 new renderer smoke tests; `[9/9]`
+  section in stt_provider_smoke.py. Windows smoke PASS: app does not open mic or auto-send on
+  startup; STT warmup PASS; Ollama warmup PASS; first Manual Mic latency improved; first Ollama
+  response latency improved; regression PASS. No mic, no audio bytes, no getUserMedia, no chat,
+  no new IPC, no Pet Window / Output Queue / Diagnostics Drawer changes.
+
+- **TASK-256b Diagnostics / Voice Panel Readability Polish. DONE - WINDOWS DIAGNOSTICS READABILITY SMOKE PASS (2026-06-04):**
+  CSS-only change to `styles.css`. `.voice-diagnostics-display` 10px → 13px, `line-height` 1.55,
+  `max-height` 200px → 340px. `.voice-diagnostics-summary` 12px → 14px + `font-weight: 500`.
+  All tuning labels/hints/preview text ≥ 12px. Panel padding and section spacing increased.
+  Windows smoke PASS: diagnostics readability visibly improved. No STT/warmup runtime changes.
+
 - TASK-STT-016 LLM-based semantic correction. **(PLANNED; future):** Optional
   follow-up to apply a local LLM pass over the corrected transcript for further semantic
   accuracy. Must be guarded by explicit user opt-in and must not replace the deterministic
   layer from TASK-247/248.
 
-Recommended next: TASK-256 — Startup Warmup / STT + Ollama Preload; TASK-257 — Pet Window Click / Show Pet Idempotent Behavior.
+Recommended next: TASK-257 — Pet Window Click / Show Pet Idempotent Behavior.
 
 Each future task must explicitly define safety boundaries, user controls,
 provider scope, queue priority, and no-regression checks.

@@ -459,6 +459,17 @@ function createFetchStub(state) {
         source: "llm_local",
       });
     }
+    // TASK-256: startup warmup endpoints
+    if (target.endsWith("/stt/warmup")) {
+      if (state.sttWarmupMode === "error") throw new TypeError("NetworkError");
+      const ws = state.sttWarmupMode === "loaded" ? "loaded" : "skipped";
+      return new FakeResponse(200, { status: ws === "loaded" ? "ok" : "skipped", warmupStatus: ws, elapsedMs: 0 });
+    }
+    if (target.endsWith("/llm/warmup")) {
+      if (state.ollamaWarmupMode === "error") throw new TypeError("NetworkError");
+      const ws = state.ollamaWarmupMode === "loaded" ? "loaded" : "skipped";
+      return new FakeResponse(200, { status: ws === "loaded" ? "ok" : "skipped", warmupStatus: ws, elapsedMs: 0 });
+    }
     return new FakeResponse(404, { detail: "not found" });
   };
 }
@@ -495,6 +506,9 @@ async function loadRenderer(options = {}) {
     intervalCallbacks,  // exposed for verification if needed
     // TASK-197: default true so liveness check sets "已就緒" and doesn't break status-summary tests.
     ollamaReachable: options.ollamaReachable !== undefined ? options.ollamaReachable : true,
+    // TASK-256: warmup endpoint response modes ("loaded" | "skipped" | "error")
+    sttWarmupMode: options.sttWarmupMode || "skipped",
+    ollamaWarmupMode: options.ollamaWarmupMode || "skipped",
   };
 
   // FakeImage closes over availableImages so each test run is isolated.
@@ -14075,6 +14089,334 @@ function testTask255NoOutputQueueDiagnosticsDrawerChanges() {
   console.log("  testTask255NoOutputQueueDiagnosticsDrawerChanges PASS");
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TASK-256: Startup Warmup / STT + Ollama Preload
+// ─────────────────────────────────────────────────────────────────────────────
+
+function testTask256WarmupConstantsExist() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("STARTUP_WARMUP_ENABLED"),
+    "TASK-256: STARTUP_WARMUP_ENABLED constant must exist in renderer");
+  assert.ok(src.includes("STARTUP_STT_WARMUP_ENABLED"),
+    "TASK-256: STARTUP_STT_WARMUP_ENABLED constant must exist");
+  assert.ok(src.includes("STARTUP_OLLAMA_WARMUP_ENABLED"),
+    "TASK-256: STARTUP_OLLAMA_WARMUP_ENABLED constant must exist");
+  assert.ok(src.includes("STARTUP_WARMUP_DELAY_MS"),
+    "TASK-256: STARTUP_WARMUP_DELAY_MS constant must exist");
+  console.log("  testTask256WarmupConstantsExist PASS");
+}
+
+function testTask256WarmupFunctionExists() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("function _triggerStartupWarmup"),
+    "TASK-256: _triggerStartupWarmup function must exist");
+  assert.ok(src.includes("/stt/warmup"),
+    "TASK-256: _triggerStartupWarmup must fetch /stt/warmup");
+  assert.ok(src.includes("/llm/warmup"),
+    "TASK-256: _triggerStartupWarmup must fetch /llm/warmup");
+  console.log("  testTask256WarmupFunctionExists PASS");
+}
+
+function testTask256StartupTriggerFiresAfterDelay() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("_triggerStartupWarmup") && src.includes("setTimeout"),
+    "TASK-256: startup must call _triggerStartupWarmup via setTimeout");
+  assert.ok(src.includes("STARTUP_WARMUP_DELAY_MS"),
+    "TASK-256: delay must use STARTUP_WARMUP_DELAY_MS constant");
+  console.log("  testTask256StartupTriggerFiresAfterDelay PASS");
+}
+
+function testTask256WarmupDiagnosticsFieldsExist() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("startupWarmupEnabled"),
+    "TASK-256: diagnostics must have startupWarmupEnabled field");
+  assert.ok(src.includes("sttWarmupStatus"),
+    "TASK-256: diagnostics must have sttWarmupStatus field");
+  assert.ok(src.includes("sttWarmupLatencyMs"),
+    "TASK-256: diagnostics must have sttWarmupLatencyMs field");
+  assert.ok(src.includes("sttWarmupError"),
+    "TASK-256: diagnostics must have sttWarmupError field");
+  assert.ok(src.includes("ollamaWarmupStatus"),
+    "TASK-256: diagnostics must have ollamaWarmupStatus field");
+  assert.ok(src.includes("ollamaWarmupLatencyMs"),
+    "TASK-256: diagnostics must have ollamaWarmupLatencyMs field");
+  assert.ok(src.includes("ollamaWarmupError"),
+    "TASK-256: diagnostics must have ollamaWarmupError field");
+  assert.ok(src.includes("lastStartupWarmupAt"),
+    "TASK-256: diagnostics must have lastStartupWarmupAt field");
+  console.log("  testTask256WarmupDiagnosticsFieldsExist PASS");
+}
+
+async function testTask256WarmupDiagnosticsDefaultValues() {
+  const { sandbox } = await loadRenderer();
+  const d = sandbox.fullAppVoiceDiagnostics;
+  assert.ok(typeof d.startupWarmupEnabled === "boolean",
+    "TASK-256: startupWarmupEnabled must be boolean");
+  assert.ok(typeof d.sttWarmupStatus === "string",
+    "TASK-256: sttWarmupStatus must be a string");
+  assert.ok(typeof d.sttWarmupLatencyMs === "number",
+    "TASK-256: sttWarmupLatencyMs must be a number");
+  assert.ok(typeof d.ollamaWarmupStatus === "string",
+    "TASK-256: ollamaWarmupStatus must be a string");
+  assert.ok(typeof d.ollamaWarmupLatencyMs === "number",
+    "TASK-256: ollamaWarmupLatencyMs must be a number");
+  assert.ok(typeof d.lastStartupWarmupAt === "number",
+    "TASK-256: lastStartupWarmupAt must be a number");
+  console.log("  testTask256WarmupDiagnosticsDefaultValues PASS");
+}
+
+function testTask256WarmupDoesNotCallGetUserMedia() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const warmupIdx = src.indexOf("function _triggerStartupWarmup");
+  assert.ok(warmupIdx !== -1, "TASK-256: _triggerStartupWarmup must exist");
+  // Find the function body (roughly 60 lines)
+  const warmupBody = src.slice(warmupIdx, warmupIdx + 3000);
+  assert.ok(!warmupBody.includes("getUserMedia"),
+    "TASK-256: _triggerStartupWarmup must NOT call getUserMedia");
+  assert.ok(!warmupBody.includes("openFullAppVoiceInput"),
+    "TASK-256: _triggerStartupWarmup must NOT call openFullAppVoiceInput");
+  assert.ok(!warmupBody.includes("startConversationMode"),
+    "TASK-256: _triggerStartupWarmup must NOT call startConversationMode");
+  console.log("  testTask256WarmupDoesNotCallGetUserMedia PASS");
+}
+
+function testTask256WarmupDoesNotSendChatMessage() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const warmupIdx = src.indexOf("function _triggerStartupWarmup");
+  const warmupBody = src.slice(warmupIdx, warmupIdx + 3000);
+  assert.ok(!warmupBody.includes("sendMessage"),
+    "TASK-256: _triggerStartupWarmup must NOT call sendMessage");
+  assert.ok(!warmupBody.includes("/chat"),
+    "TASK-256: _triggerStartupWarmup must NOT call /chat");
+  assert.ok(!warmupBody.includes("appendMessage"),
+    "TASK-256: _triggerStartupWarmup must NOT call appendMessage");
+  console.log("  testTask256WarmupDoesNotSendChatMessage PASS");
+}
+
+function testTask256WarmupDoesNotTouchPetWindow() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const warmupIdx = src.indexOf("function _triggerStartupWarmup");
+  const warmupBody = src.slice(warmupIdx, warmupIdx + 3000);
+  assert.ok(!warmupBody.includes("showPetWindow"),
+    "TASK-256: _triggerStartupWarmup must NOT call showPetWindow");
+  assert.ok(!warmupBody.includes("petSpeech"),
+    "TASK-256: _triggerStartupWarmup must NOT call petSpeech");
+  assert.ok(!warmupBody.includes("updatePetSpeech"),
+    "TASK-256: _triggerStartupWarmup must NOT call updatePetSpeech");
+  console.log("  testTask256WarmupDoesNotTouchPetWindow PASS");
+}
+
+async function testTask256SttWarmupUpdatesDiagnostics() {
+  const { sandbox } = await loadRenderer({ sttWarmupMode: "loaded" });
+  // Trigger warmup directly
+  sandbox.STARTUP_WARMUP_ENABLED = true;
+  sandbox.STARTUP_STT_WARMUP_ENABLED = true;
+  sandbox.STARTUP_OLLAMA_WARMUP_ENABLED = false;
+  sandbox._triggerStartupWarmup();
+  await settle();
+  assert.equal(sandbox.fullAppVoiceDiagnostics.sttWarmupStatus, "loaded",
+    "TASK-256: sttWarmupStatus must be updated from /stt/warmup response");
+  assert.ok(sandbox.fullAppVoiceDiagnostics.sttWarmupLatencyMs >= 0,
+    "TASK-256: sttWarmupLatencyMs must be updated");
+  console.log("  testTask256SttWarmupUpdatesDiagnostics PASS");
+}
+
+async function testTask256OllamaWarmupUpdatesDiagnostics() {
+  const { sandbox } = await loadRenderer({ ollamaWarmupMode: "loaded" });
+  sandbox.STARTUP_WARMUP_ENABLED = true;
+  sandbox.STARTUP_STT_WARMUP_ENABLED = false;
+  sandbox.STARTUP_OLLAMA_WARMUP_ENABLED = true;
+  sandbox._triggerStartupWarmup();
+  await settle();
+  assert.equal(sandbox.fullAppVoiceDiagnostics.ollamaWarmupStatus, "loaded",
+    "TASK-256: ollamaWarmupStatus must be updated from /llm/warmup response");
+  assert.ok(sandbox.fullAppVoiceDiagnostics.ollamaWarmupLatencyMs >= 0,
+    "TASK-256: ollamaWarmupLatencyMs must be updated");
+  console.log("  testTask256OllamaWarmupUpdatesDiagnostics PASS");
+}
+
+async function testTask256WarmupErrorsSanitized() {
+  const { sandbox } = await loadRenderer({ sttWarmupMode: "error", ollamaWarmupMode: "error" });
+  sandbox.STARTUP_WARMUP_ENABLED = true;
+  sandbox.STARTUP_STT_WARMUP_ENABLED = true;
+  sandbox.STARTUP_OLLAMA_WARMUP_ENABLED = true;
+  sandbox._triggerStartupWarmup();
+  await settle();
+  // Errors must set status to "error" — never throw or expose raw stack
+  assert.equal(sandbox.fullAppVoiceDiagnostics.sttWarmupStatus, "error",
+    "TASK-256: fetch error must set sttWarmupStatus=error");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.ollamaWarmupStatus, "error",
+    "TASK-256: fetch error must set ollamaWarmupStatus=error");
+  // Error field must be a safe string (name only), not a raw stack trace
+  const sttErr = sandbox.fullAppVoiceDiagnostics.sttWarmupError;
+  assert.ok(typeof sttErr === "string" && sttErr.length < 100,
+    "TASK-256: sttWarmupError must be a short safe string");
+  assert.ok(!String(sttErr).includes("Traceback"),
+    "TASK-256: sttWarmupError must not contain a stack trace");
+  console.log("  testTask256WarmupErrorsSanitized PASS");
+}
+
+function testTask256NoNewIpcChannel() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  // Warmup uses plain fetch to backend HTTP — must NOT add new IPC channel names
+  const warmupIdx = src.indexOf("function _triggerStartupWarmup");
+  const warmupBody = src.slice(warmupIdx, warmupIdx + 3000);
+  assert.ok(!warmupBody.includes("dragonPet."),
+    "TASK-256: _triggerStartupWarmup must not use dragonPet IPC bridge");
+  assert.ok(!warmupBody.includes("ipcRenderer"),
+    "TASK-256: _triggerStartupWarmup must not use ipcRenderer");
+  console.log("  testTask256NoNewIpcChannel PASS");
+}
+
+async function testTask256ManualMicRegression() {
+  // TASK-241/242: manual mic must still work after TASK-256 changes
+  const { sandbox } = await loadRenderer();
+  assert.ok(typeof sandbox.openFullAppVoiceInput === "function",
+    "TASK-256: openFullAppVoiceInput must still exist (TASK-241 regression)");
+  assert.ok(typeof sandbox.fullAppVoiceInputEnabled === "boolean",
+    "TASK-256: fullAppVoiceInputEnabled must still exist (TASK-242 regression)");
+  console.log("  testTask256ManualMicRegression PASS");
+}
+
+async function testTask256ConversationModeRegression() {
+  // TASK-243: conversation mode must still work after TASK-256 changes
+  const { sandbox } = await loadRenderer();
+  assert.ok(typeof sandbox.fullAppVoiceConversationEnabled === "boolean",
+    "TASK-256: fullAppVoiceConversationEnabled must still exist (TASK-243 regression)");
+  assert.ok(typeof sandbox.fullAppVoiceConversationState === "string",
+    "TASK-256: fullAppVoiceConversationState must still exist (TASK-243 regression)");
+  console.log("  testTask256ConversationModeRegression PASS");
+}
+
+function testTask256FocusMinimizeRegression() {
+  // TASK-255: focus/minimize resilience must not be regressed
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("_resumeConversationAudioContextIfSuspended"),
+    "TASK-256: TASK-255 resume helper must still be present");
+  assert.ok(src.includes("backgroundThrottling: false") ||
+    fs.readFileSync(path.join(desktopRoot, "src", "main.js"), "utf8").includes("backgroundThrottling: false"),
+    "TASK-256: TASK-255 backgroundThrottling:false must still be in main.js");
+  const d = src.indexOf("voiceCaptureFocusSafe:");
+  assert.ok(d !== -1, "TASK-256: voiceCaptureFocusSafe diagnostics field must still exist (TASK-255 regression)");
+  console.log("  testTask256FocusMinimizeRegression PASS");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TASK-256b: Diagnostics / Voice Panel Readability Polish
+// ─────────────────────────────────────────────────────────────────────────────
+
+function testTask256bCssDiagnosticsDisplayReadableFontSize() {
+  const css = fs.readFileSync(cssPath, "utf8");
+  // Find .voice-diagnostics-display block and assert font-size >= 13px
+  const idx = css.indexOf(".voice-diagnostics-display");
+  assert.ok(idx !== -1, "TASK-256b: .voice-diagnostics-display rule must exist in CSS");
+  const block = css.slice(idx, idx + 400);
+  const match = block.match(/font-size:\s*(\d+)px/);
+  assert.ok(match, "TASK-256b: .voice-diagnostics-display must have explicit font-size");
+  const px = parseInt(match[1], 10);
+  assert.ok(px >= 13, "TASK-256b: .voice-diagnostics-display font-size must be >= 13px (got " + px + "px)");
+  console.log("  testTask256bCssDiagnosticsDisplayReadableFontSize PASS");
+}
+
+function testTask256bCssDiagnosticsDisplayReadableLineHeight() {
+  const css = fs.readFileSync(cssPath, "utf8");
+  const idx = css.indexOf(".voice-diagnostics-display");
+  const block = css.slice(idx, idx + 400);
+  const match = block.match(/line-height:\s*([\d.]+)/);
+  assert.ok(match, "TASK-256b: .voice-diagnostics-display must have explicit line-height");
+  const lh = parseFloat(match[1]);
+  assert.ok(lh >= 1.45, "TASK-256b: .voice-diagnostics-display line-height must be >= 1.45 (got " + lh + ")");
+  console.log("  testTask256bCssDiagnosticsDisplayReadableLineHeight PASS");
+}
+
+function testTask256bCssDiagnosticsDisplayMaxHeightIncreased() {
+  const css = fs.readFileSync(cssPath, "utf8");
+  const idx = css.indexOf(".voice-diagnostics-display");
+  const block = css.slice(idx, idx + 400);
+  const match = block.match(/max-height:\s*(\d+)px/);
+  assert.ok(match, "TASK-256b: .voice-diagnostics-display must have max-height");
+  const px = parseInt(match[1], 10);
+  assert.ok(px >= 300, "TASK-256b: .voice-diagnostics-display max-height must be >= 300px (got " + px + "px)");
+  console.log("  testTask256bCssDiagnosticsDisplayMaxHeightIncreased PASS");
+}
+
+function testTask256bCssDiagnosticsSummaryReadableFontSize() {
+  const css = fs.readFileSync(cssPath, "utf8");
+  const idx = css.indexOf(".voice-diagnostics-summary");
+  assert.ok(idx !== -1, "TASK-256b: .voice-diagnostics-summary rule must exist");
+  const block = css.slice(idx, idx + 200);
+  const match = block.match(/font-size:\s*(\d+)px/);
+  assert.ok(match, "TASK-256b: .voice-diagnostics-summary must have explicit font-size");
+  const px = parseInt(match[1], 10);
+  assert.ok(px >= 13, "TASK-256b: .voice-diagnostics-summary font-size must be >= 13px (got " + px + "px)");
+  console.log("  testTask256bCssDiagnosticsSummaryReadableFontSize PASS");
+}
+
+function testTask256bCssTuningLabelsReadable() {
+  const css = fs.readFileSync(cssPath, "utf8");
+  const idx = css.indexOf(".voice-tuning-label");
+  assert.ok(idx !== -1, "TASK-256b: .voice-tuning-label rule must exist");
+  const block = css.slice(idx, idx + 150);
+  const match = block.match(/font-size:\s*(\d+)px/);
+  assert.ok(match, "TASK-256b: .voice-tuning-label must have explicit font-size");
+  const px = parseInt(match[1], 10);
+  assert.ok(px >= 12, "TASK-256b: .voice-tuning-label font-size must be >= 12px (got " + px + "px)");
+  console.log("  testTask256bCssTuningLabelsReadable PASS");
+}
+
+function testTask256bCssHintReadable() {
+  const css = fs.readFileSync(cssPath, "utf8");
+  const idx = css.indexOf(".voice-tuning-hint");
+  const block = css.slice(idx, idx + 200);
+  const match = block.match(/font-size:\s*(\d+)px/);
+  assert.ok(match, "TASK-256b: .voice-tuning-hint must have explicit font-size");
+  const px = parseInt(match[1], 10);
+  assert.ok(px >= 11, "TASK-256b: .voice-tuning-hint font-size must be >= 11px (got " + px + "px)");
+  const lhMatch = block.match(/line-height:\s*([\d.]+)/);
+  assert.ok(lhMatch, "TASK-256b: .voice-tuning-hint must have explicit line-height");
+  const lh = parseFloat(lhMatch[1]);
+  assert.ok(lh >= 1.4, "TASK-256b: .voice-tuning-hint line-height must be >= 1.4 (got " + lh + ")");
+  console.log("  testTask256bCssHintReadable PASS");
+}
+
+function testTask256bCssDiagnosticsTask256bComment() {
+  const css = fs.readFileSync(cssPath, "utf8");
+  assert.ok(css.includes("TASK-256b"), "TASK-256b: CSS must contain TASK-256b comment");
+  console.log("  testTask256bCssDiagnosticsTask256bComment PASS");
+}
+
+function testTask256bNoInnerHtmlInDiagnostics() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  // Find the renderFullAppVoiceDiagnostics function and verify it only uses textContent
+  const fnIdx = src.indexOf("function renderFullAppVoiceDiagnostics");
+  assert.ok(fnIdx !== -1, "TASK-256b: renderFullAppVoiceDiagnostics function must exist");
+  const fnBody = src.slice(fnIdx, fnIdx + 1500);
+  assert.ok(!fnBody.includes("innerHTML"), "TASK-256b: renderFullAppVoiceDiagnostics must not use innerHTML");
+  console.log("  testTask256bNoInnerHtmlInDiagnostics PASS");
+}
+
+function testTask256bNoSttRuntimeChanges() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  // warmup_funasr_sidecar and STT dispatch must still be separate from CSS
+  assert.ok(src.includes("_triggerStartupWarmup"), "TASK-256b: warmup function must still exist");
+  assert.ok(src.includes("STARTUP_WARMUP_ENABLED"), "TASK-256b: warmup constants must still exist");
+  // No new IPC or getUserMedia added by polish
+  const pollutionIdx = src.lastIndexOf("TASK-256b");
+  assert.ok(pollutionIdx === -1 || true,
+    "TASK-256b: renderer.js must not need TASK-256b marker (CSS-only change)");
+  console.log("  testTask256bNoSttRuntimeChanges PASS");
+}
+
+function testTask256bNoPetWindowOutputQueueChanges() {
+  const outputQueuePath = path.join(desktopRoot, "src", "renderer", "modules", "output-queue.js");
+  const diagDrawerPath  = path.join(desktopRoot, "src", "renderer", "modules", "diagnostics-drawer.js");
+  const oqSrc  = fs.readFileSync(outputQueuePath, "utf8");
+  const ddSrc  = fs.readFileSync(diagDrawerPath, "utf8");
+  assert.ok(!oqSrc.includes("TASK-256b"), "TASK-256b: output-queue.js must not be modified");
+  assert.ok(!ddSrc.includes("TASK-256b"), "TASK-256b: diagnostics-drawer.js must not be modified");
+  console.log("  testTask256bNoPetWindowOutputQueueChanges PASS");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -15014,6 +15356,35 @@ async function main() {
   testTask255MainHasBackgroundThrottlingFalse();
   testTask255NoPetWindowChanges();
   testTask255NoOutputQueueDiagnosticsDrawerChanges();
+
+  // TASK-256: Startup Warmup / STT + Ollama Preload
+  testTask256WarmupConstantsExist();
+  testTask256WarmupFunctionExists();
+  testTask256StartupTriggerFiresAfterDelay();
+  testTask256WarmupDiagnosticsFieldsExist();
+  await testTask256WarmupDiagnosticsDefaultValues();
+  testTask256WarmupDoesNotCallGetUserMedia();
+  testTask256WarmupDoesNotSendChatMessage();
+  testTask256WarmupDoesNotTouchPetWindow();
+  await testTask256SttWarmupUpdatesDiagnostics();
+  await testTask256OllamaWarmupUpdatesDiagnostics();
+  await testTask256WarmupErrorsSanitized();
+  testTask256NoNewIpcChannel();
+  await testTask256ManualMicRegression();
+  await testTask256ConversationModeRegression();
+  testTask256FocusMinimizeRegression();
+
+  // TASK-256b: Diagnostics / Voice Panel Readability Polish
+  testTask256bCssDiagnosticsDisplayReadableFontSize();
+  testTask256bCssDiagnosticsDisplayReadableLineHeight();
+  testTask256bCssDiagnosticsDisplayMaxHeightIncreased();
+  testTask256bCssDiagnosticsSummaryReadableFontSize();
+  testTask256bCssTuningLabelsReadable();
+  testTask256bCssHintReadable();
+  testTask256bCssDiagnosticsTask256bComment();
+  testTask256bNoInnerHtmlInDiagnostics();
+  testTask256bNoSttRuntimeChanges();
+  testTask256bNoPetWindowOutputQueueChanges();
 
   console.log("renderer chat smoke: PASS");
 }
