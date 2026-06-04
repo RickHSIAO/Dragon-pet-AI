@@ -31,10 +31,12 @@ OWNER_VOICE_MIN_THRESHOLD = 0.40
 OWNER_VOICE_MAX_THRESHOLD = 0.95
 OWNER_VOICE_MIN_ENROLLMENT_SAMPLES = 2
 OWNER_VOICE_ENROLLMENT_TIMEOUT_SECONDS = 600
+OWNER_VOICE_VERIFICATION_TIMEOUT_SECONDS = 600
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _FUNASR_PYTHON_ENV = "DRAGON_PET_FUNASR_PYTHON"
 _FUNASR_PYTHON_DEFAULT = str(_REPO_ROOT / ".venv-funasr" / "Scripts" / "python.exe")
 _OWNER_VOICE_ENROLL_SCRIPT = str(_REPO_ROOT / "scripts" / "owner_voice_gate_enroll.py")
+_OWNER_VOICE_VERIFY_SCRIPT = str(_REPO_ROOT / "scripts" / "owner_voice_gate_verify.py")
 
 _FORBIDDEN_STORAGE_FIELDS = {
     "rawAudio",
@@ -335,6 +337,67 @@ def run_owner_voice_enrollment_sidecar(paths: list[str], threshold: float) -> di
     return report
 
 
+def run_owner_voice_verification_sidecar(
+    paths: list[str], threshold: float | None, settings_path: str
+) -> dict[str, Any]:
+    py_exec = _resolve_funasr_python()
+    if not os.path.isfile(py_exec):
+        return {
+            "status": "unavailable",
+            "reason": "missing_funasr_python",
+            "message": ".venv-funasr python not found",
+        }
+    if not os.path.isfile(_OWNER_VOICE_VERIFY_SCRIPT):
+        return {
+            "status": "unavailable",
+            "reason": "missing_verify_script",
+            "message": "owner voice verification script not found",
+        }
+
+    cmd = [py_exec, _OWNER_VOICE_VERIFY_SCRIPT, "--settings-json", settings_path]
+    for path in paths:
+        cmd.extend(["--candidate-sample", path])
+    if threshold is not None:
+        cmd.extend(["--threshold", str(_clamp_threshold(threshold))])
+    env = os.environ.copy()
+    env.setdefault("PYTHONUTF8", "1")
+    env["PYTHONIOENCODING"] = "utf-8"
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=env,
+            timeout=OWNER_VOICE_VERIFICATION_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "status": "unavailable",
+            "reason": "verification_timeout",
+            "message": "owner voice verification timed out",
+        }
+    except Exception as exc:  # noqa: BLE001
+        _logger.warning("owner_voice_gate_storage: verification sidecar failed: %s", type(exc).__name__)
+        return {
+            "status": "unavailable",
+            "reason": "verification_sidecar_error",
+            "message": "owner voice verification sidecar failed",
+        }
+
+    try:
+        report = _last_json_object(proc.stdout)
+    except ValueError:
+        return {
+            "status": "unavailable",
+            "reason": "invalid_verification_report",
+            "message": "owner voice verification report was not valid json",
+        }
+    return report
+
+
 class OwnerVoiceGateStorageService:
     def __init__(self, file_path: str | None = None) -> None:
         self._file_path = _get_default_file_path() if file_path is None else file_path
@@ -414,6 +477,97 @@ class OwnerVoiceGateStorageService:
         _save_settings_to_file(self._file_path, settings)
         return _serialize_settings(settings, reason="enrolled")
 
+    def verify_from_files(
+        self, *, paths: list[str], threshold: float | None
+    ) -> dict[str, Any]:
+        with self._lock:
+            enrolled = self._settings.enrolled
+            default_threshold = self._settings.threshold
+            file_path = self._file_path
+
+        if not enrolled:
+            return {
+                "status": "not_enrolled",
+                "reason": "not_enrolled",
+                "enrolled": False,
+                "score": None,
+                "scores": [],
+                "threshold": default_threshold,
+                "accepted": False,
+                "embeddingDim": None,
+                "sampleCount": 0,
+                "checkedAudioFiles": [],
+                "rawAudioPersisted": False,
+                "candidateEmbeddingPersisted": False,
+                "storedCentroidExposed": False,
+                "micAccessed": False,
+                "runtimeIntegrated": False,
+                "message": "Owner Voice Gate is not enrolled.",
+            }
+
+        clean_paths, path_error = _prepare_owner_voice_enrollment_paths(paths)
+        if path_error == "audio_file_not_found":
+            return {
+                "status": "unavailable",
+                "reason": "audio_file_not_found",
+                "enrolled": True,
+                "score": None,
+                "scores": [],
+                "threshold": default_threshold,
+                "accepted": False,
+                "embeddingDim": None,
+                "sampleCount": len(paths),
+                "checkedAudioFiles": [],
+                "rawAudioPersisted": False,
+                "candidateEmbeddingPersisted": False,
+                "storedCentroidExposed": False,
+                "micAccessed": False,
+                "runtimeIntegrated": False,
+                "message": "Verification requires existing mono 16 kHz PCM WAV files.",
+            }
+        if not clean_paths:
+            return {
+                "status": "unavailable",
+                "reason": "no_candidate_samples",
+                "enrolled": True,
+                "score": None,
+                "scores": [],
+                "threshold": default_threshold,
+                "accepted": False,
+                "embeddingDim": None,
+                "sampleCount": 0,
+                "checkedAudioFiles": [],
+                "rawAudioPersisted": False,
+                "candidateEmbeddingPersisted": False,
+                "storedCentroidExposed": False,
+                "micAccessed": False,
+                "runtimeIntegrated": False,
+                "message": "At least one candidate WAV file path is required.",
+            }
+
+        clamped = _clamp_threshold(threshold) if threshold is not None else None
+        report = run_owner_voice_verification_sidecar(clean_paths, clamped, file_path)
+
+        # Extract safe fields only — stored centroid vector must never appear in output
+        return {
+            "status": str(report.get("status") or "unavailable"),
+            "reason": str(report.get("reason") or ""),
+            "enrolled": bool(report.get("enrolled", True)),
+            "score": report.get("score"),
+            "scores": list(report.get("scores") or []),
+            "threshold": float(report.get("threshold") or default_threshold),
+            "accepted": bool(report.get("accepted", False)),
+            "embeddingDim": report.get("embeddingDim"),
+            "sampleCount": int(report.get("sampleCount") or len(clean_paths)),
+            "checkedAudioFiles": list(report.get("checkedAudioFiles") or []),
+            "rawAudioPersisted": False,
+            "candidateEmbeddingPersisted": False,
+            "storedCentroidExposed": False,
+            "micAccessed": False,
+            "runtimeIntegrated": False,
+            "message": str(report.get("message") or "")[:240],
+        }
+
     def delete_voiceprint(self) -> dict[str, Any]:
         with self._lock:
             self._settings = OwnerVoiceGateSettings()
@@ -471,6 +625,22 @@ def validate_owner_voice_gate_enroll_fields(body: dict[str, Any]) -> None:
         raise ValueError("unsupported owner voice enrollment field")
     if set(body) & _FORBIDDEN_STORAGE_FIELDS:
         raise ValueError("unsupported owner voice enrollment field")
+
+
+def verify_owner_voice_gate_from_files(
+    *,
+    paths: list[str],
+    threshold: float | None,
+) -> dict[str, Any]:
+    return _service.verify_from_files(paths=paths, threshold=threshold)
+
+
+def validate_owner_voice_gate_verify_fields(body: dict[str, Any]) -> None:
+    unsupported = set(body) - {"paths", "threshold"}
+    if unsupported:
+        raise ValueError("unsupported owner voice verification field")
+    if set(body) & _FORBIDDEN_STORAGE_FIELDS:
+        raise ValueError("unsupported owner voice verification field")
 
 
 def enroll_owner_voice_gate_from_files(

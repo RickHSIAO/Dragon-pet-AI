@@ -597,8 +597,9 @@ Safety boundary:
 - No Manual Mic, Conversation Mode, `/stt/transcribe`, `/chat`, IPC, Pet
   Window, Output Queue, or Diagnostics Drawer runtime change.
 
-After TASK-264 smoke passes, the next runtime step should be TASK-265 Manual
-Mic runtime gate, still opt-in and disabled by default.
+After TASK-264 smoke passes, TASK-265 adds the backend verification endpoint.
+After TASK-265, the next runtime step should be TASK-266 Manual Mic runtime gate,
+still opt-in and disabled by default.
 
 Windows stored-centroid smoke PASS:
 
@@ -610,3 +611,46 @@ Windows stored-centroid smoke PASS:
   `iic/speech_campplus_sv_zh-cn_16k-common` and kept `rawAudioPersisted=false`,
   `candidateEmbeddingPersisted=false`, `storedCentroidExposed=false`,
   `micAccessed=false`, and `runtimeIntegrated=false`.
+
+## 14. TASK-265 — Backend Verification Endpoint / No Runtime Wiring
+
+TASK-265 adds `POST /owner-voice-gate/verify-files` to the backend.
+
+### What changed
+
+- `run_owner_voice_verification_sidecar()` in
+  `backend/app/services/owner_voice_gate_storage.py`: calls
+  `scripts/owner_voice_gate_verify.py` under `.venv-funasr` Python, passes
+  `--settings-json`, `--candidate-sample` args, optional `--threshold`.
+- `OwnerVoiceGateStorageService.verify_from_files()`: returns `not_enrolled`
+  when no centroid; validates WAV path existence before invoking sidecar;
+  strips sidecar output to safe fields only (no `embeddingAggregate`).
+- `validate_owner_voice_gate_verify_fields()`: allows only `paths` + `threshold`.
+- `POST /owner-voice-gate/verify-files` route in `backend/app/api/routes.py`.
+
+### Safety boundary
+
+- No mic access; no audio bytes from the renderer.
+- No raw audio, transcript, waveform, or base64 audio persistence.
+- No candidate embedding persistence.
+- `embeddingAggregate` (stored centroid vector) never in the API response.
+- No Manual Mic, Conversation Mode, `/stt/transcribe`, `/chat`, IPC, Pet
+  Window, Output Queue, or Diagnostics Drawer runtime change.
+
+### Windows backend endpoint smoke
+
+PASS on 2026-06-04:
+
+- Owner candidate `%TEMP%\dragon-pet-voice-probe\owner2.wav`:
+  `score=0.9806`, `threshold=0.65`, `accepted=true`, `embeddingDim=192`.
+- Other candidate `%TEMP%\dragon-pet-voice-probe\other.wav`:
+  `score=0.0778`, `threshold=0.65`, `accepted=false`, `embeddingDim=192`.
+- Both endpoint responses returned `status=ok`, `reason=verification_complete`,
+  `enrolled=true`, and kept `rawAudioPersisted=false`,
+  `candidateEmbeddingPersisted=false`, `storedCentroidExposed=false`,
+  `micAccessed=false`, and `runtimeIntegrated=false`.
+- The API response did not expose the stored centroid or candidate embedding.
+
+### Next task
+
+TASK-266 Manual Mic runtime gate, still opt-in and disabled by default.

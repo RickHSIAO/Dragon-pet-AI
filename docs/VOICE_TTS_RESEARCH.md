@@ -531,6 +531,23 @@ TASK-257 DONE - WINDOWS PET WINDOW CLICK/SHOW SMOKE PASS (2026-06-04): Pet Windo
   PASS: owner2.wav scored `0.9806` and accepted at threshold `0.65`; other.wav
   scored `0.0778` and rejected.
 
+- **TASK-265 Owner Voice Gate Backend Verification Endpoint / No Runtime Wiring. DONE - Windows backend verify-files smoke PASS (2026-06-04):**
+  Adds `POST /owner-voice-gate/verify-files` backend endpoint. Request body:
+  `{ "paths": [str, ...], "threshold": float (optional) }`. The endpoint
+  validates fields (rejects rawAudio/base64Audio/transcript/embeddingAggregate),
+  checks that the owner voice centroid is enrolled, validates that WAV paths
+  exist before calling the sidecar, then invokes
+  `run_owner_voice_verification_sidecar()` which calls
+  `scripts/owner_voice_gate_verify.py` under `.venv-funasr` Python. Response
+  includes `score`, `scores`, `threshold`, `accepted`, `embeddingDim`,
+  `sampleCount`, `checkedAudioFiles`, and hardcoded
+  `rawAudioPersisted=false`, `candidateEmbeddingPersisted=false`,
+  `storedCentroidExposed=false`, `micAccessed=false`,
+  `runtimeIntegrated=false`. The stored `embeddingAggregate` vector never
+  appears in the response. No mic, no audio bytes from renderer, no IPC, no
+  STT pipeline, no `/chat` wiring. 7 new pytest tests; smoke section
+  `[14/14]` added to `stt_provider_smoke.py`.
+
 Each future task must explicitly define safety boundaries, user controls,
 provider scope, queue priority, and no-regression checks.
 

@@ -79,6 +79,8 @@ from app.services.owner_voice_gate_storage import (
     update_owner_voice_gate_settings,
     validate_owner_voice_gate_enroll_fields,
     validate_owner_voice_gate_update_fields,
+    validate_owner_voice_gate_verify_fields,
+    verify_owner_voice_gate_from_files,
 )
 from app.services.state_service import get_chat_state_context, update_state_after_chat_turn
 from app.services.usage_meter_service import UsageRecord, estimate_text_tokens, record_usage
@@ -413,6 +415,48 @@ async def owner_voice_gate_enroll_files_route(request: Request):
     except Exception as exc:  # noqa: BLE001
         _logger.warning("TASK-263: owner voice enrollment failed: %s", type(exc).__name__)
         raise HTTPException(status_code=503, detail="owner voice enrollment unavailable") from exc
+    return result
+
+
+@router.post("/owner-voice-gate/verify-files")
+async def owner_voice_gate_verify_files_route(request: Request):
+    """
+    TASK-265: Verify existing WAV files against the stored owner voice centroid.
+
+    Accepts file paths only. Never accepts audio bytes, base64 audio,
+    transcripts, waveforms, or embedding vectors from the renderer. Delegates
+    embedding extraction to the .venv-funasr verification sidecar and compares
+    candidate embeddings against the stored centroid only.
+
+    Safety boundaries (TASK-265):
+    - No microphone access.
+    - No raw audio persistence.
+    - No candidate embedding persistence.
+    - Stored centroid vector never appears in the response.
+    - No runtime wiring to Conversation Mode, STT pipeline, or chat endpoint.
+    """
+    try:
+        body = await request.json()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="invalid json body") from exc
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="request body must be an object")
+    try:
+        validate_owner_voice_gate_verify_fields(body)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    paths = body.get("paths")
+    if not isinstance(paths, list) or not all(isinstance(p, str) for p in paths):
+        raise HTTPException(status_code=400, detail="paths must be a list of strings")
+    threshold = body.get("threshold")
+    if threshold is not None and not isinstance(threshold, (int, float)):
+        raise HTTPException(status_code=400, detail="threshold must be a number")
+    try:
+        result = verify_owner_voice_gate_from_files(paths=paths, threshold=threshold)
+    except Exception as exc:  # noqa: BLE001
+        _logger.warning("TASK-265: owner voice verification failed: %s", type(exc).__name__)
+        raise HTTPException(status_code=503, detail="owner voice verification unavailable") from exc
     return result
 
 

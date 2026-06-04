@@ -541,7 +541,13 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   scored `0.0778` and rejected. Both reports kept `rawAudioPersisted=false`,
   `candidateEmbeddingPersisted=false`, `storedCentroidExposed=false`,
   `micAccessed=false`, and `runtimeIntegrated=false`.
-- TASK-265 — Owner Voice Gate Runtime Integration for Manual Mic
+- TASK-265 DONE - Windows backend verify-files smoke PASS (2026-06-04):
+  Added `POST /owner-voice-gate/verify-files` backend endpoint. Accepts existing
+  WAV file paths; calls `.venv-funasr` sidecar via `run_owner_voice_verification_sidecar()`;
+  compares candidate embeddings against stored centroid; returns score/threshold/accepted.
+  Response never exposes `embeddingAggregate`. No mic, no audio persistence, no runtime
+  wiring. 7 new pytest tests. Smoke section [14/14] added to stt_provider_smoke.py.
+- TASK-266 — Owner Voice Gate Runtime Integration for Manual Mic
 - TASK-266 — Owner Voice Gate Runtime Integration for Conversation Mode
 
 - TASK-256b DONE - WINDOWS DIAGNOSTICS READABILITY SMOKE PASS (2026-06-04): Diagnostics / Voice Panel Readability Polish. CSS-only change: `.voice-diagnostics-display` 10px → 13px, `line-height` 1.55, `max-height` 200px → 340px; `.voice-diagnostics-summary` 12px → 14px + font-weight 500; `.voice-diagnostics-panel` padding 4→8px; `.voice-tuning-label/input/select` 11px → 13px; `.voice-tuning-hint/voice-preview-hint/status` 10px → 12px; `.voice-preview-play-btn` 11px → 13px; `.voice-preview-audio-el` 28px → 32px. Windows smoke PASS: diagnostics readability improved, text/spacing/panel height all visibly better. No STT/warmup/IPC/Pet Window/Output Queue runtime changes. 10 new renderer CSS smoke tests PASS.

@@ -2814,3 +2814,261 @@ def test_task256_stt_transcribe_regression():
     assert "transcript" in data
     assert "status" in data
     assert data["status"] in ("ok", "unavailable", "empty", "error")
+
+
+# -- TASK-265: Backend Owner Voice Gate verify-files endpoint tests -----------
+
+
+def _mock_owner_voice_verification_report_accept(paths, threshold, settings_path):
+    return {
+        "status": "ok",
+        "reason": "verification_complete",
+        "provider": "funasr-campp",
+        "enrolled": True,
+        "score": 0.98,
+        "scores": [0.98] * len(paths),
+        "threshold": threshold or 0.65,
+        "accepted": True,
+        "embeddingDim": 192,
+        "sampleCount": len(paths),
+        "checkedAudioFiles": [
+            {"path": p, "exists": True, "valid16kPcmWav": True} for p in paths
+        ],
+        "rawAudioPersisted": False,
+        "candidateEmbeddingPersisted": False,
+        "storedCentroidExposed": False,
+        "micAccessed": False,
+        "runtimeIntegrated": False,
+        "message": "Verification completed against stored centroid.",
+    }
+
+
+def _mock_owner_voice_verification_report_reject(paths, threshold, settings_path):
+    return {
+        "status": "ok",
+        "reason": "verification_complete",
+        "provider": "funasr-campp",
+        "enrolled": True,
+        "score": 0.07,
+        "scores": [0.07] * len(paths),
+        "threshold": threshold or 0.65,
+        "accepted": False,
+        "embeddingDim": 192,
+        "sampleCount": len(paths),
+        "checkedAudioFiles": [
+            {"path": p, "exists": True, "valid16kPcmWav": True} for p in paths
+        ],
+        "rawAudioPersisted": False,
+        "candidateEmbeddingPersisted": False,
+        "storedCentroidExposed": False,
+        "micAccessed": False,
+        "runtimeIntegrated": False,
+        "message": "Verification completed against stored centroid.",
+    }
+
+
+def _enroll_for_verify_tests(tmp_path, monkeypatch):
+    """Set up enrolled centroid state so TASK-265 verify tests can proceed."""
+    _owner_voice_gate_temp_storage(tmp_path)
+    owner1, owner2 = _owner_voice_sample_paths(tmp_path)
+    monkeypatch.setattr(
+        owner_voice_gate_storage,
+        "run_owner_voice_enrollment_sidecar",
+        _mock_owner_voice_enrollment_report,
+    )
+    with TestClient(app) as client:
+        client.post(
+            "/owner-voice-gate/enroll-files",
+            json={"paths": [owner1, owner2], "threshold": 0.65, "safetyNoticeAccepted": True},
+        )
+
+
+def test_owner_voice_gate_verify_files_not_enrolled(tmp_path):
+    """TASK-265: verify-files returns not_enrolled when no centroid is stored."""
+    _owner_voice_gate_temp_storage(tmp_path)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/owner-voice-gate/verify-files",
+            json={"paths": ["candidate.wav"]},
+        )
+
+    data = response.json()
+    assert response.status_code == 200
+    assert data["status"] == "not_enrolled"
+    assert data["reason"] == "not_enrolled"
+    assert data["enrolled"] is False
+    assert data["accepted"] is False
+    assert data["score"] is None
+    assert data["storedCentroidExposed"] is False
+    assert data["candidateEmbeddingPersisted"] is False
+    assert "embeddingAggregate" not in response.text
+
+
+def test_owner_voice_gate_verify_files_audio_not_found(tmp_path, monkeypatch):
+    """TASK-265: missing WAV path returns audio_file_not_found without calling sidecar."""
+    _enroll_for_verify_tests(tmp_path, monkeypatch)
+    missing = str(tmp_path / "雪狼丸 missing" / "candidate.wav")
+
+    def _fail_if_called(_paths, _threshold, _settings_path):
+        raise AssertionError("sidecar must not run for missing verification paths")
+
+    monkeypatch.setattr(
+        owner_voice_gate_storage,
+        "run_owner_voice_verification_sidecar",
+        _fail_if_called,
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/owner-voice-gate/verify-files",
+            json={"paths": [missing]},
+        )
+
+    data = response.json()
+    assert response.status_code == 200
+    assert data["status"] == "unavailable"
+    assert data["reason"] == "audio_file_not_found"
+    assert data["enrolled"] is True
+    assert data["accepted"] is False
+    assert "Traceback" not in response.text
+    assert "AssertionError" not in response.text
+    assert "雪狼丸" not in response.text
+    assert "embeddingAggregate" not in response.text
+
+
+def test_owner_voice_gate_verify_files_unicode_path(tmp_path, monkeypatch):
+    """TASK-265: Unicode candidate WAV paths must reach the verification sidecar unchanged."""
+    _enroll_for_verify_tests(tmp_path, monkeypatch)
+    candidate_dir = tmp_path / "雪狼丸 verify"
+    candidate_dir.mkdir(parents=True, exist_ok=True)
+    candidate_wav = candidate_dir / "candidate.wav"
+    candidate_wav.write_bytes(b"mock wav bytes for path only")
+    captured_paths: list[str] = []
+
+    def _capture_verify(paths, threshold, settings_path):
+        captured_paths.extend(paths)
+        return _mock_owner_voice_verification_report_accept(paths, threshold, settings_path)
+
+    monkeypatch.setattr(
+        owner_voice_gate_storage,
+        "run_owner_voice_verification_sidecar",
+        _capture_verify,
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/owner-voice-gate/verify-files",
+            json={"paths": [str(candidate_wav)]},
+        )
+
+    data = response.json()
+    assert response.status_code == 200
+    assert data["status"] == "ok"
+    assert data["reason"] == "verification_complete"
+    assert len(captured_paths) == 1
+    assert "雪狼丸" in captured_paths[0]
+    assert data["embeddingDim"] == 192
+    assert data["storedCentroidExposed"] is False
+    assert data["candidateEmbeddingPersisted"] is False
+    assert "embeddingAggregate" not in response.text
+
+
+def test_owner_voice_gate_verify_files_mock_accept(tmp_path, monkeypatch):
+    """TASK-265: high similarity score returns accepted=True with safe schema."""
+    _enroll_for_verify_tests(tmp_path, monkeypatch)
+    candidate = tmp_path / "owner2.wav"
+    candidate.write_bytes(b"mock owner wav")
+
+    monkeypatch.setattr(
+        owner_voice_gate_storage,
+        "run_owner_voice_verification_sidecar",
+        _mock_owner_voice_verification_report_accept,
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/owner-voice-gate/verify-files",
+            json={"paths": [str(candidate)], "threshold": 0.65},
+        )
+
+    data = response.json()
+    assert response.status_code == 200
+    assert data["status"] == "ok"
+    assert data["reason"] == "verification_complete"
+    assert data["enrolled"] is True
+    assert data["accepted"] is True
+    assert data["score"] == 0.98
+    assert data["scores"] == [0.98]
+    assert data["threshold"] == 0.65
+    assert data["embeddingDim"] == 192
+    assert data["sampleCount"] == 1
+    assert data["rawAudioPersisted"] is False
+    assert data["candidateEmbeddingPersisted"] is False
+    assert data["storedCentroidExposed"] is False
+    assert data["micAccessed"] is False
+    assert data["runtimeIntegrated"] is False
+    assert "embeddingAggregate" not in response.text
+
+
+def test_owner_voice_gate_verify_files_mock_reject(tmp_path, monkeypatch):
+    """TASK-265: low similarity score returns accepted=False."""
+    _enroll_for_verify_tests(tmp_path, monkeypatch)
+    candidate = tmp_path / "other.wav"
+    candidate.write_bytes(b"mock other wav")
+
+    monkeypatch.setattr(
+        owner_voice_gate_storage,
+        "run_owner_voice_verification_sidecar",
+        _mock_owner_voice_verification_report_reject,
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/owner-voice-gate/verify-files",
+            json={"paths": [str(candidate)]},
+        )
+
+    data = response.json()
+    assert response.status_code == 200
+    assert data["status"] == "ok"
+    assert data["reason"] == "verification_complete"
+    assert data["accepted"] is False
+    assert data["score"] == 0.07
+    assert data["storedCentroidExposed"] is False
+    assert data["candidateEmbeddingPersisted"] is False
+    assert "embeddingAggregate" not in response.text
+
+
+def test_owner_voice_gate_verify_files_rejects_forbidden_fields(tmp_path):
+    """TASK-265: verify-files rejects raw audio, transcript, and embedding fields."""
+    _owner_voice_gate_temp_storage(tmp_path)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/owner-voice-gate/verify-files",
+            json={
+                "paths": ["candidate.wav"],
+                "rawAudio": "not allowed",
+                "base64Audio": "not allowed",
+                "transcript": "not allowed",
+                "embeddingAggregate": [0.1] * 192,
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "unsupported owner voice verification field"}
+    assert "not allowed" not in response.text
+    assert "0.1" not in response.text
+
+
+def test_owner_voice_gate_verify_files_no_runtime_wiring():
+    """TASK-265: verify-files route must not call STT or chat runtime."""
+    import inspect
+    import app.api.routes as routes_module
+
+    source = inspect.getsource(routes_module.owner_voice_gate_verify_files_route)
+    assert "transcribe_audio_bytes" not in source
+    assert "generate_chat_reply" not in source
+    assert "store_chat_turn" not in source
+    assert "stt_transcribe" not in source

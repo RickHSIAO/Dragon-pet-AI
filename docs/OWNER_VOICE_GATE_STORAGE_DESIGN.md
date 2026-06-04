@@ -628,8 +628,9 @@ Manual Mic / Conversation Mode WAV
 
 Runtime integration should be split by surface:
 
-- TASK-265: Manual Mic gate.
-- TASK-266: Conversation Mode gate.
+- TASK-265: Backend verification endpoint (DONE — see Section 19).
+- TASK-266: Manual Mic gate.
+- TASK-267: Conversation Mode gate.
 
 Both must be disabled by default until enrollment exists and the user explicitly
 enables the gate.
@@ -660,8 +661,9 @@ Diagnostics must not show:
 
 Recommended sequence:
 
-- TASK-265 Owner Voice Gate Runtime Integration for Manual Mic
-- TASK-266 Owner Voice Gate Runtime Integration for Conversation Mode
+- TASK-265 Backend Verification Endpoint (DONE — Section 19)
+- TASK-266 Owner Voice Gate Runtime Integration for Manual Mic
+- TASK-267 Owner Voice Gate Runtime Integration for Conversation Mode
 
 TASK-262 calibration is complete on Windows for the small smoke set. Runtime
 gating should still remain explicit, opt-in, and threshold-aware.
@@ -681,5 +683,63 @@ git status --short
 git diff --stat
 git diff --name-only
 ```
+
+## 19. TASK-265 Backend Verification Endpoint
+
+TASK-265 adds `POST /owner-voice-gate/verify-files` to the backend API.
+
+### New storage service additions
+
+- `OWNER_VOICE_VERIFICATION_TIMEOUT_SECONDS = 600` constant.
+- `_OWNER_VOICE_VERIFY_SCRIPT` path constant pointing to
+  `scripts/owner_voice_gate_verify.py`.
+- `run_owner_voice_verification_sidecar(paths, threshold, settings_path)`:
+  calls the verify script under `.venv-funasr` Python, parses the last JSON
+  object from stdout (same `_last_json_object` helper used by enrollment).
+- `OwnerVoiceGateStorageService.verify_from_files(paths, threshold)`:
+  returns `not_enrolled` immediately if no centroid. Validates paths via
+  `_prepare_owner_voice_enrollment_paths`. Extracts only safe fields from the
+  sidecar report — `embeddingAggregate` never appears in output. Hardcodes
+  `rawAudioPersisted=False`, `candidateEmbeddingPersisted=False`,
+  `storedCentroidExposed=False`, `micAccessed=False`,
+  `runtimeIntegrated=False`.
+- `validate_owner_voice_gate_verify_fields(body)`: allows only `paths` and
+  `threshold`; rejects all `_FORBIDDEN_STORAGE_FIELDS`.
+- `verify_owner_voice_gate_from_files(paths, threshold)`: public module-level
+  function delegating to `_service.verify_from_files()`.
+
+### Endpoint contract
+
+```
+POST /owner-voice-gate/verify-files
+Request:  { "paths": [str, ...], "threshold": float (optional) }
+Response: { "status", "reason", "enrolled", "score", "scores",
+            "threshold", "accepted", "embeddingDim", "sampleCount",
+            "checkedAudioFiles", "rawAudioPersisted", "candidateEmbeddingPersisted",
+            "storedCentroidExposed", "micAccessed", "runtimeIntegrated", "message" }
+```
+
+### Safety invariants
+
+- `embeddingAggregate` never in the response body.
+- No raw audio persistence across the entire request path.
+- No candidate embedding persistence.
+- No `getUserMedia` / `MediaRecorder` in any code path.
+- No IPC channel, no `/chat`, no STT pipeline calls.
+
+### Windows backend endpoint smoke
+
+PASS on 2026-06-04:
+
+- Owner WAV `%TEMP%\dragon-pet-voice-probe\owner2.wav`: `status=ok`,
+  `reason=verification_complete`, `score=0.9806`, `threshold=0.65`,
+  `accepted=true`, `embeddingDim=192`.
+- Other WAV `%TEMP%\dragon-pet-voice-probe\other.wav`: `status=ok`,
+  `reason=verification_complete`, `score=0.0778`, `threshold=0.65`,
+  `accepted=false`, `embeddingDim=192`.
+- Both responses kept `rawAudioPersisted=false`,
+  `candidateEmbeddingPersisted=false`, `storedCentroidExposed=false`,
+  `micAccessed=false`, and `runtimeIntegrated=false`, with no stored centroid
+  or candidate embedding in the response.
 
 Expected runtime result: unchanged.

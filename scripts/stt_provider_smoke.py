@@ -856,7 +856,7 @@ check("Unicode" in owner_voice_storage_text and "audio_file_not_found" in owner_
 # ---------------------------------------------------------------------------
 # TASK-264: Stored centroid verification probe static safety checks
 # ---------------------------------------------------------------------------
-print("\n[13/13] TASK-264 - Owner Voice Gate stored centroid verification probe static safety")
+print("\n[13/14] TASK-264 - Owner Voice Gate stored centroid verification probe static safety")
 
 verify_path = _os.path.join(REPO_ROOT, "scripts", "owner_voice_gate_verify.py")
 check(_os.path.isfile(verify_path),
@@ -881,8 +881,8 @@ check("embeddingAggregate" in verify_source and "storedCentroidExposed" in verif
       "verification probe reads stored centroid but reports it as not exposed")
 check("candidateEmbeddingPersisted" in verify_source,
       "verification probe reports candidate embedding persistence boundary")
-check("/owner-voice-gate/verify-file" not in routes_source,
-      "TASK-264 does not add backend verification endpoint")
+check(_os.path.isfile(verify_path),
+      "TASK-264 verify script is standalone file; TASK-265 exposes it via backend endpoint")
 for forbidden in (
     "getUserMedia",
     "MediaRecorder",
@@ -906,6 +906,67 @@ check("TASK-264" in owner_voice_storage_text,
       "owner voice storage design doc records TASK-264")
 
 # ---------------------------------------------------------------------------
+# TASK-265: Backend verify-files endpoint static safety checks
+# ---------------------------------------------------------------------------
+print("\n[14/14] TASK-265 - Owner Voice Gate backend verify-files endpoint static safety")
+
+verify_endpoint_route = "/owner-voice-gate/verify-files"
+check(verify_endpoint_route in routes_source,
+      "backend exposes POST /owner-voice-gate/verify-files endpoint")
+check("validate_owner_voice_gate_verify_fields" in routes_source,
+      "backend verify-files endpoint validates allowed fields before dispatch")
+check("verify_owner_voice_gate_from_files" in routes_source,
+      "backend verify-files endpoint delegates to storage service verify function")
+
+owner_voice_storage_service_text = open(
+    _os.path.join(REPO_ROOT, "backend", "app", "services", "owner_voice_gate_storage.py"),
+    encoding="utf-8",
+).read()
+
+check("run_owner_voice_verification_sidecar" in owner_voice_storage_service_text,
+      "storage service has verification sidecar runner")
+check("verify_from_files" in owner_voice_storage_service_text,
+      "storage service has verify_from_files method")
+check("storedCentroidExposed" in owner_voice_storage_service_text,
+      "storage service verify sets storedCentroidExposed=False in response")
+check("candidateEmbeddingPersisted" in owner_voice_storage_service_text,
+      "storage service verify sets candidateEmbeddingPersisted=False in response")
+check("runtimeIntegrated" in owner_voice_storage_service_text,
+      "storage service verify sets runtimeIntegrated=False in response")
+check("micAccessed" in owner_voice_storage_service_text,
+      "storage service verify sets micAccessed=False in response")
+check("_OWNER_VOICE_VERIFY_SCRIPT" in owner_voice_storage_service_text,
+      "storage service references verification script path constant")
+check("OWNER_VOICE_VERIFICATION_TIMEOUT_SECONDS" in owner_voice_storage_service_text,
+      "storage service defines verification timeout constant")
+
+for forbidden in (
+    "getUserMedia",
+    "MediaRecorder",
+    "navigator.mediaDevices",
+    "ipcRenderer",
+    "ipcMain",
+    "stt:transcribe",
+    "/stt/transcribe",
+    "/chat",
+    "NamedTemporaryFile",
+    "mkdtemp",
+    "write_bytes",
+    "shutil.copy",
+):
+    check(forbidden not in open(
+              _os.path.join(REPO_ROOT, "backend", "app", "api", "routes.py"),
+              encoding="utf-8",
+          ).read().split("owner_voice_gate_verify_files_route")[1].split("\n@router")[0]
+          if "owner_voice_gate_verify_files_route" in routes_source else True,
+          f"verify-files route handler does not contain forbidden token {forbidden!r}")
+
+check("TASK-265" in owner_voice_text,
+      "owner voice research doc records TASK-265")
+check("TASK-265" in owner_voice_storage_text,
+      "owner voice storage design doc records TASK-265")
+
+# ---------------------------------------------------------------------------
 # Clean up env so test leaves no side effects
 # ---------------------------------------------------------------------------
 os.environ.pop("DRAGON_PET_STT_PROVIDER", None)
@@ -917,8 +978,8 @@ print()
 print("=" * 65)
 print(f"  {_pass_count} PASS  {_fail_count} FAIL")
 if _fail_count == 0:
-    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263/264 STT Provider Smoke: PASS")
+    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263/264/265 STT Provider Smoke: PASS")
 else:
-    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263/264 STT Provider Smoke: FAIL")
+    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263/264/265 STT Provider Smoke: FAIL")
 print("=" * 65)
 sys.exit(0 if _fail_count == 0 else 1)

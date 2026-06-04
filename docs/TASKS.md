@@ -27257,7 +27257,121 @@ Owner Voice Gate settings:
 
 ### Next Task
 
-TASK-265 Owner Voice Gate Runtime Integration for Manual Mic.
+TASK-265 Owner Voice Gate Backend Verification Endpoint / No Runtime Wiring.
+
+---
+
+## TASK-265 | Owner Voice Gate Backend Verification Endpoint / No Runtime Wiring
+
+Status: DONE - Windows backend verify-files smoke PASS
+
+### Goal
+
+Add a backend API endpoint `POST /owner-voice-gate/verify-files` that accepts
+one or more existing WAV file paths, calls the `.venv-funasr` sidecar
+(`scripts/owner_voice_gate_verify.py`) to score them against the stored owner
+voice centroid, and returns a safe response with score/threshold/accepted.
+
+This endpoint does not wire into Manual Mic, Conversation Mode, STT pipeline,
+/chat, IPC, or Pet Window at any runtime level.
+
+### Implementation
+
+- Added `run_owner_voice_verification_sidecar()` to
+  `backend/app/services/owner_voice_gate_storage.py`. Calls
+  `scripts/owner_voice_gate_verify.py` under `.venv-funasr` Python with
+  `--settings-json`, `--candidate-sample` (repeated), and optional
+  `--threshold`. Timeout: `OWNER_VOICE_VERIFICATION_TIMEOUT_SECONDS = 600`.
+- Added `OwnerVoiceGateStorageService.verify_from_files()` method. Returns
+  `not_enrolled` immediately if no centroid is stored. Validates paths via
+  `_prepare_owner_voice_enrollment_paths()` before calling sidecar. Extracts
+  only safe fields from sidecar output; never exposes stored centroid vector.
+- Added `validate_owner_voice_gate_verify_fields()` and
+  `verify_owner_voice_gate_from_files()` public API functions.
+- Added `POST /owner-voice-gate/verify-files` route to
+  `backend/app/api/routes.py`. Validates fields, checks paths type, dispatches
+  to storage service.
+
+### Request Shape
+
+```json
+{
+  "paths": ["owner2.wav", "owner3.wav"],
+  "threshold": 0.65
+}
+```
+
+`threshold` is optional; defaults to the stored settings threshold.
+
+### Response Shape
+
+```json
+{
+  "status": "ok",
+  "reason": "verification_complete",
+  "enrolled": true,
+  "score": 0.98,
+  "scores": [0.98, 0.97],
+  "threshold": 0.65,
+  "accepted": true,
+  "embeddingDim": 192,
+  "sampleCount": 2,
+  "checkedAudioFiles": [...],
+  "rawAudioPersisted": false,
+  "candidateEmbeddingPersisted": false,
+  "storedCentroidExposed": false,
+  "micAccessed": false,
+  "runtimeIntegrated": false,
+  "message": "..."
+}
+```
+
+`embeddingAggregate` (stored centroid vector) never appears in the response.
+
+### Tests
+
+- `test_owner_voice_gate_verify_files_not_enrolled` — no centroid → not_enrolled.
+- `test_owner_voice_gate_verify_files_audio_not_found` — missing WAV →
+  audio_file_not_found, sidecar never called.
+- `test_owner_voice_gate_verify_files_unicode_path` — Unicode Windows paths
+  reach sidecar unchanged.
+- `test_owner_voice_gate_verify_files_mock_accept` — mock accept score → accepted=true
+  with safe schema (embeddingAggregate absent).
+- `test_owner_voice_gate_verify_files_mock_reject` — mock reject score → accepted=false.
+- `test_owner_voice_gate_verify_files_rejects_forbidden_fields` — rawAudio,
+  base64Audio, transcript, embeddingAggregate all rejected 400.
+- `test_owner_voice_gate_verify_files_no_runtime_wiring` — inspect source checks
+  no STT/chat/mic calls.
+
+### Safety Boundary
+
+- No microphone access.
+- No raw audio persistence.
+- No candidate embedding persistence.
+- Stored centroid vector never appears in the API response.
+- No Manual Mic or Conversation Mode runtime integration.
+- No `/stt/transcribe` or `/chat` behavior/schema change.
+- No IPC channel.
+- No Pet Window, Output Queue, or Diagnostics Drawer runtime change.
+
+### Windows Backend Verify-Files Smoke
+
+PASS on 2026-06-04 against the stored owner centroid:
+
+- Owner WAV `%TEMP%\dragon-pet-voice-probe\owner2.wav`: `status=ok`,
+  `reason=verification_complete`, `enrolled=true`, `score=0.9806`,
+  `threshold=0.65`, `accepted=true`, `embeddingDim=192`.
+- Other WAV `%TEMP%\dragon-pet-voice-probe\other.wav`: `status=ok`,
+  `reason=verification_complete`, `enrolled=true`, `score=0.0778`,
+  `threshold=0.65`, `accepted=false`, `embeddingDim=192`.
+- Both endpoint responses kept `rawAudioPersisted=false`,
+  `candidateEmbeddingPersisted=false`, `storedCentroidExposed=false`,
+  `micAccessed=false`, and `runtimeIntegrated=false`.
+- Response fields did not expose stored centroid or candidate embedding.
+
+### Next Task
+
+TASK-266 Owner Voice Gate Runtime Integration for Manual Mic.
 
 ---
 
