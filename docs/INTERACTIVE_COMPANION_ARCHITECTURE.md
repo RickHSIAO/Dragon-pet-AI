@@ -647,7 +647,7 @@ Recommended next architecture phase:
   `_resumeConversationAudioContextIfSuspended()` from VAD tick + visibilitychange/focus.
   Blur/visibilitychange hidden never cancel voice. 6 diagnostics fields. 17 renderer smoke PASS.
   Windows smoke PASS: Manual Mic + Conversation Mode cut-window/minimize not interrupted;
-  regression PASS. Follow-ups: TASK-256 startup warmup; TASK-257 Pet Window click/Show idempotent.
+  regression PASS. Follow-ups: TASK-256 startup warmup; TASK-257 Pet Window click/Show idempotent (DONE).
 - TASK-256 DONE - WINDOWS STARTUP WARMUP SMOKE PASS (2026-06-04):
   Startup Warmup / STT + Ollama Preload. `POST /stt/warmup` starts funasr-local sidecar without
   audio; `POST /llm/warmup` pings Ollama keep_alive. Renderer fires both 3 s after startup health
@@ -656,7 +656,7 @@ Recommended next architecture phase:
   No mic, no audio, no chat, no new IPC, no Pet Window / Output Queue / Diagnostics Drawer changes.
 - TASK-256b DONE - WINDOWS DIAGNOSTICS READABILITY SMOKE PASS (2026-06-04):
   CSS-only: diagnostics display 10px → 13px, line-height 1.55, max-height 340px. Tuning labels/
-  hints ≥ 12px. Panel padding/spacing increased. Windows smoke PASS. Follow-up: TASK-257.
+  hints ≥ 12px. Panel padding/spacing increased. Windows smoke PASS. Follow-up: TASK-257 DONE - WINDOWS PET WINDOW CLICK/SHOW SMOKE PASS (2026-06-04).
 - Relationship state.
 - Mood / attention / energy state beyond the local preview foundation.
 - Idle reaction policy.

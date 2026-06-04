@@ -1289,6 +1289,105 @@ function testTask220DoesNotTouchExpressionChannels() {
     "TASK-220 must preserve pet expression listener");
 }
 
+// ── TASK-257: Pet Window Click / Show Pet Idempotent Behavior ─────────────────
+
+function testTask257ShowPetWindowNeverHidesOrToggles() {
+  const main = readText(mainPath);
+  const fnText = extractFunction(main, "showPetWindow");
+  assertNotIncludes(fnText, "petWindow.hide()", "showPetWindow must never call petWindow.hide()");
+  assertNotIncludes(fnText, "hidePetWindow()", "showPetWindow must never call hidePetWindow()");
+  assertNotIncludes(fnText, "isVisible()", "showPetWindow must never toggle on visibility check");
+  assertNotIncludes(fnText, "toggle", "showPetWindow must not use toggle logic");
+}
+
+function testTask257ShowPetWindowAlwaysShowFocus() {
+  const main = readText(mainPath);
+  const fnText = extractFunction(main, "showPetWindow");
+  assertIncludes(fnText, "win.show()", "showPetWindow must always call win.show()");
+  assertIncludes(fnText, "win.focus()", "showPetWindow must always call win.focus()");
+}
+
+function testTask257ShowPetWindowHandlesMinimized() {
+  const main = readText(mainPath);
+  const fnText = extractFunction(main, "showPetWindow");
+  assertIncludes(fnText, "isMinimized()", "showPetWindow must check isMinimized");
+  assertIncludes(fnText, "win.restore()", "showPetWindow must restore minimized window");
+  const restoreIdx = fnText.indexOf("win.restore()");
+  const showIdx    = fnText.indexOf("win.show()");
+  assert(restoreIdx < showIdx, "win.restore() must come before win.show() in showPetWindow");
+}
+
+function testTask257ShowPetWindowHandlesDestroyedOrNull() {
+  const main = readText(mainPath);
+  const fnText = extractFunction(main, "showPetWindow");
+  assertIncludes(fnText, "petWindow && !petWindow.isDestroyed()", "showPetWindow must guard against destroyed window");
+  assertIncludes(fnText, "createPetWindow()", "showPetWindow must call createPetWindow when null/destroyed");
+}
+
+function testTask257FullAppRendererShowPetNoToggleNoHide() {
+  const renderer = readText(rendererPath);
+  const fnStart = renderer.indexOf("async function showPetWindowFromFullApp");
+  assert(fnStart >= 0, "showPetWindowFromFullApp must exist in renderer.js");
+  const braceStart = renderer.indexOf("{", fnStart);
+  let depth = 0, fnEnd = -1;
+  for (let i = braceStart; i < renderer.length; i++) {
+    if (renderer[i] === "{") depth++;
+    if (renderer[i] === "}") { depth--; if (depth === 0) { fnEnd = i; break; } }
+  }
+  const fnText = renderer.slice(fnStart, fnEnd + 1);
+  assertIncludes(fnText, "api.showPetWindow()", "showPetWindowFromFullApp must call api.showPetWindow()");
+  assertNotIncludes(fnText, "hidePetWindow", "showPetWindowFromFullApp must never call hidePetWindow");
+  assertNotIncludes(fnText, "isVisible", "showPetWindowFromFullApp must not toggle on visibility check");
+  assertNotIncludes(fnText, "toggle", "showPetWindowFromFullApp must not use toggle logic");
+}
+
+function testTask257FullAppPreloadShowPetInvokesChannel() {
+  const preload = readText(rendererPreloadPath);
+  assertIncludes(preload, "showPetWindow: () => ipcRenderer.invoke(PET_SHOW_WINDOW_CHANNEL)",
+    "renderer preload showPetWindow must invoke narrow IPC channel");
+  assertNotIncludes(preload, "hidePetWindow()", "renderer preload showPetWindow must not call hidePetWindow");
+  assertNotIncludes(preload, "isVisible", "renderer preload must not toggle on visibility");
+}
+
+function testTask257HidePetWindowOnlyViaExplicitChannel() {
+  const main = readText(mainPath);
+  assertIncludes(main, "ipcMain.handle(PET_HIDE_WINDOW_CHANNEL, () => hidePetWindow())",
+    "main.js: hide must only be via explicit IPC channel");
+  const showFn = extractFunction(main, "showPetWindow");
+  assertNotIncludes(showFn, "hidePetWindow", "showPetWindow must not call hidePetWindow");
+}
+
+function testTask257BubbleCloseHookPointerEventsNone() {
+  const css = readText(path.join(desktopRoot, "src", "pet", "pet.css"));
+  assertRegex(css, /\.pet-stage-controls[\s\S]{0,200}pointer-events:\s*none/,
+    "pet.css: .pet-stage-controls must have pointer-events: none");
+  assertRegex(css, /\.pet-stage-controls[\s\S]{0,200}opacity:\s*0/,
+    "pet.css: .pet-stage-controls must have opacity: 0");
+}
+
+function testTask257CloseXHoverStateAlsoHidden() {
+  const css = readText(path.join(desktopRoot, "src", "pet", "pet.css"));
+  assertRegex(css, /\.pet-shell:hover\s+\.pet-stage-controls[\s\S]{0,200}opacity:\s*0/,
+    "pet.css: close X must stay hidden on hover (opacity: 0)");
+  assertRegex(css, /\.pet-shell:hover\s+\.pet-stage-controls[\s\S]{0,200}pointer-events:\s*none/,
+    "pet.css: close X must not intercept clicks on hover");
+}
+
+function testTask257HideRouteOnlyContextMenuOrExplicit() {
+  const renderer = readText(petRendererPath);
+  const dragIdx = renderer.indexOf('dragRegion.addEventListener("click"');
+  assert(dragIdx >= 0, "dragRegion click listener must exist in pet-renderer.js");
+  const dragSection = renderer.slice(dragIdx, dragIdx + 500);
+  assertNotIncludes(dragSection, "handleHidePetWindow",
+    "dragRegion click handler must NOT call handleHidePetWindow");
+  assertIncludes(dragSection, "restorePetPresence",
+    "dragRegion click handler must call restorePetPresence");
+  assertIncludes(dragSection, "stopPropagation",
+    "dragRegion click handler must call stopPropagation (TASK-257 defensive guard)");
+  assertIncludes(renderer, 'menuHideWindow.addEventListener("click"',
+    "pet-renderer.js: hide must be wired via context menu item only");
+}
+
 function run() {
   const tests = [
     testMainHasPetWindowPrototype,
@@ -1389,6 +1488,17 @@ function run() {
     testTask220MainForwardReactionBubbleRuntimeRelay,
     testTask220MainForwardReactionBubbleAbsentPetNoThrow,
     testTask220DoesNotTouchExpressionChannels,
+    // TASK-257
+    testTask257ShowPetWindowNeverHidesOrToggles,
+    testTask257ShowPetWindowAlwaysShowFocus,
+    testTask257ShowPetWindowHandlesMinimized,
+    testTask257ShowPetWindowHandlesDestroyedOrNull,
+    testTask257FullAppRendererShowPetNoToggleNoHide,
+    testTask257FullAppPreloadShowPetInvokesChannel,
+    testTask257HidePetWindowOnlyViaExplicitChannel,
+    testTask257BubbleCloseHookPointerEventsNone,
+    testTask257CloseXHoverStateAlsoHidden,
+    testTask257HideRouteOnlyContextMenuOrExplicit,
   ];
 
   for (const test of tests) {

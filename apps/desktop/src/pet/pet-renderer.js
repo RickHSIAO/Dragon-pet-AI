@@ -2410,7 +2410,13 @@ function initializePetMode(documentRef = document) {
   }
 
   if (dragRegion && typeof dragRegion.addEventListener === "function") {
-    dragRegion.addEventListener("click", () => restorePetPresence(documentRef));
+    dragRegion.addEventListener("click", (event) => {
+      // TASK-257: avatar/drag-region click must never trigger hide; stop propagation and only restore presence
+      if (event && typeof event.stopPropagation === "function") {
+        event.stopPropagation();
+      }
+      restorePetPresence(documentRef);
+    });
   }
 
   if (bubbleOpenHook && typeof bubbleOpenHook.addEventListener === "function") {

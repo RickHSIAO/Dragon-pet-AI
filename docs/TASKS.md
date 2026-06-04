@@ -26294,7 +26294,7 @@ No STT provider, warmup runtime, IPC, Pet Window, Output Queue, or backend chang
 
 ## TASK-257 | Pet Window Click / Show Pet Idempotent Behavior
 
-Status: PLANNED (2026-06-04)
+Status: DONE - WINDOWS PET WINDOW CLICK/SHOW SMOKE PASS (2026-06-04)
 
 ### Goal
 
@@ -26302,11 +26302,26 @@ Fix two related Pet Window UX issues discovered during TASK-254/255 Windows smok
 (B) Left-clicking Pet Window avatar unexpectedly hides the pet.
 (C) Show Pet button acts as toggle — should be idempotent show/focus/restore.
 
-### Preliminary Direction
+### Implementation
 
-- Left-click on Pet avatar: no-op or focus/bring-to-front; drag still works.
-- Show Pet: if already visible → focus/restore (not hide); Hide Pet only via explicit Hide action / context menu / Menu.
-- Right-click / Menu may keep Hide Pet option.
+**Code changes:**
+- `pet-renderer.js`: Added `event.stopPropagation()` to dragRegion click handler — avatar/drag-region click explicitly stops event propagation and only calls `restorePetPresence()`; never hides window.
+- All other code was already correct: `showPetWindow()` always calls `win.show(); win.focus()` with no toggle; `showPetWindowFromFullApp()` always calls `api.showPetWindow()` with no toggle; X button CSS permanently hidden (`opacity:0; pointer-events:none`) in base and hover states.
+
+**Smoke tests:**
+- `pet-window-smoke.js`: 10 new TASK-257 tests — `showPetWindow()` never hides/toggles; always show+focus; handles minimized/destroyed; `showPetWindowFromFullApp()` no toggle; preload invokeOnly; hide only via explicit IPC; CSS close-X pointer-events:none; hover state also hidden; hide route only via context menu.
+- `pet-renderer-smoke.js`: 5 new TASK-257 tests — dragRegion click calls restorePresence not hide; dragRegion click calls stopPropagation; bubbleCloseHook has stopPropagation; restorePetPresenceAfterShow never hides; dragRegion source has no hide reference.
+
+**Validation:** 92/92 pet-window-smoke PASS; 290/290 pet-renderer-smoke PASS; renderer-chat-smoke PASS; 166/166 pytest PASS; 116/116 stt_provider_smoke PASS.
+
+**Windows Pet Window click/show smoke PASS (2026-06-04):**
+1. Show Pet (already visible) PASS — window stays visible, focus/bring-to-front only, no hide.
+2. Show Pet (hidden state) PASS — window appears.
+3. Show Pet (minimized state) PASS — restore + focus.
+4. Left-click Pet avatar / body PASS — window stays visible, no hide.
+5. Right-click / Menu Hide Pet Window PASS — explicit hide works.
+6. Regression PASS: Pet bubble, expression mirror, reaction bubble, Full App chat, Voice, Output Queue, Diagnostics Drawer all unaffected.
+No STT / FunASR / startup warmup / /chat / Voice / Output Queue / Diagnostics Drawer changes.
 
 ---
 
@@ -26401,9 +26416,8 @@ Toggle: Startup Warmup ON/OFF / STT Warmup ON/OFF / Ollama Warmup ON/OFF.
 Diagnostics: sttWarmupStatus, sttWarmupLatencyMs, ollamaWarmupStatus, ollamaWarmupLatencyMs.
 No IPC (use renderer fetch), no always-listening, no raw audio, no Pet Window / Output Queue changes.
 
-**TASK-257 — Pet Window Click / Show Pet Idempotent Behavior:**
-(B) Left-click Pet avatar should not hide pet.
-(C) Show Pet = idempotent show/focus/restore; Hide Pet only via explicit Hide action / Menu.
+**TASK-258 — Owner Voice Gate Research / Local Speaker Verification Feasibility:**
+Research/feasibility spike only — no runtime changes. Evaluate local speaker verification/embedding models. Goal: owner-voice gate for Manual Mic / Conversation Mode (convenience filter, not security-grade). No raw audio saved. No main voice pipeline changes.
 
 ---
 

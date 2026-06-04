@@ -5140,6 +5140,12 @@ function testTask169ScopeChecks() {
     testTask240AvatarIsPrimaryDragRegion,
     testTask240CloseXAlwaysHidden,
     testTask240HidePetWindowInMenu,
+    // TASK-257
+    testTask257DragRegionClickCallsRestoreNotHide,
+    testTask257DragRegionClickStopsPropagation,
+    testTask257BubbleCloseHookHasStopPropagation,
+    testTask257RestorePetPresenceNeverHides,
+    testTask257DragRegionSourceHasNoHideRef,
   ];
 
   for (const test of tests) {
@@ -5807,6 +5813,109 @@ function testTask240ControlsPointerEventsManaged() {
 function testTask240DragHandleFullyHiddenDefault() {
   const css = readText(petCssPath);
   assertRegex(css, /\.pet-drag-handle\s*\{[\s\S]{0,500}opacity:\s*0\s*;/, "TASK-240 final polish: .pet-drag-handle must default to opacity: 0 (fully hidden until hover)");
+}
+
+// ---------------------------------------------------------------------------
+// TASK-257: Pet Window Click / Show Pet Idempotent Behavior
+// ---------------------------------------------------------------------------
+
+function testTask257DragRegionClickCallsRestoreNotHide() {
+  const { initializePetMode } = require(petRendererPath);
+  const fakeDoc = new FakeDocument([
+    "pet-mode-root", "pet-drag-region", "pet-avatar-container", "pet-avatar",
+    "pet-hint", "pet-bubble", "pet-bubble-open-hook", "pet-bubble-close-hook",
+    "pet-bubble-message", "pet-bubble-placeholder", "pet-chat-form-hook",
+    "pet-open-full-app-hook", "pet-context-menu-hook", "pet-menu",
+    "pet-menu-toggle-details",
+  ]);
+  const originalWindow = global.window;
+  const hideCalls = [];
+
+  global.window = {
+    dragonPet: {
+      hidePetWindow() { hideCalls.push("hide"); return Promise.resolve({ ok: true }); },
+      openFullApp() { return Promise.resolve({ ok: true }); },
+    },
+  };
+
+  initializePetMode(fakeDoc);
+  fakeDoc.getElementById("pet-drag-region").dispatchEvent({ type: "click" });
+  global.window = originalWindow;
+
+  assert.deepEqual(hideCalls, [], "dragRegion click must NOT call hidePetWindow");
+  assert.equal(fakeDoc.getElementById("pet-mode-root").dataset.initialized, "true",
+    "pet mode must remain initialized after drag-region click");
+}
+
+function testTask257DragRegionClickStopsPropagation() {
+  const { initializePetMode } = require(petRendererPath);
+  const fakeDoc = new FakeDocument([
+    "pet-mode-root", "pet-drag-region", "pet-avatar-container", "pet-avatar",
+    "pet-hint", "pet-bubble", "pet-bubble-open-hook", "pet-bubble-close-hook",
+    "pet-bubble-message", "pet-bubble-placeholder", "pet-chat-form-hook",
+    "pet-open-full-app-hook", "pet-context-menu-hook", "pet-menu",
+    "pet-menu-toggle-details",
+  ]);
+  const originalWindow = global.window;
+  global.window = {
+    dragonPet: { hidePetWindow() { return Promise.resolve({ ok: true }); } },
+  };
+
+  initializePetMode(fakeDoc);
+
+  let propagationStopped = false;
+  fakeDoc.getElementById("pet-drag-region").dispatchEvent({
+    type: "click",
+    stopPropagation() { propagationStopped = true; },
+  });
+  global.window = originalWindow;
+
+  assert.equal(propagationStopped, true,
+    "dragRegion click handler must call event.stopPropagation() (TASK-257 defensive guard)");
+}
+
+function testTask257BubbleCloseHookHasStopPropagation() {
+  const renderer = readText(petRendererPath);
+  const hookIdx = renderer.indexOf('bubbleCloseHook.addEventListener("click"');
+  assert(hookIdx >= 0, "bubbleCloseHook click listener must exist");
+  const hookSection = renderer.slice(hookIdx, hookIdx + 300);
+  assertIncludes(hookSection, "stopPropagation",
+    "bubbleCloseHook click handler must call stopPropagation");
+  assertIncludes(hookSection, "handleHidePetWindow",
+    "bubbleCloseHook click handler must call handleHidePetWindow");
+}
+
+function testTask257RestorePetPresenceNeverHides() {
+  const { restorePetPresenceAfterShow } = require(petRendererPath);
+  const fakeDoc = createPetBubbleStateDocument();
+  const originalWindow = global.window;
+  const hideCalls = [];
+
+  global.window = {
+    dragonPet: {
+      hidePetWindow() { hideCalls.push("hide"); return Promise.resolve({ ok: true }); },
+    },
+  };
+
+  restorePetPresenceAfterShow(fakeDoc, { timerApi: new FakeTimerApi() });
+  global.window = originalWindow;
+
+  assert.deepEqual(hideCalls, [], "restorePetPresenceAfterShow must never call hidePetWindow");
+}
+
+function testTask257DragRegionSourceHasNoHideRef() {
+  const renderer = readText(petRendererPath);
+  const dragIdx = renderer.indexOf('dragRegion.addEventListener("click"');
+  assert(dragIdx >= 0, "dragRegion click listener must exist in pet-renderer.js");
+  const dragSection = renderer.slice(dragIdx, dragIdx + 500);
+  assertNotIncludes(dragSection, "handleHidePetWindow",
+    "dragRegion click source must NOT reference handleHidePetWindow");
+  assertNotIncludes(dragSection, "hide()",
+    "dragRegion click source must NOT reference .hide()");
+  assertIncludes(dragSection, "stopPropagation",
+    "dragRegion click source must reference stopPropagation (TASK-257 guard)");
+  assertIncludes(dragSection, "restorePetPresence",
+    "dragRegion click source must reference restorePetPresence");
 }
 
 run().catch((error) => {

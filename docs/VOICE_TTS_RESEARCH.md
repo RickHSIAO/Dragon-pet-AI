@@ -437,7 +437,7 @@ Suggested research and implementation tasks:
   accuracy. Must be guarded by explicit user opt-in and must not replace the deterministic
   layer from TASK-247/248.
 
-Recommended next: TASK-257 — Pet Window Click / Show Pet Idempotent Behavior.
+TASK-257 DONE - WINDOWS PET WINDOW CLICK/SHOW SMOKE PASS (2026-06-04): Pet Window Click / Show Pet Idempotent Behavior. Next: TASK-258 Owner Voice Gate Research / Local Speaker Verification Feasibility.
 
 Each future task must explicitly define safety boundaries, user controls,
 provider scope, queue priority, and no-regression checks.
