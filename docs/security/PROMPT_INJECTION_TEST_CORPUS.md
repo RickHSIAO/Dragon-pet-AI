@@ -16,6 +16,7 @@ The corpus is grounded in:
 
 - `docs/SECURITY_BOUNDARY_DESIGN.md`
 - `docs/SENSITIVE_DATA_REDACTION_RULES.md`
+- `docs/security/TOOL_PERMISSION_POLICY.md`
 
 ## 2. Corpus Item Schema
 
@@ -501,7 +502,7 @@ layers. Untrusted content must be treated as data, not instructions.
 
 ## 9. Future Automation Notes
 
-Future TASK-SEC-004, TASK-SEC-TEST, or related work can convert this corpus into
+Future TASK-SEC-TEST or related work can convert this corpus into
 automated tests by:
 
 - Converting each item into structured JSON/YAML fixtures.

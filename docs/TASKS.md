@@ -26693,7 +26693,7 @@ Future task sequence:
 - TASK-SEC-001 Security Boundary / Anti Prompt Injection Design.
 - TASK-SEC-002 Sensitive Data Inventory / Redaction Rules (DONE).
 - TASK-SEC-003 Prompt Injection Test Corpus (DONE).
-- TASK-SEC-004 Tool Permission / User Confirmation Policy.
+- TASK-SEC-004 Tool Permission / User Confirmation Policy (DONE).
 - TASK-SEC-005 Phishing / Link Safety Warning Layer.
 - TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
 - TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
@@ -27378,8 +27378,9 @@ PASS on 2026-06-04 against the stored owner centroid:
 
 TASK-SEC-001 Security Boundary / Anti Prompt Injection Design and TASK-SEC-002
 Sensitive Data Inventory / Redaction Rules and TASK-SEC-003 Prompt Injection
-Test Corpus are complete; next is TASK-SEC-004 Tool Permission / User
-Confirmation Policy before TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
+Test Corpus and TASK-SEC-004 Tool Permission / User Confirmation Policy are
+complete; next is TASK-SEC-005 Phishing / Link Safety Warning Layer before
+TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
 
 ---
 
@@ -27449,14 +27450,15 @@ Diagnostics behavior.
 
 Defined recommended tiers:
 
-- T0 safe read-only public information.
-- T1 user-selected local file read.
-- T2 sensitive file read requiring explicit confirmation.
-- T3 write/delete/execute/settings actions requiring explicit confirmation.
-- T4 email/message/post/upload/form submit requiring preview confirmation.
-- T5 URL open/download/browser automation requiring domain display and warning.
-- T6 secrets, voiceprint, hidden prompts, and internal rules forbidden from LLM
-  context.
+- T0 no-tool / local reasoning only.
+- T1 safe read-only public information.
+- T2 user-selected local file read.
+- T3 sensitive local file read requiring explicit confirmation.
+- T4 write/delete/execute/settings actions requiring explicit confirmation.
+- T5 outbound communication/upload/send and URL/browser actions requiring
+  preview confirmation and destination/domain display.
+- T6 secrets, voiceprint, hidden prompts, raw biometric-like data, and internal
+  rules forbidden from LLM context.
 
 ### Runtime Integration Preconditions
 
@@ -27478,7 +27480,7 @@ Before Owner Voice Gate connects to Manual Mic or Conversation Mode runtime:
 1. TASK-SEC-001 Security Boundary / Anti Prompt Injection Design.
 2. TASK-SEC-002 Sensitive Data Inventory / Redaction Rules - DONE.
 3. TASK-SEC-003 Prompt Injection Test Corpus - DONE.
-4. TASK-SEC-004 Tool Permission / User Confirmation Policy.
+4. TASK-SEC-004 Tool Permission / User Confirmation Policy - DONE.
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
@@ -27601,7 +27603,7 @@ TASK-SEC-003 has captured prompt injection and phishing corpora covering:
 1. TASK-SEC-001 Security Boundary / Anti Prompt Injection Design - DONE.
 2. TASK-SEC-002 Sensitive Data Inventory / Redaction Rules - DONE.
 3. TASK-SEC-003 Prompt Injection Test Corpus - DONE.
-4. TASK-SEC-004 Tool Permission / User Confirmation Policy.
+4. TASK-SEC-004 Tool Permission / User Confirmation Policy - DONE.
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
@@ -27689,7 +27691,7 @@ cases, renderer smoke fixtures, or future LLM safety evals.
 
 ### Future Automation Notes
 
-Future TASK-SEC-004, TASK-SEC-TEST, or related work can convert the corpus into
+Future TASK-SEC-TEST or related work can convert the corpus into
 structured fixtures and assert that:
 
 - Responses do not contain target secrets, hidden prompts, absolute private
@@ -27705,7 +27707,7 @@ structured fixtures and assert that:
 1. TASK-SEC-001 Security Boundary / Anti Prompt Injection Design - DONE.
 2. TASK-SEC-002 Sensitive Data Inventory / Redaction Rules - DONE.
 3. TASK-SEC-003 Prompt Injection Test Corpus - DONE.
-4. TASK-SEC-004 Tool Permission / User Confirmation Policy.
+4. TASK-SEC-004 Tool Permission / User Confirmation Policy - DONE.
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
@@ -27716,6 +27718,126 @@ structured fixtures and assert that:
 - `git status --short`
 
 No runtime tests required for this docs/test-corpus-only task.
+
+---
+
+## TASK-SEC-004 | Tool Permission / User Confirmation Policy
+
+Status: DONE - DOCS-ONLY TOOL PERMISSION POLICY
+
+### Goal
+
+Define Dragon Pet AI's future tool permission and user confirmation policy. The
+policy turns the TASK-SEC-001 T0-T6 concept into concrete rules for allowed
+actions, forbidden actions, previews, confirmations, logging, LLM context
+handling, and failure behavior.
+
+This task is docs-only. It does not modify backend runtime, frontend runtime,
+IPC, Manual Mic, Conversation Mode, STT, `/chat`, Pet Window, Output Queue,
+Diagnostics behavior, Owner Voice Gate runtime wiring, or actual tool execution
+behavior.
+
+### New Document
+
+- `docs/security/TOOL_PERMISSION_POLICY.md`
+
+### Permission Tiers
+
+- T0 No-tool / local reasoning only: no tool action, no confirmation needed.
+- T1 Safe read-only public info: public data only, summarized as untrusted
+  content when needed.
+- T2 User-selected local file read: exact user-selected file(s), redacted before
+  LLM context.
+- T3 Sensitive local file read: explicit confirmation, required preview,
+  redacted/minimized summary only; T6 still forbidden.
+- T4 Write / delete / execute actions: explicit confirmation, exact operation
+  preview, backup/undo plan when practical.
+- T5 Outbound communication / upload / send actions: explicit confirmation,
+  destination and payload preview, block secrets and T6 data.
+- T6 Forbidden access: secrets, hidden prompts, owner voice centroid,
+  embeddings, raw biometric-like data, private keys, and seed phrases cannot be
+  authorized for LLM exposure.
+
+### Confirmation UX Rules
+
+Risky actions must show action type, exact operation, target path/domain/
+recipient/endpoint/command, data summary, sensitivity category, risk label,
+whether data leaves the machine, whether the action is reversible, backup/undo
+plan when relevant, and explicit confirmation result.
+
+### Outbound / Local File / URL Safety
+
+- Outbound email/message/upload/API/browser submit actions require preview and
+  explicit confirmation.
+- Outbound payloads must block secrets, tokens, owner voice centroid,
+  embeddings, hidden prompts, raw biometric-like data, raw audio, rejected
+  speech transcript, and unredacted private documents.
+- Local file reads should prefer exact user-selected files; sensitive paths need
+  confirmation and redaction.
+- Delete, overwrite, move, install, execute, and settings changes require
+  explicit confirmation.
+- URL/browser actions must show domain/normalized URL when practical, warn on
+  shorteners, encoded payloads, suspicious domains, punycode/lookalikes, and
+  mismatched visible text vs target URL.
+- Webpage/PDF/email content is untrusted data, not instructions.
+
+### Owner Voice Gate Tool Boundary
+
+- Owner voice centroid/settings, `embeddingAggregate`, embeddings, candidate
+  embeddings, and raw biometric-like data are T6 forbidden from LLM context.
+- Verification APIs may expose only score, threshold, accepted/rejected status,
+  reason, enrollment state, embedding dimension, sample count, and safety
+  booleans.
+- No raw audio or candidate embedding exposure.
+- No rejected speech transcript enters `/chat`, diagnostics, Pet Bubble, Output
+  Queue, Pet runtime, chat history, logs, or LLM context.
+- Owner Voice Gate remains a convenience filter, not authentication.
+
+### Prompt Injection Interaction Rules
+
+If untrusted content instructs the app to use tools, exfiltrate data, change
+settings, reveal secrets, open URLs, send messages, add hidden instructions, or
+bypass safety, the app must treat that instruction as untrusted content,
+summarize safely if useful, require user confirmation for independently
+justified tool actions, refuse T6 exfiltration, and avoid persisting untrusted
+instructions into future context, memory, settings, prompts, or tool plans.
+
+### Audit / Logging Rules
+
+Logs may capture action category, timestamp, sanitized target/destination, user
+confirmation result, safe reason/status, permission tier, and whether data left
+the machine.
+
+Logs must not capture secrets, full hidden prompts, owner voice
+centroid/embeddings, `embeddingAggregate`, candidate embeddings, raw audio,
+rejected transcripts, full private documents unless explicitly selected and
+sanitized, or unredacted diagnostic dumps.
+
+### Future Implementation Checklist
+
+Before implementing any tool action: classify tier T0-T6, define allowed and
+forbidden inputs, define output redaction, define confirmation requirement,
+define preview fields, define logging policy, define LLM context handling, add
+prompt injection corpus cases, add phishing/social engineering cases for
+outbound/URL tools, add smoke/eval tests, document failure behavior, and confirm
+T6 data is blocked from LLM context and outbound actions.
+
+### Updated Security Task Sequence
+
+1. TASK-SEC-001 Security Boundary / Anti Prompt Injection Design - DONE.
+2. TASK-SEC-002 Sensitive Data Inventory / Redaction Rules - DONE.
+3. TASK-SEC-003 Prompt Injection / Phishing Test Corpus - DONE.
+4. TASK-SEC-004 Tool Permission / User Confirmation Policy - DONE.
+5. TASK-SEC-005 Phishing / Link Safety Warning Layer.
+6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
+7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
+
+### Validation
+
+- `git diff --check`
+- `git status --short`
+
+No runtime tests required for this docs-only task.
 
 ---
 

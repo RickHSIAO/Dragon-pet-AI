@@ -13,6 +13,8 @@ context restrictions, and the TASK-SEC-003 corpus coverage shape.
 
 The TASK-SEC-003 corpus is now captured in
 `docs/security/PROMPT_INJECTION_TEST_CORPUS.md`.
+Tool permission and confirmation requirements are captured in
+`docs/security/TOOL_PERMISSION_POLICY.md` (TASK-SEC-004).
 
 This is a docs-only task. It does not modify backend runtime, frontend runtime,
 IPC, Manual Mic, Conversation Mode, STT, `/chat`, Pet Window, Output Queue,
@@ -265,7 +267,7 @@ content requested it.
 1. TASK-SEC-001 Security Boundary / Anti Prompt Injection Design - DONE.
 2. TASK-SEC-002 Sensitive Data Inventory / Redaction Rules - DONE.
 3. TASK-SEC-003 Prompt Injection Test Corpus - DONE.
-4. TASK-SEC-004 Tool Permission / User Confirmation Policy.
+4. TASK-SEC-004 Tool Permission / User Confirmation Policy - DONE.
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.

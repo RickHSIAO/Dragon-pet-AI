@@ -1,6 +1,6 @@
 # Interactive Companion Architecture Checkpoint
 
-**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-236 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS; TASK-237 IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS; TASK-263 DONE - Windows Unicode owner voice enrollment storage smoke PASS; TASK-264 DONE - Windows stored centroid verification smoke PASS; TASK-265 DONE - Windows backend verify-files smoke PASS; TASK-SEC-001 DONE - docs-only security boundary design; TASK-SEC-002 DONE - docs-only sensitive data inventory / redaction rules; TASK-SEC-003 DONE - docs/test-corpus only
+**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-236 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS; TASK-237 IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS; TASK-263 DONE - Windows Unicode owner voice enrollment storage smoke PASS; TASK-264 DONE - Windows stored centroid verification smoke PASS; TASK-265 DONE - Windows backend verify-files smoke PASS; TASK-SEC-001 DONE - docs-only security boundary design; TASK-SEC-002 DONE - docs-only sensitive data inventory / redaction rules; TASK-SEC-003 DONE - docs/test-corpus only; TASK-SEC-004 DONE - docs-only tool permission policy
 **Date:** 2026-06-01
 **Scope:** Architecture checkpoint for TASK-214 through TASK-230.
 
@@ -69,6 +69,7 @@ user interaction
 | TASK-SEC-001 | Security boundary / anti prompt injection design | Defines sensitive data categories, data forbidden from LLM context, direct/indirect prompt injection and phishing risks, untrusted-content handling, tool permission tiers, redaction checks, and Owner Voice Gate runtime preconditions. DOCS ONLY. |
 | TASK-SEC-002 | Sensitive data inventory / redaction rules | Defines S0-S6 classes, exposure matrix, redaction patterns, Owner Voice Gate API/diagnostics/logging restrictions, and TASK-SEC-003 corpus plan. DOCS ONLY. |
 | TASK-SEC-003 | Prompt injection / phishing test corpus | Adds structured corpus items for direct/indirect prompt injection, fake system/developer content, exfiltration, Owner Voice Gate attacks, and phishing/social engineering. DOCS/TEST-CORPUS ONLY. |
+| TASK-SEC-004 | Tool permission / user confirmation policy | Defines T0-T6 tool tiers, confirmation/preview requirements, outbound/local-file/URL safety, Owner Voice Gate tool boundary, prompt-injection interaction rules, audit logging, and implementation checklist. DOCS ONLY. |
 | TASK-228 | Output queue runtime skeleton | Adds Full App renderer-only disabled queue skeleton, sanitized snapshot, priority/preemption helpers, and queue diagnostics preview. DONE - Windows visual smoke PASS. |
 | TASK-229 | Output queue debug preview | Polishes queue snapshot preview with Recent and safe Next summary. DONE - Windows visual smoke PASS. |
 | TASK-230 | Reaction bubble diagnostics enqueue | Enqueues safe reaction bubble ids into the disabled local output queue for diagnostics only. DONE - Windows visual smoke PASS. |
@@ -548,9 +549,9 @@ satisfied (see `docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md`, Section 10).
 Recommended next architecture phase:
 
 - Security boundary follow-up before Owner Voice Gate runtime wiring:
-  TASK-SEC-004 Tool Permission / User Confirmation Policy and TASK-SEC-005
-  Phishing / Link Safety Warning Layer. TASK-SEC-002 Sensitive Data Inventory /
-  Redaction Rules and TASK-SEC-003 Prompt Injection Test Corpus are complete. Owner Voice
+  TASK-SEC-005 Phishing / Link Safety Warning Layer. TASK-SEC-002 Sensitive Data
+  Inventory / Redaction Rules, TASK-SEC-003 Prompt Injection Test Corpus, and
+  TASK-SEC-004 Tool Permission / User Confirmation Policy are complete. Owner Voice
   Gate Manual Mic and Conversation Mode work must remain opt-in, disabled by
   default, and dry-run policy gated before blocking runtime behavior.
 - Renderer modularization in progress: TASK-238 (output queue module) DONE - WINDOWS VISUAL SMOKE PASS;

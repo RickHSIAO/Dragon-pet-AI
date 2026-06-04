@@ -20,6 +20,8 @@ Detailed inventory and redaction rules are defined in
 `docs/SENSITIVE_DATA_REDACTION_RULES.md` (TASK-SEC-002).
 Prompt injection and phishing corpus cases are defined in
 `docs/security/PROMPT_INJECTION_TEST_CORPUS.md` (TASK-SEC-003).
+Tool permission and confirmation policy is defined in
+`docs/security/TOOL_PERMISSION_POLICY.md` (TASK-SEC-004).
 
 ## 2. Sensitive Data Categories
 
@@ -143,13 +145,13 @@ as policy labels for UI confirmations and backend checks.
 
 | Tier | Capability | Required control |
 |---|---|---|
-| T0 | Safe read-only public information | Allowed only for public data; no secrets, no private files. |
-| T1 | User-selected local file read | User selects exact file(s); content is treated as untrusted data. |
-| T2 | Sensitive file read | Explicit confirmation with path/category display; redact before LLM context. |
-| T3 | Write, overwrite, move, delete, install, execute, or settings changes | Explicit confirmation; preview target path/action; no hidden batch actions. |
-| T4 | Send email, message, post, upload, share, or submit form | Preview recipient, destination, body, attachments, and data categories. |
-| T5 | Open URL, follow link, download, or browser automation | Display domain, full URL or normalized URL, risk warning for suspicious domains. |
-| T6 | Secrets, credentials, voiceprint, hidden prompts, or internal rules | Forbidden from LLM context and untrusted-content workflows. |
+| T0 | No-tool / local reasoning only | No external or local tool action. |
+| T1 | Safe read-only public information | Public data only; no secrets, no private files. |
+| T2 | User-selected local file read | User selects exact file(s); content is treated as untrusted data and redacted before LLM context. |
+| T3 | Sensitive local file read | Explicit confirmation with path/category display; raw T6 data remains forbidden. |
+| T4 | Write, overwrite, move, delete, install, execute, or settings changes | Explicit confirmation; preview target path/action; no hidden batch actions. |
+| T5 | Send email, message, post, upload, share, submit form, open URL, download, or browser automation | Preview destination/domain, payload, and risk; explicit confirmation required. |
+| T6 | Secrets, credentials, voiceprint, hidden prompts, raw biometric-like data, or internal rules | Forbidden from LLM context and untrusted-content workflows. |
 
 Policy invariants:
 
@@ -223,7 +225,7 @@ runtime, all of the following must be complete:
 1. TASK-SEC-001 Security Boundary / Anti Prompt Injection Design - DONE.
 2. TASK-SEC-002 Sensitive Data Inventory / Redaction Rules - DONE.
 3. TASK-SEC-003 Prompt Injection Test Corpus - DONE.
-4. TASK-SEC-004 Tool Permission / User Confirmation Policy.
+4. TASK-SEC-004 Tool Permission / User Confirmation Policy - DONE.
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.

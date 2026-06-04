@@ -572,7 +572,14 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   attack text, risk, sensitive data target, expected behavior, must-not-do, and
   safe response pattern for future automation. No runtime or tool execution
   behavior changed.
-- TASK-SEC-004 — Tool Permission / User Confirmation Policy
+- TASK-SEC-004 DONE - DOCS-ONLY TOOL PERMISSION POLICY (2026-06-04):
+  Added `docs/security/TOOL_PERMISSION_POLICY.md`. Defines T0-T6 tool
+  permission tiers, allowed/forbidden actions, confirmation and preview
+  requirements, logging and LLM-context handling, failure behavior,
+  outbound/local-file/URL safety rules, Owner Voice Gate tool boundary,
+  prompt-injection interaction rules, audit/logging rules, and future
+  implementation checklist. No runtime or actual tool execution behavior
+  changed.
 - TASK-SEC-005 — Phishing / Link Safety Warning Layer
 - TASK-266 — Owner Voice Gate Manual Mic Dry-run Policy
 - TASK-267 — Owner Voice Gate Conversation Mode Dry-run Policy
