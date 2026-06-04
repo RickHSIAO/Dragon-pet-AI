@@ -558,9 +558,9 @@ TASK-257 DONE - WINDOWS PET WINDOW CLICK/SHOW SMOKE PASS (2026-06-04): Pet Windo
   authentication. Stored centroid and embeddings are sensitive biometric-like
   local data and must not enter LLM context, UI display, API responses, logs,
   diagnostics, Output Queue, Pet Bubble, or Pet runtime. Before Manual Mic or
-  Conversation Mode runtime wiring, complete TASK-SEC-002 Sensitive Data
-  Inventory / Redaction Rules and dry-run policy tasks. No runtime behavior
-  changed.
+  Conversation Mode runtime wiring, TASK-SEC-002 Sensitive Data Inventory /
+  Redaction Rules is now complete; next complete TASK-SEC-003 corpus and
+  dry-run policy tasks. No runtime behavior changed.
 
 Each future task must explicitly define safety boundaries, user controls,
 provider scope, queue priority, and no-regression checks.

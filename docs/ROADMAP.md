@@ -556,7 +556,14 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   preconditions. No backend runtime, frontend runtime, IPC, Manual Mic,
   Conversation Mode, STT, `/chat`, Pet Window, Output Queue, or Diagnostics
   behavior changed.
-- TASK-SEC-002 — Sensitive Data Inventory / Redaction Rules
+- TASK-SEC-002 DONE - DOCS-ONLY SENSITIVE DATA INVENTORY / REDACTION RULES (2026-06-04):
+  Added `docs/SENSITIVE_DATA_REDACTION_RULES.md`. Defines S0-S6 sensitive data
+  classes, exposure matrix for LLM/UI/diagnostics/logs/API/persistence,
+  redaction patterns for secrets/tokens/local paths/embeddings/audio/diagnostic
+  dumps/hidden prompts/suspicious URLs, Owner Voice Gate-specific rules, API
+  response restrictions, diagnostics/logging restrictions, automated redaction
+  checklist, and TASK-SEC-003 prompt injection/phishing corpus plan. No runtime
+  behavior changed.
 - TASK-SEC-003 — Prompt Injection Test Corpus
 - TASK-SEC-004 — Tool Permission / User Confirmation Policy
 - TASK-SEC-005 — Phishing / Link Safety Warning Layer

@@ -16,6 +16,9 @@ The design goal is to prevent future LLM, retrieval, browser, file, email, and
 tool workflows from being abused to leak private data, follow malicious
 instructions from untrusted content, or trick the user into unsafe actions.
 
+Detailed inventory and redaction rules are defined in
+`docs/SENSITIVE_DATA_REDACTION_RULES.md` (TASK-SEC-002).
+
 ## 2. Sensitive Data Categories
 
 The following data is sensitive and must be protected by default:
@@ -215,8 +218,8 @@ runtime, all of the following must be complete:
 
 ## 11. Recommended Task Sequence
 
-1. TASK-SEC-001 Security Boundary / Anti Prompt Injection Design.
-2. TASK-SEC-002 Sensitive Data Inventory / Redaction Rules.
+1. TASK-SEC-001 Security Boundary / Anti Prompt Injection Design - DONE.
+2. TASK-SEC-002 Sensitive Data Inventory / Redaction Rules - DONE.
 3. TASK-SEC-003 Prompt Injection Test Corpus.
 4. TASK-SEC-004 Tool Permission / User Confirmation Policy.
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer.

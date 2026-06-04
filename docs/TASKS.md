@@ -26691,7 +26691,7 @@ Future task sequence:
 - TASK-263 Owner Voice Enrollment File Import / Centroid Storage.
 - TASK-264 Owner Voice Gate Verification Probe / Stored Centroid Scoring.
 - TASK-SEC-001 Security Boundary / Anti Prompt Injection Design.
-- TASK-SEC-002 Sensitive Data Inventory / Redaction Rules.
+- TASK-SEC-002 Sensitive Data Inventory / Redaction Rules (DONE).
 - TASK-SEC-003 Prompt Injection Test Corpus.
 - TASK-SEC-004 Tool Permission / User Confirmation Policy.
 - TASK-SEC-005 Phishing / Link Safety Warning Layer.
@@ -27376,9 +27376,10 @@ PASS on 2026-06-04 against the stored owner centroid:
 
 ### Next Task
 
-TASK-SEC-001 Security Boundary / Anti Prompt Injection Design, followed by
-TASK-SEC-002 Sensitive Data Inventory / Redaction Rules, before TASK-266 Owner
-Voice Gate Manual Mic Dry-run Policy.
+TASK-SEC-001 Security Boundary / Anti Prompt Injection Design and TASK-SEC-002
+Sensitive Data Inventory / Redaction Rules are complete; next is TASK-SEC-003
+Prompt Injection Test Corpus before TASK-266 Owner Voice Gate Manual Mic Dry-run
+Policy.
 
 ---
 
@@ -27462,7 +27463,8 @@ Defined recommended tiers:
 Before Owner Voice Gate connects to Manual Mic or Conversation Mode runtime:
 
 - TASK-SEC-001 must be complete.
-- TASK-SEC-002 Sensitive Data Inventory / Redaction Rules must be complete.
+- TASK-SEC-002 Sensitive Data Inventory / Redaction Rules must be complete
+  (DONE).
 - Owner voice runtime integration remains opt-in and disabled by default.
 - Rejected speech must not enter `/chat`, LLM context, chat history,
   diagnostics, Output Queue, Pet Bubble, or Pet runtime.
@@ -27474,7 +27476,130 @@ Before Owner Voice Gate connects to Manual Mic or Conversation Mode runtime:
 ### Recommended Sequence
 
 1. TASK-SEC-001 Security Boundary / Anti Prompt Injection Design.
-2. TASK-SEC-002 Sensitive Data Inventory / Redaction Rules.
+2. TASK-SEC-002 Sensitive Data Inventory / Redaction Rules - DONE.
+3. TASK-SEC-003 Prompt Injection Test Corpus.
+4. TASK-SEC-004 Tool Permission / User Confirmation Policy.
+5. TASK-SEC-005 Phishing / Link Safety Warning Layer.
+6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
+7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
+
+### Validation
+
+- `git diff --check`
+- `git status --short`
+
+No code tests required for this docs-only task.
+
+---
+
+## TASK-SEC-002 | Sensitive Data Inventory / Redaction Rules
+
+Status: DONE - DOCS-ONLY SENSITIVE DATA INVENTORY / REDACTION RULES
+
+### Goal
+
+Make the TASK-SEC-001 security boundary concrete by defining sensitive data
+inventory classes, redaction rules, allowed and forbidden exposure rules,
+logging and diagnostics restrictions, API response restrictions, LLM context
+restrictions, and a future TASK-SEC-003 prompt injection / phishing corpus
+plan.
+
+This task is docs-only. It does not modify backend runtime, frontend runtime,
+IPC, Manual Mic, Conversation Mode, STT, `/chat`, Pet Window, Output Queue,
+Diagnostics behavior, or Owner Voice Gate runtime wiring.
+
+### New Document
+
+- `docs/SENSITIVE_DATA_REDACTION_RULES.md`
+
+### Sensitive Data Classes
+
+- S0 public / safe: public docs, public feature names, non-private status
+  labels, coarse task names.
+- S1 local metadata: repo-relative paths, basenames, timestamps, counts, safe
+  status/reason strings, provider/model names.
+- S2 user private text: chat logs, transcripts, diary entries, personal memory,
+  private notes, selected file excerpts.
+- S3 secrets and credentials: API keys, bearer tokens, `.env`, passwords,
+  cookies, OAuth tokens, private keys.
+- S4 biometric-like data: owner voice centroid, `embeddingAggregate`, raw
+  embeddings, per-sample embeddings, candidate embeddings, voiceprint storage.
+- S5 hidden system/developer/internal prompts: system prompts, developer
+  instructions, internal rules, hidden policies.
+- S6 tool outputs with mixed trust: webpages, PDFs, emails, OCR, browser
+  output, retrieved files, diagnostics bundles, future tool responses.
+
+### Exposure Rules
+
+- S0 allowed broadly.
+- S1 allowed when task-relevant and minimized.
+- S2 allowed only when user-selected or directly provided for the current task;
+  broad/full dumps require explicit confirmation.
+- S3 secrets forbidden from LLM context, diagnostics, logs, and API responses
+  except safe key status.
+- S4 raw biometric-like values forbidden from LLM context, UI, API responses,
+  diagnostics, logs, Output Queue, Pet Bubble, and Pet runtime.
+- S5 hidden prompts/internal rules forbidden from all user-visible and
+  model-facing exposure.
+- S6 untrusted tool output may enter LLM context only after wrapping as
+  untrusted content, minimizing, and applying redaction.
+
+### Redaction Rules Summary
+
+Future redaction should detect API-key-like strings, bearer tokens,
+authorization headers, `.env` assignments, PEM/private-key blocks, absolute
+local paths, local config dumps, `owner_voice_gate_settings.json`, centroid or
+embedding-like numeric arrays, `embeddingAggregate`, base64 audio-like payloads,
+waveform arrays, rejected speech transcripts, long diagnostic dumps, hidden
+prompt-like content, and suspicious URLs containing encoded private data.
+
+### Owner Voice Gate-Specific Rules
+
+- `owner_voice_gate_settings.json` must not be sent to LLM context.
+- `embeddingAggregate` and centroid vectors must not be exposed in API
+  responses, UI, diagnostics, logs, Output Queue, Pet Bubble, Pet runtime, chat
+  history, or LLM context.
+- Candidate embeddings must not be persisted.
+- Raw audio, waveform, transcript, and base64 audio must not be persisted by
+  owner voice flows.
+- Rejected speech must not enter `/chat`, LLM context, diagnostics, Output
+  Queue, Pet Bubble, Pet runtime, chat history, or TTS.
+- Owner Voice Gate remains a convenience filter, not authentication.
+
+### API Response / Diagnostics / Logging Rules
+
+- Safe booleans are allowed: `rawAudioPersisted=false`,
+  `candidateEmbeddingPersisted=false`, `storedCentroidExposed=false`,
+  `micAccessed=false`, and `runtimeIntegrated=false`.
+- Scores, thresholds, status, reason, accepted/rejected decision, provider,
+  model, embedding dimension, and sample count may be shown as safe local
+  summaries.
+- Full centroid vectors, full embeddings, candidate embeddings, raw audio,
+  waveform arrays, base64 audio, rejected speech transcripts, API keys, tokens,
+  `.env`, hidden prompts, and full private diagnostics must not be shown.
+- Logs should prefer event IDs, counts, basenames/categories, sanitized reasons,
+  and boolean safety flags.
+
+### Future TASK-SEC-003 Test Plan
+
+TASK-SEC-003 should build prompt injection and phishing corpora covering:
+
+- Requests to reveal system/developer/internal prompts, hidden rules, API keys,
+  `.env`, tokens, cookies, local paths, backend data files, owner voice
+  centroid, embeddings, diagnostics, memory, diary data, chat logs, and
+  rejected speech transcripts.
+- Indirect prompt injection inside webpages, PDFs, emails, OCR text, browser
+  content, and local files.
+- Fake system/developer/admin/security/support messages inside retrieved
+  content.
+- Fake login links, verification-code requests, token exfiltration, malicious
+  attachments, domain spoofing, shortened URLs, urgency/fear bait, and reward
+  bait.
+
+### Updated Security Task Sequence
+
+1. TASK-SEC-001 Security Boundary / Anti Prompt Injection Design - DONE.
+2. TASK-SEC-002 Sensitive Data Inventory / Redaction Rules - DONE.
 3. TASK-SEC-003 Prompt Injection Test Corpus.
 4. TASK-SEC-004 Tool Permission / User Confirmation Policy.
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer.

@@ -1,6 +1,6 @@
 # Dragon Pet AI
 
-**Latest local status (2026-06-04):** TASK-SEC-001 Security Boundary / Anti Prompt Injection Design **DONE - DOCS-ONLY SECURITY BOUNDARY DESIGN**. Added `docs/SECURITY_BOUNDARY_DESIGN.md` before Owner Voice Gate runtime wiring. Defines sensitive data categories, data that must never enter LLM context, direct/indirect prompt injection risks, phishing/social engineering risks, untrusted-content handling, future tool permission tiers, redaction checks, Owner Voice Gate security boundaries, and runtime integration preconditions. No backend runtime, frontend runtime, IPC, Manual Mic, Conversation Mode, STT, `/chat`, Pet Window, Output Queue, or Diagnostics behavior changed.
+**Latest local status (2026-06-04):** TASK-SEC-002 Sensitive Data Inventory / Redaction Rules **DONE - DOCS-ONLY SENSITIVE DATA INVENTORY / REDACTION RULES**. Added `docs/SENSITIVE_DATA_REDACTION_RULES.md` to make TASK-SEC-001 concrete. Defines S0-S6 sensitive data classes, exposure matrix for LLM/UI/diagnostics/logs/API/persistence, redaction patterns for secrets/tokens/local paths/embeddings/audio/diagnostics/hidden prompts/suspicious URLs, Owner Voice Gate-specific rules, API response limits, diagnostics/logging restrictions, automated redaction checklist, and TASK-SEC-003 corpus plan. No backend runtime, frontend runtime, IPC, Manual Mic, Conversation Mode, STT, `/chat`, Pet Window, Output Queue, Diagnostics behavior, or owner voice runtime wiring changed.
 
 > **Dragon Pet AI** 是一個本地優先的 Electron + FastAPI 桌面陪伴原型，具備手動記憶、記憶稽核日誌、BYOK 提供者設定、使用量計量、安全審查過的 Test Connection 端點、Anthropic/Ollama 提供者轉接層（隱藏在 feature flag 後）、本地 Ollama `/chat` 執行期 smoke 通過（`source=llm_local`，克莉絲蒂娜人格確認）、Ollama Provider Settings UI（無需 API Key，使用本機 GPU/CPU），以及 Full App 聊天搜尋、高亮、匯出、未讀提示、時間戳、LINE-style 日期分隔線、清除確認、empty state、Undo Clear Chat 與單則訊息刪除/復原。以安全優先的增量開發方式建構，後端 mocked 測試套件共 **586 個測試通過**。
 
@@ -109,7 +109,7 @@ ollama serve
 | 真實 API Key 使用 | ❌ 無 — 所有測試使用 mocked runner |
 | 生產就緒 | ❌ 尚未 — prototype / portfolio 階段 |
 | Demo 可用（本地 Ollama） | ✅ 是 |
-| 下一個任務 | TASK-SEC-001 Security Boundary **DONE - docs-only** → TASK-SEC-002 Sensitive Data Inventory / Redaction Rules → TASK-266 Owner Voice Gate Manual Mic Dry-run Policy |
+| 下一個任務 | TASK-SEC-002 Sensitive Data Inventory **DONE - docs-only** → TASK-SEC-003 Prompt Injection Test Corpus → TASK-SEC-004 Tool Permission / User Confirmation Policy |
 
 ---
 
@@ -408,6 +408,7 @@ python -c "import json, urllib.request; data=json.dumps({'message':'你好！克
 | [docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md](docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md) | TASK-233/TASK-239 Output Queue Runtime Checkpoint：completed task chain, current runtime state, diagnostics item schemas, safety boundary, sanitization summary, dispatch readiness checklist, renderer modularization relationship, TASK-238/TASK-239 extraction status |
 | [docs/VOICE_TTS_RESEARCH.md](docs/VOICE_TTS_RESEARCH.md) | TASK-227 Voice/TTS research note：local-first speech roadmap、candidate TTS/STT、licensing/safety boundaries |
 | [docs/SECURITY_BOUNDARY_DESIGN.md](docs/SECURITY_BOUNDARY_DESIGN.md) | TASK-SEC-001 security boundary, anti prompt injection design, sensitive data categories, tool permission tiers, phishing risks, Owner Voice Gate runtime preconditions |
+| [docs/SENSITIVE_DATA_REDACTION_RULES.md](docs/SENSITIVE_DATA_REDACTION_RULES.md) | TASK-SEC-002 sensitive data inventory, S0-S6 exposure matrix, redaction patterns, Owner Voice Gate API/diagnostics/logging restrictions, TASK-SEC-003 corpus plan |
 | [docs/OWNER_VOICE_GATE_RESEARCH.md](docs/OWNER_VOICE_GATE_RESEARCH.md) | TASK-258 through TASK-265 owner voice gate feasibility, probes, enrollment, verification, and backend endpoint |
 | [docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md](docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md) | TASK-260 through TASK-265 owner voice enrollment storage, settings UI, calibration, enrollment, verify probe, and backend endpoint design |
 | [docs/STREAMER_COMPANION_MODE.md](docs/STREAMER_COMPANION_MODE.md) | 未來支線 — OBS overlay / Twitch 陪伴設計（尚未排程） |
@@ -476,6 +477,7 @@ dragon-pet-ai/
 | `docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md` | TASK-233 Output Queue Runtime Checkpoint：task chain, current state, safety boundary, dispatch readiness checklist, next tasks, TASK-236 drawer status, TASK-237 modularization relationship, TASK-238/TASK-239 extraction status |
 | `docs/VOICE_TTS_RESEARCH.md` | TASK-227 Voice/TTS/STT research and local speech roadmap |
 | `docs/SECURITY_BOUNDARY_DESIGN.md` | TASK-SEC-001 security boundary, anti prompt injection design, sensitive data categories, future tool permission tiers, and Owner Voice Gate runtime preconditions |
+| `docs/SENSITIVE_DATA_REDACTION_RULES.md` | TASK-SEC-002 sensitive data inventory, redaction rules, API/diagnostics/logging restrictions, and future prompt injection/phishing corpus plan |
 | `docs/OWNER_VOICE_GATE_RESEARCH.md` | TASK-258 through TASK-265 local owner voice gate research, probe, enrollment, verify, and backend endpoint status |
 | `docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md` | TASK-260 through TASK-265 owner voice enrollment storage, calibration, enrollment, stored-centroid verification, and backend endpoint design |
 | `docs/CHARACTER_SPEC.md` | 角色人格規格 |

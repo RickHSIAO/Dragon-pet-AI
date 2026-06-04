@@ -630,7 +630,7 @@ Runtime integration should be split by surface:
 
 - TASK-265: Backend verification endpoint (DONE — see Section 19).
 - TASK-SEC-001: Security boundary / anti prompt injection design (DONE).
-- TASK-SEC-002: Sensitive data inventory / redaction rules.
+- TASK-SEC-002: Sensitive data inventory / redaction rules (DONE).
 - TASK-SEC-003: Prompt injection test corpus.
 - TASK-SEC-004: Tool permission / user confirmation policy.
 - TASK-SEC-005: Phishing / link safety warning layer.
@@ -668,7 +668,7 @@ Recommended sequence:
 
 - TASK-265 Backend Verification Endpoint (DONE — Section 19)
 - TASK-SEC-001 Security Boundary / Anti Prompt Injection Design (DONE)
-- TASK-SEC-002 Sensitive Data Inventory / Redaction Rules
+- TASK-SEC-002 Sensitive Data Inventory / Redaction Rules (DONE)
 - TASK-SEC-003 Prompt Injection Test Corpus
 - TASK-SEC-004 Tool Permission / User Confirmation Policy
 - TASK-SEC-005 Phishing / Link Safety Warning Layer
@@ -754,8 +754,9 @@ PASS on 2026-06-04:
 
 Expected runtime result: unchanged.
 
-Before any Manual Mic or Conversation Mode runtime wiring, TASK-SEC-002 must
-inventory sensitive fields and define redaction rules. Rejected speech must not
-enter `/chat`, LLM context, diagnostics, Output Queue, Pet Bubble, or Pet
-runtime. The stored centroid remains sensitive biometric-like local data and is
+Before any Manual Mic or Conversation Mode runtime wiring, TASK-SEC-002 has
+inventoried sensitive fields and defined redaction rules. See
+`docs/SENSITIVE_DATA_REDACTION_RULES.md`. Rejected speech must not enter
+`/chat`, LLM context, diagnostics, Output Queue, Pet Bubble, or Pet runtime.
+The stored centroid remains sensitive biometric-like local data and is
 forbidden from LLM context, UI display, API responses, logs, and diagnostics.
