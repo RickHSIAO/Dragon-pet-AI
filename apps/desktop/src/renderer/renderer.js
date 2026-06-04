@@ -3272,6 +3272,49 @@ function _ownerVoiceDryRunSourceForRecordingMode(mode) {
   return "none";
 }
 
+function formatOwnerVoiceDryRunSourceLabel(source) {
+  if (source === "manual_mic") return "Manual Mic";
+  if (source === "conversation_mode") return "Conversation Mode";
+  if (source === "none" || !source) return "None";
+  return "Unknown";
+}
+
+function formatOwnerVoiceDryRunStateLabel(status, accepted) {
+  if (status === "ok" && accepted === true) return "Accepted";
+  if (status === "ok" && accepted === false) return "Rejected";
+  if (status === "ok") return "Verification complete";
+  if (status === "not_computed") return "Not computed";
+  if (status === "error") return "Error";
+  if (status === "disabled") return "Disabled";
+  if (status === "checking") return "Checking";
+  if (status === "pending") return "Pending";
+  if (!status) return "Unknown";
+  return "Unknown";
+}
+
+function formatOwnerVoiceDryRunReasonLabel(reason) {
+  if (reason === "no_candidate_file_policy") return "No safe candidate WAV path policy yet";
+  if (reason === "verification_complete") return "Verification complete";
+  if (reason === "not_enrolled") return "Owner voice is not enrolled";
+  if (reason === "audio_file_not_found") return "Candidate audio file was not found";
+  if (reason === "verify_error" || reason === "verify_files_error") return "Verification error";
+  if (reason === "owner_voice_gate_disabled") return "Owner Voice Gate is disabled";
+  if (reason === "verify_files_pending") return "Verification pending";
+  if (reason === "recording_started") return "Recording started";
+  if (!reason) return "Unknown";
+  return "Unknown";
+}
+
+function formatOwnerVoiceDryRunBoolean(value) {
+  return value === true ? "true" : "false";
+}
+
+function ownerVoiceDryRunSafetySummary(d) {
+  return d && d.runtimeHardBlocked === true
+    ? "Unexpected runtimeHardBlocked=true diagnostic flag"
+    : "Dry-run only; existing voice flow is not blocked";
+}
+
 function _setOwnerVoiceManualMicDryRunStatus(status, reason, patch = {}) {
   fullAppVoiceDiagnostics.ownerVoiceDryRunEnabled = _ownerVoiceManualMicDryRunEnabled();
   fullAppVoiceDiagnostics.ownerVoiceDryRunSource = "manual_mic";
@@ -5412,6 +5455,14 @@ function renderFullAppVoiceDiagnostics() {
   var el = voiceDiagnosticsDisplay;
   if (!el) return;
   var d = fullAppVoiceDiagnostics;
+  var ownerVoiceSourceLabel = formatOwnerVoiceDryRunSourceLabel(d.ownerVoiceDryRunSource);
+  var ownerVoiceStateLabel = formatOwnerVoiceDryRunStateLabel(d.ownerVoiceDryRunStatus, d.ownerVoiceAccepted);
+  var ownerVoiceReasonLabel = formatOwnerVoiceDryRunReasonLabel(d.ownerVoiceDryRunReason);
+  var ownerVoiceScore = d.ownerVoiceScore === null || d.ownerVoiceScore === undefined ? "—" : d.ownerVoiceScore;
+  var ownerVoiceThreshold = d.ownerVoiceThreshold === null || d.ownerVoiceThreshold === undefined ? "—" : d.ownerVoiceThreshold;
+  var ownerVoiceAccepted = d.ownerVoiceAccepted === null || d.ownerVoiceAccepted === undefined
+    ? "unknown"
+    : (d.ownerVoiceAccepted ? "true" : "false");
   var lines = [
     "模式: " + d.mode,
     "錄音時長 ms: " + d.durationMs,
@@ -5444,9 +5495,11 @@ function renderFullAppVoiceDiagnostics() {
     "焦點安全: " + (d.voiceCaptureFocusSafe ? "是" : "否") + "  可見: " + (d.lastVisibilityState || "visible") + "  焦點: " + (d.lastWindowFocusState || "focused"),
     "AudioCtx 狀態: " + (d.audioContextState || "none") + "  中斷原因: " + (d.captureInterruptedReason || "none") + "  因可見性: " + (d.captureInterruptedByVisibility ? "是" : "否"),
     "Warmup: " + (d.startupWarmupEnabled ? "ON" : "OFF") + "  STT: " + (d.sttWarmupStatus || "pending") + " " + d.sttWarmupLatencyMs + "ms  Ollama: " + (d.ollamaWarmupStatus || "pending") + " " + d.ollamaWarmupLatencyMs + "ms",
-    "Owner Voice dry-run: " + (d.ownerVoiceDryRunEnabled ? "ON" : "OFF") + "  source: " + (d.ownerVoiceDryRunSource || "none") + "  狀態: " + (d.ownerVoiceDryRunStatus || "disabled") + "  原因: " + (d.ownerVoiceDryRunReason || "unknown"),
-    "Owner Voice score: " + (d.ownerVoiceScore === null || d.ownerVoiceScore === undefined ? "—" : d.ownerVoiceScore) + " / " + (d.ownerVoiceThreshold === null || d.ownerVoiceThreshold === undefined ? "—" : d.ownerVoiceThreshold) + "  accepted: " + (d.ownerVoiceAccepted === null || d.ownerVoiceAccepted === undefined ? "unknown" : (d.ownerVoiceAccepted ? "true" : "false")),
-    "Owner Voice safety: rawAudioPersisted=" + d.rawAudioPersisted + " candidateEmbeddingPersisted=" + d.candidateEmbeddingPersisted + " storedCentroidExposed=" + d.storedCentroidExposed + " runtimeHardBlocked=" + d.runtimeHardBlocked,
+    "Owner Voice dry-run: " + (d.ownerVoiceDryRunEnabled ? "ON" : "OFF") + "  source: " + ownerVoiceSourceLabel + " (" + (d.ownerVoiceDryRunSource || "none") + ")  state: " + ownerVoiceStateLabel + " (" + (d.ownerVoiceDryRunStatus || "disabled") + ")",
+    "Owner Voice reason: " + ownerVoiceReasonLabel + " (" + (d.ownerVoiceDryRunReason || "unknown") + ")",
+    "Owner Voice score: " + ownerVoiceScore + " / " + ownerVoiceThreshold + "  accepted: " + ownerVoiceAccepted + "  checkedAt: " + (d.ownerVoiceCheckedAt || "not checked"),
+    "Owner Voice safety: " + ownerVoiceDryRunSafetySummary(d) + "  runtimeHardBlocked=" + formatOwnerVoiceDryRunBoolean(d.runtimeHardBlocked),
+    "Owner Voice storage: rawAudioPersisted=" + formatOwnerVoiceDryRunBoolean(d.rawAudioPersisted) + " candidateEmbeddingPersisted=" + formatOwnerVoiceDryRunBoolean(d.candidateEmbeddingPersisted) + " storedCentroidExposed=" + formatOwnerVoiceDryRunBoolean(d.storedCentroidExposed),
     "---",
     "VAD 最後 RMS: " + d.lastRms.toFixed(4),
     "VAD 最高 RMS: " + d.maxRms.toFixed(4),

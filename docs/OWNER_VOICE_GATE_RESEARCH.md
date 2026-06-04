@@ -380,6 +380,7 @@ Future sequence:
 - TASK-SEC-005 Phishing / Link Safety Warning Layer Design (DONE).
 - TASK-266 Owner Voice Gate Manual Mic Dry-run Policy (DONE).
 - TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy (DONE).
+- TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish (DONE).
 
 Runtime remains unchanged by TASK-260.
 
@@ -561,6 +562,7 @@ Recommended next tasks:
 - TASK-SEC-005 Phishing / Link Safety Warning Layer Design (DONE).
 - TASK-266 Owner Voice Gate Manual Mic Dry-run Policy (DONE).
 - TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy (DONE).
+- TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish (DONE).
 
 Do not jump to runtime gating until the explicit runtime task accepts the
 threshold strategy and keeps owner voice gate opt-in.
@@ -616,6 +618,8 @@ TASK-SEC-005 Phishing / Link Safety Warning Layer Design (DONE). TASK-266
 Manual Mic dry-run policy is DONE and remains status-only with no hard block.
 TASK-267 Conversation Mode dry-run policy is DONE and remains status-only with
 no hard block.
+TASK-268 diagnostics polish is DONE and remains display-only with no hard
+block.
 
 Windows stored-centroid smoke PASS:
 
@@ -688,3 +692,23 @@ score/threshold, accepted, checked timestamp, and safety booleans. The UI and
 API must not expose the stored centroid, `embeddingAggregate`, candidate
 embeddings, raw audio, raw candidate paths, raw transcript, or rejected
 transcript. Owner Voice Gate remains a convenience filter, not authentication.
+
+## 16. TASK-268 - Dry-run Diagnostics / Safety Summary Polish
+
+TASK-268 polishes existing Voice Diagnostics display text for Owner Voice
+dry-run status. It maps source values to readable labels (`Manual Mic` and
+`Conversation Mode`), maps dry-run state/reason values to readable text, and
+adds the compact safety summary `Dry-run only; existing voice flow is not
+blocked` with `runtimeHardBlocked=false`.
+
+Allowed display data remains limited to source, status, reason,
+score/threshold, accepted state, checked timestamp, and the safety booleans
+`rawAudioPersisted=false`, `candidateEmbeddingPersisted=false`,
+`storedCentroidExposed=false`, and `runtimeHardBlocked=false`.
+
+TASK-268 does not change backend verification behavior, does not add hard
+gating, does not change `/stt/transcribe` or `/chat` schemas, does not add IPC,
+does not touch Pet Window or Output Queue behavior, and does not add
+authentication claims. It must not expose centroid vectors,
+`embeddingAggregate`, stored embedding vectors, candidate embedding vectors,
+raw audio, raw transcript, rejected transcript, or raw candidate paths.

@@ -969,7 +969,7 @@ check("TASK-265" in owner_voice_storage_text,
 # ---------------------------------------------------------------------------
 # TASK-266: Manual Mic dry-run policy static safety checks
 # ---------------------------------------------------------------------------
-print("\n[15/16] TASK-266 - Owner Voice Gate Manual Mic dry-run policy static safety")
+print("\n[15/17] TASK-266 - Owner Voice Gate Manual Mic dry-run policy static safety")
 
 check("OWNER_VOICE_MANUAL_MIC_DRY_RUN_ENABLED" in renderer_js_text,
       "renderer defines Manual Mic owner voice dry-run enable flag")
@@ -1018,7 +1018,7 @@ check("TASK-266" in owner_voice_text,
       "owner voice research doc records TASK-266")
 
 # TASK-267: Conversation Mode dry-run policy static safety checks
-print("\n[16/16] TASK-267 - Owner Voice Gate Conversation Mode dry-run policy static safety")
+print("\n[16/17] TASK-267 - Owner Voice Gate Conversation Mode dry-run policy static safety")
 
 check("OWNER_VOICE_CONVERSATION_MODE_DRY_RUN_ENABLED" in renderer_js_text,
       "renderer defines Conversation Mode owner voice dry-run enable flag")
@@ -1069,6 +1069,49 @@ check("TASK-267" in owner_voice_storage_text,
 check("TASK-267" in owner_voice_text,
       "owner voice research doc records TASK-267")
 
+# TASK-268: Owner Voice dry-run diagnostics polish static safety checks
+print("\n[17/17] TASK-268 - Owner Voice dry-run diagnostics polish static safety")
+
+check("formatOwnerVoiceDryRunSourceLabel" in renderer_js_text,
+      "renderer defines owner voice dry-run source label formatter")
+check("formatOwnerVoiceDryRunStateLabel" in renderer_js_text,
+      "renderer defines owner voice dry-run state label formatter")
+check("formatOwnerVoiceDryRunReasonLabel" in renderer_js_text,
+      "renderer defines owner voice dry-run reason label formatter")
+check("ownerVoiceDryRunSafetySummary" in renderer_js_text,
+      "renderer defines owner voice dry-run safety summary formatter")
+check("Manual Mic" in renderer_js_text and "Conversation Mode" in renderer_js_text,
+      "renderer exposes readable owner voice dry-run source labels")
+check("Not computed" in renderer_js_text and "No safe candidate WAV path policy yet" in renderer_js_text,
+      "renderer exposes readable not_computed/no_candidate_file_policy wording")
+check("Dry-run only; existing voice flow is not blocked" in renderer_js_text,
+      "renderer exposes readable dry-run only safety summary")
+check("runtimeHardBlocked=" in renderer_js_text,
+      "renderer keeps runtimeHardBlocked visible in diagnostics")
+
+diagnostics_start = renderer_js_text.find("function renderFullAppVoiceDiagnostics")
+diagnostics_end = renderer_js_text.find("function updateFullAppVoiceDiagnostics", diagnostics_start)
+diagnostics_section = (
+    renderer_js_text[diagnostics_start:diagnostics_end]
+    if diagnostics_start >= 0 and diagnostics_end > diagnostics_start else ""
+)
+check(bool(diagnostics_section), "voice diagnostics render section can be isolated")
+check("textContent" in diagnostics_section and "innerHTML" not in diagnostics_section,
+      "voice diagnostics render remains textContent-only")
+for forbidden in (
+    "embeddingAggregate",
+    "perSampleEmbeddings",
+    "base64Audio",
+    "fullAppOwnerVoiceDryRunCandidatePath",
+    "fullAppOwnerVoiceConversationDryRunCandidatePath",
+):
+    check(forbidden not in diagnostics_section,
+          f"Owner Voice diagnostics render does not expose forbidden token {forbidden!r}")
+check("TASK-268" in owner_voice_storage_text,
+      "owner voice storage design doc records TASK-268")
+check("TASK-268" in owner_voice_text,
+      "owner voice research doc records TASK-268")
+
 # ---------------------------------------------------------------------------
 # Clean up env so test leaves no side effects
 # ---------------------------------------------------------------------------
@@ -1081,8 +1124,8 @@ print()
 print("=" * 65)
 print(f"  {_pass_count} PASS  {_fail_count} FAIL")
 if _fail_count == 0:
-    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263/264/265/266/267 STT Provider Smoke: PASS")
+    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263/264/265/266/267/268 STT Provider Smoke: PASS")
 else:
-    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263/264/265/266/267 STT Provider Smoke: FAIL")
+    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263/264/265/266/267/268 STT Provider Smoke: FAIL")
 print("=" * 65)
 sys.exit(0 if _fail_count == 0 else 1)

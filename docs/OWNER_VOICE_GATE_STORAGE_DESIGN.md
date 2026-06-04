@@ -1,6 +1,6 @@
 # Owner Voice Gate Storage Design
 
-Status: TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS; TASK-263 DONE - Windows Unicode owner voice enrollment storage smoke PASS; TASK-264 DONE - Windows stored centroid verification smoke PASS; TASK-265 DONE - Windows backend verify-files smoke PASS; TASK-266 DONE - Manual Mic dry-run only / no hard block; TASK-267 DONE - Conversation Mode dry-run only / no hard block
+Status: TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS; TASK-263 DONE - Windows Unicode owner voice enrollment storage smoke PASS; TASK-264 DONE - Windows stored centroid verification smoke PASS; TASK-265 DONE - Windows backend verify-files smoke PASS; TASK-266 DONE - Manual Mic dry-run only / no hard block; TASK-267 DONE - Conversation Mode dry-run only / no hard block; TASK-268 DONE - diagnostics polish only / no hard block
 
 Date: 2026-06-05
 
@@ -636,6 +636,7 @@ Runtime integration should be split by surface:
 - TASK-SEC-005: Phishing / link safety warning layer design (DONE).
 - TASK-266: Manual Mic dry-run policy (DONE).
 - TASK-267: Conversation Mode dry-run policy (DONE).
+- TASK-268: Dry-run diagnostics / safety summary polish (DONE).
 
 Both must be disabled by default until enrollment exists and the user explicitly
 enables the gate.
@@ -674,6 +675,7 @@ Recommended sequence:
 - TASK-SEC-005 Phishing / Link Safety Warning Layer Design (DONE)
 - TASK-266 Owner Voice Gate Manual Mic Dry-run Policy (DONE)
 - TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy (DONE)
+- TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish (DONE)
 
 TASK-262 calibration is complete on Windows for the small smoke set. Runtime
 gating should still remain explicit, opt-in, and threshold-aware.
@@ -871,3 +873,49 @@ Owner Voice Gate remains a local convenience filter for reducing accidental
 voice triggers. It is not authentication, identity proof, authorization, or a
 security boundary. Reject, error, disabled, and `not_computed` results are
 diagnostic-only and never hard-block Conversation Mode.
+
+## 22. TASK-268 Dry-run Diagnostics / Safety Summary Polish
+
+TASK-268 changes display wording only. It does not change backend verification,
+Manual Mic behavior, Conversation Mode behavior, `/stt/transcribe`, `/chat`,
+IPC, Pet Window, Output Queue, or Diagnostics runtime dispatch.
+
+### Display behavior
+
+The existing Voice Diagnostics panel now maps dry-run values to readable text:
+
+- `manual_mic` -> `Manual Mic`.
+- `conversation_mode` -> `Conversation Mode`.
+- `not_computed` -> `Not computed`.
+- accepted verify result -> `Accepted`.
+- rejected verify result -> `Rejected`.
+- `no_candidate_file_policy` -> `No safe candidate WAV path policy yet`.
+- `verify_files_error` / `verify_error` -> `Verification error`.
+
+The panel also shows:
+
+- `Dry-run only; existing voice flow is not blocked`.
+- `runtimeHardBlocked=false`.
+- score / threshold.
+- accepted state.
+- checked timestamp.
+- `rawAudioPersisted=false`.
+- `candidateEmbeddingPersisted=false`.
+- `storedCentroidExposed=false`.
+
+### Safety boundary
+
+TASK-268 must not show:
+
+- stored centroid vectors.
+- `embeddingAggregate`.
+- stored embedding vectors.
+- candidate embedding vectors.
+- raw audio.
+- raw transcript.
+- rejected transcript.
+- raw candidate paths.
+
+Owner Voice Gate remains a local convenience filter for reducing accidental
+voice triggers. It is not authentication, identity proof, authorization, or a
+security boundary.

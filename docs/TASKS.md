@@ -26697,6 +26697,7 @@ Future task sequence:
 - TASK-SEC-005 Phishing / Link Safety Warning Layer Design (DONE).
 - TASK-266 Owner Voice Gate Manual Mic Dry-run Policy (DONE).
 - TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy (DONE).
+- TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish (DONE).
 
 **TASK-261 — Owner Voice Enrollment UI / Local Storage Stub:**
 
@@ -27379,7 +27380,7 @@ PASS on 2026-06-04 against the stored owner centroid:
 TASK-SEC-001 Security Boundary / Anti Prompt Injection Design and TASK-SEC-002
 Sensitive Data Inventory / Redaction Rules and TASK-SEC-003 Prompt Injection
 Test Corpus and TASK-SEC-004 Tool Permission / User Confirmation Policy are
-complete; TASK-266 Owner Voice Gate Manual Mic Dry-run Policy is DONE; TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy is DONE.
+complete; TASK-266 Owner Voice Gate Manual Mic Dry-run Policy is DONE; TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy is DONE; TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish is DONE.
 
 ---
 
@@ -27483,6 +27484,7 @@ Before Owner Voice Gate connects to Manual Mic or Conversation Mode runtime:
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer Design - DONE.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy - DONE.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
+8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
 
 ### Validation
 
@@ -27606,6 +27608,7 @@ TASK-SEC-003 has captured prompt injection and phishing corpora covering:
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer Design - DONE.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy - DONE.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
+8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
 
 ### Validation
 
@@ -27710,6 +27713,7 @@ structured fixtures and assert that:
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer Design - DONE.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy - DONE.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
+8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
 
 ### Validation
 
@@ -27830,6 +27834,7 @@ T6 data is blocked from LLM context and outbound actions.
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer Design - DONE.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy - DONE.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
+8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
 
 ### Validation
 
@@ -27936,6 +27941,7 @@ diagnostics, or embeddings enter outbound flows.
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer Design - DONE.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy - DONE.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
+8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
 
 ### Validation
 
@@ -28045,6 +28051,7 @@ Added backend pytest regression for:
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer Design - DONE.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy - DONE.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
+8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
 
 ---
 
@@ -28139,9 +28146,96 @@ Added backend pytest regression for:
 - `node apps/desktop/scripts/pet-window-smoke.js`
 - `node apps/desktop/scripts/pet-renderer-smoke.js`
 
+---
+
+## TASK-268 | Owner Voice Dry-run Diagnostics / Safety Summary Polish
+
+Status: DONE - DIAGNOSTICS POLISH ONLY / NO HARD BLOCK
+
+### Goal
+
+Polish the existing Voice Diagnostics display for Owner Voice dry-run status in
+Manual Mic and Conversation Mode.
+
+This task is display-only. It does not add hard gating, does not change
+backend verification behavior, does not change `/stt/transcribe`, does not
+change `/chat` schema, does not add authentication claims, and does not treat
+Owner Voice Gate as identity proof.
+
+### Display Changes
+
+The existing Voice Diagnostics panel now shows readable Owner Voice dry-run
+labels:
+
+- `manual_mic` -> `Manual Mic`.
+- `conversation_mode` -> `Conversation Mode`.
+- `not_computed` -> `Not computed`.
+- accepted verify result -> `Accepted`.
+- rejected verify result -> `Rejected`.
+- `error` -> `Error`.
+- `no_candidate_file_policy` -> `No safe candidate WAV path policy yet`.
+- `verification_complete` -> `Verification complete`.
+- `not_enrolled` -> `Owner voice is not enrolled`.
+- `audio_file_not_found` -> `Candidate audio file was not found`.
+- `verify_files_error` / `verify_error` -> `Verification error`.
+
+The panel also shows the compact safety summary:
+
+- `Dry-run only; existing voice flow is not blocked`.
+- `runtimeHardBlocked=false`.
+
+### Safe Fields
+
+The polished Owner Voice lines may show only:
+
+- source
+- status/state
+- reason
+- score
+- threshold
+- accepted
+- checkedAt
+- `rawAudioPersisted=false`
+- `candidateEmbeddingPersisted=false`
+- `storedCentroidExposed=false`
+- `runtimeHardBlocked=false`
+
+### Safety Boundaries
+
+- Manual Mic remains non-blocking.
+- Conversation Mode remains non-blocking.
+- `/chat` still works when dry-run rejects, errors, or returns
+  `not_computed`.
+- No hard gate was added.
+- No backend endpoint or verification behavior changed.
+- No IPC, Pet Window, Output Queue, or Diagnostics runtime behavior changed.
+- The UI must not show centroid vectors, `embeddingAggregate`, stored
+  embedding vectors, candidate embedding vectors, raw audio, raw transcript,
+  rejected transcript, or raw candidate paths.
+
+### Validation Coverage
+
+Added renderer smoke tests for:
+
+- Manual Mic source displays as `Manual Mic`.
+- Conversation Mode source displays as `Conversation Mode`.
+- `not_computed / no_candidate_file_policy` displays as safe dry-run only.
+- rejected dry-run still does not block Conversation Mode `/chat`.
+- verify error still does not block existing auto-send `/chat`.
+- Owner Voice diagnostic lines do not expose `embeddingAggregate` or candidate
+  paths.
+
+Updated `scripts/stt_provider_smoke.py` static checks for:
+
+- TASK-268 docs/status.
+- readable source/state/reason formatter helpers.
+- dry-run only safety summary.
+- `textContent` diagnostics rendering.
+- no forbidden embedding/path tokens in the diagnostics render section.
+
 ### Validation
 
-- `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_routes.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-task266`
+- `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_routes.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-task268`
 - `backend\.venv\Scripts\python.exe scripts\stt_provider_smoke.py`
 - `node apps/desktop/scripts/renderer-chat-smoke.js`
 - `node apps/desktop/scripts/pet-window-smoke.js`

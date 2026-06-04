@@ -14990,6 +14990,114 @@ function testTask267DryRunNoHardGateOrSensitiveExposure() {
   console.log("  testTask267DryRunNoHardGateOrSensitiveExposure PASS");
 }
 
+// ---------------------------------------------------------------------------
+// TASK-268: Owner Voice dry-run diagnostics polish
+// ---------------------------------------------------------------------------
+
+function _task268OwnerVoiceDiagnosticLines(sandbox) {
+  sandbox.renderFullAppVoiceDiagnostics();
+  const text = sandbox.document.getElementById("voice-diagnostics-display").textContent || "";
+  return text.split("\n").filter((line) => line.startsWith("Owner Voice"));
+}
+
+function testTask268OwnerVoiceFormatters() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("function formatOwnerVoiceDryRunSourceLabel"), "TASK-268 source label formatter must exist");
+  assert.ok(src.includes("function formatOwnerVoiceDryRunStateLabel"), "TASK-268 state label formatter must exist");
+  assert.ok(src.includes("function formatOwnerVoiceDryRunReasonLabel"), "TASK-268 reason label formatter must exist");
+  assert.ok(src.includes("function ownerVoiceDryRunSafetySummary"), "TASK-268 safety summary formatter must exist");
+  console.log("  testTask268OwnerVoiceFormatters PASS");
+}
+
+async function testTask268ManualMicNotComputedDiagnosticsWording() {
+  const { sandbox, state } = await loadRenderer({
+    ownerVoiceGateSettings: _task266OwnerVoiceEnabledSettings(),
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => ({ status: "ok", transcript: "manual diagnostics text" }),
+    },
+  });
+  sandbox.setFullAppVoiceState("transcribing");
+  sandbox._fullAppSttTranscribeChunks([new Blob(["x"], { type: "audio/wav" })], "audio/wav");
+  await settle();
+  const ownerLines = _task268OwnerVoiceDiagnosticLines(sandbox);
+  const text = ownerLines.join("\n");
+  assert.ok(text.includes("Manual Mic (manual_mic)"), "TASK-268 Manual Mic source must be readable");
+  assert.ok(text.includes("Not computed (not_computed)"), "TASK-268 not_computed state must be readable");
+  assert.ok(text.includes("No safe candidate WAV path policy yet (no_candidate_file_policy)"),
+    "TASK-268 no_candidate_file_policy reason must be readable");
+  assert.ok(text.includes("Dry-run only; existing voice flow is not blocked"),
+    "TASK-268 safety summary must say dry-run only");
+  assert.ok(text.includes("runtimeHardBlocked=false"), "TASK-268 safety line must expose runtimeHardBlocked=false");
+  assert.ok(!text.includes("embeddingAggregate"), "TASK-268 diagnostics must not expose embeddingAggregate");
+  assert.ok(!text.includes("manual-mic-candidate.wav"), "TASK-268 diagnostics must not expose candidate path");
+  assert.equal(state.calls.filter((call) => call.url.endsWith("/owner-voice-gate/verify-files")).length, 0);
+  console.log("  testTask268ManualMicNotComputedDiagnosticsWording PASS");
+}
+
+async function testTask268ConversationRejectedDiagnosticsWording() {
+  const { sandbox, state } = await loadRenderer({
+    ownerVoiceGateSettings: _task266OwnerVoiceEnabledSettings(),
+    ownerVoiceVerifyMode: "reject",
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => ({ status: "ok", transcript: "conversation diagnostics text" }),
+      updatePetSpeech: async () => ({ ok: true }),
+      updatePetExpression: async () => ({ ok: true }),
+    },
+    chatMode: "success",
+  });
+  sandbox.fullAppOwnerVoiceConversationDryRunCandidatePath = "C:\\voice\\conversation-candidate.wav";
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("transcribing");
+  sandbox._transcribeConversationChunks([new Blob(["x"], { type: "audio/wav" })], "audio/wav");
+  await settle();
+  const ownerLines = _task268OwnerVoiceDiagnosticLines(sandbox);
+  const text = ownerLines.join("\n");
+  assert.ok(text.includes("Conversation Mode (conversation_mode)"), "TASK-268 Conversation Mode source must be readable");
+  assert.ok(text.includes("Rejected (ok)"), "TASK-268 rejected dry-run must be readable");
+  assert.ok(text.includes("Verification complete (verification_complete)"),
+    "TASK-268 verification_complete reason must be readable");
+  assert.ok(text.includes("accepted: false"), "TASK-268 accepted=false must remain visible");
+  assert.ok(text.includes("Dry-run only; existing voice flow is not blocked"),
+    "TASK-268 rejected dry-run must still show non-blocking summary");
+  assert.ok(!text.includes("embeddingAggregate"), "TASK-268 diagnostics must not expose embeddingAggregate");
+  assert.ok(!text.includes("conversation-candidate.wav"), "TASK-268 diagnostics must not expose candidate path");
+  assert.ok(state.calls.filter((call) => call.url.endsWith("/chat")).length >= 1,
+    "TASK-268 rejected dry-run must not block Conversation Mode /chat");
+  console.log("  testTask268ConversationRejectedDiagnosticsWording PASS");
+}
+
+async function testTask268VerifyErrorDiagnosticsWording() {
+  const { sandbox, state } = await loadRenderer({
+    ownerVoiceGateSettings: _task266OwnerVoiceEnabledSettings(),
+    ownerVoiceVerifyMode: "error",
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => ({ status: "ok", transcript: "manual verify error diagnostics text" }),
+      updatePetSpeech: async () => ({ ok: true }),
+      updatePetExpression: async () => ({ ok: true }),
+    },
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceAutoSendEnabled = true;
+  sandbox.fullAppOwnerVoiceDryRunCandidatePath = "C:\\voice\\manual-mic-candidate.wav";
+  sandbox.setFullAppVoiceState("transcribing");
+  sandbox._fullAppSttTranscribeChunks([new Blob(["x"], { type: "audio/wav" })], "audio/wav");
+  await settle();
+  const ownerLines = _task268OwnerVoiceDiagnosticLines(sandbox);
+  const text = ownerLines.join("\n");
+  assert.ok(text.includes("Manual Mic (manual_mic)"), "TASK-268 verify error source must be readable");
+  assert.ok(text.includes("Error (error)"), "TASK-268 verify error state must be readable");
+  assert.ok(text.includes("Verification error (verify_files_error)"), "TASK-268 verify error reason must be readable");
+  assert.ok(text.includes("runtimeHardBlocked=false"), "TASK-268 verify error must remain non-blocking");
+  assert.ok(!text.includes("embeddingAggregate"), "TASK-268 diagnostics must not expose embeddingAggregate");
+  assert.ok(!text.includes("manual-mic-candidate.wav"), "TASK-268 diagnostics must not expose candidate path");
+  assert.ok(state.calls.filter((call) => call.url.endsWith("/chat")).length >= 1,
+    "TASK-268 verify error must not block existing auto-send /chat flow");
+  console.log("  testTask268VerifyErrorDiagnosticsWording PASS");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -15983,6 +16091,10 @@ async function main() {
   await testTask267ConversationDryRunRejectStillSendsChat();
   await testTask267ConversationDryRunVerifyErrorStillSendsChat();
   testTask267DryRunNoHardGateOrSensitiveExposure();
+  testTask268OwnerVoiceFormatters();
+  await testTask268ManualMicNotComputedDiagnosticsWording();
+  await testTask268ConversationRejectedDiagnosticsWording();
+  await testTask268VerifyErrorDiagnosticsWording();
 
   console.log("renderer chat smoke: PASS");
 }

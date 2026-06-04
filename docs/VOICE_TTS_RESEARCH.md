@@ -583,6 +583,15 @@ TASK-257 DONE - WINDOWS PET WINDOW CLICK/SHOW SMOKE PASS (2026-06-04): Pet Windo
   `/stt/transcribe` or `/chat` schema change, no IPC, no Pet Window, and no
   Output Queue change.
 
+- **TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish. DONE - DIAGNOSTICS POLISH ONLY / NO HARD BLOCK (2026-06-05):**
+  Polishes existing Voice Diagnostics wording for Owner Voice dry-run status.
+  Manual Mic and Conversation Mode now display readable source labels, readable
+  state/reason text, safe scalar verification fields, and the safety summary
+  `Dry-run only; existing voice flow is not blocked` with
+  `runtimeHardBlocked=false`. No backend verification behavior changed. No hard
+  gate, no authentication claim, no `/stt/transcribe` or `/chat` schema change,
+  no IPC, no Pet Window, and no Output Queue change.
+
 Each future task must explicitly define safety boundaries, user controls,
 provider scope, queue priority, and no-regression checks.
 
