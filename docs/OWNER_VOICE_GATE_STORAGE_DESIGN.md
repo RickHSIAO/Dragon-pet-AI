@@ -1,6 +1,6 @@
 # Owner Voice Gate Storage Design
 
-Status: TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS
+Status: TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS
 
 Date: 2026-06-04
 
@@ -335,6 +335,84 @@ TASK-261 still does not implement enrollment. It does not store a real
 `embeddingAggregate`; the field remains `null`. It does not write raw audio,
 base64 audio, transcript, waveform, or per-sample embeddings.
 
+## 12. TASK-262 Calibration Probe
+
+TASK-262 extends `scripts/owner_voice_gate_probe.py` with multi-sample
+calibration support. It remains offline and file-path-only; it does not
+open a microphone or persist raw audio or embeddings.
+
+New CLI arguments:
+
+- `--owner-sample PATH` (repeatable): owner WAV sample paths for calibration.
+- `--other-sample PATH` (repeatable): other-speaker WAV sample paths.
+- `--owner-dir DIR`: directory of owner WAV files (all `*.wav` in the directory).
+- `--other-dir DIR`: directory of other-speaker WAV files.
+- `--output-json PATH`: optional path to write calibration report JSON.
+
+Calibration flow:
+
+1. Collect all owner samples and compute one embedding per sample.
+2. Compute owner centroid: normalized mean of all owner embeddings.
+3. Compute `ownerSelfScores`: cosine(centroid, each owner embedding).
+4. Compute `otherScores`: cosine(centroid, each other-speaker embedding).
+5. Compute `ownerStats` (mean, min, max, p10, p90) and `otherStats` (mean, max, p90).
+6. Compute threshold suggestions:
+   - If other samples exist: midpoint-based calibration using ownerMin and otherMax.
+   - If owner-only: conservative fallback from ownerMin (85/90/95 percentiles).
+   - All thresholds clamped to `[0.40, 0.95]`.
+7. Compute `scoreGap` (ownerMin - otherMax) and `separationQuality`.
+8. Output clean JSON to stdout; optionally write to `--output-json` path.
+
+Output fields (TASK-262 additions):
+
+```json
+{
+  "ownerSampleCount": 3,
+  "otherSampleCount": 2,
+  "ownerSelfScores": [0.98, 0.97, 0.96],
+  "otherScores": [0.05, 0.12],
+  "ownerStats": {"mean": 0.97, "min": 0.96, "max": 0.98, "p10": 0.962, "p90": 0.978},
+  "otherStats": {"mean": 0.085, "max": 0.12, "p90": 0.116},
+  "scoreGap": 0.84,
+  "thresholdSuggestion": 0.54,
+  "balancedThreshold": 0.54,
+  "conservativeThreshold": 0.79,
+  "permissiveThreshold": 0.29,
+  "separationQuality": "strong",
+  "rawAudioPersisted": false,
+  "embeddingPersisted": false,
+  "micAccessed": false,
+  "runtimeIntegrated": false
+}
+```
+
+Threshold strategy:
+
+- Do not treat any suggested threshold as a universal truth.
+- `balancedThreshold`: midpoint of ownerMin and otherMax.
+- `conservativeThreshold`: 60% of the way from midpoint toward ownerMin.
+- `permissiveThreshold`: 60% of the way from midpoint toward otherMax.
+- `separationQuality`: `strong` (gap ≥ 0.35), `moderate` (gap ≥ 0.15), `weak` (gap < 0.15), `overlap` (gap ≤ 0).
+- If `overlap`: status still `ok`, but `separationQuality=overlap` is a warning that the
+  current samples do not reliably separate owner from other speakers.
+- All thresholds clamped to `[THRESHOLD_MIN=0.40, THRESHOLD_MAX=0.95]`.
+
+Safety boundary (unchanged from TASK-259/261):
+
+- No Manual Mic runtime change.
+- No Conversation Mode runtime change.
+- No `/stt/transcribe` behavior change.
+- No `/chat` schema change.
+- No new IPC channel.
+- No microphone access.
+- No `getUserMedia`.
+- No recording.
+- No raw audio persistence.
+- No embedding persistence to production storage.
+- No always listening.
+- No background monitoring.
+- No Pet Window, Output Queue, or Diagnostics Drawer change.
+
 Runtime remains unchanged:
 
 - No Manual Mic gate.
@@ -347,6 +425,34 @@ Runtime remains unchanged:
 - No always listening.
 - No background monitoring.
 - No Pet Window, Output Queue, or Diagnostics Drawer runtime changes.
+
+Windows calibration smoke PASS (TASK-262 closeout):
+
+- Repeated sample args mode PASS with two owner WAVs, one other-speaker WAV,
+  and `--output-json`.
+- Directory mode PASS with owner/other directories and `--output-json`.
+- Directory mode result: status `ok`, reason `calibration_probe_complete`,
+  modelLoaded=true, modelLoadSeconds `9.391`, embeddingDim `192`.
+- ownerSampleCount `2`, otherSampleCount `1`.
+- ownerSelfScores `[0.9806, 0.9806]`.
+- otherScores `[0.0778]`.
+- ownerStats mean/min/max/p10/p90 `0.9806`.
+- otherStats mean/max/p90 `0.0778`.
+- scoreGap `0.9028`; separationQuality `strong`.
+- thresholdSuggestion / balancedThreshold `0.5292`.
+- conservativeThreshold `0.8`.
+- permissiveThreshold `0.4`.
+- rawAudioPersisted=false, embeddingPersisted=false, micAccessed=false,
+  runtimeIntegrated=false.
+
+Threshold storage recommendation after TASK-262:
+
+- Keep stored default threshold at `0.65` for the first runtime gate.
+- Treat `0.5292` as a local calibration result from a small sample set, not as
+  a universal production default.
+- Expose `0.8` as conservative mode if runtime UX offers presets.
+- Reserve `0.4` / permissiveThreshold for debug or explicit permissive
+  experiments, not the first runtime default.
 
 ## 12. Future Runtime Architecture
 
@@ -398,12 +504,11 @@ Diagnostics must not show:
 
 Recommended sequence:
 
-- TASK-262 Owner Voice Gate Calibration Probe / Multi-Sample Threshold Review
 - TASK-263 Owner Voice Gate Runtime Integration for Manual Mic
 - TASK-264 Owner Voice Gate Runtime Integration for Conversation Mode
 
-Do not jump directly from TASK-260 to runtime gating. Enrollment storage,
-delete/reset UX, and threshold calibration should be settled first.
+TASK-262 calibration is complete on Windows for the small smoke set. Runtime
+gating should still remain explicit, opt-in, and threshold-aware.
 
 ## 15. Validation Plan
 

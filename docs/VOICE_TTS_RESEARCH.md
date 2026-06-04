@@ -480,8 +480,21 @@ TASK-257 DONE - WINDOWS PET WINDOW CLICK/SHOW SMOKE PASS (2026-06-04): Pet Windo
   transcript, waveform, per-sample embeddings, and real embedding values. No Manual Mic or
   Conversation Mode gate yet; no speaker verification runtime integration.
 
-Each future task must explicitly define safety boundaries, user controls,
-provider scope, queue priority, and no-regression checks.
+- **TASK-262 Owner Voice Gate Multi-Sample Calibration Probe. DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS (2026-06-04):**
+  Extends `scripts/owner_voice_gate_probe.py` with multi-sample calibration support:
+  `--owner-sample PATH` (repeatable), `--other-sample PATH` (repeatable), `--owner-dir DIR`,
+  `--other-dir DIR`, `--output-json PATH`. Computes owner centroid (normalized mean of all owner
+  embeddings), `ownerSelfScores` (centroid vs each owner sample), `otherScores` (centroid vs each
+  other-speaker sample), `ownerStats` (mean/min/max/p10/p90), `otherStats` (mean/max/p90),
+  `scoreGap` (ownerMin - otherMax), `balancedThreshold`, `conservativeThreshold`,
+  `permissiveThreshold`, and `separationQuality`. Windows smoke PASS in repeated sample args mode
+  and directory mode. Directory mode produced ownerSelfScores `[0.9806, 0.9806]`, otherScores
+  `[0.0778]`, scoreGap `0.9028`, separationQuality `strong`, thresholdSuggestion/balancedThreshold
+  `0.5292`, conservativeThreshold `0.8`, permissiveThreshold `0.4`. Because this used only
+  2 owner samples and 1 other sample, keep `0.65` as the first future runtime balanced default;
+  do not treat `0.5292` as universal. All thresholds clamped to [0.40, 0.95] and
+  documented as local calibration hints only. No Manual Mic, Conversation Mode, STT, `/chat`,
+  IPC, Pet Window, Output Queue, or Diagnostics Drawer change.
 
 Each future task must explicitly define safety boundaries, user controls,
 provider scope, queue priority, and no-regression checks.

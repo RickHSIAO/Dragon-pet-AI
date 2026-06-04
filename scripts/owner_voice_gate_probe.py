@@ -1,4 +1,9 @@
-"""TASK-259 owner voice gate offline speaker embedding probe.
+"""TASK-259/262 owner voice gate offline speaker embedding probe.
+
+TASK-259: Single-pair embedding probe (--enroll-a, --verify-a, --verify-b).
+TASK-262: Multi-sample calibration probe with centroid, self-scores, other-scores,
+          score gap, and threshold suggestions (--owner-sample, --other-sample,
+          --owner-dir, --other-dir, --output-json).
 
 This script is intentionally not connected to Dragon Pet AI runtime. It accepts
 existing WAV file paths only, writes a clean JSON report to stdout, and never
@@ -25,6 +30,8 @@ DEFAULT_THRESHOLD = 0.65
 DEFAULT_FUNASR_CAMPP_MODEL_ID = "iic/speech_campplus_sv_zh-cn_16k-common"
 FALLBACK_FUNASR_CAMPP_MODEL_ID = "damo/speech_campplus_sv_zh-cn_16k-common"
 REQUIRED_SAMPLE_RATE = 16000
+THRESHOLD_MIN = 0.40
+THRESHOLD_MAX = 0.95
 
 
 def _module_available(name: str) -> bool:
@@ -68,9 +75,23 @@ def _base_report(provider: str) -> dict[str, Any]:
         "modelLoadAttempted": False,
         "modelId": None,
         "embeddingDim": None,
+        # Legacy single-pair fields (TASK-259, kept for backwards compat)
         "ownerScore": None,
         "otherScore": None,
+        # Multi-sample calibration fields (TASK-262)
+        "ownerSampleCount": 0,
+        "otherSampleCount": 0,
+        "ownerSelfScores": None,
+        "otherScores": None,
+        "ownerStats": None,
+        "otherStats": None,
+        "scoreGap": None,
         "thresholdSuggestion": DEFAULT_THRESHOLD,
+        "balancedThreshold": None,
+        "conservativeThreshold": None,
+        "permissiveThreshold": None,
+        "separationQuality": None,
+        # Safety fields
         "rawAudioPersisted": False,
         "embeddingPersisted": False,
         "micAccessed": False,
@@ -220,6 +241,142 @@ def _load_funasr_model(model_id: str, allow_download: bool, device: str) -> Any:
         return AutoModel(model=model_id, device=device, disable_update=not allow_download)
 
 
+def _clamp_threshold(value: float) -> float:
+    return round(max(THRESHOLD_MIN, min(THRESHOLD_MAX, value)), 4)
+
+
+def _percentile(scores: list[float], pct: float) -> float:
+    if not scores:
+        return 0.0
+    sorted_s = sorted(scores)
+    idx = (pct / 100.0) * (len(sorted_s) - 1)
+    lo = int(idx)
+    hi = lo + 1
+    if hi >= len(sorted_s):
+        return round(sorted_s[-1], 4)
+    frac = idx - lo
+    return round(sorted_s[lo] + frac * (sorted_s[hi] - sorted_s[lo]), 4)
+
+
+def _compute_centroid(embeddings: list) -> Any:
+    import numpy as np  # type: ignore
+
+    centroid = np.mean(np.stack(embeddings), axis=0).astype("float32")
+    norm = float(np.linalg.norm(centroid))
+    if norm <= 0:
+        raise ValueError("centroid_zero_norm")
+    return centroid / norm
+
+
+def _owner_stats(scores: list[float]) -> dict[str, float]:
+    if not scores:
+        return {}
+    return {
+        "mean": round(sum(scores) / len(scores), 4),
+        "min": round(min(scores), 4),
+        "max": round(max(scores), 4),
+        "p10": _percentile(scores, 10),
+        "p90": _percentile(scores, 90),
+    }
+
+
+def _other_stats(scores: list[float]) -> dict[str, float]:
+    if not scores:
+        return {}
+    return {
+        "mean": round(sum(scores) / len(scores), 4),
+        "max": round(max(scores), 4),
+        "p90": _percentile(scores, 90),
+    }
+
+
+def _compute_calibration_thresholds(
+    owner_scores: list[float],
+    other_scores: list[float],
+    default_threshold: float,
+) -> dict[str, Any]:
+    """Return threshold suggestions clamped to [THRESHOLD_MIN, THRESHOLD_MAX].
+
+    If other_scores are provided, midpoint-based calibration is used.
+    If only owner_scores are available, a conservative fallback from ownerMin is used.
+    Thresholds are local calibration hints only — not universal truths.
+    """
+    if not owner_scores:
+        return {
+            "scoreGap": None,
+            "thresholdSuggestion": default_threshold,
+            "balancedThreshold": None,
+            "conservativeThreshold": None,
+            "permissiveThreshold": None,
+            "separationQuality": None,
+        }
+
+    owner_min = min(owner_scores)
+
+    if other_scores:
+        other_max = max(other_scores)
+        gap = round(owner_min - other_max, 4)
+        midpoint = (owner_min + other_max) / 2.0
+        # Conservative: 60% of the way from midpoint toward ownerMin
+        conservative = _clamp_threshold(midpoint + (owner_min - midpoint) * 0.6)
+        balanced = _clamp_threshold(midpoint)
+        # Permissive: 60% of the way from midpoint toward otherMax
+        permissive = _clamp_threshold(midpoint - (midpoint - other_max) * 0.6)
+
+        if gap <= 0:
+            quality = "overlap"
+        elif gap < 0.15:
+            quality = "weak"
+        elif gap < 0.35:
+            quality = "moderate"
+        else:
+            quality = "strong"
+    else:
+        # No other samples: owner-only conservative fallback
+        gap = None
+        # Conservative anchor: 85% of ownerMin; clamped to [THRESHOLD_MIN, THRESHOLD_MAX]
+        conservative = _clamp_threshold(owner_min * 0.85)
+        balanced = _clamp_threshold(owner_min * 0.90)
+        permissive = _clamp_threshold(owner_min * 0.95)
+        quality = "owner_only"
+
+    return {
+        "scoreGap": gap,
+        "thresholdSuggestion": balanced,
+        "balancedThreshold": balanced,
+        "conservativeThreshold": conservative,
+        "permissiveThreshold": permissive,
+        "separationQuality": quality,
+    }
+
+
+def _collect_wav_paths(
+    single_paths: list[Path | None],
+    multi_args: list[str] | None,
+    dir_arg: str | None,
+) -> list[Path]:
+    """Collect unique WAV paths from single args, repeated args, and a directory."""
+    seen: set[Path] = set()
+    result: list[Path] = []
+    for p in single_paths:
+        if p is not None and p not in seen:
+            seen.add(p)
+            result.append(p)
+    for raw in multi_args or []:
+        p = _path_arg(raw)
+        if p is not None and p not in seen:
+            seen.add(p)
+            result.append(p)
+    if dir_arg:
+        d = Path(dir_arg).expanduser().resolve()
+        if d.is_dir():
+            for f in sorted(d.glob("*.wav")):
+                if f not in seen:
+                    seen.add(f)
+                    result.append(f)
+    return result
+
+
 def run_probe(args: argparse.Namespace) -> dict[str, Any]:
     report = _base_report(args.model)
     report["thresholdSuggestion"] = args.threshold
@@ -264,19 +421,25 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
         )
         return report
 
-    audio_paths = [
-        path
-        for path in (
-            _path_arg(args.enroll_a),
-            _path_arg(args.verify_a),
-            _path_arg(args.verify_b),
-        )
-        if path is not None
-    ]
-    report["audioPathsProvided"] = bool(audio_paths)
+    # --- Collect audio paths ---
+    owner_paths = _collect_wav_paths(
+        [_path_arg(args.enroll_a), _path_arg(args.verify_a)],
+        getattr(args, "owner_samples", None),
+        getattr(args, "owner_dir", None),
+    )
+    other_paths = _collect_wav_paths(
+        [_path_arg(args.verify_b)],
+        getattr(args, "other_samples", None),
+        getattr(args, "other_dir", None),
+    )
+    all_audio_paths = owner_paths + other_paths
 
-    if audio_paths:
-        valid, inspected, reason = _validate_audio(audio_paths)
+    report["audioPathsProvided"] = bool(all_audio_paths)
+    report["ownerSampleCount"] = len(owner_paths)
+    report["otherSampleCount"] = len(other_paths)
+
+    if all_audio_paths:
+        valid, inspected, reason = _validate_audio(all_audio_paths)
         report["checkedAudioFiles"] = inspected
         if not valid:
             report.update(
@@ -288,7 +451,7 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
             )
             return report
 
-    should_load_model = args.load_model or bool(audio_paths)
+    should_load_model = args.load_model or bool(all_audio_paths)
     if not should_load_model:
         report.update(
             {
@@ -322,14 +485,16 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
             {
                 "status": "unavailable",
                 "reason": "missing_model",
-                "message": "Could not load FunASR CAM++ locally. "
-                "Use --allow-download only for an explicit model download probe. "
-                + " | ".join(load_errors)[:360],
+                "message": (
+                    "Could not load FunASR CAM++ locally. "
+                    "Use --allow-download only for an explicit model download probe. "
+                    + " | ".join(load_errors)[:360]
+                ),
             }
         )
         return report
 
-    if not audio_paths:
+    if not all_audio_paths:
         report.update(
             {
                 "status": "ok",
@@ -339,34 +504,72 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
         )
         return report
 
-    enroll_path = _path_arg(args.enroll_a)
-    verify_a_path = _path_arg(args.verify_a)
-    verify_b_path = _path_arg(args.verify_b)
-    if enroll_path is None or verify_a_path is None:
+    if not owner_paths:
         report.update(
             {
                 "status": "unavailable",
-                "reason": "missing_audio_pair",
-                "message": "--enroll-a and --verify-a are required for similarity scoring.",
+                "reason": "missing_owner_audio",
+                "message": (
+                    "At least one owner sample is required "
+                    "(--owner-sample PATH or --enroll-a + --verify-a)."
+                ),
             }
         )
         return report
 
     try:
-        enroll_embedding = _extract_embedding(model, enroll_path)
-        verify_a_embedding = _extract_embedding(model, verify_a_path)
-        report["embeddingDim"] = int(enroll_embedding.shape[0])
-        report["ownerScore"] = _cosine(enroll_embedding, verify_a_embedding)
+        # Extract all embeddings — kept in memory only, never written to disk
+        owner_embeddings = [_extract_embedding(model, p) for p in owner_paths]
+        other_embeddings = [_extract_embedding(model, p) for p in other_paths]
 
-        if verify_b_path is not None:
-            verify_b_embedding = _extract_embedding(model, verify_b_path)
-            report["otherScore"] = _cosine(enroll_embedding, verify_b_embedding)
+        report["embeddingDim"] = int(owner_embeddings[0].shape[0])
+
+        # Compute owner centroid (normalized mean of all owner embeddings)
+        centroid = _compute_centroid(owner_embeddings)
+
+        # ownerSelfScores: centroid vs each owner sample (represents runtime acceptance scores)
+        owner_self_scores = [_cosine(centroid, e) for e in owner_embeddings]
+        # otherScores: centroid vs each other-speaker sample
+        other_scores_list = [_cosine(centroid, e) for e in other_embeddings]
+
+        # Legacy backwards-compat: set ownerScore for single-pair mode (TASK-259 format)
+        is_legacy_enroll_verify = (
+            _path_arg(args.enroll_a) is not None
+            and _path_arg(args.verify_a) is not None
+            and not getattr(args, "owner_samples", None)
+            and not getattr(args, "owner_dir", None)
+        )
+        if is_legacy_enroll_verify and len(owner_embeddings) == 2:
+            report["ownerScore"] = _cosine(owner_embeddings[0], owner_embeddings[1])
+
+        is_legacy_verify_b = (
+            _path_arg(args.verify_b) is not None
+            and not getattr(args, "other_samples", None)
+            and not getattr(args, "other_dir", None)
+        )
+        if is_legacy_verify_b and other_scores_list:
+            report["otherScore"] = other_scores_list[0]
+
+        # Compute stats and threshold suggestions
+        o_stats = _owner_stats(owner_self_scores)
+        n_stats = _other_stats(other_scores_list)
+        thresh_info = _compute_calibration_thresholds(
+            owner_self_scores, other_scores_list, args.threshold
+        )
 
         report.update(
             {
+                "ownerSelfScores": owner_self_scores if owner_self_scores else None,
+                "otherScores": other_scores_list if other_scores_list else None,
+                "ownerStats": o_stats if o_stats else None,
+                "otherStats": n_stats if n_stats else None,
+                **thresh_info,
                 "status": "ok",
-                "reason": "embedding_probe_complete",
-                "message": "Embedding probe completed without persisting raw audio or embeddings.",
+                "reason": "calibration_probe_complete",
+                "message": (
+                    "Calibration probe completed without persisting raw audio or embeddings. "
+                    "Thresholds are local calibration hints only."
+                ),
             }
         )
         return report
@@ -385,12 +588,49 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "Offline owner voice gate speaker embedding probe. "
-            "Accepts existing WAV paths only; never records or stores raw audio."
+            "Accepts existing WAV paths only; never records or stores raw audio. "
+            "TASK-262: multi-sample calibration via --owner-sample, --other-sample, "
+            "--owner-dir, --other-dir, --output-json."
         )
     )
+    # --- Legacy single-pair args (TASK-259, kept for backwards compat) ---
     parser.add_argument("--enroll-a", help="Path to owner enrollment/reference WAV.")
     parser.add_argument("--verify-a", help="Path to same-owner verification WAV.")
     parser.add_argument("--verify-b", help="Optional path to other-speaker verification WAV.")
+    # --- Multi-sample calibration args (TASK-262) ---
+    parser.add_argument(
+        "--owner-sample",
+        action="append",
+        dest="owner_samples",
+        metavar="PATH",
+        help="Owner WAV sample path. May be repeated for multi-sample calibration.",
+    )
+    parser.add_argument(
+        "--other-sample",
+        action="append",
+        dest="other_samples",
+        metavar="PATH",
+        help="Other-speaker WAV sample path. May be repeated.",
+    )
+    parser.add_argument(
+        "--owner-dir",
+        metavar="DIR",
+        help="Directory of owner WAV samples (all *.wav files in the directory).",
+    )
+    parser.add_argument(
+        "--other-dir",
+        metavar="DIR",
+        help="Directory of other-speaker WAV samples (all *.wav files).",
+    )
+    parser.add_argument(
+        "--output-json",
+        metavar="PATH",
+        help=(
+            "Optional path to write the calibration report JSON. "
+            "Never includes raw audio or full embedding vectors."
+        ),
+    )
+    # --- Model / mode args ---
     parser.add_argument(
         "--model",
         default=PROVIDER_FUNASR_CAMPP,
@@ -424,7 +664,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--threshold",
         type=float,
         default=DEFAULT_THRESHOLD,
-        help="Similarity threshold suggestion reported in JSON.",
+        help=(
+            "Reference threshold hint reported in JSON when no audio is provided. "
+            "Multi-sample calibration computes its own balanced/conservative/permissive "
+            "suggestions and overrides this value in the thresholdSuggestion field."
+        ),
     )
     return parser
 
@@ -436,7 +680,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.check_only:
         args.load_model = bool(args.load_model)
     report = run_probe(args)
-    print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    output = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True)
+    print(output)
+    output_json_path = getattr(args, "output_json", None)
+    if output_json_path:
+        out_path = Path(output_json_path).expanduser().resolve()
+        out_path.write_text(output, encoding="utf-8")
     return 0 if report.get("status") in ("ok", "unavailable") else 1
 
 

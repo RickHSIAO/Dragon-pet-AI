@@ -520,9 +520,9 @@ check(len(missing) == 0,
 _os.environ.pop("DRAGON_PET_FUNASR_PERSISTENT", None)
 
 # ---------------------------------------------------------------------------
-# TASK-259/260: Owner Voice Gate probe and storage docs static safety checks
+# TASK-259/260/261: Owner Voice Gate probe and storage docs static safety checks
 # ---------------------------------------------------------------------------
-print("\n[10/10] TASK-259/260 - Owner Voice Gate probe and storage docs static safety")
+print("\n[10/11] TASK-259/260/261 - Owner Voice Gate probe and storage docs static safety")
 probe_path = _os.path.join(REPO_ROOT, "scripts", "owner_voice_gate_probe.py")
 owner_voice_doc = _os.path.join(REPO_ROOT, "docs", "OWNER_VOICE_GATE_RESEARCH.md")
 owner_voice_storage_doc = _os.path.join(REPO_ROOT, "docs", "OWNER_VOICE_GATE_STORAGE_DESIGN.md")
@@ -676,6 +676,85 @@ check('fetch(`${BACKEND_URL}/chat`' not in owner_ui_text,
       "owner voice gate UI section does not call /chat")
 
 # ---------------------------------------------------------------------------
+# TASK-262: Multi-sample calibration probe static safety checks
+# ---------------------------------------------------------------------------
+print("\n[11/11] TASK-262 - Owner Voice Gate multi-sample calibration probe static safety")
+
+check("--owner-sample" in probe_source,
+      "probe accepts --owner-sample for multi-sample calibration")
+check("--other-sample" in probe_source,
+      "probe accepts --other-sample for other-speaker samples")
+check("--owner-dir" in probe_source,
+      "probe accepts --owner-dir for directory of owner WAVs")
+check("--other-dir" in probe_source,
+      "probe accepts --other-dir for directory of other-speaker WAVs")
+check("--output-json" in probe_source,
+      "probe accepts --output-json for optional report file output")
+check("ownerSelfScores" in probe_source,
+      "probe report includes ownerSelfScores (centroid vs each owner sample)")
+check("otherScores" in probe_source,
+      "probe report includes otherScores (centroid vs each other-speaker sample)")
+check("ownerStats" in probe_source,
+      "probe report includes ownerStats (mean/min/max/p10/p90)")
+check("otherStats" in probe_source,
+      "probe report includes otherStats (mean/max/p90)")
+check("scoreGap" in probe_source,
+      "probe report includes scoreGap (ownerMin - otherMax)")
+check("balancedThreshold" in probe_source,
+      "probe report includes balancedThreshold suggestion")
+check("conservativeThreshold" in probe_source,
+      "probe report includes conservativeThreshold suggestion")
+check("permissiveThreshold" in probe_source,
+      "probe report includes permissiveThreshold suggestion")
+check("separationQuality" in probe_source,
+      "probe report includes separationQuality (strong/moderate/weak/overlap/owner_only)")
+check("THRESHOLD_MIN" in probe_source and "THRESHOLD_MAX" in probe_source,
+      "probe defines THRESHOLD_MIN and THRESHOLD_MAX clamp constants")
+check("_compute_calibration_thresholds" in probe_source,
+      "probe defines _compute_calibration_thresholds function")
+check("_compute_centroid" in probe_source,
+      "probe defines _compute_centroid for owner centroid computation")
+check("_clamp_threshold" in probe_source,
+      "probe defines _clamp_threshold clamping helper")
+check("calibration_probe_complete" in probe_source,
+      "probe uses calibration_probe_complete reason in output")
+check("Thresholds are local calibration hints only" in probe_source,
+      "probe documents that thresholds are local calibration hints")
+
+# Calibration output must not contain raw embedding vectors or audio bytes
+check("write_text" in probe_source and "output_json" in probe_source,
+      "probe writes --output-json report to file (no raw audio)")
+for forbidden in (
+    "getUserMedia",
+    "MediaRecorder",
+    "navigator.mediaDevices",
+    "ipcRenderer",
+    "ipcMain",
+    "stt:transcribe",
+    "/stt/transcribe",
+    "/chat",
+    "NamedTemporaryFile",
+    "mkdtemp",
+    "write_bytes",
+    "shutil.copy",
+    "save_dir",
+):
+    check(forbidden not in probe_source,
+          f"calibration probe source does not contain forbidden token {forbidden!r}")
+
+# Docs checks: TASK-262 must be recorded in owner voice research doc
+check("TASK-262" in owner_voice_text,
+      "owner voice research doc records TASK-262 calibration probe")
+check("calibration" in owner_voice_text,
+      "owner voice research doc covers calibration context")
+
+# Storage design doc threshold section must document calibration boundary
+check("TASK-262" in owner_voice_storage_text,
+      "owner voice storage design doc records TASK-262 calibration threshold")
+check("calibration" in owner_voice_storage_text,
+      "owner voice storage design doc covers calibration threshold strategy")
+
+# ---------------------------------------------------------------------------
 # Clean up env so test leaves no side effects
 # ---------------------------------------------------------------------------
 os.environ.pop("DRAGON_PET_STT_PROVIDER", None)
@@ -687,8 +766,8 @@ print()
 print("=" * 65)
 print(f"  {_pass_count} PASS  {_fail_count} FAIL")
 if _fail_count == 0:
-    print("  TASK-249/250/253/253rev/254/256/259/260/261 STT Provider Smoke: PASS")
+    print("  TASK-249/250/253/253rev/254/256/259/260/261/262 STT Provider Smoke: PASS")
 else:
-    print("  TASK-249/250/253/253rev/254/256/259/260/261 STT Provider Smoke: FAIL")
+    print("  TASK-249/250/253/253rev/254/256/259/260/261/262 STT Provider Smoke: FAIL")
 print("=" * 65)
 sys.exit(0 if _fail_count == 0 else 1)

@@ -488,7 +488,22 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   does not access mic, Manual Mic/Conversation Mode/STT/chat/Pet Window/Output Queue/Diagnostics
   Drawer regression PASS. 174 pytest PASS, 185 stt_provider_smoke PASS,
   renderer-chat-smoke PASS, pet-window-smoke 92 PASS, pet-renderer-smoke 290 PASS.
-- TASK-262 — Owner Voice Gate Calibration Probe / Multi-Sample Threshold Review
+- TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS (2026-06-04): Extended
+  `scripts/owner_voice_gate_probe.py` with multi-sample calibration: `--owner-sample PATH`
+  (repeatable), `--other-sample PATH` (repeatable), `--owner-dir DIR`, `--other-dir DIR`,
+  `--output-json PATH`. New output fields: `ownerSelfScores`, `otherScores`, `ownerStats`,
+  `otherStats`, `scoreGap`, `balancedThreshold`, `conservativeThreshold`, `permissiveThreshold`,
+  `separationQuality`. Centroid computed from all owner embeddings; scores computed as
+  cosine(centroid, each sample). Threshold clamped to [0.40, 0.95]. Legacy `--enroll-a`,
+  `--verify-a`, `--verify-b` still work. No runtime change.
+  Windows calibration smoke PASS in repeated sample args mode and directory mode. Directory mode:
+  ownerSelfScores `[0.9806, 0.9806]`, otherScores `[0.0778]`, scoreGap `0.9028`,
+  separationQuality `strong`, thresholdSuggestion/balancedThreshold `0.5292`,
+  conservativeThreshold `0.8`, permissiveThreshold `0.4`, rawAudioPersisted=false,
+  embeddingPersisted=false, micAccessed=false, runtimeIntegrated=false. Because the smoke used
+  only 2 owner samples and 1 other sample, keep `0.65` as the first future runtime balanced
+  default; do not promote `0.5292` to a universal production default.
+  223 stt_provider_smoke PASS; 174 pytest PASS; all 3 smoke scripts PASS.
 - TASK-263 — Owner Voice Gate Runtime Integration for Manual Mic
 - TASK-264 — Owner Voice Gate Runtime Integration for Conversation Mode
 

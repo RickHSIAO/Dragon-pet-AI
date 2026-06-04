@@ -26815,6 +26815,202 @@ validated.
 
 ---
 
+## TASK-262 | Owner Voice Gate Threshold / Multi-Sample Calibration Probe
+
+Status: DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS (2026-06-04)
+
+### Goal
+
+Extend `scripts/owner_voice_gate_probe.py` with multi-sample calibration
+support: multiple owner samples, multiple other-speaker samples, centroid
+computation, score distribution stats, and threshold suggestions. This is still
+an offline, file-path-only probe. No runtime integration.
+
+### Design Constraints
+
+1. Files: `scripts/owner_voice_gate_probe.py`, `scripts/stt_provider_smoke.py`,
+   and docs. No backend runtime, no renderer, no IPC.
+2. No cloud API, no microphone, no `getUserMedia`, no recording.
+3. No raw audio persistence. No embedding persistence to production storage.
+4. No Manual Mic, Conversation Mode, STT, `/chat`, Pet Window, Output Queue,
+   or Diagnostics Drawer change.
+5. No commit or push.
+
+### Implementation (2026-06-04)
+
+**`scripts/owner_voice_gate_probe.py`** — multi-sample calibration (TASK-262):
+
+New CLI arguments:
+
+- `--owner-sample PATH` (repeatable): owner WAV sample paths.
+- `--other-sample PATH` (repeatable): other-speaker WAV sample paths.
+- `--owner-dir DIR`: directory of owner WAV files (`*.wav`).
+- `--other-dir DIR`: directory of other-speaker WAV files.
+- `--output-json PATH`: optional path to write calibration report JSON (no raw audio/embedding).
+
+New functions:
+
+- `_clamp_threshold(value)` → clamped to `[THRESHOLD_MIN=0.40, THRESHOLD_MAX=0.95]`.
+- `_percentile(scores, pct)` → linear interpolation percentile.
+- `_compute_centroid(embeddings)` → normalized mean of all owner embeddings.
+- `_owner_stats(scores)` → `{mean, min, max, p10, p90}`.
+- `_other_stats(scores)` → `{mean, max, p90}`.
+- `_compute_calibration_thresholds(owner_scores, other_scores, default)` → threshold dict.
+- `_collect_wav_paths(single_paths, multi_args, dir_arg)` → deduplicated path list.
+
+Calibration flow:
+
+1. Collect owner paths from `--enroll-a`, `--verify-a`, `--owner-sample`, `--owner-dir`.
+2. Collect other paths from `--verify-b`, `--other-sample`, `--other-dir`.
+3. Validate all paths (mono 16 kHz PCM WAV).
+4. Load FunASR CAM++ model (local-cache only).
+5. Extract embeddings in memory only; never write to disk.
+6. Compute owner centroid.
+7. Compute `ownerSelfScores` = cosine(centroid, each owner embedding).
+8. Compute `otherScores` = cosine(centroid, each other embedding).
+9. Compute stats and threshold suggestions.
+10. Write clean JSON to stdout; optionally to `--output-json` path.
+
+Threshold strategy:
+
+- If other samples exist: midpoint-based calibration (ownerMin vs otherMax).
+  - `balancedThreshold` = midpoint; `conservativeThreshold` = 60% toward ownerMin;
+    `permissiveThreshold` = 60% toward otherMax.
+  - `separationQuality`: `strong` (gap ≥ 0.35), `moderate` (≥ 0.15), `weak` (< 0.15),
+    `overlap` (≤ 0).
+- If owner-only: 85/90/95% of ownerMin as conservative/balanced/permissive fallback.
+- All thresholds clamped to `[0.40, 0.95]`.
+- Thresholds are local calibration hints only — not universal truths.
+
+Backwards compat:
+
+- `--enroll-a` + `--verify-a` still sets legacy `ownerScore` (direct pairwise similarity).
+- `--verify-b` still sets legacy `otherScore`.
+- `--check-only` behavior unchanged.
+
+New base report fields:
+
+```json
+{
+  "ownerSampleCount": 0,
+  "otherSampleCount": 0,
+  "ownerSelfScores": null,
+  "otherScores": null,
+  "ownerStats": null,
+  "otherStats": null,
+  "scoreGap": null,
+  "balancedThreshold": null,
+  "conservativeThreshold": null,
+  "permissiveThreshold": null,
+  "separationQuality": null
+}
+```
+
+**`scripts/stt_provider_smoke.py`** — TASK-262 section added (`[11/11]`):
+
+- Confirms `--owner-sample`, `--other-sample`, `--owner-dir`, `--other-dir`, `--output-json` in probe source.
+- Confirms `ownerSelfScores`, `otherScores`, `ownerStats`, `otherStats`, `scoreGap`,
+  `balancedThreshold`, `conservativeThreshold`, `permissiveThreshold`, `separationQuality` in probe source.
+- Confirms `THRESHOLD_MIN`, `THRESHOLD_MAX`, `_compute_calibration_thresholds`, `_compute_centroid`,
+  `_clamp_threshold` in probe source.
+- Confirms no forbidden tokens (getUserMedia, MediaRecorder, /stt/transcribe, /chat, etc.).
+- Confirms TASK-262 and calibration boundary in docs.
+- 223/223 PASS.
+
+### Acceptance Criteria
+
+- ✅ `--owner-sample`, `--other-sample`, `--owner-dir`, `--other-dir`, `--output-json` added
+- ✅ `_collect_wav_paths` deduplicates paths from all sources
+- ✅ `_compute_centroid` normalizes mean of all owner embeddings
+- ✅ `ownerSelfScores` = cosine(centroid, each owner embedding)
+- ✅ `otherScores` = cosine(centroid, each other-speaker embedding)
+- ✅ `ownerStats` includes mean/min/max/p10/p90
+- ✅ `otherStats` includes mean/max/p90
+- ✅ `_compute_calibration_thresholds` with midpoint-based and owner-only fallback
+- ✅ `scoreGap` = ownerMin - otherMax (None when no other samples)
+- ✅ `separationQuality` with strong/moderate/weak/overlap/owner_only levels
+- ✅ All thresholds clamped to [0.40, 0.95]
+- ✅ Thresholds documented as local calibration hints only
+- ✅ Legacy `ownerScore` / `otherScore` still set in single-pair backwards-compat mode
+- ✅ `--check-only` still returns dependency_check_only with full new fields (null)
+- ✅ `--output-json PATH` writes report to file without raw audio or embedding vectors
+- ✅ No getUserMedia, MediaRecorder, /stt/transcribe, /chat, raw audio persistence
+- ✅ 174 backend pytest PASS (unchanged)
+- ✅ 223/223 stt_provider_smoke PASS (TASK-262 section passes)
+- ✅ renderer-chat-smoke PASS
+- ✅ pet-window-smoke 92 PASS
+- ✅ pet-renderer-smoke 290 PASS
+- ✅ `--help` PASS (all new args shown)
+- ✅ `--check-only` PASS (all new fields present, status=ok)
+- ✅ git diff --check PASS (CRLF warnings only)
+
+### Windows Calibration Smoke Closeout (2026-06-04)
+
+Repeated sample args mode PASS:
+
+- `--owner-sample owner1.wav`
+- `--owner-sample owner2.wav`
+- `--other-sample other.wav`
+- `--output-json task262-calibration.json`
+
+Directory mode PASS:
+
+- `--owner-dir %TEMP%\dragon-pet-voice-probe\owner`
+- `--other-dir %TEMP%\dragon-pet-voice-probe\other`
+- `--output-json task262-calibration-dir.json`
+
+Directory mode result:
+
+- status: `ok`
+- reason: `calibration_probe_complete`
+- modelLoaded: `true`
+- modelLoadSeconds: `9.391`
+- embeddingDim: `192`
+- ownerSampleCount: `2`
+- otherSampleCount: `1`
+- ownerSelfScores: `[0.9806, 0.9806]`
+- otherScores: `[0.0778]`
+- ownerStats mean/min/max/p10/p90: `0.9806`
+- otherStats mean/max/p90: `0.0778`
+- scoreGap: `0.9028`
+- separationQuality: `strong`
+- thresholdSuggestion: `0.5292`
+- balancedThreshold: `0.5292`
+- conservativeThreshold: `0.8`
+- permissiveThreshold: `0.4`
+- rawAudioPersisted: `false`
+- embeddingPersisted: `false`
+- micAccessed: `false`
+- runtimeIntegrated: `false`
+
+Threshold closeout:
+
+- This smoke shows strong local separation.
+- The sample count is still small: 2 owner samples and 1 other sample.
+- Do not treat `0.5292` as a universal production default.
+- Keep `0.65` as the first future runtime balanced default unless larger
+  calibration data suggests otherwise.
+- Document `0.8` as conservative mode.
+- Treat `0.4` / permissiveThreshold as debug/permissive only, not as the
+  first runtime gate default.
+
+Safety closeout:
+
+- Probe remains offline and file-based.
+- No raw audio persistence.
+- No embedding persistence.
+- No microphone access.
+- No runtime integration.
+- No Manual Mic / Conversation Mode runtime integration.
+- No STT or `/chat` schema change.
+- No Pet Window, Output Queue, or Diagnostics Drawer change.
+
+### Next Task
+
+TASK-263 — Owner Voice Gate Runtime Integration for Manual Mic
+
+---
+
 ## TASK-253 | FunASR Transcript Normalisation / Traditional Chinese Output
 
 Status: DONE - WINDOWS NORMALIZATION SMOKE PASS / NEEDS LATENCY FOLLOW-UP (2026-06-03)

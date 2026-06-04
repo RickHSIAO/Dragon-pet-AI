@@ -1,6 +1,6 @@
 # Interactive Companion Architecture Checkpoint
 
-**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-236 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS; TASK-237 IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS
+**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-236 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS; TASK-237 IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS
 **Date:** 2026-06-01
 **Scope:** Architecture checkpoint for TASK-214 through TASK-230.
 
@@ -62,6 +62,7 @@ user interaction
 | TASK-259 | Owner voice gate probe | Adds offline file-path-only speaker embedding probe; no runtime integration. DONE - Windows owner voice probe smoke PASS. |
 | TASK-260 | Owner voice gate storage design | Defines enrollment storage, threshold calibration, reset/delete UX, and diagnostics boundary. DOCS ONLY / NO RUNTIME CHANGE. |
 | TASK-261 | Owner voice gate settings UI/storage stub | Adds backend-owned storage stub, narrow status/settings/delete endpoints, and Full App settings UI. No enrollment or runtime gate. DONE - Windows owner voice storage/UI smoke PASS. |
+| TASK-262 | Owner voice gate multi-sample calibration probe | Extends offline probe with centroid, ownerSelfScores/otherScores, stats, threshold suggestions. DONE - Windows owner voice calibration smoke PASS. |
 | TASK-228 | Output queue runtime skeleton | Adds Full App renderer-only disabled queue skeleton, sanitized snapshot, priority/preemption helpers, and queue diagnostics preview. DONE - Windows visual smoke PASS. |
 | TASK-229 | Output queue debug preview | Polishes queue snapshot preview with Recent and safe Next summary. DONE - Windows visual smoke PASS. |
 | TASK-230 | Reaction bubble diagnostics enqueue | Enqueues safe reaction bubble ids into the disabled local output queue for diagnostics only. DONE - Windows visual smoke PASS. |
@@ -698,6 +699,22 @@ Recommended next architecture phase:
   and clamped, enable blocked when not enrolled (clean not_enrolled), delete resets stub, storage
   file contains no raw audio/base64/transcript/waveform, re-enroll placeholder does not access mic,
   all runtime regression PASS.
+- TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS (2026-06-04):
+  Extends `scripts/owner_voice_gate_probe.py` with multi-sample calibration. New CLI args:
+  `--owner-sample PATH` (repeatable), `--other-sample PATH` (repeatable), `--owner-dir DIR`,
+  `--other-dir DIR`, `--output-json PATH`. Computes owner centroid, `ownerSelfScores`
+  (cosine of centroid vs each owner sample), `otherScores` (centroid vs each other-speaker
+  sample), `ownerStats`/`otherStats`, `scoreGap`, and threshold suggestions
+  (`balancedThreshold`, `conservativeThreshold`, `permissiveThreshold`). All thresholds clamped
+  to [0.40, 0.95] and documented as local calibration hints only. Legacy `--enroll-a`,
+  `--verify-a`, `--verify-b` still work. No runtime change, no mic, no raw audio persistence.
+  Windows calibration smoke PASS in repeated sample args mode and directory mode. Directory mode:
+  ownerSelfScores `[0.9806, 0.9806]`, otherScores `[0.0778]`, scoreGap `0.9028`,
+  separationQuality `strong`, thresholdSuggestion/balancedThreshold `0.5292`,
+  conservativeThreshold `0.8`, permissiveThreshold `0.4`, rawAudioPersisted=false,
+  embeddingPersisted=false, micAccessed=false, runtimeIntegrated=false. Because this smoke used
+  only 2 owner samples and 1 other sample, future runtime should keep `0.65` as the first
+  balanced default until larger calibration data suggests otherwise.
 - Relationship state.
 - Mood / attention / energy state beyond the local preview foundation.
 - Idle reaction policy.

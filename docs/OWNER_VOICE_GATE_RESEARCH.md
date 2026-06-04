@@ -1,6 +1,6 @@
 # Owner Voice Gate Research
 
-Status: TASK-258 RESEARCH - OWNER VOICE GATE FEASIBILITY / NO RUNTIME CHANGE; TASK-259 DONE - WINDOWS OWNER VOICE PROBE SMOKE PASS; TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS
+Status: TASK-258 RESEARCH - OWNER VOICE GATE FEASIBILITY / NO RUNTIME CHANGE; TASK-259 DONE - WINDOWS OWNER VOICE PROBE SMOKE PASS; TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS
 
 Date: 2026-06-04
 
@@ -414,3 +414,97 @@ Safety boundary remains unchanged:
 Next recommended task: TASK-262 Owner Voice Gate Calibration Probe /
 Multi-Sample Threshold Review. Do not jump directly to Manual Mic or
 Conversation Mode runtime gating.
+
+## 13. TASK-262 multi-sample calibration probe
+
+Status: DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS
+
+TASK-262 extends `scripts/owner_voice_gate_probe.py` with multi-sample
+calibration support. It is still offline and file-path-only.
+
+New CLI arguments:
+
+- `--owner-sample PATH` (repeatable): owner WAV sample paths.
+- `--other-sample PATH` (repeatable): other-speaker WAV sample paths.
+- `--owner-dir DIR`: directory of owner WAV files.
+- `--other-dir DIR`: directory of other-speaker WAV files.
+- `--output-json PATH`: optional JSON report file output.
+
+Calibration behavior:
+
+1. Collect all owner samples; compute embeddings in memory only.
+2. Compute owner centroid: normalized mean of all owner embeddings.
+3. `ownerSelfScores`: cosine(centroid, each owner embedding).
+4. `otherScores`: cosine(centroid, each other-speaker embedding).
+5. `ownerStats`: mean, min, max, p10, p90 of ownerSelfScores.
+6. `otherStats`: mean, max, p90 of otherScores.
+7. Threshold suggestions clamped to `[0.40, 0.95]`:
+   - `balancedThreshold`: midpoint(ownerMin, otherMax) when other samples exist.
+   - `conservativeThreshold`: 60% of the way from midpoint toward ownerMin.
+   - `permissiveThreshold`: 60% of the way from midpoint toward otherMax.
+   - Owner-only fallback: conservative/balanced/permissive derived from ownerMin.
+8. `scoreGap`: ownerMin - otherMax.
+9. `separationQuality`: `strong` (≥ 0.35), `moderate` (≥ 0.15), `weak` (< 0.15), `overlap` (≤ 0), `owner_only`.
+10. Thresholds are local calibration hints only — not universal truths.
+
+Safety boundary (unchanged):
+
+- No Manual Mic runtime change.
+- No Conversation Mode runtime change.
+- No `/stt/transcribe` behavior change.
+- No `/chat` schema change.
+- No new IPC channel.
+- No microphone access.
+- No `getUserMedia`.
+- No recording.
+- No raw audio persistence.
+- No embedding persistence to production storage.
+- No always listening.
+- No background monitoring.
+- No Pet Window, Output Queue, or Diagnostics Drawer change.
+
+Windows calibration smoke PASS:
+
+- Repeated sample args mode PASS: `--owner-sample owner1.wav`,
+  `--owner-sample owner2.wav`, `--other-sample other.wav`, and
+  `--output-json task262-calibration.json`.
+- Directory mode PASS: `--owner-dir %TEMP%\dragon-pet-voice-probe\owner`,
+  `--other-dir %TEMP%\dragon-pet-voice-probe\other`, and
+  `--output-json task262-calibration-dir.json`.
+- Directory mode loaded `iic/speech_campplus_sv_zh-cn_16k-common` locally
+  with FunASR CAM++ in 9.391 s and produced 192-d embeddings.
+- ownerSampleCount: 2; otherSampleCount: 1.
+- ownerSelfScores: `[0.9806, 0.9806]`.
+- otherScores: `[0.0778]`.
+- ownerStats mean/min/max/p10/p90: `0.9806`.
+- otherStats mean/max/p90: `0.0778`.
+- scoreGap: `0.9028`.
+- separationQuality: `strong`.
+- thresholdSuggestion / balancedThreshold: `0.5292`.
+- conservativeThreshold: `0.8`.
+- permissiveThreshold: `0.4`.
+- rawAudioPersisted=false, embeddingPersisted=false, micAccessed=false,
+  runtimeIntegrated=false.
+
+Threshold interpretation:
+
+The smoke result shows strong separation for this Windows machine and these
+three samples, but the sample count is still small. Do not treat `0.5292` as a
+universal production default. For future runtime gating, keep `0.65` as the
+first balanced default unless larger calibration data suggests otherwise.
+Document `0.8` as conservative mode. Treat `0.4` as debug/permissive only, not
+as the first runtime gate default.
+
+Backwards compatibility:
+
+- `--enroll-a` and `--verify-a` still work as before (treated as 2 owner samples).
+- `--verify-b` still works (treated as 1 other-speaker sample).
+- Legacy `ownerScore` and `otherScore` fields are set when only legacy args are used.
+
+Recommended next tasks:
+
+- TASK-263 Owner Voice Gate Runtime Integration for Manual Mic.
+- TASK-264 Owner Voice Gate Runtime Integration for Conversation Mode.
+
+Do not jump to runtime gating until the explicit runtime task accepts the
+threshold strategy and keeps owner voice gate opt-in.
