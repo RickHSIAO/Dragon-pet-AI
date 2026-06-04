@@ -329,7 +329,7 @@ handling:
 3. TASK-SEC-003 Prompt Injection / Phishing Test Corpus - DONE.
 4. TASK-SEC-004 Tool Permission / User Confirmation Policy - DONE.
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer Design - DONE.
-6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
+6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy - DONE.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
 
 ## 13. Validation

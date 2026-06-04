@@ -222,6 +222,11 @@ runtime, all of the following must be complete:
 - Manual Mic and Conversation Mode integration each have separate tests and
   documentation.
 
+TASK-266 satisfies the Manual Mic dry-run requirement as status-only behavior:
+accept, reject, not-computed, disabled, and error states do not hard-block
+Manual Mic STT, textarea fill, auto-send, `/stt/transcribe`, or `/chat`.
+Conversation Mode remains deferred to TASK-267.
+
 ## 11. Recommended Task Sequence
 
 1. TASK-SEC-001 Security Boundary / Anti Prompt Injection Design - DONE.
@@ -229,7 +234,7 @@ runtime, all of the following must be complete:
 3. TASK-SEC-003 Prompt Injection Test Corpus - DONE.
 4. TASK-SEC-004 Tool Permission / User Confirmation Policy - DONE.
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer Design - DONE.
-6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
+6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy - DONE.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
 
 ## 12. Non-Goals

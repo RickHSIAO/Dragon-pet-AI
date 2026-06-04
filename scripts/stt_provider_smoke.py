@@ -908,7 +908,7 @@ check("TASK-264" in owner_voice_storage_text,
 # ---------------------------------------------------------------------------
 # TASK-265: Backend verify-files endpoint static safety checks
 # ---------------------------------------------------------------------------
-print("\n[14/14] TASK-265 - Owner Voice Gate backend verify-files endpoint static safety")
+print("\n[14/15] TASK-265 - Owner Voice Gate backend verify-files endpoint static safety")
 
 verify_endpoint_route = "/owner-voice-gate/verify-files"
 check(verify_endpoint_route in routes_source,
@@ -967,6 +967,55 @@ check("TASK-265" in owner_voice_storage_text,
       "owner voice storage design doc records TASK-265")
 
 # ---------------------------------------------------------------------------
+# TASK-266: Manual Mic dry-run policy static safety checks
+# ---------------------------------------------------------------------------
+print("\n[15/15] TASK-266 - Owner Voice Gate Manual Mic dry-run policy static safety")
+
+check("OWNER_VOICE_MANUAL_MIC_DRY_RUN_ENABLED" in renderer_js_text,
+      "renderer defines Manual Mic owner voice dry-run enable flag")
+check("ownerVoiceDryRunStatus" in renderer_js_text,
+      "renderer exposes ownerVoiceDryRunStatus diagnostics field")
+check("ownerVoiceDryRunReason" in renderer_js_text,
+      "renderer exposes ownerVoiceDryRunReason diagnostics field")
+check("ownerVoiceScore" in renderer_js_text and "ownerVoiceThreshold" in renderer_js_text,
+      "renderer exposes safe owner voice score/threshold diagnostics")
+check("ownerVoiceAccepted" in renderer_js_text,
+      "renderer exposes safe owner voice accepted diagnostics")
+check("runtimeHardBlocked" in renderer_js_text,
+      "renderer records runtimeHardBlocked safety field")
+check("rawAudioPersisted" in renderer_js_text and "candidateEmbeddingPersisted" in renderer_js_text,
+      "renderer records raw audio / candidate embedding persistence safety fields")
+check("storedCentroidExposed" in renderer_js_text,
+      "renderer records storedCentroidExposed safety field")
+check("async function runOwnerVoiceManualMicDryRun" in renderer_js_text,
+      "renderer defines Manual Mic dry-run helper")
+check("/owner-voice-gate/verify-files" in renderer_js_text,
+      "Manual Mic dry-run reuses verify-files endpoint")
+check("no_candidate_file_policy" in renderer_js_text,
+      "Manual Mic dry-run avoids raw-audio persistence when no candidate path policy exists")
+
+dry_run_start = renderer_js_text.find("async function runOwnerVoiceManualMicDryRun")
+dry_run_section = renderer_js_text[dry_run_start:dry_run_start + 2600] if dry_run_start >= 0 else ""
+check(bool(dry_run_section), "Manual Mic dry-run helper section can be isolated")
+for forbidden in (
+    "fullAppVoiceConversation",
+    "sendMessage(",
+    "DragonOutputQueue",
+    "dragonPet.",
+    "embeddingAggregate",
+    "transcript",
+):
+    check(forbidden not in dry_run_section,
+          f"Manual Mic dry-run helper does not contain forbidden token {forbidden!r}")
+check("runtimeHardBlocked" in dry_run_section and "false" in dry_run_section,
+      "Manual Mic dry-run explicitly keeps runtimeHardBlocked=false")
+
+check("TASK-266" in owner_voice_storage_text,
+      "owner voice storage design doc records TASK-266")
+check("TASK-266" in owner_voice_text,
+      "owner voice research doc records TASK-266")
+
+# ---------------------------------------------------------------------------
 # Clean up env so test leaves no side effects
 # ---------------------------------------------------------------------------
 os.environ.pop("DRAGON_PET_STT_PROVIDER", None)
@@ -978,8 +1027,8 @@ print()
 print("=" * 65)
 print(f"  {_pass_count} PASS  {_fail_count} FAIL")
 if _fail_count == 0:
-    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263/264/265 STT Provider Smoke: PASS")
+    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263/264/265/266 STT Provider Smoke: PASS")
 else:
-    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263/264/265 STT Provider Smoke: FAIL")
+    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263/264/265/266 STT Provider Smoke: FAIL")
 print("=" * 65)
 sys.exit(0 if _fail_count == 0 else 1)

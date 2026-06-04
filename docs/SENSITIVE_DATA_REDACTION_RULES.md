@@ -148,6 +148,10 @@ Hard rules:
   embedding dimension, sample count, threshold, and verification decision.
 - Scores and thresholds may be shown as local verification results, but they
   must not be presented as identity proof or account security.
+- TASK-266 Manual Mic dry-run diagnostics may show only status, reason,
+  score/threshold, accepted state, checked timestamp, and safety booleans.
+  They must not show centroid vectors, `embeddingAggregate`, candidate
+  embeddings, raw audio, raw candidate paths, or rejected transcript.
 
 ## 7. API Response Rules
 
@@ -271,7 +275,7 @@ content requested it.
 3. TASK-SEC-003 Prompt Injection Test Corpus - DONE.
 4. TASK-SEC-004 Tool Permission / User Confirmation Policy - DONE.
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer Design - DONE.
-6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
+6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy - DONE.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
 
 ## 12. Validation

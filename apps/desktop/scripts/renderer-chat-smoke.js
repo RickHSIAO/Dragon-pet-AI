@@ -426,6 +426,28 @@ function createFetchStub(state) {
       state.ownerVoiceGateSettings = defaultOwnerVoiceGateSettings({ reason: "deleted" });
       return new FakeResponse(200, state.ownerVoiceGateSettings);
     }
+    if (target.endsWith("/owner-voice-gate/verify-files")) {
+      if (state.ownerVoiceVerifyMode === "error") {
+        throw new TypeError("verify failed");
+      }
+      const body = JSON.parse(options.body || "{}");
+      const threshold = Math.max(0.4, Math.min(0.95, Number(body.threshold || 0.65)));
+      const accepted = state.ownerVoiceVerifyMode !== "reject";
+      return new FakeResponse(200, {
+        status: "ok",
+        reason: "verification_complete",
+        enrolled: true,
+        score: accepted ? 0.9806 : 0.0778,
+        threshold,
+        accepted,
+        embeddingDim: 192,
+        rawAudioPersisted: false,
+        candidateEmbeddingPersisted: false,
+        storedCentroidExposed: false,
+        micAccessed: false,
+        runtimeIntegrated: false,
+      });
+    }
     if (target.endsWith("/provider/settings") && options.method === "PATCH") {
       state.providerSettings = {
         ...state.providerSettings,
@@ -592,6 +614,8 @@ async function loadRenderer(options = {}) {
     // TASK-256: warmup endpoint response modes ("loaded" | "skipped" | "error")
     sttWarmupMode: options.sttWarmupMode || "skipped",
     ollamaWarmupMode: options.ollamaWarmupMode || "skipped",
+    // TASK-266: owner voice verify-files response mode ("accept" | "reject" | "error")
+    ownerVoiceVerifyMode: options.ownerVoiceVerifyMode || "accept",
   };
 
   // FakeImage closes over availableImages so each test run is isolated.
@@ -14700,6 +14724,161 @@ function testTask263OwnerVoiceEnrollmentNoMicSttChatPetOrOutputQueue() {
   console.log("  testTask263OwnerVoiceEnrollmentNoMicSttChatPetOrOutputQueue PASS");
 }
 
+// ---------------------------------------------------------------------------
+// TASK-266: Owner Voice Gate Manual Mic dry-run policy
+// ---------------------------------------------------------------------------
+
+function _task266OwnerVoiceDryRunRendererSection() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const start = src.indexOf("TASK-266: Owner Voice Gate Manual Mic dry-run policy.");
+  const end = src.indexOf("TASK-179:", start);
+  assert.ok(start !== -1, "TASK-266 renderer constants section must exist");
+  assert.ok(end !== -1, "TASK-266 constants section must end before TASK-179");
+  return src.slice(start, end);
+}
+
+function _task266OwnerVoiceEnabledSettings() {
+  return {
+    enabled: true,
+    enrolled: true,
+    sampleCount: 2,
+    threshold: 0.65,
+    embeddingAggregate: null,
+    embeddingPersisted: true,
+    safetyNoticeAccepted: true,
+    status: "enabled",
+    reason: "settings_updated",
+  };
+}
+
+async function testTask266ManualMicDryRunDisabledStillFillsTextarea() {
+  const { document, sandbox, state } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => ({ status: "ok", transcript: "dry run disabled text" }),
+    },
+  });
+  sandbox.setFullAppVoiceState("transcribing");
+  sandbox._fullAppSttTranscribeChunks([new Blob(["x"], { type: "audio/wav" })], "audio/wav");
+  await settle();
+  assert.equal(document.getElementById("message-input").value, "dry run disabled text");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.ownerVoiceDryRunStatus, "disabled");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.runtimeHardBlocked, false);
+  assert.equal(state.calls.filter((call) => call.url.endsWith("/owner-voice-gate/verify-files")).length, 0,
+    "TASK-266 disabled dry-run must not call verify-files");
+  console.log("  testTask266ManualMicDryRunDisabledStillFillsTextarea PASS");
+}
+
+async function testTask266ManualMicDryRunAcceptStillFillsTextarea() {
+  const { document, sandbox, state } = await loadRenderer({
+    ownerVoiceGateSettings: _task266OwnerVoiceEnabledSettings(),
+    ownerVoiceVerifyMode: "accept",
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => ({ status: "ok", transcript: "owner accepted text" }),
+    },
+  });
+  sandbox.fullAppOwnerVoiceDryRunCandidatePath = "C:\\voice\\manual-mic-candidate.wav";
+  sandbox.setFullAppVoiceState("transcribing");
+  sandbox._fullAppSttTranscribeChunks([new Blob(["x"], { type: "audio/wav" })], "audio/wav");
+  await settle();
+  const verifyCalls = state.calls.filter((call) => call.url.endsWith("/owner-voice-gate/verify-files"));
+  assert.equal(document.getElementById("message-input").value, "owner accepted text");
+  assert.equal(verifyCalls.length, 1, "TASK-266 accept path must call verify-files once");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.ownerVoiceDryRunStatus, "ok");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.ownerVoiceAccepted, true);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.ownerVoiceScore, 0.9806);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.runtimeHardBlocked, false);
+  console.log("  testTask266ManualMicDryRunAcceptStillFillsTextarea PASS");
+}
+
+async function testTask266ManualMicDryRunRejectStillFillsTextarea() {
+  const { document, sandbox, state } = await loadRenderer({
+    ownerVoiceGateSettings: _task266OwnerVoiceEnabledSettings(),
+    ownerVoiceVerifyMode: "reject",
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => ({ status: "ok", transcript: "owner rejected text" }),
+    },
+  });
+  sandbox.fullAppOwnerVoiceDryRunCandidatePath = "C:\\voice\\manual-mic-candidate.wav";
+  sandbox.setFullAppVoiceState("transcribing");
+  sandbox._fullAppSttTranscribeChunks([new Blob(["x"], { type: "audio/wav" })], "audio/wav");
+  await settle();
+  assert.equal(document.getElementById("message-input").value, "owner rejected text",
+    "TASK-266 rejected dry-run must not block Manual Mic textarea fill");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.ownerVoiceAccepted, false);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.ownerVoiceDryRunStatus, "ok");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.runtimeHardBlocked, false);
+  assert.equal(state.calls.filter((call) => call.url.endsWith("/chat")).length, 0,
+    "TASK-266 reject with auto-send OFF must not add /chat call");
+  console.log("  testTask266ManualMicDryRunRejectStillFillsTextarea PASS");
+}
+
+async function testTask266ManualMicDryRunVerifyErrorStillAutosends() {
+  const { sandbox, state } = await loadRenderer({
+    ownerVoiceGateSettings: _task266OwnerVoiceEnabledSettings(),
+    ownerVoiceVerifyMode: "error",
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => ({ status: "ok", transcript: "owner verify error text" }),
+      updatePetSpeech: async () => ({ ok: true }),
+      updatePetExpression: async () => ({ ok: true }),
+    },
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceAutoSendEnabled = true;
+  sandbox.fullAppOwnerVoiceDryRunCandidatePath = "C:\\voice\\manual-mic-candidate.wav";
+  sandbox.setFullAppVoiceState("transcribing");
+  sandbox._fullAppSttTranscribeChunks([new Blob(["x"], { type: "audio/wav" })], "audio/wav");
+  await settle();
+  assert.equal(sandbox.fullAppVoiceDiagnostics.ownerVoiceDryRunStatus, "error");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.ownerVoiceDryRunReason, "verify_files_error");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.runtimeHardBlocked, false);
+  assert.ok(state.calls.filter((call) => call.url.endsWith("/chat")).length >= 1,
+    "TASK-266 verify error must not block existing auto-send /chat flow");
+  console.log("  testTask266ManualMicDryRunVerifyErrorStillAutosends PASS");
+}
+
+async function testTask266ManualMicDryRunEnabledWithoutCandidateDoesNotPersistAudio() {
+  const { document, sandbox, state } = await loadRenderer({
+    ownerVoiceGateSettings: _task266OwnerVoiceEnabledSettings(),
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => ({ status: "ok", transcript: "no candidate policy text" }),
+    },
+  });
+  sandbox.setFullAppVoiceState("transcribing");
+  sandbox._fullAppSttTranscribeChunks([new Blob(["x"], { type: "audio/wav" })], "audio/wav");
+  await settle();
+  assert.equal(document.getElementById("message-input").value, "no candidate policy text");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.ownerVoiceDryRunStatus, "not_computed");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.ownerVoiceDryRunReason, "no_candidate_file_policy");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.rawAudioPersisted, false);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.candidateEmbeddingPersisted, false);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.storedCentroidExposed, false);
+  assert.equal(state.calls.filter((call) => call.url.endsWith("/owner-voice-gate/verify-files")).length, 0,
+    "TASK-266 no candidate path must not call verify-files or persist audio");
+  console.log("  testTask266ManualMicDryRunEnabledWithoutCandidateDoesNotPersistAudio PASS");
+}
+
+function testTask266DryRunNoConversationModeWiringOrSensitiveExposure() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const marker = src.indexOf("async function runOwnerVoiceManualMicDryRun");
+  const body = src.slice(marker, marker + 2300);
+  assert.ok(marker !== -1, "TASK-266 runOwnerVoiceManualMicDryRun function must exist");
+  assert.ok(body.includes("/owner-voice-gate/verify-files"), "TASK-266 dry-run must reuse verify-files");
+  assert.ok(!body.includes("fullAppVoiceConversation"), "TASK-266 dry-run must not wire Conversation Mode");
+  assert.ok(!body.includes("sendMessage("), "TASK-266 dry-run must not call /chat path");
+  assert.ok(!body.includes("DragonOutputQueue"), "TASK-266 dry-run must not touch Output Queue");
+  assert.ok(!body.includes("dragonPet."), "TASK-266 dry-run must not touch Pet Window IPC");
+  assert.ok(!body.includes("embeddingAggregate"), "TASK-266 dry-run must not expose centroid/embeddingAggregate");
+  assert.ok(!body.includes("transcript"), "TASK-266 dry-run must not inspect or expose transcript");
+  assert.ok(body.includes("runtimeHardBlocked") && body.includes("false"),
+    "TASK-266 dry-run must explicitly keep runtimeHardBlocked=false");
+  console.log("  testTask266DryRunNoConversationModeWiringOrSensitiveExposure PASS");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -15683,6 +15862,12 @@ async function main() {
   await testTask263OwnerVoiceEnrollmentSuccessUpdatesUiWithoutVector();
   await testTask263OwnerVoiceEnableAllowedAfterEnrollment();
   testTask263OwnerVoiceEnrollmentNoMicSttChatPetOrOutputQueue();
+  await testTask266ManualMicDryRunDisabledStillFillsTextarea();
+  await testTask266ManualMicDryRunAcceptStillFillsTextarea();
+  await testTask266ManualMicDryRunRejectStillFillsTextarea();
+  await testTask266ManualMicDryRunVerifyErrorStillAutosends();
+  await testTask266ManualMicDryRunEnabledWithoutCandidateDoesNotPersistAudio();
+  testTask266DryRunNoConversationModeWiringOrSensitiveExposure();
 
   console.log("renderer chat smoke: PASS");
 }

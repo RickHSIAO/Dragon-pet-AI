@@ -80,6 +80,11 @@ var STARTUP_WARMUP_ENABLED        = true;  // var: exposed to vm sandbox for smo
 var STARTUP_STT_WARMUP_ENABLED    = true;  // var: exposed to vm sandbox
 var STARTUP_OLLAMA_WARMUP_ENABLED = true;  // var: exposed to vm sandbox
 const STARTUP_WARMUP_DELAY_MS     = 3000;  // delay after health check before warmup fires
+// TASK-266: Owner Voice Gate Manual Mic dry-run policy.
+// Status-only: never hard-block Manual Mic STT/chat flow. The candidate path
+// stays empty until a future explicit temp-file policy supplies one.
+var OWNER_VOICE_MANUAL_MIC_DRY_RUN_ENABLED = true; // var: exposed to vm sandbox
+var fullAppOwnerVoiceDryRunCandidatePath = "";     // var: test/future policy hook only
 // TASK-179: gentle hint shown after OCR summary exists.
 const ocrAskHintEl = document.getElementById("ocr-ask-hint");
 const memoryForm  = document.getElementById("memory-form");
@@ -292,7 +297,20 @@ var fullAppVoiceDiagnostics = {
   ollamaWarmupStatus: "pending",
   ollamaWarmupLatencyMs: 0,
   ollamaWarmupError: null,
-  lastStartupWarmupAt: 0
+  lastStartupWarmupAt: 0,
+  // TASK-266: Owner Voice Gate Manual Mic dry-run status. These fields are
+  // status-only and must never hard-block runtime behavior.
+  ownerVoiceDryRunEnabled: false,
+  ownerVoiceDryRunStatus: "disabled",
+  ownerVoiceDryRunReason: "not_checked",
+  ownerVoiceScore: null,
+  ownerVoiceThreshold: 0.65,
+  ownerVoiceAccepted: null,
+  ownerVoiceCheckedAt: "",
+  rawAudioPersisted: false,
+  candidateEmbeddingPersisted: false,
+  storedCentroidExposed: false,
+  runtimeHardBlocked: false
 };
 // TASK-244: session-only VAD tuning vars — override constants for this session only, not persisted
 var fullAppConversationRmsThreshold = FULL_APP_CONVERSATION_RMS_THRESHOLD;
@@ -308,6 +326,7 @@ let currentProviderSettings = {};
 let providerSettingsLoaded = false;
 let lastChatSource = "not_checked";
 let lastChatStatusMessage = "No chat response yet.";
+var currentOwnerVoiceGateSettings = {}; // var: exposed to vm sandbox for smoke tests
 
 function setShowPetWindowStatus(message, isError = false) {
   if (!showPetWindowStatus) {
@@ -3222,8 +3241,94 @@ function _ownerVoiceEnrollmentPaths() {
     .filter(Boolean);
 }
 
+function _ownerVoiceManualMicThreshold() {
+  const value = currentOwnerVoiceGateSettings && currentOwnerVoiceGateSettings.threshold;
+  const parsed = parseFloat(value);
+  if (Number.isNaN(parsed)) return 0.65;
+  return Math.max(0.40, Math.min(0.95, parsed));
+}
+
+function _ownerVoiceManualMicDryRunEnabled() {
+  return OWNER_VOICE_MANUAL_MIC_DRY_RUN_ENABLED === true &&
+    currentOwnerVoiceGateSettings &&
+    currentOwnerVoiceGateSettings.enrolled === true &&
+    currentOwnerVoiceGateSettings.enabled === true;
+}
+
+function _setOwnerVoiceManualMicDryRunStatus(status, reason, patch = {}) {
+  fullAppVoiceDiagnostics.ownerVoiceDryRunEnabled = _ownerVoiceManualMicDryRunEnabled();
+  fullAppVoiceDiagnostics.ownerVoiceDryRunStatus = status || "unknown";
+  fullAppVoiceDiagnostics.ownerVoiceDryRunReason = reason || "unknown";
+  fullAppVoiceDiagnostics.ownerVoiceThreshold = _ownerVoiceManualMicThreshold();
+  fullAppVoiceDiagnostics.ownerVoiceCheckedAt = new Date().toISOString();
+  fullAppVoiceDiagnostics.ownerVoiceScore = Object.prototype.hasOwnProperty.call(patch, "ownerVoiceScore")
+    ? patch.ownerVoiceScore
+    : null;
+  fullAppVoiceDiagnostics.ownerVoiceAccepted = Object.prototype.hasOwnProperty.call(patch, "ownerVoiceAccepted")
+    ? patch.ownerVoiceAccepted
+    : null;
+  fullAppVoiceDiagnostics.rawAudioPersisted = false;
+  fullAppVoiceDiagnostics.candidateEmbeddingPersisted = false;
+  fullAppVoiceDiagnostics.storedCentroidExposed = false;
+  fullAppVoiceDiagnostics.runtimeHardBlocked = false;
+  renderFullAppVoiceDiagnostics();
+}
+
+function _syncOwnerVoiceManualMicDryRunFromSettings() {
+  const enabled = _ownerVoiceManualMicDryRunEnabled();
+  fullAppVoiceDiagnostics.ownerVoiceDryRunEnabled = enabled;
+  fullAppVoiceDiagnostics.ownerVoiceThreshold = _ownerVoiceManualMicThreshold();
+  if (!enabled) {
+    const reason = currentOwnerVoiceGateSettings && currentOwnerVoiceGateSettings.enrolled === true
+      ? "owner_voice_gate_disabled"
+      : "not_enrolled";
+    _setOwnerVoiceManualMicDryRunStatus("disabled", reason);
+  }
+}
+
+async function runOwnerVoiceManualMicDryRun(audioBlob) {
+  // _setOwnerVoiceManualMicDryRunStatus() always forces runtimeHardBlocked=false.
+  const enabled = _ownerVoiceManualMicDryRunEnabled();
+  if (!enabled) {
+    const reason = currentOwnerVoiceGateSettings && currentOwnerVoiceGateSettings.enrolled === true
+      ? "owner_voice_gate_disabled"
+      : "not_enrolled";
+    _setOwnerVoiceManualMicDryRunStatus("disabled", reason);
+    return { status: "disabled", reason };
+  }
+
+  if (!audioBlob || !fullAppOwnerVoiceDryRunCandidatePath) {
+    _setOwnerVoiceManualMicDryRunStatus("not_computed", "no_candidate_file_policy");
+    return { status: "not_computed", reason: "no_candidate_file_policy" };
+  }
+
+  _setOwnerVoiceManualMicDryRunStatus("checking", "verify_files_pending");
+  try {
+    const res = await fetch(`${BACKEND_URL}/owner-voice-gate/verify-files`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        paths: [fullAppOwnerVoiceDryRunCandidatePath],
+        threshold: _ownerVoiceManualMicThreshold(),
+      }),
+    });
+    const result = await parseJsonResponse(res);
+    const score = typeof result.score === "number" ? result.score : null;
+    const accepted = typeof result.accepted === "boolean" ? result.accepted : null;
+    _setOwnerVoiceManualMicDryRunStatus(result.status || "ok", result.reason || "verification_complete", {
+      ownerVoiceScore: score,
+      ownerVoiceAccepted: accepted,
+    });
+    return result;
+  } catch (_err) {
+    _setOwnerVoiceManualMicDryRunStatus("error", "verify_files_error");
+    return { status: "error", reason: "verify_files_error" };
+  }
+}
+
 function renderOwnerVoiceGateStatus(settings) {
   if (!settings) return;
+  currentOwnerVoiceGateSettings = { ...settings };
   const status = settings.status || (settings.enrolled ? "disabled" : "not_enrolled");
   if (ownerVoiceGateState) ownerVoiceGateState.textContent = status;
   if (ownerVoiceGateProvider) ownerVoiceGateProvider.textContent = settings.provider || "funasr-campp";
@@ -3267,6 +3372,7 @@ function renderOwnerVoiceGateStatus(settings) {
       ? "owner-voice-gate-status-summary active"
       : "owner-voice-gate-status-summary warning";
   }
+  _syncOwnerVoiceManualMicDryRunFromSettings();
 }
 
 async function enrollOwnerVoiceGateFromFiles() {
@@ -4313,6 +4419,10 @@ function _fullAppSttTranscribeChunks(chunks, mimeType) {
   }
   renderFullAppVoiceDiagnostics();
 
+  // TASK-266: status-only Owner Voice Gate dry-run for Manual Mic.
+  // Fire-and-forget: accept/reject/error must not block STT, textarea fill, or auto-send.
+  runOwnerVoiceManualMicDryRun(audioBlob);
+
   transcribeFullAppAudioBlob(audioBlob).then(function (transcript) {
     setFullAppVoiceState("idle");
 
@@ -5252,6 +5362,9 @@ function renderFullAppVoiceDiagnostics() {
     "焦點安全: " + (d.voiceCaptureFocusSafe ? "是" : "否") + "  可見: " + (d.lastVisibilityState || "visible") + "  焦點: " + (d.lastWindowFocusState || "focused"),
     "AudioCtx 狀態: " + (d.audioContextState || "none") + "  中斷原因: " + (d.captureInterruptedReason || "none") + "  因可見性: " + (d.captureInterruptedByVisibility ? "是" : "否"),
     "Warmup: " + (d.startupWarmupEnabled ? "ON" : "OFF") + "  STT: " + (d.sttWarmupStatus || "pending") + " " + d.sttWarmupLatencyMs + "ms  Ollama: " + (d.ollamaWarmupStatus || "pending") + " " + d.ollamaWarmupLatencyMs + "ms",
+    "Owner Voice dry-run: " + (d.ownerVoiceDryRunEnabled ? "ON" : "OFF") + "  狀態: " + (d.ownerVoiceDryRunStatus || "disabled") + "  原因: " + (d.ownerVoiceDryRunReason || "unknown"),
+    "Owner Voice score: " + (d.ownerVoiceScore === null || d.ownerVoiceScore === undefined ? "—" : d.ownerVoiceScore) + " / " + (d.ownerVoiceThreshold === null || d.ownerVoiceThreshold === undefined ? "—" : d.ownerVoiceThreshold) + "  accepted: " + (d.ownerVoiceAccepted === null || d.ownerVoiceAccepted === undefined ? "unknown" : (d.ownerVoiceAccepted ? "true" : "false")),
+    "Owner Voice safety: rawAudioPersisted=" + d.rawAudioPersisted + " candidateEmbeddingPersisted=" + d.candidateEmbeddingPersisted + " storedCentroidExposed=" + d.storedCentroidExposed + " runtimeHardBlocked=" + d.runtimeHardBlocked,
     "---",
     "VAD 最後 RMS: " + d.lastRms.toFixed(4),
     "VAD 最高 RMS: " + d.maxRms.toFixed(4),
@@ -5356,6 +5469,19 @@ function resetFullAppVoiceDiagnosticsForRecording(mode) {
   fullAppVoiceDiagnostics.sttProviderLoadStatus          = "";
   fullAppVoiceDiagnostics.sttProviderLoadError           = "";
   fullAppVoiceDiagnostics.sttProviderFallbackReason      = "";
+  // TASK-266: reset Manual Mic owner-voice dry-run status; settings sync will
+  // flip enabled back on if Owner Voice Gate is enrolled+enabled.
+  fullAppVoiceDiagnostics.ownerVoiceDryRunEnabled        = _ownerVoiceManualMicDryRunEnabled();
+  fullAppVoiceDiagnostics.ownerVoiceDryRunStatus         = fullAppVoiceDiagnostics.ownerVoiceDryRunEnabled ? "pending" : "disabled";
+  fullAppVoiceDiagnostics.ownerVoiceDryRunReason         = fullAppVoiceDiagnostics.ownerVoiceDryRunEnabled ? "recording_started" : "owner_voice_gate_disabled";
+  fullAppVoiceDiagnostics.ownerVoiceScore                = null;
+  fullAppVoiceDiagnostics.ownerVoiceThreshold            = _ownerVoiceManualMicThreshold();
+  fullAppVoiceDiagnostics.ownerVoiceAccepted             = null;
+  fullAppVoiceDiagnostics.ownerVoiceCheckedAt            = "";
+  fullAppVoiceDiagnostics.rawAudioPersisted              = false;
+  fullAppVoiceDiagnostics.candidateEmbeddingPersisted    = false;
+  fullAppVoiceDiagnostics.storedCentroidExposed          = false;
+  fullAppVoiceDiagnostics.runtimeHardBlocked             = false;
   // constraintsEchoCancellation/NoiseSuppression/AutoGainControl: not reset (carry over from stream)
   revokeLastAudioObjectUrl();
   if (voicePreviewPlayBtn) voicePreviewPlayBtn.disabled = true;

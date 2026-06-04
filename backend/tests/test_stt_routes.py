@@ -3072,3 +3072,72 @@ def test_owner_voice_gate_verify_files_no_runtime_wiring():
     assert "generate_chat_reply" not in source
     assert "store_chat_turn" not in source
     assert "stt_transcribe" not in source
+
+
+# -- TASK-266: Owner Voice Gate Manual Mic dry-run backend regression ----------
+
+
+def test_task266_chat_response_schema_unchanged():
+    """TASK-266: /chat schema stays fixed at reply/mood/source."""
+    from app.schemas.chat import ChatResponse
+
+    fields = getattr(ChatResponse, "model_fields", None) or getattr(ChatResponse, "__fields__", {})
+    assert set(fields.keys()) == {"reply", "mood", "source"}
+    assert "ownerVoiceDryRunStatus" not in fields
+    assert "ownerVoiceScore" not in fields
+    assert "ownerVoiceAccepted" not in fields
+
+
+def test_task266_no_new_owner_voice_runtime_endpoints():
+    """TASK-266: dry-run reuses verify-files; no Manual Mic or Conversation gate endpoint."""
+    route_paths = {getattr(route, "path", "") for route in app.routes}
+    assert "/owner-voice-gate/verify-files" in route_paths
+    assert "/owner-voice-gate/manual-mic" not in route_paths
+    assert "/owner-voice-gate/manual-mic/verify" not in route_paths
+    assert "/owner-voice-gate/conversation-mode" not in route_paths
+    assert "/owner-voice-gate/conversation-mode/verify" not in route_paths
+
+
+def test_task266_stt_and_chat_are_not_owner_voice_hard_gated():
+    """TASK-266: backend STT/chat runtime paths do not call Owner Voice Gate."""
+    import inspect
+    import app.api.routes as routes_module
+
+    stt_source = inspect.getsource(routes_module.stt_transcribe)
+    chat_source = inspect.getsource(routes_module.chat)
+    for source in (stt_source, chat_source):
+        assert "verify_owner_voice_gate_from_files" not in source
+        assert "owner_voice_gate_verify_files_route" not in source
+        assert "/owner-voice-gate/verify-files" not in source
+        assert "runtimeHardBlocked" not in source
+
+
+def test_task266_verify_files_response_keeps_sensitive_data_hidden(tmp_path, monkeypatch):
+    """TASK-266: dry-run source endpoint still returns only safe status fields."""
+    _enroll_for_verify_tests(tmp_path, monkeypatch)
+    candidate = tmp_path / "manual-mic-candidate.wav"
+    candidate.write_bytes(b"mock owner wav")
+    monkeypatch.setattr(
+        owner_voice_gate_storage,
+        "run_owner_voice_verification_sidecar",
+        _mock_owner_voice_verification_report_reject,
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/owner-voice-gate/verify-files",
+            json={"paths": [str(candidate)], "threshold": 0.65},
+        )
+
+    data = response.json()
+    assert response.status_code == 200
+    assert data["accepted"] is False
+    assert data["rawAudioPersisted"] is False
+    assert data["candidateEmbeddingPersisted"] is False
+    assert data["storedCentroidExposed"] is False
+    assert data["micAccessed"] is False
+    assert data["runtimeIntegrated"] is False
+    assert "embeddingAggregate" not in response.text
+    assert "perSampleEmbeddings" not in response.text
+    assert "rawAudio" not in data
+    assert "base64Audio" not in data

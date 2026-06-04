@@ -634,7 +634,7 @@ Runtime integration should be split by surface:
 - TASK-SEC-003: Prompt injection test corpus (DONE).
 - TASK-SEC-004: Tool permission / user confirmation policy (DONE).
 - TASK-SEC-005: Phishing / link safety warning layer design (DONE).
-- TASK-266: Manual Mic dry-run policy.
+- TASK-266: Manual Mic dry-run policy (DONE).
 - TASK-267: Conversation Mode dry-run policy.
 
 Both must be disabled by default until enrollment exists and the user explicitly
@@ -672,7 +672,7 @@ Recommended sequence:
 - TASK-SEC-003 Prompt Injection Test Corpus (DONE)
 - TASK-SEC-004 Tool Permission / User Confirmation Policy (DONE)
 - TASK-SEC-005 Phishing / Link Safety Warning Layer Design (DONE)
-- TASK-266 Owner Voice Gate Manual Mic Dry-run Policy
+- TASK-266 Owner Voice Gate Manual Mic Dry-run Policy (DONE)
 - TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy
 
 TASK-262 calibration is complete on Windows for the small smoke set. Runtime
@@ -760,3 +760,56 @@ inventoried sensitive fields and defined redaction rules. See
 `/chat`, LLM context, diagnostics, Output Queue, Pet Bubble, or Pet runtime.
 The stored centroid remains sensitive biometric-like local data and is
 forbidden from LLM context, UI display, API responses, logs, and diagnostics.
+
+## 20. TASK-266 Manual Mic Dry-run Policy
+
+TASK-266 adds Manual Mic dry-run status only. It does not turn Owner Voice Gate
+into a hard runtime gate.
+
+### Runtime behavior
+
+- Manual Mic STT continues when dry-run is disabled, accepted, rejected,
+  not computed, or errored.
+- Existing textarea fill and auto-send behavior remains unchanged.
+- No Conversation Mode dry-run or gate is wired in this task.
+- No `/stt/transcribe` schema or backend behavior changes.
+- No `/chat` schema change; `/chat` remains `reply / mood / source`.
+- No IPC, Pet Window, Output Queue, or Diagnostics Drawer dispatch change.
+
+### Candidate audio policy
+
+TASK-266 intentionally does not write Manual Mic audio to disk just to satisfy
+`/owner-voice-gate/verify-files`. The current Manual Mic audio remains
+in-memory. Dry-run verification may call `verify-files` only if a future
+explicit temp-file policy supplies a safe candidate WAV path.
+
+When no safe candidate path exists, Manual Mic diagnostics report:
+
+- `ownerVoiceDryRunEnabled=true` when the gate is enrolled and enabled.
+- `ownerVoiceDryRunStatus=not_computed`.
+- `ownerVoiceDryRunReason=no_candidate_file_policy`.
+- `rawAudioPersisted=false`.
+- `candidateEmbeddingPersisted=false`.
+- `storedCentroidExposed=false`.
+- `runtimeHardBlocked=false`.
+
+### Safe status fields
+
+The existing Voice Diagnostics panel may show only:
+
+- dry-run enabled state
+- status/reason
+- score/threshold
+- accepted/rejected/unknown
+- checked timestamp
+- safety booleans
+
+It must not show centroid vectors, `embeddingAggregate`, candidate embeddings,
+raw audio, raw candidate paths, or rejected transcript as part of Owner Voice
+dry-run status.
+
+### Security statement
+
+Owner Voice Gate remains a local convenience filter for reducing accidental
+voice triggers. It is not authentication, identity proof, authorization, or a
+security boundary.
