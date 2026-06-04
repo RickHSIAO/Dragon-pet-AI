@@ -9,7 +9,10 @@
 TASK-SEC-002 makes the TASK-SEC-001 security boundary concrete. It defines
 Dragon Pet AI sensitive data classes, allowed and forbidden exposure rules,
 redaction patterns, API response restrictions, diagnostics/logging limits, LLM
-context restrictions, and the future TASK-SEC-003 test-plan shape.
+context restrictions, and the TASK-SEC-003 corpus coverage shape.
+
+The TASK-SEC-003 corpus is now captured in
+`docs/security/PROMPT_INJECTION_TEST_CORPUS.md`.
 
 This is a docs-only task. It does not modify backend runtime, frontend runtime,
 IPC, Manual Mic, Conversation Mode, STT, `/chat`, Pet Window, Output Queue,
@@ -230,9 +233,9 @@ send, file upload, browser submission, or URL open:
 If a check is uncertain, the default action is to redact, summarize, and ask for
 explicit user selection of a narrower excerpt or action.
 
-## 10. TASK-SEC-003 Test Plan
+## 10. TASK-SEC-003 Corpus Coverage
 
-Future TASK-SEC-003 Prompt Injection Test Corpus should include tests for:
+TASK-SEC-003 Prompt Injection Test Corpus captures cases for:
 
 - Attempts to reveal system, developer, internal prompts, hidden rules, and
   security policy text.
@@ -261,7 +264,7 @@ content requested it.
 
 1. TASK-SEC-001 Security Boundary / Anti Prompt Injection Design - DONE.
 2. TASK-SEC-002 Sensitive Data Inventory / Redaction Rules - DONE.
-3. TASK-SEC-003 Prompt Injection Test Corpus.
+3. TASK-SEC-003 Prompt Injection Test Corpus - DONE.
 4. TASK-SEC-004 Tool Permission / User Confirmation Policy.
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.

@@ -564,7 +564,14 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   response restrictions, diagnostics/logging restrictions, automated redaction
   checklist, and TASK-SEC-003 prompt injection/phishing corpus plan. No runtime
   behavior changed.
-- TASK-SEC-003 — Prompt Injection Test Corpus
+- TASK-SEC-003 DONE - DOCS/TEST-CORPUS ONLY (2026-06-04):
+  Added `docs/security/PROMPT_INJECTION_TEST_CORPUS.md` with structured cases
+  for direct prompt injection, indirect prompt injection, fake
+  system/developer messages, sensitive data exfiltration, Owner Voice Gate
+  attacks, and phishing/social engineering. Each item records id, category,
+  attack text, risk, sensitive data target, expected behavior, must-not-do, and
+  safe response pattern for future automation. No runtime or tool execution
+  behavior changed.
 - TASK-SEC-004 — Tool Permission / User Confirmation Policy
 - TASK-SEC-005 — Phishing / Link Safety Warning Layer
 - TASK-266 — Owner Voice Gate Manual Mic Dry-run Policy

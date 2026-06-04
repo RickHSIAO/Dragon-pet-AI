@@ -559,8 +559,9 @@ TASK-257 DONE - WINDOWS PET WINDOW CLICK/SHOW SMOKE PASS (2026-06-04): Pet Windo
   local data and must not enter LLM context, UI display, API responses, logs,
   diagnostics, Output Queue, Pet Bubble, or Pet runtime. Before Manual Mic or
   Conversation Mode runtime wiring, TASK-SEC-002 Sensitive Data Inventory /
-  Redaction Rules is now complete; next complete TASK-SEC-003 corpus and
-  dry-run policy tasks. No runtime behavior changed.
+  Redaction Rules and TASK-SEC-003 corpus are now complete; next complete
+  TASK-SEC-004/005 policy tasks and dry-run policy tasks. No runtime behavior
+  changed.
 
 Each future task must explicitly define safety boundaries, user controls,
 provider scope, queue priority, and no-regression checks.

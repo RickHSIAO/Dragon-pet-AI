@@ -18,6 +18,8 @@ instructions from untrusted content, or trick the user into unsafe actions.
 
 Detailed inventory and redaction rules are defined in
 `docs/SENSITIVE_DATA_REDACTION_RULES.md` (TASK-SEC-002).
+Prompt injection and phishing corpus cases are defined in
+`docs/security/PROMPT_INJECTION_TEST_CORPUS.md` (TASK-SEC-003).
 
 ## 2. Sensitive Data Categories
 
@@ -220,7 +222,7 @@ runtime, all of the following must be complete:
 
 1. TASK-SEC-001 Security Boundary / Anti Prompt Injection Design - DONE.
 2. TASK-SEC-002 Sensitive Data Inventory / Redaction Rules - DONE.
-3. TASK-SEC-003 Prompt Injection Test Corpus.
+3. TASK-SEC-003 Prompt Injection Test Corpus - DONE.
 4. TASK-SEC-004 Tool Permission / User Confirmation Policy.
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.

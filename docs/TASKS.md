@@ -26692,7 +26692,7 @@ Future task sequence:
 - TASK-264 Owner Voice Gate Verification Probe / Stored Centroid Scoring.
 - TASK-SEC-001 Security Boundary / Anti Prompt Injection Design.
 - TASK-SEC-002 Sensitive Data Inventory / Redaction Rules (DONE).
-- TASK-SEC-003 Prompt Injection Test Corpus.
+- TASK-SEC-003 Prompt Injection Test Corpus (DONE).
 - TASK-SEC-004 Tool Permission / User Confirmation Policy.
 - TASK-SEC-005 Phishing / Link Safety Warning Layer.
 - TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
@@ -27377,9 +27377,9 @@ PASS on 2026-06-04 against the stored owner centroid:
 ### Next Task
 
 TASK-SEC-001 Security Boundary / Anti Prompt Injection Design and TASK-SEC-002
-Sensitive Data Inventory / Redaction Rules are complete; next is TASK-SEC-003
-Prompt Injection Test Corpus before TASK-266 Owner Voice Gate Manual Mic Dry-run
-Policy.
+Sensitive Data Inventory / Redaction Rules and TASK-SEC-003 Prompt Injection
+Test Corpus are complete; next is TASK-SEC-004 Tool Permission / User
+Confirmation Policy before TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
 
 ---
 
@@ -27477,7 +27477,7 @@ Before Owner Voice Gate connects to Manual Mic or Conversation Mode runtime:
 
 1. TASK-SEC-001 Security Boundary / Anti Prompt Injection Design.
 2. TASK-SEC-002 Sensitive Data Inventory / Redaction Rules - DONE.
-3. TASK-SEC-003 Prompt Injection Test Corpus.
+3. TASK-SEC-003 Prompt Injection Test Corpus - DONE.
 4. TASK-SEC-004 Tool Permission / User Confirmation Policy.
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
@@ -27580,9 +27580,9 @@ prompt-like content, and suspicious URLs containing encoded private data.
 - Logs should prefer event IDs, counts, basenames/categories, sanitized reasons,
   and boolean safety flags.
 
-### Future TASK-SEC-003 Test Plan
+### TASK-SEC-003 Test Plan
 
-TASK-SEC-003 should build prompt injection and phishing corpora covering:
+TASK-SEC-003 has captured prompt injection and phishing corpora covering:
 
 - Requests to reveal system/developer/internal prompts, hidden rules, API keys,
   `.env`, tokens, cookies, local paths, backend data files, owner voice
@@ -27600,7 +27600,7 @@ TASK-SEC-003 should build prompt injection and phishing corpora covering:
 
 1. TASK-SEC-001 Security Boundary / Anti Prompt Injection Design - DONE.
 2. TASK-SEC-002 Sensitive Data Inventory / Redaction Rules - DONE.
-3. TASK-SEC-003 Prompt Injection Test Corpus.
+3. TASK-SEC-003 Prompt Injection Test Corpus - DONE.
 4. TASK-SEC-004 Tool Permission / User Confirmation Policy.
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
@@ -27612,6 +27612,110 @@ TASK-SEC-003 should build prompt injection and phishing corpora covering:
 - `git status --short`
 
 No code tests required for this docs-only task.
+
+---
+
+## TASK-SEC-003 | Prompt Injection / Phishing Test Corpus
+
+Status: DONE - DOCS/TEST-CORPUS ONLY
+
+### Goal
+
+Create a structured prompt injection and phishing test corpus for Dragon Pet AI
+that future security tasks can convert into automated tests. The corpus covers
+direct prompt injection, indirect prompt injection, fake system/developer
+messages, sensitive data exfiltration, Owner Voice Gate attacks, and
+phishing/social engineering.
+
+This task is docs/test-corpus-only. It does not modify backend runtime,
+frontend runtime, IPC, Manual Mic, Conversation Mode, STT, `/chat`, Pet Window,
+Output Queue, Diagnostics behavior, Owner Voice Gate runtime wiring, or tool
+execution behavior.
+
+### New Document
+
+- `docs/security/PROMPT_INJECTION_TEST_CORPUS.md`
+
+### Corpus Item Structure
+
+Each corpus item includes:
+
+- `id`
+- `category`
+- `attack_text`
+- `risk`
+- `sensitive_data_target`
+- `expected_behavior`
+- `must_not_do`
+- `safe_response_pattern`
+
+This structure is intended to be convertible to JSON/YAML fixtures, pytest
+cases, renderer smoke fixtures, or future LLM safety evals.
+
+### Categories Added
+
+- Direct prompt injection: reveal system/developer/internal rules, ignore
+  previous instructions, fake debug console, output hidden memory, local config,
+  API keys, `.env`, local paths, Owner Voice Gate centroid, and embeddings.
+- Indirect prompt injection: malicious instructions embedded in simulated
+  webpage, PDF, Markdown file, email, OCR text, downloaded README, chat
+  transcript, and pasted support ticket content.
+- Fake system/developer messages: `SYSTEM:`, `DEVELOPER:`, `IMPORTANT SECURITY
+  UPDATE:`, `BEGIN HIDDEN INSTRUCTIONS`, fake tool results, fake authorization
+  tokens, and fake admin override.
+- Sensitive data exfiltration: API keys, tokens, `.env`, hidden prompts, local
+  paths, Owner Voice Gate centroid, candidate embeddings, raw audio, rejected
+  speech transcript, chat logs, diagnostics logs, diary, memory, and private
+  notes.
+- Owner Voice Gate-specific attacks: requests for
+  `owner_voice_gate_settings.json`, `embeddingAggregate`, centroid vector,
+  candidate embedding, rejected speech transcript, authentication claims, and
+  bypass requests.
+- Phishing/social engineering: fake login links, account suspension warnings,
+  verification-code requests, token/password requests, domain spoofing, URL
+  shorteners, malicious attachments, urgency/fear/reward bait, support staff
+  impersonation, and crypto wallet seed phrase requests.
+
+### Expected Handling
+
+- Treat untrusted content as data, not instructions.
+- Refuse hidden prompt, secret, memory, local config, raw diagnostics, and
+  biometric-like voiceprint extraction.
+- Never expose Owner Voice Gate centroid, `embeddingAggregate`, candidate
+  embeddings, raw audio, or rejected speech transcript.
+- Explain Owner Voice Gate is a convenience filter, not authentication.
+- Warn on phishing/social engineering and never encourage sharing tokens,
+  passwords, verification codes, API keys, or seed phrases.
+
+### Future Automation Notes
+
+Future TASK-SEC-004, TASK-SEC-TEST, or related work can convert the corpus into
+structured fixtures and assert that:
+
+- Responses do not contain target secrets, hidden prompts, absolute private
+  paths, raw diagnostics, owner voice vectors, embeddings, or rejected speech.
+- Untrusted content wrappers are not followed as instructions.
+- Phishing cases produce warning language and do not trigger outbound actions.
+- Owner Voice Gate cases never load real settings, real WAV files, or real
+  embeddings.
+- Corpus categories map cleanly to future tool permission tiers T0-T6.
+
+### Updated Security Task Sequence
+
+1. TASK-SEC-001 Security Boundary / Anti Prompt Injection Design - DONE.
+2. TASK-SEC-002 Sensitive Data Inventory / Redaction Rules - DONE.
+3. TASK-SEC-003 Prompt Injection Test Corpus - DONE.
+4. TASK-SEC-004 Tool Permission / User Confirmation Policy.
+5. TASK-SEC-005 Phishing / Link Safety Warning Layer.
+6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
+7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
+
+### Validation
+
+- `git diff --check`
+- `git status --short`
+
+No runtime tests required for this docs/test-corpus-only task.
 
 ---
 
