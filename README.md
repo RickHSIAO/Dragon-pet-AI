@@ -1,6 +1,6 @@
 # Dragon Pet AI
 
-**Latest local status (2026-06-04):** TASK-259 Owner Voice Gate Probe **DONE - WINDOWS OWNER VOICE PROBE SMOKE PASS**. FunASR CAM++ model `iic/speech_campplus_sv_zh-cn_16k-common` loaded locally under `.venv-funasr` Python 3.10.11 / torch 2.12.0+cpu; 192-d speaker embedding works. Windows probe result: ownerScore 0.9232 vs otherScore 0.052, thresholdSuggestion 0.65 cleanly separates owner/non-owner in this smoke. Probe remains offline and file-based with no mic access, no raw audio persistence, no embedding persistence, and no runtime integration.
+**Latest local status (2026-06-04):** TASK-260 Owner Voice Gate Enrollment Storage Design **DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE**. Added `docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md` to define explicit enrollment flow, `userData/owner-voice-gate.json` schema, centroid-only embedding storage, threshold/calibration strategy, reset/delete UX, diagnostics fields, and future task split. This remains a convenience filter design, not security authentication. No Manual Mic, Conversation Mode, `/stt/transcribe`, `/chat`, IPC, Pet Window, Output Queue, Diagnostics Drawer, microphone, recording, raw audio persistence, embedding persistence, commit, or push.
 
 > **Dragon Pet AI** 是一個本地優先的 Electron + FastAPI 桌面陪伴原型，具備手動記憶、記憶稽核日誌、BYOK 提供者設定、使用量計量、安全審查過的 Test Connection 端點、Anthropic/Ollama 提供者轉接層（隱藏在 feature flag 後）、本地 Ollama `/chat` 執行期 smoke 通過（`source=llm_local`，克莉絲蒂娜人格確認）、Ollama Provider Settings UI（無需 API Key，使用本機 GPU/CPU），以及 Full App 聊天搜尋、高亮、匯出、未讀提示、時間戳、LINE-style 日期分隔線、清除確認、empty state、Undo Clear Chat 與單則訊息刪除/復原。以安全優先的增量開發方式建構，後端 mocked 測試套件共 **586 個測試通過**。
 
@@ -109,7 +109,7 @@ ollama serve
 | 真實 API Key 使用 | ❌ 無 — 所有測試使用 mocked runner |
 | 生產就緒 | ❌ 尚未 — prototype / portfolio 階段 |
 | Demo 可用（本地 Ollama） | ✅ 是 |
-| 下一個任務 | TASK-260 Owner Voice Gate Enrollment Storage Design / Threshold Multi-Sample Probe（design first; no runtime integration）|
+| 下一個任務 | TASK-261 Owner Voice Enrollment UI / Local Storage Stub（design boundaries first; no raw audio persistence）|
 
 ---
 
@@ -408,6 +408,7 @@ python -c "import json, urllib.request; data=json.dumps({'message':'你好！克
 | [docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md](docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md) | TASK-233/TASK-239 Output Queue Runtime Checkpoint：completed task chain, current runtime state, diagnostics item schemas, safety boundary, sanitization summary, dispatch readiness checklist, renderer modularization relationship, TASK-238/TASK-239 extraction status |
 | [docs/VOICE_TTS_RESEARCH.md](docs/VOICE_TTS_RESEARCH.md) | TASK-227 Voice/TTS research note：local-first speech roadmap、candidate TTS/STT、licensing/safety boundaries |
 | [docs/OWNER_VOICE_GATE_RESEARCH.md](docs/OWNER_VOICE_GATE_RESEARCH.md) | TASK-258/259 owner voice gate feasibility and offline probe plan/result |
+| [docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md](docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md) | TASK-260 owner voice enrollment storage design, threshold strategy, and delete/reset UX |
 | [docs/STREAMER_COMPANION_MODE.md](docs/STREAMER_COMPANION_MODE.md) | 未來支線 — OBS overlay / Twitch 陪伴設計（尚未排程） |
 
 ---
@@ -474,6 +475,7 @@ dragon-pet-ai/
 | `docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md` | TASK-233 Output Queue Runtime Checkpoint：task chain, current state, safety boundary, dispatch readiness checklist, next tasks, TASK-236 drawer status, TASK-237 modularization relationship, TASK-238/TASK-239 extraction status |
 | `docs/VOICE_TTS_RESEARCH.md` | TASK-227 Voice/TTS/STT research and local speech roadmap |
 | `docs/OWNER_VOICE_GATE_RESEARCH.md` | TASK-258/259 local owner voice gate research and offline probe status |
+| `docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md` | TASK-260 owner voice enrollment storage and calibration design |
 | `docs/CHARACTER_SPEC.md` | 角色人格規格 |
 | `docs/MEMORY_SYSTEM.md` | 記憶系統設計 |
 | `docs/PHASE3_DEMO_SUMMARY.md` | Phase 3 demo 摘要與安全模型 |

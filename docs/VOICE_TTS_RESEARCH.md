@@ -460,6 +460,16 @@ TASK-257 DONE - WINDOWS PET WINDOW CLICK/SHOW SMOKE PASS (2026-06-04): Pet Windo
   no mic access, no recording, no raw audio persistence, no embedding persistence, no IPC,
   and no `/stt/transcribe` or `/chat` change.
 
+- **TASK-260 Owner Voice Gate Enrollment Storage Design. DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE (2026-06-04):**
+  Adds `docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md`. Defines future explicit enrollment, local
+  `userData/owner-voice-gate.json` storage, centroid-only 192-d embedding aggregate, threshold
+  calibration, reset/delete voiceprint UX, and diagnostics fields. Recommended first enrollment:
+  3 samples of 8-15 seconds, normalize each embedding, average, normalize centroid, store centroid
+  only. Forbidden storage: raw audio, base64 audio, full transcript, raw waveform, per-sample
+  embeddings in v1, and unnecessary personal data. No runtime wiring, no mic access, no recording,
+  no raw audio persistence, no formal voiceprint persistence, no IPC, and no `/stt/transcribe` or
+  `/chat` change.
+
 Each future task must explicitly define safety boundaries, user controls,
 provider scope, queue priority, and no-regression checks.
 
@@ -476,6 +486,7 @@ Related docs:
 - `docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md`
 - `docs/CHRISTINA_PERSONA_CONTEXT_PACK.md`
 - `docs/OWNER_VOICE_GATE_RESEARCH.md`
+- `docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md`
 
 Relationship:
 

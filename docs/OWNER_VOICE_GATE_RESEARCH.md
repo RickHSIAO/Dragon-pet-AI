@@ -1,6 +1,6 @@
 # Owner Voice Gate Research
 
-Status: TASK-258 RESEARCH - OWNER VOICE GATE FEASIBILITY / NO RUNTIME CHANGE; TASK-259 DONE - WINDOWS OWNER VOICE PROBE SMOKE PASS
+Status: TASK-258 RESEARCH - OWNER VOICE GATE FEASIBILITY / NO RUNTIME CHANGE; TASK-259 DONE - WINDOWS OWNER VOICE PROBE SMOKE PASS; TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE
 
 Date: 2026-06-04
 
@@ -174,11 +174,12 @@ Not recommended for the first implementation:
   - Do not save embeddings into formal storage.
 
 - TASK-260 Owner Voice Gate Enrollment Storage Design / Threshold Multi-Sample Probe
-  - Define enrollment sample count.
-  - Define local embedding storage format.
-  - Define reset/delete voiceprint UX.
-  - Define threshold tuning and false accept / false reject diagnostics.
-  - Keep no raw audio persistence and convenience-filter-only wording.
+  - Completed in `docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md`.
+  - Defines enrollment sample count.
+  - Defines local embedding storage format.
+  - Defines reset/delete voiceprint UX.
+  - Defines threshold tuning and false accept / false reject diagnostics.
+  - Keeps no raw audio persistence and convenience-filter-only wording.
 
 - TASK-261 Owner Voice Gate for Manual Mic / Conversation Mode
   - Add disabled-by-default session setting.
@@ -342,3 +343,35 @@ Recommended next design task:
 Design should cover enrollment sample count, local embedding storage format,
 reset/delete voiceprint UX, threshold tuning, false accept / false reject
 diagnostics, no raw audio persistence, and the convenience-filter limitation.
+
+## 11. TASK-260 storage design
+
+Status: DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE
+
+TASK-260 adds `docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md` as the docs-only design
+checkpoint for future owner voice enrollment storage.
+
+Design summary:
+
+- Enrollment should be explicit through an "Enroll Owner Voice" action.
+- First version should require 3 samples, each 8-15 seconds.
+- Each sample produces one normalized embedding.
+- The app should average normalized embeddings and normalize the result into one
+  centroid.
+- Store the centroid only, plus metadata and calibration stats.
+- Do not store raw audio, base64 audio, full transcript, raw waveform, or
+  per-sample embeddings in the first version.
+- Recommended future storage path: `userData/owner-voice-gate.json`.
+- Initial threshold remains 0.65, informed by TASK-259 ownerScore 0.9232 vs
+  otherScore 0.052.
+- Delete owner voiceprint should delete only owner voice gate storage and clear
+  in-memory embedding state; Clear Chat must not delete the voiceprint.
+
+Future sequence:
+
+- TASK-261 Owner Voice Enrollment UI / Local Storage Stub.
+- TASK-262 Owner Voice Gate Calibration Probe.
+- TASK-263 Owner Voice Gate Runtime Integration for Manual Mic.
+- TASK-264 Owner Voice Gate Runtime Integration for Conversation Mode.
+
+Runtime remains unchanged by TASK-260.

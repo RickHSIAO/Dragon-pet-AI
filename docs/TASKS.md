@@ -26586,13 +26586,110 @@ Closeout conclusion:
 
 Recommended next task:
 
-- TASK-260 Owner Voice Gate Enrollment Storage Design, or
-- TASK-260 Owner Voice Gate Threshold / Multi-Sample Probe.
+- TASK-260 Owner Voice Gate Enrollment Storage Design / Threshold Multi-Sample Probe.
 
 Next design should cover enrollment sample count, local embedding storage format,
 reset/delete voiceprint UX, threshold tuning, false accept / false reject
 diagnostics, no raw audio persistence, and convenience-filter-not-security-auth
 product copy.
+
+**TASK-260 — Owner Voice Gate Enrollment Storage Design:**
+Status: DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE (2026-06-04)
+
+Added `docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md` as a docs-only design checkpoint
+for owner voice enrollment, local embedding storage, threshold calibration,
+reset/delete UX, diagnostics, and future task boundaries.
+
+Design summary:
+
+- Owner Voice Gate remains a convenience filter, not security-grade authentication.
+- Enrollment must be explicit through an "Enroll Owner Voice" user action.
+- First version should record 3 enrollment samples, each 8-15 seconds.
+- Each enrollment sample produces one speaker embedding.
+- Raw audio is discarded after embedding extraction.
+- The stored voiceprint should be a single normalized centroid plus metadata.
+- Storage target for future implementation: `userData/owner-voice-gate.json`.
+- Initial threshold remains 0.65, informed by TASK-259 ownerScore 0.9232 and
+  otherScore 0.052.
+- Reset/delete UX must include Disable Owner Voice Gate, Delete owner voiceprint,
+  and Re-enroll owner voice.
+- Clear Chat must not delete owner voiceprint.
+- Runtime gating remains deferred.
+
+Proposed storage schema fields:
+
+- `schemaVersion`
+- `provider`
+- `modelId`
+- `embeddingDim`
+- `embeddingAggregate` (`kind="centroid"`, vector)
+- `sampleCount`
+- `threshold`
+- `createdAt`
+- `updatedAt`
+- `calibrationStats`
+- `enabled`
+- `safetyNoticeAccepted`
+
+Forbidden storage:
+
+- raw audio
+- base64 audio
+- full transcript
+- complete per-sample raw waveform
+- per-sample raw embedding vectors in v1
+- unnecessary personal data
+
+Embedding aggregation recommendation:
+
+- Extract one embedding per sample.
+- L2-normalize each embedding.
+- Average the normalized embeddings.
+- L2-normalize the average.
+- Store the centroid only.
+- Store quality metadata only: sampleCount, meanSelfScore, minSelfScore, and
+  optional negativeSampleScore.
+
+Threshold strategy:
+
+- Start with threshold 0.65.
+- Use owner self-score distribution from enrollment samples.
+- If a negative sample exists, compute a midpoint-based recommended threshold.
+- Document false accept / false reject tradeoff in UI.
+
+Future diagnostics fields:
+
+- `ownerVoiceGateEnabled`
+- `ownerVoiceGateStatus`
+- `ownerVoiceScore`
+- `ownerVoiceThreshold`
+- `ownerVoiceDecision`
+- `ownerVoiceReason`
+- `ownerVoiceModel`
+- `ownerVoiceEmbeddingDim`
+- `ownerVoiceLastCheckedAt`
+
+Safety/privacy boundary:
+
+- No Manual Mic runtime change.
+- No Conversation Mode runtime change.
+- No `/stt/transcribe` behavior change.
+- No `/chat` schema change.
+- No IPC channel.
+- No mic access.
+- No recording.
+- No raw audio persistence.
+- No formal voiceprint persistence in TASK-260.
+- No always listening / background monitoring.
+- No Pet Window, Output Queue, or Diagnostics Drawer runtime change.
+- No commit / push.
+
+Future task sequence:
+
+- TASK-261 Owner Voice Enrollment UI / Local Storage Stub.
+- TASK-262 Owner Voice Gate Calibration Probe.
+- TASK-263 Owner Voice Gate Runtime Integration for Manual Mic.
+- TASK-264 Owner Voice Gate Runtime Integration for Conversation Mode.
 
 ---
 

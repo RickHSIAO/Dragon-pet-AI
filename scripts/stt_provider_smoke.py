@@ -520,11 +520,12 @@ check(len(missing) == 0,
 _os.environ.pop("DRAGON_PET_FUNASR_PERSISTENT", None)
 
 # ---------------------------------------------------------------------------
-# TASK-259: Owner Voice Gate probe static safety checks
+# TASK-259/260: Owner Voice Gate probe and storage docs static safety checks
 # ---------------------------------------------------------------------------
-print("\n[10/10] TASK-259 - Owner Voice Gate probe static safety")
+print("\n[10/10] TASK-259/260 - Owner Voice Gate probe and storage docs static safety")
 probe_path = _os.path.join(REPO_ROOT, "scripts", "owner_voice_gate_probe.py")
 owner_voice_doc = _os.path.join(REPO_ROOT, "docs", "OWNER_VOICE_GATE_RESEARCH.md")
+owner_voice_storage_doc = _os.path.join(REPO_ROOT, "docs", "OWNER_VOICE_GATE_STORAGE_DESIGN.md")
 
 check(_os.path.isfile(probe_path),
       f"owner_voice_gate_probe.py exists: {probe_path}")
@@ -583,6 +584,36 @@ check("No raw audio persistence" in owner_voice_text,
 check("not security-grade" in owner_voice_text,
       "owner voice research doc keeps convenience-filter limitation")
 
+check(_os.path.isfile(owner_voice_storage_doc),
+      "OWNER_VOICE_GATE_STORAGE_DESIGN.md exists")
+try:
+    with open(owner_voice_storage_doc, "r", encoding="utf-8") as f:
+        owner_voice_storage_text = f.read()
+except OSError as exc:
+    owner_voice_storage_text = ""
+    _fail(f"could not read OWNER_VOICE_GATE_STORAGE_DESIGN.md: {exc}")
+
+check("TASK-260" in owner_voice_storage_text,
+      "owner voice storage design doc records TASK-260")
+check("DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE" in owner_voice_storage_text,
+      "owner voice storage design doc records no-runtime status")
+check("userData/owner-voice-gate.json" in owner_voice_storage_text,
+      "owner voice storage design doc records future storage path")
+check("raw audio" in owner_voice_storage_text and "Forbidden stored values" in owner_voice_storage_text,
+      "owner voice storage design doc forbids raw audio storage")
+check("centroid" in owner_voice_storage_text and "Store the centroid only" in owner_voice_storage_text,
+      "owner voice storage design doc recommends centroid-only storage")
+check("not security-grade" in owner_voice_storage_text,
+      "owner voice storage design doc keeps non-security limitation")
+check("No Manual Mic runtime change" in owner_voice_storage_text,
+      "owner voice storage design doc preserves Manual Mic boundary")
+check("No Conversation Mode runtime change" in owner_voice_storage_text,
+      "owner voice storage design doc preserves Conversation Mode boundary")
+check("No `/stt/transcribe` behavior change" in owner_voice_storage_text,
+      "owner voice storage design doc preserves STT boundary")
+check("No `/chat` schema change" in owner_voice_storage_text,
+      "owner voice storage design doc preserves chat schema boundary")
+
 # ---------------------------------------------------------------------------
 # Clean up env so test leaves no side effects
 # ---------------------------------------------------------------------------
@@ -595,8 +626,8 @@ print()
 print("=" * 65)
 print(f"  {_pass_count} PASS  {_fail_count} FAIL")
 if _fail_count == 0:
-    print("  TASK-249/250/253/253rev/254/256/259 STT Provider Smoke: PASS")
+    print("  TASK-249/250/253/253rev/254/256/259/260 STT Provider Smoke: PASS")
 else:
-    print("  TASK-249/250/253/253rev/254/256/259 STT Provider Smoke: FAIL")
+    print("  TASK-249/250/253/253rev/254/256/259/260 STT Provider Smoke: FAIL")
 print("=" * 65)
 sys.exit(0 if _fail_count == 0 else 1)

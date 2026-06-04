@@ -60,6 +60,7 @@ user interaction
 | TASK-227 | Voice/TTS research | Records local-first speech roadmap, provider candidates, and speech safety boundaries. DOCS ONLY. |
 | TASK-258 | Owner voice gate research | Evaluates local speaker verification before STT as a future convenience filter. RESEARCH ONLY / NO RUNTIME CHANGE. |
 | TASK-259 | Owner voice gate probe | Adds offline file-path-only speaker embedding probe; no runtime integration. DONE - Windows owner voice probe smoke PASS. |
+| TASK-260 | Owner voice gate storage design | Defines enrollment storage, threshold calibration, reset/delete UX, and diagnostics boundary. DOCS ONLY / NO RUNTIME CHANGE. |
 | TASK-228 | Output queue runtime skeleton | Adds Full App renderer-only disabled queue skeleton, sanitized snapshot, priority/preemption helpers, and queue diagnostics preview. DONE - Windows visual smoke PASS. |
 | TASK-229 | Output queue debug preview | Polishes queue snapshot preview with Recent and safe Next summary. DONE - Windows visual smoke PASS. |
 | TASK-230 | Reaction bubble diagnostics enqueue | Enqueues safe reaction bubble ids into the disabled local output queue for diagnostics only. DONE - Windows visual smoke PASS. |
@@ -676,6 +677,13 @@ Recommended next architecture phase:
   microphone, record audio, save raw audio, save embeddings/formal voiceprints, add IPC, call
   `/stt/transcribe`, call `/chat`, or change Manual Mic / Conversation Mode / Pet Window /
   Output Queue / Diagnostics Drawer runtime.
+- TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE (2026-06-04):
+  Adds `docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md`. Future enrollment should collect 3 explicit
+  owner samples, compute one embedding per sample, normalize/average/renormalize into one centroid,
+  and store only centroid plus metadata in `userData/owner-voice-gate.json`. Defines threshold
+  calibration, reset/delete voiceprint UX, future diagnostics fields, and task split for enrollment,
+  calibration, Manual Mic gate, and Conversation Mode gate. No runtime, mic, IPC, STT, `/chat`,
+  Pet Window, Output Queue, or Diagnostics Drawer change.
 - Relationship state.
 - Mood / attention / energy state beyond the local preview foundation.
 - Idle reaction policy.

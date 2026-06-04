@@ -467,8 +467,17 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   loaded in 10.425 s, embeddingDim=192, ownerScore=0.9232, otherScore=0.052, thresholdSuggestion=0.65.
   No Manual Mic, Conversation Mode, STT, `/chat`, IPC, Pet Window, Output Queue, Diagnostics Drawer,
   mic, recording, raw audio persistence, embedding persistence, or formal voiceprint storage change.
-- TASK-260 — Owner Voice Gate Enrollment Storage Design / Threshold Multi-Sample Probe
-- TASK-261 — Owner Voice Gate for Manual Mic / Conversation Mode
+- TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE (2026-06-04):
+  Added `docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md`. Defines future enrollment flow (3 samples,
+  8-15 s each), `userData/owner-voice-gate.json` schema, centroid-only embedding storage,
+  threshold/calibration strategy, reset/delete voiceprint UX, diagnostics fields, and the
+  next task split. No Manual Mic, Conversation Mode, STT, `/chat`, IPC, Pet Window, Output Queue,
+  Diagnostics Drawer, mic, recording, raw audio persistence, embedding persistence, or runtime
+  integration change.
+- TASK-261 — Owner Voice Enrollment UI / Local Storage Stub
+- TASK-262 — Owner Voice Gate Calibration Probe
+- TASK-263 — Owner Voice Gate Runtime Integration for Manual Mic
+- TASK-264 — Owner Voice Gate Runtime Integration for Conversation Mode
 
 - TASK-256b DONE - WINDOWS DIAGNOSTICS READABILITY SMOKE PASS (2026-06-04): Diagnostics / Voice Panel Readability Polish. CSS-only change: `.voice-diagnostics-display` 10px → 13px, `line-height` 1.55, `max-height` 200px → 340px; `.voice-diagnostics-summary` 12px → 14px + font-weight 500; `.voice-diagnostics-panel` padding 4→8px; `.voice-tuning-label/input/select` 11px → 13px; `.voice-tuning-hint/voice-preview-hint/status` 10px → 12px; `.voice-preview-play-btn` 11px → 13px; `.voice-preview-audio-el` 28px → 32px. Windows smoke PASS: diagnostics readability improved, text/spacing/panel height all visibly better. No STT/warmup/IPC/Pet Window/Output Queue runtime changes. 10 new renderer CSS smoke tests PASS.
 
