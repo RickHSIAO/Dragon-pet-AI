@@ -1,6 +1,6 @@
 # Dragon Pet AI
 
-**Latest local status (2026-06-04):** TASK-263 Owner Voice Enrollment File Import / Centroid Storage **DONE - Windows Unicode owner voice enrollment storage smoke PASS**. Added `scripts/owner_voice_gate_enroll.py` for `.venv-funasr` file-path-only enrollment from existing 16 kHz mono PCM WAV files, plus backend `POST /owner-voice-gate/enroll-files` and Full App dev/probe file-path controls. Enrollment uses FunASR CAM++ to create one normalized 192-d centroid and writes only that centroid plus metadata to backend-owned `backend/data/owner_voice_gate_settings.json`; it does not save raw audio, base64 audio, transcripts, waveforms, or per-sample embeddings. Windows Unicode API smoke PASS: non-ASCII temp paths enrolled through backend with `enrolled=true`, `sampleCount=2`, `embeddingDim=192`, `embeddingPersisted=true`, `status=disabled`, `reason=enrolled`, and masked `embeddingAggregate=null`. The centroid is a sensitive local voiceprint. Gate remains disabled after enrollment until explicitly enabled. Manual Mic, Conversation Mode, `/stt/transcribe`, `/chat`, IPC, Pet Window, Output Queue, Diagnostics Drawer, microphone, recording, always listening, background monitoring, commit, and push remain unchanged.
+**Latest local status (2026-06-04):** TASK-264 Owner Voice Gate Verification Probe / Stored Centroid Scoring **DONE - Windows stored centroid verification smoke PASS**. Added `scripts/owner_voice_gate_verify.py` as a `.venv-funasr` file-path-only verification probe. It reads backend-owned Owner Voice Gate settings, confirms enrollment exists, validates existing 16 kHz mono PCM WAV candidates, loads FunASR CAM++, creates in-memory 192-d candidate embeddings, compares them with the stored centroid by cosine similarity, and reports `score`, `threshold`, and `accepted` without exposing `embeddingAggregate`. Windows stored-centroid smoke PASS: owner2.wav scored `0.9806` and accepted at threshold `0.65`; other.wav scored `0.0778` and rejected. This remains script-only: no backend verify endpoint, no Manual Mic or Conversation Mode gate, no `/stt/transcribe` or `/chat` change, no IPC, no Pet Window, no Output Queue, no Diagnostics Drawer runtime change, no mic access, no recording, no raw audio persistence, no transcript/waveform/base64 audio persistence, and no candidate embedding persistence.
 
 > **Dragon Pet AI** 是一個本地優先的 Electron + FastAPI 桌面陪伴原型，具備手動記憶、記憶稽核日誌、BYOK 提供者設定、使用量計量、安全審查過的 Test Connection 端點、Anthropic/Ollama 提供者轉接層（隱藏在 feature flag 後）、本地 Ollama `/chat` 執行期 smoke 通過（`source=llm_local`，克莉絲蒂娜人格確認）、Ollama Provider Settings UI（無需 API Key，使用本機 GPU/CPU），以及 Full App 聊天搜尋、高亮、匯出、未讀提示、時間戳、LINE-style 日期分隔線、清除確認、empty state、Undo Clear Chat 與單則訊息刪除/復原。以安全優先的增量開發方式建構，後端 mocked 測試套件共 **586 個測試通過**。
 
@@ -109,7 +109,7 @@ ollama serve
 | 真實 API Key 使用 | ❌ 無 — 所有測試使用 mocked runner |
 | 生產就緒 | ❌ 尚未 — prototype / portfolio 階段 |
 | Demo 可用（本地 Ollama） | ✅ 是 |
-| 下一個任務 | TASK-264 Owner Voice Gate Runtime Integration for Manual Mic（design/runtime gate opt-in; no automatic runtime gate）|
+| 下一個任務 | TASK-265 Owner Voice Gate Runtime Integration for Manual Mic（design/runtime gate opt-in; no automatic runtime gate）|
 
 ---
 
@@ -407,8 +407,8 @@ python -c "import json, urllib.request; data=json.dumps({'message':'你好！克
 | [docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md](docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md) | TASK-226/TASK-239 Interaction Output Queue：priority design, disabled runtime skeleton, debug snapshot preview, diagnostics enqueue, priority winner preview, active output item model, collapsible diagnostics drawer, renderer modularization relationship, TASK-238 output queue module extraction, TASK-239 diagnostics drawer module extraction |
 | [docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md](docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md) | TASK-233/TASK-239 Output Queue Runtime Checkpoint：completed task chain, current runtime state, diagnostics item schemas, safety boundary, sanitization summary, dispatch readiness checklist, renderer modularization relationship, TASK-238/TASK-239 extraction status |
 | [docs/VOICE_TTS_RESEARCH.md](docs/VOICE_TTS_RESEARCH.md) | TASK-227 Voice/TTS research note：local-first speech roadmap、candidate TTS/STT、licensing/safety boundaries |
-| [docs/OWNER_VOICE_GATE_RESEARCH.md](docs/OWNER_VOICE_GATE_RESEARCH.md) | TASK-258/259 owner voice gate feasibility and offline probe plan/result |
-| [docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md](docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md) | TASK-260/261 owner voice enrollment storage design plus backend-owned settings/UI stub |
+| [docs/OWNER_VOICE_GATE_RESEARCH.md](docs/OWNER_VOICE_GATE_RESEARCH.md) | TASK-258 through TASK-264 owner voice gate feasibility, probes, enrollment, and stored-centroid verification |
+| [docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md](docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md) | TASK-260 through TASK-264 owner voice enrollment storage, settings UI, calibration, enrollment, and verify probe design |
 | [docs/STREAMER_COMPANION_MODE.md](docs/STREAMER_COMPANION_MODE.md) | 未來支線 — OBS overlay / Twitch 陪伴設計（尚未排程） |
 
 ---
@@ -474,8 +474,8 @@ dragon-pet-ai/
 | `docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md` | TASK-226 output queue / priority design, TASK-228 disabled runtime skeleton, TASK-229 snapshot preview notes, TASK-230/231/232 diagnostics enqueue, TASK-234 winner preview, TASK-235 active item model, TASK-236 collapsible diagnostics drawer, TASK-238 output queue module extraction, TASK-239 diagnostics drawer module extraction |
 | `docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md` | TASK-233 Output Queue Runtime Checkpoint：task chain, current state, safety boundary, dispatch readiness checklist, next tasks, TASK-236 drawer status, TASK-237 modularization relationship, TASK-238/TASK-239 extraction status |
 | `docs/VOICE_TTS_RESEARCH.md` | TASK-227 Voice/TTS/STT research and local speech roadmap |
-| `docs/OWNER_VOICE_GATE_RESEARCH.md` | TASK-258/259 local owner voice gate research and offline probe status |
-| `docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md` | TASK-260/261 owner voice enrollment storage design and backend-owned settings/UI stub |
+| `docs/OWNER_VOICE_GATE_RESEARCH.md` | TASK-258 through TASK-264 local owner voice gate research, probe, enrollment, and verify status |
+| `docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md` | TASK-260 through TASK-264 owner voice enrollment storage, calibration, and stored-centroid verification design |
 | `docs/CHARACTER_SPEC.md` | 角色人格規格 |
 | `docs/MEMORY_SYSTEM.md` | 記憶系統設計 |
 | `docs/PHASE3_DEMO_SUMMARY.md` | Phase 3 demo 摘要與安全模型 |

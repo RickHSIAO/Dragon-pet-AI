@@ -522,7 +522,7 @@ _os.environ.pop("DRAGON_PET_FUNASR_PERSISTENT", None)
 # ---------------------------------------------------------------------------
 # TASK-259/260/261: Owner Voice Gate probe and storage docs static safety checks
 # ---------------------------------------------------------------------------
-print("\n[10/12] TASK-259/260/261 - Owner Voice Gate probe and storage docs static safety")
+print("\n[10/13] TASK-259/260/261 - Owner Voice Gate probe and storage docs static safety")
 probe_path = _os.path.join(REPO_ROOT, "scripts", "owner_voice_gate_probe.py")
 owner_voice_doc = _os.path.join(REPO_ROOT, "docs", "OWNER_VOICE_GATE_RESEARCH.md")
 owner_voice_storage_doc = _os.path.join(REPO_ROOT, "docs", "OWNER_VOICE_GATE_STORAGE_DESIGN.md")
@@ -698,7 +698,7 @@ check('fetch(`${BACKEND_URL}/chat`' not in owner_ui_text,
 # ---------------------------------------------------------------------------
 # TASK-262: Multi-sample calibration probe static safety checks
 # ---------------------------------------------------------------------------
-print("\n[11/12] TASK-262 - Owner Voice Gate multi-sample calibration probe static safety")
+print("\n[11/13] TASK-262 - Owner Voice Gate multi-sample calibration probe static safety")
 
 check("--owner-sample" in probe_source,
       "probe accepts --owner-sample for multi-sample calibration")
@@ -777,7 +777,7 @@ check("calibration" in owner_voice_storage_text,
 # ---------------------------------------------------------------------------
 # TASK-263: Owner voice file enrollment + centroid storage static checks
 # ---------------------------------------------------------------------------
-print("\n[12/12] TASK-263 - Owner Voice Gate file enrollment and centroid storage static safety")
+print("\n[12/13] TASK-263 - Owner Voice Gate file enrollment and centroid storage static safety")
 
 enroll_path = _os.path.join(REPO_ROOT, "scripts", "owner_voice_gate_enroll.py")
 check(_os.path.isfile(enroll_path),
@@ -854,6 +854,58 @@ check("Unicode" in owner_voice_storage_text and "audio_file_not_found" in owner_
       "owner voice storage design doc records Unicode path follow-up")
 
 # ---------------------------------------------------------------------------
+# TASK-264: Stored centroid verification probe static safety checks
+# ---------------------------------------------------------------------------
+print("\n[13/13] TASK-264 - Owner Voice Gate stored centroid verification probe static safety")
+
+verify_path = _os.path.join(REPO_ROOT, "scripts", "owner_voice_gate_verify.py")
+check(_os.path.isfile(verify_path),
+      f"owner_voice_gate_verify.py exists: {verify_path}")
+if _os.path.isfile(verify_path):
+    with open(verify_path, "r", encoding="utf-8") as f:
+        verify_source = f.read()
+else:
+    verify_source = ""
+
+check("--settings-json" in verify_source,
+      "verification probe accepts --settings-json")
+check("--candidate-sample" in verify_source,
+      "verification probe accepts --candidate-sample")
+check("--candidate-dir" in verify_source,
+      "verification probe accepts --candidate-dir")
+check("verification_complete" in verify_source,
+      "verification probe reports verification_complete")
+check("build_verification_decision" in verify_source,
+      "verification probe has testable score/threshold decision helper")
+check("embeddingAggregate" in verify_source and "storedCentroidExposed" in verify_source,
+      "verification probe reads stored centroid but reports it as not exposed")
+check("candidateEmbeddingPersisted" in verify_source,
+      "verification probe reports candidate embedding persistence boundary")
+check("/owner-voice-gate/verify-file" not in routes_source,
+      "TASK-264 does not add backend verification endpoint")
+for forbidden in (
+    "getUserMedia",
+    "MediaRecorder",
+    "navigator.mediaDevices",
+    "ipcRenderer",
+    "ipcMain",
+    "stt:transcribe",
+    "/stt/transcribe",
+    "/chat",
+    "NamedTemporaryFile",
+    "mkdtemp",
+    "write_bytes",
+    "shutil.copy",
+    "save_dir",
+):
+    check(forbidden not in verify_source,
+          f"verification probe source does not contain forbidden token {forbidden!r}")
+check("TASK-264" in owner_voice_text,
+      "owner voice research doc records TASK-264")
+check("TASK-264" in owner_voice_storage_text,
+      "owner voice storage design doc records TASK-264")
+
+# ---------------------------------------------------------------------------
 # Clean up env so test leaves no side effects
 # ---------------------------------------------------------------------------
 os.environ.pop("DRAGON_PET_STT_PROVIDER", None)
@@ -865,8 +917,8 @@ print()
 print("=" * 65)
 print(f"  {_pass_count} PASS  {_fail_count} FAIL")
 if _fail_count == 0:
-    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263 STT Provider Smoke: PASS")
+    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263/264 STT Provider Smoke: PASS")
 else:
-    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263 STT Provider Smoke: FAIL")
+    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263/264 STT Provider Smoke: FAIL")
 print("=" * 65)
 sys.exit(0 if _fail_count == 0 else 1)

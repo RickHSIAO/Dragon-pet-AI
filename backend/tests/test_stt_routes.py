@@ -6,8 +6,12 @@ When STT is unavailable, the endpoint returns status="unavailable" (not an error
 """
 
 import io
+import importlib.util
 import json
 import os
+from pathlib import Path
+from types import SimpleNamespace
+import wave
 
 import pytest
 
@@ -391,6 +395,58 @@ def _owner_voice_sample_paths(tmp_path, folder_name="voice"):
     return str(owner1), str(owner2)
 
 
+def _load_owner_voice_verify_module():
+    script_path = Path(__file__).resolve().parents[2] / "scripts" / "owner_voice_gate_verify.py"
+    spec = importlib.util.spec_from_file_location("owner_voice_gate_verify_for_tests", script_path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec and spec.loader
+    spec.loader.exec_module(module)
+    return module
+
+
+def _write_task264_wav(path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(16000)
+        wav.writeframes(b"\x00\x00" * 1600)
+
+
+def _write_task264_settings(path, centroid=None, threshold=0.65):
+    centroid = centroid or ([1.0] + [0.0] * 191)
+    path.write_text(
+        json.dumps(
+            {
+                "schemaVersion": 1,
+                "enabled": False,
+                "enrolled": True,
+                "provider": "funasr-campp",
+                "modelId": "iic/speech_campplus_sv_zh-cn_16k-common",
+                "embeddingDim": 192,
+                "embeddingAggregate": centroid,
+                "sampleCount": 2,
+                "threshold": threshold,
+                "safetyNoticeAccepted": True,
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+
+def _task264_args(settings_path, candidate_samples=None, threshold=None):
+    return SimpleNamespace(
+        settings_json=str(settings_path),
+        candidate_samples=candidate_samples or [],
+        candidate_dir=None,
+        threshold=threshold,
+        model_id=None,
+        allow_download=False,
+        device="cpu",
+    )
+
+
 def test_owner_voice_gate_enroll_requires_safety_notice(tmp_path):
     """TASK-263: file enrollment requires explicit safety notice acceptance."""
     _owner_voice_gate_temp_storage(tmp_path)
@@ -647,6 +703,109 @@ def test_owner_voice_gate_enroll_route_no_stt_or_chat_runtime_calls():
     assert "stt_transcribe" not in source
     assert "generate_chat_reply" not in source
     assert "store_chat_turn" not in source
+
+
+def test_owner_voice_gate_verify_no_enrollment_returns_clean_not_enrolled(tmp_path):
+    """TASK-264: verification probe returns clean not_enrolled without model load."""
+    verify = _load_owner_voice_verify_module()
+
+    result = verify.run_verification(_task264_args(tmp_path / "missing_settings.json"))
+
+    assert result["status"] == "not_enrolled"
+    assert result["reason"] == "not_enrolled"
+    assert result["enrolled"] is False
+    assert result["accepted"] is False
+    assert result["modelLoadAttempted"] is False
+    assert result["storedCentroidExposed"] is False
+    assert result["candidateEmbeddingPersisted"] is False
+    assert "embeddingAggregate" not in result
+
+
+def test_owner_voice_gate_verify_missing_wav_returns_clean_audio_not_found(tmp_path):
+    """TASK-264: missing candidate files return a clean reason and do not load model."""
+    verify = _load_owner_voice_verify_module()
+    settings_path = tmp_path / "owner_voice_gate_settings.json"
+    _write_task264_settings(settings_path)
+    missing_path = tmp_path / "雪狼丸 missing" / "candidate.wav"
+
+    result = verify.run_verification(_task264_args(settings_path, [str(missing_path)]))
+
+    assert result["status"] == "unavailable"
+    assert result["reason"] == "audio_file_not_found"
+    assert result["enrolled"] is True
+    assert result["modelLoadAttempted"] is False
+    assert "Traceback" not in json.dumps(result, ensure_ascii=False)
+    assert "embeddingAggregate" not in result
+
+
+def test_owner_voice_gate_verify_unicode_path_and_mock_accept(tmp_path, monkeypatch):
+    """TASK-264: Unicode candidate paths reach mocked embedding extraction unchanged."""
+    verify = _load_owner_voice_verify_module()
+    settings_path = tmp_path / "owner_voice_gate_settings.json"
+    _write_task264_settings(settings_path)
+    candidate_path = tmp_path / "雪狼丸 voice probe" / "owner2.wav"
+    _write_task264_wav(candidate_path)
+    captured_paths = []
+    original_base_report = verify._base_report
+
+    def _mock_base_report():
+        report = original_base_report()
+        report.update(
+            {
+                "torchAvailable": True,
+                "funasrAvailable": True,
+                "modelscopeAvailable": True,
+                "numpyAvailable": True,
+            }
+        )
+        return report
+
+    monkeypatch.setattr(verify, "_base_report", _mock_base_report)
+    monkeypatch.setattr(verify, "_load_funasr_model", lambda *_args, **_kwargs: object())
+
+    def _mock_extract(_model, path):
+        captured_paths.append(str(path))
+        return [1.0] + [0.0] * 191
+
+    monkeypatch.setattr(verify, "_extract_embedding", _mock_extract)
+
+    result = verify.run_verification(_task264_args(settings_path, [str(candidate_path)]))
+
+    assert result["status"] == "ok"
+    assert result["reason"] == "verification_complete"
+    assert result["score"] == 1.0
+    assert result["scores"] == [1.0]
+    assert result["threshold"] == 0.65
+    assert result["accepted"] is True
+    assert result["embeddingDim"] == 192
+    assert result["sampleCount"] == 1
+    assert captured_paths == [str(candidate_path)]
+    assert "雪狼丸" in captured_paths[0]
+    assert result["storedCentroidExposed"] is False
+    assert result["candidateEmbeddingPersisted"] is False
+    assert "embeddingAggregate" not in result
+
+
+def test_owner_voice_gate_verify_mock_reject_decision():
+    """TASK-264: cosine score below threshold rejects without exposing embeddings."""
+    verify = _load_owner_voice_verify_module()
+    owner_centroid = [1.0] + [0.0] * 191
+    other_embedding = [0.0, 1.0] + [0.0] * 190
+
+    result = verify.build_verification_decision(
+        stored_centroid=owner_centroid,
+        candidate_embeddings=[other_embedding],
+        threshold=0.65,
+    )
+
+    assert result == {
+        "score": 0.0,
+        "scores": [0.0],
+        "threshold": 0.65,
+        "accepted": False,
+        "embeddingDim": 192,
+        "sampleCount": 1,
+    }
 
 
 def test_stt_service_no_audio_persistence():

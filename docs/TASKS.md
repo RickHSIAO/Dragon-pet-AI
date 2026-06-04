@@ -26689,8 +26689,9 @@ Future task sequence:
 - TASK-261 Owner Voice Enrollment UI / Local Storage Stub.
 - TASK-262 Owner Voice Gate Calibration Probe.
 - TASK-263 Owner Voice Enrollment File Import / Centroid Storage.
-- TASK-264 Owner Voice Gate Runtime Integration for Manual Mic.
-- TASK-265 Owner Voice Gate Runtime Integration for Conversation Mode.
+- TASK-264 Owner Voice Gate Verification Probe / Stored Centroid Scoring.
+- TASK-265 Owner Voice Gate Runtime Integration for Manual Mic.
+- TASK-266 Owner Voice Gate Runtime Integration for Conversation Mode.
 
 **TASK-261 — Owner Voice Enrollment UI / Local Storage Stub:**
 
@@ -27154,7 +27155,109 @@ Manual backend API smoke on 2026-06-04:
 
 ### Next Task
 
-TASK-264 Owner Voice Gate Runtime Integration for Manual Mic.
+TASK-264 Owner Voice Gate Verification Probe / Stored Centroid Scoring.
+
+---
+
+## TASK-264 | Owner Voice Gate Verification Probe / Stored Centroid Scoring
+
+Status: DONE - Windows stored centroid verification smoke PASS (2026-06-04)
+
+### Goal
+
+Add a local verification probe that reads the stored Owner Voice Gate centroid
+from backend-owned storage and scores one or more existing WAV files against it.
+This is a file-path-only probe and does not connect the owner voice gate to
+Manual Mic, Conversation Mode, STT, chat, IPC, or Pet runtime.
+
+### Implementation
+
+- Added `scripts/owner_voice_gate_verify.py` for `.venv-funasr` Python 3.10.
+- The script reads `backend/data/owner_voice_gate_settings.json` by default,
+  validates enrollment, and never exposes `embeddingAggregate` in output.
+- It accepts `--candidate-sample` repeatedly or `--candidate-dir` for existing
+  16 kHz mono PCM WAV files.
+- It validates candidate WAV metadata before loading the model.
+- It loads FunASR CAM++ locally, extracts candidate embeddings in memory,
+  L2-normalizes them, aggregates multiple candidates into one candidate
+  centroid, and compares against the stored centroid with cosine similarity.
+- It returns clean JSON and uses `not_enrolled`, `audio_file_not_found`,
+  `audio_not_16k_pcm_wav`, `missing_dependency`, `missing_model`,
+  `embedding_failed`, or `verification_complete` reasons without raw stack
+  traces.
+
+### Result Shape
+
+The verification report includes:
+
+- `status`
+- `reason`
+- `provider`
+- `modelId`
+- `enrolled`
+- `score`
+- `scores`
+- `threshold`
+- `accepted`
+- `embeddingDim`
+- `sampleCount`
+- `checkedAudioFiles`
+- `rawAudioPersisted=false`
+- `transcriptPersisted=false`
+- `waveformPersisted=false`
+- `base64AudioPersisted=false`
+- `candidateEmbeddingPersisted=false`
+- `storedCentroidExposed=false`
+- `micAccessed=false`
+- `runtimeIntegrated=false`
+
+### Tests
+
+- Backend tests cover no enrollment, missing WAV path, Unicode Windows path
+  handling with mocked embeddings, accepted decision, and rejected decision.
+- `scripts/stt_provider_smoke.py` now checks the TASK-264 verify script,
+  forbidden mic/IPC/STT/chat tokens, script-only boundary, docs mention, and
+  no `/owner-voice-gate/verify-file` endpoint.
+
+### Windows Stored Centroid Smoke
+
+Stored centroid verification smoke PASS on Windows using the TASK-263 local
+Owner Voice Gate settings:
+
+- Owner sample: `owner2.wav`
+- Owner result: `status=ok`, `reason=verification_complete`, `score=0.9806`,
+  `threshold=0.65`, `accepted=true`, `embeddingDim=192`, `sampleCount=1`.
+- Other-speaker sample: `other.wav`
+- Other result: `status=ok`, `reason=verification_complete`, `score=0.0778`,
+  `threshold=0.65`, `accepted=false`, `embeddingDim=192`, `sampleCount=1`.
+- Model: `iic/speech_campplus_sv_zh-cn_16k-common`.
+- Python: `.venv-funasr` Python 3.10.11.
+- Torch: `2.12.0+cpu`; CUDA unavailable.
+- `rawAudioPersisted=false`.
+- `transcriptPersisted=false`.
+- `waveformPersisted=false`.
+- `base64AudioPersisted=false`.
+- `candidateEmbeddingPersisted=false`.
+- `storedCentroidExposed=false`.
+- `micAccessed=false`.
+- `runtimeIntegrated=false`.
+
+### Safety Boundary
+
+- No microphone access.
+- No recording.
+- No raw audio persistence.
+- No transcript, waveform, or base64 audio persistence.
+- No candidate per-sample embedding persistence.
+- No stored centroid exposure in API/script output.
+- No Manual Mic or Conversation Mode runtime integration.
+- No `/stt/transcribe` or `/chat` behavior/schema change.
+- No IPC channel.
+- No Pet Window, Output Queue, or Diagnostics Drawer runtime change.
+
+### Next Task
+
+TASK-265 Owner Voice Gate Runtime Integration for Manual Mic.
 
 ---
 

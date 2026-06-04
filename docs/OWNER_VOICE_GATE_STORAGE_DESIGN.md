@@ -1,6 +1,6 @@
 # Owner Voice Gate Storage Design
 
-Status: TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS; TASK-263 DONE - Windows Unicode owner voice enrollment storage smoke PASS
+Status: TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS; TASK-263 DONE - Windows Unicode owner voice enrollment storage smoke PASS; TASK-264 DONE - Windows stored centroid verification smoke PASS
 
 Date: 2026-06-04
 
@@ -552,7 +552,65 @@ TASK-263 Windows Unicode path follow-up:
   recording, STT, chat, IPC, Pet Window, Output Queue, or Diagnostics Drawer
   behavior changed.
 
-## 14. Future Runtime Architecture
+## 14. TASK-264 Stored Centroid Verification Probe
+
+TASK-264 adds a script-only verification probe for the stored centroid. It is
+the first consumer of the persisted owner voice centroid, but it does not wire
+the gate into Manual Mic, Conversation Mode, STT, chat, IPC, or Pet runtime.
+
+Implemented path:
+
+```text
+Existing candidate WAV path(s)
+  -> scripts/owner_voice_gate_verify.py
+  -> read backend/data/owner_voice_gate_settings.json
+  -> validate enrollment and stored 192-d centroid
+  -> validate candidate WAV metadata
+  -> FunASR CAM++ embedding in .venv-funasr
+  -> L2 normalize candidate embedding(s)
+  -> aggregate candidate centroid if multiple samples
+  -> cosine similarity against stored centroid
+  -> JSON score / threshold / accepted
+```
+
+Report shape:
+
+- `status`
+- `reason`
+- `enrolled`
+- `score`
+- `scores`
+- `threshold`
+- `accepted`
+- `embeddingDim`
+- `sampleCount`
+- `checkedAudioFiles`
+- safety booleans for raw audio, transcript, waveform, base64 audio,
+  candidate embedding persistence, stored centroid exposure, mic access, and
+  runtime integration.
+
+The probe must not persist raw candidate audio, candidate transcript,
+candidate waveform, base64 audio, candidate per-sample embeddings, or candidate
+aggregate embeddings. The probe must not expose `embeddingAggregate`, full
+stored centroid values, or full candidate embedding vectors.
+
+TASK-264 uses a script rather than a backend endpoint so the first verification
+step stays outside runtime request paths. A future runtime task can reuse the
+same scoring rules after threshold behavior and UX are explicitly accepted.
+
+Windows stored-centroid smoke PASS:
+
+- Owner candidate `owner2.wav`: `score=0.9806`, `threshold=0.65`,
+  `accepted=true`.
+- Other candidate `other.wav`: `score=0.0778`, `threshold=0.65`,
+  `accepted=false`.
+- `embeddingDim=192`, `sampleCount=1`, model
+  `iic/speech_campplus_sv_zh-cn_16k-common`.
+- `rawAudioPersisted=false`, `candidateEmbeddingPersisted=false`,
+  `storedCentroidExposed=false`, `micAccessed=false`, and
+  `runtimeIntegrated=false`.
+
+## 15. Future Runtime Architecture
 
 This is for future tasks only:
 
@@ -570,13 +628,13 @@ Manual Mic / Conversation Mode WAV
 
 Runtime integration should be split by surface:
 
-- TASK-264: Manual Mic gate.
-- TASK-265: Conversation Mode gate.
+- TASK-265: Manual Mic gate.
+- TASK-266: Conversation Mode gate.
 
 Both must be disabled by default until enrollment exists and the user explicitly
 enables the gate.
 
-## 15. Future Diagnostics Fields
+## 16. Future Diagnostics Fields
 
 Suggested future diagnostics fields:
 
@@ -598,17 +656,17 @@ Diagnostics must not show:
 - Full transcript for rejected speech.
 - Hidden prompt or private storage path details.
 
-## 16. Future Tasks
+## 17. Future Tasks
 
 Recommended sequence:
 
-- TASK-264 Owner Voice Gate Runtime Integration for Manual Mic
-- TASK-265 Owner Voice Gate Runtime Integration for Conversation Mode
+- TASK-265 Owner Voice Gate Runtime Integration for Manual Mic
+- TASK-266 Owner Voice Gate Runtime Integration for Conversation Mode
 
 TASK-262 calibration is complete on Windows for the small smoke set. Runtime
 gating should still remain explicit, opt-in, and threshold-aware.
 
-## 17. Validation Plan
+## 18. Validation Plan
 
 Because TASK-261 adds a UI/storage stub only, validation is regression-oriented:
 

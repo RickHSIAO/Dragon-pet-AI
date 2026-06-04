@@ -1,6 +1,6 @@
 # Owner Voice Gate Research
 
-Status: TASK-258 RESEARCH - OWNER VOICE GATE FEASIBILITY / NO RUNTIME CHANGE; TASK-259 DONE - WINDOWS OWNER VOICE PROBE SMOKE PASS; TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS; TASK-263 DONE - Windows Unicode owner voice enrollment storage smoke PASS
+Status: TASK-258 RESEARCH - OWNER VOICE GATE FEASIBILITY / NO RUNTIME CHANGE; TASK-259 DONE - WINDOWS OWNER VOICE PROBE SMOKE PASS; TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS; TASK-263 DONE - Windows Unicode owner voice enrollment storage smoke PASS; TASK-264 DONE - Windows stored centroid verification smoke PASS
 
 Date: 2026-06-04
 
@@ -372,8 +372,9 @@ Future sequence:
 - TASK-261 Owner Voice Enrollment UI / Local Storage Stub.
 - TASK-262 Owner Voice Gate Calibration Probe.
 - TASK-263 Owner Voice Enrollment File Import / Centroid Storage.
-- TASK-264 Owner Voice Gate Runtime Integration for Manual Mic.
-- TASK-265 Owner Voice Gate Runtime Integration for Conversation Mode.
+- TASK-264 Owner Voice Gate Verification Probe / Stored Centroid Scoring.
+- TASK-265 Owner Voice Gate Runtime Integration for Manual Mic.
+- TASK-266 Owner Voice Gate Runtime Integration for Conversation Mode.
 
 Runtime remains unchanged by TASK-260.
 
@@ -547,8 +548,65 @@ Safety boundary remains unchanged:
 
 Recommended next tasks:
 
-- TASK-264 Owner Voice Gate Runtime Integration for Manual Mic.
-- TASK-265 Owner Voice Gate Runtime Integration for Conversation Mode.
+- TASK-264 Owner Voice Gate Verification Probe / Stored Centroid Scoring.
+- TASK-265 Owner Voice Gate Runtime Integration for Manual Mic.
+- TASK-266 Owner Voice Gate Runtime Integration for Conversation Mode.
 
 Do not jump to runtime gating until the explicit runtime task accepts the
 threshold strategy and keeps owner voice gate opt-in.
+
+## 15. TASK-264 stored centroid verification probe
+
+TASK-264 adds the first local verification probe against the stored owner
+centroid. It intentionally remains script-only:
+
+- Script: `scripts/owner_voice_gate_verify.py`.
+- Runtime: `.venv-funasr` Python 3.10.
+- Input: existing local WAV file paths via `--candidate-sample` or
+  `--candidate-dir`.
+- Storage input: backend-owned `owner_voice_gate_settings.json`.
+- Model: FunASR CAM++ / 3D-Speaker 192-d embedding.
+- Scoring: L2-normalized candidate embedding or aggregate candidate centroid
+  compared to the stored owner centroid with cosine similarity.
+- Decision: `accepted = score >= threshold`.
+
+Expected report fields:
+
+- `status`
+- `reason`
+- `enrolled`
+- `score`
+- `scores`
+- `threshold`
+- `accepted`
+- `embeddingDim`
+- `sampleCount`
+- `rawAudioPersisted=false`
+- `candidateEmbeddingPersisted=false`
+- `storedCentroidExposed=false`
+- `micAccessed=false`
+- `runtimeIntegrated=false`
+
+Safety boundary:
+
+- No microphone access or recording.
+- No raw audio, transcript, waveform, or base64 audio persistence.
+- No candidate embedding persistence.
+- No stored centroid in the output.
+- No backend verify endpoint in TASK-264.
+- No Manual Mic, Conversation Mode, `/stt/transcribe`, `/chat`, IPC, Pet
+  Window, Output Queue, or Diagnostics Drawer runtime change.
+
+After TASK-264 smoke passes, the next runtime step should be TASK-265 Manual
+Mic runtime gate, still opt-in and disabled by default.
+
+Windows stored-centroid smoke PASS:
+
+- Owner candidate `owner2.wav`: `score=0.9806`, `threshold=0.65`,
+  `accepted=true`.
+- Other candidate `other.wav`: `score=0.0778`, `threshold=0.65`,
+  `accepted=false`.
+- Both reports used 192-d embeddings from
+  `iic/speech_campplus_sv_zh-cn_16k-common` and kept `rawAudioPersisted=false`,
+  `candidateEmbeddingPersisted=false`, `storedCentroidExposed=false`,
+  `micAccessed=false`, and `runtimeIntegrated=false`.

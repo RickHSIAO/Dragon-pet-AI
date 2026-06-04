@@ -516,6 +516,21 @@ TASK-257 DONE - WINDOWS PET WINDOW CLICK/SHOW SMOKE PASS (2026-06-04): Pet Windo
   `embeddingPersisted=true`, `status=disabled`, `reason=enrolled`, and
   `embeddingAggregate=null`.
 
+- **TASK-264 Owner Voice Gate Verification Probe / Stored Centroid Scoring. DONE - Windows stored centroid verification smoke PASS (2026-06-04):**
+  Adds `scripts/owner_voice_gate_verify.py`, a `.venv-funasr` script-only
+  verification probe. It reads backend-owned Owner Voice Gate settings,
+  confirms enrollment exists, validates existing 16 kHz mono PCM WAV candidate
+  paths, loads FunASR CAM++, extracts candidate embeddings in memory, compares
+  a normalized candidate centroid against the stored owner centroid with cosine
+  similarity, and returns clean JSON fields such as `score`, `scores`,
+  `threshold`, `accepted`, `embeddingDim`, and `sampleCount`. It does not expose
+  `embeddingAggregate`, does not persist raw audio, transcripts, waveforms,
+  base64 audio, or candidate embeddings, and does not add a backend verify
+  endpoint. Manual Mic, Conversation Mode, STT, `/chat`, IPC, Pet Window,
+  Output Queue, and Diagnostics Drawer runtime remain unchanged. Windows smoke
+  PASS: owner2.wav scored `0.9806` and accepted at threshold `0.65`; other.wav
+  scored `0.0778` and rejected.
+
 Each future task must explicitly define safety boundaries, user controls,
 provider scope, queue priority, and no-regression checks.
 
