@@ -1,6 +1,6 @@
 # Dragon Pet AI
 
-**Latest local status (2026-06-04):** TASK-262 Owner Voice Gate Multi-Sample Calibration Probe **DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS**. Windows smoke passed in repeated sample args mode (`--owner-sample`, `--other-sample`, `--output-json`) and directory mode (`--owner-dir`, `--other-dir`, `--output-json`). Directory mode loaded FunASR CAM++ locally, produced 192-d embeddings, ownerSelfScores `[0.9806, 0.9806]`, otherScores `[0.0778]`, scoreGap `0.9028`, separationQuality `strong`, and thresholdSuggestion/balancedThreshold `0.5292`. Because this used only 2 owner samples and 1 other sample, `0.5292` is a local calibration result, not a universal runtime default; keep `0.65` as the first balanced default until larger calibration says otherwise, with `0.8` as conservative and `0.4` only for debug/permissive experiments. No microphone, no raw audio persistence, no embedding persistence, no runtime integration, no IPC, no Pet Window/Output Queue/Diagnostics Drawer change. Manual Mic, Conversation Mode, `/stt/transcribe`, `/chat`, microphone, recording, always listening, background monitoring, commit, and push remain unchanged.
+**Latest local status (2026-06-04):** TASK-263 Owner Voice Enrollment File Import / Centroid Storage **DONE - Windows Unicode owner voice enrollment storage smoke PASS**. Added `scripts/owner_voice_gate_enroll.py` for `.venv-funasr` file-path-only enrollment from existing 16 kHz mono PCM WAV files, plus backend `POST /owner-voice-gate/enroll-files` and Full App dev/probe file-path controls. Enrollment uses FunASR CAM++ to create one normalized 192-d centroid and writes only that centroid plus metadata to backend-owned `backend/data/owner_voice_gate_settings.json`; it does not save raw audio, base64 audio, transcripts, waveforms, or per-sample embeddings. Windows Unicode API smoke PASS: non-ASCII temp paths enrolled through backend with `enrolled=true`, `sampleCount=2`, `embeddingDim=192`, `embeddingPersisted=true`, `status=disabled`, `reason=enrolled`, and masked `embeddingAggregate=null`. The centroid is a sensitive local voiceprint. Gate remains disabled after enrollment until explicitly enabled. Manual Mic, Conversation Mode, `/stt/transcribe`, `/chat`, IPC, Pet Window, Output Queue, Diagnostics Drawer, microphone, recording, always listening, background monitoring, commit, and push remain unchanged.
 
 > **Dragon Pet AI** 是一個本地優先的 Electron + FastAPI 桌面陪伴原型，具備手動記憶、記憶稽核日誌、BYOK 提供者設定、使用量計量、安全審查過的 Test Connection 端點、Anthropic/Ollama 提供者轉接層（隱藏在 feature flag 後）、本地 Ollama `/chat` 執行期 smoke 通過（`source=llm_local`，克莉絲蒂娜人格確認）、Ollama Provider Settings UI（無需 API Key，使用本機 GPU/CPU），以及 Full App 聊天搜尋、高亮、匯出、未讀提示、時間戳、LINE-style 日期分隔線、清除確認、empty state、Undo Clear Chat 與單則訊息刪除/復原。以安全優先的增量開發方式建構，後端 mocked 測試套件共 **586 個測試通過**。
 
@@ -109,7 +109,7 @@ ollama serve
 | 真實 API Key 使用 | ❌ 無 — 所有測試使用 mocked runner |
 | 生產就緒 | ❌ 尚未 — prototype / portfolio 階段 |
 | Demo 可用（本地 Ollama） | ✅ 是 |
-| 下一個任務 | TASK-263 Owner Voice Gate Runtime Integration planning for Manual Mic（explicit opt-in only; still no automatic runtime gate）|
+| 下一個任務 | TASK-264 Owner Voice Gate Runtime Integration for Manual Mic（design/runtime gate opt-in; no automatic runtime gate）|
 
 ---
 

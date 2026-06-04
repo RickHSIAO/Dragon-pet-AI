@@ -17,6 +17,7 @@ os.environ.setdefault("SETTINGS_FILE_PATH", "")
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.main import app  # noqa: E402
+from app.services import owner_voice_gate_storage  # noqa: E402
 from app.services.owner_voice_gate_storage import reset_owner_voice_gate_storage_for_tests  # noqa: E402
 from app.stt import stt_service  # noqa: E402
 
@@ -354,6 +355,298 @@ def test_owner_voice_gate_errors_do_not_return_raw_stack(tmp_path):
     assert response.json() == {"detail": "request body must be an object"}
     assert "Traceback" not in response.text
     assert "Exception" not in response.text
+
+
+def _mock_owner_voice_enrollment_report(paths, threshold):
+    vector = [0.0] * 192
+    vector[0] = 1.0
+    return {
+        "status": "ok",
+        "reason": "owner_enrollment_complete",
+        "provider": "funasr-campp",
+        "modelId": "iic/speech_campplus_sv_zh-cn_16k-common",
+        "embeddingDim": 192,
+        "sampleCount": len(paths),
+        "threshold": threshold,
+        "calibrationStats": {
+            "meanSelfScore": 0.98,
+            "minSelfScore": 0.97,
+            "maxSelfScore": 0.99,
+        },
+        "embeddingAggregate": vector,
+        "rawAudioPersisted": False,
+        "embeddingPersisted": False,
+        "micAccessed": False,
+        "runtimeIntegrated": False,
+    }
+
+
+def _owner_voice_sample_paths(tmp_path, folder_name="voice"):
+    sample_dir = tmp_path / folder_name
+    sample_dir.mkdir(parents=True, exist_ok=True)
+    owner1 = sample_dir / "owner1.wav"
+    owner2 = sample_dir / "owner2.wav"
+    owner1.write_bytes(b"mock owner wav path only")
+    owner2.write_bytes(b"mock owner wav path only")
+    return str(owner1), str(owner2)
+
+
+def test_owner_voice_gate_enroll_requires_safety_notice(tmp_path):
+    """TASK-263: file enrollment requires explicit safety notice acceptance."""
+    _owner_voice_gate_temp_storage(tmp_path)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/owner-voice-gate/enroll-files",
+            json={"paths": ["owner1.wav", "owner2.wav"], "safetyNoticeAccepted": False},
+        )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "safety notice must be accepted before enrollment"}
+
+
+def test_owner_voice_gate_enroll_rejects_forbidden_fields(tmp_path):
+    """TASK-263: enrollment endpoint accepts paths only, never audio or embeddings from UI."""
+    _owner_voice_gate_temp_storage(tmp_path)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/owner-voice-gate/enroll-files",
+            json={
+                "paths": ["owner1.wav", "owner2.wav"],
+                "safetyNoticeAccepted": True,
+                "rawAudio": "not allowed",
+                "base64Audio": "not allowed",
+                "transcript": "not allowed",
+                "embeddingAggregate": [0.1] * 192,
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "unsupported owner voice enrollment field"}
+    assert "not allowed" not in response.text
+    assert "0.1" not in response.text
+
+
+def test_owner_voice_gate_enroll_rejects_fewer_than_two_samples(tmp_path):
+    """TASK-263: enrollment requires at least two owner WAV file paths."""
+    _owner_voice_gate_temp_storage(tmp_path)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/owner-voice-gate/enroll-files",
+            json={"paths": ["owner1.wav"], "safetyNoticeAccepted": True},
+        )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "at least 2 owner voice samples are required"}
+
+
+def test_owner_voice_gate_enroll_mock_writes_centroid_storage(tmp_path, monkeypatch):
+    """TASK-263: successful mocked enrollment stores centroid only in backend storage."""
+    path = _owner_voice_gate_temp_storage(tmp_path)
+    owner1, owner2 = _owner_voice_sample_paths(tmp_path)
+    monkeypatch.setattr(
+        owner_voice_gate_storage,
+        "run_owner_voice_enrollment_sidecar",
+        _mock_owner_voice_enrollment_report,
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/owner-voice-gate/enroll-files",
+            json={
+                "paths": [owner1, owner2],
+                "threshold": 0.65,
+                "safetyNoticeAccepted": True,
+            },
+        )
+
+    data = response.json()
+    assert response.status_code == 200
+    assert data["reason"] == "enrolled"
+    assert data["enabled"] is False
+    assert data["enrolled"] is True
+    assert data["sampleCount"] == 2
+    assert data["embeddingAggregate"] is None, "API response must not expose centroid"
+    assert data["embeddingPersisted"] is True
+    assert data["calibrationStats"]["meanSelfScore"] == 0.98
+
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    assert saved["enrolled"] is True
+    assert saved["enabled"] is False
+    assert saved["sampleCount"] == 2
+    assert len(saved["embeddingAggregate"]) == 192
+    assert saved["embeddingAggregate"][0] == 1.0
+    assert "rawAudio" not in saved
+    assert "base64Audio" not in saved
+    assert "transcript" not in saved
+    assert "waveform" not in saved
+    assert "perSampleEmbeddings" not in saved
+
+
+def test_owner_voice_gate_enroll_accepts_unicode_existing_paths(tmp_path, monkeypatch):
+    """TASK-263 follow-up: Windows Unicode paths must reach the sidecar unchanged."""
+    _owner_voice_gate_temp_storage(tmp_path)
+    owner1, owner2 = _owner_voice_sample_paths(tmp_path, "雪狼丸 owner voice")
+    captured_paths = []
+
+    def _capture_owner_voice_enrollment_report(paths, threshold):
+        captured_paths.extend(paths)
+        return _mock_owner_voice_enrollment_report(paths, threshold)
+
+    monkeypatch.setattr(
+        owner_voice_gate_storage,
+        "run_owner_voice_enrollment_sidecar",
+        _capture_owner_voice_enrollment_report,
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/owner-voice-gate/enroll-files",
+            json={
+                "paths": [owner1, owner2],
+                "threshold": 0.65,
+                "safetyNoticeAccepted": True,
+            },
+        )
+
+    data = response.json()
+    assert response.status_code == 200
+    assert data["reason"] == "enrolled"
+    assert data["sampleCount"] == 2
+    assert captured_paths == [owner1, owner2]
+    assert "雪狼丸" in captured_paths[0]
+    assert data["embeddingAggregate"] is None
+
+
+def test_owner_voice_gate_enroll_ascii_existing_paths_still_work(tmp_path, monkeypatch):
+    """TASK-263 follow-up: ASCII path enrollment remains compatible."""
+    _owner_voice_gate_temp_storage(tmp_path)
+    owner1, owner2 = _owner_voice_sample_paths(tmp_path, "ascii-owner-voice")
+    monkeypatch.setattr(
+        owner_voice_gate_storage,
+        "run_owner_voice_enrollment_sidecar",
+        _mock_owner_voice_enrollment_report,
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/owner-voice-gate/enroll-files",
+            json={
+                "paths": [owner1, owner2],
+                "threshold": 0.65,
+                "safetyNoticeAccepted": True,
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["reason"] == "enrolled"
+    assert response.json()["sampleCount"] == 2
+
+
+def test_owner_voice_gate_enroll_missing_file_returns_clean_not_enrolled(tmp_path, monkeypatch):
+    """TASK-263 follow-up: missing files return a clean reason and do not call sidecar."""
+    _owner_voice_gate_temp_storage(tmp_path)
+    missing1 = str(tmp_path / "雪狼丸 missing" / "owner1.wav")
+    missing2 = str(tmp_path / "雪狼丸 missing" / "owner2.wav")
+
+    def _fail_if_called(_paths, _threshold):
+        raise AssertionError("sidecar must not run for missing enrollment paths")
+
+    monkeypatch.setattr(
+        owner_voice_gate_storage,
+        "run_owner_voice_enrollment_sidecar",
+        _fail_if_called,
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/owner-voice-gate/enroll-files",
+            json={
+                "paths": [missing1, missing2],
+                "threshold": 0.65,
+                "safetyNoticeAccepted": True,
+            },
+        )
+
+    data = response.json()
+    assert response.status_code == 200
+    assert data["status"] == "not_enrolled"
+    assert data["reason"] == "audio_file_not_found"
+    assert data["message"] == "Enrollment requires existing mono 16 kHz PCM WAV files."
+    assert "Traceback" not in response.text
+    assert "AssertionError" not in response.text
+    assert "雪狼丸" not in response.text
+
+
+def test_owner_voice_gate_enable_allowed_after_enrollment(tmp_path, monkeypatch):
+    """TASK-263: enabled can be true only after a centroid has been enrolled."""
+    _owner_voice_gate_temp_storage(tmp_path)
+    owner1, owner2 = _owner_voice_sample_paths(tmp_path)
+    monkeypatch.setattr(
+        owner_voice_gate_storage,
+        "run_owner_voice_enrollment_sidecar",
+        _mock_owner_voice_enrollment_report,
+    )
+
+    with TestClient(app) as client:
+        enroll = client.post(
+            "/owner-voice-gate/enroll-files",
+            json={
+                "paths": [owner1, owner2],
+                "safetyNoticeAccepted": True,
+            },
+        )
+        enabled = client.post("/owner-voice-gate/settings", json={"enabled": True})
+
+    assert enroll.status_code == 200
+    assert enabled.status_code == 200
+    assert enabled.json()["enrolled"] is True
+    assert enabled.json()["enabled"] is True
+    assert enabled.json()["status"] == "enabled"
+
+
+def test_owner_voice_gate_delete_clears_enrolled_centroid(tmp_path, monkeypatch):
+    """TASK-263: delete clears the stored centroid and enrolled state."""
+    path = _owner_voice_gate_temp_storage(tmp_path)
+    owner1, owner2 = _owner_voice_sample_paths(tmp_path)
+    monkeypatch.setattr(
+        owner_voice_gate_storage,
+        "run_owner_voice_enrollment_sidecar",
+        _mock_owner_voice_enrollment_report,
+    )
+
+    with TestClient(app) as client:
+        client.post(
+            "/owner-voice-gate/enroll-files",
+            json={
+                "paths": [owner1, owner2],
+                "safetyNoticeAccepted": True,
+            },
+        )
+        assert path.exists()
+        response = client.post("/owner-voice-gate/delete")
+        status = client.get("/owner-voice-gate/status")
+
+    assert response.status_code == 200
+    assert response.json()["enrolled"] is False
+    assert response.json()["embeddingAggregate"] is None
+    assert response.json()["embeddingPersisted"] is False
+    assert not path.exists()
+    assert status.json()["status"] == "not_enrolled"
+
+
+def test_owner_voice_gate_enroll_route_no_stt_or_chat_runtime_calls():
+    """TASK-263: enrollment endpoint must not call STT or chat runtime."""
+    import inspect
+    import app.api.routes as routes_module
+
+    source = inspect.getsource(routes_module.owner_voice_gate_enroll_files_route)
+    assert "transcribe_audio_bytes" not in source
+    assert "stt_transcribe" not in source
+    assert "generate_chat_reply" not in source
+    assert "store_chat_turn" not in source
 
 
 def test_stt_service_no_audio_persistence():

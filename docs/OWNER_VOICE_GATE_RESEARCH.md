@@ -1,6 +1,6 @@
 # Owner Voice Gate Research
 
-Status: TASK-258 RESEARCH - OWNER VOICE GATE FEASIBILITY / NO RUNTIME CHANGE; TASK-259 DONE - WINDOWS OWNER VOICE PROBE SMOKE PASS; TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS
+Status: TASK-258 RESEARCH - OWNER VOICE GATE FEASIBILITY / NO RUNTIME CHANGE; TASK-259 DONE - WINDOWS OWNER VOICE PROBE SMOKE PASS; TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS; TASK-263 DONE - Windows Unicode owner voice enrollment storage smoke PASS
 
 Date: 2026-06-04
 
@@ -371,8 +371,9 @@ Future sequence:
 
 - TASK-261 Owner Voice Enrollment UI / Local Storage Stub.
 - TASK-262 Owner Voice Gate Calibration Probe.
-- TASK-263 Owner Voice Gate Runtime Integration for Manual Mic.
-- TASK-264 Owner Voice Gate Runtime Integration for Conversation Mode.
+- TASK-263 Owner Voice Enrollment File Import / Centroid Storage.
+- TASK-264 Owner Voice Gate Runtime Integration for Manual Mic.
+- TASK-265 Owner Voice Gate Runtime Integration for Conversation Mode.
 
 Runtime remains unchanged by TASK-260.
 
@@ -411,8 +412,9 @@ Safety boundary remains unchanged:
 - No IPC channel.
 - No Pet Window, Output Queue, or Diagnostics Drawer runtime change.
 
-Next recommended task: TASK-262 Owner Voice Gate Calibration Probe /
-Multi-Sample Threshold Review. Do not jump directly to Manual Mic or
+Next completed step after TASK-261 was TASK-262 Owner Voice Gate Calibration
+Probe / Multi-Sample Threshold Review. TASK-263 now implements file-based
+enrollment and centroid storage. Do not jump directly to Manual Mic or
 Conversation Mode runtime gating.
 
 ## 13. TASK-262 multi-sample calibration probe
@@ -501,10 +503,52 @@ Backwards compatibility:
 - `--verify-b` still works (treated as 1 other-speaker sample).
 - Legacy `ownerScore` and `otherScore` fields are set when only legacy args are used.
 
+TASK-263 implements the first real local voiceprint write path:
+
+- `scripts/owner_voice_gate_enroll.py` runs in `.venv-funasr` Python 3.10.
+- Backend endpoint: `POST /owner-voice-gate/enroll-files`.
+- Payload accepts local file paths only: `paths`, `threshold`, `safetyNoticeAccepted`.
+- The endpoint rejects raw audio, base64 audio, transcripts, waveforms, and embedding vectors from the UI.
+- Enrollment requires at least 2 owner WAV paths and safety notice acceptance.
+- The sidecar validates 16 kHz mono PCM WAV files, loads FunASR CAM++, extracts embeddings in memory, L2-normalizes each embedding, averages, and L2-normalizes the centroid.
+- Backend storage writes only the final 192-d centroid, `enrolled=true`, `sampleCount`, threshold, calibration stats, provider/model metadata, and timestamps.
+- API status/settings responses mask the centroid by default; UI does not render `embeddingAggregate`.
+- Gate remains disabled after enrollment until explicitly enabled.
+- Delete clears the centroid and resets `enrolled=false`.
+
+TASK-263 follow-up fixes Windows non-ASCII/Unicode path handling for
+`/owner-voice-gate/enroll-files`. The backend no longer eagerly resolves owner
+sample paths before invoking the `.venv-funasr` sidecar; it trims and
+`expanduser()`s paths, validates that each path exists with `Path.is_file()`,
+passes the caller-provided Unicode spelling through to sidecar argv, and decodes
+sidecar JSON stdout as UTF-8. Missing files return a clean
+`audio_file_not_found` not-enrolled result without stack traces or raw paths.
+Windows Unicode backend API smoke PASS with two owner WAVs under
+`C:\Users\雪狼丸\AppData\Local\Temp`: `enrolled=true`, `sampleCount=2`,
+`embeddingDim=192`, `embeddingPersisted=true`, `status=disabled`,
+`reason=enrolled`, and masked `embeddingAggregate=null`.
+
+The stored centroid is sensitive local biometric-like data. It is still a
+convenience-filter voiceprint, not security-grade authentication.
+
+Safety boundary remains unchanged:
+
+- No Manual Mic runtime gate.
+- No Conversation Mode runtime gate.
+- No `/stt/transcribe` behavior change.
+- No `/chat` schema change.
+- No new IPC channel.
+- No microphone access.
+- No recording.
+- No raw audio persistence.
+- No transcript or waveform persistence.
+- No always listening or background monitoring.
+- No Pet Window, Output Queue, or Diagnostics Drawer change.
+
 Recommended next tasks:
 
-- TASK-263 Owner Voice Gate Runtime Integration for Manual Mic.
-- TASK-264 Owner Voice Gate Runtime Integration for Conversation Mode.
+- TASK-264 Owner Voice Gate Runtime Integration for Manual Mic.
+- TASK-265 Owner Voice Gate Runtime Integration for Conversation Mode.
 
 Do not jump to runtime gating until the explicit runtime task accepts the
 threshold strategy and keeps owner voice gate opt-in.

@@ -1,6 +1,6 @@
 # Owner Voice Gate Storage Design
 
-Status: TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS
+Status: TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS; TASK-263 DONE - Windows Unicode owner voice enrollment storage smoke PASS
 
 Date: 2026-06-04
 
@@ -454,7 +454,105 @@ Threshold storage recommendation after TASK-262:
 - Reserve `0.4` / permissiveThreshold for debug or explicit permissive
   experiments, not the first runtime default.
 
-## 12. Future Runtime Architecture
+## 13. TASK-263 File Enrollment / Centroid Storage
+
+TASK-263 implements enrollment from existing owner WAV files. It is the first
+task that writes a real owner voiceprint, but it still does not connect that
+voiceprint to Manual Mic or Conversation Mode runtime gating.
+
+Implemented path:
+
+```text
+Full App Owner Voice Gate settings
+-> user pastes existing owner WAV file paths
+-> POST /owner-voice-gate/enroll-files
+-> backend invokes .venv-funasr scripts/owner_voice_gate_enroll.py
+-> sidecar validates 16 kHz mono PCM WAV files
+-> sidecar extracts CAM++ embeddings in memory
+-> L2 normalize each sample embedding
+-> average embeddings
+-> L2 normalize centroid
+-> backend writes owner_voice_gate_settings.json
+```
+
+Storage write after successful enrollment:
+
+- `enrolled=true`
+- `enabled=false`
+- `provider=funasr-campp`
+- `modelId=iic/speech_campplus_sv_zh-cn_16k-common`
+- `embeddingDim=192`
+- `embeddingAggregate=<192 float centroid>`
+- `sampleCount=N`
+- `threshold=<clamped 0.40..0.95>`
+- `calibrationStats.meanSelfScore/minSelfScore/maxSelfScore`
+- `safetyNoticeAccepted=true`
+- `createdAt` / `updatedAt`
+
+Sensitive data boundary:
+
+- `embeddingAggregate` is a sensitive local voiceprint.
+- It is stored only in backend-owned Owner Voice Gate storage.
+- It is not written to chat history, STT state, Pet state, renderer
+  `localStorage`, exports, or diagnostics drawers.
+- API status/settings responses mask the centroid by default.
+- UI shows only enrollment state, sample count, threshold, provider/model,
+  embedding dimension, and aggregate score summary.
+
+Forbidden persistence remains:
+
+- No raw audio.
+- No base64 audio.
+- No transcripts.
+- No waveforms.
+- No per-sample embeddings.
+- No formal runtime gate decision history.
+
+Delete/reset behavior:
+
+- `POST /owner-voice-gate/delete` deletes the owner voice storage file or resets
+  it to defaults.
+- Delete clears `embeddingAggregate`, `enrolled`, `sampleCount`, `enabled`, and
+  calibration stats.
+- Delete does not touch chat history, STT state, Pet state, provider settings,
+  or app memory.
+
+Runtime remains unchanged:
+
+- No Manual Mic gate.
+- No Conversation Mode gate.
+- No `/stt/transcribe` behavior change.
+- No `/chat` schema change.
+- No new IPC channel.
+- No microphone access, recording, always listening, or background monitoring.
+- No Pet Window, Output Queue, or Diagnostics Drawer change.
+
+TASK-263 Windows Unicode path follow-up:
+
+- Windows smoke found that direct `.venv-funasr` sidecar enrollment could load
+  samples from a non-ASCII user temp path, and backend `Path.exists()` could see
+  the same files, but `POST /owner-voice-gate/enroll-files` returned
+  `audio_file_not_found` for the Unicode path.
+- Root cause: backend enrollment path preparation eagerly canonicalized paths
+  with `Path(...).resolve()` before invoking the sidecar. That extra path
+  rewrite was unnecessary for file import enrollment and brittle for Windows
+  non-ASCII user profile paths.
+- Fix: backend now trims and `expanduser()`s each path, validates existence
+  with `Path.is_file()`, preserves the caller-provided Unicode spelling for the
+  `.venv-funasr` sidecar argv, and decodes sidecar JSON stdout as UTF-8.
+- Missing files still return a clean `audio_file_not_found` not-enrolled result
+  without stack traces or raw paths.
+- ASCII enrollment paths remain supported.
+- Windows Unicode backend API smoke PASS with two owner WAVs under
+  `C:\Users\雪狼丸\AppData\Local\Temp`: `enrolled=true`, `sampleCount=2`,
+  `embeddingDim=192`, `embeddingPersisted=true`, `status=disabled`,
+  `reason=enrolled`, `safetyNoticeAccepted=true`, and `embeddingAggregate=null`
+  in the API response.
+- No raw audio, base64 audio, transcript, waveform, per-sample embedding, mic,
+  recording, STT, chat, IPC, Pet Window, Output Queue, or Diagnostics Drawer
+  behavior changed.
+
+## 14. Future Runtime Architecture
 
 This is for future tasks only:
 
@@ -472,13 +570,13 @@ Manual Mic / Conversation Mode WAV
 
 Runtime integration should be split by surface:
 
-- TASK-263: Manual Mic gate.
-- TASK-264: Conversation Mode gate.
+- TASK-264: Manual Mic gate.
+- TASK-265: Conversation Mode gate.
 
 Both must be disabled by default until enrollment exists and the user explicitly
 enables the gate.
 
-## 13. Future Diagnostics Fields
+## 15. Future Diagnostics Fields
 
 Suggested future diagnostics fields:
 
@@ -500,17 +598,17 @@ Diagnostics must not show:
 - Full transcript for rejected speech.
 - Hidden prompt or private storage path details.
 
-## 14. Future Tasks
+## 16. Future Tasks
 
 Recommended sequence:
 
-- TASK-263 Owner Voice Gate Runtime Integration for Manual Mic
-- TASK-264 Owner Voice Gate Runtime Integration for Conversation Mode
+- TASK-264 Owner Voice Gate Runtime Integration for Manual Mic
+- TASK-265 Owner Voice Gate Runtime Integration for Conversation Mode
 
 TASK-262 calibration is complete on Windows for the small smoke set. Runtime
 gating should still remain explicit, opt-in, and threshold-aware.
 
-## 15. Validation Plan
+## 17. Validation Plan
 
 Because TASK-261 adds a UI/storage stub only, validation is regression-oriented:
 

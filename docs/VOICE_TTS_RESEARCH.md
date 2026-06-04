@@ -496,6 +496,26 @@ TASK-257 DONE - WINDOWS PET WINDOW CLICK/SHOW SMOKE PASS (2026-06-04): Pet Windo
   documented as local calibration hints only. No Manual Mic, Conversation Mode, STT, `/chat`,
   IPC, Pet Window, Output Queue, or Diagnostics Drawer change.
 
+- **TASK-263 Owner Voice Enrollment File Import / Centroid Storage. DONE - Windows Unicode owner voice enrollment storage smoke PASS (2026-06-04):**
+  Adds explicit file-path enrollment from existing owner WAV files. The new
+  `.venv-funasr` sidecar `scripts/owner_voice_gate_enroll.py` validates 16 kHz
+  mono PCM WAV input, loads FunASR CAM++, extracts embeddings in memory, and
+  returns one 192-d centroid. Backend `POST /owner-voice-gate/enroll-files`
+  accepts only `paths`, `threshold`, and `safetyNoticeAccepted`, rejects audio
+  bytes/base64/transcript/waveform/embedding fields, and stores only the final
+  centroid plus metadata in backend-owned Owner Voice Gate storage. The stored
+  centroid is sensitive local voiceprint data. UI shows file-path enrollment
+  controls and status only; it does not render the full vector. No Manual Mic,
+  Conversation Mode, STT, `/chat`, IPC, mic, recording, raw audio persistence,
+  per-sample embedding persistence, Pet Window, Output Queue, or Diagnostics
+  Drawer change. Follow-up fix preserves Windows non-ASCII/Unicode path strings
+  when backend invokes the `.venv-funasr` sidecar, prechecks existence with
+  `Path.is_file()`, decodes sidecar JSON as UTF-8, and keeps missing-file errors
+  as clean `audio_file_not_found` not-enrolled results. Backend Unicode API
+  smoke PASS with `enrolled=true`, `sampleCount=2`, `embeddingDim=192`,
+  `embeddingPersisted=true`, `status=disabled`, `reason=enrolled`, and
+  `embeddingAggregate=null`.
+
 Each future task must explicitly define safety boundaries, user controls,
 provider scope, queue priority, and no-regression checks.
 

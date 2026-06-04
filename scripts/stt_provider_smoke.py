@@ -522,11 +522,12 @@ _os.environ.pop("DRAGON_PET_FUNASR_PERSISTENT", None)
 # ---------------------------------------------------------------------------
 # TASK-259/260/261: Owner Voice Gate probe and storage docs static safety checks
 # ---------------------------------------------------------------------------
-print("\n[10/11] TASK-259/260/261 - Owner Voice Gate probe and storage docs static safety")
+print("\n[10/12] TASK-259/260/261 - Owner Voice Gate probe and storage docs static safety")
 probe_path = _os.path.join(REPO_ROOT, "scripts", "owner_voice_gate_probe.py")
 owner_voice_doc = _os.path.join(REPO_ROOT, "docs", "OWNER_VOICE_GATE_RESEARCH.md")
 owner_voice_storage_doc = _os.path.join(REPO_ROOT, "docs", "OWNER_VOICE_GATE_STORAGE_DESIGN.md")
 owner_voice_storage_service = _os.path.join(REPO_ROOT, "backend", "app", "services", "owner_voice_gate_storage.py")
+routes_path = _os.path.join(REPO_ROOT, "backend", "app", "api", "routes.py")
 renderer_html = _os.path.join(REPO_ROOT, "apps", "desktop", "src", "renderer", "index.html")
 renderer_js = _os.path.join(REPO_ROOT, "apps", "desktop", "src", "renderer", "renderer.js")
 
@@ -624,6 +625,11 @@ if _os.path.isfile(owner_voice_storage_service):
         owner_voice_storage_service_text = f.read()
 else:
     owner_voice_storage_service_text = ""
+if _os.path.isfile(routes_path):
+    with open(routes_path, "r", encoding="utf-8") as f:
+        routes_source = f.read()
+else:
+    routes_source = ""
 
 check("OwnerVoiceGateStorageService" in owner_voice_storage_service_text,
       "owner voice storage service defines narrow storage service")
@@ -631,8 +637,20 @@ check("OWNER_VOICE_DEFAULT_THRESHOLD = 0.65" in owner_voice_storage_service_text
       "owner voice storage service records default threshold")
 check("OWNER_VOICE_MIN_THRESHOLD = 0.40" in owner_voice_storage_service_text and "OWNER_VOICE_MAX_THRESHOLD = 0.95" in owner_voice_storage_service_text,
       "owner voice storage service clamps threshold")
-check("embeddingAggregate: None = None" in owner_voice_storage_service_text,
-      "owner voice storage service keeps embeddingAggregate null placeholder")
+check("embeddingAggregate: list[float] | None = None" in owner_voice_storage_service_text,
+      "owner voice storage service supports centroid-only embedding storage")
+check("run_owner_voice_enrollment_sidecar" in owner_voice_storage_service_text,
+      "owner voice storage service runs narrow enrollment sidecar")
+check("_prepare_owner_voice_enrollment_paths" in owner_voice_storage_service_text,
+      "owner voice storage service prepares enrollment paths before sidecar")
+check("Path(path).expanduser().resolve()" not in owner_voice_storage_service_text,
+      "owner voice storage service does not eagerly resolve enrollment paths")
+check("path.is_file()" in owner_voice_storage_service_text,
+      "owner voice storage service validates enrollment paths exist")
+check('reason="audio_file_not_found"' in owner_voice_storage_service_text,
+      "owner voice storage service returns clean audio_file_not_found reason")
+check('encoding="utf-8"' in owner_voice_storage_service_text and "PYTHONIOENCODING" in owner_voice_storage_service_text,
+      "owner voice storage service decodes sidecar JSON with UTF-8")
 for forbidden in ("getUserMedia", "MediaRecorder", "navigator.mediaDevices", "/stt/transcribe", "/chat", "transcribe_audio_bytes", "warmup_funasr_sidecar"):
     check(forbidden not in owner_voice_storage_service_text,
           f"owner voice storage service does not contain forbidden token {forbidden!r}")
@@ -661,7 +679,9 @@ check("/owner-voice-gate/settings" in renderer_js_text,
       "owner voice gate UI calls narrow settings endpoint")
 check("/owner-voice-gate/delete" in renderer_js_text,
       "owner voice gate UI calls narrow delete endpoint")
-owner_ui_start = renderer_js_text.find("TASK-261: Owner Voice Gate settings UI + backend storage stub.")
+check("/owner-voice-gate/enroll-files" in renderer_js_text,
+      "owner voice gate UI calls narrow file enrollment endpoint")
+owner_ui_start = renderer_js_text.find("TASK-261/263: Owner Voice Gate settings UI + backend storage/file enrollment.")
 owner_ui_end = renderer_js_text.find("Provider Key Save / Clear", owner_ui_start)
 owner_ui_text = renderer_js_text[owner_ui_start:owner_ui_end] if owner_ui_start >= 0 and owner_ui_end > owner_ui_start else ""
 check(bool(owner_ui_text), "owner voice gate UI renderer section can be isolated")
@@ -678,7 +698,7 @@ check('fetch(`${BACKEND_URL}/chat`' not in owner_ui_text,
 # ---------------------------------------------------------------------------
 # TASK-262: Multi-sample calibration probe static safety checks
 # ---------------------------------------------------------------------------
-print("\n[11/11] TASK-262 - Owner Voice Gate multi-sample calibration probe static safety")
+print("\n[11/12] TASK-262 - Owner Voice Gate multi-sample calibration probe static safety")
 
 check("--owner-sample" in probe_source,
       "probe accepts --owner-sample for multi-sample calibration")
@@ -755,6 +775,85 @@ check("calibration" in owner_voice_storage_text,
       "owner voice storage design doc covers calibration threshold strategy")
 
 # ---------------------------------------------------------------------------
+# TASK-263: Owner voice file enrollment + centroid storage static checks
+# ---------------------------------------------------------------------------
+print("\n[12/12] TASK-263 - Owner Voice Gate file enrollment and centroid storage static safety")
+
+enroll_path = _os.path.join(REPO_ROOT, "scripts", "owner_voice_gate_enroll.py")
+check(_os.path.isfile(enroll_path),
+      f"owner_voice_gate_enroll.py exists: {enroll_path}")
+if _os.path.isfile(enroll_path):
+    with open(enroll_path, "r", encoding="utf-8") as f:
+        enroll_source = f.read()
+else:
+    enroll_source = ""
+
+check("--owner-sample" in enroll_source,
+      "enrollment sidecar accepts --owner-sample")
+check("--owner-dir" in enroll_source,
+      "enrollment sidecar accepts --owner-dir")
+check("--threshold" in enroll_source,
+      "enrollment sidecar accepts --threshold")
+check("--output-json" in enroll_source,
+      "enrollment sidecar accepts --output-json")
+check("owner_enrollment_complete" in enroll_source,
+      "enrollment sidecar reports owner_enrollment_complete")
+check("embeddingAggregate" in enroll_source,
+      "enrollment sidecar outputs final centroid embeddingAggregate")
+check("per-sample embedding" in enroll_source,
+      "enrollment sidecar documents no per-sample embedding output")
+for forbidden in (
+    "getUserMedia",
+    "MediaRecorder",
+    "navigator.mediaDevices",
+    "ipcRenderer",
+    "ipcMain",
+    "stt:transcribe",
+    "/stt/transcribe",
+    "/chat",
+    "NamedTemporaryFile",
+    "mkdtemp",
+    "write_bytes",
+    "shutil.copy",
+    "save_dir",
+):
+    check(forbidden not in enroll_source,
+          f"enrollment sidecar source does not contain forbidden token {forbidden!r}")
+
+check("/owner-voice-gate/enroll-files" in routes_source,
+      "backend exposes narrow owner voice file enrollment endpoint")
+check("validate_owner_voice_gate_enroll_fields" in routes_source,
+      "backend enrollment endpoint validates allowed fields")
+check("enroll_owner_voice_gate_from_files" in routes_source,
+      "backend enrollment endpoint delegates storage write")
+check("rawAudio" in owner_voice_storage_service_text and "base64Audio" in owner_voice_storage_service_text,
+      "storage service rejects raw audio/base64 enrollment fields")
+check("embeddingAggregate" in owner_voice_storage_service_text and "include_embedding: bool = False" in owner_voice_storage_service_text,
+      "storage service masks centroid from status/settings API responses by default")
+check("enrolled = True" in owner_voice_storage_service_text,
+      "storage service can mark owner voice as enrolled after sidecar success")
+check("enabled = False" in owner_voice_storage_service_text,
+      "storage service keeps gate disabled immediately after enrollment")
+check('id="owner-voice-gate-enroll-paths"' in renderer_html_text,
+      "owner voice UI includes enrollment paths textarea")
+check('id="owner-voice-gate-enroll-btn"' in renderer_html_text,
+      "owner voice UI includes file enrollment button")
+check("Accept the safety notice before enrollment" in renderer_js_text,
+      "owner voice UI requires safety notice before enrollment")
+check("Provide at least two owner WAV file paths" in renderer_js_text,
+      "owner voice UI requires at least two owner paths")
+check("embeddingAggregate" not in owner_ui_text,
+      "owner voice UI section does not render embeddingAggregate")
+check("TASK-263" in owner_voice_text,
+      "owner voice research doc records TASK-263")
+check("TASK-263" in owner_voice_storage_text,
+      "owner voice storage design doc records TASK-263")
+check("centroid" in owner_voice_storage_text and "sensitive" in owner_voice_storage_text,
+      "owner voice storage design doc treats centroid as sensitive local voiceprint")
+check("Unicode" in owner_voice_storage_text and "audio_file_not_found" in owner_voice_storage_text,
+      "owner voice storage design doc records Unicode path follow-up")
+
+# ---------------------------------------------------------------------------
 # Clean up env so test leaves no side effects
 # ---------------------------------------------------------------------------
 os.environ.pop("DRAGON_PET_STT_PROVIDER", None)
@@ -766,8 +865,8 @@ print()
 print("=" * 65)
 print(f"  {_pass_count} PASS  {_fail_count} FAIL")
 if _fail_count == 0:
-    print("  TASK-249/250/253/253rev/254/256/259/260/261/262 STT Provider Smoke: PASS")
+    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263 STT Provider Smoke: PASS")
 else:
-    print("  TASK-249/250/253/253rev/254/256/259/260/261/262 STT Provider Smoke: FAIL")
+    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263 STT Provider Smoke: FAIL")
 print("=" * 65)
 sys.exit(0 if _fail_count == 0 else 1)

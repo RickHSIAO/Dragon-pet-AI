@@ -1,6 +1,6 @@
 # Interactive Companion Architecture Checkpoint
 
-**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-236 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS; TASK-237 IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS
+**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-236 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS; TASK-237 IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS; TASK-263 DONE - Windows Unicode owner voice enrollment storage smoke PASS
 **Date:** 2026-06-01
 **Scope:** Architecture checkpoint for TASK-214 through TASK-230.
 
@@ -63,6 +63,7 @@ user interaction
 | TASK-260 | Owner voice gate storage design | Defines enrollment storage, threshold calibration, reset/delete UX, and diagnostics boundary. DOCS ONLY / NO RUNTIME CHANGE. |
 | TASK-261 | Owner voice gate settings UI/storage stub | Adds backend-owned storage stub, narrow status/settings/delete endpoints, and Full App settings UI. No enrollment or runtime gate. DONE - Windows owner voice storage/UI smoke PASS. |
 | TASK-262 | Owner voice gate multi-sample calibration probe | Extends offline probe with centroid, ownerSelfScores/otherScores, stats, threshold suggestions. DONE - Windows owner voice calibration smoke PASS. |
+| TASK-263 | Owner voice enrollment file import / centroid storage | Adds `.venv-funasr` enrollment sidecar, backend file-path enrollment endpoint, and Full App file-path enrollment controls. Stores final centroid only; no runtime gate. DONE - Windows Unicode smoke PASS. |
 | TASK-228 | Output queue runtime skeleton | Adds Full App renderer-only disabled queue skeleton, sanitized snapshot, priority/preemption helpers, and queue diagnostics preview. DONE - Windows visual smoke PASS. |
 | TASK-229 | Output queue debug preview | Polishes queue snapshot preview with Recent and safe Next summary. DONE - Windows visual smoke PASS. |
 | TASK-230 | Reaction bubble diagnostics enqueue | Enqueues safe reaction bubble ids into the disabled local output queue for diagnostics only. DONE - Windows visual smoke PASS. |
@@ -715,6 +716,22 @@ Recommended next architecture phase:
   embeddingPersisted=false, micAccessed=false, runtimeIntegrated=false. Because this smoke used
   only 2 owner samples and 1 other sample, future runtime should keep `0.65` as the first
   balanced default until larger calibration data suggests otherwise.
+- TASK-263 DONE - Windows Unicode owner voice enrollment storage smoke PASS (2026-06-04):
+  Adds explicit owner voice enrollment from existing WAV file paths. Backend
+  `POST /owner-voice-gate/enroll-files` accepts only local path strings,
+  threshold, and safety notice acceptance, then invokes
+  `scripts/owner_voice_gate_enroll.py` through `.venv-funasr` instead of
+  importing FunASR/torch into backend Python 3.14. Storage writes one sensitive
+  192-d centroid voiceprint plus metadata, masks the centroid from status/UI
+  responses, and keeps the gate disabled after enrollment until explicitly
+  enabled. No Manual Mic or Conversation Mode gate, no STT/chat schema change,
+  no mic, recording, always listening, IPC, Pet Window, Output Queue, or
+  Diagnostics Drawer change. Follow-up hardens Windows non-ASCII/Unicode file
+  paths by preserving caller-provided path strings for sidecar argv, validating
+  existence with `Path.is_file()`, and decoding sidecar JSON as UTF-8. Backend
+  Unicode API smoke PASS with `enrolled=true`, `sampleCount=2`,
+  `embeddingDim=192`, `embeddingPersisted=true`, `status=disabled`,
+  `reason=enrolled`, and `embeddingAggregate=null`.
 - Relationship state.
 - Mood / attention / energy state beyond the local preview foundation.
 - Idle reaction policy.

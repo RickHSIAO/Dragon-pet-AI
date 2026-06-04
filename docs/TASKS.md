@@ -26688,8 +26688,9 @@ Future task sequence:
 
 - TASK-261 Owner Voice Enrollment UI / Local Storage Stub.
 - TASK-262 Owner Voice Gate Calibration Probe.
-- TASK-263 Owner Voice Gate Runtime Integration for Manual Mic.
-- TASK-264 Owner Voice Gate Runtime Integration for Conversation Mode.
+- TASK-263 Owner Voice Enrollment File Import / Centroid Storage.
+- TASK-264 Owner Voice Gate Runtime Integration for Manual Mic.
+- TASK-265 Owner Voice Gate Runtime Integration for Conversation Mode.
 
 **TASK-261 — Owner Voice Enrollment UI / Local Storage Stub:**
 
@@ -27007,7 +27008,153 @@ Safety closeout:
 
 ### Next Task
 
-TASK-263 — Owner Voice Gate Runtime Integration for Manual Mic
+TASK-263 — Owner Voice Enrollment File Import / Centroid Storage
+
+---
+
+## TASK-263 | Owner Voice Enrollment File Import / Centroid Storage
+
+Status: DONE - Windows Unicode owner voice enrollment storage smoke PASS (2026-06-04)
+
+### Goal
+
+Implement explicit owner voice enrollment from existing local WAV file paths.
+Generate one local FunASR CAM++ speaker embedding centroid and store it in
+backend-owned Owner Voice Gate storage. This task still does not connect Owner
+Voice Gate to Manual Mic or Conversation Mode runtime gating.
+
+### Implementation
+
+**`scripts/owner_voice_gate_enroll.py`**:
+
+- Runs under `.venv-funasr` Python 3.10.
+- Accepts `--owner-sample PATH` repeatedly and `--owner-dir DIR`.
+- Requires at least 2 owner WAV files.
+- Validates existing mono 16 kHz PCM WAV input.
+- Loads FunASR CAM++ / 3D-Speaker model locally.
+- Extracts embeddings in memory only.
+- L2 normalizes each embedding, averages, then L2 normalizes the centroid.
+- Outputs clean JSON with final `embeddingAggregate` only.
+- Does not output per-sample embeddings, waveform, transcript, or raw audio.
+
+**Backend endpoint**:
+
+- Adds `POST /owner-voice-gate/enroll-files`.
+- Payload: `paths`, `threshold`, `safetyNoticeAccepted`.
+- Rejects raw audio, base64 audio, transcript, waveform, and embedding fields.
+- Requires `safetyNoticeAccepted=true`.
+- Requires at least 2 owner file paths.
+- Invokes `.venv-funasr\Scripts\python.exe scripts\owner_voice_gate_enroll.py`
+  as a narrow subprocess sidecar.
+- Does not import FunASR or torch into backend Python 3.14.
+- Does not call `/stt/transcribe` or `/chat`.
+
+**Storage write**:
+
+- Stores `enrolled=true`.
+- Stores `enabled=false` after enrollment.
+- Stores `embeddingAggregate` as one 192-float centroid.
+- Stores `sampleCount`, `threshold`, provider/model metadata, calibration stats,
+  `safetyNoticeAccepted`, timestamps.
+- Status/settings API responses mask the centroid by default.
+- Delete clears the centroid and resets `enrolled=false`.
+
+**Full App UI**:
+
+- Adds Owner WAV file paths textarea.
+- Adds `Enroll from WAV files` and active `Re-enroll owner voice` buttons.
+- Requires safety notice before enrollment.
+- Requires at least two paths before calling backend.
+- Shows enrolled/sampleCount/threshold/provider/model/embeddingDim/score summary.
+- Does not render the full `embeddingAggregate`.
+- Does not open file picker, microphone, MediaRecorder, STT, `/chat`, IPC, Pet
+  Window, Output Queue, or Diagnostics Drawer.
+
+### Safety Boundary
+
+- No Manual Mic runtime change.
+- No Conversation Mode runtime change.
+- No `/stt/transcribe` behavior change.
+- No `/chat` schema change.
+- No microphone access.
+- No recording.
+- No raw audio persistence.
+- No base64 audio persistence.
+- No transcript or waveform persistence.
+- No per-sample embedding persistence.
+- No always listening or background monitoring.
+- No Pet Window, Output Queue, or Diagnostics Drawer change.
+- The stored centroid is sensitive local voiceprint data, but this remains a
+  convenience filter, not security-grade authentication.
+
+### Validation Notes
+
+- Backend pytest covers safety notice requirement, forbidden field rejection,
+  minimum sample count, mocked enrollment storage write, enable-after-enrolled,
+  delete/reset, and no STT/chat runtime call.
+- Renderer smoke covers enrollment UI, safety notice guard, two-path guard,
+  success rendering without vector display, enable-after-enrolled, and no
+  mic/STT/chat/Pet/Output Queue/localStorage use.
+- `scripts/stt_provider_smoke.py` now checks the enrollment sidecar and TASK-263
+  storage/UI/docs safety boundary.
+
+### Windows Unicode Path Follow-Up
+
+Windows enrollment storage smoke found a Unicode path regression:
+
+- Direct `.venv-funasr` sidecar enrollment PASS with a non-ASCII Windows temp
+  path.
+- Backend Python `Path.exists()` / `Path.is_file()` PASS for the same path.
+- Backend API `POST /owner-voice-gate/enroll-files` returned
+  `audio_file_not_found` for the Unicode path.
+- The same WAV files copied to an ASCII path enrolled successfully.
+
+Fix:
+
+- Backend enrollment path preparation no longer eagerly calls
+  `Path(...).resolve()` on owner sample paths before invoking the sidecar.
+- Backend now trims and `expanduser()`s each path, validates existence with
+  `Path.is_file()`, and preserves the caller-provided Unicode path spelling for
+  `.venv-funasr` sidecar argv.
+- Sidecar subprocess JSON stdout is decoded as UTF-8 with replacement on decode
+  errors.
+- Missing files return a clean `audio_file_not_found` not-enrolled response
+  without stack traces or raw paths.
+- ASCII path enrollment remains covered.
+- No Manual Mic, Conversation Mode, `/stt/transcribe`, `/chat`, IPC, Pet Window,
+  Output Queue, Diagnostics Drawer, mic, recording, raw audio, transcript,
+  waveform, or base64 audio behavior changed.
+
+### Windows Unicode Backend Smoke PASS
+
+Manual backend API smoke on 2026-06-04:
+
+- Backend: local uvicorn on `127.0.0.1:8000`.
+- Request: `POST /owner-voice-gate/enroll-files` with
+  `Content-Type: application/json; charset=utf-8`.
+- Paths:
+  - `%TEMP%\dragon-pet-voice-probe\owner1.wav`
+  - `%TEMP%\dragon-pet-voice-probe\owner2.wav`
+- Unicode-expanded path root: `C:\Users\雪狼丸\AppData\Local\Temp\...`.
+- Result:
+  - `enrolled=true`
+  - `sampleCount=2`
+  - `embeddingDim=192`
+  - `embeddingPersisted=true`
+  - `status=disabled`
+  - `reason=enrolled`
+  - `safetyNoticeAccepted=true`
+  - `calibrationStats.meanSelfScore=0.9806`
+  - `calibrationStats.minSelfScore=0.9806`
+  - `calibrationStats.maxSelfScore=0.9806`
+  - `embeddingAggregate=null` in API response, so the full centroid is not exposed.
+- Smoke used a temp `OWNER_VOICE_GATE_FILE_PATH`; repo
+  `backend/data/owner_voice_gate_settings.json`, raw WAV files, temp JSON, and
+  pytest temp folders were not added for commit.
+
+### Next Task
+
+TASK-264 Owner Voice Gate Runtime Integration for Manual Mic.
 
 ---
 

@@ -504,8 +504,31 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   only 2 owner samples and 1 other sample, keep `0.65` as the first future runtime balanced
   default; do not promote `0.5292` to a universal production default.
   223 stt_provider_smoke PASS; 174 pytest PASS; all 3 smoke scripts PASS.
-- TASK-263 — Owner Voice Gate Runtime Integration for Manual Mic
-- TASK-264 — Owner Voice Gate Runtime Integration for Conversation Mode
+- TASK-263 DONE - Windows Unicode owner voice enrollment storage smoke PASS (2026-06-04):
+  Added explicit owner voice file enrollment and centroid storage. New
+  `scripts/owner_voice_gate_enroll.py` runs under `.venv-funasr`, accepts
+  existing 16 kHz mono PCM WAV paths only, extracts FunASR CAM++ embeddings in
+  memory, creates one L2-normalized 192-d centroid, and outputs clean JSON for
+  backend storage. New backend endpoint `POST /owner-voice-gate/enroll-files`
+  accepts only `paths`, `threshold`, and `safetyNoticeAccepted`; rejects raw
+  audio/base64/transcript/waveform/embedding fields; invokes the sidecar without
+  importing FunASR/torch into backend Python 3.14; and writes only the final
+  centroid plus metadata to backend-owned storage. Full App Owner Voice Gate UI
+  now has file-path enrollment controls and does not render the full centroid.
+  Gate remains disabled after enrollment until explicitly enabled. No Manual
+  Mic/Conversation Mode runtime gate, no STT/chat schema change, no mic,
+  recording, always listening, IPC, Pet Window, Output Queue, or Diagnostics
+  Drawer change. Follow-up fix: backend enrollment now preserves Windows
+  non-ASCII/Unicode file paths for the `.venv-funasr` sidecar, prechecks
+  existence with `Path.is_file()`, decodes sidecar JSON as UTF-8, and returns a
+  clean `audio_file_not_found` result for missing files. ASCII paths remain
+  supported; no runtime voice/chat/Pet surfaces changed. Windows Unicode API
+  smoke PASS through backend with paths under `C:\Users\雪狼丸\AppData\Local\Temp`:
+  `enrolled=true`, `sampleCount=2`, `embeddingDim=192`, `embeddingPersisted=true`,
+  `status=disabled`, `reason=enrolled`, `safetyNoticeAccepted=true`, and
+  `embeddingAggregate=null` in the API response.
+- TASK-264 — Owner Voice Gate Runtime Integration for Manual Mic
+- TASK-265 — Owner Voice Gate Runtime Integration for Conversation Mode
 
 - TASK-256b DONE - WINDOWS DIAGNOSTICS READABILITY SMOKE PASS (2026-06-04): Diagnostics / Voice Panel Readability Polish. CSS-only change: `.voice-diagnostics-display` 10px → 13px, `line-height` 1.55, `max-height` 200px → 340px; `.voice-diagnostics-summary` 12px → 14px + font-weight 500; `.voice-diagnostics-panel` padding 4→8px; `.voice-tuning-label/input/select` 11px → 13px; `.voice-tuning-hint/voice-preview-hint/status` 10px → 12px; `.voice-preview-play-btn` 11px → 13px; `.voice-preview-audio-el` 28px → 32px. Windows smoke PASS: diagnostics readability improved, text/spacing/panel height all visibly better. No STT/warmup/IPC/Pet Window/Output Queue runtime changes. 10 new renderer CSS smoke tests PASS.
 

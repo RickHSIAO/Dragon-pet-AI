@@ -74,8 +74,10 @@ from app.services.provider_settings_service import (
 from app.services.owner_voice_gate_storage import (
     OwnerVoiceGateSettingsUpdate,
     delete_owner_voice_gate_voiceprint,
+    enroll_owner_voice_gate_from_files,
     get_owner_voice_gate_status,
     update_owner_voice_gate_settings,
+    validate_owner_voice_gate_enroll_fields,
     validate_owner_voice_gate_update_fields,
 )
 from app.services.state_service import get_chat_state_context, update_state_after_chat_turn
@@ -372,6 +374,46 @@ def owner_voice_gate_delete_route():
     state to defaults and removes the stub file if it exists.
     """
     return delete_owner_voice_gate_voiceprint()
+
+
+@router.post("/owner-voice-gate/enroll-files")
+async def owner_voice_gate_enroll_files_route(request: Request):
+    """
+    TASK-263: Enroll owner voice from existing local WAV file paths.
+
+    This endpoint accepts file paths only. It never accepts audio bytes,
+    base64 audio, transcripts, waveforms, or embedding vectors from the
+    renderer. It delegates embedding extraction to the .venv-funasr enrollment
+    sidecar and stores only the final centroid in backend-owned storage.
+    """
+    try:
+        body = await request.json()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="invalid json body") from exc
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="request body must be an object")
+    try:
+        validate_owner_voice_gate_enroll_fields(body)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    paths = body.get("paths")
+    if not isinstance(paths, list) or not all(isinstance(path, str) for path in paths):
+        raise HTTPException(status_code=400, detail="paths must be a list of strings")
+    threshold = body.get("threshold", 0.65)
+    safety_notice_accepted = bool(body.get("safetyNoticeAccepted", False))
+    try:
+        result = enroll_owner_voice_gate_from_files(
+            paths=paths,
+            threshold=threshold,
+            safety_notice_accepted=safety_notice_accepted,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        _logger.warning("TASK-263: owner voice enrollment failed: %s", type(exc).__name__)
+        raise HTTPException(status_code=503, detail="owner voice enrollment unavailable") from exc
+    return result
 
 
 @router.get("/provider/health")

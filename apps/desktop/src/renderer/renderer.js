@@ -155,17 +155,20 @@ const vadSilenceMsSelect      = document.getElementById("vad-silence-ms-select")
 const voicePreviewPlayBtn    = document.getElementById("voice-preview-play-btn");
 const voicePreviewAudio      = document.getElementById("voice-preview-audio");
 const voicePreviewStatus     = document.getElementById("voice-preview-status");
-// TASK-261: Owner Voice Gate settings stub DOM refs. No mic or runtime gate.
+// TASK-261/263: Owner Voice Gate settings + file enrollment DOM refs. No mic or runtime gate.
 const ownerVoiceGateRefreshBtn = document.getElementById("owner-voice-gate-refresh-btn");
 const ownerVoiceGateState = document.getElementById("owner-voice-gate-state");
 const ownerVoiceGateProvider = document.getElementById("owner-voice-gate-provider");
 const ownerVoiceGateModel = document.getElementById("owner-voice-gate-model");
 const ownerVoiceGateEmbeddingDim = document.getElementById("owner-voice-gate-embedding-dim");
+const ownerVoiceGateSampleCount = document.getElementById("owner-voice-gate-sample-count");
 const ownerVoiceGateLastScore = document.getElementById("owner-voice-gate-last-score");
 const ownerVoiceGateStorageOwner = document.getElementById("owner-voice-gate-storage-owner");
 const ownerVoiceGateSafetyAccepted = document.getElementById("owner-voice-gate-safety-accepted");
 const ownerVoiceGateEnabledToggle = document.getElementById("owner-voice-gate-enabled-toggle");
 const ownerVoiceGateThreshold = document.getElementById("owner-voice-gate-threshold");
+const ownerVoiceGateEnrollPaths = document.getElementById("owner-voice-gate-enroll-paths");
+const ownerVoiceGateEnrollBtn = document.getElementById("owner-voice-gate-enroll-btn");
 const ownerVoiceGateSaveThresholdBtn = document.getElementById("owner-voice-gate-save-threshold-btn");
 const ownerVoiceGateDeleteBtn = document.getElementById("owner-voice-gate-delete-btn");
 const ownerVoiceGateReenrollBtn = document.getElementById("owner-voice-gate-reenroll-btn");
@@ -3192,7 +3195,7 @@ async function saveProviderSettings() {
 }
 
 // ---------------------------------------------------------------------------
-// TASK-261: Owner Voice Gate settings UI + backend storage stub.
+// TASK-261/263: Owner Voice Gate settings UI + backend storage/file enrollment.
 // Safety: no microphone access, no recording, no localStorage voiceprint, no
 // STT request, no /chat request, no Pet Window call, no Output Queue call.
 // ---------------------------------------------------------------------------
@@ -3211,6 +3214,14 @@ function _ownerVoiceThresholdValue() {
   return Math.max(0.40, Math.min(0.95, rawValue));
 }
 
+function _ownerVoiceEnrollmentPaths() {
+  if (!ownerVoiceGateEnrollPaths) return [];
+  return ownerVoiceGateEnrollPaths.value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
 function renderOwnerVoiceGateStatus(settings) {
   if (!settings) return;
   const status = settings.status || (settings.enrolled ? "disabled" : "not_enrolled");
@@ -3223,12 +3234,14 @@ function renderOwnerVoiceGateStatus(settings) {
   if (ownerVoiceGateEmbeddingDim) {
     ownerVoiceGateEmbeddingDim.textContent = String(settings.embeddingDim || 192);
   }
+  if (ownerVoiceGateSampleCount) {
+    ownerVoiceGateSampleCount.textContent = String(settings.sampleCount || 0);
+  }
   if (ownerVoiceGateLastScore) {
     const stats = settings.calibrationStats || {};
+    const score = stats.meanSelfScore ?? stats.ownerScore;
     ownerVoiceGateLastScore.textContent =
-      stats.ownerScore === null || stats.ownerScore === undefined
-        ? "none"
-        : String(stats.ownerScore);
+      score === null || score === undefined ? "none" : String(score);
   }
   if (ownerVoiceGateStorageOwner) {
     ownerVoiceGateStorageOwner.textContent = settings.storageOwner || "backend";
@@ -3244,7 +3257,7 @@ function renderOwnerVoiceGateStatus(settings) {
     ownerVoiceGateThreshold.value = String(settings.threshold ?? 0.65);
   }
   if (ownerVoiceGateReenrollBtn) {
-    ownerVoiceGateReenrollBtn.disabled = true;
+    ownerVoiceGateReenrollBtn.disabled = false;
   }
   if (ownerVoiceGateStatusSummary) {
     const enrolledText = settings.enrolled ? "Enrolled" : "Not enrolled";
@@ -3253,6 +3266,43 @@ function renderOwnerVoiceGateStatus(settings) {
     ownerVoiceGateStatusSummary.className = settings.enabled
       ? "owner-voice-gate-status-summary active"
       : "owner-voice-gate-status-summary warning";
+  }
+}
+
+async function enrollOwnerVoiceGateFromFiles() {
+  if (!ownerVoiceGateSafetyAccepted || !ownerVoiceGateSafetyAccepted.checked) {
+    setOwnerVoiceGateSettingsStatus("Accept the safety notice before enrollment.", true);
+    return null;
+  }
+  const paths = _ownerVoiceEnrollmentPaths();
+  if (paths.length < 2) {
+    setOwnerVoiceGateSettingsStatus("Provide at least two owner WAV file paths.", true);
+    return null;
+  }
+  setOwnerVoiceGateSettingsStatus("Enrolling owner voice from local WAV file paths...");
+  try {
+    const res = await fetch(`${BACKEND_URL}/owner-voice-gate/enroll-files`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        paths,
+        threshold: _ownerVoiceThresholdValue(),
+        safetyNoticeAccepted: ownerVoiceGateSafetyAccepted.checked,
+      }),
+    });
+    const settings = await parseJsonResponse(res);
+    renderOwnerVoiceGateStatus(settings);
+    if (settings.enrolled) {
+      setOwnerVoiceGateSettingsStatus(
+        `Owner voice enrolled from ${settings.sampleCount || paths.length} WAV samples. Gate remains disabled until explicitly enabled.`
+      );
+    } else {
+      setOwnerVoiceGateSettingsStatus(settings.message || "Owner voice enrollment did not complete.", true);
+    }
+    return settings;
+  } catch (err) {
+    setOwnerVoiceGateSettingsStatus(formatBackendError(err), true);
+    return null;
   }
 }
 
@@ -5399,6 +5449,18 @@ if (ownerVoiceGateSaveThresholdBtn) {
     saveOwnerVoiceGateSettings({
       threshold: _ownerVoiceThresholdValue(),
     });
+  });
+}
+
+if (ownerVoiceGateEnrollBtn) {
+  ownerVoiceGateEnrollBtn.addEventListener("click", () => {
+    enrollOwnerVoiceGateFromFiles();
+  });
+}
+
+if (ownerVoiceGateReenrollBtn) {
+  ownerVoiceGateReenrollBtn.addEventListener("click", () => {
+    enrollOwnerVoiceGateFromFiles();
   });
 }
 

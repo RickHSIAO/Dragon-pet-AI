@@ -206,12 +206,12 @@ Queue: disabled · Items: 0 · Recent: 0 · Next: none</pre>
     </div>
   </details>
 
-  <!-- TASK-261: Owner Voice Gate settings stub. No mic, no recording, no runtime gate. -->
+  <!-- TASK-261/263: Owner Voice Gate settings + file enrollment. No mic, no recording, no runtime gate. -->
   <section id="owner-voice-gate-section" aria-labelledby="owner-voice-gate-title">
     <details id="owner-voice-gate-details">
       <summary class="owner-voice-gate-summary">
         <h2 id="owner-voice-gate-title" class="owner-voice-gate-summary-title">Owner Voice Gate</h2>
-        <span class="owner-voice-gate-summary-hint">Local settings stub; no recording or runtime gate yet.</span>
+        <span class="owner-voice-gate-summary-hint">Local file enrollment; no recording or runtime gate yet.</span>
       </summary>
 
       <div class="section-header">
@@ -247,6 +247,10 @@ Queue: disabled · Items: 0 · Recent: 0 · Next: none</pre>
           <strong id="owner-voice-gate-embedding-dim">192</strong>
         </div>
         <div>
+          <span>Samples</span>
+          <strong id="owner-voice-gate-sample-count">0</strong>
+        </div>
+        <div>
           <span>Last score</span>
           <strong id="owner-voice-gate-last-score">none</strong>
         </div>
@@ -279,10 +283,21 @@ Queue: disabled · Items: 0 · Recent: 0 · Next: none</pre>
           />
         </label>
 
+        <label class="owner-voice-gate-paths-label" for="owner-voice-gate-enroll-paths">
+          Owner WAV file paths
+          <textarea
+            id="owner-voice-gate-enroll-paths"
+            rows="3"
+            spellcheck="false"
+            placeholder="C:\path\to\owner1.wav&#10;C:\path\to\owner2.wav"
+          ></textarea>
+        </label>
+
         <div class="owner-voice-gate-actions">
           <button id="owner-voice-gate-save-threshold-btn" type="button">Save threshold</button>
           <button id="owner-voice-gate-delete-btn" type="button">Delete owner voiceprint</button>
-          <button id="owner-voice-gate-reenroll-btn" type="button" disabled title="Enrollment is deferred to a later task.">Re-enroll owner voice</button>
+          <button id="owner-voice-gate-enroll-btn" type="button">Enroll from WAV files</button>
+          <button id="owner-voice-gate-reenroll-btn" type="button">Re-enroll owner voice</button>
         </div>
       </div>
 

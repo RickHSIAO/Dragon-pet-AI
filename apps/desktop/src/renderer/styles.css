@@ -2001,12 +2001,19 @@ textarea {
 }
 
 .owner-voice-gate-checkbox,
-.owner-voice-gate-threshold-label {
+.owner-voice-gate-threshold-label,
+.owner-voice-gate-paths-label {
   align-items: center;
   color: var(--text-primary, #d6deed);
   display: flex;
   gap: 10px;
   font-size: 0.88rem;
+}
+
+.owner-voice-gate-paths-label {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .owner-voice-gate-threshold-label input {
@@ -2016,6 +2023,20 @@ textarea {
   color: var(--text-primary, #e5e7eb);
   padding: 7px 9px;
   width: 96px;
+}
+
+.owner-voice-gate-paths-label textarea {
+  background: var(--bg-primary, #0b1220);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary, #e5e7eb);
+  font-family: Consolas, "SFMono-Regular", monospace;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  min-height: 74px;
+  padding: 8px 10px;
+  resize: vertical;
+  width: min(520px, 100%);
 }
 
 .owner-voice-gate-actions {
