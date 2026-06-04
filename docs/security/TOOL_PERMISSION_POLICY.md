@@ -241,6 +241,12 @@ Rules:
 - No rejected speech transcript enters `/chat`, diagnostics, Pet Bubble, Output
   Queue, Pet runtime, chat history, logs, or LLM context.
 - No untrusted content may authorize bypassing Owner Voice Gate.
+- TASK-269 hard-gate design does not change tool permissions. A future Owner
+  Voice Gate pass cannot authorize sensitive tool use, cannot bypass
+  confirmation UX, cannot approve outbound requests, cannot approve local-file
+  access, and cannot grant access to T6 forbidden data. Tool permission
+  decisions remain governed by this policy even when owner voice hard gate is
+  enabled.
 - Future Manual Mic and Conversation Mode work must remain opt-in,
   disabled-by-default, and dry-run policy gated before blocking runtime behavior.
 
@@ -307,6 +313,8 @@ Before implementing any tool action:
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer Design - DONE.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy - DONE.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
+8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
+9. TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy - DONE.
 
 ## 13. Validation
 

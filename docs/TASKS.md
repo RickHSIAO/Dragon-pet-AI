@@ -26698,6 +26698,7 @@ Future task sequence:
 - TASK-266 Owner Voice Gate Manual Mic Dry-run Policy (DONE).
 - TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy (DONE).
 - TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish (DONE).
+- TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy (DONE).
 
 **TASK-261 — Owner Voice Enrollment UI / Local Storage Stub:**
 
@@ -27380,7 +27381,7 @@ PASS on 2026-06-04 against the stored owner centroid:
 TASK-SEC-001 Security Boundary / Anti Prompt Injection Design and TASK-SEC-002
 Sensitive Data Inventory / Redaction Rules and TASK-SEC-003 Prompt Injection
 Test Corpus and TASK-SEC-004 Tool Permission / User Confirmation Policy are
-complete; TASK-266 Owner Voice Gate Manual Mic Dry-run Policy is DONE; TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy is DONE; TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish is DONE.
+complete; TASK-266 Owner Voice Gate Manual Mic Dry-run Policy is DONE; TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy is DONE; TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish is DONE; TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy is DONE.
 
 ---
 
@@ -27485,6 +27486,7 @@ Before Owner Voice Gate connects to Manual Mic or Conversation Mode runtime:
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy - DONE.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
+9. TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy - DONE.
 
 ### Validation
 
@@ -27609,6 +27611,7 @@ TASK-SEC-003 has captured prompt injection and phishing corpora covering:
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy - DONE.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
+9. TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy - DONE.
 
 ### Validation
 
@@ -27714,6 +27717,7 @@ structured fixtures and assert that:
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy - DONE.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
+9. TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy - DONE.
 
 ### Validation
 
@@ -27835,6 +27839,7 @@ T6 data is blocked from LLM context and outbound actions.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy - DONE.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
+9. TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy - DONE.
 
 ### Validation
 
@@ -27942,6 +27947,7 @@ diagnostics, or embeddings enter outbound flows.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy - DONE.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
+9. TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy - DONE.
 
 ### Validation
 
@@ -28052,6 +28058,7 @@ Added backend pytest regression for:
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy - DONE.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
+9. TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy - DONE.
 
 ---
 
@@ -28240,6 +28247,209 @@ Updated `scripts/stt_provider_smoke.py` static checks for:
 - `node apps/desktop/scripts/renderer-chat-smoke.js`
 - `node apps/desktop/scripts/pet-window-smoke.js`
 - `node apps/desktop/scripts/pet-renderer-smoke.js`
+- `git diff --check`
+- `git status --short`
+
+---
+
+## TASK-269 | Owner Voice Gate Hard Gate Design / Opt-in Policy
+
+Status: DONE - DOCS-ONLY DESIGN / NO RUNTIME CHANGE
+
+### Goal
+
+Define the future Owner Voice Gate hard blocking policy before any runtime
+hard gate is implemented.
+
+This task is docs-only. It does not implement hard blocking, does not modify
+Manual Mic or Conversation Mode runtime behavior, does not change
+`/stt/transcribe` or `/chat`, does not add IPC, does not touch Pet Window,
+does not touch Output Queue, does not change Diagnostics runtime dispatch, and
+does not change backend endpoint behavior.
+
+### Hard Gate Purpose
+
+Owner Voice Gate remains a local convenience filter. It may reduce accidental
+non-owner speech entering chat, but it is not authentication, account security,
+authorization, identity proof, or approval for sensitive actions.
+
+Hard gate behavior must be opt-in and disabled by default. Product text must
+avoid phrases such as "verified identity", "secure login", "authorized user",
+or "account owner proven".
+
+### Opt-in Requirements
+
+Before hard gate can be enabled:
+
+- Owner voice enrollment must exist.
+- The Owner Voice Gate safety notice must be accepted.
+- The user must explicitly enable hard gate mode; dry-run enablement is not
+  enough.
+- UI must explain false accepts and false rejects are possible.
+- UI must state Owner Voice Gate is not security authentication.
+- Threshold must be visible and adjustable, or the active threshold policy must
+  be documented in the UI.
+- The user must be able to disable hard gate without deleting enrollment.
+
+### Fail-open / Fail-closed Policy
+
+Recommended default for early runtime stages: fail open with warning/status.
+This preserves existing voice flows while collecting dry-run data and avoiding
+surprising loss of input.
+
+Fail open should apply when:
+
+- No enrollment exists.
+- Verification is unavailable.
+- The speaker model is unavailable.
+- Sidecar verification errors.
+- Candidate WAV policy is missing.
+- Backend timeout occurs.
+- Unicode path handling fails.
+- Offline mode prevents verification.
+
+Low confidence scores should be treated as reject decisions only when hard gate
+is explicitly enabled. Before that, they remain diagnostic.
+
+Fail closed is allowed only after explicit user opt-in and confirmation. The
+UI must explain that speech may be rejected incorrectly and that the gate is
+still not authentication.
+
+### Manual Mic Hard Gate Design
+
+If a future Manual Mic hard gate is enabled:
+
+- Accepted speech may continue through existing STT and chat flow.
+- Rejected speech must not auto-send to `/chat`.
+- Rejected transcript must not enter LLM context, Pet Bubble, Output Queue,
+  chat history, TTS, or logs.
+- The textarea behavior must be designed explicitly: either do not fill it on
+  reject, or fill only behind a clear local warning that does not enter chat.
+- User override/retry may exist only through explicit user action, not hidden
+  auto-send.
+- Dry-run status and hard-gate status must remain visible in Voice
+  Diagnostics.
+
+### Conversation Mode Hard Gate Design
+
+If a future Conversation Mode hard gate is enabled:
+
+- Accepted speech may continue the conversation loop.
+- Rejected speech must not enter `/chat`.
+- Rejected speech must not trigger Pet reply, Pet Bubble speech, TTS, or Output
+  Queue entries.
+- Rejected transcript must not be surfaced in unsafe diagnostics.
+- Repeated rejects should be rate-limited in UI/log messages so they do not
+  spam the panel or logs.
+- The loop must remain stable and recoverable: after reject/error, return to a
+  waiting/listening state according to the existing Conversation Mode policy.
+- Stop controls must remain responsive.
+
+### Candidate WAV Temporary Policy Requirements
+
+Hard gate requires a safe candidate WAV policy. TASK-266/TASK-267 currently
+report `no_candidate_file_policy` when no safe candidate path exists.
+
+Future candidate WAV policy must define:
+
+- Candidate audio source for Manual Mic and Conversation Mode.
+- Whether audio is held in memory, written to temp storage, or streamed to the
+  verification path.
+- Temp file directory and lifetime if disk is used.
+- Deletion timing after verification, including error and timeout paths.
+- Whether paths are exposed to UI; default should be no path exposure.
+- What is logged; logs should contain only status, reason, score, threshold,
+  accepted/rejected, checkedAt, and safety booleans.
+- What is never persisted: raw audio, waveform, base64 audio, candidate
+  embeddings, rejected transcript, and full local paths.
+- Unicode path behavior and cleanup guarantees.
+
+### Privacy And Redaction
+
+Hard gate must never expose:
+
+- Stored centroid.
+- `embeddingAggregate`.
+- Stored embedding vector.
+- Candidate embedding vector.
+- Raw audio.
+- Waveform.
+- Base64 audio.
+- Raw transcript.
+- Rejected transcript.
+- Full local paths unless user-selected and necessary for explicit enrollment.
+
+Allowed display remains limited to:
+
+- status
+- reason
+- score
+- threshold
+- accepted/rejected
+- checkedAt
+- `rawAudioPersisted=false`
+- `candidateEmbeddingPersisted=false`
+- `storedCentroidExposed=false`
+- `runtimeHardBlocked=true/false`
+
+### UX / Diagnostics Messages
+
+Suggested UI wording:
+
+- Disabled: `Owner Voice Gate hard block is off. Existing voice flow is not blocked.`
+- Dry-run only: `Dry-run only; existing voice flow is not blocked.`
+- Enabled: `Owner Voice hard block is on. This is a convenience filter, not authentication.`
+- Rejected speech: `Voice did not match the enrolled owner. Speech was not sent.`
+- Verification error: `Owner Voice verification failed. Existing policy: fail open with warning unless hard block is explicitly enabled.`
+- No enrollment: `Enroll owner voice before enabling hard block.`
+- Threshold too strict: `Current threshold may reject valid owner speech. Adjust threshold or return to dry-run.`
+- Manual override/retry: `Retry or send manually only after explicit user action.`
+- Not authentication warning: `Passing Owner Voice Gate does not authorize tools or sensitive actions.`
+
+### Interaction With Security Docs
+
+TASK-269 depends on:
+
+- `docs/SECURITY_BOUNDARY_DESIGN.md`
+- `docs/SENSITIVE_DATA_REDACTION_RULES.md`
+- `docs/security/TOOL_PERMISSION_POLICY.md`
+- `docs/security/PHISHING_LINK_SAFETY_DESIGN.md`
+
+Policy interaction:
+
+- Owner voice result cannot authorize sensitive tool use.
+- Owner voice pass does not bypass tool confirmation.
+- Voice identity does not override prompt injection or phishing rules.
+- Voice gate must not grant access to T6 data.
+- Untrusted content cannot ask the app to enable, disable, bypass, or reinterpret
+  Owner Voice Gate.
+
+### Future Implementation Checklist
+
+Before implementing hard gate:
+
+- Design approved.
+- Candidate WAV temp policy implemented.
+- Redaction rules enforced.
+- Diagnostics verified safe.
+- Dry-run data observed over multiple owner/other/error cases.
+- Manual Mic reject/error/not_enrolled/timeout tests added.
+- Conversation Mode reject/error/not_enrolled/timeout tests added.
+- Opt-in UI tested.
+- Hard gate disable flow tested.
+- User override/retry behavior defined and tested.
+- No centroid, embedding, raw audio, path, or rejected transcript exposure.
+
+### Recommended Next Tasks
+
+- TASK-270 Candidate WAV Temporary Policy Design / Implementation.
+- TASK-271 Manual Mic Hard Gate Opt-in UI.
+- TASK-272 Manual Mic Hard Gate Runtime Implementation.
+- TASK-273 Conversation Mode Hard Gate Runtime Implementation.
+- TASK-274 Owner Voice Gate Safety Eval / Regression Corpus.
+
+### Validation
+
 - `git diff --check`
 - `git status --short`
 

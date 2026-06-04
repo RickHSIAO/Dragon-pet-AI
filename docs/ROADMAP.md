@@ -617,6 +617,17 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   authentication claim, no backend verification behavior change, no
   `/stt/transcribe` or `/chat` schema change, no IPC, no Pet Window, and no
   Output Queue change.
+- TASK-269 DONE - OWNER VOICE GATE HARD GATE DESIGN / OPT-IN POLICY (2026-06-05):
+  Docs-only design for future hard blocking. Defines Owner Voice Gate as an
+  opt-in convenience filter, not authentication or account security. Hard gate
+  remains disabled by default and requires enrollment, accepted safety notice,
+  explicit hard-gate enable action, visible threshold, and UI warning about
+  false accepts/rejects. Early runtime stages should fail open with
+  warning/status; fail-closed behavior requires explicit opt-in and confirmation.
+  Manual Mic and Conversation Mode hard-gate behavior, candidate WAV temp policy,
+  redaction/privacy rules, UX messages, TASK-SEC interactions, and future
+  implementation checklist are documented. No runtime, backend, schema, IPC, Pet
+  Window, Output Queue, or Diagnostics runtime behavior changed.
 
 - TASK-256b DONE - WINDOWS DIAGNOSTICS READABILITY SMOKE PASS (2026-06-04): Diagnostics / Voice Panel Readability Polish. CSS-only change: `.voice-diagnostics-display` 10px → 13px, `line-height` 1.55, `max-height` 200px → 340px; `.voice-diagnostics-summary` 12px → 14px + font-weight 500; `.voice-diagnostics-panel` padding 4→8px; `.voice-tuning-label/input/select` 11px → 13px; `.voice-tuning-hint/voice-preview-hint/status` 10px → 12px; `.voice-preview-play-btn` 11px → 13px; `.voice-preview-audio-el` 28px → 32px. Windows smoke PASS: diagnostics readability improved, text/spacing/panel height all visibly better. No STT/warmup/IPC/Pet Window/Output Queue runtime changes. 10 new renderer CSS smoke tests PASS.
 

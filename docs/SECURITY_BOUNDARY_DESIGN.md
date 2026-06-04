@@ -230,6 +230,23 @@ behavior: accept, reject, not-computed, disabled, and error states do not
 hard-block Conversation Mode STT, `/chat`, Manual Mic, `/stt/transcribe`, or
 existing auto-send behavior.
 
+TASK-269 defines the future hard-gate opt-in policy as docs-only design. Hard
+gate remains disabled by default. It is allowed only after owner enrollment,
+safety notice acceptance, explicit hard-gate enablement, visible threshold
+policy, and UI warnings that false accepts/rejects are possible and Owner
+Voice Gate is not authentication.
+
+Before a safe candidate WAV temp policy and opt-in UI exist, future runtime
+work should fail open with warning/status for no enrollment, verification
+unavailable, model unavailable, sidecar error, missing candidate WAV policy,
+backend timeout, Unicode path error, and offline mode. Fail-closed behavior
+requires explicit user opt-in and confirmation.
+
+Owner voice result cannot authorize sensitive tool use, bypass tool
+confirmation, override prompt-injection/phishing policy, or grant access to T6
+data. Untrusted content cannot enable, disable, bypass, or reinterpret Owner
+Voice Gate.
+
 ## 11. Recommended Task Sequence
 
 1. TASK-SEC-001 Security Boundary / Anti Prompt Injection Design - DONE.
@@ -239,6 +256,8 @@ existing auto-send behavior.
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer Design - DONE.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy - DONE.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
+8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
+9. TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy - DONE.
 
 ## 12. Non-Goals
 

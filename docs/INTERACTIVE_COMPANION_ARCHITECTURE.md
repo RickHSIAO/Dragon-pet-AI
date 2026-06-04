@@ -1,6 +1,6 @@
 # Interactive Companion Architecture Checkpoint
 
-**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-236 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS; TASK-237 IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS; TASK-263 DONE - Windows Unicode owner voice enrollment storage smoke PASS; TASK-264 DONE - Windows stored centroid verification smoke PASS; TASK-265 DONE - Windows backend verify-files smoke PASS; TASK-SEC-001 DONE - docs-only security boundary design; TASK-SEC-002 DONE - docs-only sensitive data inventory / redaction rules; TASK-SEC-003 DONE - docs/test-corpus only; TASK-SEC-004 DONE - docs-only tool permission policy; TASK-SEC-005 DONE - docs-only phishing/link safety design; TASK-266 DONE - Manual Mic dry-run only / no hard block; TASK-267 DONE - Conversation Mode dry-run only / no hard block; TASK-268 DONE - diagnostics polish only / no hard block
+**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-236 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS; TASK-237 IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS; TASK-263 DONE - Windows Unicode owner voice enrollment storage smoke PASS; TASK-264 DONE - Windows stored centroid verification smoke PASS; TASK-265 DONE - Windows backend verify-files smoke PASS; TASK-SEC-001 DONE - docs-only security boundary design; TASK-SEC-002 DONE - docs-only sensitive data inventory / redaction rules; TASK-SEC-003 DONE - docs/test-corpus only; TASK-SEC-004 DONE - docs-only tool permission policy; TASK-SEC-005 DONE - docs-only phishing/link safety design; TASK-266 DONE - Manual Mic dry-run only / no hard block; TASK-267 DONE - Conversation Mode dry-run only / no hard block; TASK-268 DONE - diagnostics polish only / no hard block; TASK-269 DONE - hard gate opt-in design / no runtime change
 **Date:** 2026-06-01
 **Scope:** Architecture checkpoint for TASK-214 through TASK-230.
 
@@ -74,6 +74,7 @@ user interaction
 | TASK-266 | Owner Voice Gate Manual Mic dry-run policy | Adds status-only Manual Mic owner voice dry-run diagnostics. Accept/reject/error/not-computed never hard-block Manual Mic STT, textarea fill, or auto-send. Reuses verify-files only when a safe candidate WAV path policy exists. No Conversation Mode gate, no `/chat` schema change, no authentication claim. |
 | TASK-267 | Owner Voice Gate Conversation Mode dry-run policy | Adds status-only Conversation Mode owner voice dry-run diagnostics with `ownerVoiceDryRunSource=conversation_mode`. Accept/reject/error/not-computed never hard-block Conversation Mode STT or `/chat`. Reuses verify-files only when a safe candidate WAV path policy exists. No hard gate, backend schema change, IPC, Pet Window, or Output Queue change. |
 | TASK-268 | Owner Voice dry-run diagnostics polish | Polishes existing Voice Diagnostics wording for Manual Mic and Conversation Mode dry-run status. Shows readable source/state/reason labels and `Dry-run only; existing voice flow is not blocked` with `runtimeHardBlocked=false`. No hard gate, backend behavior change, schema change, IPC, Pet Window, or Output Queue change. |
+| TASK-269 | Owner Voice Gate hard gate design | Docs-only opt-in policy for future hard blocking. Defines convenience-filter purpose, disabled-by-default opt-in requirements, fail-open/fail-closed policy, Manual Mic and Conversation Mode behavior, candidate WAV temp requirements, redaction, UX messages, and security-doc interactions. No runtime change. |
 | TASK-228 | Output queue runtime skeleton | Adds Full App renderer-only disabled queue skeleton, sanitized snapshot, priority/preemption helpers, and queue diagnostics preview. DONE - Windows visual smoke PASS. |
 | TASK-229 | Output queue debug preview | Polishes queue snapshot preview with Recent and safe Next summary. DONE - Windows visual smoke PASS. |
 | TASK-230 | Reaction bubble diagnostics enqueue | Enqueues safe reaction bubble ids into the disabled local output queue for diagnostics only. DONE - Windows visual smoke PASS. |
@@ -554,11 +555,12 @@ Recommended next architecture phase:
 
 - Security boundary prerequisites before Owner Voice Gate runtime wiring are now
   documented through TASK-SEC-005. TASK-266 adds Manual Mic dry-run status only
-  TASK-267 adds Conversation Mode dry-run status only, and TASK-268 polishes
-  their existing Voice Diagnostics wording. All keep existing runtime behavior
-  non-blocking. Future owner voice hard-gate work remains deferred and must
-  stay opt-in, disabled by default, and policy gated before blocking runtime
-  behavior.
+  TASK-267 adds Conversation Mode dry-run status only, TASK-268 polishes their
+  existing Voice Diagnostics wording, and TASK-269 documents hard-gate opt-in
+  policy without runtime changes. All keep existing runtime behavior
+  non-blocking. Future owner voice hard-gate implementation remains deferred
+  until candidate WAV temp policy, opt-in UI, redaction, and safety tests are
+  approved.
 - Renderer modularization in progress: TASK-238 (output queue module) DONE - WINDOWS VISUAL SMOKE PASS;
   TASK-239 (diagnostics drawer module) DONE - WINDOWS VISUAL SMOKE PASS;
   TASK-240 (Christina Desktop Pet Cutout Stage Foundation — transparent cutout CSS visual,

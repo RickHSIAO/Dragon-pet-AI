@@ -1,6 +1,6 @@
 # Dragon Pet AI
 
-**Latest local status (2026-06-05):** TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish **DONE - diagnostics polish only / no hard block**. Existing Voice Diagnostics now shows readable Owner Voice dry-run source labels (`Manual Mic`, `Conversation Mode`), readable state/reason text, score/threshold/accepted/checkedAt, and a compact safety summary: `Dry-run only; existing voice flow is not blocked` with `runtimeHardBlocked=false`. TASK-266 Manual Mic dry-run and TASK-267 Conversation Mode dry-run remain non-blocking. No hard gate, authentication claim, backend verification behavior change, `/stt/transcribe` or `/chat` schema change, IPC, Pet Window, Output Queue, or Diagnostics runtime dispatch change was added.
+**Latest local status (2026-06-05):** TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy **DONE - docs-only design / no runtime change**. The docs now define future hard-gate purpose, explicit opt-in requirements, fail-open vs fail-closed policy, Manual Mic and Conversation Mode hard-gate behavior, candidate WAV temp-policy requirements, privacy/redaction boundaries, UX messages, security-doc interactions, implementation checklist, and recommended follow-up tasks. No hard gate, Manual Mic behavior change, Conversation Mode behavior change, backend verification behavior change, `/stt/transcribe` or `/chat` schema change, IPC, Pet Window, Output Queue, Diagnostics runtime dispatch change, or authentication claim was added.
 
 > **Dragon Pet AI** 是一個本地優先的 Electron + FastAPI 桌面陪伴原型，具備手動記憶、記憶稽核日誌、BYOK 提供者設定、使用量計量、安全審查過的 Test Connection 端點、Anthropic/Ollama 提供者轉接層（隱藏在 feature flag 後）、本地 Ollama `/chat` 執行期 smoke 通過（`source=llm_local`，克莉絲蒂娜人格確認）、Ollama Provider Settings UI（無需 API Key，使用本機 GPU/CPU），以及 Full App 聊天搜尋、高亮、匯出、未讀提示、時間戳、LINE-style 日期分隔線、清除確認、empty state、Undo Clear Chat 與單則訊息刪除/復原。以安全優先的增量開發方式建構，後端 mocked 測試套件共 **586 個測試通過**。
 
@@ -109,7 +109,7 @@ ollama serve
 | 真實 API Key 使用 | ❌ 無 — 所有測試使用 mocked runner |
 | 生產就緒 | ❌ 尚未 — prototype / portfolio 階段 |
 | Demo 可用（本地 Ollama） | ✅ 是 |
-| 下一個任務 | TASK-268 Owner Voice dry-run diagnostics polish **DONE - diagnostics polish only**; future hard gate remains deferred |
+| 下一個任務 | TASK-269 Owner Voice Gate hard gate design **DONE - docs-only**; next implementation work starts with candidate WAV temp policy |
 
 ---
 

@@ -156,6 +156,12 @@ Hard rules:
   plus `ownerVoiceDryRunSource=conversation_mode`. They must not show centroid
   vectors, `embeddingAggregate`, candidate embeddings, raw audio, raw candidate
   paths, raw transcript, or rejected transcript.
+- TASK-269 hard-gate design keeps the same redaction boundary for future
+  blocking. A hard-gate reject must not expose or persist rejected transcript,
+  raw audio, waveform, base64 audio, candidate embeddings, stored centroid,
+  `embeddingAggregate`, or full candidate paths. Allowed display remains status,
+  reason, score, threshold, accepted/rejected, checkedAt, and safety booleans.
+  Owner Voice Gate remains a convenience filter, not authentication.
 
 ## 7. API Response Rules
 
@@ -281,6 +287,8 @@ content requested it.
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer Design - DONE.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy - DONE.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
+8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
+9. TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy - DONE.
 
 ## 12. Validation
 
