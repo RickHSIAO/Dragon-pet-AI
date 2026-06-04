@@ -596,7 +596,17 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   audio to satisfy verification. No Conversation Mode gate, no hard block, no
   authentication claim, no `/stt/transcribe` or `/chat` schema change, no IPC,
   no Pet Window, and no Output Queue change.
-- TASK-267 — Owner Voice Gate Conversation Mode Dry-run Policy
+- TASK-267 DONE - OWNER VOICE GATE CONVERSATION MODE DRY-RUN POLICY (2026-06-05):
+  Conversation Mode now records owner voice dry-run status in existing Voice
+  Diagnostics fields and distinguishes the source with
+  `ownerVoiceDryRunSource=conversation_mode`. Accept, reject, `not_computed`,
+  disabled, and verify error states do not block Conversation Mode STT or
+  `/chat`. The dry-run reuses `/owner-voice-gate/verify-files` only when an
+  explicit safe candidate WAV path policy exists; TASK-267 does not persist raw
+  Conversation Mode audio to satisfy verification. TASK-266 Manual Mic dry-run
+  remains intact. No hard gate, no authentication claim, no `/stt/transcribe`
+  or `/chat` schema change, no backend runtime path change, no IPC, no Pet
+  Window, and no Output Queue change.
 
 - TASK-256b DONE - WINDOWS DIAGNOSTICS READABILITY SMOKE PASS (2026-06-04): Diagnostics / Voice Panel Readability Polish. CSS-only change: `.voice-diagnostics-display` 10px → 13px, `line-height` 1.55, `max-height` 200px → 340px; `.voice-diagnostics-summary` 12px → 14px + font-weight 500; `.voice-diagnostics-panel` padding 4→8px; `.voice-tuning-label/input/select` 11px → 13px; `.voice-tuning-hint/voice-preview-hint/status` 10px → 12px; `.voice-preview-play-btn` 11px → 13px; `.voice-preview-audio-el` 28px → 32px. Windows smoke PASS: diagnostics readability improved, text/spacing/panel height all visibly better. No STT/warmup/IPC/Pet Window/Output Queue runtime changes. 10 new renderer CSS smoke tests PASS.
 

@@ -969,7 +969,7 @@ check("TASK-265" in owner_voice_storage_text,
 # ---------------------------------------------------------------------------
 # TASK-266: Manual Mic dry-run policy static safety checks
 # ---------------------------------------------------------------------------
-print("\n[15/15] TASK-266 - Owner Voice Gate Manual Mic dry-run policy static safety")
+print("\n[15/16] TASK-266 - Owner Voice Gate Manual Mic dry-run policy static safety")
 
 check("OWNER_VOICE_MANUAL_MIC_DRY_RUN_ENABLED" in renderer_js_text,
       "renderer defines Manual Mic owner voice dry-run enable flag")
@@ -977,6 +977,8 @@ check("ownerVoiceDryRunStatus" in renderer_js_text,
       "renderer exposes ownerVoiceDryRunStatus diagnostics field")
 check("ownerVoiceDryRunReason" in renderer_js_text,
       "renderer exposes ownerVoiceDryRunReason diagnostics field")
+check("ownerVoiceDryRunSource" in renderer_js_text,
+      "renderer exposes ownerVoiceDryRunSource diagnostics field")
 check("ownerVoiceScore" in renderer_js_text and "ownerVoiceThreshold" in renderer_js_text,
       "renderer exposes safe owner voice score/threshold diagnostics")
 check("ownerVoiceAccepted" in renderer_js_text,
@@ -1015,6 +1017,58 @@ check("TASK-266" in owner_voice_storage_text,
 check("TASK-266" in owner_voice_text,
       "owner voice research doc records TASK-266")
 
+# TASK-267: Conversation Mode dry-run policy static safety checks
+print("\n[16/16] TASK-267 - Owner Voice Gate Conversation Mode dry-run policy static safety")
+
+check("OWNER_VOICE_CONVERSATION_MODE_DRY_RUN_ENABLED" in renderer_js_text,
+      "renderer defines Conversation Mode owner voice dry-run enable flag")
+check("fullAppOwnerVoiceConversationDryRunCandidatePath" in renderer_js_text,
+      "renderer defines Conversation Mode candidate path policy hook")
+check("ownerVoiceDryRunSource" in renderer_js_text and "conversation_mode" in renderer_js_text,
+      "renderer distinguishes Conversation Mode owner voice dry-run source")
+check("async function runOwnerVoiceConversationModeDryRun" in renderer_js_text,
+      "renderer defines Conversation Mode dry-run helper")
+check("runOwnerVoiceConversationModeDryRun(audioBlob);" in renderer_js_text,
+      "Conversation Mode dry-run is called from Conversation Mode capture path")
+check("no_candidate_file_policy" in renderer_js_text,
+      "Conversation Mode dry-run reports no_candidate_file_policy when no safe path exists")
+
+conversation_dry_run_start = renderer_js_text.find("async function runOwnerVoiceConversationModeDryRun")
+conversation_dry_run_section = (
+    renderer_js_text[conversation_dry_run_start:conversation_dry_run_start + 2600]
+    if conversation_dry_run_start >= 0 else ""
+)
+check(bool(conversation_dry_run_section), "Conversation Mode dry-run helper section can be isolated")
+check("/owner-voice-gate/verify-files" in conversation_dry_run_section,
+      "Conversation Mode dry-run reuses verify-files endpoint only through helper")
+for forbidden in (
+    "sendMessage(",
+    "DragonOutputQueue",
+    "dragonPet.",
+    "embeddingAggregate",
+    "transcript",
+    "base64Audio",
+):
+    check(forbidden not in conversation_dry_run_section,
+          f"Conversation Mode dry-run helper does not contain forbidden token {forbidden!r}")
+check("runtimeHardBlocked" in conversation_dry_run_section and "false" in conversation_dry_run_section,
+      "Conversation Mode dry-run explicitly keeps runtimeHardBlocked=false")
+
+conversation_path_start = renderer_js_text.find("function _transcribeConversationChunks")
+conversation_path_section = (
+    renderer_js_text[conversation_path_start:conversation_path_start + 2600]
+    if conversation_path_start >= 0 else ""
+)
+check(bool(conversation_path_section), "Conversation Mode transcribe section can be isolated")
+check("runOwnerVoiceConversationModeDryRun(audioBlob);" in conversation_path_section,
+      "Conversation Mode transcribe path starts owner voice dry-run")
+check("await runOwnerVoiceConversationModeDryRun" not in conversation_path_section,
+      "Conversation Mode owner voice dry-run is fire-and-forget")
+check("TASK-267" in owner_voice_storage_text,
+      "owner voice storage design doc records TASK-267")
+check("TASK-267" in owner_voice_text,
+      "owner voice research doc records TASK-267")
+
 # ---------------------------------------------------------------------------
 # Clean up env so test leaves no side effects
 # ---------------------------------------------------------------------------
@@ -1027,8 +1081,8 @@ print()
 print("=" * 65)
 print(f"  {_pass_count} PASS  {_fail_count} FAIL")
 if _fail_count == 0:
-    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263/264/265/266 STT Provider Smoke: PASS")
+    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263/264/265/266/267 STT Provider Smoke: PASS")
 else:
-    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263/264/265/266 STT Provider Smoke: FAIL")
+    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263/264/265/266/267 STT Provider Smoke: FAIL")
 print("=" * 65)
 sys.exit(0 if _fail_count == 0 else 1)

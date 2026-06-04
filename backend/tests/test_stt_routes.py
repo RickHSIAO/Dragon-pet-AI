@@ -3141,3 +3141,42 @@ def test_task266_verify_files_response_keeps_sensitive_data_hidden(tmp_path, mon
     assert "perSampleEmbeddings" not in response.text
     assert "rawAudio" not in data
     assert "base64Audio" not in data
+
+
+# -- TASK-267: Owner Voice Gate Conversation Mode dry-run backend regression ---
+
+
+def test_task267_chat_response_schema_stays_unchanged():
+    """TASK-267: Conversation Mode dry-run does not add owner voice fields to /chat."""
+    from app.schemas.chat import ChatResponse
+
+    fields = getattr(ChatResponse, "model_fields", None) or getattr(ChatResponse, "__fields__", {})
+    assert set(fields.keys()) == {"reply", "mood", "source"}
+    assert "ownerVoiceDryRunSource" not in fields
+    assert "ownerVoiceDryRunStatus" not in fields
+    assert "ownerVoiceAccepted" not in fields
+
+
+def test_task267_no_new_conversation_owner_voice_endpoint():
+    """TASK-267: Conversation Mode dry-run reuses verify-files only when a safe path exists."""
+    route_paths = {getattr(route, "path", "") for route in app.routes}
+    assert "/owner-voice-gate/verify-files" in route_paths
+    assert "/owner-voice-gate/conversation-mode" not in route_paths
+    assert "/owner-voice-gate/conversation-mode/verify" not in route_paths
+    assert "/owner-voice-gate/conversation" not in route_paths
+    assert "/owner-voice-gate/conversation/verify" not in route_paths
+
+
+def test_task267_stt_and_chat_runtime_paths_stay_unwired():
+    """TASK-267: backend STT/chat runtime paths do not call Owner Voice Gate."""
+    import inspect
+    import app.api.routes as routes_module
+
+    stt_source = inspect.getsource(routes_module.stt_transcribe)
+    chat_source = inspect.getsource(routes_module.chat)
+    for source in (stt_source, chat_source):
+        assert "verify_owner_voice_gate_from_files" not in source
+        assert "owner_voice_gate_verify_files_route" not in source
+        assert "/owner-voice-gate/verify-files" not in source
+        assert "ownerVoiceDryRunSource" not in source
+        assert "runtimeHardBlocked" not in source

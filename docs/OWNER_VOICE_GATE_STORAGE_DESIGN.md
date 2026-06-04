@@ -1,8 +1,8 @@
 # Owner Voice Gate Storage Design
 
-Status: TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS; TASK-263 DONE - Windows Unicode owner voice enrollment storage smoke PASS; TASK-264 DONE - Windows stored centroid verification smoke PASS
+Status: TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS; TASK-263 DONE - Windows Unicode owner voice enrollment storage smoke PASS; TASK-264 DONE - Windows stored centroid verification smoke PASS; TASK-265 DONE - Windows backend verify-files smoke PASS; TASK-266 DONE - Manual Mic dry-run only / no hard block; TASK-267 DONE - Conversation Mode dry-run only / no hard block
 
-Date: 2026-06-04
+Date: 2026-06-05
 
 ## 1. Purpose
 
@@ -635,7 +635,7 @@ Runtime integration should be split by surface:
 - TASK-SEC-004: Tool permission / user confirmation policy (DONE).
 - TASK-SEC-005: Phishing / link safety warning layer design (DONE).
 - TASK-266: Manual Mic dry-run policy (DONE).
-- TASK-267: Conversation Mode dry-run policy.
+- TASK-267: Conversation Mode dry-run policy (DONE).
 
 Both must be disabled by default until enrollment exists and the user explicitly
 enables the gate.
@@ -673,7 +673,7 @@ Recommended sequence:
 - TASK-SEC-004 Tool Permission / User Confirmation Policy (DONE)
 - TASK-SEC-005 Phishing / Link Safety Warning Layer Design (DONE)
 - TASK-266 Owner Voice Gate Manual Mic Dry-run Policy (DONE)
-- TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy
+- TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy (DONE)
 
 TASK-262 calibration is complete on Windows for the small smoke set. Runtime
 gating should still remain explicit, opt-in, and threshold-aware.
@@ -813,3 +813,61 @@ dry-run status.
 Owner Voice Gate remains a local convenience filter for reducing accidental
 voice triggers. It is not authentication, identity proof, authorization, or a
 security boundary.
+
+## 21. TASK-267 Conversation Mode Dry-run Policy
+
+TASK-267 adds Conversation Mode dry-run status only. It does not turn Owner
+Voice Gate into a hard runtime gate.
+
+### Runtime behavior
+
+- Conversation Mode STT and `/chat` continue when dry-run is disabled,
+  accepted, rejected, not computed, or errored.
+- TASK-266 Manual Mic dry-run remains unchanged and uses
+  `ownerVoiceDryRunSource=manual_mic`.
+- TASK-267 Conversation Mode dry-run uses
+  `ownerVoiceDryRunSource=conversation_mode`.
+- No `/stt/transcribe` schema or backend behavior changes.
+- No `/chat` schema change; `/chat` remains `reply / mood / source`.
+- No IPC, Pet Window, Output Queue, or Diagnostics Drawer dispatch change.
+
+### Candidate audio policy
+
+TASK-267 intentionally does not write Conversation Mode audio to disk just to
+satisfy `/owner-voice-gate/verify-files`. The current Conversation Mode audio
+remains in-memory. Dry-run verification may call `verify-files` only if a
+future explicit temp-file policy supplies a safe candidate WAV path.
+
+When no safe candidate path exists, Conversation Mode diagnostics report:
+
+- `ownerVoiceDryRunEnabled=true` when the gate is enrolled and enabled.
+- `ownerVoiceDryRunSource=conversation_mode`.
+- `ownerVoiceDryRunStatus=not_computed`.
+- `ownerVoiceDryRunReason=no_candidate_file_policy`.
+- `rawAudioPersisted=false`.
+- `candidateEmbeddingPersisted=false`.
+- `storedCentroidExposed=false`.
+- `runtimeHardBlocked=false`.
+
+### Safe status fields
+
+The existing Voice Diagnostics panel may show only:
+
+- dry-run source
+- dry-run enabled state
+- status/reason
+- score/threshold
+- accepted/rejected/unknown
+- checked timestamp
+- safety booleans
+
+It must not show centroid vectors, `embeddingAggregate`, candidate embeddings,
+raw audio, raw candidate paths, raw transcript, or rejected transcript as part
+of Owner Voice dry-run status.
+
+### Security statement
+
+Owner Voice Gate remains a local convenience filter for reducing accidental
+voice triggers. It is not authentication, identity proof, authorization, or a
+security boundary. Reject, error, disabled, and `not_computed` results are
+diagnostic-only and never hard-block Conversation Mode.

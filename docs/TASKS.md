@@ -26696,7 +26696,7 @@ Future task sequence:
 - TASK-SEC-004 Tool Permission / User Confirmation Policy (DONE).
 - TASK-SEC-005 Phishing / Link Safety Warning Layer Design (DONE).
 - TASK-266 Owner Voice Gate Manual Mic Dry-run Policy (DONE).
-- TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
+- TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy (DONE).
 
 **TASK-261 — Owner Voice Enrollment UI / Local Storage Stub:**
 
@@ -27379,7 +27379,7 @@ PASS on 2026-06-04 against the stored owner centroid:
 TASK-SEC-001 Security Boundary / Anti Prompt Injection Design and TASK-SEC-002
 Sensitive Data Inventory / Redaction Rules and TASK-SEC-003 Prompt Injection
 Test Corpus and TASK-SEC-004 Tool Permission / User Confirmation Policy are
-complete; TASK-266 Owner Voice Gate Manual Mic Dry-run Policy is DONE; next is TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
+complete; TASK-266 Owner Voice Gate Manual Mic Dry-run Policy is DONE; TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy is DONE.
 
 ---
 
@@ -27482,7 +27482,7 @@ Before Owner Voice Gate connects to Manual Mic or Conversation Mode runtime:
 4. TASK-SEC-004 Tool Permission / User Confirmation Policy - DONE.
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer Design - DONE.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy - DONE.
-7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
+7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 
 ### Validation
 
@@ -27605,7 +27605,7 @@ TASK-SEC-003 has captured prompt injection and phishing corpora covering:
 4. TASK-SEC-004 Tool Permission / User Confirmation Policy - DONE.
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer Design - DONE.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy - DONE.
-7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
+7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 
 ### Validation
 
@@ -27709,7 +27709,7 @@ structured fixtures and assert that:
 4. TASK-SEC-004 Tool Permission / User Confirmation Policy - DONE.
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer Design - DONE.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy - DONE.
-7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
+7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 
 ### Validation
 
@@ -27829,7 +27829,7 @@ T6 data is blocked from LLM context and outbound actions.
 4. TASK-SEC-004 Tool Permission / User Confirmation Policy - DONE.
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer Design - DONE.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy - DONE.
-7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
+7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 
 ### Validation
 
@@ -27935,7 +27935,7 @@ diagnostics, or embeddings enter outbound flows.
 4. TASK-SEC-004 Tool Permission / User Confirmation Policy - DONE.
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer Design - DONE.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy - DONE.
-7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
+7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 
 ### Validation
 
@@ -28044,7 +28044,100 @@ Added backend pytest regression for:
 4. TASK-SEC-004 Tool Permission / User Confirmation Policy - DONE.
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer Design - DONE.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy - DONE.
-7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
+7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
+
+---
+
+## TASK-267 | Owner Voice Gate Conversation Mode Dry-run Policy
+
+Status: DONE - DRY-RUN ONLY / NO HARD BLOCK
+
+### Goal
+
+Add Owner Voice Gate policy support for Conversation Mode dry-run status
+without blocking the existing Conversation Mode STT or `/chat` behavior.
+
+This task is not a hard gate. It does not change `/stt/transcribe`, does not
+change `/chat` schema, does not add authentication claims, and does not treat
+Owner Voice Gate as identity proof.
+
+### Runtime Behavior
+
+- Conversation Mode continues through existing STT and `/chat` flow even when
+  owner voice dry-run accepts, rejects, is disabled, cannot compute, or errors.
+- Dry-run status is recorded in the existing Voice Diagnostics panel only.
+- The dry-run reuses `POST /owner-voice-gate/verify-files` only when an
+  explicit safe candidate WAV path policy supplies a local path.
+- Current Conversation Mode audio remains in-memory. TASK-267 does not write
+  raw audio to TEMP or any project path to satisfy verification.
+- If no safe candidate path exists, diagnostics report
+  `ownerVoiceDryRunStatus=not_computed` and
+  `ownerVoiceDryRunReason=no_candidate_file_policy`.
+
+### Dry-run Status Model
+
+TASK-267 reuses TASK-266 diagnostics and adds source distinction:
+
+- `ownerVoiceDryRunSource=conversation_mode`
+- `ownerVoiceDryRunEnabled`
+- `ownerVoiceDryRunStatus`
+- `ownerVoiceDryRunReason`
+- `ownerVoiceScore`
+- `ownerVoiceThreshold`
+- `ownerVoiceAccepted`
+- `ownerVoiceCheckedAt`
+- `rawAudioPersisted=false`
+- `candidateEmbeddingPersisted=false`
+- `storedCentroidExposed=false`
+- `runtimeHardBlocked=false`
+
+Manual Mic continues to use `ownerVoiceDryRunSource=manual_mic`.
+
+### Safety Boundaries
+
+- No hard block of Conversation Mode, Manual Mic, `/stt/transcribe`, `/chat`,
+  textarea fill, or auto-send.
+- No new backend endpoint, IPC channel, Pet Window call, Output Queue call, or
+  Diagnostics Drawer dispatch change.
+- No stored centroid or `embeddingAggregate` exposure.
+- No candidate embedding persistence.
+- No raw audio persistence beyond existing in-memory audio preview behavior.
+- No raw transcript or rejected transcript is added to Owner Voice dry-run
+  status, Pet Bubble, Output Queue, LLM context, or diagnostics.
+- Owner Voice Gate remains a local convenience filter, not authentication.
+
+### UI Status
+
+No new UI panel was added. Conversation Mode reuses the existing Voice
+Diagnostics panel and adds `source: conversation_mode` beside the dry-run
+status/reason. The UI does not show centroid, embeddings, raw candidate paths,
+raw audio, or rejected transcript as Owner Voice dry-run status.
+
+### Validation Coverage
+
+Added renderer smoke tests for:
+
+- Conversation Mode still sends `/chat` when enabled dry-run has no safe
+  candidate path and reports `not_computed`.
+- Conversation Mode still sends `/chat` when dry-run rejects.
+- Conversation Mode still sends `/chat` when verify-files errors.
+- Dry-run helper does not call `/chat`, Pet Window IPC, Output Queue, or expose
+  centroid/embedding/transcript/raw audio data.
+- Manual Mic TASK-266 dry-run source remains intact.
+
+Added backend pytest regression for:
+
+- `/chat` response schema remains `reply / mood / source`.
+- No new owner voice Conversation Mode runtime endpoint.
+- `/stt/transcribe` and `/chat` do not call Owner Voice Gate.
+
+### Validation
+
+- `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_routes.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-task267`
+- `backend\.venv\Scripts\python.exe scripts\stt_provider_smoke.py`
+- `node apps/desktop/scripts/renderer-chat-smoke.js`
+- `node apps/desktop/scripts/pet-window-smoke.js`
+- `node apps/desktop/scripts/pet-renderer-smoke.js`
 
 ### Validation
 

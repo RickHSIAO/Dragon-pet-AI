@@ -330,7 +330,7 @@ handling:
 4. TASK-SEC-004 Tool Permission / User Confirmation Policy - DONE.
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer Design - DONE.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy - DONE.
-7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
+7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 
 ## 13. Validation
 

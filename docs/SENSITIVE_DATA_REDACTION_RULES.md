@@ -152,6 +152,10 @@ Hard rules:
   score/threshold, accepted state, checked timestamp, and safety booleans.
   They must not show centroid vectors, `embeddingAggregate`, candidate
   embeddings, raw audio, raw candidate paths, or rejected transcript.
+- TASK-267 Conversation Mode dry-run diagnostics may show the same safe fields
+  plus `ownerVoiceDryRunSource=conversation_mode`. They must not show centroid
+  vectors, `embeddingAggregate`, candidate embeddings, raw audio, raw candidate
+  paths, raw transcript, or rejected transcript.
 
 ## 7. API Response Rules
 
@@ -276,7 +280,7 @@ content requested it.
 4. TASK-SEC-004 Tool Permission / User Confirmation Policy - DONE.
 5. TASK-SEC-005 Phishing / Link Safety Warning Layer Design - DONE.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy - DONE.
-7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
+7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 
 ## 12. Validation
 

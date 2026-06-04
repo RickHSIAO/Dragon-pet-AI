@@ -379,7 +379,7 @@ Future sequence:
 - TASK-SEC-004 Tool Permission / User Confirmation Policy (DONE).
 - TASK-SEC-005 Phishing / Link Safety Warning Layer Design (DONE).
 - TASK-266 Owner Voice Gate Manual Mic Dry-run Policy (DONE).
-- TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
+- TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy (DONE).
 
 Runtime remains unchanged by TASK-260.
 
@@ -560,7 +560,7 @@ Recommended next tasks:
 - TASK-SEC-004 Tool Permission / User Confirmation Policy (DONE).
 - TASK-SEC-005 Phishing / Link Safety Warning Layer Design (DONE).
 - TASK-266 Owner Voice Gate Manual Mic Dry-run Policy (DONE).
-- TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
+- TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy (DONE).
 
 Do not jump to runtime gating until the explicit runtime task accepts the
 threshold strategy and keeps owner voice gate opt-in.
@@ -614,8 +614,8 @@ Sensitive Data Inventory / Redaction Rules (DONE), TASK-SEC-003 Prompt Injection
 Corpus (DONE), TASK-SEC-004 Tool Permission / User Confirmation Policy (DONE), and
 TASK-SEC-005 Phishing / Link Safety Warning Layer Design (DONE). TASK-266
 Manual Mic dry-run policy is DONE and remains status-only with no hard block.
-The next owner voice runtime work should be TASK-267 Conversation Mode dry-run
-policy, still opt-in and disabled by default.
+TASK-267 Conversation Mode dry-run policy is DONE and remains status-only with
+no hard block.
 
 Windows stored-centroid smoke PASS:
 
@@ -667,8 +667,24 @@ PASS on 2026-06-04:
   `micAccessed=false`, and `runtimeIntegrated=false`.
 - The API response did not expose the stored centroid or candidate embedding.
 
-### Next task
+## 15. TASK-267 - Conversation Mode Dry-run Policy
 
-TASK-267 Conversation Mode dry-run policy, still opt-in and disabled by
-default. TASK-266 Manual Mic dry-run is status-only and does not hard-block
-Manual Mic.
+TASK-267 adds status-only Owner Voice Gate dry-run diagnostics for Conversation
+Mode. It reuses `POST /owner-voice-gate/verify-files` only when a future safe
+candidate WAV path policy supplies a local path. When no safe path exists, the
+Voice Diagnostics panel reports `ownerVoiceDryRunStatus=not_computed`,
+`ownerVoiceDryRunReason=no_candidate_file_policy`, and
+`ownerVoiceDryRunSource=conversation_mode`.
+
+Conversation Mode continues through existing STT and `/chat` behavior when
+dry-run accepts, rejects, is disabled, cannot compute, or errors. TASK-267 does
+not add a hard gate, does not change `/stt/transcribe`, does not change `/chat`
+schema, does not add IPC, Pet Window, Output Queue, or Diagnostics runtime
+dispatch, and does not persist raw Conversation Mode audio to satisfy
+verification.
+
+Safe diagnostics remain limited to source, enabled state, status/reason,
+score/threshold, accepted, checked timestamp, and safety booleans. The UI and
+API must not expose the stored centroid, `embeddingAggregate`, candidate
+embeddings, raw audio, raw candidate paths, raw transcript, or rejected
+transcript. Owner Voice Gate remains a convenience filter, not authentication.

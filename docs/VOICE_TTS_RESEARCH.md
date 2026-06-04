@@ -563,6 +563,26 @@ TASK-257 DONE - WINDOWS PET WINDOW CLICK/SHOW SMOKE PASS (2026-06-04): Pet Windo
   TASK-SEC-005 phishing/link safety design are now complete; next complete
   dry-run policy tasks. No runtime behavior changed.
 
+- **TASK-266 Owner Voice Gate Manual Mic Dry-run Policy. DONE - DRY-RUN ONLY / NO HARD BLOCK (2026-06-04):**
+  Adds status-only Manual Mic Owner Voice dry-run diagnostics in the existing
+  Voice Diagnostics panel. Accept, reject, disabled, `not_computed`, and verify
+  error states do not block Manual Mic STT, textarea fill, or auto-send. The
+  dry-run reuses `/owner-voice-gate/verify-files` only when a safe candidate WAV
+  path policy exists; otherwise it reports `no_candidate_file_policy`. No raw
+  audio persistence, no hard gate, no `/stt/transcribe` or `/chat` schema
+  change, no IPC, no Pet Window, and no Output Queue change.
+
+- **TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy. DONE - DRY-RUN ONLY / NO HARD BLOCK (2026-06-05):**
+  Adds status-only Conversation Mode Owner Voice dry-run diagnostics with
+  `ownerVoiceDryRunSource=conversation_mode` in the existing Voice Diagnostics
+  panel. Accept, reject, disabled, `not_computed`, and verify error states do
+  not block Conversation Mode STT or `/chat`. The dry-run reuses
+  `/owner-voice-gate/verify-files` only when a safe candidate WAV path policy
+  exists; otherwise it reports `no_candidate_file_policy`. TASK-266 Manual Mic
+  dry-run remains intact. No raw audio persistence, no hard gate, no
+  `/stt/transcribe` or `/chat` schema change, no IPC, no Pet Window, and no
+  Output Queue change.
+
 Each future task must explicitly define safety boundaries, user controls,
 provider scope, queue priority, and no-regression checks.
 

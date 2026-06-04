@@ -1,6 +1,6 @@
 # Dragon Pet AI
 
-**Latest local status (2026-06-04):** TASK-266 Owner Voice Gate Manual Mic Dry-run Policy **DONE - dry-run only / no hard block**. Manual Mic now records Owner Voice dry-run status in the existing Voice Diagnostics panel (`ownerVoiceDryRunStatus`, reason, score/threshold, accepted, checkedAt, and safety booleans) while preserving the existing STT, textarea fill, and auto-send flow even when verification rejects or errors. The dry-run reuses `/owner-voice-gate/verify-files` only when a future explicit candidate WAV file policy supplies a safe path; otherwise it reports `not_computed` and does not persist raw audio. No Conversation Mode gate, `/chat` schema change, hard blocking, authentication claim, IPC, Pet Window, Output Queue, or Diagnostics runtime dispatch change was added.
+**Latest local status (2026-06-05):** TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy **DONE - dry-run only / no hard block**. Conversation Mode now records Owner Voice dry-run status in the existing Voice Diagnostics panel with `ownerVoiceDryRunSource=conversation_mode`, while preserving STT and `/chat` behavior when verification rejects, errors, or cannot compute. The dry-run reuses `/owner-voice-gate/verify-files` only when a safe candidate WAV file policy supplies a path; otherwise it reports `not_computed` / `no_candidate_file_policy` and does not persist raw audio. TASK-266 Manual Mic dry-run remains intact. No hard gate, Manual Mic gate, Conversation Mode gate, `/stt/transcribe` or `/chat` schema change, authentication claim, IPC, Pet Window, Output Queue, or Diagnostics runtime dispatch change was added.
 
 > **Dragon Pet AI** 是一個本地優先的 Electron + FastAPI 桌面陪伴原型，具備手動記憶、記憶稽核日誌、BYOK 提供者設定、使用量計量、安全審查過的 Test Connection 端點、Anthropic/Ollama 提供者轉接層（隱藏在 feature flag 後）、本地 Ollama `/chat` 執行期 smoke 通過（`source=llm_local`，克莉絲蒂娜人格確認）、Ollama Provider Settings UI（無需 API Key，使用本機 GPU/CPU），以及 Full App 聊天搜尋、高亮、匯出、未讀提示、時間戳、LINE-style 日期分隔線、清除確認、empty state、Undo Clear Chat 與單則訊息刪除/復原。以安全優先的增量開發方式建構，後端 mocked 測試套件共 **586 個測試通過**。
 
@@ -109,7 +109,7 @@ ollama serve
 | 真實 API Key 使用 | ❌ 無 — 所有測試使用 mocked runner |
 | 生產就緒 | ❌ 尚未 — prototype / portfolio 階段 |
 | Demo 可用（本地 Ollama） | ✅ 是 |
-| 下一個任務 | TASK-266 Owner Voice Gate Manual Mic Dry-run **DONE - dry-run only** → TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy |
+| 下一個任務 | TASK-267 Owner Voice Gate Conversation Mode Dry-run **DONE - dry-run only**; future hard gate remains deferred |
 
 ---
 
@@ -412,8 +412,8 @@ python -c "import json, urllib.request; data=json.dumps({'message':'你好！克
 | [docs/security/PROMPT_INJECTION_TEST_CORPUS.md](docs/security/PROMPT_INJECTION_TEST_CORPUS.md) | TASK-SEC-003 prompt injection and phishing test corpus with structured future automation cases |
 | [docs/security/TOOL_PERMISSION_POLICY.md](docs/security/TOOL_PERMISSION_POLICY.md) | TASK-SEC-004 T0-T6 tool permission tiers, user confirmation policy, outbound/local-file/URL safety, audit/logging, future implementation checklist |
 | [docs/security/PHISHING_LINK_SAFETY_DESIGN.md](docs/security/PHISHING_LINK_SAFETY_DESIGN.md) | TASK-SEC-005 phishing and link safety warning design, URL checks, hard blocks, soft warnings, Owner Voice Gate phishing rules |
-| [docs/OWNER_VOICE_GATE_RESEARCH.md](docs/OWNER_VOICE_GATE_RESEARCH.md) | TASK-258 through TASK-265 owner voice gate feasibility, probes, enrollment, verification, and backend endpoint |
-| [docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md](docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md) | TASK-260 through TASK-266 owner voice enrollment storage, settings UI, calibration, enrollment, verify probe, backend endpoint, and Manual Mic dry-run policy |
+| [docs/OWNER_VOICE_GATE_RESEARCH.md](docs/OWNER_VOICE_GATE_RESEARCH.md) | TASK-258 through TASK-267 owner voice gate feasibility, probes, enrollment, verification, backend endpoint, and dry-run policies |
+| [docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md](docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md) | TASK-260 through TASK-267 owner voice enrollment storage, settings UI, calibration, enrollment, verify probe, backend endpoint, and Manual Mic / Conversation Mode dry-run policies |
 | [docs/STREAMER_COMPANION_MODE.md](docs/STREAMER_COMPANION_MODE.md) | 未來支線 — OBS overlay / Twitch 陪伴設計（尚未排程） |
 
 ---
@@ -484,8 +484,8 @@ dragon-pet-ai/
 | `docs/security/PROMPT_INJECTION_TEST_CORPUS.md` | TASK-SEC-003 prompt injection, indirect injection, fake system/developer, sensitive exfiltration, Owner Voice Gate, and phishing/social engineering corpus |
 | `docs/security/TOOL_PERMISSION_POLICY.md` | TASK-SEC-004 tool permission tiers, confirmation UX, outbound/local file/URL safety, Owner Voice Gate tool boundary, and implementation checklist |
 | `docs/security/PHISHING_LINK_SAFETY_DESIGN.md` | TASK-SEC-005 phishing/link safety warning design, URL risk checks, hard blocks, soft warnings, examples, and future implementation checklist |
-| `docs/OWNER_VOICE_GATE_RESEARCH.md` | TASK-258 through TASK-265 local owner voice gate research, probe, enrollment, verify, and backend endpoint status |
-| `docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md` | TASK-260 through TASK-266 owner voice enrollment storage, calibration, enrollment, stored-centroid verification, backend endpoint, and Manual Mic dry-run policy |
+| `docs/OWNER_VOICE_GATE_RESEARCH.md` | TASK-258 through TASK-267 local owner voice gate research, probe, enrollment, verify, backend endpoint, and dry-run policy status |
+| `docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md` | TASK-260 through TASK-267 owner voice enrollment storage, calibration, enrollment, stored-centroid verification, backend endpoint, and Manual Mic / Conversation Mode dry-run policies |
 | `docs/CHARACTER_SPEC.md` | 角色人格規格 |
 | `docs/MEMORY_SYSTEM.md` | 記憶系統設計 |
 | `docs/PHASE3_DEMO_SUMMARY.md` | Phase 3 demo 摘要與安全模型 |
