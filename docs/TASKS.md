@@ -26691,6 +26691,128 @@ Future task sequence:
 - TASK-263 Owner Voice Gate Runtime Integration for Manual Mic.
 - TASK-264 Owner Voice Gate Runtime Integration for Conversation Mode.
 
+**TASK-261 — Owner Voice Enrollment UI / Local Storage Stub:**
+
+Status: DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS (2026-06-04)
+
+TASK-261 adds the first Owner Voice Gate settings surface and a backend-owned
+local storage stub. It does not implement enrollment, speaker verification, or
+runtime gating.
+
+Storage ownership decision:
+
+- Owner Voice Gate settings are owned by the backend, not Electron renderer
+  `localStorage`.
+- Default stub path: `backend/data/owner_voice_gate_settings.json`.
+- Test/alternate path override: `OWNER_VOICE_GATE_FILE_PATH`.
+- This avoids future ambiguity where backend speaker verification needs to read
+  settings while Electron `userData` would be owned by the main process.
+
+Backend implementation:
+
+- Added `backend/app/services/owner_voice_gate_storage.py`.
+- Added narrow endpoints:
+  - `GET /owner-voice-gate/status`
+  - `POST /owner-voice-gate/settings`
+  - `POST /owner-voice-gate/delete`
+- Allowed settings fields:
+  - `enabled`
+  - `threshold`
+  - `safetyNoticeAccepted`
+- Rejected fields:
+  - `rawAudio`
+  - `base64Audio`
+  - `transcript`
+  - `waveform`
+  - `perSampleEmbeddings`
+  - actual `embeddingAggregate` vector values
+- `threshold` is clamped to `0.40..0.95`.
+- `enabled=true` while `enrolled=false` returns clean `reason=not_enrolled`
+  and keeps `enabled=false`.
+- Delete resets the stub to defaults and removes the stub file if present.
+
+Storage schema v1:
+
+```json
+{
+  "schemaVersion": 1,
+  "enabled": false,
+  "enrolled": false,
+  "provider": "funasr-campp",
+  "modelId": "iic/speech_campplus_sv_zh-cn_16k-common",
+  "embeddingDim": 192,
+  "embeddingAggregate": null,
+  "sampleCount": 0,
+  "threshold": 0.65,
+  "calibrationStats": {
+    "ownerScore": null,
+    "otherScore": null,
+    "meanSelfScore": null,
+    "minSelfScore": null
+  },
+  "safetyNoticeAccepted": false,
+  "createdAt": null,
+  "updatedAt": null
+}
+```
+
+Full App UI behavior:
+
+- Added `#owner-voice-gate-section` to the Full App settings area.
+- Shows Not enrolled / Disabled / Enabled status.
+- Shows provider `funasr-campp`, model
+  `iic/speech_campplus_sv_zh-cn_16k-common`, embedding dim `192`, threshold,
+  storage owner, and last score placeholder.
+- Safety note states the feature is a convenience filter, not security
+  authentication.
+- Controls:
+  - Accept safety notice.
+  - Enable / Disable Owner Voice Gate.
+  - Save threshold.
+  - Delete owner voiceprint.
+  - Re-enroll owner voice placeholder, disabled.
+
+Safety / privacy boundary:
+
+- No Manual Mic runtime change.
+- No Conversation Mode runtime change.
+- No `/stt/transcribe` behavior change.
+- No `/chat` schema change.
+- No new IPC channel.
+- No microphone access.
+- No `getUserMedia`.
+- No recording.
+- No raw audio persistence.
+- No base64 audio persistence.
+- No transcript persistence.
+- No real voiceprint persistence.
+- No always listening.
+- No background monitoring.
+- No Pet Window runtime change.
+- No Output Queue change.
+- No Diagnostics Drawer runtime change.
+- No commit or push.
+
+Validation coverage added:
+
+- Backend pytest covers default status, safe schema, threshold clamp,
+  safetyNoticeAccepted update, not-enrolled enable guard, delete reset,
+  forbidden storage fields, and sanitized bad-request errors.
+- Renderer smoke covers UI presence, safety note, status load, settings calls,
+  not-enrolled enable behavior, threshold clamp, delete reset, no mic/STT/chat,
+  no Pet Window, no Output Queue, no `localStorage`, and no generic IPC in the
+  owner voice path.
+- `scripts/stt_provider_smoke.py` now checks TASK-261 storage service/UI static
+  safety alongside TASK-259/260 owner voice checks.
+
+Recommended next task:
+
+- TASK-262 Owner Voice Gate Calibration Probe / Multi-Sample Threshold Review.
+
+Do not jump directly to Manual Mic / Conversation Mode runtime gating until
+calibration behavior, false accept/reject diagnostics, and reset/delete UX are
+validated.
+
 ---
 
 ## TASK-253 | FunASR Transcript Normalisation / Traditional Chinese Output

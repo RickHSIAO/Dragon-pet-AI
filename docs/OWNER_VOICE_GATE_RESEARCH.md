@@ -1,6 +1,6 @@
 # Owner Voice Gate Research
 
-Status: TASK-258 RESEARCH - OWNER VOICE GATE FEASIBILITY / NO RUNTIME CHANGE; TASK-259 DONE - WINDOWS OWNER VOICE PROBE SMOKE PASS; TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE
+Status: TASK-258 RESEARCH - OWNER VOICE GATE FEASIBILITY / NO RUNTIME CHANGE; TASK-259 DONE - WINDOWS OWNER VOICE PROBE SMOKE PASS; TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS
 
 Date: 2026-06-04
 
@@ -375,3 +375,42 @@ Future sequence:
 - TASK-264 Owner Voice Gate Runtime Integration for Conversation Mode.
 
 Runtime remains unchanged by TASK-260.
+
+## 12. TASK-261 UI / storage stub
+
+TASK-261 implements the first owner voice gate settings surface without
+enrollment or runtime gating.
+
+Implemented boundary:
+
+- Backend-owned storage stub:
+  `backend/data/owner_voice_gate_settings.json`.
+- Test/alternate path override: `OWNER_VOICE_GATE_FILE_PATH`.
+- Narrow endpoints:
+  - `GET /owner-voice-gate/status`
+  - `POST /owner-voice-gate/settings`
+  - `POST /owner-voice-gate/delete`
+- Full App Owner Voice Gate settings UI.
+- `threshold` default remains `0.65`, clamped to `0.40..0.95`.
+- `enabled=true` before enrollment returns clean `not_enrolled` and keeps the
+  gate disabled.
+- `embeddingAggregate` remains `null`; no real voiceprint is saved.
+
+Safety boundary remains unchanged:
+
+- No microphone access.
+- No recording.
+- No raw audio persistence.
+- No base64 audio persistence.
+- No transcript persistence.
+- No real embedding persistence.
+- No Manual Mic gate.
+- No Conversation Mode gate.
+- No `/stt/transcribe` behavior change.
+- No `/chat` schema change.
+- No IPC channel.
+- No Pet Window, Output Queue, or Diagnostics Drawer runtime change.
+
+Next recommended task: TASK-262 Owner Voice Gate Calibration Probe /
+Multi-Sample Threshold Review. Do not jump directly to Manual Mic or
+Conversation Mode runtime gating.

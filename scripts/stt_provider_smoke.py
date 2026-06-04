@@ -526,6 +526,9 @@ print("\n[10/10] TASK-259/260 - Owner Voice Gate probe and storage docs static s
 probe_path = _os.path.join(REPO_ROOT, "scripts", "owner_voice_gate_probe.py")
 owner_voice_doc = _os.path.join(REPO_ROOT, "docs", "OWNER_VOICE_GATE_RESEARCH.md")
 owner_voice_storage_doc = _os.path.join(REPO_ROOT, "docs", "OWNER_VOICE_GATE_STORAGE_DESIGN.md")
+owner_voice_storage_service = _os.path.join(REPO_ROOT, "backend", "app", "services", "owner_voice_gate_storage.py")
+renderer_html = _os.path.join(REPO_ROOT, "apps", "desktop", "src", "renderer", "index.html")
+renderer_js = _os.path.join(REPO_ROOT, "apps", "desktop", "src", "renderer", "renderer.js")
 
 check(_os.path.isfile(probe_path),
       f"owner_voice_gate_probe.py exists: {probe_path}")
@@ -597,8 +600,8 @@ check("TASK-260" in owner_voice_storage_text,
       "owner voice storage design doc records TASK-260")
 check("DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE" in owner_voice_storage_text,
       "owner voice storage design doc records no-runtime status")
-check("userData/owner-voice-gate.json" in owner_voice_storage_text,
-      "owner voice storage design doc records future storage path")
+check("backend/data/owner_voice_gate_settings.json" in owner_voice_storage_text,
+      "owner voice storage design doc records backend-owned storage path")
 check("raw audio" in owner_voice_storage_text and "Forbidden stored values" in owner_voice_storage_text,
       "owner voice storage design doc forbids raw audio storage")
 check("centroid" in owner_voice_storage_text and "Store the centroid only" in owner_voice_storage_text,
@@ -614,6 +617,64 @@ check("No `/stt/transcribe` behavior change" in owner_voice_storage_text,
 check("No `/chat` schema change" in owner_voice_storage_text,
       "owner voice storage design doc preserves chat schema boundary")
 
+check(_os.path.isfile(owner_voice_storage_service),
+      f"owner voice gate storage service exists: {owner_voice_storage_service}")
+if _os.path.isfile(owner_voice_storage_service):
+    with open(owner_voice_storage_service, "r", encoding="utf-8") as f:
+        owner_voice_storage_service_text = f.read()
+else:
+    owner_voice_storage_service_text = ""
+
+check("OwnerVoiceGateStorageService" in owner_voice_storage_service_text,
+      "owner voice storage service defines narrow storage service")
+check("OWNER_VOICE_DEFAULT_THRESHOLD = 0.65" in owner_voice_storage_service_text,
+      "owner voice storage service records default threshold")
+check("OWNER_VOICE_MIN_THRESHOLD = 0.40" in owner_voice_storage_service_text and "OWNER_VOICE_MAX_THRESHOLD = 0.95" in owner_voice_storage_service_text,
+      "owner voice storage service clamps threshold")
+check("embeddingAggregate: None = None" in owner_voice_storage_service_text,
+      "owner voice storage service keeps embeddingAggregate null placeholder")
+for forbidden in ("getUserMedia", "MediaRecorder", "navigator.mediaDevices", "/stt/transcribe", "/chat", "transcribe_audio_bytes", "warmup_funasr_sidecar"):
+    check(forbidden not in owner_voice_storage_service_text,
+          f"owner voice storage service does not contain forbidden token {forbidden!r}")
+for forbidden_field in ("rawAudio", "base64Audio", "transcript", "waveform", "embeddingAggregate", "perSampleEmbeddings"):
+    check(forbidden_field in owner_voice_storage_service_text,
+          f"owner voice storage service explicitly rejects forbidden field {forbidden_field!r}")
+
+if _os.path.isfile(renderer_html):
+    with open(renderer_html, "r", encoding="utf-8") as f:
+        renderer_html_text = f.read()
+else:
+    renderer_html_text = ""
+if _os.path.isfile(renderer_js):
+    with open(renderer_js, "r", encoding="utf-8") as f:
+        renderer_js_text = f.read()
+else:
+    renderer_js_text = ""
+
+check('id="owner-voice-gate-section"' in renderer_html_text,
+      "owner voice gate UI section exists")
+check("Convenience filter only, not security authentication" in renderer_html_text,
+      "owner voice gate UI includes safety boundary text")
+check("/owner-voice-gate/status" in renderer_js_text,
+      "owner voice gate UI calls narrow status endpoint")
+check("/owner-voice-gate/settings" in renderer_js_text,
+      "owner voice gate UI calls narrow settings endpoint")
+check("/owner-voice-gate/delete" in renderer_js_text,
+      "owner voice gate UI calls narrow delete endpoint")
+owner_ui_start = renderer_js_text.find("TASK-261: Owner Voice Gate settings UI + backend storage stub.")
+owner_ui_end = renderer_js_text.find("Provider Key Save / Clear", owner_ui_start)
+owner_ui_text = renderer_js_text[owner_ui_start:owner_ui_end] if owner_ui_start >= 0 and owner_ui_end > owner_ui_start else ""
+check(bool(owner_ui_text), "owner voice gate UI renderer section can be isolated")
+for forbidden in ("getUserMedia", "MediaRecorder", "navigator.mediaDevices", "ipcRenderer", "ipcMain", "dragonPet.", "DragonOutputQueue"):
+    check(forbidden not in owner_ui_text,
+          f"owner voice gate UI section does not contain forbidden token {forbidden!r}")
+check("localStorage." not in owner_ui_text and "localStorage[" not in owner_ui_text,
+      "owner voice gate UI section does not use localStorage for voiceprint")
+check('fetch(`${BACKEND_URL}/stt/transcribe`' not in owner_ui_text,
+      "owner voice gate UI section does not call /stt/transcribe")
+check('fetch(`${BACKEND_URL}/chat`' not in owner_ui_text,
+      "owner voice gate UI section does not call /chat")
+
 # ---------------------------------------------------------------------------
 # Clean up env so test leaves no side effects
 # ---------------------------------------------------------------------------
@@ -626,8 +687,8 @@ print()
 print("=" * 65)
 print(f"  {_pass_count} PASS  {_fail_count} FAIL")
 if _fail_count == 0:
-    print("  TASK-249/250/253/253rev/254/256/259/260 STT Provider Smoke: PASS")
+    print("  TASK-249/250/253/253rev/254/256/259/260/261 STT Provider Smoke: PASS")
 else:
-    print("  TASK-249/250/253/253rev/254/256/259/260 STT Provider Smoke: FAIL")
+    print("  TASK-249/250/253/253rev/254/256/259/260/261 STT Provider Smoke: FAIL")
 print("=" * 65)
 sys.exit(0 if _fail_count == 0 else 1)

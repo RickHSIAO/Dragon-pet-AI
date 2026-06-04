@@ -155,6 +155,22 @@ const vadSilenceMsSelect      = document.getElementById("vad-silence-ms-select")
 const voicePreviewPlayBtn    = document.getElementById("voice-preview-play-btn");
 const voicePreviewAudio      = document.getElementById("voice-preview-audio");
 const voicePreviewStatus     = document.getElementById("voice-preview-status");
+// TASK-261: Owner Voice Gate settings stub DOM refs. No mic or runtime gate.
+const ownerVoiceGateRefreshBtn = document.getElementById("owner-voice-gate-refresh-btn");
+const ownerVoiceGateState = document.getElementById("owner-voice-gate-state");
+const ownerVoiceGateProvider = document.getElementById("owner-voice-gate-provider");
+const ownerVoiceGateModel = document.getElementById("owner-voice-gate-model");
+const ownerVoiceGateEmbeddingDim = document.getElementById("owner-voice-gate-embedding-dim");
+const ownerVoiceGateLastScore = document.getElementById("owner-voice-gate-last-score");
+const ownerVoiceGateStorageOwner = document.getElementById("owner-voice-gate-storage-owner");
+const ownerVoiceGateSafetyAccepted = document.getElementById("owner-voice-gate-safety-accepted");
+const ownerVoiceGateEnabledToggle = document.getElementById("owner-voice-gate-enabled-toggle");
+const ownerVoiceGateThreshold = document.getElementById("owner-voice-gate-threshold");
+const ownerVoiceGateSaveThresholdBtn = document.getElementById("owner-voice-gate-save-threshold-btn");
+const ownerVoiceGateDeleteBtn = document.getElementById("owner-voice-gate-delete-btn");
+const ownerVoiceGateReenrollBtn = document.getElementById("owner-voice-gate-reenroll-btn");
+const ownerVoiceGateStatusSummary = document.getElementById("owner-voice-gate-status-summary");
+const ownerVoiceGateSettingsStatus = document.getElementById("owner-voice-gate-settings-status");
 
 // ---------------------------------------------------------------------------
 // State
@@ -3176,6 +3192,127 @@ async function saveProviderSettings() {
 }
 
 // ---------------------------------------------------------------------------
+// TASK-261: Owner Voice Gate settings UI + backend storage stub.
+// Safety: no microphone access, no recording, no localStorage voiceprint, no
+// STT request, no /chat request, no Pet Window call, no Output Queue call.
+// ---------------------------------------------------------------------------
+
+function setOwnerVoiceGateSettingsStatus(message, isError = false) {
+  if (!ownerVoiceGateSettingsStatus) return;
+  ownerVoiceGateSettingsStatus.textContent = message;
+  ownerVoiceGateSettingsStatus.className = isError
+    ? "owner-voice-gate-settings-status error"
+    : "owner-voice-gate-settings-status";
+}
+
+function _ownerVoiceThresholdValue() {
+  const rawValue = ownerVoiceGateThreshold ? parseFloat(ownerVoiceGateThreshold.value) : 0.65;
+  if (Number.isNaN(rawValue)) return 0.65;
+  return Math.max(0.40, Math.min(0.95, rawValue));
+}
+
+function renderOwnerVoiceGateStatus(settings) {
+  if (!settings) return;
+  const status = settings.status || (settings.enrolled ? "disabled" : "not_enrolled");
+  if (ownerVoiceGateState) ownerVoiceGateState.textContent = status;
+  if (ownerVoiceGateProvider) ownerVoiceGateProvider.textContent = settings.provider || "funasr-campp";
+  if (ownerVoiceGateModel) {
+    ownerVoiceGateModel.textContent =
+      settings.modelId || "iic/speech_campplus_sv_zh-cn_16k-common";
+  }
+  if (ownerVoiceGateEmbeddingDim) {
+    ownerVoiceGateEmbeddingDim.textContent = String(settings.embeddingDim || 192);
+  }
+  if (ownerVoiceGateLastScore) {
+    const stats = settings.calibrationStats || {};
+    ownerVoiceGateLastScore.textContent =
+      stats.ownerScore === null || stats.ownerScore === undefined
+        ? "none"
+        : String(stats.ownerScore);
+  }
+  if (ownerVoiceGateStorageOwner) {
+    ownerVoiceGateStorageOwner.textContent = settings.storageOwner || "backend";
+  }
+  if (ownerVoiceGateSafetyAccepted) {
+    ownerVoiceGateSafetyAccepted.checked = Boolean(settings.safetyNoticeAccepted);
+  }
+  if (ownerVoiceGateEnabledToggle) {
+    ownerVoiceGateEnabledToggle.checked = Boolean(settings.enabled);
+    ownerVoiceGateEnabledToggle.disabled = false;
+  }
+  if (ownerVoiceGateThreshold) {
+    ownerVoiceGateThreshold.value = String(settings.threshold ?? 0.65);
+  }
+  if (ownerVoiceGateReenrollBtn) {
+    ownerVoiceGateReenrollBtn.disabled = true;
+  }
+  if (ownerVoiceGateStatusSummary) {
+    const enrolledText = settings.enrolled ? "Enrolled" : "Not enrolled";
+    const enabledText = settings.enabled ? "Enabled" : "Disabled";
+    ownerVoiceGateStatusSummary.textContent = `Owner Voice Gate: ${enrolledText} / ${enabledText}`;
+    ownerVoiceGateStatusSummary.className = settings.enabled
+      ? "owner-voice-gate-status-summary active"
+      : "owner-voice-gate-status-summary warning";
+  }
+}
+
+async function loadOwnerVoiceGateStatus() {
+  setOwnerVoiceGateSettingsStatus("Loading owner voice gate status...");
+  try {
+    const res = await fetch(`${BACKEND_URL}/owner-voice-gate/status`);
+    const settings = await parseJsonResponse(res);
+    renderOwnerVoiceGateStatus(settings);
+    setOwnerVoiceGateSettingsStatus("Owner voice gate status loaded.");
+    return settings;
+  } catch (err) {
+    setOwnerVoiceGateSettingsStatus(formatBackendError(err), true);
+    return null;
+  }
+}
+
+async function saveOwnerVoiceGateSettings(update) {
+  setOwnerVoiceGateSettingsStatus("Saving owner voice gate settings...");
+  try {
+    const res = await fetch(`${BACKEND_URL}/owner-voice-gate/settings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(update),
+    });
+    const settings = await parseJsonResponse(res);
+    renderOwnerVoiceGateStatus(settings);
+    if (settings.reason === "not_enrolled") {
+      setOwnerVoiceGateSettingsStatus(
+        "Owner Voice Gate is not enrolled yet. Enable remains disabled.",
+        true
+      );
+    } else {
+      setOwnerVoiceGateSettingsStatus("Owner voice gate settings saved.");
+    }
+    return settings;
+  } catch (err) {
+    setOwnerVoiceGateSettingsStatus(formatBackendError(err), true);
+    return null;
+  }
+}
+
+async function deleteOwnerVoiceGateVoiceprint() {
+  setOwnerVoiceGateSettingsStatus("Deleting owner voice gate placeholder...");
+  try {
+    const res = await fetch(`${BACKEND_URL}/owner-voice-gate/delete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    const settings = await parseJsonResponse(res);
+    renderOwnerVoiceGateStatus(settings);
+    setOwnerVoiceGateSettingsStatus("Owner voice gate reset to defaults.");
+    return settings;
+  } catch (err) {
+    setOwnerVoiceGateSettingsStatus(formatBackendError(err), true);
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Provider Key Save / Clear (TASK-056)
 // Security rules:
 //   - Key value is NEVER written to any console.* call.
@@ -5235,6 +5372,42 @@ providerSettingsForm.addEventListener("submit", (e) => {
   saveProviderSettings();
 });
 
+if (ownerVoiceGateRefreshBtn) {
+  ownerVoiceGateRefreshBtn.addEventListener("click", () => {
+    loadOwnerVoiceGateStatus();
+  });
+}
+
+if (ownerVoiceGateSafetyAccepted) {
+  ownerVoiceGateSafetyAccepted.addEventListener("change", () => {
+    saveOwnerVoiceGateSettings({
+      safetyNoticeAccepted: ownerVoiceGateSafetyAccepted.checked,
+    });
+  });
+}
+
+if (ownerVoiceGateEnabledToggle) {
+  ownerVoiceGateEnabledToggle.addEventListener("change", () => {
+    saveOwnerVoiceGateSettings({
+      enabled: ownerVoiceGateEnabledToggle.checked,
+    });
+  });
+}
+
+if (ownerVoiceGateSaveThresholdBtn) {
+  ownerVoiceGateSaveThresholdBtn.addEventListener("click", () => {
+    saveOwnerVoiceGateSettings({
+      threshold: _ownerVoiceThresholdValue(),
+    });
+  });
+}
+
+if (ownerVoiceGateDeleteBtn) {
+  ownerVoiceGateDeleteBtn.addEventListener("click", () => {
+    deleteOwnerVoiceGateVoiceprint();
+  });
+}
+
 // TASK-056: key save / clear event listeners
 saveProviderKeyBtn.addEventListener("click", () => {
   saveProviderKey();
@@ -5538,6 +5711,7 @@ async function checkLocalProviderLiveness() {
       await loadMemoryContextPreview();
       await loadAuditLogs();
       await loadProviderSettings();
+      await loadOwnerVoiceGateStatus();
       // TASK-197: async Ollama liveness probe — runs in background, no await.
       // Does not write chat history, does not trigger Pet, does not call /chat.
       checkLocalProviderLiveness();
@@ -5556,6 +5730,7 @@ async function checkLocalProviderLiveness() {
     setChatRuntimeStatus("backend_offline", sourceStatusMessage("backend_offline"), "error");
     setMemoryStatus(`Cannot reach backend at ${BACKEND_URL}.`, true);
     setProviderSettingsStatus(`Cannot reach backend at ${BACKEND_URL}.`, true);
+    setOwnerVoiceGateSettingsStatus(`Cannot reach backend at ${BACKEND_URL}.`, true);
     // TASK-083: show offline expression on startup failure
     setPetExpression("offline");
     setPetHint(moodHintLabel("offline"));

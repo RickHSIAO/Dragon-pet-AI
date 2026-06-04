@@ -44,3 +44,6 @@ backend/data/provider_settings.json.tmp
 �ƿ��/
 
 開啟方式.txt
+# TASK-261 local owner voice gate / pytest temp
+backend/data/owner_voice_gate_settings.json
+backend.pytest-tmp-task261-*/

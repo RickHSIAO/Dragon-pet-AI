@@ -1,6 +1,6 @@
 # Owner Voice Gate Storage Design
 
-Status: TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE
+Status: TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS
 
 Date: 2026-06-04
 
@@ -115,19 +115,24 @@ temp file and delete it immediately in a `finally` path.
 
 ## 6. Storage Location
 
-Recommended future storage path:
+TASK-260 originally considered Electron `userData`. TASK-261 resolves storage
+ownership to the backend so the future speaker verification boundary can read
+the settings without Electron-to-backend file sharing.
+
+TASK-261 storage stub path:
 
 ```text
-userData/owner-voice-gate.json
+backend/data/owner_voice_gate_settings.json
 ```
 
-This file should be controlled by the main process or an existing narrow
-settings/storage boundary. TASK-260 does not add that runtime.
+The path can be overridden for tests through `OWNER_VOICE_GATE_FILE_PATH`.
+An empty override disables persistence for isolated tests. The renderer must not
+store owner voice gate settings or voiceprint data in `localStorage`.
 
 Do not store it in:
 
 - The repo.
-- `backend/data`.
+- Electron renderer `localStorage`.
 - Chat history.
 - Memory tables.
 - Diagnostics logs.
@@ -136,11 +141,38 @@ Do not store it in:
 
 ## 7. Storage Schema
 
-Proposed JSON schema:
+TASK-261 storage stub schema:
 
 ```json
 {
   "schemaVersion": 1,
+  "enabled": false,
+  "enrolled": false,
+  "provider": "funasr-campp",
+  "modelId": "iic/speech_campplus_sv_zh-cn_16k-common",
+  "embeddingDim": 192,
+  "embeddingAggregate": null,
+  "sampleCount": 0,
+  "threshold": 0.65,
+  "calibrationStats": {
+    "ownerScore": null,
+    "otherScore": null,
+    "meanSelfScore": null,
+    "minSelfScore": null
+  },
+  "safetyNoticeAccepted": false,
+  "createdAt": null,
+  "updatedAt": null
+}
+```
+
+Future enrolled schema after a later enrollment task:
+
+```json
+{
+  "schemaVersion": 1,
+  "enabled": true,
+  "enrolled": true,
   "provider": "funasr-campp",
   "modelId": "iic/speech_campplus_sv_zh-cn_16k-common",
   "embeddingDim": 192,
@@ -150,6 +182,7 @@ Proposed JSON schema:
   },
   "sampleCount": 3,
   "threshold": 0.65,
+  "safetyNoticeAccepted": true,
   "createdAt": "2026-06-04T00:00:00.000Z",
   "updatedAt": "2026-06-04T00:00:00.000Z",
   "calibrationStats": {
@@ -267,7 +300,7 @@ Required future controls:
 
 Deletion behavior:
 
-- Delete `userData/owner-voice-gate.json`.
+- Delete/reset `backend/data/owner_voice_gate_settings.json`.
 - Clear in-memory owner embedding state.
 - Turn `enabled` off.
 - Do not delete chat history.
@@ -277,11 +310,45 @@ Deletion behavior:
 
 Clear Chat must not delete owner voiceprint.
 
-App uninstall should follow normal userData behavior. If the app later adds an
-"Erase all local data" action, it should include owner voiceprint deletion in
-that broader action.
+App uninstall should follow the app's normal local data cleanup behavior. If the
+app later adds an "Erase all local data" action, it should include owner voice
+gate storage deletion in that broader action.
 
-## 11. Future Runtime Architecture
+## 11. TASK-261 UI / Storage Stub
+
+TASK-261 implements the first non-runtime Owner Voice Gate surface:
+
+- Backend-owned storage service: `backend/app/services/owner_voice_gate_storage.py`.
+- Narrow backend endpoints:
+  - `GET /owner-voice-gate/status`
+  - `POST /owner-voice-gate/settings`
+  - `POST /owner-voice-gate/delete`
+- Full App settings UI section: `#owner-voice-gate-section`.
+- Renderer calls only the three owner voice gate endpoints.
+- `enabled=true` while `enrolled=false` returns a clean `not_enrolled` result
+  and leaves `enabled=false`.
+- `threshold` is clamped to `0.40..0.95`.
+- `safetyNoticeAccepted` is persisted as a boolean.
+- Delete resets the stub to defaults and removes the stub file if present.
+
+TASK-261 still does not implement enrollment. It does not store a real
+`embeddingAggregate`; the field remains `null`. It does not write raw audio,
+base64 audio, transcript, waveform, or per-sample embeddings.
+
+Runtime remains unchanged:
+
+- No Manual Mic gate.
+- No Conversation Mode gate.
+- No `/stt/transcribe` behavior change.
+- No `/chat` schema change.
+- No IPC channel.
+- No microphone access.
+- No recording.
+- No always listening.
+- No background monitoring.
+- No Pet Window, Output Queue, or Diagnostics Drawer runtime changes.
+
+## 12. Future Runtime Architecture
 
 This is for future tasks only:
 
@@ -305,7 +372,7 @@ Runtime integration should be split by surface:
 Both must be disabled by default until enrollment exists and the user explicitly
 enables the gate.
 
-## 12. Future Diagnostics Fields
+## 13. Future Diagnostics Fields
 
 Suggested future diagnostics fields:
 
@@ -327,21 +394,20 @@ Diagnostics must not show:
 - Full transcript for rejected speech.
 - Hidden prompt or private storage path details.
 
-## 13. Future Tasks
+## 14. Future Tasks
 
 Recommended sequence:
 
-- TASK-261 Owner Voice Enrollment UI / Local Storage Stub
-- TASK-262 Owner Voice Gate Calibration Probe
+- TASK-262 Owner Voice Gate Calibration Probe / Multi-Sample Threshold Review
 - TASK-263 Owner Voice Gate Runtime Integration for Manual Mic
 - TASK-264 Owner Voice Gate Runtime Integration for Conversation Mode
 
 Do not jump directly from TASK-260 to runtime gating. Enrollment storage,
 delete/reset UX, and threshold calibration should be settled first.
 
-## 14. Validation Plan
+## 15. Validation Plan
 
-Because TASK-260 is docs-only, validation is regression-oriented:
+Because TASK-261 adds a UI/storage stub only, validation is regression-oriented:
 
 ```powershell
 node apps\desktop\scripts\renderer-chat-smoke.js

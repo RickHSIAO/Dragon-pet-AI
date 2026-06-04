@@ -71,6 +71,13 @@ from app.services.provider_settings_service import (
     save_provider_api_key,
     update_provider_settings,
 )
+from app.services.owner_voice_gate_storage import (
+    OwnerVoiceGateSettingsUpdate,
+    delete_owner_voice_gate_voiceprint,
+    get_owner_voice_gate_status,
+    update_owner_voice_gate_settings,
+    validate_owner_voice_gate_update_fields,
+)
 from app.services.state_service import get_chat_state_context, update_state_after_chat_turn
 from app.services.usage_meter_service import UsageRecord, estimate_text_tokens, record_usage
 from app.stt.stt_service import transcribe_audio_bytes, warmup_funasr_sidecar  # TASK-167B / TASK-256
@@ -315,6 +322,56 @@ def health_check():
     Returns ok status if the backend is running.
     """
     return {"status": "ok", "service": "dragon-pet-ai"}
+
+
+@router.get("/owner-voice-gate/status")
+def owner_voice_gate_status_route():
+    """
+    TASK-261: Return safe Owner Voice Gate storage-stub status.
+
+    This endpoint does not accept audio, does not load speaker models, does not
+    call STT, does not call /chat, and never returns raw audio or embeddings.
+    """
+    return get_owner_voice_gate_status()
+
+
+@router.post("/owner-voice-gate/settings")
+async def owner_voice_gate_settings_route(request: Request):
+    """
+    TASK-261: Update safe Owner Voice Gate stub settings only.
+
+    Allowed fields: enabled, threshold, safetyNoticeAccepted.
+    Real enrollment and embedding persistence are intentionally unavailable.
+    """
+    try:
+        body = await request.json()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="invalid json body") from exc
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="request body must be an object")
+    try:
+        validate_owner_voice_gate_update_fields(body)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    update = OwnerVoiceGateSettingsUpdate(
+        enabled=body["enabled"] if "enabled" in body else None,
+        threshold=body["threshold"] if "threshold" in body else None,
+        safetyNoticeAccepted=(
+            body["safetyNoticeAccepted"] if "safetyNoticeAccepted" in body else None
+        ),
+    )
+    return update_owner_voice_gate_settings(update)
+
+
+@router.post("/owner-voice-gate/delete")
+def owner_voice_gate_delete_route():
+    """
+    TASK-261: Reset the Owner Voice Gate storage stub.
+
+    There is no real voiceprint in this task. Delete resets the placeholder
+    state to defaults and removes the stub file if it exists.
+    """
+    return delete_owner_voice_gate_voiceprint()
 
 
 @router.get("/provider/health")

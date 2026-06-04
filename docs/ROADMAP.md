@@ -469,13 +469,26 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   mic, recording, raw audio persistence, embedding persistence, or formal voiceprint storage change.
 - TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE (2026-06-04):
   Added `docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md`. Defines future enrollment flow (3 samples,
-  8-15 s each), `userData/owner-voice-gate.json` schema, centroid-only embedding storage,
-  threshold/calibration strategy, reset/delete voiceprint UX, diagnostics fields, and the
-  next task split. No Manual Mic, Conversation Mode, STT, `/chat`, IPC, Pet Window, Output Queue,
-  Diagnostics Drawer, mic, recording, raw audio persistence, embedding persistence, or runtime
-  integration change.
-- TASK-261 — Owner Voice Enrollment UI / Local Storage Stub
-- TASK-262 — Owner Voice Gate Calibration Probe
+  8-15 s each), centroid-only embedding storage, threshold/calibration strategy, reset/delete
+  voiceprint UX, diagnostics fields, and the next task split. TASK-261 resolved storage
+  ownership to backend-owned JSON instead of Electron `userData`.
+- TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS (2026-06-04): Added
+  backend-owned Owner Voice Gate settings stub (`backend/data/owner_voice_gate_settings.json`,
+  override `OWNER_VOICE_GATE_FILE_PATH`), narrow `/owner-voice-gate/status`,
+  `/owner-voice-gate/settings`, and `/owner-voice-gate/delete` endpoints, plus a Full App
+  settings UI section. Stub persists only safe fields (`enabled`, `threshold`,
+  `safetyNoticeAccepted`, metadata/null placeholders), rejects raw audio/base64/transcript/
+  waveform/per-sample embeddings/real embedding values, clamps threshold to 0.40..0.95, and
+  returns clean `not_enrolled` when enable is requested before enrollment. No Manual Mic,
+  Conversation Mode, STT, `/chat`, IPC, Pet Window, Output Queue, Diagnostics Drawer, mic,
+  recording, always listening, background monitoring, or runtime gate change.
+  Windows smoke PASS: Owner Voice Gate UI exists and is usable, safety notice accepted/persisted,
+  threshold saved/clamped, enable blocked when not enrolled (clean not_enrolled), delete resets
+  stub, storage file contains no raw audio/base64/transcript/waveform, re-enroll placeholder
+  does not access mic, Manual Mic/Conversation Mode/STT/chat/Pet Window/Output Queue/Diagnostics
+  Drawer regression PASS. 174 pytest PASS, 185 stt_provider_smoke PASS,
+  renderer-chat-smoke PASS, pet-window-smoke 92 PASS, pet-renderer-smoke 290 PASS.
+- TASK-262 — Owner Voice Gate Calibration Probe / Multi-Sample Threshold Review
 - TASK-263 — Owner Voice Gate Runtime Integration for Manual Mic
 - TASK-264 — Owner Voice Gate Runtime Integration for Conversation Mode
 

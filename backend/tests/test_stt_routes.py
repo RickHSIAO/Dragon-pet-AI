@@ -6,6 +6,7 @@ When STT is unavailable, the endpoint returns status="unavailable" (not an error
 """
 
 import io
+import json
 import os
 
 import pytest
@@ -16,6 +17,7 @@ os.environ.setdefault("SETTINGS_FILE_PATH", "")
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.main import app  # noqa: E402
+from app.services.owner_voice_gate_storage import reset_owner_voice_gate_storage_for_tests  # noqa: E402
 from app.stt import stt_service  # noqa: E402
 
 
@@ -190,6 +192,168 @@ def test_stt_transcribe_no_chat_forwarding(monkeypatch):
     assert "chat_service" not in source, (
         "/stt/transcribe must not import chat_service (TASK-167C boundary)"
     )
+
+
+def _owner_voice_gate_temp_storage(tmp_path):
+    path = tmp_path / "owner_voice_gate_settings.json"
+    reset_owner_voice_gate_storage_for_tests(str(path))
+    return path
+
+
+def test_owner_voice_gate_default_status_safe_schema(tmp_path):
+    """TASK-261: Owner Voice Gate status is safe, disabled, and not enrolled by default."""
+    _owner_voice_gate_temp_storage(tmp_path)
+
+    with TestClient(app) as client:
+        response = client.get("/owner-voice-gate/status")
+
+    data = response.json()
+    assert response.status_code == 200
+    assert data["schemaVersion"] == 1
+    assert data["storageOwner"] == "backend"
+    assert data["status"] == "not_enrolled"
+    assert data["enabled"] is False
+    assert data["enrolled"] is False
+    assert data["provider"] == "funasr-campp"
+    assert data["modelId"] == "iic/speech_campplus_sv_zh-cn_16k-common"
+    assert data["embeddingDim"] == 192
+    assert data["embeddingAggregate"] is None
+    assert data["sampleCount"] == 0
+    assert data["threshold"] == 0.65
+    assert data["safetyNoticeAccepted"] is False
+    assert "rawAudio" not in response.text
+    assert "base64Audio" not in response.text
+    assert "transcript" not in response.text
+    assert "waveform" not in response.text
+
+
+def test_owner_voice_gate_update_accepts_safety_notice_and_threshold(tmp_path):
+    """TASK-261: settings endpoint stores only safe stub fields."""
+    path = _owner_voice_gate_temp_storage(tmp_path)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/owner-voice-gate/settings",
+            json={"safetyNoticeAccepted": True, "threshold": 0.72},
+        )
+
+    data = response.json()
+    assert response.status_code == 200
+    assert data["safetyNoticeAccepted"] is True
+    assert data["threshold"] == 0.72
+    assert data["enabled"] is False
+    assert data["enrolled"] is False
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    assert saved["safetyNoticeAccepted"] is True
+    assert saved["threshold"] == 0.72
+    assert saved["embeddingAggregate"] is None
+
+
+def test_owner_voice_gate_threshold_is_clamped(tmp_path):
+    """TASK-261: threshold stays in the documented 0.40..0.95 range."""
+    _owner_voice_gate_temp_storage(tmp_path)
+
+    with TestClient(app) as client:
+        low = client.post("/owner-voice-gate/settings", json={"threshold": 0.1})
+        high = client.post("/owner-voice-gate/settings", json={"threshold": 1.5})
+
+    assert low.status_code == 200
+    assert low.json()["threshold"] == 0.4
+    assert high.status_code == 200
+    assert high.json()["threshold"] == 0.95
+
+
+def test_owner_voice_gate_cannot_enable_when_not_enrolled(tmp_path):
+    """TASK-261: enabling the gate before enrollment returns clean not_enrolled."""
+    _owner_voice_gate_temp_storage(tmp_path)
+
+    with TestClient(app) as client:
+        response = client.post("/owner-voice-gate/settings", json={"enabled": True})
+
+    data = response.json()
+    assert response.status_code == 200
+    assert data["enabled"] is False
+    assert data["enrolled"] is False
+    assert data["reason"] == "not_enrolled"
+    assert data["status"] == "not_enrolled"
+
+
+def test_owner_voice_gate_rejects_forbidden_storage_fields(tmp_path):
+    """TASK-261: endpoint rejects audio, transcript, and embedding vector fields."""
+    _owner_voice_gate_temp_storage(tmp_path)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/owner-voice-gate/settings",
+            json={
+                "rawAudio": "not allowed",
+                "base64Audio": "not allowed",
+                "transcript": "not allowed",
+                "waveform": [0, 1],
+                "embeddingAggregate": [0.1, 0.2],
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "unsupported owner voice gate setting field"}
+    assert "not allowed" not in response.text
+    assert "0.1" not in response.text
+
+
+def test_owner_voice_gate_storage_file_never_contains_audio_or_embedding_fields(tmp_path):
+    """TASK-261: persisted stub does not contain raw audio, transcripts, or real vectors."""
+    path = _owner_voice_gate_temp_storage(tmp_path)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/owner-voice-gate/settings",
+            json={"safetyNoticeAccepted": True, "threshold": 0.65},
+        )
+
+    assert response.status_code == 200
+    raw = path.read_text(encoding="utf-8")
+    assert "rawAudio" not in raw
+    assert "base64Audio" not in raw
+    assert "audioBytes" not in raw
+    assert "transcript" not in raw
+    assert "waveform" not in raw
+    assert "perSampleEmbeddings" not in raw
+    assert '"embeddingAggregate": null' in raw
+
+
+def test_owner_voice_gate_delete_resets_storage_stub(tmp_path):
+    """TASK-261: delete resets placeholder storage to default, with no chat/STT effect."""
+    path = _owner_voice_gate_temp_storage(tmp_path)
+
+    with TestClient(app) as client:
+        client.post(
+            "/owner-voice-gate/settings",
+            json={"safetyNoticeAccepted": True, "threshold": 0.72},
+        )
+        assert path.exists()
+        response = client.post("/owner-voice-gate/delete")
+        status = client.get("/owner-voice-gate/status")
+
+    assert response.status_code == 200
+    assert response.json()["reason"] == "deleted"
+    assert response.json()["enabled"] is False
+    assert response.json()["safetyNoticeAccepted"] is False
+    assert not path.exists()
+    assert status.json()["threshold"] == 0.65
+    assert status.json()["enabled"] is False
+
+
+def test_owner_voice_gate_errors_do_not_return_raw_stack(tmp_path):
+    """TASK-261: bad requests are sanitized."""
+    _owner_voice_gate_temp_storage(tmp_path)
+
+    with TestClient(app) as client:
+        response = client.post("/owner-voice-gate/settings", json=["bad"])
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "request body must be an object"}
+    assert "Traceback" not in response.text
+    assert "Exception" not in response.text
 
 
 def test_stt_service_no_audio_persistence():

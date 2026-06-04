@@ -1,6 +1,6 @@
 # Interactive Companion Architecture Checkpoint
 
-**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-236 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS; TASK-237 IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED
+**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-236 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS; TASK-237 IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS
 **Date:** 2026-06-01
 **Scope:** Architecture checkpoint for TASK-214 through TASK-230.
 
@@ -61,6 +61,7 @@ user interaction
 | TASK-258 | Owner voice gate research | Evaluates local speaker verification before STT as a future convenience filter. RESEARCH ONLY / NO RUNTIME CHANGE. |
 | TASK-259 | Owner voice gate probe | Adds offline file-path-only speaker embedding probe; no runtime integration. DONE - Windows owner voice probe smoke PASS. |
 | TASK-260 | Owner voice gate storage design | Defines enrollment storage, threshold calibration, reset/delete UX, and diagnostics boundary. DOCS ONLY / NO RUNTIME CHANGE. |
+| TASK-261 | Owner voice gate settings UI/storage stub | Adds backend-owned storage stub, narrow status/settings/delete endpoints, and Full App settings UI. No enrollment or runtime gate. DONE - Windows owner voice storage/UI smoke PASS. |
 | TASK-228 | Output queue runtime skeleton | Adds Full App renderer-only disabled queue skeleton, sanitized snapshot, priority/preemption helpers, and queue diagnostics preview. DONE - Windows visual smoke PASS. |
 | TASK-229 | Output queue debug preview | Polishes queue snapshot preview with Recent and safe Next summary. DONE - Windows visual smoke PASS. |
 | TASK-230 | Reaction bubble diagnostics enqueue | Enqueues safe reaction bubble ids into the disabled local output queue for diagnostics only. DONE - Windows visual smoke PASS. |
@@ -680,10 +681,23 @@ Recommended next architecture phase:
 - TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE (2026-06-04):
   Adds `docs/OWNER_VOICE_GATE_STORAGE_DESIGN.md`. Future enrollment should collect 3 explicit
   owner samples, compute one embedding per sample, normalize/average/renormalize into one centroid,
-  and store only centroid plus metadata in `userData/owner-voice-gate.json`. Defines threshold
-  calibration, reset/delete voiceprint UX, future diagnostics fields, and task split for enrollment,
-  calibration, Manual Mic gate, and Conversation Mode gate. No runtime, mic, IPC, STT, `/chat`,
-  Pet Window, Output Queue, or Diagnostics Drawer change.
+  and store only centroid plus metadata. Defines threshold calibration, reset/delete voiceprint UX,
+  future diagnostics fields, and task split for enrollment, calibration, Manual Mic gate, and
+  Conversation Mode gate. TASK-261 resolves storage ownership to backend JSON instead of Electron
+  `userData`.
+- TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS (2026-06-04):
+  Adds backend-owned Owner Voice Gate storage stub
+  `backend/data/owner_voice_gate_settings.json`, override `OWNER_VOICE_GATE_FILE_PATH`, plus
+  narrow endpoints `GET /owner-voice-gate/status`, `POST /owner-voice-gate/settings`, and
+  `POST /owner-voice-gate/delete`. Full App UI can accept the safety notice, request enable/disable,
+  save a clamped threshold, delete/reset the stub, and show disabled Re-enroll placeholder. It stores
+  only safe stub fields and null placeholders; no real embedding, raw audio, base64 audio,
+  transcript, waveform, or per-sample embedding persistence. No runtime gate, mic, recording, IPC,
+  STT, `/chat`, Pet Window, Output Queue, or Diagnostics Drawer change.
+  Windows smoke PASS: UI exists and is usable, safety notice accepted/persisted, threshold saved
+  and clamped, enable blocked when not enrolled (clean not_enrolled), delete resets stub, storage
+  file contains no raw audio/base64/transcript/waveform, re-enroll placeholder does not access mic,
+  all runtime regression PASS.
 - Relationship state.
 - Mood / attention / energy state beyond the local preview foundation.
 - Idle reaction policy.

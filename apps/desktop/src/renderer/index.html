@@ -206,6 +206,90 @@ Queue: disabled · Items: 0 · Recent: 0 · Next: none</pre>
     </div>
   </details>
 
+  <!-- TASK-261: Owner Voice Gate settings stub. No mic, no recording, no runtime gate. -->
+  <section id="owner-voice-gate-section" aria-labelledby="owner-voice-gate-title">
+    <details id="owner-voice-gate-details">
+      <summary class="owner-voice-gate-summary">
+        <h2 id="owner-voice-gate-title" class="owner-voice-gate-summary-title">Owner Voice Gate</h2>
+        <span class="owner-voice-gate-summary-hint">Local settings stub; no recording or runtime gate yet.</span>
+      </summary>
+
+      <div class="section-header">
+        <div>
+          <p>Convenience filter planning for future owner-only voice commands.</p>
+        </div>
+        <button id="owner-voice-gate-refresh-btn" type="button">Refresh owner voice status</button>
+      </div>
+
+      <p class="owner-voice-gate-safety-note">
+        Convenience filter only, not security authentication. Replay, voice conversion, or AI voice clone may bypass it.
+      </p>
+
+      <div id="owner-voice-gate-status-summary" class="owner-voice-gate-status-summary" aria-live="polite">
+        Owner Voice Gate: Not enrolled
+      </div>
+
+      <div class="owner-voice-gate-grid" aria-live="polite">
+        <div>
+          <span>Status</span>
+          <strong id="owner-voice-gate-state">not_enrolled</strong>
+        </div>
+        <div>
+          <span>Provider</span>
+          <strong id="owner-voice-gate-provider">funasr-campp</strong>
+        </div>
+        <div>
+          <span>Model</span>
+          <strong id="owner-voice-gate-model">iic/speech_campplus_sv_zh-cn_16k-common</strong>
+        </div>
+        <div>
+          <span>Embedding dim</span>
+          <strong id="owner-voice-gate-embedding-dim">192</strong>
+        </div>
+        <div>
+          <span>Last score</span>
+          <strong id="owner-voice-gate-last-score">none</strong>
+        </div>
+        <div>
+          <span>Storage owner</span>
+          <strong id="owner-voice-gate-storage-owner">backend</strong>
+        </div>
+      </div>
+
+      <div class="owner-voice-gate-controls">
+        <label class="owner-voice-gate-checkbox">
+          <input id="owner-voice-gate-safety-accepted" type="checkbox" />
+          Accept safety notice
+        </label>
+
+        <label class="owner-voice-gate-checkbox">
+          <input id="owner-voice-gate-enabled-toggle" type="checkbox" />
+          Enable Owner Voice Gate
+        </label>
+
+        <label class="owner-voice-gate-threshold-label" for="owner-voice-gate-threshold">
+          Threshold
+          <input
+            id="owner-voice-gate-threshold"
+            type="number"
+            min="0.40"
+            max="0.95"
+            step="0.01"
+            value="0.65"
+          />
+        </label>
+
+        <div class="owner-voice-gate-actions">
+          <button id="owner-voice-gate-save-threshold-btn" type="button">Save threshold</button>
+          <button id="owner-voice-gate-delete-btn" type="button">Delete owner voiceprint</button>
+          <button id="owner-voice-gate-reenroll-btn" type="button" disabled title="Enrollment is deferred to a later task.">Re-enroll owner voice</button>
+        </div>
+      </div>
+
+      <div id="owner-voice-gate-settings-status" class="owner-voice-gate-settings-status" role="status"></div>
+    </details>
+  </section>
+
   <!-- ── Settings sections (below the fold) ────────────────── -->
   <!-- Memory management — collapsed by default; expand to manage -->
   <section id="memory-section" aria-labelledby="memory-title">

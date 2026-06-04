@@ -285,6 +285,35 @@ function defaultProviderSettings(overrides = {}) {
   };
 }
 
+function defaultOwnerVoiceGateSettings(overrides = {}) {
+  return {
+    schemaVersion: 1,
+    enabled: false,
+    enrolled: false,
+    provider: "funasr-campp",
+    modelId: "iic/speech_campplus_sv_zh-cn_16k-common",
+    embeddingDim: 192,
+    embeddingAggregate: null,
+    sampleCount: 0,
+    threshold: 0.65,
+    calibrationStats: {
+      ownerScore: null,
+      otherScore: null,
+      meanSelfScore: null,
+      minSelfScore: null,
+    },
+    safetyNoticeAccepted: false,
+    createdAt: null,
+    updatedAt: null,
+    storageOwner: "backend",
+    storagePath: "data/owner_voice_gate_settings.json",
+    status: "not_enrolled",
+    reason: "ok",
+    message: "ok",
+    ...overrides,
+  };
+}
+
 function usageFor(source, overrides = {}) {
   return {
     request_count: 1,
@@ -343,6 +372,26 @@ function createFetchStub(state) {
     }
     if (target.endsWith("/provider/settings") && (options.method || "GET") === "GET") {
       return new FakeResponse(200, state.providerSettings);
+    }
+    if (target.endsWith("/owner-voice-gate/status") && (options.method || "GET") === "GET") {
+      return new FakeResponse(200, state.ownerVoiceGateSettings);
+    }
+    if (target.endsWith("/owner-voice-gate/settings")) {
+      const patch = JSON.parse(options.body || "{}");
+      const requestedEnabled = patch.enabled === true;
+      const enrolled = state.ownerVoiceGateSettings.enrolled === true;
+      state.ownerVoiceGateSettings = {
+        ...state.ownerVoiceGateSettings,
+        ...patch,
+        enabled: requestedEnabled && enrolled,
+        status: enrolled ? (requestedEnabled ? "enabled" : "disabled") : "not_enrolled",
+        reason: requestedEnabled && !enrolled ? "not_enrolled" : "settings_updated",
+      };
+      return new FakeResponse(200, state.ownerVoiceGateSettings);
+    }
+    if (target.endsWith("/owner-voice-gate/delete")) {
+      state.ownerVoiceGateSettings = defaultOwnerVoiceGateSettings({ reason: "deleted" });
+      return new FakeResponse(200, state.ownerVoiceGateSettings);
     }
     if (target.endsWith("/provider/settings") && options.method === "PATCH") {
       state.providerSettings = {
@@ -502,6 +551,7 @@ async function loadRenderer(options = {}) {
     pauseChat: Boolean(options.pauseChat),
     resolveChat: null,
     providerSettings: defaultProviderSettings(options.providerSettings || {}),
+    ownerVoiceGateSettings: defaultOwnerVoiceGateSettings(options.ownerVoiceGateSettings || {}),
     availableImages,
     intervalCallbacks,  // exposed for verification if needed
     // TASK-197: default true so liveness check sets "已就緒" and doesn't break status-summary tests.
@@ -14417,6 +14467,115 @@ function testTask256bNoPetWindowOutputQueueChanges() {
   console.log("  testTask256bNoPetWindowOutputQueueChanges PASS");
 }
 
+// ---------------------------------------------------------------------------
+// TASK-261: Owner Voice Gate settings UI + storage stub
+// ---------------------------------------------------------------------------
+
+function _task261OwnerVoiceRendererSection() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const start = src.indexOf("TASK-261: Owner Voice Gate settings UI + backend storage stub.");
+  const end = src.indexOf("Provider Key Save / Clear", start);
+  assert.ok(start !== -1, "TASK-261 renderer section must exist");
+  assert.ok(end !== -1, "TASK-261 renderer section must end before provider key section");
+  return src.slice(start, end);
+}
+
+function testTask261OwnerVoiceUiExists() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes('id="owner-voice-gate-section"'), "TASK-261 HTML must include owner voice gate section");
+  assert.ok(html.includes('id="owner-voice-gate-safety-accepted"'), "TASK-261 HTML must include safety notice control");
+  assert.ok(html.includes('id="owner-voice-gate-enabled-toggle"'), "TASK-261 HTML must include enable toggle");
+  assert.ok(html.includes('id="owner-voice-gate-delete-btn"'), "TASK-261 HTML must include delete control");
+  assert.ok(html.includes('id="owner-voice-gate-reenroll-btn"'), "TASK-261 HTML must include re-enroll placeholder");
+  assert.ok(html.includes("Convenience filter only, not security authentication"),
+    "TASK-261 safety note must be visible");
+  console.log("  testTask261OwnerVoiceUiExists PASS");
+}
+
+function testTask261OwnerVoiceCssExists() {
+  const css = fs.readFileSync(cssPath, "utf8");
+  assert.ok(css.includes("TASK-261: Owner Voice Gate settings stub"), "TASK-261 CSS comment must exist");
+  assert.ok(css.includes("#owner-voice-gate-section"), "TASK-261 CSS must style owner voice section");
+  assert.ok(css.includes(".owner-voice-gate-grid"), "TASK-261 CSS must style status grid");
+  assert.ok(css.includes(".owner-voice-gate-actions"), "TASK-261 CSS must style action row");
+  console.log("  testTask261OwnerVoiceCssExists PASS");
+}
+
+async function testTask261OwnerVoiceStatusLoads() {
+  const { document, state } = await loadRenderer();
+  assert.equal(document.getElementById("owner-voice-gate-state").textContent, "not_enrolled");
+  assert.equal(document.getElementById("owner-voice-gate-provider").textContent, "funasr-campp");
+  assert.equal(document.getElementById("owner-voice-gate-embedding-dim").textContent, "192");
+  const calls = state.calls.filter((call) => call.url.endsWith("/owner-voice-gate/status"));
+  assert.ok(calls.length >= 1, "TASK-261 startup must load owner voice gate status");
+  console.log("  testTask261OwnerVoiceStatusLoads PASS");
+}
+
+async function testTask261OwnerVoiceSafetyNoticePersistsStub() {
+  const { document, state } = await loadRenderer();
+  const checkbox = document.getElementById("owner-voice-gate-safety-accepted");
+  checkbox.checked = true;
+  checkbox.dispatchEvent({ type: "change" });
+  await settle();
+  const calls = state.calls.filter((call) => call.url.endsWith("/owner-voice-gate/settings"));
+  assert.ok(calls.length >= 1, "TASK-261 safety notice must call settings endpoint");
+  const body = JSON.parse(calls.at(-1).body);
+  assert.deepEqual(body, { safetyNoticeAccepted: true });
+  assert.equal(state.ownerVoiceGateSettings.safetyNoticeAccepted, true);
+  console.log("  testTask261OwnerVoiceSafetyNoticePersistsStub PASS");
+}
+
+async function testTask261OwnerVoiceEnableNotEnrolledStaysDisabled() {
+  const { document, state } = await loadRenderer();
+  const toggle = document.getElementById("owner-voice-gate-enabled-toggle");
+  toggle.checked = true;
+  toggle.dispatchEvent({ type: "change" });
+  await settle();
+  assert.equal(state.ownerVoiceGateSettings.reason, "not_enrolled");
+  assert.equal(document.getElementById("owner-voice-gate-enabled-toggle").checked, false);
+  assert.match(document.getElementById("owner-voice-gate-settings-status").textContent, /not enrolled/i);
+  console.log("  testTask261OwnerVoiceEnableNotEnrolledStaysDisabled PASS");
+}
+
+async function testTask261OwnerVoiceThresholdClampAndSave() {
+  const { document, state } = await loadRenderer();
+  document.getElementById("owner-voice-gate-threshold").value = "1.5";
+  document.getElementById("owner-voice-gate-save-threshold-btn").click();
+  await settle();
+  const calls = state.calls.filter((call) => call.url.endsWith("/owner-voice-gate/settings"));
+  const body = JSON.parse(calls.at(-1).body);
+  assert.equal(body.threshold, 0.95, "TASK-261 UI must clamp threshold before saving");
+  console.log("  testTask261OwnerVoiceThresholdClampAndSave PASS");
+}
+
+async function testTask261OwnerVoiceDeleteResetsStub() {
+  const { document, state } = await loadRenderer();
+  state.ownerVoiceGateSettings.safetyNoticeAccepted = true;
+  state.ownerVoiceGateSettings.threshold = 0.72;
+  document.getElementById("owner-voice-gate-delete-btn").click();
+  await settle();
+  const calls = state.calls.filter((call) => call.url.endsWith("/owner-voice-gate/delete"));
+  assert.equal(calls.length, 1, "TASK-261 delete must call narrow delete endpoint once");
+  assert.equal(document.getElementById("owner-voice-gate-state").textContent, "not_enrolled");
+  assert.equal(document.getElementById("owner-voice-gate-threshold").value, "0.65");
+  console.log("  testTask261OwnerVoiceDeleteResetsStub PASS");
+}
+
+function testTask261OwnerVoiceNoMicSttChatPetOrOutputQueue() {
+  const section = _task261OwnerVoiceRendererSection();
+  assert.ok(!section.includes("getUserMedia"), "TASK-261 owner voice UI must not call getUserMedia");
+  assert.ok(!section.includes("MediaRecorder"), "TASK-261 owner voice UI must not use MediaRecorder");
+  assert.ok(!/fetch\s*\([^)]*\/stt\/transcribe/.test(section),
+    "TASK-261 owner voice UI must not call /stt/transcribe");
+  assert.ok(!/fetch\s*\([^)]*\/chat/.test(section),
+    "TASK-261 owner voice UI must not call /chat");
+  assert.ok(!section.includes("dragonPet."), "TASK-261 owner voice UI must not touch Pet Window IPC");
+  assert.ok(!section.includes("DragonOutputQueue"), "TASK-261 owner voice UI must not touch Output Queue");
+  assert.ok(!/localStorage\s*[\.\[]/.test(section), "TASK-261 owner voice UI must not use localStorage for voiceprint");
+  assert.ok(!/ipcRenderer\.(invoke|send|on)\(/.test(section), "TASK-261 owner voice UI must not use generic IPC");
+  console.log("  testTask261OwnerVoiceNoMicSttChatPetOrOutputQueue PASS");
+}
+
 async function main() {
   await testChatSendCallsBackendAndRendersReply();
   await testSuccessfulChatMirrorsReplyToPetSpeech();
@@ -15385,6 +15544,16 @@ async function main() {
   testTask256bNoInnerHtmlInDiagnostics();
   testTask256bNoSttRuntimeChanges();
   testTask256bNoPetWindowOutputQueueChanges();
+
+  // TASK-261: Owner Voice Gate settings UI + storage stub
+  testTask261OwnerVoiceUiExists();
+  testTask261OwnerVoiceCssExists();
+  await testTask261OwnerVoiceStatusLoads();
+  await testTask261OwnerVoiceSafetyNoticePersistsStub();
+  await testTask261OwnerVoiceEnableNotEnrolledStaysDisabled();
+  await testTask261OwnerVoiceThresholdClampAndSave();
+  await testTask261OwnerVoiceDeleteResetsStub();
+  testTask261OwnerVoiceNoMicSttChatPetOrOutputQueue();
 
   console.log("renderer chat smoke: PASS");
 }
