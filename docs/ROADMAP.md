@@ -547,8 +547,21 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   compares candidate embeddings against stored centroid; returns score/threshold/accepted.
   Response never exposes `embeddingAggregate`. No mic, no audio persistence, no runtime
   wiring. 7 new pytest tests. Smoke section [14/14] added to stt_provider_smoke.py.
-- TASK-266 — Owner Voice Gate Runtime Integration for Manual Mic
-- TASK-266 — Owner Voice Gate Runtime Integration for Conversation Mode
+- TASK-SEC-001 DONE - DOCS-ONLY SECURITY BOUNDARY DESIGN (2026-06-04):
+  Added `docs/SECURITY_BOUNDARY_DESIGN.md` before Owner Voice Gate runtime wiring.
+  Defines sensitive data categories, data forbidden from LLM context, direct and
+  indirect prompt injection risks, phishing/social engineering risks,
+  untrusted-content handling, future tool permission tiers, output redaction
+  checks, Owner Voice Gate security boundaries, and runtime integration
+  preconditions. No backend runtime, frontend runtime, IPC, Manual Mic,
+  Conversation Mode, STT, `/chat`, Pet Window, Output Queue, or Diagnostics
+  behavior changed.
+- TASK-SEC-002 — Sensitive Data Inventory / Redaction Rules
+- TASK-SEC-003 — Prompt Injection Test Corpus
+- TASK-SEC-004 — Tool Permission / User Confirmation Policy
+- TASK-SEC-005 — Phishing / Link Safety Warning Layer
+- TASK-266 — Owner Voice Gate Manual Mic Dry-run Policy
+- TASK-267 — Owner Voice Gate Conversation Mode Dry-run Policy
 
 - TASK-256b DONE - WINDOWS DIAGNOSTICS READABILITY SMOKE PASS (2026-06-04): Diagnostics / Voice Panel Readability Polish. CSS-only change: `.voice-diagnostics-display` 10px → 13px, `line-height` 1.55, `max-height` 200px → 340px; `.voice-diagnostics-summary` 12px → 14px + font-weight 500; `.voice-diagnostics-panel` padding 4→8px; `.voice-tuning-label/input/select` 11px → 13px; `.voice-tuning-hint/voice-preview-hint/status` 10px → 12px; `.voice-preview-play-btn` 11px → 13px; `.voice-preview-audio-el` 28px → 32px. Windows smoke PASS: diagnostics readability improved, text/spacing/panel height all visibly better. No STT/warmup/IPC/Pet Window/Output Queue runtime changes. 10 new renderer CSS smoke tests PASS.
 

@@ -548,6 +548,20 @@ TASK-257 DONE - WINDOWS PET WINDOW CLICK/SHOW SMOKE PASS (2026-06-04): Pet Windo
   STT pipeline, no `/chat` wiring. 7 new pytest tests; smoke section
   `[14/14]` added to `stt_provider_smoke.py`.
 
+- **TASK-SEC-001 Security Boundary / Anti Prompt Injection Design. DONE - DOCS-ONLY SECURITY BOUNDARY DESIGN (2026-06-04):**
+  Adds `docs/SECURITY_BOUNDARY_DESIGN.md` before Owner Voice Gate runtime
+  wiring. Defines sensitive data categories, data forbidden from LLM context,
+  direct and indirect prompt injection risks, phishing/social engineering
+  risks, untrusted-content handling, future tool permission tiers, output
+  redaction checks, Owner Voice Gate security boundaries, and runtime
+  integration preconditions. Owner Voice Gate remains a convenience filter, not
+  authentication. Stored centroid and embeddings are sensitive biometric-like
+  local data and must not enter LLM context, UI display, API responses, logs,
+  diagnostics, Output Queue, Pet Bubble, or Pet runtime. Before Manual Mic or
+  Conversation Mode runtime wiring, complete TASK-SEC-002 Sensitive Data
+  Inventory / Redaction Rules and dry-run policy tasks. No runtime behavior
+  changed.
+
 Each future task must explicitly define safety boundaries, user controls,
 provider scope, queue priority, and no-regression checks.
 

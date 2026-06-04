@@ -26690,8 +26690,13 @@ Future task sequence:
 - TASK-262 Owner Voice Gate Calibration Probe.
 - TASK-263 Owner Voice Enrollment File Import / Centroid Storage.
 - TASK-264 Owner Voice Gate Verification Probe / Stored Centroid Scoring.
-- TASK-265 Owner Voice Gate Runtime Integration for Manual Mic.
-- TASK-266 Owner Voice Gate Runtime Integration for Conversation Mode.
+- TASK-SEC-001 Security Boundary / Anti Prompt Injection Design.
+- TASK-SEC-002 Sensitive Data Inventory / Redaction Rules.
+- TASK-SEC-003 Prompt Injection Test Corpus.
+- TASK-SEC-004 Tool Permission / User Confirmation Policy.
+- TASK-SEC-005 Phishing / Link Safety Warning Layer.
+- TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
+- TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
 
 **TASK-261 — Owner Voice Enrollment UI / Local Storage Stub:**
 
@@ -27371,7 +27376,117 @@ PASS on 2026-06-04 against the stored owner centroid:
 
 ### Next Task
 
-TASK-266 Owner Voice Gate Runtime Integration for Manual Mic.
+TASK-SEC-001 Security Boundary / Anti Prompt Injection Design, followed by
+TASK-SEC-002 Sensitive Data Inventory / Redaction Rules, before TASK-266 Owner
+Voice Gate Manual Mic Dry-run Policy.
+
+---
+
+## TASK-SEC-001 | Security Boundary / Anti Prompt Injection Design
+
+Status: DONE - DOCS-ONLY SECURITY BOUNDARY DESIGN
+
+### Goal
+
+Define the Dragon Pet AI security boundary before connecting Owner Voice Gate
+to Manual Mic or Conversation Mode runtime. The design covers anti prompt
+injection, indirect prompt injection, sensitive information protection,
+phishing and social engineering risks, private data leak prevention, and future
+tool permission boundaries.
+
+This task is docs-only. It does not modify backend runtime, frontend runtime,
+IPC, Manual Mic, Conversation Mode, STT, `/chat`, Pet Window, Output Queue, or
+Diagnostics behavior.
+
+### New Document
+
+- `docs/SECURITY_BOUNDARY_DESIGN.md`
+
+### Sensitive Data Categories
+
+- System, developer, internal prompts, hidden rules, and private agent
+  instructions.
+- API keys, tokens, credentials, `.env`, cookies, provider secrets, and
+  recovery codes.
+- Local paths, config files, backend data files, app settings, databases, and
+  private project layout details.
+- Owner Voice Gate centroid, embeddings, per-sample embeddings,
+  `owner_voice_gate_settings.json`, and voiceprint metadata.
+- Raw audio, base64 audio, waveforms, transcripts, chat logs, rejected speech,
+  diagnostics logs, debug dumps, and stack traces.
+- User diary data, personal memory, private project notes, local research
+  notes, and future webpage/PDF/file/email/browser/tool outputs.
+
+### Data Forbidden From LLM Context
+
+- Raw owner voice centroid vectors and raw embeddings.
+- `backend/data/owner_voice_gate_settings.json` and equivalent local voiceprint
+  settings.
+- API keys, tokens, passwords, cookies, credentials, `.env`, and provider
+  secrets.
+- Hidden prompts, internal rules, developer messages, policy text, and system
+  instructions.
+- Full local diagnostic dumps unless the user explicitly selects the exact data
+  and confirms sharing.
+- Unredacted private logs, full chat logs, full transcripts, user diary data,
+  personal memory, private project notes, or local database dumps.
+
+### Prompt Injection And Phishing Coverage
+
+- Direct prompt injection and attempts to reveal hidden prompts, secrets,
+  memory, local paths, config, or embeddings.
+- Indirect prompt injection from webpages, PDFs, files, emails, messages,
+  screenshots, OCR output, browser pages, documentation, issue trackers, and
+  retrieved documents.
+- Fake system/developer/admin/support/security messages inside pasted or
+  retrieved content.
+- Suspicious login links, verification code requests, token/password requests,
+  fake account suspension or payment messages, malicious attachments, domain
+  spoofing, shortened URLs, lookalike domains, and urgency/fear/reward bait.
+
+### Future Tool Permission Model
+
+Defined recommended tiers:
+
+- T0 safe read-only public information.
+- T1 user-selected local file read.
+- T2 sensitive file read requiring explicit confirmation.
+- T3 write/delete/execute/settings actions requiring explicit confirmation.
+- T4 email/message/post/upload/form submit requiring preview confirmation.
+- T5 URL open/download/browser automation requiring domain display and warning.
+- T6 secrets, voiceprint, hidden prompts, and internal rules forbidden from LLM
+  context.
+
+### Runtime Integration Preconditions
+
+Before Owner Voice Gate connects to Manual Mic or Conversation Mode runtime:
+
+- TASK-SEC-001 must be complete.
+- TASK-SEC-002 Sensitive Data Inventory / Redaction Rules must be complete.
+- Owner voice runtime integration remains opt-in and disabled by default.
+- Rejected speech must not enter `/chat`, LLM context, chat history,
+  diagnostics, Output Queue, Pet Bubble, or Pet runtime.
+- Rejected speech must not expose transcript, raw audio, waveform, candidate
+  embedding, or score details beyond safe local status.
+- Manual Mic and Conversation Mode integration each need separate dry-run
+  policy tasks and validation.
+
+### Recommended Sequence
+
+1. TASK-SEC-001 Security Boundary / Anti Prompt Injection Design.
+2. TASK-SEC-002 Sensitive Data Inventory / Redaction Rules.
+3. TASK-SEC-003 Prompt Injection Test Corpus.
+4. TASK-SEC-004 Tool Permission / User Confirmation Policy.
+5. TASK-SEC-005 Phishing / Link Safety Warning Layer.
+6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
+7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
+
+### Validation
+
+- `git diff --check`
+- `git status --short`
+
+No code tests required for this docs-only task.
 
 ---
 

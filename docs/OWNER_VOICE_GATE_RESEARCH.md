@@ -373,8 +373,13 @@ Future sequence:
 - TASK-262 Owner Voice Gate Calibration Probe.
 - TASK-263 Owner Voice Enrollment File Import / Centroid Storage.
 - TASK-264 Owner Voice Gate Verification Probe / Stored Centroid Scoring.
-- TASK-265 Owner Voice Gate Runtime Integration for Manual Mic.
-- TASK-266 Owner Voice Gate Runtime Integration for Conversation Mode.
+- TASK-SEC-001 Security Boundary / Anti Prompt Injection Design.
+- TASK-SEC-002 Sensitive Data Inventory / Redaction Rules.
+- TASK-SEC-003 Prompt Injection Test Corpus.
+- TASK-SEC-004 Tool Permission / User Confirmation Policy.
+- TASK-SEC-005 Phishing / Link Safety Warning Layer.
+- TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
+- TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
 
 Runtime remains unchanged by TASK-260.
 
@@ -549,8 +554,13 @@ Safety boundary remains unchanged:
 Recommended next tasks:
 
 - TASK-264 Owner Voice Gate Verification Probe / Stored Centroid Scoring.
-- TASK-265 Owner Voice Gate Runtime Integration for Manual Mic.
-- TASK-266 Owner Voice Gate Runtime Integration for Conversation Mode.
+- TASK-SEC-001 Security Boundary / Anti Prompt Injection Design.
+- TASK-SEC-002 Sensitive Data Inventory / Redaction Rules.
+- TASK-SEC-003 Prompt Injection Test Corpus.
+- TASK-SEC-004 Tool Permission / User Confirmation Policy.
+- TASK-SEC-005 Phishing / Link Safety Warning Layer.
+- TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
+- TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
 
 Do not jump to runtime gating until the explicit runtime task accepts the
 threshold strategy and keeps owner voice gate opt-in.
@@ -598,8 +608,13 @@ Safety boundary:
   Window, Output Queue, or Diagnostics Drawer runtime change.
 
 After TASK-264 smoke passes, TASK-265 adds the backend verification endpoint.
-After TASK-265, the next runtime step should be TASK-266 Manual Mic runtime gate,
-still opt-in and disabled by default.
+After TASK-265, security work must run before runtime wiring:
+TASK-SEC-001 Security Boundary / Anti Prompt Injection Design, TASK-SEC-002
+Sensitive Data Inventory / Redaction Rules, TASK-SEC-003 Prompt Injection Test
+Corpus, TASK-SEC-004 Tool Permission / User Confirmation Policy, and
+TASK-SEC-005 Phishing / Link Safety Warning Layer. The next owner voice runtime
+work should be TASK-266 Manual Mic dry-run policy, still opt-in and disabled by
+default.
 
 Windows stored-centroid smoke PASS:
 
@@ -653,4 +668,5 @@ PASS on 2026-06-04:
 
 ### Next task
 
-TASK-266 Manual Mic runtime gate, still opt-in and disabled by default.
+TASK-SEC-002 Sensitive Data Inventory / Redaction Rules, then TASK-266 Manual
+Mic dry-run policy, still opt-in and disabled by default.

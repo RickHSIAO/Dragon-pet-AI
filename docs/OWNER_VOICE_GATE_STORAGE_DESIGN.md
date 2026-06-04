@@ -629,8 +629,13 @@ Manual Mic / Conversation Mode WAV
 Runtime integration should be split by surface:
 
 - TASK-265: Backend verification endpoint (DONE — see Section 19).
-- TASK-266: Manual Mic gate.
-- TASK-267: Conversation Mode gate.
+- TASK-SEC-001: Security boundary / anti prompt injection design (DONE).
+- TASK-SEC-002: Sensitive data inventory / redaction rules.
+- TASK-SEC-003: Prompt injection test corpus.
+- TASK-SEC-004: Tool permission / user confirmation policy.
+- TASK-SEC-005: Phishing / link safety warning layer.
+- TASK-266: Manual Mic dry-run policy.
+- TASK-267: Conversation Mode dry-run policy.
 
 Both must be disabled by default until enrollment exists and the user explicitly
 enables the gate.
@@ -662,8 +667,13 @@ Diagnostics must not show:
 Recommended sequence:
 
 - TASK-265 Backend Verification Endpoint (DONE — Section 19)
-- TASK-266 Owner Voice Gate Runtime Integration for Manual Mic
-- TASK-267 Owner Voice Gate Runtime Integration for Conversation Mode
+- TASK-SEC-001 Security Boundary / Anti Prompt Injection Design (DONE)
+- TASK-SEC-002 Sensitive Data Inventory / Redaction Rules
+- TASK-SEC-003 Prompt Injection Test Corpus
+- TASK-SEC-004 Tool Permission / User Confirmation Policy
+- TASK-SEC-005 Phishing / Link Safety Warning Layer
+- TASK-266 Owner Voice Gate Manual Mic Dry-run Policy
+- TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy
 
 TASK-262 calibration is complete on Windows for the small smoke set. Runtime
 gating should still remain explicit, opt-in, and threshold-aware.
@@ -743,3 +753,9 @@ PASS on 2026-06-04:
   or candidate embedding in the response.
 
 Expected runtime result: unchanged.
+
+Before any Manual Mic or Conversation Mode runtime wiring, TASK-SEC-002 must
+inventory sensitive fields and define redaction rules. Rejected speech must not
+enter `/chat`, LLM context, diagnostics, Output Queue, Pet Bubble, or Pet
+runtime. The stored centroid remains sensitive biometric-like local data and is
+forbidden from LLM context, UI display, API responses, logs, and diagnostics.

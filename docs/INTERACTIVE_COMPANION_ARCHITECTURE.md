@@ -1,6 +1,6 @@
 # Interactive Companion Architecture Checkpoint
 
-**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-236 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS; TASK-237 IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS; TASK-263 DONE - Windows Unicode owner voice enrollment storage smoke PASS; TASK-264 DONE - Windows stored centroid verification smoke PASS; TASK-265 DONE - Windows backend verify-files smoke PASS
+**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-236 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS; TASK-237 IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS; TASK-263 DONE - Windows Unicode owner voice enrollment storage smoke PASS; TASK-264 DONE - Windows stored centroid verification smoke PASS; TASK-265 DONE - Windows backend verify-files smoke PASS; TASK-SEC-001 DONE - docs-only security boundary design
 **Date:** 2026-06-01
 **Scope:** Architecture checkpoint for TASK-214 through TASK-230.
 
@@ -66,6 +66,7 @@ user interaction
 | TASK-263 | Owner voice enrollment file import / centroid storage | Adds `.venv-funasr` enrollment sidecar, backend file-path enrollment endpoint, and Full App file-path enrollment controls. Stores final centroid only; no runtime gate. DONE - Windows Unicode smoke PASS. |
 | TASK-264 | Owner voice gate stored centroid verification probe | Adds script-only stored centroid scoring from existing WAV paths. No backend verify endpoint and no runtime gate. DONE - Windows stored centroid verify smoke PASS. |
 | TASK-265 | Owner voice gate backend verification endpoint | Adds `POST /owner-voice-gate/verify-files`. Calls `.venv-funasr` sidecar; returns score/accepted; centroid never in response; no runtime wiring. DONE - Windows backend verify-files smoke PASS. |
+| TASK-SEC-001 | Security boundary / anti prompt injection design | Defines sensitive data categories, data forbidden from LLM context, direct/indirect prompt injection and phishing risks, untrusted-content handling, tool permission tiers, redaction checks, and Owner Voice Gate runtime preconditions. DOCS ONLY. |
 | TASK-228 | Output queue runtime skeleton | Adds Full App renderer-only disabled queue skeleton, sanitized snapshot, priority/preemption helpers, and queue diagnostics preview. DONE - Windows visual smoke PASS. |
 | TASK-229 | Output queue debug preview | Polishes queue snapshot preview with Recent and safe Next summary. DONE - Windows visual smoke PASS. |
 | TASK-230 | Reaction bubble diagnostics enqueue | Enqueues safe reaction bubble ids into the disabled local output queue for diagnostics only. DONE - Windows visual smoke PASS. |
@@ -544,6 +545,12 @@ satisfied (see `docs/OUTPUT_QUEUE_RUNTIME_CHECKPOINT.md`, Section 10).
 
 Recommended next architecture phase:
 
+- Security boundary follow-up before Owner Voice Gate runtime wiring:
+  TASK-SEC-002 Sensitive Data Inventory / Redaction Rules, TASK-SEC-003 Prompt
+  Injection Test Corpus, TASK-SEC-004 Tool Permission / User Confirmation
+  Policy, and TASK-SEC-005 Phishing / Link Safety Warning Layer. Owner Voice
+  Gate Manual Mic and Conversation Mode work must remain opt-in, disabled by
+  default, and dry-run policy gated before blocking runtime behavior.
 - Renderer modularization in progress: TASK-238 (output queue module) DONE - WINDOWS VISUAL SMOKE PASS;
   TASK-239 (diagnostics drawer module) DONE - WINDOWS VISUAL SMOKE PASS;
   TASK-240 (Christina Desktop Pet Cutout Stage Foundation — transparent cutout CSS visual,
