@@ -17,6 +17,7 @@ The corpus is grounded in:
 - `docs/SECURITY_BOUNDARY_DESIGN.md`
 - `docs/SENSITIVE_DATA_REDACTION_RULES.md`
 - `docs/security/TOOL_PERMISSION_POLICY.md`
+- `docs/security/PHISHING_LINK_SAFETY_DESIGN.md`
 
 ## 2. Corpus Item Schema
 

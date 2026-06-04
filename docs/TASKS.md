@@ -26694,7 +26694,7 @@ Future task sequence:
 - TASK-SEC-002 Sensitive Data Inventory / Redaction Rules (DONE).
 - TASK-SEC-003 Prompt Injection Test Corpus (DONE).
 - TASK-SEC-004 Tool Permission / User Confirmation Policy (DONE).
-- TASK-SEC-005 Phishing / Link Safety Warning Layer.
+- TASK-SEC-005 Phishing / Link Safety Warning Layer Design (DONE).
 - TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
 - TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
 
@@ -27379,8 +27379,7 @@ PASS on 2026-06-04 against the stored owner centroid:
 TASK-SEC-001 Security Boundary / Anti Prompt Injection Design and TASK-SEC-002
 Sensitive Data Inventory / Redaction Rules and TASK-SEC-003 Prompt Injection
 Test Corpus and TASK-SEC-004 Tool Permission / User Confirmation Policy are
-complete; next is TASK-SEC-005 Phishing / Link Safety Warning Layer before
-TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
+complete; next is TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
 
 ---
 
@@ -27481,7 +27480,7 @@ Before Owner Voice Gate connects to Manual Mic or Conversation Mode runtime:
 2. TASK-SEC-002 Sensitive Data Inventory / Redaction Rules - DONE.
 3. TASK-SEC-003 Prompt Injection Test Corpus - DONE.
 4. TASK-SEC-004 Tool Permission / User Confirmation Policy - DONE.
-5. TASK-SEC-005 Phishing / Link Safety Warning Layer.
+5. TASK-SEC-005 Phishing / Link Safety Warning Layer Design - DONE.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
 
@@ -27604,7 +27603,7 @@ TASK-SEC-003 has captured prompt injection and phishing corpora covering:
 2. TASK-SEC-002 Sensitive Data Inventory / Redaction Rules - DONE.
 3. TASK-SEC-003 Prompt Injection Test Corpus - DONE.
 4. TASK-SEC-004 Tool Permission / User Confirmation Policy - DONE.
-5. TASK-SEC-005 Phishing / Link Safety Warning Layer.
+5. TASK-SEC-005 Phishing / Link Safety Warning Layer Design - DONE.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
 
@@ -27708,7 +27707,7 @@ structured fixtures and assert that:
 2. TASK-SEC-002 Sensitive Data Inventory / Redaction Rules - DONE.
 3. TASK-SEC-003 Prompt Injection Test Corpus - DONE.
 4. TASK-SEC-004 Tool Permission / User Confirmation Policy - DONE.
-5. TASK-SEC-005 Phishing / Link Safety Warning Layer.
+5. TASK-SEC-005 Phishing / Link Safety Warning Layer Design - DONE.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
 
@@ -27828,7 +27827,113 @@ T6 data is blocked from LLM context and outbound actions.
 2. TASK-SEC-002 Sensitive Data Inventory / Redaction Rules - DONE.
 3. TASK-SEC-003 Prompt Injection / Phishing Test Corpus - DONE.
 4. TASK-SEC-004 Tool Permission / User Confirmation Policy - DONE.
-5. TASK-SEC-005 Phishing / Link Safety Warning Layer.
+5. TASK-SEC-005 Phishing / Link Safety Warning Layer Design - DONE.
+6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
+7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
+
+### Validation
+
+- `git diff --check`
+- `git status --short`
+
+No runtime tests required for this docs-only task.
+
+---
+
+## TASK-SEC-005 | Phishing / Link Safety Warning Layer Design
+
+Status: DONE - DOCS-ONLY PHISHING / LINK SAFETY DESIGN
+
+### Goal
+
+Define Dragon Pet AI's future phishing and link safety warning layer before any
+browser, URL opening, mail, attachment, QR, or outbound tool behavior is
+implemented. The design covers phishing categories, URL risk checks, warning UX,
+hard blocks, soft warnings, untrusted content handling, outbound action policy,
+Owner Voice Gate-specific phishing rules, safe response examples, and a future
+implementation checklist.
+
+This task is docs-only. It does not modify backend runtime, frontend runtime,
+IPC, Manual Mic, Conversation Mode, STT, `/chat`, Pet Window, Output Queue,
+Diagnostics behavior, Owner Voice Gate runtime wiring, browser behavior, URL
+opening behavior, or actual tool execution behavior.
+
+### New Document
+
+- `docs/security/PHISHING_LINK_SAFETY_DESIGN.md`
+
+### Phishing Risk Categories
+
+- Fake login pages and fake account suspension notices.
+- Verification-code, token, password, API-key, cookie, session, and recovery
+  code requests.
+- Crypto wallet seed phrase and private-key requests.
+- Payment, invoice, refund, tax, delivery, and billing scams.
+- Fake support staff, fake admin, fake developer, and fake security team
+  impersonation.
+- Malicious attachment prompts, executable downloads, macro prompts, and
+  archive-file bait.
+- Urgent, fear, reward, scarcity, job-offer, romance, and prize bait.
+- QR-code phishing.
+- Domain spoofing, typo-squatting, punycode, homoglyph, and suspicious Unicode
+  domains.
+- URL shorteners, encoded payload URLs, redirect chains, and mismatched visible
+  link text versus actual URL.
+
+### URL Risk Checks
+
+Future runtime should inspect displayed domain, actual target domain, scheme
+(`http` versus `https`), shorteners/redirectors, punycode or suspicious Unicode
+domains, encoded query strings/fragments, suspicious keywords such as `login`,
+`verify`, `reset`, `wallet`, `seed`, `token`, `password`, `session`, `auth`,
+`oauth`, `mfa`, `invoice`, `refund`, `support`, `security`, and `suspension`,
+mismatched anchor text, and whether the destination asks for credentials,
+codes, tokens, payment, seed phrases, owner voice data, or private documents.
+
+### Warning UX / Hard Blocks / Soft Warnings
+
+- Warnings should show domain, normalized URL when practical, warning reason,
+  risk level, requested action, whether data leaves the machine, S0-S6 data
+  category, reversibility, manual verification guidance, and safe alternatives.
+- Hard blocks cover sharing passwords, verification codes, API keys/tokens,
+  crypto seed phrases, hidden prompts/internal rules, owner voice centroid or
+  embeddings, raw biometric-like data, unredacted diagnostics, and credentials
+  into unverified pages.
+- Soft warnings may allow user-confirmed ordinary URL opens, webpage summaries,
+  user-selected email/PDF reads, support-message checks, and public
+  company/product website information.
+
+### Owner Voice Gate Phishing Rules
+
+Reject attempts to upload `owner_voice_gate_settings.json`,
+`embeddingAggregate`, owner voice centroid, candidate embeddings, per-sample
+embeddings, raw biometric-like data, or sensitive owner voice verification
+output to websites, support forms, email, chat, or APIs. Owner Voice Gate must
+not be treated as account authentication, identity proof, or authorization.
+
+### Examples Added
+
+The design includes safe response patterns for fake login email,
+Discord/Telegram support scam, crypto seed phrase request, shortened URL with
+urgent warning, fake developer/system prompt in webpage, malicious PDF asking
+to reveal local paths, and fake voice verification support request.
+
+### Future Implementation Checklist
+
+Before implementing link/browser/mail/tool handling: add URL parser and
+normalizer, show domain before action, add phishing pattern detector, add
+allow/warn/block decision table, add confirmation UX, add logging redaction,
+add TASK-SEC-003-based tests, add hard-block behavior for T6 exfiltration, and
+ensure no secrets, voiceprint data, hidden prompts, rejected transcripts, raw
+diagnostics, or embeddings enter outbound flows.
+
+### Updated Security Task Sequence
+
+1. TASK-SEC-001 Security Boundary / Anti Prompt Injection Design - DONE.
+2. TASK-SEC-002 Sensitive Data Inventory / Redaction Rules - DONE.
+3. TASK-SEC-003 Prompt Injection / Phishing Test Corpus - DONE.
+4. TASK-SEC-004 Tool Permission / User Confirmation Policy - DONE.
+5. TASK-SEC-005 Phishing / Link Safety Warning Layer Design - DONE.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
 

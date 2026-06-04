@@ -580,7 +580,12 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   prompt-injection interaction rules, audit/logging rules, and future
   implementation checklist. No runtime or actual tool execution behavior
   changed.
-- TASK-SEC-005 — Phishing / Link Safety Warning Layer
+- TASK-SEC-005 DONE - DOCS-ONLY PHISHING / LINK SAFETY DESIGN (2026-06-04):
+  Added `docs/security/PHISHING_LINK_SAFETY_DESIGN.md`. Defines phishing risk
+  categories, URL risk checks, warning UX, hard blocks, soft warnings,
+  untrusted-content handling, outbound action policy, Owner Voice Gate-specific
+  phishing rules, safe response examples, and future implementation checklist.
+  No runtime, browser, URL opening, or actual tool execution behavior changed.
 - TASK-266 — Owner Voice Gate Manual Mic Dry-run Policy
 - TASK-267 — Owner Voice Gate Conversation Mode Dry-run Policy
 

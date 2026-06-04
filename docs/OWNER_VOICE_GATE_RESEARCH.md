@@ -377,7 +377,7 @@ Future sequence:
 - TASK-SEC-002 Sensitive Data Inventory / Redaction Rules (DONE).
 - TASK-SEC-003 Prompt Injection Test Corpus (DONE).
 - TASK-SEC-004 Tool Permission / User Confirmation Policy (DONE).
-- TASK-SEC-005 Phishing / Link Safety Warning Layer.
+- TASK-SEC-005 Phishing / Link Safety Warning Layer Design (DONE).
 - TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
 - TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
 
@@ -558,7 +558,7 @@ Recommended next tasks:
 - TASK-SEC-002 Sensitive Data Inventory / Redaction Rules (DONE).
 - TASK-SEC-003 Prompt Injection Test Corpus (DONE).
 - TASK-SEC-004 Tool Permission / User Confirmation Policy (DONE).
-- TASK-SEC-005 Phishing / Link Safety Warning Layer.
+- TASK-SEC-005 Phishing / Link Safety Warning Layer Design (DONE).
 - TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
 - TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
 
@@ -612,9 +612,9 @@ After TASK-265, security work must run before runtime wiring:
 TASK-SEC-001 Security Boundary / Anti Prompt Injection Design, TASK-SEC-002
 Sensitive Data Inventory / Redaction Rules (DONE), TASK-SEC-003 Prompt Injection Test
 Corpus (DONE), TASK-SEC-004 Tool Permission / User Confirmation Policy (DONE), and
-TASK-SEC-005 Phishing / Link Safety Warning Layer. The next owner voice runtime
-work should be TASK-266 Manual Mic dry-run policy, still opt-in and disabled by
-default.
+TASK-SEC-005 Phishing / Link Safety Warning Layer Design (DONE). The next owner
+voice runtime work should be TASK-266 Manual Mic dry-run policy, still opt-in
+and disabled by default.
 
 Windows stored-centroid smoke PASS:
 
@@ -668,5 +668,4 @@ PASS on 2026-06-04:
 
 ### Next task
 
-TASK-SEC-005 Phishing / Link Safety Warning Layer, then TASK-266 Manual Mic
-dry-run policy, still opt-in and disabled by default.
+TASK-266 Manual Mic dry-run policy, still opt-in and disabled by default.

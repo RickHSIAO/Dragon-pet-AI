@@ -21,6 +21,7 @@ Related docs:
 - `docs/SECURITY_BOUNDARY_DESIGN.md`
 - `docs/SENSITIVE_DATA_REDACTION_RULES.md`
 - `docs/security/PROMPT_INJECTION_TEST_CORPUS.md`
+- `docs/security/PHISHING_LINK_SAFETY_DESIGN.md`
 
 ## 2. Permission Tier Summary
 
@@ -303,7 +304,7 @@ Before implementing any tool action:
 2. TASK-SEC-002 Sensitive Data Inventory / Redaction Rules - DONE.
 3. TASK-SEC-003 Prompt Injection / Phishing Test Corpus - DONE.
 4. TASK-SEC-004 Tool Permission / User Confirmation Policy - DONE.
-5. TASK-SEC-005 Phishing / Link Safety Warning Layer.
+5. TASK-SEC-005 Phishing / Link Safety Warning Layer Design - DONE.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
 

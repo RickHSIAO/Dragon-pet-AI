@@ -22,6 +22,8 @@ Prompt injection and phishing corpus cases are defined in
 `docs/security/PROMPT_INJECTION_TEST_CORPUS.md` (TASK-SEC-003).
 Tool permission and confirmation policy is defined in
 `docs/security/TOOL_PERMISSION_POLICY.md` (TASK-SEC-004).
+Phishing and link safety warning design is defined in
+`docs/security/PHISHING_LINK_SAFETY_DESIGN.md` (TASK-SEC-005).
 
 ## 2. Sensitive Data Categories
 
@@ -226,7 +228,7 @@ runtime, all of the following must be complete:
 2. TASK-SEC-002 Sensitive Data Inventory / Redaction Rules - DONE.
 3. TASK-SEC-003 Prompt Injection Test Corpus - DONE.
 4. TASK-SEC-004 Tool Permission / User Confirmation Policy - DONE.
-5. TASK-SEC-005 Phishing / Link Safety Warning Layer.
+5. TASK-SEC-005 Phishing / Link Safety Warning Layer Design - DONE.
 6. TASK-266 Owner Voice Gate Manual Mic Dry-run Policy.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy.
 

@@ -633,7 +633,7 @@ Runtime integration should be split by surface:
 - TASK-SEC-002: Sensitive data inventory / redaction rules (DONE).
 - TASK-SEC-003: Prompt injection test corpus (DONE).
 - TASK-SEC-004: Tool permission / user confirmation policy (DONE).
-- TASK-SEC-005: Phishing / link safety warning layer.
+- TASK-SEC-005: Phishing / link safety warning layer design (DONE).
 - TASK-266: Manual Mic dry-run policy.
 - TASK-267: Conversation Mode dry-run policy.
 
@@ -671,7 +671,7 @@ Recommended sequence:
 - TASK-SEC-002 Sensitive Data Inventory / Redaction Rules (DONE)
 - TASK-SEC-003 Prompt Injection Test Corpus (DONE)
 - TASK-SEC-004 Tool Permission / User Confirmation Policy (DONE)
-- TASK-SEC-005 Phishing / Link Safety Warning Layer
+- TASK-SEC-005 Phishing / Link Safety Warning Layer Design (DONE)
 - TASK-266 Owner Voice Gate Manual Mic Dry-run Policy
 - TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy
 
