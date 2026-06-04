@@ -58,6 +58,7 @@ user interaction
 | TASK-225 | Persona context pack | Adds Christina persona source, safe adaptation, strength levels, and runtime boundary. DOCS ONLY. |
 | TASK-226 | Output queue / priority design | Defines future output arbitration priorities and preemption rules. DOCS ONLY. |
 | TASK-227 | Voice/TTS research | Records local-first speech roadmap, provider candidates, and speech safety boundaries. DOCS ONLY. |
+| TASK-258 | Owner voice gate research | Evaluates local speaker verification before STT as a future convenience filter. RESEARCH ONLY / NO RUNTIME CHANGE. |
 | TASK-228 | Output queue runtime skeleton | Adds Full App renderer-only disabled queue skeleton, sanitized snapshot, priority/preemption helpers, and queue diagnostics preview. DONE - Windows visual smoke PASS. |
 | TASK-229 | Output queue debug preview | Polishes queue snapshot preview with Recent and safe Next summary. DONE - Windows visual smoke PASS. |
 | TASK-230 | Reaction bubble diagnostics enqueue | Enqueues safe reaction bubble ids into the disabled local output queue for diagnostics only. DONE - Windows visual smoke PASS. |
@@ -469,6 +470,7 @@ expression/reaction bubble regression.
 
 The current system does not yet implement:
 
+- Owner voice gate runtime.
 - Relationship state.
 - Idle reaction policy.
 - LLM-based proactive reaction.
@@ -657,6 +659,13 @@ Recommended next architecture phase:
 - TASK-256b DONE - WINDOWS DIAGNOSTICS READABILITY SMOKE PASS (2026-06-04):
   CSS-only: diagnostics display 10px → 13px, line-height 1.55, max-height 340px. Tuning labels/
   hints ≥ 12px. Panel padding/spacing increased. Windows smoke PASS. Follow-up: TASK-257 DONE - WINDOWS PET WINDOW CLICK/SHOW SMOKE PASS (2026-06-04).
+- TASK-258 RESEARCH - OWNER VOICE GATE FEASIBILITY / NO RUNTIME CHANGE (2026-06-04):
+  Adds `docs/OWNER_VOICE_GATE_RESEARCH.md`. Future architecture candidate: explicit owner enrollment
+  creates local speaker embeddings, stores only embeddings, then Manual Mic / Conversation Mode WAV
+  can be checked before STT. Pass continues to existing STT -> correctedTranscript -> `/chat`; fail
+  discards audio in memory with no STT, no `/chat`, and no history. Recommended first probe:
+  FunASR CAM++ / 3D-Speaker in `.venv-funasr`; fallbacks: sherpa-onnx and SpeechBrain ECAPA-TDNN.
+  This is a convenience filter, not security-grade authentication.
 - Relationship state.
 - Mood / attention / energy state beyond the local preview foundation.
 - Idle reaction policy.

@@ -26417,7 +26417,70 @@ Diagnostics: sttWarmupStatus, sttWarmupLatencyMs, ollamaWarmupStatus, ollamaWarm
 No IPC (use renderer fetch), no always-listening, no raw audio, no Pet Window / Output Queue changes.
 
 **TASK-258 — Owner Voice Gate Research / Local Speaker Verification Feasibility:**
-Research/feasibility spike only — no runtime changes. Evaluate local speaker verification/embedding models. Goal: owner-voice gate for Manual Mic / Conversation Mode (convenience filter, not security-grade). No raw audio saved. No main voice pipeline changes.
+Status: RESEARCH - OWNER VOICE GATE FEASIBILITY / NO RUNTIME CHANGE (2026-06-04)
+
+Research/feasibility spike only — no runtime changes. Added
+`docs/OWNER_VOICE_GATE_RESEARCH.md` to evaluate local speaker verification /
+speaker embedding models for a future owner-voice gate before STT.
+
+Goal: optional convenience filter for Manual Mic / Conversation Mode that can
+reject obvious non-owner speech before STT. This is not security-grade
+authentication.
+
+Safety boundary:
+
+- No Manual Mic runtime change.
+- No Conversation Mode runtime change.
+- No `/stt/transcribe` behavior change.
+- No `/chat` schema change.
+- No always listening or background monitoring.
+- No mic access, recording, or raw audio persistence.
+- No formal voiceprint storage.
+- No new IPC channel.
+- No Pet Window, Output Queue, or Diagnostics Drawer change.
+- No commit / push.
+
+Research summary:
+
+- Future architecture should enroll owner voice through explicit user action,
+  compute local speaker embeddings, store only embeddings + metadata, discard raw
+  audio, and gate Manual Mic / Conversation Mode WAV before STT.
+- Pass path: speaker gate pass -> STT -> normalized/corrected transcript ->
+  existing send flow -> `/chat`.
+- Fail path: discard in-memory audio bytes; no STT, no `/chat`, no history, no
+  transcript preview.
+- First recommended probe: FunASR CAM++ / 3D-Speaker in `.venv-funasr` Python
+  3.10, because the current project already has a working local FunASR sidecar
+  with torch CPU.
+- Fallback candidates: sherpa-onnx speaker identification and SpeechBrain
+  ECAPA-TDNN.
+- Not recommended for the first implementation: pyannote.audio and NVIDIA NeMo,
+  because they are heavier than needed for a desktop convenience gate.
+
+Candidate comparison covered:
+
+- SpeechBrain speaker verification.
+- pyannote.audio.
+- NVIDIA NeMo speaker verification / diarization.
+- Resemblyzer.
+- WeSpeaker / wespeakerruntime.
+- 3D-Speaker / FunASR CAM++ speaker embedding.
+- sherpa-onnx speaker identification.
+
+Recommended future tasks:
+
+- TASK-259 Owner Voice Enrollment UI.
+- TASK-260 Owner Voice Gate Probe / Offline Embedding Test.
+- TASK-261 Owner Voice Gate for Manual Mic / Conversation Mode.
+
+Open questions:
+
+- Threshold tuning.
+- False reject / false accept balance.
+- Noisy room behavior.
+- Multi-speaker and TV background behavior.
+- Reset/delete voiceprint UX.
+- Replay, voice changer, and AI voice clone warning copy.
 
 ---
 

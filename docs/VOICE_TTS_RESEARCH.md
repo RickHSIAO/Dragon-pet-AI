@@ -437,7 +437,16 @@ Suggested research and implementation tasks:
   accuracy. Must be guarded by explicit user opt-in and must not replace the deterministic
   layer from TASK-247/248.
 
-TASK-257 DONE - WINDOWS PET WINDOW CLICK/SHOW SMOKE PASS (2026-06-04): Pet Window Click / Show Pet Idempotent Behavior. Next: TASK-258 Owner Voice Gate Research / Local Speaker Verification Feasibility.
+TASK-257 DONE - WINDOWS PET WINDOW CLICK/SHOW SMOKE PASS (2026-06-04): Pet Window Click / Show Pet Idempotent Behavior.
+
+- **TASK-258 Owner Voice Gate Research. RESEARCH - OWNER VOICE GATE FEASIBILITY / NO RUNTIME CHANGE (2026-06-04):**
+  Adds `docs/OWNER_VOICE_GATE_RESEARCH.md`. Evaluates local speaker verification / speaker
+  embedding options for a future owner voice gate before STT. Recommended first probe:
+  FunASR CAM++ / 3D-Speaker in `.venv-funasr` Python 3.10; fallbacks: sherpa-onnx speaker
+  identification and SpeechBrain ECAPA-TDNN. Boundary: convenience filter only, not
+  security-grade authentication; no runtime wiring, no mic access, no raw audio persistence,
+  no `/stt/transcribe` or `/chat` change, no IPC, no Pet Window / Output Queue / Diagnostics
+  Drawer change.
 
 Each future task must explicitly define safety boundaries, user controls,
 provider scope, queue priority, and no-regression checks.
@@ -454,6 +463,7 @@ Related docs:
 - `docs/INTERACTIVE_COMPANION_ARCHITECTURE.md`
 - `docs/INTERACTION_OUTPUT_QUEUE_DESIGN.md`
 - `docs/CHRISTINA_PERSONA_CONTEXT_PACK.md`
+- `docs/OWNER_VOICE_GATE_RESEARCH.md`
 
 Relationship:
 
@@ -461,6 +471,8 @@ Relationship:
 - Output queue controls timing, priority, and interruption rules.
 - Voice/TTS research controls provider candidates, licensing, and local-first
   roadmap.
+- Owner voice gate research controls the future speaker-verification feasibility
+  boundary and candidate comparison.
 - None of these docs wire runtime behavior by themselves.
 
 ---

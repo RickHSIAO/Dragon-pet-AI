@@ -449,7 +449,16 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 - TASK-257 DONE - WINDOWS PET WINDOW CLICK/SHOW SMOKE PASS (2026-06-04): Pet Window Click / Show Pet Idempotent Behavior. Defensive code: `event.stopPropagation()` added to `#pet-drag-region` click handler in `pet-renderer.js` — avatar click restores presence, never hides. `showPetWindow()` idempotent: always show/focus, restore() if minimized, recreate if null/destroyed. `showPetWindowFromFullApp()` no toggle. Hide only via explicit `PET_HIDE_WINDOW_CHANNEL` (context menu). X button permanently CSS-hidden. Windows smoke PASS: Show Pet (visible/hidden/minimized) PASS; left-click avatar no hide PASS; explicit Hide PASS; Pet bubble/expression/reaction/Full App chat/Voice/Output Queue/Diagnostics Drawer regression PASS. 10 pet-window-smoke + 5 pet-renderer-smoke tests (92+290 PASS). Pytest 166/166; stt_provider_smoke 116/116. No STT/FunASR/warmup//chat/Voice/Output Queue/Diagnostics Drawer changes.
 
 **Next planned tasks:**
-- TASK-258 — Owner Voice Gate Research / Local Speaker Verification Feasibility
+- TASK-258 RESEARCH - OWNER VOICE GATE FEASIBILITY / NO RUNTIME CHANGE (2026-06-04): Added
+  `docs/OWNER_VOICE_GATE_RESEARCH.md`. Evaluates local speaker verification / speaker embedding
+  for a future owner-voice convenience gate before STT. Recommended first probe: FunASR CAM++ /
+  3D-Speaker in `.venv-funasr` Python 3.10; fallbacks: sherpa-onnx speaker identification and
+  SpeechBrain ECAPA-TDNN. Not security-grade authentication. No Manual Mic, Conversation Mode,
+  `/stt/transcribe`, `/chat`, IPC, Pet Window, Output Queue, Diagnostics Drawer, mic, recording,
+  raw audio, or storage runtime change.
+- TASK-259 — Owner Voice Enrollment UI
+- TASK-260 — Owner Voice Gate Probe / Offline Embedding Test
+- TASK-261 — Owner Voice Gate for Manual Mic / Conversation Mode
 
 - TASK-256b DONE - WINDOWS DIAGNOSTICS READABILITY SMOKE PASS (2026-06-04): Diagnostics / Voice Panel Readability Polish. CSS-only change: `.voice-diagnostics-display` 10px → 13px, `line-height` 1.55, `max-height` 200px → 340px; `.voice-diagnostics-summary` 12px → 14px + font-weight 500; `.voice-diagnostics-panel` padding 4→8px; `.voice-tuning-label/input/select` 11px → 13px; `.voice-tuning-hint/voice-preview-hint/status` 10px → 12px; `.voice-preview-play-btn` 11px → 13px; `.voice-preview-audio-el` 28px → 32px. Windows smoke PASS: diagnostics readability improved, text/spacing/panel height all visibly better. No STT/warmup/IPC/Pet Window/Output Queue runtime changes. 10 new renderer CSS smoke tests PASS.
 
