@@ -520,6 +520,70 @@ check(len(missing) == 0,
 _os.environ.pop("DRAGON_PET_FUNASR_PERSISTENT", None)
 
 # ---------------------------------------------------------------------------
+# TASK-259: Owner Voice Gate probe static safety checks
+# ---------------------------------------------------------------------------
+print("\n[10/10] TASK-259 - Owner Voice Gate probe static safety")
+probe_path = _os.path.join(REPO_ROOT, "scripts", "owner_voice_gate_probe.py")
+owner_voice_doc = _os.path.join(REPO_ROOT, "docs", "OWNER_VOICE_GATE_RESEARCH.md")
+
+check(_os.path.isfile(probe_path),
+      f"owner_voice_gate_probe.py exists: {probe_path}")
+
+try:
+    with open(probe_path, "r", encoding="utf-8") as f:
+        probe_source = f.read()
+except OSError as exc:
+    probe_source = ""
+    _fail(f"could not read owner_voice_gate_probe.py: {exc}")
+
+check("argparse" in probe_source,
+      "probe uses argparse file-path CLI")
+check("json.dumps" in probe_source,
+      "probe writes JSON report")
+check("rawAudioPersisted" in probe_source and "embeddingPersisted" in probe_source,
+      "probe report includes persistence safety fields")
+check("--enroll-a" in probe_source and "--verify-a" in probe_source,
+      "probe accepts enrollment and verification WAV paths")
+
+for forbidden in (
+    "getUserMedia",
+    "MediaRecorder",
+    "navigator.mediaDevices",
+    "ipcRenderer",
+    "ipcMain",
+    "stt:transcribe",
+    "/stt/transcribe",
+    "/chat",
+    "NamedTemporaryFile",
+    "mkdtemp",
+    "write_bytes",
+    "shutil.copy",
+    "save_dir",
+):
+    check(forbidden not in probe_source,
+          f"probe source does not contain forbidden token {forbidden!r}")
+
+check(_os.path.isfile(owner_voice_doc),
+      "OWNER_VOICE_GATE_RESEARCH.md exists")
+try:
+    with open(owner_voice_doc, "r", encoding="utf-8") as f:
+        owner_voice_text = f.read()
+except OSError as exc:
+    owner_voice_text = ""
+    _fail(f"could not read OWNER_VOICE_GATE_RESEARCH.md: {exc}")
+
+check("TASK-259" in owner_voice_text,
+      "owner voice research doc records TASK-259")
+check("No Manual Mic runtime change" in owner_voice_text,
+      "owner voice research doc preserves Manual Mic boundary")
+check("No Conversation Mode runtime change" in owner_voice_text,
+      "owner voice research doc preserves Conversation Mode boundary")
+check("No raw audio persistence" in owner_voice_text,
+      "owner voice research doc preserves raw audio boundary")
+check("not security-grade" in owner_voice_text,
+      "owner voice research doc keeps convenience-filter limitation")
+
+# ---------------------------------------------------------------------------
 # Clean up env so test leaves no side effects
 # ---------------------------------------------------------------------------
 os.environ.pop("DRAGON_PET_STT_PROVIDER", None)
@@ -531,8 +595,8 @@ print()
 print("=" * 65)
 print(f"  {_pass_count} PASS  {_fail_count} FAIL")
 if _fail_count == 0:
-    print("  TASK-249/250/253/253rev/254/256 STT Provider Smoke: PASS")
+    print("  TASK-249/250/253/253rev/254/256/259 STT Provider Smoke: PASS")
 else:
-    print("  TASK-249/250/253/253rev/254/256 STT Provider Smoke: FAIL")
+    print("  TASK-249/250/253/253rev/254/256/259 STT Provider Smoke: FAIL")
 print("=" * 65)
 sys.exit(0 if _fail_count == 0 else 1)

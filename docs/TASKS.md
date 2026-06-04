@@ -26469,8 +26469,8 @@ Candidate comparison covered:
 
 Recommended future tasks:
 
-- TASK-259 Owner Voice Enrollment UI.
-- TASK-260 Owner Voice Gate Probe / Offline Embedding Test.
+- TASK-259 Owner Voice Gate Probe / Offline Embedding Test.
+- TASK-260 Owner Voice Gate Enrollment Storage Design / Threshold Multi-Sample Probe.
 - TASK-261 Owner Voice Gate for Manual Mic / Conversation Mode.
 
 Open questions:
@@ -26481,6 +26481,118 @@ Open questions:
 - Multi-speaker and TV background behavior.
 - Reset/delete voiceprint UX.
 - Replay, voice changer, and AI voice clone warning copy.
+
+**TASK-259 — Owner Voice Gate Probe / Offline Embedding Test:**
+Status: DONE - WINDOWS OWNER VOICE PROBE SMOKE PASS (2026-06-04)
+
+Implemented `scripts/owner_voice_gate_probe.py` as a local-only, file-path-only
+speaker embedding probe for `.venv-funasr` Python 3.10. This is a feasibility
+probe only and is not connected to runtime.
+
+Design summary:
+
+- Default provider: `funasr-campp`.
+- Default model id: `iic/speech_campplus_sv_zh-cn_16k-common`; fallback model id:
+  `damo/speech_campplus_sv_zh-cn_16k-common`.
+- Default execution with no audio arguments is dependency check only.
+- `--check-only` prints a clean JSON dependency report.
+- `--load-model` attempts a local-cache-only model load.
+- `--allow-download` is required before model download/update is allowed.
+- Audio mode accepts existing mono 16 kHz PCM WAV paths only:
+  `--enroll-a`, `--verify-a`, optional `--verify-b`.
+- Embeddings are extracted in memory and compared with cosine similarity.
+- JSON output includes shape/dimension and similarity scores only; it never
+  prints full embedding vectors.
+
+Current local dependency result from `.venv-funasr`:
+
+- Python 3.10.11.
+- `torchAvailable=true`, `torchVersion=2.12.0+cpu`, `cudaAvailable=false`.
+- `funasrAvailable=true`.
+- `modelscopeAvailable=true`.
+- `numpyAvailable=true`.
+- `soundfileAvailable=true`.
+- `modelLoaded=false` for `--check-only`.
+
+Safety boundary:
+
+- No Manual Mic runtime change.
+- No Conversation Mode runtime change.
+- No `/stt/transcribe` behavior change.
+- No `/chat` schema change.
+- No IPC channel.
+- No microphone access.
+- No recording.
+- No raw audio persistence.
+- No formal voiceprint storage.
+- No always listening / background monitoring.
+- No Pet Window runtime change.
+- No Output Queue or Diagnostics Drawer change.
+- No commit / push.
+
+Smoke/static checks added to `scripts/stt_provider_smoke.py`:
+
+- Probe file exists.
+- Probe uses argparse and JSON output.
+- Probe report includes raw audio / embedding persistence safety fields.
+- Probe accepts enrollment and verification WAV path flags.
+- Probe source excludes `getUserMedia`, `MediaRecorder`, `navigator.mediaDevices`,
+  IPC tokens, `/stt/transcribe`, `/chat`, temp-file helpers, copy helpers, and `save_dir`.
+- Owner voice research doc records TASK-259 and safety boundaries.
+
+Validation commands:
+
+- `.venv-funasr\Scripts\python.exe scripts\owner_voice_gate_probe.py --help` PASS.
+- `.venv-funasr\Scripts\python.exe scripts\owner_voice_gate_probe.py --check-only` PASS.
+
+Windows owner voice probe smoke result:
+
+- provider: `funasr-campp`
+- modelId: `iic/speech_campplus_sv_zh-cn_16k-common`
+- status: `ok`
+- reason: `embedding_probe_complete`
+- modelLoaded: `true`
+- modelLoadSeconds: 10.425
+- embeddingDim: 192
+- ownerScore: 0.9232
+- otherScore: 0.052
+- thresholdSuggestion: 0.65
+- rawAudioPersisted: `false`
+- embeddingPersisted: `false`
+- micAccessed: `false`
+- runtimeIntegrated: `false`
+- Python: 3.10.11
+- torch: 2.12.0+cpu
+- CUDA: `false`
+
+Audio validation:
+
+- `owner1.wav`: 10.581 s, mono, 16 kHz, PCM WAV, valid.
+- `owner2.wav`: 12.181 s, mono, 16 kHz, PCM WAV, valid.
+- `other.wav`: 12.075 s, mono, 16 kHz, PCM WAV, valid.
+
+Closeout conclusion:
+
+- Offline owner voice probe PASS.
+- CAM++ model can load locally under `.venv-funasr` Python 3.10.
+- 192-dimensional speaker embedding works.
+- ownerScore 0.9232 vs otherScore 0.052 gives strong owner/non-owner separation
+  in this smoke.
+- thresholdSuggestion 0.65 looks reasonable for the first pass.
+- Probe remains offline and file-based.
+- No mic access, no raw audio persistence, no embedding persistence.
+- No runtime integration occurred.
+- Manual Mic / Conversation Mode / STT / chat flow unchanged.
+
+Recommended next task:
+
+- TASK-260 Owner Voice Gate Enrollment Storage Design, or
+- TASK-260 Owner Voice Gate Threshold / Multi-Sample Probe.
+
+Next design should cover enrollment sample count, local embedding storage format,
+reset/delete voiceprint UX, threshold tuning, false accept / false reject
+diagnostics, no raw audio persistence, and convenience-filter-not-security-auth
+product copy.
 
 ---
 

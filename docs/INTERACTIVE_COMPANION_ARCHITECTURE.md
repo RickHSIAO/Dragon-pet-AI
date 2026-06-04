@@ -59,6 +59,7 @@ user interaction
 | TASK-226 | Output queue / priority design | Defines future output arbitration priorities and preemption rules. DOCS ONLY. |
 | TASK-227 | Voice/TTS research | Records local-first speech roadmap, provider candidates, and speech safety boundaries. DOCS ONLY. |
 | TASK-258 | Owner voice gate research | Evaluates local speaker verification before STT as a future convenience filter. RESEARCH ONLY / NO RUNTIME CHANGE. |
+| TASK-259 | Owner voice gate probe | Adds offline file-path-only speaker embedding probe; no runtime integration. DONE - Windows owner voice probe smoke PASS. |
 | TASK-228 | Output queue runtime skeleton | Adds Full App renderer-only disabled queue skeleton, sanitized snapshot, priority/preemption helpers, and queue diagnostics preview. DONE - Windows visual smoke PASS. |
 | TASK-229 | Output queue debug preview | Polishes queue snapshot preview with Recent and safe Next summary. DONE - Windows visual smoke PASS. |
 | TASK-230 | Reaction bubble diagnostics enqueue | Enqueues safe reaction bubble ids into the disabled local output queue for diagnostics only. DONE - Windows visual smoke PASS. |
@@ -666,6 +667,15 @@ Recommended next architecture phase:
   discards audio in memory with no STT, no `/chat`, and no history. Recommended first probe:
   FunASR CAM++ / 3D-Speaker in `.venv-funasr`; fallbacks: sherpa-onnx and SpeechBrain ECAPA-TDNN.
   This is a convenience filter, not security-grade authentication.
+- TASK-259 DONE - WINDOWS OWNER VOICE PROBE SMOKE PASS (2026-06-04):
+  Adds `scripts/owner_voice_gate_probe.py` as an offline probe only. It accepts existing WAV
+  file paths, checks `.venv-funasr` dependencies, optionally loads FunASR CAM++ from local cache,
+  and reports embedding dimension / cosine similarity in JSON. Windows smoke PASS: CAM++ model
+  `iic/speech_campplus_sv_zh-cn_16k-common` loaded locally, 192-dim embeddings extracted,
+  ownerScore 0.9232 vs otherScore 0.052, thresholdSuggestion 0.65. It does not open the
+  microphone, record audio, save raw audio, save embeddings/formal voiceprints, add IPC, call
+  `/stt/transcribe`, call `/chat`, or change Manual Mic / Conversation Mode / Pet Window /
+  Output Queue / Diagnostics Drawer runtime.
 - Relationship state.
 - Mood / attention / energy state beyond the local preview foundation.
 - Idle reaction policy.

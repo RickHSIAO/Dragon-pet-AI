@@ -448,6 +448,18 @@ TASK-257 DONE - WINDOWS PET WINDOW CLICK/SHOW SMOKE PASS (2026-06-04): Pet Windo
   no `/stt/transcribe` or `/chat` change, no IPC, no Pet Window / Output Queue / Diagnostics
   Drawer change.
 
+- **TASK-259 Owner Voice Gate Probe. DONE - WINDOWS OWNER VOICE PROBE SMOKE PASS (2026-06-04):**
+  Adds `scripts/owner_voice_gate_probe.py`, an offline file-path-only speaker embedding probe
+  for `.venv-funasr` Python 3.10. `--check-only` performs dependency checks and prints clean
+  JSON; audio mode accepts existing mono 16 kHz PCM WAV files via `--enroll-a`, `--verify-a`,
+  and optional `--verify-b`. Current check-only result: torch 2.12.0+cpu, funasr, modelscope,
+  numpy, and soundfile are available; model is not loaded in check-only mode. Windows real-WAV
+  probe PASS: FunASR CAM++ model `iic/speech_campplus_sv_zh-cn_16k-common` loaded locally in
+  10.425 s, 192-dim embeddings extracted, ownerScore 0.9232 vs otherScore 0.052, and
+  thresholdSuggestion 0.65 separates owner/non-owner clearly in this smoke. No runtime wiring,
+  no mic access, no recording, no raw audio persistence, no embedding persistence, no IPC,
+  and no `/stt/transcribe` or `/chat` change.
+
 Each future task must explicitly define safety boundaries, user controls,
 provider scope, queue priority, and no-regression checks.
 

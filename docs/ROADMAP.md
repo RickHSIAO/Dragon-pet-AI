@@ -456,8 +456,18 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   SpeechBrain ECAPA-TDNN. Not security-grade authentication. No Manual Mic, Conversation Mode,
   `/stt/transcribe`, `/chat`, IPC, Pet Window, Output Queue, Diagnostics Drawer, mic, recording,
   raw audio, or storage runtime change.
-- TASK-259 — Owner Voice Enrollment UI
-- TASK-260 — Owner Voice Gate Probe / Offline Embedding Test
+- TASK-259 DONE - WINDOWS OWNER VOICE PROBE SMOKE PASS (2026-06-04): Added
+  `scripts/owner_voice_gate_probe.py`, an offline file-path-only speaker embedding probe for
+  `.venv-funasr` Python 3.10. Default / `--check-only` mode performs dependency checks only and
+  prints clean JSON. Audio mode accepts existing mono 16 kHz PCM WAV paths (`--enroll-a`,
+  `--verify-a`, optional `--verify-b`), attempts FunASR CAM++ local-cache-only model loading,
+  computes embedding dimension plus cosine similarity scores, and never prints full vectors.
+  Current dependency check: Python 3.10.11, torch 2.12.0+cpu, funasr/modelscope/numpy/soundfile
+  available. Windows owner voice probe PASS: model `iic/speech_campplus_sv_zh-cn_16k-common`
+  loaded in 10.425 s, embeddingDim=192, ownerScore=0.9232, otherScore=0.052, thresholdSuggestion=0.65.
+  No Manual Mic, Conversation Mode, STT, `/chat`, IPC, Pet Window, Output Queue, Diagnostics Drawer,
+  mic, recording, raw audio persistence, embedding persistence, or formal voiceprint storage change.
+- TASK-260 — Owner Voice Gate Enrollment Storage Design / Threshold Multi-Sample Probe
 - TASK-261 — Owner Voice Gate for Manual Mic / Conversation Mode
 
 - TASK-256b DONE - WINDOWS DIAGNOSTICS READABILITY SMOKE PASS (2026-06-04): Diagnostics / Voice Panel Readability Polish. CSS-only change: `.voice-diagnostics-display` 10px → 13px, `line-height` 1.55, `max-height` 200px → 340px; `.voice-diagnostics-summary` 12px → 14px + font-weight 500; `.voice-diagnostics-panel` padding 4→8px; `.voice-tuning-label/input/select` 11px → 13px; `.voice-tuning-hint/voice-preview-hint/status` 10px → 12px; `.voice-preview-play-btn` 11px → 13px; `.voice-preview-audio-el` 28px → 32px. Windows smoke PASS: diagnostics readability improved, text/spacing/panel height all visibly better. No STT/warmup/IPC/Pet Window/Output Queue runtime changes. 10 new renderer CSS smoke tests PASS.
