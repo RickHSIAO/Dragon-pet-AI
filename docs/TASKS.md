@@ -28578,6 +28578,135 @@ paths, or rejected transcript internals.
 
 ---
 
+## TASK-CONV-001 | Conversation Mode Continuous Capture / Pending Utterance Queue
+
+Status: IMPLEMENTED - AUTOMATED RENDERER SMOKE PASS / NEEDS WINDOWS RUNTIME SMOKE (2026-06-05)
+
+### Goal
+
+Improve Conversation Mode so it can resume listening after an utterance Blob is
+finalized and queued, without waiting for the prior utterance's STT and `/chat`
+work to finish.
+
+This is queued continuous capture, not full-duplex multi-chat processing.
+
+### Previous Serial Behavior
+
+Before TASK-CONV-001, Conversation Mode used a single coarse state:
+
+```text
+waiting -> speaking -> transcribing -> sending -> waiting
+```
+
+While `transcribing` or `sending`, the VAD tick returned early and did not read
+the analyser. This meant the next utterance could not be captured until both STT
+and `/chat` had finished.
+
+### New State Design
+
+TASK-CONV-001 separates runtime state into three concepts:
+
+- capture state: `off`, `listening`, `recording`
+- processing state: `idle`, `stt_processing`, `chat_processing`
+- queue state: bounded pending utterances plus `activeTurnId`
+
+The old `fullAppVoiceConversationState` remains as a coarse UI compatibility
+state, but VAD decisions now use capture state. When recording stops because of
+silence or max duration, the renderer finalizes the WAV Blob, enqueues it, and
+returns capture to `listening` if Conversation Mode is still enabled.
+
+### Queue Policy
+
+- `FULL_APP_CONVERSATION_PENDING_MAX = 2`.
+- One active processing worker drains the queue.
+- `/chat` calls are still sequential and ordered.
+- No simultaneous multiple `/chat` requests are allowed.
+- Overflow drops the newest utterance and records sanitized diagnostics:
+  `conversationLastQueueAction=dropped`,
+  `conversationLastQueueReason=queue_full`.
+- The queue stores only bounded in-memory audio Blob references until processed;
+  no raw audio is persisted by this task.
+
+### Stop And Error Behavior
+
+- Stop disables Conversation Mode capture.
+- Stop clears pending utterances.
+- Stop marks active recorder output for discard so canceled audio is not
+  enqueued.
+- In-flight STT/chat promises are not force-aborted; when they settle, they do
+  not resume listening because Conversation Mode is disabled.
+- STT failure for one utterance records `sttStatus=error` and the worker moves
+  to the next queued utterance.
+- Empty/too-long transcript handling remains non-blocking and does not deadlock
+  the queue.
+
+### Diagnostics
+
+Voice Diagnostics now shows sanitized queue/capture fields:
+
+- `conversationCaptureState`
+- `conversationProcessingState`
+- `conversationPendingCount`
+- `conversationQueueLimit`
+- `conversationActiveTurnId`
+- `conversationLastQueueAction`
+- `conversationLastQueueReason`
+
+Diagnostics remain `textContent` only. They do not display raw audio, full
+candidate paths, raw/rejected transcripts beyond existing safe STT previews,
+stored centroids, `embeddingAggregate`, or candidate embeddings.
+
+### Boundaries
+
+- No TTS interruption or barge-in.
+- No full-duplex chat.
+- No multiple simultaneous `/chat` requests.
+- No `/stt/transcribe` request schema change.
+- No `/chat` schema change.
+- No new IPC channel.
+- No Pet Window change.
+- No Output Queue change.
+- No Owner Voice hard gate.
+- Owner Voice dry-run remains non-blocking with `runtimeHardBlocked=false`.
+- TASK-STT-001 punctuation restoration remains intact; queued Conversation Mode
+  sends the final transcript.
+- Manual Mic behavior is unchanged.
+
+### Automated Smoke Coverage
+
+`apps/desktop/scripts/renderer-chat-smoke.js` now covers:
+
+- queue state and diagnostics fields
+- capture remains/listens while STT is processing
+- `/chat` ordering for queued utterances
+- queue limit and newest-drop overflow
+- first utterance STT error does not deadlock the second
+- duplicate recorder/start prevention
+- stop clears pending utterances and prevents capture resume
+- Owner Voice dry-run remains non-blocking
+- TASK-STT-001 final transcript remains the `/chat` input
+- no schema/IPC/sensitive exposure regression
+
+### Validation
+
+- `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_routes.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-conv001`
+- `backend\.venv\Scripts\python.exe scripts\stt_provider_smoke.py`
+- `node apps/desktop/scripts/renderer-chat-smoke.js`
+- `node apps/desktop/scripts/pet-window-smoke.js`
+- `node apps/desktop/scripts/pet-renderer-smoke.js`
+- `git diff --check`
+- `git status --short`
+
+### Runtime Follow-Up
+
+Windows live runtime smoke with actual audio is still required before marking
+TASK-CONV-001 as DONE. The smoke should confirm that next utterance capture
+starts while the prior utterance is still processing, chat ordering remains
+sequential, queue overflow is safe, stop/error paths recover, and no sensitive
+data is exposed.
+
+---
+
 ## TASK-270 | Owner Voice Candidate WAV Temporary Policy Design / Implementation
 
 Status: DONE - WINDOWS RUNTIME CANDIDATE WAV LIFECYCLE SMOKE PASS / NO HARD GATE (2026-06-05)

@@ -584,6 +584,16 @@ async function settle() {
   }
 }
 
+function createDeferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 async function loadRenderer(options = {}) {
   const document = new FakeDocument();
 
@@ -13240,6 +13250,298 @@ function testTaskStt001NoRuntimeSchemaOrOwnerVoiceRegression() {
 }
 
 // ---------------------------------------------------------------------------
+// TASK-CONV-001: Conversation Mode Continuous Capture / Pending Utterance Queue
+// ---------------------------------------------------------------------------
+
+function testTaskConv001RendererHasQueueStateFields() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("FULL_APP_CONVERSATION_PENDING_MAX      = 2"),
+    "TASK-CONV-001 queue limit must be 2");
+  for (const token of [
+    "fullAppVoiceConversationCaptureState",
+    "fullAppVoiceConversationProcessingState",
+    "fullAppVoiceConversationPendingQueue",
+    "fullAppVoiceConversationActiveTurnId",
+    "fullAppVoiceConversationLastQueueAction",
+    "_enqueueConversationAudioBlob",
+    "_processConversationQueue",
+  ]) {
+    assert.ok(src.includes(token), "TASK-CONV-001 renderer must include " + token);
+  }
+  assert.ok(!src.includes("sendMessage(rawTranscript)"), "TASK-CONV-001 must not send raw transcript");
+  assert.ok(!src.includes("sendMessage(correctedTranscript)"), "TASK-CONV-001 must keep final transcript path");
+  console.log("  testTaskConv001RendererHasQueueStateFields PASS");
+}
+
+function testTaskConv001DiagnosticsRenderIncludesQueueFields() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const renderFnStart = src.indexOf("function renderFullAppVoiceDiagnostics");
+  const renderFnEnd   = src.indexOf("\n}", renderFnStart) + 2;
+  const renderFn = src.slice(renderFnStart, renderFnEnd);
+  for (const token of [
+    "conversationCaptureState",
+    "conversationProcessingState",
+    "conversationPendingCount",
+    "conversationActiveTurnId",
+    "conversationLastQueueAction",
+    "conversationLastQueueReason",
+  ]) {
+    assert.ok(renderFn.includes(token), "TASK-CONV-001 diagnostics render must include " + token);
+  }
+  assert.ok(!renderFn.includes("innerHTML"), "TASK-CONV-001 diagnostics must remain textContent-only");
+  console.log("  testTaskConv001DiagnosticsRenderIncludesQueueFields PASS");
+}
+
+async function testTaskConv001DiagnosticsDefaultsAndReset() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  const d = sandbox.fullAppVoiceDiagnostics;
+  assert.equal(d.conversationCaptureState, "off");
+  assert.equal(d.conversationProcessingState, "idle");
+  assert.equal(d.conversationPendingCount, 0);
+  assert.equal(d.conversationQueueLimit, 2);
+  assert.equal(d.conversationActiveTurnId, 0);
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("waiting");
+  sandbox.resetFullAppVoiceDiagnosticsForRecording("conversation");
+  assert.equal(d.conversationCaptureState, "listening");
+  assert.equal(d.conversationProcessingState, "idle");
+  assert.equal(d.conversationQueueLimit, 2);
+  console.log("  testTaskConv001DiagnosticsDefaultsAndReset PASS");
+}
+
+async function testTaskConv001CaptureCanListenWhileSttProcessing() {
+  const first = createDeferred();
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => first.promise,
+      updatePetSpeech: async () => ({ ok: true }),
+      updatePetExpression: async () => ({ ok: true }),
+    },
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("waiting");
+  const pending = sandbox._transcribeConversationChunks([new Blob(["one"], { type: "audio/wav" })], "audio/wav");
+  await settle();
+  assert.equal(sandbox.fullAppVoiceConversationCaptureState, "listening",
+    "TASK-CONV-001 capture must remain/listen while STT is processing");
+  assert.equal(sandbox.fullAppVoiceConversationProcessingState, "stt_processing",
+    "TASK-CONV-001 processing state must show STT work separately");
+  first.resolve({ status: "ok", transcript: "first queued final." });
+  await pending;
+  await settle();
+  console.log("  testTaskConv001CaptureCanListenWhileSttProcessing PASS");
+}
+
+async function testTaskConv001QueueSendsChatInOrder() {
+  const transcripts = ["first final.", "second final."];
+  const { sandbox, state } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => ({ status: "ok", transcript: transcripts.shift() }),
+      updatePetSpeech: async () => ({ ok: true }),
+      updatePetExpression: async () => ({ ok: true }),
+    },
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("waiting");
+  const p1 = sandbox._transcribeConversationChunks([new Blob(["one"], { type: "audio/wav" })], "audio/wav");
+  const p2 = sandbox._transcribeConversationChunks([new Blob(["two"], { type: "audio/wav" })], "audio/wav");
+  await p1;
+  await p2;
+  await settle();
+  const chatBodies = state.calls
+    .filter((call) => call.url.endsWith("/chat"))
+    .map((call) => JSON.parse(call.body || "{}").message);
+  assert.deepEqual(chatBodies.slice(0, 2), ["first final.", "second final."],
+    "TASK-CONV-001 /chat calls must preserve utterance queue order");
+  assert.equal(sandbox.fullAppVoiceConversationProcessingState, "idle");
+  assert.equal(sandbox.fullAppVoiceConversationPendingQueue.length, 0);
+  console.log("  testTaskConv001QueueSendsChatInOrder PASS");
+}
+
+async function testTaskConv001QueueLimitDropsNewest() {
+  const first = createDeferred();
+  let transcribeCalls = 0;
+  const { sandbox, state } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => {
+        transcribeCalls += 1;
+        if (transcribeCalls === 1) return first.promise;
+        return { status: "ok", transcript: "queued " + transcribeCalls };
+      },
+      updatePetSpeech: async () => ({ ok: true }),
+      updatePetExpression: async () => ({ ok: true }),
+    },
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("waiting");
+  const p1 = sandbox._transcribeConversationChunks([new Blob(["one"], { type: "audio/wav" })], "audio/wav");
+  await settle();
+  sandbox._transcribeConversationChunks([new Blob(["two"], { type: "audio/wav" })], "audio/wav");
+  sandbox._transcribeConversationChunks([new Blob(["three"], { type: "audio/wav" })], "audio/wav");
+  sandbox._transcribeConversationChunks([new Blob(["four"], { type: "audio/wav" })], "audio/wav");
+  await settle();
+  assert.equal(sandbox.fullAppVoiceConversationPendingQueue.length, 2,
+    "TASK-CONV-001 pending queue must be capped at 2 while one turn is active");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.conversationLastQueueAction, "dropped");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.conversationLastQueueReason, "queue_full");
+  first.resolve({ status: "ok", transcript: "active first" });
+  await p1;
+  await settle();
+  const chatCalls = state.calls.filter((call) => call.url.endsWith("/chat"));
+  assert.equal(chatCalls.length, 3,
+    "TASK-CONV-001 overflow must drop newest utterance instead of sending a fourth /chat");
+  console.log("  testTaskConv001QueueLimitDropsNewest PASS");
+}
+
+async function testTaskConv001FirstErrorDoesNotDeadlockSecond() {
+  let transcribeCalls = 0;
+  const { sandbox, state } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => {
+        transcribeCalls += 1;
+        if (transcribeCalls === 1) {
+          return { status: "error", reason: "decode_failed" };
+        }
+        return { status: "ok", transcript: "second after error." };
+      },
+      updatePetSpeech: async () => ({ ok: true }),
+      updatePetExpression: async () => ({ ok: true }),
+    },
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("waiting");
+  const p1 = sandbox._transcribeConversationChunks([new Blob(["bad"], { type: "audio/wav" })], "audio/wav");
+  const p2 = sandbox._transcribeConversationChunks([new Blob(["good"], { type: "audio/wav" })], "audio/wav");
+  await p1;
+  await p2;
+  await settle();
+  const chatBodies = state.calls
+    .filter((call) => call.url.endsWith("/chat"))
+    .map((call) => JSON.parse(call.body || "{}").message);
+  assert.deepEqual(chatBodies, ["second after error."],
+    "TASK-CONV-001 first STT error must not deadlock the next queued utterance");
+  assert.equal(sandbox.fullAppVoiceConversationProcessingState, "idle");
+  console.log("  testTaskConv001FirstErrorDoesNotDeadlockSecond PASS");
+}
+
+async function testTaskConv001DuplicateRecorderStartIgnored() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.fullAppVoiceConversationRecorder = { state: "recording" };
+  sandbox.fullAppVoiceConversationCaptureState = "recording";
+  sandbox._startConversationUtteranceRecorder();
+  assert.equal(sandbox.fullAppVoiceDiagnostics.conversationLastQueueAction, "ignored");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.conversationLastQueueReason, "recorder_already_active");
+  console.log("  testTaskConv001DuplicateRecorderStartIgnored PASS");
+}
+
+async function testTaskConv001StopClearsPendingAndPreventsCapture() {
+  const first = createDeferred();
+  let transcribeCalls = 0;
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => {
+        transcribeCalls += 1;
+        if (transcribeCalls === 1) return first.promise;
+        return { status: "ok", transcript: "queued after stop" };
+      },
+    },
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("waiting");
+  const p1 = sandbox._transcribeConversationChunks([new Blob(["one"], { type: "audio/wav" })], "audio/wav");
+  await settle();
+  sandbox._transcribeConversationChunks([new Blob(["two"], { type: "audio/wav" })], "audio/wav");
+  await settle();
+  assert.equal(sandbox.fullAppVoiceConversationPendingQueue.length, 1);
+  sandbox.stopConversationMode();
+  assert.equal(sandbox.fullAppVoiceConversationEnabled, false);
+  assert.equal(sandbox.fullAppVoiceConversationCaptureState, "off");
+  assert.equal(sandbox.fullAppVoiceConversationPendingQueue.length, 0);
+  first.resolve({ status: "ok", transcript: "active stopped" });
+  await p1;
+  await settle();
+  assert.equal(sandbox.fullAppVoiceConversationCaptureState, "off",
+    "TASK-CONV-001 stop must not resume listening after active processing settles");
+  console.log("  testTaskConv001StopClearsPendingAndPreventsCapture PASS");
+}
+
+async function testTaskConv001OwnerVoiceDryRunRemainsNonBlocking() {
+  const bridge = _task270TempBridge({ transcript: "owner voice queued transcript" });
+  const { sandbox, state } = await loadRenderer({
+    ownerVoiceGateSettings: _task266OwnerVoiceEnabledSettings(),
+    ownerVoiceVerifyMode: "reject",
+    dragonPet: bridge.api,
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("waiting");
+  const p = sandbox._transcribeConversationChunks([new Blob(["RIFF-task-conv"], { type: "audio/wav" })], "audio/wav");
+  await p;
+  await settle();
+  assert.ok(state.calls.filter((call) => call.url.endsWith("/chat")).length >= 1,
+    "TASK-CONV-001 Owner Voice reject must not block queued /chat");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.runtimeHardBlocked, false);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.candidateWavTemporary, true);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.candidateWavDeleted, true);
+  console.log("  testTaskConv001OwnerVoiceDryRunRemainsNonBlocking PASS");
+}
+
+async function testTaskConv001PunctuationFinalTranscriptPreserved() {
+  const { sandbox, state } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => ({
+        status: "ok",
+        transcript: "排隊模式標點測試。",
+        rawTranscript: "排隊模式標點測試",
+        correctedTranscript: "排隊模式標點測試",
+        punctuatedTranscript: "排隊模式標點測試。",
+        finalTranscript: "排隊模式標點測試。",
+        punctuationApplied: true,
+        punctuationMode: "conservative_cjk_terminal",
+        punctuationReason: "added_terminal_period",
+      }),
+      updatePetSpeech: async () => ({ ok: true }),
+      updatePetExpression: async () => ({ ok: true }),
+    },
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("waiting");
+  const p = sandbox._transcribeConversationChunks([new Blob(["punct"], { type: "audio/wav" })], "audio/wav");
+  await p;
+  await settle();
+  const chatBody = JSON.parse(state.calls.find((call) => call.url.endsWith("/chat")).body || "{}");
+  assert.equal(chatBody.message, "排隊模式標點測試。");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.sttPunctuationApplied, true);
+  console.log("  testTaskConv001PunctuationFinalTranscriptPreserved PASS");
+}
+
+function testTaskConv001NoSchemaIpcOrSensitiveExposure() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const preloadSrc = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "preload.js"), "utf8");
+  assert.ok(!preloadSrc.includes("conversation:queue"), "TASK-CONV-001 must not add conversation queue IPC");
+  assert.ok(!src.includes("candidate.path") || src.includes("paths: [candidate.path]"),
+    "TASK-CONV-001 must not render candidate paths");
+  assert.ok(!src.includes("embeddingAggregate"), "TASK-CONV-001 must not expose owner voice centroid");
+  assert.ok(!src.includes("candidateEmbedding:") && !src.includes("candidateEmbedding ="),
+    "TASK-CONV-001 must not expose candidate embedding values");
+  assert.ok(!src.includes("rawAudioPersisted = true"), "TASK-CONV-001 must not persist raw audio");
+  console.log("  testTaskConv001NoSchemaIpcOrSensitiveExposure PASS");
+}
+
+// ---------------------------------------------------------------------------
 // TASK-246: STT Model Quality / Whisper Model Upgrade
 // ---------------------------------------------------------------------------
 
@@ -16262,6 +16564,18 @@ async function main() {
   await testTaskStt001ManualMicTextareaUsesFinalTranscript();
   await testTaskStt001ConversationModeSendsFinalTranscript();
   testTaskStt001NoRuntimeSchemaOrOwnerVoiceRegression();
+  testTaskConv001RendererHasQueueStateFields();
+  testTaskConv001DiagnosticsRenderIncludesQueueFields();
+  await testTaskConv001DiagnosticsDefaultsAndReset();
+  await testTaskConv001CaptureCanListenWhileSttProcessing();
+  await testTaskConv001QueueSendsChatInOrder();
+  await testTaskConv001QueueLimitDropsNewest();
+  await testTaskConv001FirstErrorDoesNotDeadlockSecond();
+  await testTaskConv001DuplicateRecorderStartIgnored();
+  await testTaskConv001StopClearsPendingAndPreventsCapture();
+  await testTaskConv001OwnerVoiceDryRunRemainsNonBlocking();
+  await testTaskConv001PunctuationFinalTranscriptPreserved();
+  testTaskConv001NoSchemaIpcOrSensitiveExposure();
 
   // TASK-246: STT Model Quality / Whisper Model Upgrade
   testTask246RendererHasModelQualityFields();

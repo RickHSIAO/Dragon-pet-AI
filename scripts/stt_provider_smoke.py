@@ -1109,14 +1109,16 @@ for forbidden in (
 check("runtimeHardBlocked" in conversation_dry_run_section and "false" in conversation_dry_run_section,
       "Conversation Mode dry-run explicitly keeps runtimeHardBlocked=false")
 
-conversation_path_start = renderer_js_text.find("function _transcribeConversationChunks")
+conversation_path_start = renderer_js_text.find("async function _processConversationQueueItem")
+if conversation_path_start < 0:
+    conversation_path_start = renderer_js_text.find("function _transcribeConversationChunks")
 conversation_path_section = (
     renderer_js_text[conversation_path_start:conversation_path_start + 2600]
     if conversation_path_start >= 0 else ""
 )
-check(bool(conversation_path_section), "Conversation Mode transcribe section can be isolated")
+check(bool(conversation_path_section), "Conversation Mode queued processing section can be isolated")
 check("runOwnerVoiceConversationModeDryRun(audioBlob);" in conversation_path_section,
-      "Conversation Mode transcribe path starts owner voice dry-run")
+      "Conversation Mode queued processing path starts owner voice dry-run")
 check("await runOwnerVoiceConversationModeDryRun" not in conversation_path_section,
       "Conversation Mode owner voice dry-run is fire-and-forget")
 check("TASK-267" in owner_voice_storage_text,

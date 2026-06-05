@@ -69,6 +69,7 @@ const FULL_APP_CONVERSATION_MIN_SPEECH_MS    = 300;
 const FULL_APP_CONVERSATION_MAX_UTTERANCE_MS = 30000;
 const FULL_APP_CONVERSATION_VAD_INTERVAL_MS  = 100;
 const FULL_APP_CONVERSATION_RMS_THRESHOLD    = 0.035;
+const FULL_APP_CONVERSATION_PENDING_MAX      = 2;
 // TASK-244b: Voice Pipeline Diagnostics constants
 const FULL_APP_VOICE_MIME_PRIORITY = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"];
 const FULL_APP_VOICE_AUDIO_CONSTRAINTS = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
@@ -202,6 +203,14 @@ var fullAppVoiceAutoSendEnabled = false; // var: exposed to vm sandbox for smoke
 // TASK-243: Voice Conversation Mode state — session-only, not persisted
 var fullAppVoiceConversationEnabled         = false; // var: exposed to vm sandbox
 var fullAppVoiceConversationState           = "off"; // off|waiting|speaking|transcribing|sending|error — var: exposed to vm sandbox
+var fullAppVoiceConversationCaptureState    = "off"; // off|listening|recording — var: exposed to vm sandbox
+var fullAppVoiceConversationProcessingState = "idle"; // idle|stt_processing|chat_processing — var: exposed to vm sandbox
+var fullAppVoiceConversationPendingQueue    = []; // var: bounded in-memory utterance queue
+var fullAppVoiceConversationActiveTurnId    = 0; // var: exposed to vm sandbox
+var fullAppVoiceConversationNextTurnId      = 1; // var: exposed to vm sandbox
+var fullAppVoiceConversationLastQueueAction = "none"; // var: exposed to vm sandbox
+var fullAppVoiceConversationLastQueueReason = "none"; // var: exposed to vm sandbox
+var fullAppVoiceConversationProcessingPromise = null; // var: exposed to vm sandbox
 var fullAppVoiceConversationStream          = null;
 var fullAppVoiceConversationAudioContext    = null;
 var fullAppVoiceConversationAnalyser        = null;
@@ -210,6 +219,7 @@ var fullAppVoiceConversationRecorder        = null;
 var fullAppVoiceConversationChunks          = [];
 var fullAppVoiceConversationSpeechStartedAt = 0;
 var fullAppVoiceConversationLastVoiceAt     = 0;
+var fullAppVoiceConversationDiscardRecorderStop = false;
 // TASK-252: PCM capture state — manual mic and conversation modes
 let _fullAppPcmChunks    = [];
 let _fullAppPcmCtx       = null;
@@ -233,6 +243,13 @@ var fullAppVoiceDiagnostics = {
   emptyTranscript: false,
   autoSendEnabled: false,
   conversationState: "off",
+  conversationCaptureState: "off",
+  conversationProcessingState: "idle",
+  conversationPendingCount: 0,
+  conversationQueueLimit: FULL_APP_CONVERSATION_PENDING_MAX,
+  conversationActiveTurnId: 0,
+  conversationLastQueueAction: "none",
+  conversationLastQueueReason: "none",
   stopReason: "none",
   lastRms: 0,
   maxRms: 0,
@@ -5117,8 +5134,73 @@ if (voiceAutosendToggle) {
 // TASK-243: Voice Conversation Mode
 // ---------------------------------------------------------------------------
 
+var _fullAppConversationRefreshingState = false;
+
+function _syncConversationQueueDiagnostics() {
+  fullAppVoiceDiagnostics.conversationState = fullAppVoiceConversationState;
+  fullAppVoiceDiagnostics.conversationCaptureState = fullAppVoiceConversationCaptureState;
+  fullAppVoiceDiagnostics.conversationProcessingState = fullAppVoiceConversationProcessingState;
+  fullAppVoiceDiagnostics.conversationPendingCount = fullAppVoiceConversationPendingQueue.length;
+  fullAppVoiceDiagnostics.conversationQueueLimit = FULL_APP_CONVERSATION_PENDING_MAX;
+  fullAppVoiceDiagnostics.conversationActiveTurnId = fullAppVoiceConversationActiveTurnId;
+  fullAppVoiceDiagnostics.conversationLastQueueAction = fullAppVoiceConversationLastQueueAction;
+  fullAppVoiceDiagnostics.conversationLastQueueReason = fullAppVoiceConversationLastQueueReason;
+}
+
+function _refreshConversationCoarseState() {
+  var nextState = "off";
+  if (fullAppVoiceConversationCaptureState === "recording") {
+    nextState = "speaking";
+  } else if (fullAppVoiceConversationProcessingState === "chat_processing") {
+    nextState = "sending";
+  } else if (fullAppVoiceConversationProcessingState === "stt_processing") {
+    nextState = "transcribing";
+  } else if (fullAppVoiceConversationCaptureState === "listening") {
+    nextState = "waiting";
+  } else if (fullAppVoiceConversationEnabled) {
+    nextState = "waiting";
+  }
+  _fullAppConversationRefreshingState = true;
+  setConversationState(nextState);
+  _fullAppConversationRefreshingState = false;
+}
+
+function _setConversationCaptureState(state) {
+  fullAppVoiceConversationCaptureState = state;
+  _refreshConversationCoarseState();
+  _syncConversationQueueDiagnostics();
+}
+
+function _setConversationProcessingState(state) {
+  fullAppVoiceConversationProcessingState = state;
+  _refreshConversationCoarseState();
+  _syncConversationQueueDiagnostics();
+}
+
+function _setConversationQueueAction(action, reason) {
+  fullAppVoiceConversationLastQueueAction = action || "none";
+  fullAppVoiceConversationLastQueueReason = reason || "none";
+  _syncConversationQueueDiagnostics();
+}
+
 function setConversationState(state) {
   fullAppVoiceConversationState = state;
+  if (!_fullAppConversationRefreshingState) {
+    if (state === "off" || state === "error") {
+      fullAppVoiceConversationCaptureState = "off";
+      fullAppVoiceConversationProcessingState = "idle";
+    } else if (state === "waiting") {
+      fullAppVoiceConversationCaptureState = "listening";
+      fullAppVoiceConversationProcessingState = "idle";
+    } else if (state === "speaking") {
+      fullAppVoiceConversationCaptureState = "recording";
+    } else if (state === "transcribing") {
+      fullAppVoiceConversationProcessingState = "stt_processing";
+    } else if (state === "sending") {
+      fullAppVoiceConversationProcessingState = "chat_processing";
+    }
+  }
+  _syncConversationQueueDiagnostics();
   if (!conversationModeBtn) return;
   var statusMap = {
     "off":          { btn: "開始對話",       status: "",             hidden: true  },
@@ -5154,11 +5236,15 @@ function _conversationReleaseResources() {
   }
   try {
     if (fullAppVoiceConversationRecorder && fullAppVoiceConversationRecorder.state !== "inactive") {
+      fullAppVoiceConversationDiscardRecorderStop = true;
       fullAppVoiceConversationRecorder.stop();
     }
   } catch (_e) {}
   fullAppVoiceConversationRecorder = null;
   fullAppVoiceConversationChunks = [];
+  fullAppVoiceConversationPendingQueue = [];
+  fullAppVoiceConversationActiveTurnId = 0;
+  _setConversationQueueAction("cleared", "stop");
   try {
     if (fullAppVoiceConversationStream) {
       fullAppVoiceConversationStream.getTracks().forEach(function (t) { t.stop(); });
@@ -5175,11 +5261,23 @@ function _conversationReleaseResources() {
   // TASK-252: release conv PCM capture resources
   _stopConvPcmCapture();
   _convPcmChunks = [];
+  fullAppVoiceConversationCaptureState = "off";
+  if (!fullAppVoiceConversationProcessingPromise) {
+    fullAppVoiceConversationProcessingState = "idle";
+  }
+  _syncConversationQueueDiagnostics();
 }
 
 function _startConversationUtteranceRecorder() {
+  if (!fullAppVoiceConversationEnabled) return;
+  if (fullAppVoiceConversationRecorder || fullAppVoiceConversationCaptureState === "recording") {
+    _setConversationQueueAction("ignored", "recorder_already_active");
+    renderFullAppVoiceDiagnostics();
+    return;
+  }
   // TASK-244: reset diagnostics for this utterance recording
   resetFullAppVoiceDiagnosticsForRecording("conversation");
+  _setConversationCaptureState("recording");
   fullAppVoiceDiagnostics.speechStarted = true;
   fullAppVoiceDiagnostics.maxRms = fullAppVoiceDiagnostics.lastRms;
   renderFullAppVoiceDiagnostics();
@@ -5202,10 +5300,21 @@ function _startConversationUtteranceRecorder() {
     if (ev.data && ev.data.size > 0) fullAppVoiceConversationChunks.push(ev.data);
   });
   recorder.addEventListener("stop", function () {
+    var shouldDiscard = fullAppVoiceConversationDiscardRecorderStop || !fullAppVoiceConversationEnabled;
+    fullAppVoiceConversationDiscardRecorderStop = false;
+    fullAppVoiceConversationRecorder = null;
     // TASK-252: encode PCM chunks as WAV for FunASR compatibility
     _stopConvPcmCapture();
+    if (shouldDiscard) {
+      _convPcmChunks = [];
+      fullAppVoiceConversationChunks = [];
+      _setConversationQueueAction("discarded", "stop");
+      return;
+    }
     var wavBlob = _encodeWavPcm(_convPcmChunks, FULL_APP_STT_PCM_SAMPLE_RATE);
     _convPcmChunks = [];
+    fullAppVoiceConversationChunks = [];
+    _setConversationCaptureState("listening");
     _transcribeConversationChunks([wavBlob], "audio/wav");
   });
   // TASK-252: start PCM capture in parallel with MediaRecorder
@@ -5214,33 +5323,24 @@ function _startConversationUtteranceRecorder() {
 }
 
 function _stopConversationUtteranceRecorder() {
-  setConversationState("transcribing");
   try {
     if (fullAppVoiceConversationRecorder && fullAppVoiceConversationRecorder.state !== "inactive") {
       fullAppVoiceConversationRecorder.stop();
+    } else if (fullAppVoiceConversationEnabled) {
+      _setConversationCaptureState("listening");
     }
   } catch (_e) {
     setConversationState("error");
   }
 }
 
-function _transcribeConversationChunks(chunks, mimeType) {
-  var audioBlob;
-  try {
-    audioBlob = new Blob(chunks || [], { type: mimeType || "audio/webm" });
-  } catch (_e) {
-    if (fullAppVoiceConversationEnabled) setConversationState("waiting");
-    return;
-  }
-
-  // TASK-244: update diagnostics with blob/recording metadata
+function _updateConversationAudioDiagnostics(audioBlob, chunksCount, mimeType, recordingEndedAt) {
+  var _convEndedAt = recordingEndedAt || Date.now();
   try { fullAppVoiceDiagnostics.blobSizeBytes = audioBlob.size || 0; } catch (_e) {}
   fullAppVoiceDiagnostics.mimeType = mimeType || "";
-  fullAppVoiceDiagnostics.chunksCount = (chunks || []).length;
-  var _convEndedAt = Date.now();
+  fullAppVoiceDiagnostics.chunksCount = chunksCount || 0;
   fullAppVoiceDiagnostics.recordingEndedAt = _convEndedAt;
   fullAppVoiceDiagnostics.durationMs = _convEndedAt - (fullAppVoiceDiagnostics.recordingStartedAt || _convEndedAt);
-  // TASK-244b: pipeline diagnostics — selectedMimeType, bytesPerSecond, in-memory preview blob
   fullAppVoiceDiagnostics.selectedMimeType = mimeType || "";
   if (audioBlob && audioBlob.size > 0) {
     fullAppLastAudioBlob = audioBlob;
@@ -5250,69 +5350,149 @@ function _transcribeConversationChunks(chunks, mimeType) {
     }
     if (voicePreviewPlayBtn) voicePreviewPlayBtn.disabled = false;
   }
+  _syncConversationQueueDiagnostics();
   renderFullAppVoiceDiagnostics();
+}
 
-  // TASK-267: status-only Owner Voice Gate dry-run for Conversation Mode.
+function _enqueueConversationAudioBlob(audioBlob, mimeType, chunksCount, recordingEndedAt, stopReason) {
+  if (!audioBlob) {
+    _setConversationQueueAction("dropped", "audio_blob_unavailable");
+    renderFullAppVoiceDiagnostics();
+    return Promise.resolve(false);
+  }
+  if (fullAppVoiceConversationPendingQueue.length >= FULL_APP_CONVERSATION_PENDING_MAX) {
+    _setConversationQueueAction("dropped", "queue_full");
+    renderFullAppVoiceDiagnostics();
+    return Promise.resolve(false);
+  }
+  var item = {
+    turnId: fullAppVoiceConversationNextTurnId++,
+    audioBlob: audioBlob,
+    mimeType: mimeType || "audio/webm",
+    chunksCount: chunksCount || 0,
+    recordingEndedAt: recordingEndedAt || Date.now(),
+    stopReason: stopReason || "queued"
+  };
+  fullAppVoiceConversationPendingQueue.push(item);
+  _setConversationQueueAction("queued", item.stopReason);
+  renderFullAppVoiceDiagnostics();
+  return _processConversationQueue();
+}
+
+async function _processConversationQueueItem(item) {
+  var audioBlob = item.audioBlob;
+  fullAppVoiceDiagnostics.stopReason = item.stopReason || fullAppVoiceDiagnostics.stopReason;
+  _updateConversationAudioDiagnostics(audioBlob, item.chunksCount, item.mimeType, item.recordingEndedAt);
+
+  // TASK-267/TASK-270: status-only Owner Voice Gate dry-run for Conversation Mode.
   // Fire-and-forget: accept/reject/error/not_computed must not block STT or /chat.
   runOwnerVoiceConversationModeDryRun(audioBlob);
 
-  transcribeFullAppAudioBlob(audioBlob).then(function (transcript) {
-    if (!fullAppVoiceConversationEnabled) return;
-
-    if (transcript === null || !transcript) {
-      // TASK-244: empty/unavailable diagnostics
-      fullAppVoiceDiagnostics.emptyTranscript = true;
-      fullAppVoiceDiagnostics.sttStatus = "empty";
-      renderFullAppVoiceDiagnostics();
-      _recordVoiceDiagnosticsHistory();
-      setConversationState("waiting");
-      return;
-    }
-
-    var trimmed = transcript.trim();
-    if (!trimmed || trimmed.length > FULL_APP_VOICE_CHAT_MAX_CHARS) {
-      fullAppVoiceDiagnostics.emptyTranscript = true;
-      fullAppVoiceDiagnostics.sttStatus = "empty";
-      renderFullAppVoiceDiagnostics();
-      setConversationState("waiting");
-      return;
-    }
-
-    // TASK-244: success transcript diagnostics
-    fullAppVoiceDiagnostics.transcriptLength  = trimmed.length;
-    fullAppVoiceDiagnostics.transcriptPreview = makeSafeTranscriptPreview(trimmed);
-    fullAppVoiceDiagnostics.emptyTranscript   = false;
-    fullAppVoiceDiagnostics.sttStatus         = "success";
-    renderFullAppVoiceDiagnostics();
-    _recordVoiceDiagnosticsHistory();
-
-    if (msgInput) {
-      msgInput.value = trimmed;
-      msgInput.dispatchEvent(new Event("input"));
-    }
-
-    if (!isSending && !editingMessageState && typeof sendMessage === "function") {
-      setConversationState("sending");
-      var result = sendMessage(trimmed);
-      if (result && typeof result.then === "function") {
-        result.then(function () {
-          if (fullAppVoiceConversationEnabled) setConversationState("waiting");
-        }).catch(function () {
-          if (fullAppVoiceConversationEnabled) setConversationState("waiting");
-        });
-      } else {
-        if (fullAppVoiceConversationEnabled) setConversationState("waiting");
-      }
-    } else {
-      setConversationState("waiting");
-    }
-  }).catch(function () {
-    // TASK-244: error diagnostics
+  var transcript;
+  try {
+    transcript = await transcribeFullAppAudioBlob(audioBlob);
+  } catch (_err) {
     fullAppVoiceDiagnostics.sttStatus = "error";
     renderFullAppVoiceDiagnostics();
     _recordVoiceDiagnosticsHistory();
-    if (fullAppVoiceConversationEnabled) setConversationState("waiting");
+    return;
+  }
+
+  if (!fullAppVoiceConversationEnabled) return;
+
+  if (transcript === null || !transcript) {
+    // TASK-244: empty/unavailable diagnostics
+    fullAppVoiceDiagnostics.emptyTranscript = true;
+    fullAppVoiceDiagnostics.sttStatus = "empty";
+    renderFullAppVoiceDiagnostics();
+    _recordVoiceDiagnosticsHistory();
+    return;
+  }
+
+  var trimmed = transcript.trim();
+  if (!trimmed || trimmed.length > FULL_APP_VOICE_CHAT_MAX_CHARS) {
+    fullAppVoiceDiagnostics.emptyTranscript = true;
+    fullAppVoiceDiagnostics.sttStatus = "empty";
+    renderFullAppVoiceDiagnostics();
+    _recordVoiceDiagnosticsHistory();
+    return;
+  }
+
+  // TASK-244: success transcript diagnostics
+  fullAppVoiceDiagnostics.transcriptLength  = trimmed.length;
+  fullAppVoiceDiagnostics.transcriptPreview = makeSafeTranscriptPreview(trimmed);
+  fullAppVoiceDiagnostics.emptyTranscript   = false;
+  fullAppVoiceDiagnostics.sttStatus         = "success";
+  renderFullAppVoiceDiagnostics();
+  _recordVoiceDiagnosticsHistory();
+
+  if (msgInput) {
+    msgInput.value = trimmed;
+    msgInput.dispatchEvent(new Event("input"));
+  }
+
+  if (!isSending && !editingMessageState && typeof sendMessage === "function") {
+    _setConversationProcessingState("chat_processing");
+    var result = sendMessage(trimmed);
+    if (result && typeof result.then === "function") {
+      try {
+        await result;
+      } catch (_sendErr) {}
+    }
+  }
+}
+
+function _processConversationQueue() {
+  if (fullAppVoiceConversationProcessingPromise) {
+    return fullAppVoiceConversationProcessingPromise;
+  }
+  fullAppVoiceConversationProcessingPromise = (async function () {
+    while (fullAppVoiceConversationPendingQueue.length > 0) {
+      var item = fullAppVoiceConversationPendingQueue.shift();
+      fullAppVoiceConversationActiveTurnId = item.turnId;
+      _setConversationProcessingState("stt_processing");
+      _setConversationQueueAction("processing", "turn_" + item.turnId);
+      await _processConversationQueueItem(item);
+      fullAppVoiceConversationActiveTurnId = 0;
+      _syncConversationQueueDiagnostics();
+    }
+  })().finally(function () {
+    fullAppVoiceConversationProcessingPromise = null;
+    fullAppVoiceConversationActiveTurnId = 0;
+    _setConversationProcessingState("idle");
+    if (fullAppVoiceConversationEnabled && fullAppVoiceConversationCaptureState !== "recording") {
+      _setConversationCaptureState("listening");
+    } else if (!fullAppVoiceConversationEnabled) {
+      _setConversationCaptureState("off");
+    }
+    _setConversationQueueAction("idle", "queue_empty");
+    renderFullAppVoiceDiagnostics();
   });
+  return fullAppVoiceConversationProcessingPromise;
+}
+
+function _transcribeConversationChunks(chunks, mimeType) {
+  var audioBlob;
+  try {
+    audioBlob = new Blob(chunks || [], { type: mimeType || "audio/webm" });
+  } catch (_e) {
+    _setConversationQueueAction("dropped", "blob_create_error");
+    renderFullAppVoiceDiagnostics();
+    if (fullAppVoiceConversationEnabled && fullAppVoiceConversationCaptureState !== "recording") {
+      _setConversationCaptureState("listening");
+    }
+    return Promise.resolve(false);
+  }
+
+  var _convEndedAt = Date.now();
+  _updateConversationAudioDiagnostics(audioBlob, (chunks || []).length, mimeType || "audio/webm", _convEndedAt);
+  return _enqueueConversationAudioBlob(
+    audioBlob,
+    mimeType || "audio/webm",
+    (chunks || []).length,
+    _convEndedAt,
+    fullAppVoiceDiagnostics.stopReason || "queued"
+  );
 }
 
 // TASK-256: Best-effort startup warmup — fires once, 3s after backend health OK.
@@ -5385,8 +5565,8 @@ function _resumeConversationAudioContextIfSuspended() {
 function _conversationVadTick() {
   // TASK-255: resume AudioContext if throttled/suspended during background/minimize
   _resumeConversationAudioContextIfSuspended();
-  var state = fullAppVoiceConversationState;
-  if (state === "sending" || state === "transcribing") return;
+  if (!fullAppVoiceConversationEnabled) return;
+  var captureState = fullAppVoiceConversationCaptureState;
   if (!fullAppVoiceConversationAnalyser) return;
 
   var rms = computeConversationRms(fullAppVoiceConversationAnalyser);
@@ -5395,17 +5575,16 @@ function _conversationVadTick() {
   // TASK-244: update VAD diagnostics every tick
   fullAppVoiceDiagnostics.lastRms = rms;
   if (rms > fullAppVoiceDiagnostics.maxRms) fullAppVoiceDiagnostics.maxRms = rms;
-  fullAppVoiceDiagnostics.conversationState = state;
+  _syncConversationQueueDiagnostics();
   renderFullAppVoiceDiagnostics();
 
-  if (state === "waiting") {
+  if (captureState === "listening") {
     if (rms >= fullAppConversationRmsThreshold) {
       fullAppVoiceConversationSpeechStartedAt = now;
       fullAppVoiceConversationLastVoiceAt = now;
-      setConversationState("speaking");
       _startConversationUtteranceRecorder();
     }
-  } else if (state === "speaking") {
+  } else if (captureState === "recording") {
     if (rms >= fullAppConversationRmsThreshold) {
       fullAppVoiceConversationLastVoiceAt = now;
     }
@@ -5468,8 +5647,11 @@ async function startConversationMode() {
   fullAppVoiceConversationAudioContext = audioContext;
   fullAppVoiceConversationAnalyser     = analyser;
   fullAppVoiceConversationEnabled      = true;
-
-  setConversationState("waiting");
+  fullAppVoiceConversationPendingQueue = [];
+  fullAppVoiceConversationActiveTurnId = 0;
+  _setConversationQueueAction("idle", "session_started");
+  _setConversationProcessingState("idle");
+  _setConversationCaptureState("listening");
 
   fullAppVoiceConversationVadTimer = setInterval(_conversationVadTick, FULL_APP_CONVERSATION_VAD_INTERVAL_MS);
 }
@@ -5481,7 +5663,11 @@ function stopConversationMode() {
   }
   fullAppVoiceConversationEnabled = false;
   _conversationReleaseResources();
+  fullAppVoiceConversationProcessingState = "idle";
+  fullAppVoiceConversationCaptureState = "off";
   setConversationState("off");
+  _setConversationQueueAction("cleared", "stop");
+  renderFullAppVoiceDiagnostics();
 }
 
 // TASK-243: conversation mode button wiring
@@ -5654,6 +5840,9 @@ function renderFullAppVoiceDiagnostics() {
     "空 transcript: " + (d.emptyTranscript ? "是" : "否"),
     "Auto-send: " + (d.autoSendEnabled ? "開" : "關"),
     "對話狀態: " + d.conversationState,
+    "對話捕捉: " + d.conversationCaptureState + "  處理: " + d.conversationProcessingState,
+    "對話佇列: pending=" + d.conversationPendingCount + "/" + d.conversationQueueLimit + " activeTurnId=" + d.conversationActiveTurnId,
+    "對話佇列動作: " + (d.conversationLastQueueAction || "none") + " reason: " + (d.conversationLastQueueReason || "none"),
     "停止原因: " + d.stopReason,
     "STT 狀態: " + d.sttStatus,
     "STT 語言: " + (d.sttLanguage || "unknown") + "  已鎖定: " + (d.languageLocked ? "是" : "否"),
@@ -5737,6 +5926,13 @@ function resetFullAppVoiceDiagnosticsForRecording(mode) {
   fullAppVoiceDiagnostics.emptyTranscript    = false;
   fullAppVoiceDiagnostics.autoSendEnabled    = fullAppVoiceAutoSendEnabled;
   fullAppVoiceDiagnostics.conversationState  = fullAppVoiceConversationState;
+  fullAppVoiceDiagnostics.conversationCaptureState = fullAppVoiceConversationCaptureState;
+  fullAppVoiceDiagnostics.conversationProcessingState = fullAppVoiceConversationProcessingState;
+  fullAppVoiceDiagnostics.conversationPendingCount = fullAppVoiceConversationPendingQueue.length;
+  fullAppVoiceDiagnostics.conversationQueueLimit = FULL_APP_CONVERSATION_PENDING_MAX;
+  fullAppVoiceDiagnostics.conversationActiveTurnId = fullAppVoiceConversationActiveTurnId;
+  fullAppVoiceDiagnostics.conversationLastQueueAction = fullAppVoiceConversationLastQueueAction;
+  fullAppVoiceDiagnostics.conversationLastQueueReason = fullAppVoiceConversationLastQueueReason;
   fullAppVoiceDiagnostics.stopReason         = "none";
   fullAppVoiceDiagnostics.lastRms            = 0;
   fullAppVoiceDiagnostics.maxRms             = 0;

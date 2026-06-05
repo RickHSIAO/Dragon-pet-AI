@@ -647,6 +647,27 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   IPC, no Pet Window / Output Queue change, no voice recording change, and no
   Owner Voice Gate behavior or hard-gate policy change.
 
+- TASK-CONV-001 IMPLEMENTED - CONVERSATION MODE CONTINUOUS CAPTURE / PENDING UTTERANCE QUEUE (2026-06-05):
+  Conversation Mode now separates capture state (`off/listening/recording`) from
+  processing state (`idle/stt_processing/chat_processing`) and uses a bounded
+  in-memory pending utterance queue (`FULL_APP_CONVERSATION_PENDING_MAX = 2`).
+  After a recording stops and the WAV Blob is finalized, capture can return to
+  listening while the queued utterance continues through STT and `/chat`.
+  Processing remains sequential and ordered through one active worker, so no
+  simultaneous multiple `/chat` requests are introduced. Queue overflow drops
+  the newest utterance and records sanitized diagnostics with `queue_full`.
+  Stop clears pending utterances and prevents canceled recorder output from
+  entering the queue; STT errors on one item do not deadlock later queued
+  utterances. Voice Diagnostics now includes safe capture/processing/queue
+  counters and action/reason fields. No TTS interruption/barge-in, full-duplex
+  chat, new IPC, `/stt/transcribe` schema change, `/chat` schema change, Pet
+  Window change, Output Queue change, Owner Voice hard gate, raw audio
+  persistence, candidate path exposure, centroid exposure, or embedding
+  exposure was added. Renderer smoke covers queue ordering, limit/overflow,
+  duplicate recorder guard, stop/error recovery, Owner Voice non-blocking
+  behavior, and TASK-STT-001 final transcript preservation. Windows live
+  runtime smoke with actual audio is still required before marking DONE.
+
 - TASK-270 DONE - OWNER VOICE CANDIDATE WAV TEMPORARY POLICY (2026-06-05):
   Manual Mic and Conversation Mode dry-run verification now create a bounded
   temporary candidate WAV under the OS temp directory through a narrow Electron
