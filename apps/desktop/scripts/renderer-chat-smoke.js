@@ -13562,6 +13562,53 @@ function _taskConv001InstallDelayedStopRecorder(sandbox) {
   return recorders;
 }
 
+function _taskAudio001InstallFakePcmContext(sandbox) {
+  const contexts = [];
+  const processors = [];
+  class FakeAudioContext {
+    constructor() {
+      this.state = "running";
+      this.closed = false;
+      this.resumeCalled = false;
+      contexts.push(this);
+    }
+    createMediaStreamSource() {
+      return { connect() {}, disconnect() {} };
+    }
+    createScriptProcessor() {
+      const processor = {
+        onaudioprocess: null,
+        connect() {},
+        disconnect() {},
+      };
+      processors.push(processor);
+      return processor;
+    }
+    resume() {
+      this.resumeCalled = true;
+      this.state = "running";
+      return Promise.resolve();
+    }
+    close() {
+      this.closed = true;
+      this.state = "closed";
+      return Promise.resolve();
+    }
+  }
+  sandbox.AudioContext = FakeAudioContext;
+  return { contexts, processors };
+}
+
+function _taskAudio001PcmEvent(length, fill = 0.2) {
+  const chunk = new Float32Array(length);
+  chunk.fill(fill);
+  return {
+    inputBuffer: {
+      getChannelData: () => chunk,
+    },
+  };
+}
+
 async function testTaskConv001StopDuringChatProcessingDrainsTwoPendingWithoutParallelChat() {
   const transcripts = ["first drain chat.", "second drain chat.", "third drain chat."];
   const { sandbox, state } = await loadRenderer({
@@ -14078,37 +14125,150 @@ async function testTaskAudio001HeaderOnlyConversationWavDroppedBeforeSttOwnerVoi
 
 async function testTaskAudio001ConversationPcmContextResumesWithVadContext() {
   const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
-  const contexts = [];
-  class FakeAudioContext {
-    constructor() {
-      this.state = "suspended";
-      this.resumeCalled = false;
-      contexts.push(this);
-    }
-    createMediaStreamSource() {
-      return { connect() {}, disconnect() {} };
-    }
-    createScriptProcessor() {
-      return { connect() {}, disconnect() {}, onaudioprocess: null };
-    }
-    resume() {
-      this.resumeCalled = true;
-      this.state = "running";
-      return Promise.resolve();
-    }
-    close() {
-      this.state = "closed";
-      return Promise.resolve();
-    }
-  }
-  sandbox.AudioContext = FakeAudioContext;
+  const { contexts } = _taskAudio001InstallFakePcmContext(sandbox);
   sandbox._startConvPcmCapture({ getTracks: () => [] });
   assert.equal(contexts.length, 1, "TASK-AUDIO-001 test setup must create one PCM context");
+  contexts[0].state = "suspended";
   sandbox._resumeConversationAudioContextIfSuspended();
   assert.equal(contexts[0].resumeCalled, true,
     "TASK-AUDIO-001 suspended PCM capture context must be resumed with VAD context");
   sandbox._stopConvPcmCapture();
   console.log("  testTaskAudio001ConversationPcmContextResumesWithVadContext PASS");
+}
+
+async function testTaskAudio001PcmPipelineSurvivesFirstUtteranceForSecondCapture() {
+  const transcripts = ["first pcm turn.", "second pcm turn."];
+  const { sandbox, state } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => ({ status: "ok", transcript: transcripts.shift() }),
+      updatePetSpeech: async () => ({ ok: true }),
+      updatePetExpression: async () => ({ ok: true }),
+    },
+    chatMode: "success",
+  });
+  const recorders = _taskConv001InstallFakeRecorder(sandbox);
+  const { contexts, processors } = _taskAudio001InstallFakePcmContext(sandbox);
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("waiting");
+  sandbox._startConvPcmCapture(sandbox.fullAppVoiceConversationStream);
+  const processor = processors[0];
+  assert.equal(contexts.length, 1, "TASK-AUDIO-001 must create one Conversation PCM pipeline");
+
+  processor.onaudioprocess(_taskAudio001PcmEvent(400));
+  sandbox._startConversationUtteranceRecorder(0.05);
+  processor.onaudioprocess(_taskAudio001PcmEvent(600));
+  recorders[0].stop();
+  await settle();
+  assert.equal(contexts[0].closed, false,
+    "TASK-AUDIO-001 first utterance finalization must not close the session PCM pipeline");
+  assert.equal(sandbox.fullAppVoiceConversationCaptureState, "listening",
+    "TASK-AUDIO-001 capture must rearm to listening after first valid utterance");
+
+  processor.onaudioprocess(_taskAudio001PcmEvent(400));
+  sandbox._startConversationUtteranceRecorder(0.06);
+  processor.onaudioprocess(_taskAudio001PcmEvent(600));
+  recorders[1].stop();
+  await settle();
+  const chatBodies = state.calls
+    .filter((call) => call.url.endsWith("/chat"))
+    .map((call) => JSON.parse(call.body || "{}").message);
+  assert.deepEqual(chatBodies.slice(0, 2), ["first pcm turn.", "second pcm turn."],
+    "TASK-AUDIO-001 second capture after first finalization must still collect usable PCM and send");
+  assert.equal(contexts.length, 1, "TASK-AUDIO-001 must not create a duplicate PCM pipeline between utterances");
+  sandbox._stopConvPcmCapture();
+  console.log("  testTaskAudio001PcmPipelineSurvivesFirstUtteranceForSecondCapture PASS");
+}
+
+async function testTaskAudio001PcmCaptureEmptyRearmsWithoutFakeErrorHistoryOrDuplicatePipeline() {
+  let transcribeCalls = 0;
+  const { sandbox, state } = await loadRenderer({
+    ownerVoiceGateSettings: _task266OwnerVoiceEnabledSettings(),
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => {
+        transcribeCalls += 1;
+        return { status: "ok", transcript: "should not happen" };
+      },
+      updatePetSpeech: async () => ({ ok: true }),
+      updatePetExpression: async () => ({ ok: true }),
+    },
+    chatMode: "success",
+  });
+  const recorders = _taskConv001InstallFakeRecorder(sandbox);
+  const { contexts } = _taskAudio001InstallFakePcmContext(sandbox);
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("waiting");
+  sandbox._startConvPcmCapture(sandbox.fullAppVoiceConversationStream);
+
+  sandbox._startConversationUtteranceRecorder(0.05);
+  recorders[0].stop();
+  await settle();
+  assert.equal(sandbox.fullAppVoiceConversationCaptureState, "listening",
+    "TASK-AUDIO-001 pcm_capture_empty must rearm listening when Stop was not requested");
+  assert.equal(sandbox.fullAppVoiceConversationRecorder, null,
+    "TASK-AUDIO-001 pcm_capture_empty must clear failed recorder reference");
+  assert.equal(sandbox.fullAppVoiceConversationActiveCaptureMeta, null,
+    "TASK-AUDIO-001 pcm_capture_empty must clear active capture metadata");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.sttStatus, "capture_drop",
+    "TASK-AUDIO-001 pcm_capture_empty history/diagnostics must be capture_drop, not STT:error");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.lastAudioPreviewAvailable, false,
+    "TASK-AUDIO-001 pcm_capture_empty must not expose invalid preview");
+  assert.equal(sandbox.fullAppVoiceDiagnosticsHistory[0].sttStatus, "capture_drop",
+    "TASK-AUDIO-001 history must label empty capture as capture_drop");
+  assert.notEqual(sandbox.fullAppVoiceDiagnosticsHistory[0].sttStatus, "error",
+    "TASK-AUDIO-001 must not create fake 0ms 0B STT:error history entries");
+
+  sandbox._startConversationUtteranceRecorder(0.06);
+  recorders[1].stop();
+  await settle();
+  assert.equal(transcribeCalls, 0, "TASK-AUDIO-001 repeated empty PCM must not reach STT");
+  assert.equal(state.calls.filter((call) => call.url.endsWith("/owner-voice-gate/verify-files")).length, 0,
+    "TASK-AUDIO-001 repeated empty PCM must not reach Owner Voice");
+  assert.equal(state.calls.filter((call) => call.url.endsWith("/chat")).length, 0,
+    "TASK-AUDIO-001 repeated empty PCM must not send chat");
+  assert.equal(contexts.length, 1,
+    "TASK-AUDIO-001 repeated empty PCM recovery must not create duplicate PCM listeners");
+  assert.equal(recorders.length, 2,
+    "TASK-AUDIO-001 repeated empty PCM recovery must not hot-loop extra recorders");
+  sandbox._stopConvPcmCapture();
+  console.log("  testTaskAudio001PcmCaptureEmptyRearmsWithoutFakeErrorHistoryOrDuplicatePipeline PASS");
+}
+
+async function testTaskAudio001PcmCaptureEmptyRearmsDuringChatProcessing() {
+  const { sandbox, state } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => ({ status: "ok", transcript: "chat still processing." }),
+      updatePetSpeech: async () => ({ ok: true }),
+      updatePetExpression: async () => ({ ok: true }),
+    },
+    chatMode: "success",
+    pauseChat: true,
+  });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("waiting");
+  sandbox._transcribeConversationChunks([new Blob(["valid"], { type: "audio/wav" })], "audio/wav");
+  await settle();
+  assert.equal(sandbox.fullAppVoiceConversationProcessingState, "chat_processing",
+    "TASK-AUDIO-001 setup must have active chat processing");
+  const meta = {
+    captureSource: "conversation",
+    recordingStartedAt: 1000,
+    recordingStoppedAt: 1200,
+    finalizedAt: 1200,
+    mimeType: "audio/wav",
+    pcmGuardRequired: true,
+  };
+  await sandbox._transcribeConversationChunks([new Blob([new ArrayBuffer(44)], { type: "audio/wav" })], "audio/wav", meta);
+  await settle();
+  assert.equal(sandbox.fullAppVoiceConversationProcessingState, "chat_processing",
+    "TASK-AUDIO-001 capture recovery must not cancel active chat processing");
+  assert.equal(sandbox.fullAppVoiceConversationCaptureState, "listening",
+    "TASK-AUDIO-001 processing=chat_processing must not block capture rearm");
+  state.resolveChat();
+  await settle();
+  console.log("  testTaskAudio001PcmCaptureEmptyRearmsDuringChatProcessing PASS");
 }
 
 async function testTaskAudio001ManualMicPreparingIsNotRecording() {
@@ -17174,6 +17334,9 @@ async function main() {
   await testTaskAudio001PreRollClearedAfterStop();
   await testTaskAudio001HeaderOnlyConversationWavDroppedBeforeSttOwnerVoicePreview();
   await testTaskAudio001ConversationPcmContextResumesWithVadContext();
+  await testTaskAudio001PcmPipelineSurvivesFirstUtteranceForSecondCapture();
+  await testTaskAudio001PcmCaptureEmptyRearmsWithoutFakeErrorHistoryOrDuplicatePipeline();
+  await testTaskAudio001PcmCaptureEmptyRearmsDuringChatProcessing();
   await testTaskAudio001ManualMicPreparingIsNotRecording();
 
   // TASK-246: STT Model Quality / Whisper Model Upgrade
