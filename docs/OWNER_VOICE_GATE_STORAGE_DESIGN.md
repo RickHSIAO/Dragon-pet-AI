@@ -1,6 +1,6 @@
 # Owner Voice Gate Storage Design
 
-Status: TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS; TASK-263 DONE - Windows Unicode owner voice enrollment storage smoke PASS; TASK-264 DONE - Windows stored centroid verification smoke PASS; TASK-265 DONE - Windows backend verify-files smoke PASS; TASK-266 DONE - Manual Mic dry-run only / no hard block; TASK-267 DONE - Conversation Mode dry-run only / no hard block; TASK-268 DONE - diagnostics polish only / no hard block; TASK-269 DONE - hard gate opt-in design / no runtime change; TASK-270 DONE - candidate WAV temporary policy / dry-run only / no hard block
+Status: TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS; TASK-263 DONE - Windows Unicode owner voice enrollment storage smoke PASS; TASK-264 DONE - Windows stored centroid verification smoke PASS; TASK-265 DONE - Windows backend verify-files smoke PASS; TASK-266 DONE - Manual Mic dry-run only / no hard block; TASK-267 DONE - Conversation Mode dry-run only / no hard block; TASK-268 DONE - diagnostics polish only / no hard block; TASK-269 DONE - hard gate opt-in design / no runtime change; TASK-270 DONE - Windows runtime candidate WAV lifecycle smoke PASS / no hard block
 
 Date: 2026-06-05
 
@@ -898,7 +898,8 @@ gate.
 
 TASK-270 implements the safe temporary candidate WAV policy needed for dry-run
 verification. It is not a hard gate and does not change backend Owner Voice
-Gate behavior.
+Gate behavior. Windows runtime lifecycle smoke is PASS for both Manual Mic and
+Conversation Mode.
 
 ### Runtime behavior
 
@@ -972,6 +973,45 @@ If temp creation, conversion, verification, or deletion fails, the existing
 voice flow continues. The dry-run status records a safe reason such as
 `candidate_wav_temp_unavailable` or `verify_files_error`; `runtimeHardBlocked`
 stays false.
+
+### Windows runtime smoke closeout
+
+Manual Mic runtime smoke:
+
+- mode: `manual_mic`
+- STT status: `success`
+- dry-run source: `manual_mic`
+- reason: `verification_complete`
+- score / threshold: `0.7568 / 0.65`
+- accepted: `true`
+- `candidateWavTemporary=true`
+- `candidateWavDeleted=true`
+- `runtimeHardBlocked=false`
+- `rawAudioPersisted=false`
+- `candidateEmbeddingPersisted=false`
+- `storedCentroidExposed=false`
+- existing Manual Mic flow remained non-blocking
+
+Conversation Mode runtime smoke:
+
+- mode: `conversation`
+- STT status: `success`
+- VAD detected speech: `true`
+- dry-run source: `conversation_mode`
+- reason: `verification_complete`
+- score / threshold: `0.0157 / 0.65`
+- accepted: `false`
+- `candidateWavTemporary=true`
+- `candidateWavDeleted=true`
+- `runtimeHardBlocked=false`
+- `rawAudioPersisted=false`
+- `candidateEmbeddingPersisted=false`
+- `storedCentroidExposed=false`
+- subsequent capture appeared, so the loop continued
+- existing Conversation Mode flow remained non-blocking
+
+The low Conversation Mode score is a calibration and voice-quality follow-up.
+It is not a TASK-270 candidate WAV lifecycle failure.
 
 ## 21. TASK-267 Conversation Mode Dry-run Policy
 

@@ -1,6 +1,6 @@
 # Dragon Pet AI
 
-**Latest local status (2026-06-05):** TASK-270 Owner Voice Candidate WAV Temporary Policy **DONE - dry-run temp WAV policy / no hard gate**. Manual Mic and Conversation Mode dry-run verification now prepare a bounded temporary WAV under the OS temp directory through a narrow Electron IPC bridge, call the existing backend `/owner-voice-gate/verify-files` endpoint, and delete the temp WAV after verification or by cleanup timeout. Existing STT/chat flow remains non-blocking; verify accept/reject/error/temp-create failure never hard-blocks Manual Mic, Conversation Mode, `/stt/transcribe`, or `/chat`. Diagnostics show only safe status/reason/score/threshold/accepted/checkedAt plus `candidateWavTemporary` and `candidateWavDeleted` booleans. No backend endpoint behavior change, `/stt/transcribe` schema change, `/chat` schema change, Pet Window change, Output Queue change, hard gate, authentication claim, candidate path display, centroid/embedding exposure, or raw audio/transcript exposure was added.
+**Latest local status (2026-06-05):** TASK-270 Owner Voice Candidate WAV Temporary Policy **DONE - WINDOWS RUNTIME CANDIDATE WAV LIFECYCLE SMOKE PASS / no hard gate**. Manual Mic runtime smoke PASS: STT succeeded, owner voice dry-run verified with score 0.7568 >= threshold 0.65, `candidateWavTemporary=true`, `candidateWavDeleted=true`, and `runtimeHardBlocked=false`; existing Manual Mic flow remained non-blocking. Conversation Mode runtime smoke PASS: STT succeeded, VAD detected speech, owner voice dry-run verified with score 0.0157 < threshold 0.65, `candidateWavTemporary=true`, `candidateWavDeleted=true`, `runtimeHardBlocked=false`, and the loop continued; low Conversation Mode score is a separate calibration/voice-quality follow-up, not a temp lifecycle failure. Diagnostics exposed only safe status/reason/score/threshold/accepted/checkedAt and safety booleans. No backend endpoint behavior change, `/stt/transcribe` schema change, `/chat` schema change, Pet Window change, Output Queue change, hard gate, authentication claim, candidate path display, centroid/embedding exposure, or raw audio/transcript exposure was added.
 
 > **Dragon Pet AI** 是一個本地優先的 Electron + FastAPI 桌面陪伴原型，具備手動記憶、記憶稽核日誌、BYOK 提供者設定、使用量計量、安全審查過的 Test Connection 端點、Anthropic/Ollama 提供者轉接層（隱藏在 feature flag 後）、本地 Ollama `/chat` 執行期 smoke 通過（`source=llm_local`，克莉絲蒂娜人格確認）、Ollama Provider Settings UI（無需 API Key，使用本機 GPU/CPU），以及 Full App 聊天搜尋、高亮、匯出、未讀提示、時間戳、LINE-style 日期分隔線、清除確認、empty state、Undo Clear Chat 與單則訊息刪除/復原。以安全優先的增量開發方式建構，後端 mocked 測試套件共 **586 個測試通過**。
 
@@ -109,7 +109,7 @@ ollama serve
 | 真實 API Key 使用 | ❌ 無 — 所有測試使用 mocked runner |
 | 生產就緒 | ❌ 尚未 — prototype / portfolio 階段 |
 | Demo 可用（本地 Ollama） | ✅ 是 |
-| 下一個任務 | TASK-270 Owner Voice candidate WAV temporary policy **DONE - dry-run only**; next implementation work should focus on explicit opt-in hard-gate UI/settings and safety evaluation |
+| 下一個任務 | TASK-270 Owner Voice candidate WAV temporary policy **DONE - Windows runtime lifecycle smoke PASS**; next work should track Conversation Mode score/calibration quality before any hard-gate implementation |
 
 ---
 

@@ -640,7 +640,13 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   transcripts, centroid data, and embeddings are not displayed. No backend
   endpoint change, `/stt/transcribe` schema change, `/chat` schema change, Pet
   Window change, Output Queue change, hard gate, or authentication claim was
-  added.
+  added. Windows runtime lifecycle smoke PASS: Manual Mic STT succeeded,
+  dry-run accepted at score 0.7568 / threshold 0.65, temp WAV was marked
+  temporary and deleted, and flow stayed non-blocking. Conversation Mode STT
+  succeeded, VAD detected speech, dry-run rejected at score 0.0157 / threshold
+  0.65, temp WAV was marked temporary and deleted, runtime hard block stayed
+  false, and the loop continued. The low Conversation Mode score is a separate
+  calibration / voice-quality follow-up, not a TASK-270 temp lifecycle failure.
 
 - TASK-256b DONE - WINDOWS DIAGNOSTICS READABILITY SMOKE PASS (2026-06-04): Diagnostics / Voice Panel Readability Polish. CSS-only change: `.voice-diagnostics-display` 10px → 13px, `line-height` 1.55, `max-height` 200px → 340px; `.voice-diagnostics-summary` 12px → 14px + font-weight 500; `.voice-diagnostics-panel` padding 4→8px; `.voice-tuning-label/input/select` 11px → 13px; `.voice-tuning-hint/voice-preview-hint/status` 10px → 12px; `.voice-preview-play-btn` 11px → 13px; `.voice-preview-audio-el` 28px → 32px. Windows smoke PASS: diagnostics readability improved, text/spacing/panel height all visibly better. No STT/warmup/IPC/Pet Window/Output Queue runtime changes. 10 new renderer CSS smoke tests PASS.
 

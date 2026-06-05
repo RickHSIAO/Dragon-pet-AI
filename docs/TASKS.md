@@ -26699,7 +26699,7 @@ Future task sequence:
 - TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy (DONE).
 - TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish (DONE).
 - TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy (DONE).
-- TASK-270 Owner Voice Candidate WAV Temporary Policy Design / Implementation (DONE).
+- TASK-270 Owner Voice Candidate WAV Temporary Policy Design / Implementation (DONE - Windows runtime lifecycle smoke PASS).
 
 **TASK-261 — Owner Voice Enrollment UI / Local Storage Stub:**
 
@@ -27382,7 +27382,7 @@ PASS on 2026-06-04 against the stored owner centroid:
 TASK-SEC-001 Security Boundary / Anti Prompt Injection Design and TASK-SEC-002
 Sensitive Data Inventory / Redaction Rules and TASK-SEC-003 Prompt Injection
 Test Corpus and TASK-SEC-004 Tool Permission / User Confirmation Policy are
-complete; TASK-266 Owner Voice Gate Manual Mic Dry-run Policy is DONE; TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy is DONE; TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish is DONE; TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy is DONE; TASK-270 Owner Voice Candidate WAV Temporary Policy is DONE.
+complete; TASK-266 Owner Voice Gate Manual Mic Dry-run Policy is DONE; TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy is DONE; TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish is DONE; TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy is DONE; TASK-270 Owner Voice Candidate WAV Temporary Policy is DONE with Windows runtime lifecycle smoke PASS.
 
 ---
 
@@ -27488,7 +27488,7 @@ Before Owner Voice Gate connects to Manual Mic or Conversation Mode runtime:
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
 9. TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy - DONE.
-10. TASK-270 Owner Voice Candidate WAV Temporary Policy Design / Implementation - DONE.
+10. TASK-270 Owner Voice Candidate WAV Temporary Policy Design / Implementation - DONE - WINDOWS RUNTIME LIFECYCLE SMOKE PASS.
 
 ### Validation
 
@@ -27614,7 +27614,7 @@ TASK-SEC-003 has captured prompt injection and phishing corpora covering:
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
 9. TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy - DONE.
-10. TASK-270 Owner Voice Candidate WAV Temporary Policy Design / Implementation - DONE.
+10. TASK-270 Owner Voice Candidate WAV Temporary Policy Design / Implementation - DONE - WINDOWS RUNTIME LIFECYCLE SMOKE PASS.
 
 ### Validation
 
@@ -27721,7 +27721,7 @@ structured fixtures and assert that:
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
 9. TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy - DONE.
-10. TASK-270 Owner Voice Candidate WAV Temporary Policy Design / Implementation - DONE.
+10. TASK-270 Owner Voice Candidate WAV Temporary Policy Design / Implementation - DONE - WINDOWS RUNTIME LIFECYCLE SMOKE PASS.
 
 ### Validation
 
@@ -27844,7 +27844,7 @@ T6 data is blocked from LLM context and outbound actions.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
 9. TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy - DONE.
-10. TASK-270 Owner Voice Candidate WAV Temporary Policy Design / Implementation - DONE.
+10. TASK-270 Owner Voice Candidate WAV Temporary Policy Design / Implementation - DONE - WINDOWS RUNTIME LIFECYCLE SMOKE PASS.
 
 ### Validation
 
@@ -27953,7 +27953,7 @@ diagnostics, or embeddings enter outbound flows.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
 9. TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy - DONE.
-10. TASK-270 Owner Voice Candidate WAV Temporary Policy Design / Implementation - DONE.
+10. TASK-270 Owner Voice Candidate WAV Temporary Policy Design / Implementation - DONE - WINDOWS RUNTIME LIFECYCLE SMOKE PASS.
 
 ### Validation
 
@@ -28065,7 +28065,7 @@ Added backend pytest regression for:
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
 9. TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy - DONE.
-10. TASK-270 Owner Voice Candidate WAV Temporary Policy Design / Implementation - DONE.
+10. TASK-270 Owner Voice Candidate WAV Temporary Policy Design / Implementation - DONE - WINDOWS RUNTIME LIFECYCLE SMOKE PASS.
 
 ---
 
@@ -28467,7 +28467,7 @@ Before implementing hard gate:
 
 ## TASK-270 | Owner Voice Candidate WAV Temporary Policy Design / Implementation
 
-Status: DONE - DRY-RUN TEMP WAV POLICY / NO HARD GATE (2026-06-05)
+Status: DONE - WINDOWS RUNTIME CANDIDATE WAV LIFECYCLE SMOKE PASS / NO HARD GATE (2026-06-05)
 
 ### Goal
 
@@ -28521,6 +28521,45 @@ If temp WAV creation, conversion, verification, or cleanup fails:
   `reason=candidate_wav_temp_unavailable`.
 - Verify failure reports `status=error` and `reason=verify_files_error`.
 - Existing Manual Mic and Conversation Mode flow continues.
+
+### Windows Runtime Smoke Closeout
+
+Manual Mic smoke PASS:
+
+- mode: `manual_mic`
+- STT status: `success`
+- dry-run source: `manual_mic`
+- reason: `verification_complete`
+- score / threshold: `0.7568 / 0.65`
+- accepted: `true`
+- `candidateWavTemporary=true`
+- `candidateWavDeleted=true`
+- `runtimeHardBlocked=false`
+- `rawAudioPersisted=false`
+- `candidateEmbeddingPersisted=false`
+- `storedCentroidExposed=false`
+- existing Manual Mic flow remained non-blocking
+
+Conversation Mode smoke PASS:
+
+- mode: `conversation`
+- STT status: `success`
+- VAD detected speech: `true`
+- dry-run source: `conversation_mode`
+- reason: `verification_complete`
+- score / threshold: `0.0157 / 0.65`
+- accepted: `false`
+- `candidateWavTemporary=true`
+- `candidateWavDeleted=true`
+- `runtimeHardBlocked=false`
+- `rawAudioPersisted=false`
+- `candidateEmbeddingPersisted=false`
+- `storedCentroidExposed=false`
+- subsequent capture appeared, so the loop continued
+- existing Conversation Mode flow remained non-blocking
+
+Low Conversation Mode score is a separate calibration and voice-quality
+follow-up. It is not a TASK-270 temp lifecycle failure.
 
 ### Privacy And Redaction
 
