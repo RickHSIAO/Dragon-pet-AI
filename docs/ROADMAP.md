@@ -656,10 +656,15 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   Processing remains sequential and ordered through one active worker, so no
   simultaneous multiple `/chat` requests are introduced. Queue overflow drops
   the newest utterance and records sanitized diagnostics with `queue_full`.
-  Stop clears pending utterances and prevents canceled recorder output from
-  entering the queue; STT errors on one item do not deadlock later queued
-  utterances. Voice Diagnostics now includes safe capture/processing/queue
-  counters and action/reason fields. No TTS interruption/barge-in, full-duplex
+  Stop now means graceful drain: it immediately prevents new capture, preserves
+  already-finalized pending turns, safely finalizes an active recorder as the
+  last queued turn when valid, drains recorded turns in order, and finishes at
+  capture `off`, processing `idle`, pending `0`, and `activeTurnId=0`.
+  Utterances that begin after Stop are dropped and do not enter the queue. STT
+  errors on one item do not deadlock later queued utterances. Voice Diagnostics
+  now includes safe capture/processing/queue counters, stop/drain state, and
+  action/reason fields. A future explicit Cancel Pending / Force Stop action
+  may clear queued turns; normal Stop does not. No TTS interruption/barge-in, full-duplex
   chat, new IPC, `/stt/transcribe` schema change, `/chat` schema change, Pet
   Window change, Output Queue change, Owner Voice hard gate, raw audio
   persistence, candidate path exposure, centroid exposure, or embedding

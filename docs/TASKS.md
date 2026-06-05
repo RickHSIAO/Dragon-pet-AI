@@ -28604,11 +28604,13 @@ and `/chat` had finished.
 
 ### New State Design
 
-TASK-CONV-001 separates runtime state into three concepts:
+TASK-CONV-001 separates runtime state into explicit concepts:
 
 - capture state: `off`, `listening`, `recording`
 - processing state: `idle`, `stt_processing`, `chat_processing`
 - queue state: bounded pending utterances plus `activeTurnId`
+- stop/drain state: `conversationStopRequested`, `conversationDrainPending`,
+  and `conversationStopMode`
 
 The old `fullAppVoiceConversationState` remains as a coarse UI compatibility
 state, but VAD decisions now use capture state. When recording stops because of
@@ -28627,18 +28629,28 @@ returns capture to `listening` if Conversation Mode is still enabled.
 - The queue stores only bounded in-memory audio Blob references until processed;
   no raw audio is persisted by this task.
 
-### Stop And Error Behavior
+### Stop / Drain And Error Behavior
 
-- Stop disables Conversation Mode capture.
-- Stop clears pending utterances.
-- Stop marks active recorder output for discard so canceled audio is not
-  enqueued.
-- In-flight STT/chat promises are not force-aborted; when they settle, they do
-  not resume listening because Conversation Mode is disabled.
+- Stop now means graceful drain, not queue discard.
+- Stop immediately disables new capture: VAD/listening are shut down, the
+  microphone stream is released, and no new `MediaRecorder` may start.
+- Already-finalized pending utterances are preserved and continue processing in
+  order.
+- Active STT/chat work continues; in-flight promises are not force-aborted.
+- If Stop is pressed during an active recording, the recorder is safely stopped
+  and finalized; if it contains a recorded utterance, it is enqueued as the
+  final turn.
+- No listening state is re-armed after Stop. After drain completes, state lands
+  at capture `off`, processing `idle`, pending count `0`, and `activeTurnId=0`.
+- Utterances that begin after Stop is requested are dropped with sanitized
+  diagnostics and do not enter the queue.
 - STT failure for one utterance records `sttStatus=error` and the worker moves
   to the next queued utterance.
 - Empty/too-long transcript handling remains non-blocking and does not deadlock
   the queue.
+- A separate future `Cancel Pending` / `Force Stop` action may be added if the
+  product needs explicit queue discard; normal Stop does not discard
+  already-recorded turns.
 
 ### Diagnostics
 
@@ -28651,6 +28663,9 @@ Voice Diagnostics now shows sanitized queue/capture fields:
 - `conversationActiveTurnId`
 - `conversationLastQueueAction`
 - `conversationLastQueueReason`
+- `conversationStopRequested`
+- `conversationDrainPending`
+- `conversationStopMode`
 
 Diagnostics remain `textContent` only. They do not display raw audio, full
 candidate paths, raw/rejected transcripts beyond existing safe STT previews,
@@ -28682,14 +28697,22 @@ stored centroids, `embeddingAggregate`, or candidate embeddings.
 - queue limit and newest-drop overflow
 - first utterance STT error does not deadlock the second
 - duplicate recorder/start prevention
-- stop clears pending utterances and prevents capture resume
+- Stop graceful-drain behavior: active and pending recorded turns keep sending
+  in order
+- Stop during active recording finalizes the current recorder as the last queued
+  turn
+- no utterance beginning after Stop enters the queue
+- no parallel `/chat` requests during drain
+- drain completion returns capture `off`, processing `idle`, pending `0`,
+  activeTurnId `0`
 - Owner Voice dry-run remains non-blocking
 - TASK-STT-001 final transcript remains the `/chat` input
+- candidate WAV temp/delete lifecycle remains intact
 - no schema/IPC/sensitive exposure regression
 
 ### Validation
 
-- `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_routes.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-conv001`
+- `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_routes.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-conv001-stop-drain`
 - `backend\.venv\Scripts\python.exe scripts\stt_provider_smoke.py`
 - `node apps/desktop/scripts/renderer-chat-smoke.js`
 - `node apps/desktop/scripts/pet-window-smoke.js`
@@ -28702,8 +28725,9 @@ stored centroids, `embeddingAggregate`, or candidate embeddings.
 Windows live runtime smoke with actual audio is still required before marking
 TASK-CONV-001 as DONE. The smoke should confirm that next utterance capture
 starts while the prior utterance is still processing, chat ordering remains
-sequential, queue overflow is safe, stop/error paths recover, and no sensitive
-data is exposed.
+sequential, queue overflow is safe, Stop prevents new capture while draining
+already-recorded turns, active recording Stop finalizes the last turn,
+stop/error paths recover, and no sensitive data is exposed.
 
 ---
 
