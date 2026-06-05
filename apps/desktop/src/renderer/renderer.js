@@ -70,6 +70,8 @@ const FULL_APP_CONVERSATION_MAX_UTTERANCE_MS = 30000;
 const FULL_APP_CONVERSATION_VAD_INTERVAL_MS  = 100;
 const FULL_APP_CONVERSATION_RMS_THRESHOLD    = 0.035;
 const FULL_APP_CONVERSATION_PENDING_MAX      = 2;
+const FULL_APP_CONVERSATION_PRE_ROLL_ENABLED = true;
+const FULL_APP_CONVERSATION_PRE_ROLL_MS      = 500;
 // TASK-244b: Voice Pipeline Diagnostics constants
 const FULL_APP_VOICE_MIME_PRIORITY = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"];
 const FULL_APP_VOICE_AUDIO_CONSTRAINTS = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
@@ -193,6 +195,7 @@ let isSending   = false;
 // TASK-241: Full App voice input state — isolated from isSending / chat state
 var fullAppRecording    = false; // var: exposed to vm sandbox for smoke tests
 var fullAppTranscribing = false; // var: exposed to vm sandbox for smoke tests
+var fullAppVoicePreparing = false; // var: mic requested, recorder not ready yet
 let _fullAppMicStream    = null;
 let _fullAppRecorder     = null;
 let _fullAppChunks       = [];
@@ -217,6 +220,8 @@ var fullAppVoiceConversationDrainPending = false; // var: drain already-recorded
 var fullAppVoiceConversationStopRequestedAt = 0;
 var fullAppVoiceConversationStopMode = "none"; // none|graceful_drain|drain_complete
 var fullAppVoiceConversationStream          = null;
+var fullAppVoiceConversationCaptureRequestedAt = 0;
+var fullAppVoiceConversationMediaStreamReadyAt = 0;
 var fullAppVoiceConversationAudioContext    = null;
 var fullAppVoiceConversationAnalyser        = null;
 var fullAppVoiceConversationVadTimer        = null;
@@ -230,15 +235,31 @@ let _fullAppPcmChunks    = [];
 let _fullAppPcmCtx       = null;
 let _fullAppPcmSource    = null;
 let _fullAppPcmProcessor = null;
+let _fullAppActiveCaptureMeta = null;
 let _convPcmChunks       = [];
 let _convPcmCtx          = null;
 let _convPcmSource       = null;
 let _convPcmProcessor    = null;
+let _convPcmPreRollChunks = [];
+let _convPcmPreRollSamples = 0;
 // TASK-244: Voice Quality Diagnostics state — session-only, not persisted
 var fullAppVoiceDiagnostics = {
   mode: "none",
   recordingStartedAt: 0,
   recordingEndedAt: 0,
+  captureRequestedAt: 0,
+  mediaStreamReadyAt: 0,
+  recorderStartRequestedAt: 0,
+  recorderStartedAt: 0,
+  firstChunkAt: 0,
+  vadTriggeredAt: 0,
+  recordingFinalizedAt: 0,
+  captureReadyLatencyMs: 0,
+  firstChunkLatencyMs: 0,
+  preRollEnabled: false,
+  preRollConfiguredMs: 0,
+  preRollAppliedMs: 0,
+  sentenceStartPreserved: false,
   durationMs: 0,
   blobSizeBytes: 0,
   mimeType: "",
@@ -4600,11 +4621,13 @@ if (chatNewMsgBtn) {
 // ---------------------------------------------------------------------------
 
 function setFullAppVoiceState(state) {
-  // state: "idle" | "recording" | "transcribing"
+  // state: "idle" | "preparing" | "recording" | "transcribing"
   var isIdle         = state === "idle";
+  var isPreparing    = state === "preparing";
   var isRecording    = state === "recording";
   var isTranscribing = state === "transcribing";
 
+  fullAppVoicePreparing = isPreparing;
   fullAppRecording    = isRecording;
   fullAppTranscribing = isTranscribing;
 
@@ -4614,12 +4637,16 @@ function setFullAppVoiceState(state) {
       voiceInputBtn.disabled = false;
     } else {
       voiceInputBtn.dataset.state = state;
-      voiceInputBtn.disabled = isTranscribing;
+      voiceInputBtn.disabled = isPreparing || isTranscribing;
     }
   }
 
   if (voiceInputStatus) {
-    if (isRecording) {
+    if (isPreparing) {
+      voiceInputStatus.textContent = "準備錄音…";
+      voiceInputStatus.dataset.state = "preparing";
+      voiceInputStatus.hidden = false;
+    } else if (isRecording) {
       voiceInputStatus.textContent = "錄音中… 再按停止";
       voiceInputStatus.dataset.state = "recording";
       voiceInputStatus.hidden = false;
@@ -4713,7 +4740,7 @@ async function transcribeFullAppAudioBlob(blob) {
   return String(result.transcript);
 }
 
-function _fullAppSttTranscribeChunks(chunks, mimeType) {
+function _fullAppSttTranscribeChunks(chunks, mimeType, recordingMeta) {
   var audioBlob;
   try {
     audioBlob = new Blob(chunks || [], { type: mimeType || "audio/webm" });
@@ -4726,7 +4753,13 @@ function _fullAppSttTranscribeChunks(chunks, mimeType) {
   try { fullAppVoiceDiagnostics.blobSizeBytes = audioBlob.size || 0; } catch (_e) {}
   fullAppVoiceDiagnostics.mimeType = mimeType || "";
   fullAppVoiceDiagnostics.chunksCount = (chunks || []).length;
-  var _sttEndedAt = Date.now();
+  var _sttEndedAt = _conversationNowMs();
+  if (recordingMeta && typeof recordingMeta === "object") {
+    if (!recordingMeta.recordingFinalizedAt) recordingMeta.recordingFinalizedAt = _sttEndedAt;
+    if (!recordingMeta.recordingStoppedAt) recordingMeta.recordingStoppedAt = _sttEndedAt;
+    if (!recordingMeta.recordingStartedAt) recordingMeta.recordingStartedAt = fullAppVoiceDiagnostics.recordingStartedAt || _sttEndedAt;
+    _updateCaptureTimingDiagnostics(recordingMeta);
+  }
   fullAppVoiceDiagnostics.recordingEndedAt = _sttEndedAt;
   fullAppVoiceDiagnostics.durationMs = _sttEndedAt - (fullAppVoiceDiagnostics.recordingStartedAt || _sttEndedAt);
   // TASK-244b: pipeline diagnostics — selectedMimeType, bytesPerSecond, in-memory preview blob
@@ -4870,15 +4903,21 @@ function _encodeWavPcm(pcmChunks, sampleRate) {
   return new Blob([buffer], { type: "audio/wav" });
 }
 
-function _startPcmCapture(stream) {
+function _startPcmCapture(stream, captureMeta) {
   try {
     _fullAppPcmChunks = [];
+    _fullAppActiveCaptureMeta = captureMeta || null;
     var ctx = new AudioContext({ sampleRate: FULL_APP_STT_PCM_SAMPLE_RATE });
     _fullAppPcmCtx = ctx;
     _fullAppPcmSource = ctx.createMediaStreamSource(stream);
     _fullAppPcmProcessor = ctx.createScriptProcessor(FULL_APP_STT_PCM_BUFFER_SIZE, 1, 1);
     _fullAppPcmProcessor.onaudioprocess = function (ev) {
-      _fullAppPcmChunks.push(new Float32Array(ev.inputBuffer.getChannelData(0)));
+      var chunk = new Float32Array(ev.inputBuffer.getChannelData(0));
+      if (_fullAppActiveCaptureMeta && !_fullAppActiveCaptureMeta.firstChunkAt) {
+        _fullAppActiveCaptureMeta.firstChunkAt = _conversationNowMs();
+        _updateCaptureTimingDiagnostics(_fullAppActiveCaptureMeta);
+      }
+      _fullAppPcmChunks.push(chunk);
     };
     _fullAppPcmSource.connect(_fullAppPcmProcessor);
     _fullAppPcmProcessor.connect(ctx.destination);
@@ -4892,17 +4931,30 @@ function _stopPcmCapture() {
   _fullAppPcmProcessor = null;
   _fullAppPcmSource    = null;
   _fullAppPcmCtx       = null;
+  _fullAppActiveCaptureMeta = null;
 }
 
 function _startConvPcmCapture(stream) {
   try {
     _convPcmChunks = [];
+    _clearConversationPreRollBuffer();
     var ctx = new AudioContext({ sampleRate: FULL_APP_STT_PCM_SAMPLE_RATE });
     _convPcmCtx = ctx;
     _convPcmSource = ctx.createMediaStreamSource(stream);
     _convPcmProcessor = ctx.createScriptProcessor(FULL_APP_STT_PCM_BUFFER_SIZE, 1, 1);
     _convPcmProcessor.onaudioprocess = function (ev) {
-      _convPcmChunks.push(new Float32Array(ev.inputBuffer.getChannelData(0)));
+      var chunk = new Float32Array(ev.inputBuffer.getChannelData(0));
+      if (fullAppVoiceConversationCaptureState === "recording") {
+        if (fullAppVoiceConversationActiveCaptureMeta && !fullAppVoiceConversationActiveCaptureMeta.firstChunkAt) {
+          fullAppVoiceConversationActiveCaptureMeta.firstChunkAt = _conversationNowMs();
+          _updateCaptureTimingDiagnostics(fullAppVoiceConversationActiveCaptureMeta);
+        }
+        _convPcmChunks.push(chunk);
+      } else if (fullAppVoiceConversationEnabled && !fullAppVoiceConversationStopRequested && !fullAppVoiceConversationDrainPending) {
+        _appendConversationPreRollChunk(chunk);
+        fullAppVoiceDiagnostics.preRollEnabled = FULL_APP_CONVERSATION_PRE_ROLL_ENABLED;
+        fullAppVoiceDiagnostics.preRollConfiguredMs = FULL_APP_CONVERSATION_PRE_ROLL_MS;
+      }
     };
     _convPcmSource.connect(_convPcmProcessor);
     _convPcmProcessor.connect(ctx.destination);
@@ -4916,6 +4968,7 @@ function _stopConvPcmCapture() {
   _convPcmProcessor = null;
   _convPcmSource    = null;
   _convPcmCtx       = null;
+  _clearConversationPreRollBuffer();
 }
 
 function stopFullAppVoiceInput() {
@@ -4973,6 +5026,7 @@ function cancelFullAppVoiceInput() {
 }
 
 async function openFullAppVoiceInput() {
+  var captureRequestedAt = _conversationNowMs();
   // Toggle: if already recording, stop and transcribe
   if (fullAppRecording) {
     stopFullAppVoiceInput();
@@ -4980,7 +5034,7 @@ async function openFullAppVoiceInput() {
   }
 
   // If transcribing, ignore new request
-  if (fullAppTranscribing) {
+  if (fullAppTranscribing || fullAppVoicePreparing) {
     return;
   }
 
@@ -4989,8 +5043,15 @@ async function openFullAppVoiceInput() {
     return;
   }
 
+  setFullAppVoiceState("preparing");
+  fullAppVoiceDiagnostics.captureRequestedAt = captureRequestedAt;
+  fullAppVoiceDiagnostics.captureReadyLatencyMs = 0;
+  fullAppVoiceDiagnostics.firstChunkLatencyMs = 0;
+  renderFullAppVoiceDiagnostics();
+
   // Check MediaRecorder availability (not present in all environments)
   if (typeof MediaRecorder === "undefined") {
+    setFullAppVoiceState("idle");
     if (voiceInputStatus) {
       voiceInputStatus.textContent = "此環境不支援語音輸入。";
       voiceInputStatus.hidden = false;
@@ -5006,7 +5067,10 @@ async function openFullAppVoiceInput() {
       throw new Error("no_mic");
     }
     stream = await navObj.mediaDevices.getUserMedia({ audio: FULL_APP_VOICE_AUDIO_CONSTRAINTS });
+    fullAppVoiceDiagnostics.mediaStreamReadyAt = _conversationNowMs();
+    fullAppVoiceDiagnostics.captureReadyLatencyMs = _nonNegativeLatencyMs(captureRequestedAt, fullAppVoiceDiagnostics.mediaStreamReadyAt);
   } catch (err) {
+    setFullAppVoiceState("idle");
     var errName    = err && err.name    ? err.name    : "";
     var errMsgStr  = err && err.message ? err.message : "";
     var statusText;
@@ -5049,6 +5113,7 @@ async function openFullAppVoiceInput() {
     recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
   } catch (_e) {
     try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (_e2) { /* ignore */ }
+    setFullAppVoiceState("idle");
     if (voiceInputStatus) {
       voiceInputStatus.textContent = "此環境不支援語音輸入。";
       voiceInputStatus.hidden = false;
@@ -5059,15 +5124,38 @@ async function openFullAppVoiceInput() {
   _fullAppMicStream = stream;
   _fullAppRecorder  = recorder;
   _fullAppChunks    = [];
+  var manualCaptureMeta = {
+    captureSource: "manual_mic",
+    captureRequestedAt: captureRequestedAt,
+    mediaStreamReadyAt: fullAppVoiceDiagnostics.mediaStreamReadyAt || _conversationNowMs(),
+    recorderStartRequestedAt: 0,
+    recorderStartedAt: 0,
+    firstChunkAt: 0,
+    recordingStartedAt: 0,
+    recordingStoppedAt: 0,
+    recordingFinalizedAt: 0,
+    mimeType: "audio/wav",
+    preRollEnabled: false,
+    preRollConfiguredMs: 0,
+    preRollAppliedMs: 0,
+    sentenceStartPreserved: false
+  };
   recorder._stopAndTranscribe = false;
+  recorder._manualCaptureMeta = manualCaptureMeta;
 
   recorder.addEventListener("dataavailable", function (event) {
     if (event.data && event.data.size > 0) {
+      if (recorder._manualCaptureMeta && !recorder._manualCaptureMeta.firstChunkAt) {
+        recorder._manualCaptureMeta.firstChunkAt = _conversationNowMs();
+        _updateCaptureTimingDiagnostics(recorder._manualCaptureMeta);
+      }
       _fullAppChunks.push(event.data);
     }
   });
 
   recorder.addEventListener("stop", function () {
+    var stopMeta = recorder._manualCaptureMeta || manualCaptureMeta;
+    if (stopMeta && !stopMeta.recordingStoppedAt) stopMeta.recordingStoppedAt = _conversationNowMs();
     try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (_e) { /* ignore */ }
     _fullAppMicStream = null;
     if (_fullAppRecorder && _fullAppRecorder._stopAndTranscribe) {
@@ -5075,25 +5163,30 @@ async function openFullAppVoiceInput() {
       // TASK-252: encode PCM chunks as WAV for FunASR compatibility
       _stopPcmCapture();
       var wavBlob = _encodeWavPcm(_fullAppPcmChunks, FULL_APP_STT_PCM_SAMPLE_RATE);
+      if (stopMeta) stopMeta.recordingFinalizedAt = _conversationNowMs();
       _fullAppPcmChunks = [];
-      _fullAppSttTranscribeChunks([wavBlob], "audio/wav");
+      _fullAppSttTranscribeChunks([wavBlob], "audio/wav", stopMeta);
     } else {
       _stopPcmCapture();
       _fullAppPcmChunks = [];
     }
   });
 
-  setFullAppVoiceState("recording");
-  // TASK-244: reset diagnostics for this manual recording
-  resetFullAppVoiceDiagnosticsForRecording(fullAppVoiceAutoSendEnabled ? "manual_auto_send" : "manual_mic");
-
+  manualCaptureMeta.recorderStartRequestedAt = _conversationNowMs();
   // TASK-252: start PCM capture in parallel with MediaRecorder
-  _startPcmCapture(stream);
+  _startPcmCapture(stream, manualCaptureMeta);
 
   try {
     recorder.start();
+    manualCaptureMeta.recorderStartedAt = _conversationNowMs();
+    manualCaptureMeta.recordingStartedAt = manualCaptureMeta.recorderStartedAt;
+    setFullAppVoiceState("recording");
+    // TASK-244/TASK-AUDIO-001: reset diagnostics only after recorder is ready.
+    resetFullAppVoiceDiagnosticsForRecording(fullAppVoiceAutoSendEnabled ? "manual_auto_send" : "manual_mic", manualCaptureMeta);
   } catch (_e) {
     try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (_e2) { /* ignore */ }
+    _stopPcmCapture();
+    _fullAppPcmChunks = [];
     _fullAppMicStream = null;
     _fullAppRecorder  = null;
     setFullAppVoiceState("idle");
@@ -5251,17 +5344,116 @@ function _conversationFiniteNumber(value) {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+function _nonNegativeLatencyMs(startAt, endAt) {
+  if (!_conversationFiniteNumber(startAt) || !_conversationFiniteNumber(endAt)) return 0;
+  return endAt >= startAt ? endAt - startAt : 0;
+}
+
+function _conversationPcmMsFromSamples(samples) {
+  if (!_conversationFiniteNumber(samples) || samples <= 0) return 0;
+  return Math.round((samples / FULL_APP_STT_PCM_SAMPLE_RATE) * 1000);
+}
+
+function _clonePcmChunk(chunk) {
+  if (!chunk || typeof chunk.length !== "number") return new Float32Array(0);
+  return new Float32Array(chunk);
+}
+
+function _clearConversationPreRollBuffer() {
+  _convPcmPreRollChunks = [];
+  _convPcmPreRollSamples = 0;
+}
+
+function _appendConversationPreRollChunk(chunk) {
+  if (!FULL_APP_CONVERSATION_PRE_ROLL_ENABLED || !chunk || !chunk.length) return;
+  var maxSamples = Math.max(0, Math.round(FULL_APP_STT_PCM_SAMPLE_RATE * (FULL_APP_CONVERSATION_PRE_ROLL_MS / 1000)));
+  if (maxSamples <= 0) {
+    _clearConversationPreRollBuffer();
+    return;
+  }
+  var copy = _clonePcmChunk(chunk);
+  if (copy.length > maxSamples && typeof copy.slice === "function") {
+    copy = copy.slice(copy.length - maxSamples);
+  }
+  _convPcmPreRollChunks.push(copy);
+  _convPcmPreRollSamples += copy.length;
+  while (_convPcmPreRollSamples > maxSamples && _convPcmPreRollChunks.length > 0) {
+    var dropped = _convPcmPreRollChunks.shift();
+    _convPcmPreRollSamples -= dropped && dropped.length ? dropped.length : 0;
+  }
+}
+
+function _takeConversationPreRollChunksForUtterance(meta) {
+  if (!FULL_APP_CONVERSATION_PRE_ROLL_ENABLED) {
+    _clearConversationPreRollBuffer();
+    return [];
+  }
+  var chunks = [];
+  var samples = Math.max(0, _convPcmPreRollSamples);
+  for (var i = 0; i < _convPcmPreRollChunks.length; i++) {
+    chunks.push(_clonePcmChunk(_convPcmPreRollChunks[i]));
+  }
+  _clearConversationPreRollBuffer();
+  var appliedMs = _conversationPcmMsFromSamples(samples);
+  if (meta && typeof meta === "object") {
+    meta.preRollEnabled = true;
+    meta.preRollConfiguredMs = FULL_APP_CONVERSATION_PRE_ROLL_MS;
+    meta.preRollAppliedMs = appliedMs;
+    meta.sentenceStartPreserved = appliedMs > 0;
+  }
+  fullAppVoiceDiagnostics.preRollEnabled = true;
+  fullAppVoiceDiagnostics.preRollConfiguredMs = FULL_APP_CONVERSATION_PRE_ROLL_MS;
+  fullAppVoiceDiagnostics.preRollAppliedMs = appliedMs;
+  fullAppVoiceDiagnostics.sentenceStartPreserved = appliedMs > 0;
+  return chunks;
+}
+
+function _updateCaptureTimingDiagnostics(meta) {
+  var source = meta && typeof meta === "object" ? meta : {};
+  var captureRequestedAt = _conversationFiniteNumber(source.captureRequestedAt) ? source.captureRequestedAt : 0;
+  var mediaStreamReadyAt = _conversationFiniteNumber(source.mediaStreamReadyAt) ? source.mediaStreamReadyAt : 0;
+  var recorderStartRequestedAt = _conversationFiniteNumber(source.recorderStartRequestedAt) ? source.recorderStartRequestedAt : 0;
+  var recorderStartedAt = _conversationFiniteNumber(source.recorderStartedAt) ? source.recorderStartedAt : 0;
+  var firstChunkAt = _conversationFiniteNumber(source.firstChunkAt) ? source.firstChunkAt : 0;
+  var vadTriggeredAt = _conversationFiniteNumber(source.vadTriggeredAt) ? source.vadTriggeredAt : 0;
+  var recordingFinalizedAt = _conversationFiniteNumber(source.recordingFinalizedAt) ? source.recordingFinalizedAt : 0;
+  fullAppVoiceDiagnostics.captureRequestedAt = captureRequestedAt;
+  fullAppVoiceDiagnostics.mediaStreamReadyAt = mediaStreamReadyAt;
+  fullAppVoiceDiagnostics.recorderStartRequestedAt = recorderStartRequestedAt;
+  fullAppVoiceDiagnostics.recorderStartedAt = recorderStartedAt;
+  fullAppVoiceDiagnostics.firstChunkAt = firstChunkAt;
+  fullAppVoiceDiagnostics.vadTriggeredAt = vadTriggeredAt;
+  fullAppVoiceDiagnostics.recordingFinalizedAt = recordingFinalizedAt;
+  fullAppVoiceDiagnostics.captureReadyLatencyMs = _nonNegativeLatencyMs(captureRequestedAt, recorderStartedAt || mediaStreamReadyAt);
+  fullAppVoiceDiagnostics.firstChunkLatencyMs = _nonNegativeLatencyMs(recorderStartedAt || recorderStartRequestedAt || captureRequestedAt, firstChunkAt);
+  fullAppVoiceDiagnostics.preRollEnabled = Boolean(source.preRollEnabled);
+  fullAppVoiceDiagnostics.preRollConfiguredMs = _conversationFiniteNumber(source.preRollConfiguredMs) ? source.preRollConfiguredMs : 0;
+  fullAppVoiceDiagnostics.preRollAppliedMs = _conversationFiniteNumber(source.preRollAppliedMs) ? source.preRollAppliedMs : 0;
+  fullAppVoiceDiagnostics.sentenceStartPreserved = Boolean(source.sentenceStartPreserved);
+}
+
 function _createConversationCaptureMeta(options) {
   var opts = options && typeof options === "object" ? options : {};
   var nowMs = _conversationFiniteNumber(opts.nowMs) ? opts.nowMs : _conversationNowMs();
   return {
     turnId: _conversationFiniteNumber(opts.turnId) && opts.turnId > 0 ? opts.turnId : fullAppVoiceConversationNextTurnId++,
     captureSource: opts.captureSource || "conversation",
+    captureRequestedAt: _conversationFiniteNumber(opts.captureRequestedAt) ? opts.captureRequestedAt : nowMs,
+    mediaStreamReadyAt: _conversationFiniteNumber(opts.mediaStreamReadyAt) ? opts.mediaStreamReadyAt : 0,
+    recorderStartRequestedAt: _conversationFiniteNumber(opts.recorderStartRequestedAt) ? opts.recorderStartRequestedAt : 0,
+    recorderStartedAt: _conversationFiniteNumber(opts.recorderStartedAt) ? opts.recorderStartedAt : 0,
+    firstChunkAt: _conversationFiniteNumber(opts.firstChunkAt) ? opts.firstChunkAt : 0,
+    vadTriggeredAt: _conversationFiniteNumber(opts.vadTriggeredAt) ? opts.vadTriggeredAt : 0,
     recordingStartedAt: _conversationFiniteNumber(opts.recordingStartedAt) ? opts.recordingStartedAt : nowMs,
     recordingStoppedAt: _conversationFiniteNumber(opts.recordingStoppedAt) ? opts.recordingStoppedAt : 0,
     finalizedAt: _conversationFiniteNumber(opts.finalizedAt) ? opts.finalizedAt : 0,
+    recordingFinalizedAt: _conversationFiniteNumber(opts.recordingFinalizedAt) ? opts.recordingFinalizedAt : 0,
     mimeType: opts.mimeType || "audio/webm",
-    triggerRms: _conversationFiniteNumber(opts.triggerRms) ? opts.triggerRms : 0
+    triggerRms: _conversationFiniteNumber(opts.triggerRms) ? opts.triggerRms : 0,
+    preRollEnabled: Boolean(opts.preRollEnabled),
+    preRollConfiguredMs: _conversationFiniteNumber(opts.preRollConfiguredMs) ? opts.preRollConfiguredMs : 0,
+    preRollAppliedMs: _conversationFiniteNumber(opts.preRollAppliedMs) ? opts.preRollAppliedMs : 0,
+    sentenceStartPreserved: Boolean(opts.sentenceStartPreserved)
   };
 }
 
@@ -5270,14 +5462,26 @@ function _finalizeConversationCaptureMeta(meta, mimeType, finalizedAt) {
   var endedAt = _conversationFiniteNumber(finalizedAt) ? finalizedAt : _conversationNowMs();
   var startedAt = _conversationFiniteNumber(source.recordingStartedAt) ? source.recordingStartedAt : endedAt;
   var stoppedAt = _conversationFiniteNumber(source.recordingStoppedAt) && source.recordingStoppedAt > 0 ? source.recordingStoppedAt : endedAt;
+  var recordingFinalizedAt = _conversationFiniteNumber(source.recordingFinalizedAt) && source.recordingFinalizedAt > 0 ? source.recordingFinalizedAt : endedAt;
   return {
     turnId: _conversationFiniteNumber(source.turnId) && source.turnId > 0 ? source.turnId : fullAppVoiceConversationNextTurnId++,
     captureSource: source.captureSource || "conversation",
+    captureRequestedAt: _conversationFiniteNumber(source.captureRequestedAt) ? source.captureRequestedAt : startedAt,
+    mediaStreamReadyAt: _conversationFiniteNumber(source.mediaStreamReadyAt) ? source.mediaStreamReadyAt : 0,
+    recorderStartRequestedAt: _conversationFiniteNumber(source.recorderStartRequestedAt) ? source.recorderStartRequestedAt : 0,
+    recorderStartedAt: _conversationFiniteNumber(source.recorderStartedAt) ? source.recorderStartedAt : startedAt,
+    firstChunkAt: _conversationFiniteNumber(source.firstChunkAt) ? source.firstChunkAt : 0,
+    vadTriggeredAt: _conversationFiniteNumber(source.vadTriggeredAt) ? source.vadTriggeredAt : 0,
     recordingStartedAt: startedAt,
     recordingStoppedAt: stoppedAt,
     finalizedAt: _conversationFiniteNumber(source.finalizedAt) && source.finalizedAt > 0 ? source.finalizedAt : endedAt,
+    recordingFinalizedAt: recordingFinalizedAt,
     mimeType: mimeType || source.mimeType || "audio/webm",
-    triggerRms: _conversationFiniteNumber(source.triggerRms) ? source.triggerRms : 0
+    triggerRms: _conversationFiniteNumber(source.triggerRms) ? source.triggerRms : 0,
+    preRollEnabled: Boolean(source.preRollEnabled),
+    preRollConfiguredMs: _conversationFiniteNumber(source.preRollConfiguredMs) ? source.preRollConfiguredMs : 0,
+    preRollAppliedMs: _conversationFiniteNumber(source.preRollAppliedMs) ? source.preRollAppliedMs : 0,
+    sentenceStartPreserved: Boolean(source.sentenceStartPreserved)
   };
 }
 
@@ -5325,6 +5529,7 @@ function _conversationShutdownCaptureResources(options) {
     fullAppVoiceConversationActiveCaptureMeta = null;
     _stopConvPcmCapture();
     _convPcmChunks = [];
+    _clearConversationPreRollBuffer();
   }
   if (opts.clearQueue) {
     fullAppVoiceConversationPendingQueue = [];
@@ -5337,6 +5542,8 @@ function _conversationShutdownCaptureResources(options) {
     }
   } catch (_e) {}
   fullAppVoiceConversationStream = null;
+  fullAppVoiceConversationCaptureRequestedAt = 0;
+  fullAppVoiceConversationMediaStreamReadyAt = 0;
   try {
     if (fullAppVoiceConversationAudioContext && fullAppVoiceConversationAudioContext.state !== "closed") {
       fullAppVoiceConversationAudioContext.close();
@@ -5379,22 +5586,32 @@ function _startConversationUtteranceRecorder(triggerRms) {
   // TASK-CONV-001: every recorder session owns immutable timing metadata.
   var mimeType = selectVoiceMimeType();
   var startRms = _conversationFiniteNumber(triggerRms) ? triggerRms : fullAppVoiceDiagnostics.lastRms;
+  var vadTriggeredAt = _conversationNowMs();
   var captureMeta = _createConversationCaptureMeta({
     captureSource: "conversation",
+    captureRequestedAt: vadTriggeredAt,
+    mediaStreamReadyAt: fullAppVoiceConversationMediaStreamReadyAt,
+    vadTriggeredAt: vadTriggeredAt,
+    recordingStartedAt: vadTriggeredAt,
     mimeType: mimeType || "audio/wav",
-    triggerRms: startRms
+    triggerRms: startRms,
+    preRollEnabled: FULL_APP_CONVERSATION_PRE_ROLL_ENABLED,
+    preRollConfiguredMs: FULL_APP_CONVERSATION_PRE_ROLL_MS
   });
+  fullAppVoiceConversationSpeechStartedAt = vadTriggeredAt;
   fullAppVoiceConversationActiveCaptureMeta = captureMeta;
 
   // TASK-244: reset diagnostics for this utterance recording
   resetFullAppVoiceDiagnosticsForRecording("conversation", captureMeta);
+  fullAppVoiceConversationChunks = [];
+  _convPcmChunks = _takeConversationPreRollChunksForUtterance(captureMeta);
   _setConversationCaptureState("recording");
   fullAppVoiceDiagnostics.speechStarted = true;
   fullAppVoiceDiagnostics.lastRms = startRms;
   fullAppVoiceDiagnostics.maxRms = startRms;
+  _updateCaptureTimingDiagnostics(captureMeta);
   renderFullAppVoiceDiagnostics();
 
-  fullAppVoiceConversationChunks = [];
   // TASK-244b: use shared mime type selector (same priority as manual mic)
   var recorder;
   try {
@@ -5410,7 +5627,13 @@ function _startConversationUtteranceRecorder(triggerRms) {
   recorder._conversationCaptureMeta = captureMeta;
   fullAppVoiceConversationRecorder = recorder;
   recorder.addEventListener("dataavailable", function (ev) {
-    if (ev.data && ev.data.size > 0) fullAppVoiceConversationChunks.push(ev.data);
+    if (ev.data && ev.data.size > 0) {
+      if (!captureMeta.firstChunkAt) {
+        captureMeta.firstChunkAt = _conversationNowMs();
+        _updateCaptureTimingDiagnostics(captureMeta);
+      }
+      fullAppVoiceConversationChunks.push(ev.data);
+    }
   });
   recorder.addEventListener("stop", function () {
     var shouldDiscard = fullAppVoiceConversationDiscardRecorderStop || (!fullAppVoiceConversationEnabled && !fullAppVoiceConversationStopRequested);
@@ -5432,6 +5655,7 @@ function _startConversationUtteranceRecorder(triggerRms) {
       return;
     }
     var wavBlob = _encodeWavPcm(_convPcmChunks, FULL_APP_STT_PCM_SAMPLE_RATE);
+    if (stopMeta) stopMeta.recordingFinalizedAt = _conversationNowMs();
     var finalizedMeta = _finalizeConversationCaptureMeta(stopMeta, "audio/wav", _conversationNowMs());
     _convPcmChunks = [];
     fullAppVoiceConversationChunks = [];
@@ -5441,9 +5665,11 @@ function _startConversationUtteranceRecorder(triggerRms) {
     _setConversationCaptureState(fullAppVoiceConversationStopRequested ? "off" : "listening");
     _transcribeConversationChunks([wavBlob], "audio/wav", finalizedMeta);
   });
-  // TASK-252: start PCM capture in parallel with MediaRecorder
-  _startConvPcmCapture(fullAppVoiceConversationStream);
+  captureMeta.recorderStartRequestedAt = _conversationNowMs();
   recorder.start();
+  captureMeta.recorderStartedAt = _conversationNowMs();
+  captureMeta.recordingStartedAt = captureMeta.recorderStartedAt;
+  _updateCaptureTimingDiagnostics(captureMeta);
 }
 
 function _stopConversationUtteranceRecorder() {
@@ -5465,6 +5691,7 @@ function _updateConversationAudioDiagnostics(audioBlob, chunksCount, mimeType, r
   var meta = _finalizeConversationCaptureMeta(recordingMeta, mimeType || "audio/webm", recordingMeta && recordingMeta.finalizedAt);
   var _convEndedAt = meta.finalizedAt;
   var _durationMs = _durationMsFromConversationMeta(meta);
+  _updateCaptureTimingDiagnostics(meta);
   try { fullAppVoiceDiagnostics.blobSizeBytes = audioBlob.size || 0; } catch (_e) {}
   fullAppVoiceDiagnostics.mimeType = meta.mimeType || mimeType || "";
   fullAppVoiceDiagnostics.chunksCount = chunksCount || 0;
@@ -5518,9 +5745,20 @@ function _enqueueConversationAudioBlob(audioBlob, mimeType, chunksCount, recordi
     mimeType: itemMeta.mimeType || mimeType || "audio/webm",
     chunksCount: chunksCount || 0,
     captureSource: itemMeta.captureSource,
+    captureRequestedAt: itemMeta.captureRequestedAt,
+    mediaStreamReadyAt: itemMeta.mediaStreamReadyAt,
+    recorderStartRequestedAt: itemMeta.recorderStartRequestedAt,
+    recorderStartedAt: itemMeta.recorderStartedAt,
+    firstChunkAt: itemMeta.firstChunkAt,
+    vadTriggeredAt: itemMeta.vadTriggeredAt,
     recordingStartedAt: itemMeta.recordingStartedAt,
     recordingStoppedAt: itemMeta.recordingStoppedAt,
     finalizedAt: itemMeta.finalizedAt,
+    recordingFinalizedAt: itemMeta.recordingFinalizedAt,
+    preRollEnabled: itemMeta.preRollEnabled,
+    preRollConfiguredMs: itemMeta.preRollConfiguredMs,
+    preRollAppliedMs: itemMeta.preRollAppliedMs,
+    sentenceStartPreserved: itemMeta.sentenceStartPreserved,
     stopReason: stopReason || "queued"
   };
   fullAppVoiceConversationPendingQueue.push(item);
@@ -5728,7 +5966,7 @@ function _conversationVadTick() {
   if (!fullAppVoiceConversationAnalyser) return;
 
   var rms = computeConversationRms(fullAppVoiceConversationAnalyser);
-  var now = Date.now();
+  var now = _conversationNowMs();
 
   // TASK-244: update VAD diagnostics every tick
   fullAppVoiceDiagnostics.lastRms = rms;
@@ -5760,6 +5998,7 @@ function _conversationVadTick() {
 }
 
 async function startConversationMode() {
+  var captureRequestedAt = _conversationNowMs();
   if (!fullAppVoiceInputEnabled) return;
   if (fullAppVoiceConversationEnabled) return;
   if (fullAppVoiceConversationStopRequested || fullAppVoiceConversationDrainPending || fullAppVoiceConversationProcessingPromise) return;
@@ -5770,7 +6009,14 @@ async function startConversationMode() {
 
   var stream;
   try {
+    fullAppVoiceConversationCaptureRequestedAt = captureRequestedAt;
+    fullAppVoiceDiagnostics.captureRequestedAt = captureRequestedAt;
+    fullAppVoiceDiagnostics.preRollEnabled = FULL_APP_CONVERSATION_PRE_ROLL_ENABLED;
+    fullAppVoiceDiagnostics.preRollConfiguredMs = FULL_APP_CONVERSATION_PRE_ROLL_MS;
     stream = await navigator.mediaDevices.getUserMedia({ audio: FULL_APP_VOICE_AUDIO_CONSTRAINTS });
+    fullAppVoiceConversationMediaStreamReadyAt = _conversationNowMs();
+    fullAppVoiceDiagnostics.mediaStreamReadyAt = fullAppVoiceConversationMediaStreamReadyAt;
+    fullAppVoiceDiagnostics.captureReadyLatencyMs = _nonNegativeLatencyMs(captureRequestedAt, fullAppVoiceConversationMediaStreamReadyAt);
   } catch (_e) {
     setConversationState("error");
     return;
@@ -5809,6 +6055,8 @@ async function startConversationMode() {
   fullAppVoiceConversationPendingQueue = [];
   fullAppVoiceConversationActiveTurnId = 0;
   fullAppVoiceConversationActiveCaptureMeta = null;
+  _convPcmChunks = [];
+  _clearConversationPreRollBuffer();
   fullAppVoiceConversationStopRequested = false;
   fullAppVoiceConversationDrainPending = false;
   fullAppVoiceConversationStopRequestedAt = 0;
@@ -5816,6 +6064,7 @@ async function startConversationMode() {
   _setConversationQueueAction("idle", "session_started");
   _setConversationProcessingState("idle");
   _setConversationCaptureState("listening");
+  _startConvPcmCapture(stream);
 
   fullAppVoiceConversationVadTimer = setInterval(_conversationVadTick, FULL_APP_CONVERSATION_VAD_INTERVAL_MS);
 }
@@ -5889,6 +6138,9 @@ function _recordVoiceDiagnosticsHistory() {
     stopReason:      d.stopReason,
     selectedMimeType: d.selectedMimeType,
     bytesPerSecond:  d.bytesPerSecond,
+    captureReadyLatencyMs: d.captureReadyLatencyMs,
+    firstChunkLatencyMs: d.firstChunkLatencyMs,
+    preRollAppliedMs: d.preRollAppliedMs,
     sttStatus:       d.sttStatus
   };
   fullAppVoiceDiagnosticsHistory.unshift(entry);
@@ -6021,6 +6273,13 @@ function renderFullAppVoiceDiagnostics() {
     "Transcript 預覽: " + (d.transcriptPreview || "—"),
     "空 transcript: " + (d.emptyTranscript ? "是" : "否"),
     "Auto-send: " + (d.autoSendEnabled ? "開" : "關"),
+    "Capture ready latency ms: " + d.captureReadyLatencyMs,
+    "First chunk latency ms: " + d.firstChunkLatencyMs,
+    "VAD trigger at: " + (d.vadTriggeredAt || "—"),
+    "Pre-roll: enabled=" + (d.preRollEnabled ? "true" : "false") +
+      " configuredMs=" + d.preRollConfiguredMs +
+      " appliedMs=" + d.preRollAppliedMs +
+      " preserved=" + (d.sentenceStartPreserved ? "true" : "false"),
     "對話狀態: " + d.conversationState,
     "對話捕捉: " + d.conversationCaptureState + "  處理: " + d.conversationProcessingState,
     "對話佇列: pending=" + d.conversationPendingCount + "/" + d.conversationQueueLimit + " activeTurnId=" + d.conversationActiveTurnId,
@@ -6106,6 +6365,20 @@ function resetFullAppVoiceDiagnosticsForRecording(mode, recordingMeta) {
   fullAppVoiceDiagnostics.mode              = mode || "none";
   fullAppVoiceDiagnostics.recordingStartedAt = _recordingStartedAt;
   fullAppVoiceDiagnostics.recordingEndedAt   = 0;
+  fullAppVoiceDiagnostics.captureRequestedAt = 0;
+  fullAppVoiceDiagnostics.mediaStreamReadyAt = 0;
+  fullAppVoiceDiagnostics.recorderStartRequestedAt = 0;
+  fullAppVoiceDiagnostics.recorderStartedAt = 0;
+  fullAppVoiceDiagnostics.firstChunkAt = 0;
+  fullAppVoiceDiagnostics.vadTriggeredAt = 0;
+  fullAppVoiceDiagnostics.recordingFinalizedAt = 0;
+  fullAppVoiceDiagnostics.captureReadyLatencyMs = 0;
+  fullAppVoiceDiagnostics.firstChunkLatencyMs = 0;
+  fullAppVoiceDiagnostics.preRollEnabled = false;
+  fullAppVoiceDiagnostics.preRollConfiguredMs = 0;
+  fullAppVoiceDiagnostics.preRollAppliedMs = 0;
+  fullAppVoiceDiagnostics.sentenceStartPreserved = false;
+  _updateCaptureTimingDiagnostics(recordingMeta);
   fullAppVoiceDiagnostics.durationMs         = 0;
   fullAppVoiceDiagnostics.blobSizeBytes      = 0;
   fullAppVoiceDiagnostics.mimeType           = "";

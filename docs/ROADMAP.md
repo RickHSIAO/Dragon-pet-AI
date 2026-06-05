@@ -672,6 +672,24 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   duplicate recorder guard, stop/error recovery, Owner Voice non-blocking
   behavior, and TASK-STT-001 final transcript preservation. Windows live
   runtime smoke with actual audio is still required before marking DONE.
+  User-facing acceptance remains blocked by observed capture-start clipping and
+  STT recognition quality until TASK-AUDIO-001 Windows capture smoke and a later
+  STT quality benchmark pass.
+
+- TASK-AUDIO-001 IMPLEMENTED - CAPTURE START LATENCY MEASUREMENT / CONVERSATION PRE-ROLL BUFFER (2026-06-05):
+  Voice Diagnostics now records safe per-capture timing metadata:
+  `captureRequestedAt`, `mediaStreamReadyAt`, `recorderStartRequestedAt`,
+  `recorderStartedAt`, `firstChunkAt`, `vadTriggeredAt`,
+  `recordingFinalizedAt`, `captureReadyLatencyMs`, and
+  `firstChunkLatencyMs`. Manual Mic uses a short preparing state and does not
+  claim active recording before `MediaRecorder.start()` succeeds. Conversation
+  Mode starts bounded in-memory PCM capture while listening, keeps a 500 ms
+  rolling pre-roll buffer, prepends that buffer when VAD triggers, records
+  `preRollAppliedMs`, and clears the buffer after use/Stop so stale audio is not
+  reused. No raw audio persistence, pre-roll content/path exposure, STT model
+  change, transcript rewrite, Owner Voice hard gate, schema change, IPC, Pet
+  Window, or Output Queue change. Renderer smoke PASS; Windows runtime playback
+  smoke is still required.
 
 - TASK-270 DONE - OWNER VOICE CANDIDATE WAV TEMPORARY POLICY (2026-06-05):
   Manual Mic and Conversation Mode dry-run verification now create a bounded

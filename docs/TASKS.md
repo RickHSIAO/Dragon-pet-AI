@@ -28686,6 +28686,10 @@ stored centroids, `embeddingAggregate`, or candidate embeddings.
 - TASK-STT-001 punctuation restoration remains intact; queued Conversation Mode
   sends the final transcript.
 - Manual Mic behavior is unchanged.
+- User-facing DONE acceptance is temporarily blocked by capture-start clipping
+  and current STT recognition quality. TASK-AUDIO-001 addresses capture timing
+  and sentence-start preservation first; a later STT quality benchmark/model task
+  must address recognizer quality separately.
 
 ### Automated Smoke Coverage
 
@@ -28727,7 +28731,102 @@ TASK-CONV-001 as DONE. The smoke should confirm that next utterance capture
 starts while the prior utterance is still processing, chat ordering remains
 sequential, queue overflow is safe, Stop prevents new capture while draining
 already-recorded turns, active recording Stop finalizes the last turn,
-stop/error paths recover, and no sensitive data is exposed.
+stop/error paths recover, and no sensitive data is exposed. Because current
+Windows observations show possible utterance-start clipping and poor STT
+recognition, TASK-CONV-001 should remain not-DONE until TASK-AUDIO-001 Windows
+capture/pre-roll smoke and a later STT quality benchmark both pass.
+
+---
+
+## TASK-AUDIO-001 | Capture Start Latency Measurement / Conversation Pre-roll Buffer
+
+Status: IMPLEMENTED - AUTOMATED RENDERER SMOKE PASS / NEEDS WINDOWS RUNTIME SMOKE (2026-06-05)
+
+### Goal
+
+Improve capture quality and sentence-start preservation for Manual Mic and
+Conversation Mode before changing STT models or adding any aggressive transcript
+rewrite.
+
+### Root Cause Findings
+
+- Manual Mic previously moved the UI to `recording` before `MediaRecorder.start()`
+  had succeeded, so diagnostics could not distinguish mic request latency from
+  ready-to-record time.
+- Conversation Mode VAD started utterance recording only after RMS crossed the
+  threshold. Any phonemes spoken just before the threshold could be absent from
+  the utterance WAV.
+- Diagnostics showed chunk/blob facts but did not expose safe per-capture
+  readiness timing.
+
+### Implementation Summary
+
+- Added per-capture timing metadata and diagnostics:
+  `captureRequestedAt`, `mediaStreamReadyAt`, `recorderStartRequestedAt`,
+  `recorderStartedAt`, `firstChunkAt`, `vadTriggeredAt`,
+  `recordingFinalizedAt`, `captureReadyLatencyMs`, and
+  `firstChunkLatencyMs`.
+- Uses one clock source (`Date.now()`) through the existing conversation timing
+  helper.
+- Manual Mic now uses a short `preparing` state and only enters `recording`
+  after `MediaRecorder.start()` succeeds and PCM capture has been requested.
+- Conversation Mode starts bounded PCM capture while listening and keeps a
+  rolling in-memory pre-roll buffer.
+- On VAD trigger, the renderer prepends the current bounded pre-roll PCM chunks
+  to the utterance, records `preRollAppliedMs`, and clears the rolling buffer so
+  stale audio is not reused.
+- Pre-roll is in-memory only, configured at `500ms`, and bounded by sample
+  count at 16 kHz.
+
+### Boundaries
+
+- No default STT model change.
+- No LLM rewrite or aggressive transcript rewriting.
+- No Owner Voice hard gate.
+- No `/stt/transcribe` request schema change.
+- No `/chat` schema change.
+- No new IPC channel.
+- No Pet Window or Output Queue change.
+- No raw audio persistence.
+- No pre-roll content, candidate path, centroid, embedding, or raw audio
+  exposure in diagnostics.
+- TASK-CONV-001 bounded queue and graceful drain remain intact.
+- TASK-STT-001 final transcript path remains intact.
+- TASK-270 candidate WAV temporary/delete lifecycle remains intact.
+
+### Automated Smoke Coverage
+
+`apps/desktop/scripts/renderer-chat-smoke.js` now covers:
+
+- timing fields exist and diagnostics render only safe summary values
+- timing metadata latencies remain finite and non-negative
+- Conversation Mode pre-roll buffer is bounded
+- pre-roll chunks are prepended and then cleared after use
+- Stop clears stale pre-roll audio
+- Manual Mic `preparing` state does not claim active recording
+- TASK-CONV-001 no-new-capture-after-Stop and graceful drain regressions remain
+  covered
+- Owner Voice and punctuation behavior remain intact through existing smoke
+  coverage
+
+### Validation
+
+- `node apps/desktop/scripts/renderer-chat-smoke.js` - PASS
+
+Full closeout validation still needs the backend/STT/Pet suites and
+`git diff --check`.
+
+### Windows Runtime Smoke Required
+
+- Play back Manual Mic recording and confirm sentence start is preserved.
+- Play back Conversation Mode recording and confirm sentence start is preserved.
+- Confirm `captureReadyLatencyMs`, `firstChunkLatencyMs`, `preRollEnabled`,
+  `preRollConfiguredMs`, and `preRollAppliedMs` are visible and sane.
+- Confirm no stale audio from a previous utterance is prepended.
+- Confirm no temp audio remains after Stop.
+- Confirm TASK-CONV-001 graceful Stop still drains already-recorded turns.
+- Confirm Owner Voice dry-run remains non-blocking and no sensitive diagnostics
+  exposure is introduced.
 
 ---
 

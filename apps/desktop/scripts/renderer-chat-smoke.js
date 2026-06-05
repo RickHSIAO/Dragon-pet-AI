@@ -13851,6 +13851,135 @@ function testTaskConv001NoSchemaIpcOrSensitiveExposure() {
   console.log("  testTaskConv001NoSchemaIpcOrSensitiveExposure PASS");
 }
 
+// TASK-AUDIO-001: Capture Start Latency Measurement / Conversation Pre-roll Buffer
+
+function testTaskAudio001RendererHasTimingAndPreRollFields() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  for (const token of [
+    "FULL_APP_CONVERSATION_PRE_ROLL_ENABLED",
+    "FULL_APP_CONVERSATION_PRE_ROLL_MS",
+    "captureRequestedAt",
+    "mediaStreamReadyAt",
+    "recorderStartRequestedAt",
+    "recorderStartedAt",
+    "firstChunkAt",
+    "vadTriggeredAt",
+    "recordingFinalizedAt",
+    "captureReadyLatencyMs",
+    "firstChunkLatencyMs",
+    "preRollEnabled",
+    "preRollConfiguredMs",
+    "preRollAppliedMs",
+    "sentenceStartPreserved",
+    "_appendConversationPreRollChunk",
+    "_takeConversationPreRollChunksForUtterance",
+    "_clearConversationPreRollBuffer",
+  ]) {
+    assert.ok(src.includes(token), "TASK-AUDIO-001 renderer must include " + token);
+  }
+  assert.ok(!src.includes("sendMessage(rawTranscript)"), "TASK-AUDIO-001 must not add aggressive transcript rewrite path");
+  console.log("  testTaskAudio001RendererHasTimingAndPreRollFields PASS");
+}
+
+function testTaskAudio001DiagnosticsRenderIncludesSafeTimingPreRoll() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const renderFnStart = src.indexOf("function renderFullAppVoiceDiagnostics");
+  const renderFnEnd = src.indexOf("\n}", renderFnStart) + 2;
+  const renderFn = src.slice(renderFnStart, renderFnEnd);
+  for (const token of [
+    "captureReadyLatencyMs",
+    "firstChunkLatencyMs",
+    "vadTriggeredAt",
+    "preRollEnabled",
+    "preRollConfiguredMs",
+    "preRollAppliedMs",
+    "sentenceStartPreserved",
+  ]) {
+    assert.ok(renderFn.includes(token), "TASK-AUDIO-001 diagnostics render must include " + token);
+  }
+  assert.ok(!renderFn.includes("embeddingAggregate"), "TASK-AUDIO-001 diagnostics must not expose embeddings");
+  assert.ok(!renderFn.includes("candidatePath"), "TASK-AUDIO-001 diagnostics must not expose candidate paths");
+  assert.ok(!renderFn.includes("innerHTML"), "TASK-AUDIO-001 diagnostics must stay textContent-only");
+  console.log("  testTaskAudio001DiagnosticsRenderIncludesSafeTimingPreRoll PASS");
+}
+
+async function testTaskAudio001TimingMetaNonNegative() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  const meta = sandbox._createConversationCaptureMeta({
+    captureSource: "conversation",
+    captureRequestedAt: 1000,
+    mediaStreamReadyAt: 1100,
+    recorderStartRequestedAt: 1200,
+    recorderStartedAt: 1250,
+    firstChunkAt: 1400,
+    vadTriggeredAt: 1000,
+    recordingStartedAt: 1250,
+    recordingStoppedAt: 1800,
+    recordingFinalizedAt: 1850,
+    preRollEnabled: true,
+    preRollConfiguredMs: 500,
+    preRollAppliedMs: 320,
+    sentenceStartPreserved: true,
+  });
+  sandbox.resetFullAppVoiceDiagnosticsForRecording("conversation", meta);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.captureReadyLatencyMs, 250);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.firstChunkLatencyMs, 150);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.preRollAppliedMs, 320);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.sentenceStartPreserved, true);
+  assert.ok(sandbox.fullAppVoiceDiagnostics.captureReadyLatencyMs >= 0);
+  assert.ok(sandbox.fullAppVoiceDiagnostics.firstChunkLatencyMs >= 0);
+  console.log("  testTaskAudio001TimingMetaNonNegative PASS");
+}
+
+async function testTaskAudio001ConversationPreRollBoundedAndPrepended() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  for (let i = 0; i < 20; i += 1) {
+    const chunk = new Float32Array(1000);
+    chunk[0] = i + 1;
+    sandbox._appendConversationPreRollChunk(chunk);
+  }
+  const meta = sandbox._createConversationCaptureMeta({
+    captureSource: "conversation",
+    preRollEnabled: true,
+    preRollConfiguredMs: 500,
+  });
+  const chunks = sandbox._takeConversationPreRollChunksForUtterance(meta);
+  const samples = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  assert.ok(samples <= 8000, "TASK-AUDIO-001 pre-roll must be bounded to 500ms at 16kHz");
+  assert.ok(samples > 0, "TASK-AUDIO-001 pre-roll must provide prependable PCM chunks");
+  assert.equal(meta.preRollAppliedMs <= 500, true);
+  assert.equal(meta.sentenceStartPreserved, true);
+  const afterUse = sandbox._takeConversationPreRollChunksForUtterance({});
+  assert.equal(afterUse.length, 0, "TASK-AUDIO-001 pre-roll buffer must clear after use");
+  console.log("  testTaskAudio001ConversationPreRollBoundedAndPrepended PASS");
+}
+
+async function testTaskAudio001PreRollClearedAfterStop() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("waiting");
+  sandbox._appendConversationPreRollChunk(new Float32Array(1000));
+  sandbox.stopConversationMode();
+  await settle();
+  const chunks = sandbox._takeConversationPreRollChunksForUtterance({});
+  assert.equal(chunks.length, 0, "TASK-AUDIO-001 Stop must clear stale pre-roll audio");
+  assert.equal(sandbox.fullAppVoiceConversationCaptureState, "off");
+  console.log("  testTaskAudio001PreRollClearedAfterStop PASS");
+}
+
+async function testTaskAudio001ManualMicPreparingIsNotRecording() {
+  const { document, sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  sandbox.setFullAppVoiceState("preparing");
+  const btn = document.getElementById("voice-input-btn");
+  assert.equal(sandbox.fullAppRecording, false, "TASK-AUDIO-001 preparing must not claim active recording");
+  assert.equal(sandbox.fullAppVoicePreparing, true);
+  assert.equal(btn.dataset.state, "preparing");
+  assert.equal(btn.disabled, true);
+  sandbox.setFullAppVoiceState("recording");
+  assert.equal(sandbox.fullAppRecording, true, "TASK-AUDIO-001 recording remains active only after ready state");
+  console.log("  testTaskAudio001ManualMicPreparingIsNotRecording PASS");
+}
+
 // ---------------------------------------------------------------------------
 // TASK-246: STT Model Quality / Whisper Model Upgrade
 // ---------------------------------------------------------------------------
@@ -16893,6 +17022,12 @@ async function main() {
   await testTaskConv001DelayedFinalizationIgnoresGlobalStartTimestamp();
   await testTaskConv001VadTriggerRmsSurvivesRecordingReset();
   testTaskConv001NoSchemaIpcOrSensitiveExposure();
+  testTaskAudio001RendererHasTimingAndPreRollFields();
+  testTaskAudio001DiagnosticsRenderIncludesSafeTimingPreRoll();
+  await testTaskAudio001TimingMetaNonNegative();
+  await testTaskAudio001ConversationPreRollBoundedAndPrepended();
+  await testTaskAudio001PreRollClearedAfterStop();
+  await testTaskAudio001ManualMicPreparingIsNotRecording();
 
   // TASK-246: STT Model Quality / Whisper Model Upgrade
   testTask246RendererHasModelQualityFields();
