@@ -13262,7 +13262,9 @@ function testTaskConv001RendererHasQueueStateFields() {
     "fullAppVoiceConversationProcessingState",
     "fullAppVoiceConversationPendingQueue",
     "fullAppVoiceConversationActiveTurnId",
+    "fullAppVoiceConversationActiveCaptureMeta",
     "fullAppVoiceConversationLastQueueAction",
+    "_createConversationCaptureMeta",
     "_enqueueConversationAudioBlob",
     "_processConversationQueue",
   ]) {
@@ -13526,6 +13528,119 @@ async function testTaskConv001PunctuationFinalTranscriptPreserved() {
   assert.equal(chatBody.message, "排隊模式標點測試。");
   assert.equal(sandbox.fullAppVoiceDiagnostics.sttPunctuationApplied, true);
   console.log("  testTaskConv001PunctuationFinalTranscriptPreserved PASS");
+}
+
+async function testTaskConv001PerTurnDurationSurvivesNextCaptureStart() {
+  const first = createDeferred();
+  let transcribeCalls = 0;
+  const { sandbox, state } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => {
+        transcribeCalls += 1;
+        if (transcribeCalls === 1) return first.promise;
+        return { status: "ok", transcript: "second duration final." };
+      },
+      updatePetSpeech: async () => ({ ok: true }),
+      updatePetExpression: async () => ({ ok: true }),
+    },
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("waiting");
+  const firstMeta = {
+    turnId: 101,
+    captureSource: "conversation",
+    recordingStartedAt: 1000,
+    recordingStoppedAt: 1800,
+    finalizedAt: 1800,
+    mimeType: "audio/wav",
+  };
+  const secondMeta = {
+    turnId: 102,
+    captureSource: "conversation",
+    recordingStartedAt: 5000,
+    recordingStoppedAt: 5600,
+    finalizedAt: 5600,
+    mimeType: "audio/wav",
+  };
+  const p1 = sandbox._transcribeConversationChunks([new Blob(["one"], { type: "audio/wav" })], "audio/wav", firstMeta);
+  await settle();
+  sandbox.resetFullAppVoiceDiagnosticsForRecording("conversation", {
+    turnId: 102,
+    recordingStartedAt: 5000,
+    mimeType: "audio/wav",
+    triggerRms: 0.05,
+  });
+  const p2 = sandbox._transcribeConversationChunks([new Blob(["two"], { type: "audio/wav" })], "audio/wav", secondMeta);
+  await settle();
+  first.resolve({ status: "ok", transcript: "first duration final." });
+  await p1;
+  await p2;
+  await settle();
+  const history = sandbox.fullAppVoiceDiagnosticsHistory;
+  assert.equal(history.length, 2, "TASK-CONV-001 duration regression must record both queued utterances");
+  assert.equal(JSON.stringify(history.map((entry) => entry.durationMs)), JSON.stringify([600, 800]),
+    "TASK-CONV-001 history durations must use each utterance's own timestamps");
+  assert.ok(history.every((entry) => Number.isFinite(entry.durationMs) && entry.durationMs >= 0),
+    "TASK-CONV-001 history durations must be finite and non-negative");
+  assert.ok(history.every((entry) => Number.isFinite(entry.bytesPerSecond) && entry.bytesPerSecond >= 0),
+    "TASK-CONV-001 bytes-per-second must be finite and non-negative");
+  const chatBodies = state.calls
+    .filter((call) => call.url.endsWith("/chat"))
+    .map((call) => JSON.parse(call.body || "{}").message);
+  assert.equal(JSON.stringify(chatBodies.slice(0, 2)), JSON.stringify(["first duration final.", "second duration final."]),
+    "TASK-CONV-001 duration fix must preserve queue processing order");
+  console.log("  testTaskConv001PerTurnDurationSurvivesNextCaptureStart PASS");
+}
+
+async function testTaskConv001DelayedFinalizationIgnoresGlobalStartTimestamp() {
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => ({ status: "ok", transcript: "delayed duration final." }),
+      updatePetSpeech: async () => ({ ok: true }),
+      updatePetExpression: async () => ({ ok: true }),
+    },
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("waiting");
+  sandbox.fullAppVoiceDiagnostics.recordingStartedAt = 10000;
+  await sandbox._transcribeConversationChunks(
+    [new Blob(["delayed"], { type: "audio/wav" })],
+    "audio/wav",
+    {
+      turnId: 201,
+      captureSource: "conversation",
+      recordingStartedAt: 2000,
+      recordingStoppedAt: 2600,
+      finalizedAt: 2600,
+      mimeType: "audio/wav",
+    }
+  );
+  await settle();
+  assert.equal(sandbox.fullAppVoiceDiagnosticsHistory[0].durationMs, 600,
+    "TASK-CONV-001 delayed processing must not read overwritten global recordingStartedAt");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.durationMs, 600,
+    "TASK-CONV-001 active diagnostics must use per-turn metadata");
+  console.log("  testTaskConv001DelayedFinalizationIgnoresGlobalStartTimestamp PASS");
+}
+
+async function testTaskConv001VadTriggerRmsSurvivesRecordingReset() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("waiting");
+  sandbox.resetFullAppVoiceDiagnosticsForRecording("conversation", {
+    turnId: 301,
+    recordingStartedAt: 3000,
+    mimeType: "audio/wav",
+    triggerRms: 0.05,
+  });
+  assert.equal(sandbox.fullAppVoiceDiagnostics.recordingStartedAt, 3000);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.lastRms, 0.05);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.maxRms, 0.05);
+  console.log("  testTaskConv001VadTriggerRmsSurvivesRecordingReset PASS");
 }
 
 function testTaskConv001NoSchemaIpcOrSensitiveExposure() {
@@ -16575,6 +16690,9 @@ async function main() {
   await testTaskConv001StopClearsPendingAndPreventsCapture();
   await testTaskConv001OwnerVoiceDryRunRemainsNonBlocking();
   await testTaskConv001PunctuationFinalTranscriptPreserved();
+  await testTaskConv001PerTurnDurationSurvivesNextCaptureStart();
+  await testTaskConv001DelayedFinalizationIgnoresGlobalStartTimestamp();
+  await testTaskConv001VadTriggerRmsSurvivesRecordingReset();
   testTaskConv001NoSchemaIpcOrSensitiveExposure();
 
   // TASK-246: STT Model Quality / Whisper Model Upgrade
