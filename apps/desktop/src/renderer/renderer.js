@@ -276,6 +276,12 @@ var fullAppVoiceDiagnostics = {
   sttCorrectionApplied: false,
   sttCorrectionMode: "",
   sttCorrectionReason: "",
+  // TASK-STT-001: STT punctuation restoration diagnostics
+  sttPunctuatedTranscriptPreview: "",
+  sttFinalTranscriptPreview: "",
+  sttPunctuationApplied: false,
+  sttPunctuationMode: "",
+  sttPunctuationReason: "",
   // TASK-248: matched alias / canonical term diagnostics
   sttMatchedAlias: "",
   sttCanonicalTerm: "",
@@ -4655,6 +4661,12 @@ async function transcribeFullAppAudioBlob(blob) {
     fullAppVoiceDiagnostics.sttCorrectionApplied         = Boolean(result.correctionApplied);
     fullAppVoiceDiagnostics.sttCorrectionMode            = result.correctionMode  ? String(result.correctionMode)  : "";
     fullAppVoiceDiagnostics.sttCorrectionReason          = result.correctionReason ? String(result.correctionReason) : "";
+    // TASK-STT-001: punctuation diagnostics — final transcript is what textarea/chat receives
+    fullAppVoiceDiagnostics.sttPunctuatedTranscriptPreview = result.punctuatedTranscript ? makeSafeTranscriptPreview(String(result.punctuatedTranscript)) : "";
+    fullAppVoiceDiagnostics.sttFinalTranscriptPreview      = result.finalTranscript      ? makeSafeTranscriptPreview(String(result.finalTranscript))      : "";
+    fullAppVoiceDiagnostics.sttPunctuationApplied          = Boolean(result.punctuationApplied);
+    fullAppVoiceDiagnostics.sttPunctuationMode             = result.punctuationMode   ? String(result.punctuationMode)   : "";
+    fullAppVoiceDiagnostics.sttPunctuationReason           = result.punctuationReason ? String(result.punctuationReason) : "";
     // TASK-248: matched alias / canonical term diagnostics
     fullAppVoiceDiagnostics.sttMatchedAlias  = result.matchedAlias  ? String(result.matchedAlias)  : "";
     fullAppVoiceDiagnostics.sttCanonicalTerm = result.canonicalTerm ? String(result.canonicalTerm) : "";
@@ -5655,6 +5667,10 @@ function renderFullAppVoiceDiagnostics() {
     "修正 Transcript: " + (d.sttCorrectedTranscriptPreview || "—"),
     "已修正: " + (d.sttCorrectionApplied ? "是" : "否") + "  修正模式: " + (d.sttCorrectionMode || "—"),
     "修正原因: " + (d.sttCorrectionReason || "—"),
+    "標點 Transcript: " + (d.sttPunctuatedTranscriptPreview || "—"),
+    "最終 Transcript: " + (d.sttFinalTranscriptPreview || "—"),
+    "已加標點: " + (d.sttPunctuationApplied ? "是" : "否") + "  標點模式: " + (d.sttPunctuationMode || "—"),
+    "標點原因: " + (d.sttPunctuationReason || "—"),
     "命中 alias: " + (d.sttMatchedAlias || "—") + "  canonical: " + (d.sttCanonicalTerm || "—"),
     "STT Provider: " + (d.sttProviderResolved || "unknown") + "  來源: " + (d.sttProviderSource || "unknown"),
     "Provider 載入: " + (d.sttProviderLoadStatus || "unknown") + "  fallback: " + (d.sttProviderFallbackReason || "none"),
@@ -5761,6 +5777,12 @@ function resetFullAppVoiceDiagnosticsForRecording(mode) {
   fullAppVoiceDiagnostics.sttCorrectionApplied           = false;
   fullAppVoiceDiagnostics.sttCorrectionMode              = "";
   fullAppVoiceDiagnostics.sttCorrectionReason            = "";
+  // TASK-STT-001: reset punctuation diagnostics — repopulated after each STT call
+  fullAppVoiceDiagnostics.sttPunctuatedTranscriptPreview = "";
+  fullAppVoiceDiagnostics.sttFinalTranscriptPreview      = "";
+  fullAppVoiceDiagnostics.sttPunctuationApplied          = false;
+  fullAppVoiceDiagnostics.sttPunctuationMode             = "";
+  fullAppVoiceDiagnostics.sttPunctuationReason           = "";
   // TASK-248: reset matched alias / canonical term diagnostics
   fullAppVoiceDiagnostics.sttMatchedAlias                = "";
   fullAppVoiceDiagnostics.sttCanonicalTerm               = "";

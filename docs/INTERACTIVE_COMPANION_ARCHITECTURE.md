@@ -1,6 +1,6 @@
 # Interactive Companion Architecture Checkpoint
 
-**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-236 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS; TASK-237 IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS; TASK-263 DONE - Windows Unicode owner voice enrollment storage smoke PASS; TASK-264 DONE - Windows stored centroid verification smoke PASS; TASK-265 DONE - Windows backend verify-files smoke PASS; TASK-SEC-001 DONE - docs-only security boundary design; TASK-SEC-002 DONE - docs-only sensitive data inventory / redaction rules; TASK-SEC-003 DONE - docs/test-corpus only; TASK-SEC-004 DONE - docs-only tool permission policy; TASK-SEC-005 DONE - docs-only phishing/link safety design; TASK-266 DONE - Manual Mic dry-run only / no hard block; TASK-267 DONE - Conversation Mode dry-run only / no hard block; TASK-268 DONE - diagnostics polish only / no hard block; TASK-269 DONE - hard gate opt-in design / no runtime change; TASK-270 DONE - Windows runtime candidate WAV lifecycle smoke PASS / no hard block
+**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-236 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS; TASK-237 IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED; TASK-STT-001 IMPLEMENTED - conservative Chinese STT punctuation restoration; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS; TASK-263 DONE - Windows Unicode owner voice enrollment storage smoke PASS; TASK-264 DONE - Windows stored centroid verification smoke PASS; TASK-265 DONE - Windows backend verify-files smoke PASS; TASK-SEC-001 DONE - docs-only security boundary design; TASK-SEC-002 DONE - docs-only sensitive data inventory / redaction rules; TASK-SEC-003 DONE - docs/test-corpus only; TASK-SEC-004 DONE - docs-only tool permission policy; TASK-SEC-005 DONE - docs-only phishing/link safety design; TASK-266 DONE - Manual Mic dry-run only / no hard block; TASK-267 DONE - Conversation Mode dry-run only / no hard block; TASK-268 DONE - diagnostics polish only / no hard block; TASK-269 DONE - hard gate opt-in design / no runtime change; TASK-270 DONE - Windows runtime candidate WAV lifecycle smoke PASS / no hard block
 **Date:** 2026-06-01
 **Scope:** Architecture checkpoint for TASK-214 through TASK-230.
 
@@ -76,6 +76,7 @@ user interaction
 | TASK-268 | Owner Voice dry-run diagnostics polish | Polishes existing Voice Diagnostics wording for Manual Mic and Conversation Mode dry-run status. Shows readable source/state/reason labels and `Dry-run only; existing voice flow is not blocked` with `runtimeHardBlocked=false`. No hard gate, backend behavior change, schema change, IPC, Pet Window, or Output Queue change. |
 | TASK-269 | Owner Voice Gate hard gate design | Docs-only opt-in policy for future hard blocking. Defines convenience-filter purpose, disabled-by-default opt-in requirements, fail-open/fail-closed policy, Manual Mic and Conversation Mode behavior, candidate WAV temp requirements, redaction, UX messages, and security-doc interactions. No runtime change. |
 | TASK-270 | Owner Voice candidate WAV temporary policy | Adds dry-run-only temp WAV creation/deletion for Manual Mic and Conversation Mode owner voice verification. Windows runtime lifecycle smoke PASS for Manual Mic accepted score 0.7568 and Conversation Mode rejected score 0.0157; both had `candidateWavTemporary=true`, `candidateWavDeleted=true`, and `runtimeHardBlocked=false`. Low Conversation Mode score is a future calibration/voice-quality follow-up. No hard gate, backend endpoint change, `/stt/transcribe` or `/chat` schema change, Pet Window, or Output Queue change. |
+| TASK-STT-001 | Chinese STT punctuation restoration | Adds a deterministic local punctuation layer after safe-dictionary correction. `transcript` now equals `finalTranscript`; raw/corrected/punctuated/final transcript previews are available in Voice Diagnostics. Manual Mic textarea and Conversation Mode `/chat` use the final transcript. No request schema change, `/chat` schema change, IPC, Pet Window, Output Queue, recording, or Owner Voice Gate behavior change. |
 | TASK-228 | Output queue runtime skeleton | Adds Full App renderer-only disabled queue skeleton, sanitized snapshot, priority/preemption helpers, and queue diagnostics preview. DONE - Windows visual smoke PASS. |
 | TASK-229 | Output queue debug preview | Polishes queue snapshot preview with Recent and safe Next summary. DONE - Windows visual smoke PASS. |
 | TASK-230 | Reaction bubble diagnostics enqueue | Enqueues safe reaction bubble ids into the disabled local output queue for diagnostics only. DONE - Windows visual smoke PASS. |
@@ -638,6 +639,15 @@ Recommended next architecture phase:
   Provider Evaluation. `DRAGON_PET_STT_PROVIDER` env var resolver; FunASR skeleton (safe unavailable if
   not installed; `paraformer-zh`; no auto-download); sherpa-onnx design-only. 7 provider metadata fields
   in response; 6 renderer diagnostics fields. 85 pytest + 11 renderer smoke PASS. 35/35 provider smoke PASS.
+- TASK-STT-001 IMPLEMENTED - CONSERVATIVE CHINESE STT PUNCTUATION RESTORATION (2026-06-05):
+  Backend STT ok-path now preserves `rawTranscript`, applies existing safe-dictionary correction to
+  `correctedTranscript`, then applies deterministic text-only punctuation restoration to produce
+  `punctuatedTranscript` and `finalTranscript`; `transcript` equals `finalTranscript`. Manual Mic
+  textarea fill and Conversation Mode `/chat` therefore use final transcript through the existing
+  STT result flow. Voice Diagnostics show raw/corrected/punctuated/final transcript previews plus
+  `punctuationApplied`, `punctuationMode`, and `punctuationReason` via `textContent`. No new IPC,
+  no `/stt/transcribe` request schema change, no `/chat` schema change, no Pet Window / Output Queue
+  change, no voice recording change, no LLM rewrite, and no Owner Voice Gate behavior change.
 - TASK-250 IMPLEMENTED - NEEDS WINDOWS FUNASR QUALITY SMOKE (2026-06-03): FunASR Local Runtime
   Integration. `_parse_funasr_result()` multi-format parser; `_FUNASR_HOTWORDS` constant; `_transcribe_funasr()`
   full implementation (BytesIO, hotword boosting, correction layer, provider metadata in all paths).

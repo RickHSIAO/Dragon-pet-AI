@@ -115,6 +115,9 @@ async def stt_transcribe(audio: UploadFile = File(...)):
              "correctionApplied": bool | None, "correctionMode": str | None,
              "correctionReason": str | None, "matchedAlias": str | None,
              "canonicalTerm": str | None,
+             "punctuatedTranscript": str | None, "finalTranscript": str | None,
+             "punctuationApplied": bool | None, "punctuationMode": str | None,
+             "punctuationReason": str | None,
              "sttProviderRequested": str | None, "sttProviderResolved": str | None,
              "sttProviderSource": str | None, "sttProviderLoadStatus": str | None,
              "sttProviderLoadError": str | None, "sttProviderFallbackReason": str | None,
@@ -126,6 +129,8 @@ async def stt_transcribe(audio: UploadFile = File(...)):
     - No always-listening, wake-word, TTS, screen capture, or vision logic.
     - /chat handoff is deferred to TASK-167C; this endpoint stops at transcript.
     - Language is locked to _STT_DEFAULT_LANGUAGE ("zh") — no UI or persistence.
+    - TASK-STT-001 punctuation restoration adds only conservative local punctuation
+      after existing safe-dictionary correction; request schema stays unchanged.
     """
     audio_bytes = await audio.read(_STT_MAX_BYTES + 1)
     if len(audio_bytes) > _STT_MAX_BYTES:

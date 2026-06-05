@@ -28465,6 +28465,119 @@ Before implementing hard gate:
 
 ---
 
+## TASK-STT-001 | Chinese STT Punctuation Restoration / Transcript Readability
+
+Status: IMPLEMENTED - CONSERVATIVE LOCAL PUNCTUATION LAYER (2026-06-05)
+
+### Goal
+
+Improve Chinese STT readability for Manual Mic and Conversation Mode without
+changing voice capture, IPC, `/stt/transcribe` request schema, `/chat` schema,
+Owner Voice Gate behavior, Pet Window behavior, or Output Queue behavior.
+
+### Processing Order
+
+The intended STT text pipeline is:
+
+```text
+raw STT transcript
+  -> existing safe-dictionary correction
+  -> conservative punctuation restoration
+  -> final transcript used for textarea/chat
+```
+
+Response fields preserve each step:
+
+- `rawTranscript`: original provider output.
+- `correctedTranscript`: existing TASK-247/248 safe-dictionary output.
+- `punctuatedTranscript`: punctuation-restored output.
+- `finalTranscript`: final text used by runtime callers.
+- `transcript`: equals `finalTranscript` on ok responses.
+- `punctuationApplied`, `punctuationMode`, `punctuationReason`: diagnostics.
+
+### Implementation
+
+- Added `restore_transcript_punctuation(corrected_text)` in
+  `backend/app/stt/stt_service.py`.
+- The helper is deterministic and local. It does not call an LLM, cloud API, or
+  external service.
+- First version is text-only because the current STT provider paths do not
+  expose stable segment/pause metadata after transcript segments are joined.
+- The helper adds only conservative terminal CJK punctuation when text is long
+  enough, contains CJK, and lacks existing sentence punctuation.
+- Empty, short ambiguous, non-CJK, already-punctuated, and boundary-punctuated
+  text passes through unchanged.
+- Faster-whisper and FunASR ok-paths both run correction before punctuation.
+
+### Manual Mic Behavior
+
+Manual Mic still calls the existing STT bridge and fills the textarea from
+`result.transcript`. Since backend `transcript` now equals `finalTranscript`,
+Manual Mic receives the punctuated final transcript without new renderer-side
+rewriting. Auto-send behavior remains unchanged.
+
+### Conversation Mode Behavior
+
+Conversation Mode still calls the existing STT bridge and then the existing
+`sendMessage(trimmed)` flow. Since backend `transcript` now equals
+`finalTranscript`, `/chat` receives the final transcript without a `/chat`
+schema change or Conversation Mode control-flow change.
+
+### Diagnostics
+
+Voice Diagnostics now shows:
+
+- original transcript preview
+- corrected transcript preview
+- punctuated transcript preview
+- final transcript preview
+- whether punctuation was applied
+- punctuation mode
+- punctuation reason
+
+Diagnostics remain `textContent` only and do not expose hidden prompts,
+sensitive settings, Owner Voice centroid/embeddings, raw audio, candidate WAV
+paths, or rejected transcript internals.
+
+### Boundaries
+
+- No Owner Voice Gate behavior change.
+- No hard gate.
+- No `/stt/transcribe` request schema change.
+- No `/chat` schema change.
+- No new IPC channel.
+- No Pet Window behavior change.
+- No Output Queue behavior change.
+- No voice recording behavior change.
+- No LLM rewrite, paraphrase, invented words, or alias replacement outside the
+  existing safe-dictionary correction map.
+
+### Tests Added
+
+- Chinese transcript without punctuation receives conservative punctuation.
+- Already-punctuated transcript is preserved.
+- Empty transcript remains empty.
+- Short ambiguous transcript is not aggressively modified.
+- Existing safe-dictionary correction remains intact before punctuation.
+- Faster-whisper and FunASR ok paths return final transcript.
+- `/stt/transcribe` response surfaces punctuation metadata without request
+  schema changes.
+- Manual Mic textarea uses final transcript.
+- Conversation Mode `/chat` uses final transcript.
+- Owner Voice Gate runtime wiring remains unchanged.
+
+### Validation
+
+- `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_routes.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-stt-punctuation`
+- `backend\.venv\Scripts\python.exe scripts\stt_provider_smoke.py`
+- `node apps/desktop/scripts/renderer-chat-smoke.js`
+- `node apps/desktop/scripts/pet-window-smoke.js`
+- `node apps/desktop/scripts/pet-renderer-smoke.js`
+- `git diff --check`
+- `git status --short`
+
+---
+
 ## TASK-270 | Owner Voice Candidate WAV Temporary Policy Design / Implementation
 
 Status: DONE - WINDOWS RUNTIME CANDIDATE WAV LIFECYCLE SMOKE PASS / NO HARD GATE (2026-06-05)

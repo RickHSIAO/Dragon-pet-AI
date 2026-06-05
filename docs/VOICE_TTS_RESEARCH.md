@@ -432,6 +432,21 @@ Suggested research and implementation tasks:
   All tuning labels/hints/preview text ≥ 12px. Panel padding and section spacing increased.
   Windows smoke PASS: diagnostics readability visibly improved. No STT/warmup runtime changes.
 
+- **TASK-STT-001 Chinese STT Punctuation Restoration / Transcript Readability. IMPLEMENTED (2026-06-05):**
+  Adds a local deterministic punctuation layer after existing transcript correction. Processing
+  order: raw STT transcript -> safe-dictionary correction -> punctuation restoration -> final
+  transcript. `rawTranscript` is preserved; `correctedTranscript` remains the safe-dictionary
+  output; `punctuatedTranscript` / `finalTranscript` are added for ok responses; `transcript`
+  equals `finalTranscript`, so Manual Mic textarea fill and Conversation Mode `/chat` use the
+  readable version. Diagnostics add `punctuationApplied`, `punctuationMode`, and
+  `punctuationReason`. First version is conservative text-only punctuation because the current
+  backend provider paths do not expose stable segment/pause metadata after joining transcripts:
+  it only adds a terminal CJK sentence mark for sufficiently long unpunctuated text and leaves
+  empty, short ambiguous, non-CJK, and already-punctuated text unchanged. No LLM rewrite,
+  paraphrase, invented words, hidden prompts, new IPC, `/stt/transcribe` request schema change,
+  `/chat` schema change, Pet Window / Output Queue change, recording behavior change, or Owner
+  Voice Gate behavior change.
+
 - TASK-STT-016 LLM-based semantic correction. **(PLANNED; future):** Optional
   follow-up to apply a local LLM pass over the corrected transcript for further semantic
   accuracy. Must be guarded by explicit user opt-in and must not replace the deterministic

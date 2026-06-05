@@ -7,6 +7,9 @@ Design boundaries:
 - No always-listening, wake-word, TTS, screen capture, or vision.
 - No external network calls.
 - Returns {"transcript": str, "status": "ok" | "unavailable" | "empty" | "error"}.
+- TASK-STT-001 readability pipeline for ok results:
+  raw STT transcript -> existing safe-dictionary correction -> conservative punctuation
+  restoration -> final transcript returned in "transcript".
 """
 
 import base64
@@ -808,6 +811,101 @@ def correct_transcript_text(raw_text: str) -> dict:
     }
 
 
+_CJK_RE = re.compile(r"[\u3400-\u9fff]")
+_SENTENCE_PUNCTUATION_RE = re.compile(r"[。！？!?…]")
+_BOUNDARY_PUNCTUATION_RE = re.compile(r"[。！？!?…，、；：,.]$")
+_QUESTION_SUFFIXES = ("嗎", "呢", "么")
+_MIN_PUNCTUATION_CJK_CHARS = 8
+
+
+def restore_transcript_punctuation(corrected_text: str) -> dict:
+    """
+    TASK-STT-001: Apply conservative, deterministic punctuation restoration.
+
+    Boundary:
+    - Adds only a final Chinese sentence mark when the transcript is long enough,
+      CJK-heavy enough, and currently lacks sentence punctuation.
+    - Does not paraphrase, rewrite words, insert missing words, or alter aliases.
+    - First version is text-only because current provider paths do not expose
+      stable segment pause metadata to this service after transcription joins.
+
+    Returns
+    -------
+    dict with keys:
+        punctuatedTranscript -- text after punctuation restoration
+        finalTranscript      -- transcript callers should use for textarea/chat
+        punctuationApplied   -- True when punctuation was added
+        punctuationMode      -- "conservative_cjk_terminal"
+        punctuationReason    -- reason tag for diagnostics
+    """
+    if not corrected_text:
+        return {
+            "punctuatedTranscript": "",
+            "finalTranscript": "",
+            "punctuationApplied": False,
+            "punctuationMode": "conservative_cjk_terminal",
+            "punctuationReason": "empty",
+        }
+
+    text = corrected_text.strip()
+    if not text:
+        return {
+            "punctuatedTranscript": "",
+            "finalTranscript": "",
+            "punctuationApplied": False,
+            "punctuationMode": "conservative_cjk_terminal",
+            "punctuationReason": "empty",
+        }
+
+    if not _CJK_RE.search(text):
+        return {
+            "punctuatedTranscript": text,
+            "finalTranscript": text,
+            "punctuationApplied": False,
+            "punctuationMode": "conservative_cjk_terminal",
+            "punctuationReason": "non_cjk",
+        }
+
+    if _SENTENCE_PUNCTUATION_RE.search(text):
+        return {
+            "punctuatedTranscript": text,
+            "finalTranscript": text,
+            "punctuationApplied": False,
+            "punctuationMode": "conservative_cjk_terminal",
+            "punctuationReason": "already_punctuated",
+        }
+
+    cjk_chars = _CJK_RE.findall(text)
+    if len(cjk_chars) < _MIN_PUNCTUATION_CJK_CHARS:
+        return {
+            "punctuatedTranscript": text,
+            "finalTranscript": text,
+            "punctuationApplied": False,
+            "punctuationMode": "conservative_cjk_terminal",
+            "punctuationReason": "short_ambiguous",
+        }
+
+    if _BOUNDARY_PUNCTUATION_RE.search(text):
+        return {
+            "punctuatedTranscript": text,
+            "finalTranscript": text,
+            "punctuationApplied": False,
+            "punctuationMode": "conservative_cjk_terminal",
+            "punctuationReason": "existing_boundary_punctuation",
+        }
+
+    mark = "？" if text.endswith(_QUESTION_SUFFIXES) else "。"
+    reason = "added_terminal_question" if mark == "？" else "added_terminal_period"
+    punctuated = text + mark
+    return {
+        "punctuatedTranscript": punctuated,
+        "finalTranscript": punctuated,
+        "punctuationApplied": True,
+        "punctuationMode": "conservative_cjk_terminal",
+        "punctuationReason": reason,
+    }
+
+
 def _reset_model_for_tests() -> None:
     """Reset cached models and load status — only for test isolation. Not for production use."""
     global _whisper_model, _STT_MODEL_LOAD_STATUS, _STT_MODEL_LOAD_ERROR
@@ -1018,8 +1116,9 @@ def _transcribe_funasr(
     _FUNASR_LOAD_ERROR = None
     norm = _normalize_funasr_transcript(transcript)
     correction = correct_transcript_text(norm["normalizedTranscript"])
+    punctuation = restore_transcript_punctuation(correction["correctedTranscript"])
     return {
-        "transcript": correction["correctedTranscript"],
+        "transcript": punctuation["finalTranscript"],
         "status": "ok",
         **_get_model_metadata(),
         **_get_provider_metadata(),
@@ -1037,6 +1136,11 @@ def _transcribe_funasr(
         "correctionReason": correction["correctionReason"],
         "matchedAlias": correction["matchedAlias"],
         "canonicalTerm": correction["canonicalTerm"],
+        "punctuatedTranscript": punctuation["punctuatedTranscript"],
+        "finalTranscript": punctuation["finalTranscript"],
+        "punctuationApplied": punctuation["punctuationApplied"],
+        "punctuationMode": punctuation["punctuationMode"],
+        "punctuationReason": punctuation["punctuationReason"],
         "funasrSidecarMode": sidecar_result.get("funasrSidecarMode", "oneshot"),
         "funasrSidecarWarm": sidecar_result.get("funasrSidecarWarm", False),
         "funasrSidecarRestarted": sidecar_result.get("funasrSidecarRestarted", False),
@@ -1054,6 +1158,7 @@ def transcribe_audio_bytes(
     Provider is selected by DRAGON_PET_STT_PROVIDER env var (default: faster-whisper-local).
     Falls back to faster-whisper-local for invalid provider values.
     TASK-247/248 correction layer applies regardless of provider.
+    TASK-STT-001 punctuation restoration applies after correction on ok responses.
 
     Parameters
     ----------
@@ -1087,6 +1192,13 @@ def transcribe_audio_bytes(
         "correctionReason"   : str  -- "phrase_map" | "none"
         "matchedAlias"       : str
         "canonicalTerm"      : str
+
+    TASK-STT-001 punctuation restoration (present for ok only):
+        "punctuatedTranscript": str
+        "finalTranscript"     : str
+        "punctuationApplied"  : bool
+        "punctuationMode"     : str  -- "conservative_cjk_terminal"
+        "punctuationReason"   : str
 
     TASK-249 provider selection metadata (present for ok / unavailable / error):
         "sttProviderRequested"     : str
@@ -1142,10 +1254,12 @@ def transcribe_audio_bytes(
         detected_language: str | None = getattr(_info, "language", None)
         if not transcript:
             return {"transcript": "", "status": "empty"}
-        # TASK-247: apply deterministic correction layer before returning.
+        # TASK-247/248 then TASK-STT-001:
+        # raw STT transcript -> safe dictionary correction -> conservative punctuation.
         correction = correct_transcript_text(transcript)
+        punctuation = restore_transcript_punctuation(correction["correctedTranscript"])
         return {
-            "transcript": correction["correctedTranscript"],
+            "transcript": punctuation["finalTranscript"],
             "status": "ok",
             **_get_model_metadata(),
             **_get_provider_metadata(),
@@ -1157,6 +1271,11 @@ def transcribe_audio_bytes(
             "correctionReason": correction["correctionReason"],
             "matchedAlias": correction["matchedAlias"],
             "canonicalTerm": correction["canonicalTerm"],
+            "punctuatedTranscript": punctuation["punctuatedTranscript"],
+            "finalTranscript": punctuation["finalTranscript"],
+            "punctuationApplied": punctuation["punctuationApplied"],
+            "punctuationMode": punctuation["punctuationMode"],
+            "punctuationReason": punctuation["punctuationReason"],
         }
     except Exception as exc:  # noqa: BLE001
         logger.warning("TASK-167B: STT error mime=%s exc=%s", mime_type, exc)

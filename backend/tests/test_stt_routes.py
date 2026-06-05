@@ -1607,6 +1607,167 @@ def test_stt_route_response_includes_matched_alias():
         assert "canonicalTerm" in data, "TASK-248: ok response must include 'canonicalTerm'"
 
 
+# -- TASK-STT-001: Chinese STT punctuation restoration -------------------------
+
+
+def test_task_stt_001_punctuation_helper_exists():
+    """TASK-STT-001: stt_service must expose restore_transcript_punctuation helper."""
+    assert hasattr(stt_service, "restore_transcript_punctuation")
+    assert callable(stt_service.restore_transcript_punctuation)
+
+
+def test_task_stt_001_chinese_without_punctuation_gets_terminal_period():
+    """Conservative CJK text without punctuation receives a final sentence mark."""
+    result = stt_service.restore_transcript_punctuation("今天天氣很好我們開始測試")
+    assert result["punctuatedTranscript"] == "今天天氣很好我們開始測試。"
+    assert result["finalTranscript"] == result["punctuatedTranscript"]
+    assert result["punctuationApplied"] is True
+    assert result["punctuationMode"] == "conservative_cjk_terminal"
+    assert result["punctuationReason"] == "added_terminal_period"
+
+
+def test_task_stt_001_already_punctuated_transcript_not_damaged():
+    """Already punctuated Chinese text must pass through unchanged."""
+    text = "今天天氣很好，我們開始測試。"
+    result = stt_service.restore_transcript_punctuation(text)
+    assert result["punctuatedTranscript"] == text
+    assert result["finalTranscript"] == text
+    assert result["punctuationApplied"] is False
+    assert result["punctuationReason"] == "already_punctuated"
+
+
+def test_task_stt_001_empty_transcript_remains_empty():
+    """Empty transcript remains empty and is not marked as punctuated."""
+    result = stt_service.restore_transcript_punctuation("")
+    assert result["punctuatedTranscript"] == ""
+    assert result["finalTranscript"] == ""
+    assert result["punctuationApplied"] is False
+    assert result["punctuationReason"] == "empty"
+
+
+def test_task_stt_001_short_ambiguous_transcript_not_modified():
+    """Short ambiguous utterances like '你好' must not be aggressively modified."""
+    result = stt_service.restore_transcript_punctuation("你好")
+    assert result["punctuatedTranscript"] == "你好"
+    assert result["finalTranscript"] == "你好"
+    assert result["punctuationApplied"] is False
+    assert result["punctuationReason"] == "short_ambiguous"
+
+
+def test_task_stt_001_safe_dictionary_correction_precedes_punctuation(monkeypatch):
+    """Pipeline order: raw STT -> safe dictionary correction -> punctuation -> final transcript."""
+    from types import SimpleNamespace
+
+    class _CorrectableModel:
+        def transcribe(self, _buf, **_kwargs):
+            seg = SimpleNamespace(text="這是中文語音編輯測試我們開始")
+            info = SimpleNamespace(language="zh")
+            return iter([seg]), info
+
+    monkeypatch.setattr(stt_service, "_WHISPER_AVAILABLE", True)
+    monkeypatch.setattr(stt_service, "_STT_RESOLVED_PROVIDER", "faster-whisper-local")
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(stt_service, "_load_model", lambda: _CorrectableModel())
+    result = stt_service.transcribe_audio_bytes(b"\x01\x02\x03", language="zh")
+
+    assert result["status"] == "ok"
+    assert result["rawTranscript"] == "這是中文語音編輯測試我們開始"
+    assert result["correctedTranscript"] == "這是中文語音辨識測試我們開始"
+    assert result["punctuatedTranscript"] == "這是中文語音辨識測試我們開始。"
+    assert result["finalTranscript"] == result["punctuatedTranscript"]
+    assert result["transcript"] == result["finalTranscript"]
+    assert result["correctionApplied"] is True
+    assert result["punctuationApplied"] is True
+
+
+def test_task_stt_001_funasr_ok_path_uses_final_transcript(monkeypatch):
+    """FunASR ok path also returns finalTranscript in transcript."""
+    monkeypatch.setattr(stt_service, "_FUNASR_AVAILABLE", True)
+    monkeypatch.setattr(stt_service, "_STT_RESOLVED_PROVIDER", "funasr-local")
+    monkeypatch.setattr(stt_service, "_STT_PROVIDER_RESOLUTION", {
+        "requested_provider": "funasr-local",
+        "resolved_provider": "funasr-local",
+        "provider_source": "env",
+        "provider_fallback_reason": "none",
+    })
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(
+        stt_service,
+        "_run_funasr",
+        lambda b, m: {
+            "transcript": "今天天氣很好我們開始測試",
+            "status": "ok",
+            "error": None,
+            "funasrSidecarMode": "persistent",
+            "funasrSidecarWarm": True,
+            "funasrSidecarRestarted": False,
+        },
+    )
+    result = stt_service._transcribe_funasr(b"\x01\x02")
+    assert result["status"] == "ok"
+    assert result["transcript"] == "今天天氣很好我們開始測試。"
+    assert result["finalTranscript"] == result["transcript"]
+    assert result["punctuationApplied"] is True
+
+
+def test_task_stt_001_stt_route_response_includes_punctuation_metadata(monkeypatch):
+    """Endpoint response surfaces punctuation metadata without changing request schema."""
+    import app.api.routes as routes_module
+
+    def _mock_transcribe(_audio_bytes, mime_type="audio/webm", language=None):
+        return {
+            "transcript": "今天天氣很好我們開始測試。",
+            "status": "ok",
+            "rawTranscript": "今天天氣很好我們開始測試",
+            "correctedTranscript": "今天天氣很好我們開始測試",
+            "punctuatedTranscript": "今天天氣很好我們開始測試。",
+            "finalTranscript": "今天天氣很好我們開始測試。",
+            "punctuationApplied": True,
+            "punctuationMode": "conservative_cjk_terminal",
+            "punctuationReason": "added_terminal_period",
+        }
+
+    monkeypatch.setattr(routes_module, "transcribe_audio_bytes", _mock_transcribe)
+    with TestClient(app) as client:
+        response = client.post(
+            "/stt/transcribe",
+            files={"audio": ("audio.wav", io.BytesIO(b"\x01\x02\x03"), "audio/wav")},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["transcript"] == data["finalTranscript"]
+    assert data["punctuatedTranscript"] == data["finalTranscript"]
+    assert data["punctuationApplied"] is True
+    assert data["punctuationMode"] == "conservative_cjk_terminal"
+    assert data["punctuationReason"] == "added_terminal_period"
+    assert data["language"] == "zh"
+    assert data["languageLocked"] is True
+
+
+def test_task_stt_001_transcribe_signature_unchanged():
+    """TASK-STT-001 must not change /stt/transcribe service request inputs."""
+    import inspect
+
+    sig = inspect.signature(stt_service.transcribe_audio_bytes)
+    assert list(sig.parameters.keys()) == ["audio_bytes", "mime_type", "language"]
+
+
+def test_task_stt_001_owner_voice_gate_runtime_unmodified():
+    """Punctuation restoration must not add Owner Voice hard-gate wiring."""
+    import inspect
+    import app.api.routes as routes_module
+
+    stt_source = inspect.getsource(routes_module.stt_transcribe)
+    chat_source = inspect.getsource(routes_module.chat)
+    assert "verify_owner_voice_gate_from_files" not in stt_source
+    assert "owner_voice_gate_verify_files_route" not in stt_source
+    assert "runtimeHardBlocked" not in stt_source
+    assert "punctuation" not in chat_source
+    assert "finalTranscript" not in chat_source
+
+
 # =============================================================================
 # TASK-249: Free Local Chinese STT Provider Evaluation tests
 # =============================================================================

@@ -628,6 +628,25 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   redaction/privacy rules, UX messages, TASK-SEC interactions, and future
   implementation checklist are documented. No runtime, backend, schema, IPC, Pet
   Window, Output Queue, or Diagnostics runtime behavior changed.
+- TASK-STT-001 IMPLEMENTED - CHINESE STT PUNCTUATION RESTORATION / TRANSCRIPT READABILITY (2026-06-05):
+  Adds a deterministic local punctuation restoration layer to the existing STT
+  ok-path. Processing order is now: raw STT transcript -> existing
+  safe-dictionary correction -> conservative punctuation restoration -> final
+  transcript. `rawTranscript` and `correctedTranscript` remain available for
+  diagnostics; ok responses also include `punctuatedTranscript`,
+  `finalTranscript`, `punctuationApplied`, `punctuationMode`, and
+  `punctuationReason`. `transcript` is set to `finalTranscript`, so Manual Mic
+  textarea fill and Conversation Mode `/chat` naturally use the readable final
+  transcript without renderer-side rewriting. First version is text-only because
+  stable segment/pause metadata is not exposed after current provider paths join
+  transcript segments; it adds only conservative terminal CJK punctuation for
+  sufficiently long unpunctuated text and leaves empty, short ambiguous,
+  non-CJK, and already-punctuated text unchanged. No LLM rewrite, no paraphrase,
+  no invented words, no alias replacement outside the existing correction map,
+  no `/stt/transcribe` request schema change, no `/chat` schema change, no new
+  IPC, no Pet Window / Output Queue change, no voice recording change, and no
+  Owner Voice Gate behavior or hard-gate policy change.
+
 - TASK-270 DONE - OWNER VOICE CANDIDATE WAV TEMPORARY POLICY (2026-06-05):
   Manual Mic and Conversation Mode dry-run verification now create a bounded
   temporary candidate WAV under the OS temp directory through a narrow Electron

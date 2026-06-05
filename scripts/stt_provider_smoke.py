@@ -520,16 +520,71 @@ check(len(missing) == 0,
 _os.environ.pop("DRAGON_PET_FUNASR_PERSISTENT", None)
 
 # ---------------------------------------------------------------------------
+# TASK-STT-001: Chinese STT punctuation restoration static/runtime checks
+# ---------------------------------------------------------------------------
+print("\n[10/19] TASK-STT-001 - Chinese STT punctuation restoration")
+stt = reload_stt("faster-whisper-local")
+
+check(hasattr(stt, "restore_transcript_punctuation"),
+      "stt_service exposes restore_transcript_punctuation helper")
+check(callable(getattr(stt, "restore_transcript_punctuation", None)),
+      "restore_transcript_punctuation is callable")
+punct = stt.restore_transcript_punctuation("今天天氣很好我們開始測試")
+check(punct.get("finalTranscript") == "今天天氣很好我們開始測試。",
+      "Chinese transcript without punctuation gets conservative terminal period")
+check(punct.get("punctuationApplied") is True,
+      "punctuationApplied=True when terminal punctuation is added")
+short = stt.restore_transcript_punctuation("你好")
+check(short.get("finalTranscript") == "你好" and short.get("punctuationApplied") is False,
+      "short ambiguous transcript is not aggressively modified")
+existing = stt.restore_transcript_punctuation("今天天氣很好。")
+check(existing.get("finalTranscript") == "今天天氣很好。" and existing.get("punctuationApplied") is False,
+      "already-punctuated transcript is preserved")
+
+stt_service_path = _os.path.join(REPO_ROOT, "backend", "app", "stt", "stt_service.py")
+routes_path = _os.path.join(REPO_ROOT, "backend", "app", "api", "routes.py")
+renderer_js = _os.path.join(REPO_ROOT, "apps", "desktop", "src", "renderer", "renderer.js")
+renderer_preload_path = _os.path.join(REPO_ROOT, "apps", "desktop", "src", "renderer", "preload.js")
+
+with open(stt_service_path, "r", encoding="utf-8") as f:
+    stt_service_text = f.read()
+with open(routes_path, "r", encoding="utf-8") as f:
+    routes_source = f.read()
+with open(renderer_js, "r", encoding="utf-8") as f:
+    renderer_js_text = f.read()
+with open(renderer_preload_path, "r", encoding="utf-8") as f:
+    renderer_preload_text = f.read()
+
+for token in (
+    "punctuatedTranscript",
+    "finalTranscript",
+    "punctuationApplied",
+    "punctuationMode",
+    "punctuationReason",
+):
+    check(token in stt_service_text,
+          f"stt_service includes punctuation field {token}")
+    check(token in routes_source,
+          f"/stt/transcribe response docs include punctuation field {token}")
+    check(token in renderer_js_text,
+          f"renderer diagnostics include punctuation field {token}")
+
+check('"transcript": punctuation["finalTranscript"]' in stt_service_text,
+      "backend transcript field is finalTranscript on ok responses")
+check("raw STT transcript -> existing safe-dictionary correction -> conservative punctuation" in stt_service_text,
+      "stt_service documents raw -> correction -> punctuation processing order")
+check("stt:punctuate" not in renderer_preload_text and "stt:punctuate" not in renderer_js_text,
+      "TASK-STT-001 adds no punctuation IPC channel")
+
+# ---------------------------------------------------------------------------
 # TASK-259/260/261: Owner Voice Gate probe and storage docs static safety checks
 # ---------------------------------------------------------------------------
-print("\n[10/13] TASK-259/260/261 - Owner Voice Gate probe and storage docs static safety")
+print("\n[11/19] TASK-259/260/261 - Owner Voice Gate probe and storage docs static safety")
 probe_path = _os.path.join(REPO_ROOT, "scripts", "owner_voice_gate_probe.py")
 owner_voice_doc = _os.path.join(REPO_ROOT, "docs", "OWNER_VOICE_GATE_RESEARCH.md")
 owner_voice_storage_doc = _os.path.join(REPO_ROOT, "docs", "OWNER_VOICE_GATE_STORAGE_DESIGN.md")
 owner_voice_storage_service = _os.path.join(REPO_ROOT, "backend", "app", "services", "owner_voice_gate_storage.py")
-routes_path = _os.path.join(REPO_ROOT, "backend", "app", "api", "routes.py")
 renderer_html = _os.path.join(REPO_ROOT, "apps", "desktop", "src", "renderer", "index.html")
-renderer_js = _os.path.join(REPO_ROOT, "apps", "desktop", "src", "renderer", "renderer.js")
 
 check(_os.path.isfile(probe_path),
       f"owner_voice_gate_probe.py exists: {probe_path}")
@@ -698,7 +753,7 @@ check('fetch(`${BACKEND_URL}/chat`' not in owner_ui_text,
 # ---------------------------------------------------------------------------
 # TASK-262: Multi-sample calibration probe static safety checks
 # ---------------------------------------------------------------------------
-print("\n[11/13] TASK-262 - Owner Voice Gate multi-sample calibration probe static safety")
+print("\n[12/19] TASK-262 - Owner Voice Gate multi-sample calibration probe static safety")
 
 check("--owner-sample" in probe_source,
       "probe accepts --owner-sample for multi-sample calibration")
@@ -777,7 +832,7 @@ check("calibration" in owner_voice_storage_text,
 # ---------------------------------------------------------------------------
 # TASK-263: Owner voice file enrollment + centroid storage static checks
 # ---------------------------------------------------------------------------
-print("\n[12/13] TASK-263 - Owner Voice Gate file enrollment and centroid storage static safety")
+print("\n[13/19] TASK-263 - Owner Voice Gate file enrollment and centroid storage static safety")
 
 enroll_path = _os.path.join(REPO_ROOT, "scripts", "owner_voice_gate_enroll.py")
 check(_os.path.isfile(enroll_path),
@@ -856,7 +911,7 @@ check("Unicode" in owner_voice_storage_text and "audio_file_not_found" in owner_
 # ---------------------------------------------------------------------------
 # TASK-264: Stored centroid verification probe static safety checks
 # ---------------------------------------------------------------------------
-print("\n[13/14] TASK-264 - Owner Voice Gate stored centroid verification probe static safety")
+print("\n[14/19] TASK-264 - Owner Voice Gate stored centroid verification probe static safety")
 
 verify_path = _os.path.join(REPO_ROOT, "scripts", "owner_voice_gate_verify.py")
 check(_os.path.isfile(verify_path),
@@ -908,7 +963,7 @@ check("TASK-264" in owner_voice_storage_text,
 # ---------------------------------------------------------------------------
 # TASK-265: Backend verify-files endpoint static safety checks
 # ---------------------------------------------------------------------------
-print("\n[14/15] TASK-265 - Owner Voice Gate backend verify-files endpoint static safety")
+print("\n[15/19] TASK-265 - Owner Voice Gate backend verify-files endpoint static safety")
 
 verify_endpoint_route = "/owner-voice-gate/verify-files"
 check(verify_endpoint_route in routes_source,
@@ -969,7 +1024,7 @@ check("TASK-265" in owner_voice_storage_text,
 # ---------------------------------------------------------------------------
 # TASK-266: Manual Mic dry-run policy static safety checks
 # ---------------------------------------------------------------------------
-print("\n[15/18] TASK-266 - Owner Voice Gate Manual Mic dry-run policy static safety")
+print("\n[16/19] TASK-266 - Owner Voice Gate Manual Mic dry-run policy static safety")
 
 check("OWNER_VOICE_MANUAL_MIC_DRY_RUN_ENABLED" in renderer_js_text,
       "renderer defines Manual Mic owner voice dry-run enable flag")
@@ -1018,7 +1073,7 @@ check("TASK-266" in owner_voice_text,
       "owner voice research doc records TASK-266")
 
 # TASK-267: Conversation Mode dry-run policy static safety checks
-print("\n[16/18] TASK-267 - Owner Voice Gate Conversation Mode dry-run policy static safety")
+print("\n[17/19] TASK-267 - Owner Voice Gate Conversation Mode dry-run policy static safety")
 
 check("OWNER_VOICE_CONVERSATION_MODE_DRY_RUN_ENABLED" in renderer_js_text,
       "renderer defines Conversation Mode owner voice dry-run enable flag")
@@ -1070,7 +1125,7 @@ check("TASK-267" in owner_voice_text,
       "owner voice research doc records TASK-267")
 
 # TASK-268: Owner Voice dry-run diagnostics polish static safety checks
-print("\n[17/18] TASK-268 - Owner Voice dry-run diagnostics polish static safety")
+print("\n[18/19] TASK-268 - Owner Voice dry-run diagnostics polish static safety")
 
 check("formatOwnerVoiceDryRunSourceLabel" in renderer_js_text,
       "renderer defines owner voice dry-run source label formatter")
@@ -1113,7 +1168,7 @@ check("TASK-268" in owner_voice_text,
       "owner voice research doc records TASK-268")
 
 # TASK-270: Owner Voice candidate WAV temporary policy checks
-print("\n[18/18] TASK-270 - Owner Voice candidate WAV temporary policy static safety")
+print("\n[19/19] TASK-270 - Owner Voice candidate WAV temporary policy static safety")
 
 renderer_preload_path = _os.path.join(REPO_ROOT, "apps", "desktop", "src", "renderer", "preload.js")
 main_js_path = _os.path.join(REPO_ROOT, "apps", "desktop", "src", "main.js")
@@ -1185,8 +1240,8 @@ print()
 print("=" * 65)
 print(f"  {_pass_count} PASS  {_fail_count} FAIL")
 if _fail_count == 0:
-    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263/264/265/266/267/268/270 STT Provider Smoke: PASS")
+    print("  TASK-249/250/253/253rev/254/256/TASK-STT-001/259/260/261/262/263/264/265/266/267/268/270 STT Provider Smoke: PASS")
 else:
-    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263/264/265/266/267/268/270 STT Provider Smoke: FAIL")
+    print("  TASK-249/250/253/253rev/254/256/TASK-STT-001/259/260/261/262/263/264/265/266/267/268/270 STT Provider Smoke: FAIL")
 print("=" * 65)
 sys.exit(0 if _fail_count == 0 else 1)

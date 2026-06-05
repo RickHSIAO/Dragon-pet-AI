@@ -13096,6 +13096,150 @@ async function testTask247RegressionTask246StillPass() {
 }
 
 // ---------------------------------------------------------------------------
+// TASK-STT-001: Chinese STT Punctuation Restoration / Transcript Readability
+// ---------------------------------------------------------------------------
+
+function testTaskStt001RendererHasPunctuationFields() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes('sttPunctuatedTranscriptPreview: ""'), "TASK-STT-001 diagnostics must have punctuated preview field");
+  assert.ok(src.includes('sttFinalTranscriptPreview: ""'), "TASK-STT-001 diagnostics must have final preview field");
+  assert.ok(src.includes("sttPunctuationApplied"), "TASK-STT-001 diagnostics must have punctuation applied field");
+  assert.ok(src.includes("sttPunctuationMode"), "TASK-STT-001 diagnostics must have punctuation mode field");
+  assert.ok(src.includes("sttPunctuationReason"), "TASK-STT-001 diagnostics must have punctuation reason field");
+  console.log("  testTaskStt001RendererHasPunctuationFields PASS");
+}
+
+function testTaskStt001DiagnosticsRenderIncludesPunctuationLines() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const renderFnStart = src.indexOf("function renderFullAppVoiceDiagnostics");
+  const renderFnEnd   = src.indexOf("\n}", renderFnStart) + 2;
+  const renderFn = src.slice(renderFnStart, renderFnEnd);
+  assert.ok(renderFn.includes("sttPunctuatedTranscriptPreview"), "TASK-STT-001 render must include punctuated transcript preview");
+  assert.ok(renderFn.includes("sttFinalTranscriptPreview"), "TASK-STT-001 render must include final transcript preview");
+  assert.ok(renderFn.includes("sttPunctuationApplied"), "TASK-STT-001 render must include punctuation applied field");
+  assert.ok(!renderFn.includes("innerHTML"), "TASK-STT-001 diagnostics render must remain textContent-only");
+  console.log("  testTaskStt001DiagnosticsRenderIncludesPunctuationLines PASS");
+}
+
+async function testTaskStt001DiagnosticsDefaultsAndReset() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  const d = sandbox.fullAppVoiceDiagnostics;
+  assert.strictEqual(d.sttPunctuatedTranscriptPreview, "", "TASK-STT-001 punctuated preview default must be empty");
+  assert.strictEqual(d.sttFinalTranscriptPreview, "", "TASK-STT-001 final preview default must be empty");
+  assert.strictEqual(d.sttPunctuationApplied, false, "TASK-STT-001 punctuationApplied default must be false");
+  assert.strictEqual(d.sttPunctuationMode, "", "TASK-STT-001 punctuationMode default must be empty");
+  assert.strictEqual(d.sttPunctuationReason, "", "TASK-STT-001 punctuationReason default must be empty");
+  d.sttPunctuatedTranscriptPreview = "標點後";
+  d.sttFinalTranscriptPreview = "最終";
+  d.sttPunctuationApplied = true;
+  d.sttPunctuationMode = "conservative_cjk_terminal";
+  d.sttPunctuationReason = "added_terminal_period";
+  sandbox.resetFullAppVoiceDiagnosticsForRecording("manual_mic");
+  assert.strictEqual(d.sttPunctuatedTranscriptPreview, "", "TASK-STT-001 reset must clear punctuated preview");
+  assert.strictEqual(d.sttFinalTranscriptPreview, "", "TASK-STT-001 reset must clear final preview");
+  assert.strictEqual(d.sttPunctuationApplied, false, "TASK-STT-001 reset must clear punctuationApplied");
+  assert.strictEqual(d.sttPunctuationMode, "", "TASK-STT-001 reset must clear punctuationMode");
+  assert.strictEqual(d.sttPunctuationReason, "", "TASK-STT-001 reset must clear punctuationReason");
+  console.log("  testTaskStt001DiagnosticsDefaultsAndReset PASS");
+}
+
+async function testTaskStt001TranscribeReturnsFinalTranscriptAndDiagnostics() {
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => ({
+        status: "ok",
+        transcript: "今天天氣很好我們開始測試。",
+        rawTranscript: "今天天氣很好我們開始測試",
+        correctedTranscript: "今天天氣很好我們開始測試",
+        punctuatedTranscript: "今天天氣很好我們開始測試。",
+        finalTranscript: "今天天氣很好我們開始測試。",
+        punctuationApplied: true,
+        punctuationMode: "conservative_cjk_terminal",
+        punctuationReason: "added_terminal_period"
+      }),
+    },
+  });
+  const transcript = await sandbox.transcribeFullAppAudioBlob(new Blob(["x"], { type: "audio/wav" }));
+  assert.strictEqual(transcript, "今天天氣很好我們開始測試。", "TASK-STT-001 transcribe helper must return backend final transcript");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttRawTranscriptPreview, "今天天氣很好我們開始測試");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttCorrectedTranscriptPreview, "今天天氣很好我們開始測試");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttPunctuatedTranscriptPreview, "今天天氣很好我們開始測試。");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttFinalTranscriptPreview, "今天天氣很好我們開始測試。");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttPunctuationApplied, true);
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttPunctuationMode, "conservative_cjk_terminal");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttPunctuationReason, "added_terminal_period");
+  console.log("  testTaskStt001TranscribeReturnsFinalTranscriptAndDiagnostics PASS");
+}
+
+async function testTaskStt001ManualMicTextareaUsesFinalTranscript() {
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => ({
+        status: "ok",
+        transcript: "手動語音輸入完成測試。",
+        rawTranscript: "手動語音輸入完成測試",
+        correctedTranscript: "手動語音輸入完成測試",
+        punctuatedTranscript: "手動語音輸入完成測試。",
+        finalTranscript: "手動語音輸入完成測試。",
+        punctuationApplied: true,
+        punctuationMode: "conservative_cjk_terminal",
+        punctuationReason: "added_terminal_period"
+      }),
+    },
+  });
+  sandbox.setFullAppVoiceState("transcribing");
+  sandbox._fullAppSttTranscribeChunks([new Blob(["x"], { type: "audio/wav" })], "audio/wav");
+  await settle();
+  assert.strictEqual(document.getElementById("message-input").value, "手動語音輸入完成測試。",
+    "TASK-STT-001 Manual Mic textarea must receive final transcript");
+  console.log("  testTaskStt001ManualMicTextareaUsesFinalTranscript PASS");
+}
+
+async function testTaskStt001ConversationModeSendsFinalTranscript() {
+  const { sandbox, state } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => ({
+        status: "ok",
+        transcript: "對話模式語音完成測試。",
+        rawTranscript: "對話模式語音完成測試",
+        correctedTranscript: "對話模式語音完成測試",
+        punctuatedTranscript: "對話模式語音完成測試。",
+        finalTranscript: "對話模式語音完成測試。",
+        punctuationApplied: true,
+        punctuationMode: "conservative_cjk_terminal",
+        punctuationReason: "added_terminal_period"
+      }),
+      updatePetSpeech: async () => ({ ok: true }),
+      updatePetExpression: async () => ({ ok: true }),
+    },
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("transcribing");
+  sandbox._transcribeConversationChunks([new Blob(["x"], { type: "audio/wav" })], "audio/wav");
+  await settle();
+  const chatCalls = state.calls.filter((call) => call.url.endsWith("/chat"));
+  assert.ok(chatCalls.length >= 1, "TASK-STT-001 Conversation Mode must still call /chat");
+  const body = JSON.parse(chatCalls[0].body || "{}");
+  assert.strictEqual(body.message, "對話模式語音完成測試。",
+    "TASK-STT-001 Conversation Mode /chat message must be final transcript");
+  console.log("  testTaskStt001ConversationModeSendsFinalTranscript PASS");
+}
+
+function testTaskStt001NoRuntimeSchemaOrOwnerVoiceRegression() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const preloadSrc = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "preload.js"), "utf8");
+  assert.ok(!preloadSrc.includes("stt:punctuate"), "TASK-STT-001 must not add punctuation IPC channel");
+  assert.ok(!src.includes("sendMessage(rawTranscript)"), "TASK-STT-001 must not send raw transcript");
+  assert.ok(!src.includes("sendMessage(correctedTranscript)"), "TASK-STT-001 must not bypass backend final transcript");
+  assert.ok(!src.includes("ownerVoiceDryRunStatus = \"blocked\""), "TASK-STT-001 must not add Owner Voice hard block");
+  console.log("  testTaskStt001NoRuntimeSchemaOrOwnerVoiceRegression PASS");
+}
+
+// ---------------------------------------------------------------------------
 // TASK-246: STT Model Quality / Whisper Model Upgrade
 // ---------------------------------------------------------------------------
 
@@ -16111,6 +16255,13 @@ async function main() {
   testTask247NoPetWindowCallsInCorrectionFlow();
   testTask247RawTranscriptNotExposedInHistory();
   await testTask247RegressionTask246StillPass();
+  testTaskStt001RendererHasPunctuationFields();
+  testTaskStt001DiagnosticsRenderIncludesPunctuationLines();
+  await testTaskStt001DiagnosticsDefaultsAndReset();
+  await testTaskStt001TranscribeReturnsFinalTranscriptAndDiagnostics();
+  await testTaskStt001ManualMicTextareaUsesFinalTranscript();
+  await testTaskStt001ConversationModeSendsFinalTranscript();
+  testTaskStt001NoRuntimeSchemaOrOwnerVoiceRegression();
 
   // TASK-246: STT Model Quality / Whisper Model Upgrade
   testTask246RendererHasModelQualityFields();
