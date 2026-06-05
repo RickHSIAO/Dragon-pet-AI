@@ -236,9 +236,12 @@ safety notice acceptance, explicit hard-gate enablement, visible threshold
 policy, and UI warnings that false accepts/rejects are possible and Owner
 Voice Gate is not authentication.
 
-Before a safe candidate WAV temp policy and opt-in UI exist, future runtime
-work should fail open with warning/status for no enrollment, verification
-unavailable, model unavailable, sidecar error, missing candidate WAV policy,
+TASK-270 implements a dry-run-only candidate WAV temp policy. It writes bounded
+temporary WAV files under OS temp through a narrow Electron IPC bridge, deletes
+them after verification or by timeout, and does not expose full paths in
+diagnostics. This still does not enable hard blocking. Future runtime work
+should fail open with warning/status for no enrollment, verification
+unavailable, model unavailable, sidecar error, temp WAV creation failure,
 backend timeout, Unicode path error, and offline mode. Fail-closed behavior
 requires explicit user opt-in and confirmation.
 
@@ -258,6 +261,7 @@ Voice Gate.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
 9. TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy - DONE.
+10. TASK-270 Owner Voice Candidate WAV Temporary Policy Design / Implementation - DONE.
 
 ## 12. Non-Goals
 

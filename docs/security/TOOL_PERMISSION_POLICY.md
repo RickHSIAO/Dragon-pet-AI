@@ -247,6 +247,10 @@ Rules:
   access, and cannot grant access to T6 forbidden data. Tool permission
   decisions remain governed by this policy even when owner voice hard gate is
   enabled.
+- TASK-270 candidate WAV temp policy does not change tool permissions. A
+  dry-run verification pass, reject, temp WAV path, or cleanup result cannot
+  authorize sensitive tools, bypass confirmation UX, approve outbound requests,
+  approve local-file access, or grant access to T6 forbidden data.
 - Future Manual Mic and Conversation Mode work must remain opt-in,
   disabled-by-default, and dry-run policy gated before blocking runtime behavior.
 
@@ -315,6 +319,7 @@ Before implementing any tool action:
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
 9. TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy - DONE.
+10. TASK-270 Owner Voice Candidate WAV Temporary Policy Design / Implementation - DONE.
 
 ## 13. Validation
 

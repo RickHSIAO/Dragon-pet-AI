@@ -81,9 +81,10 @@ var STARTUP_STT_WARMUP_ENABLED    = true;  // var: exposed to vm sandbox
 var STARTUP_OLLAMA_WARMUP_ENABLED = true;  // var: exposed to vm sandbox
 const STARTUP_WARMUP_DELAY_MS     = 3000;  // delay after health check before warmup fires
 // TASK-266: Owner Voice Gate Manual Mic dry-run policy.
-// TASK-266/267: Owner Voice Gate dry-run policies.
+// TASK-266/267/270: Owner Voice Gate dry-run policies.
 // Status-only: never hard-block Manual Mic or Conversation Mode STT/chat flow.
-// Candidate paths stay empty until a future explicit temp-file policy supplies one.
+// TASK-270 supplies a temp WAV policy via narrow IPC; explicit candidate path
+// vars remain test hooks only and are not rendered in diagnostics.
 var OWNER_VOICE_MANUAL_MIC_DRY_RUN_ENABLED = true; // var: exposed to vm sandbox
 var fullAppOwnerVoiceDryRunCandidatePath = "";     // var: test/future policy hook only
 var OWNER_VOICE_CONVERSATION_MODE_DRY_RUN_ENABLED = true; // var: exposed to vm sandbox
@@ -314,7 +315,9 @@ var fullAppVoiceDiagnostics = {
   rawAudioPersisted: false,
   candidateEmbeddingPersisted: false,
   storedCentroidExposed: false,
-  runtimeHardBlocked: false
+  runtimeHardBlocked: false,
+  candidateWavTemporary: false,
+  candidateWavDeleted: false
 };
 // TASK-244: session-only VAD tuning vars — override constants for this session only, not persisted
 var fullAppConversationRmsThreshold = FULL_APP_CONVERSATION_RMS_THRESHOLD;
@@ -3294,6 +3297,7 @@ function formatOwnerVoiceDryRunStateLabel(status, accepted) {
 
 function formatOwnerVoiceDryRunReasonLabel(reason) {
   if (reason === "no_candidate_file_policy") return "No safe candidate WAV path policy yet";
+  if (reason === "candidate_wav_temp_unavailable") return "Temporary candidate WAV unavailable";
   if (reason === "verification_complete") return "Verification complete";
   if (reason === "not_enrolled") return "Owner voice is not enrolled";
   if (reason === "audio_file_not_found") return "Candidate audio file was not found";
@@ -3315,6 +3319,12 @@ function ownerVoiceDryRunSafetySummary(d) {
     : "Dry-run only; existing voice flow is not blocked";
 }
 
+function _ownerVoicePatchBoolean(patch, field, fallback) {
+  return Object.prototype.hasOwnProperty.call(patch, field)
+    ? patch[field] === true
+    : fallback;
+}
+
 function _setOwnerVoiceManualMicDryRunStatus(status, reason, patch = {}) {
   fullAppVoiceDiagnostics.ownerVoiceDryRunEnabled = _ownerVoiceManualMicDryRunEnabled();
   fullAppVoiceDiagnostics.ownerVoiceDryRunSource = "manual_mic";
@@ -3332,6 +3342,8 @@ function _setOwnerVoiceManualMicDryRunStatus(status, reason, patch = {}) {
   fullAppVoiceDiagnostics.candidateEmbeddingPersisted = false;
   fullAppVoiceDiagnostics.storedCentroidExposed = false;
   fullAppVoiceDiagnostics.runtimeHardBlocked = false;
+  fullAppVoiceDiagnostics.candidateWavTemporary = _ownerVoicePatchBoolean(patch, "candidateWavTemporary", false);
+  fullAppVoiceDiagnostics.candidateWavDeleted = _ownerVoicePatchBoolean(patch, "candidateWavDeleted", false);
   renderFullAppVoiceDiagnostics();
 }
 
@@ -3352,6 +3364,8 @@ function _setOwnerVoiceConversationModeDryRunStatus(status, reason, patch = {}) 
   fullAppVoiceDiagnostics.candidateEmbeddingPersisted = false;
   fullAppVoiceDiagnostics.storedCentroidExposed = false;
   fullAppVoiceDiagnostics.runtimeHardBlocked = false;
+  fullAppVoiceDiagnostics.candidateWavTemporary = _ownerVoicePatchBoolean(patch, "candidateWavTemporary", false);
+  fullAppVoiceDiagnostics.candidateWavDeleted = _ownerVoicePatchBoolean(patch, "candidateWavDeleted", false);
   renderFullAppVoiceDiagnostics();
 }
 
@@ -3367,6 +3381,136 @@ function _syncOwnerVoiceManualMicDryRunFromSettings() {
   }
 }
 
+function _ownerVoiceEncodePcm16Wav(samples, sampleRate) {
+  const length = samples.length;
+  const buffer = new ArrayBuffer(44 + length * 2);
+  const view = new DataView(buffer);
+  function writeAscii(offset, text) {
+    for (let i = 0; i < text.length; i += 1) {
+      view.setUint8(offset + i, text.charCodeAt(i));
+    }
+  }
+
+  writeAscii(0, "RIFF");
+  view.setUint32(4, 36 + length * 2, true);
+  writeAscii(8, "WAVE");
+  writeAscii(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeAscii(36, "data");
+  view.setUint32(40, length * 2, true);
+
+  for (let i = 0; i < length; i += 1) {
+    const clamped = Math.max(-1, Math.min(1, samples[i] || 0));
+    view.setInt16(44 + i * 2, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true);
+  }
+  return buffer;
+}
+
+function _ownerVoiceAudioBufferTo16kMonoWav(audioBuffer) {
+  const targetRate = 16000;
+  const sourceRate = audioBuffer && audioBuffer.sampleRate ? audioBuffer.sampleRate : targetRate;
+  const sourceLength = audioBuffer && audioBuffer.length ? audioBuffer.length : 0;
+  const targetLength = Math.max(1, Math.round(sourceLength * targetRate / sourceRate));
+  const channelCount = Math.max(1, audioBuffer.numberOfChannels || 1);
+  const channelData = [];
+  for (let ch = 0; ch < channelCount; ch += 1) {
+    channelData.push(audioBuffer.getChannelData(ch));
+  }
+
+  const mono = new Float32Array(targetLength);
+  for (let i = 0; i < targetLength; i += 1) {
+    const sourceIndex = Math.min(sourceLength - 1, Math.floor(i * sourceRate / targetRate));
+    let mixed = 0;
+    for (let ch = 0; ch < channelData.length; ch += 1) {
+      mixed += channelData[ch][sourceIndex] || 0;
+    }
+    mono[i] = mixed / channelData.length;
+  }
+  return _ownerVoiceEncodePcm16Wav(mono, targetRate);
+}
+
+async function _ownerVoiceBlobToTemporaryWavBytes(audioBlob) {
+  if (!audioBlob || typeof audioBlob.arrayBuffer !== "function") {
+    throw new Error("candidate_wav_temp_unavailable");
+  }
+  const inputBuffer = await audioBlob.arrayBuffer();
+  const mime = typeof audioBlob.type === "string" ? audioBlob.type.toLowerCase() : "";
+  if (mime === "audio/wav" || mime === "audio/wave" || mime === "audio/x-wav") {
+    return inputBuffer;
+  }
+
+  const AudioContextCtor = typeof AudioContext !== "undefined"
+    ? AudioContext
+    : (typeof webkitAudioContext !== "undefined" ? webkitAudioContext : null);
+  if (!AudioContextCtor) {
+    throw new Error("candidate_wav_temp_unavailable");
+  }
+
+  const context = new AudioContextCtor();
+  try {
+    const decoded = await context.decodeAudioData(inputBuffer.slice(0));
+    return _ownerVoiceAudioBufferTo16kMonoWav(decoded);
+  } finally {
+    if (context && typeof context.close === "function") {
+      try { context.close(); } catch (_e) {}
+    }
+  }
+}
+
+async function _ownerVoiceCreateCandidateWavTemp(audioBlob, explicitCandidatePath) {
+  if (explicitCandidatePath) {
+    return {
+      ok: true,
+      path: explicitCandidatePath,
+      candidateWavTemporary: false,
+      cleanupRequired: false,
+    };
+  }
+
+  const api = window && window.dragonPet;
+  if (!audioBlob || !api || typeof api.createOwnerVoiceCandidateWavTemp !== "function") {
+    return { ok: false, reason: "candidate_wav_temp_unavailable" };
+  }
+
+  try {
+    const wavBytes = await _ownerVoiceBlobToTemporaryWavBytes(audioBlob);
+    const result = await api.createOwnerVoiceCandidateWavTemp(wavBytes);
+    if (!result || result.ok !== true || typeof result.path !== "string" || !result.path) {
+      return { ok: false, reason: "candidate_wav_temp_unavailable" };
+    }
+    return {
+      ok: true,
+      path: result.path,
+      candidateWavTemporary: true,
+      cleanupRequired: true,
+    };
+  } catch (_err) {
+    return { ok: false, reason: "candidate_wav_temp_unavailable" };
+  }
+}
+
+async function _ownerVoiceDeleteCandidateWavTemp(candidate) {
+  if (!candidate || candidate.cleanupRequired !== true || !candidate.path) {
+    return false;
+  }
+  const api = window && window.dragonPet;
+  if (!api || typeof api.deleteOwnerVoiceCandidateWavTemp !== "function") {
+    return false;
+  }
+  try {
+    const result = await api.deleteOwnerVoiceCandidateWavTemp(candidate.path);
+    return Boolean(result && result.deleted === true);
+  } catch (_err) {
+    return false;
+  }
+}
+
 async function runOwnerVoiceConversationModeDryRun(audioBlob) {
   // _setOwnerVoiceConversationModeDryRunStatus() always forces runtimeHardBlocked=false.
   const enabled = _ownerVoiceConversationModeDryRunEnabled();
@@ -3378,31 +3522,41 @@ async function runOwnerVoiceConversationModeDryRun(audioBlob) {
     return { status: "disabled", reason };
   }
 
-  if (!audioBlob || !fullAppOwnerVoiceConversationDryRunCandidatePath) {
-    _setOwnerVoiceConversationModeDryRunStatus("not_computed", "no_candidate_file_policy");
-    return { status: "not_computed", reason: "no_candidate_file_policy" };
+  const candidate = await _ownerVoiceCreateCandidateWavTemp(audioBlob, fullAppOwnerVoiceConversationDryRunCandidatePath);
+  if (!candidate.ok) {
+    _setOwnerVoiceConversationModeDryRunStatus("not_computed", candidate.reason || "candidate_wav_temp_unavailable");
+    return { status: "not_computed", reason: candidate.reason || "candidate_wav_temp_unavailable" };
   }
 
-  _setOwnerVoiceConversationModeDryRunStatus("checking", "verify_files_pending");
+  _setOwnerVoiceConversationModeDryRunStatus("checking", "verify_files_pending", {
+    candidateWavTemporary: candidate.candidateWavTemporary,
+  });
   try {
     const res = await fetch(`${BACKEND_URL}/owner-voice-gate/verify-files`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        paths: [fullAppOwnerVoiceConversationDryRunCandidatePath],
+        paths: [candidate.path],
         threshold: _ownerVoiceManualMicThreshold(),
       }),
     });
     const result = await parseJsonResponse(res);
     const score = typeof result.score === "number" ? result.score : null;
     const accepted = typeof result.accepted === "boolean" ? result.accepted : null;
+    const deleted = await _ownerVoiceDeleteCandidateWavTemp(candidate);
     _setOwnerVoiceConversationModeDryRunStatus(result.status || "ok", result.reason || "verification_complete", {
       ownerVoiceScore: score,
       ownerVoiceAccepted: accepted,
+      candidateWavTemporary: candidate.candidateWavTemporary,
+      candidateWavDeleted: candidate.cleanupRequired ? deleted : false,
     });
     return result;
   } catch (_err) {
-    _setOwnerVoiceConversationModeDryRunStatus("error", "verify_files_error");
+    const deleted = await _ownerVoiceDeleteCandidateWavTemp(candidate);
+    _setOwnerVoiceConversationModeDryRunStatus("error", "verify_files_error", {
+      candidateWavTemporary: candidate.candidateWavTemporary,
+      candidateWavDeleted: candidate.cleanupRequired ? deleted : false,
+    });
     return { status: "error", reason: "verify_files_error" };
   }
 }
@@ -3418,31 +3572,41 @@ async function runOwnerVoiceManualMicDryRun(audioBlob) {
     return { status: "disabled", reason };
   }
 
-  if (!audioBlob || !fullAppOwnerVoiceDryRunCandidatePath) {
-    _setOwnerVoiceManualMicDryRunStatus("not_computed", "no_candidate_file_policy");
-    return { status: "not_computed", reason: "no_candidate_file_policy" };
+  const candidate = await _ownerVoiceCreateCandidateWavTemp(audioBlob, fullAppOwnerVoiceDryRunCandidatePath);
+  if (!candidate.ok) {
+    _setOwnerVoiceManualMicDryRunStatus("not_computed", candidate.reason || "candidate_wav_temp_unavailable");
+    return { status: "not_computed", reason: candidate.reason || "candidate_wav_temp_unavailable" };
   }
 
-  _setOwnerVoiceManualMicDryRunStatus("checking", "verify_files_pending");
+  _setOwnerVoiceManualMicDryRunStatus("checking", "verify_files_pending", {
+    candidateWavTemporary: candidate.candidateWavTemporary,
+  });
   try {
     const res = await fetch(`${BACKEND_URL}/owner-voice-gate/verify-files`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        paths: [fullAppOwnerVoiceDryRunCandidatePath],
+        paths: [candidate.path],
         threshold: _ownerVoiceManualMicThreshold(),
       }),
     });
     const result = await parseJsonResponse(res);
     const score = typeof result.score === "number" ? result.score : null;
     const accepted = typeof result.accepted === "boolean" ? result.accepted : null;
+    const deleted = await _ownerVoiceDeleteCandidateWavTemp(candidate);
     _setOwnerVoiceManualMicDryRunStatus(result.status || "ok", result.reason || "verification_complete", {
       ownerVoiceScore: score,
       ownerVoiceAccepted: accepted,
+      candidateWavTemporary: candidate.candidateWavTemporary,
+      candidateWavDeleted: candidate.cleanupRequired ? deleted : false,
     });
     return result;
   } catch (_err) {
-    _setOwnerVoiceManualMicDryRunStatus("error", "verify_files_error");
+    const deleted = await _ownerVoiceDeleteCandidateWavTemp(candidate);
+    _setOwnerVoiceManualMicDryRunStatus("error", "verify_files_error", {
+      candidateWavTemporary: candidate.candidateWavTemporary,
+      candidateWavDeleted: candidate.cleanupRequired ? deleted : false,
+    });
     return { status: "error", reason: "verify_files_error" };
   }
 }
@@ -5463,6 +5627,8 @@ function renderFullAppVoiceDiagnostics() {
   var ownerVoiceAccepted = d.ownerVoiceAccepted === null || d.ownerVoiceAccepted === undefined
     ? "unknown"
     : (d.ownerVoiceAccepted ? "true" : "false");
+  var ownerVoiceCandidateWavTemporary = formatOwnerVoiceDryRunBoolean(d.candidateWavTemporary);
+  var ownerVoiceCandidateWavDeleted = formatOwnerVoiceDryRunBoolean(d.candidateWavDeleted);
   var lines = [
     "模式: " + d.mode,
     "錄音時長 ms: " + d.durationMs,
@@ -5500,6 +5666,7 @@ function renderFullAppVoiceDiagnostics() {
     "Owner Voice score: " + ownerVoiceScore + " / " + ownerVoiceThreshold + "  accepted: " + ownerVoiceAccepted + "  checkedAt: " + (d.ownerVoiceCheckedAt || "not checked"),
     "Owner Voice safety: " + ownerVoiceDryRunSafetySummary(d) + "  runtimeHardBlocked=" + formatOwnerVoiceDryRunBoolean(d.runtimeHardBlocked),
     "Owner Voice storage: rawAudioPersisted=" + formatOwnerVoiceDryRunBoolean(d.rawAudioPersisted) + " candidateEmbeddingPersisted=" + formatOwnerVoiceDryRunBoolean(d.candidateEmbeddingPersisted) + " storedCentroidExposed=" + formatOwnerVoiceDryRunBoolean(d.storedCentroidExposed),
+    "Owner Voice candidate WAV: temporary=" + ownerVoiceCandidateWavTemporary + " deleted=" + ownerVoiceCandidateWavDeleted,
     "---",
     "VAD 最後 RMS: " + d.lastRms.toFixed(4),
     "VAD 最高 RMS: " + d.maxRms.toFixed(4),
@@ -5622,6 +5789,8 @@ function resetFullAppVoiceDiagnosticsForRecording(mode) {
   fullAppVoiceDiagnostics.candidateEmbeddingPersisted    = false;
   fullAppVoiceDiagnostics.storedCentroidExposed          = false;
   fullAppVoiceDiagnostics.runtimeHardBlocked             = false;
+  fullAppVoiceDiagnostics.candidateWavTemporary          = false;
+  fullAppVoiceDiagnostics.candidateWavDeleted            = false;
   // constraintsEchoCancellation/NoiseSuppression/AutoGainControl: not reset (carry over from stream)
   revokeLastAudioObjectUrl();
   if (voicePreviewPlayBtn) voicePreviewPlayBtn.disabled = true;

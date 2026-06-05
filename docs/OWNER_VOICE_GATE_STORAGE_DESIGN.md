@@ -1,6 +1,6 @@
 # Owner Voice Gate Storage Design
 
-Status: TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS; TASK-263 DONE - Windows Unicode owner voice enrollment storage smoke PASS; TASK-264 DONE - Windows stored centroid verification smoke PASS; TASK-265 DONE - Windows backend verify-files smoke PASS; TASK-266 DONE - Manual Mic dry-run only / no hard block; TASK-267 DONE - Conversation Mode dry-run only / no hard block; TASK-268 DONE - diagnostics polish only / no hard block; TASK-269 DONE - hard gate opt-in design / no runtime change
+Status: TASK-260 DESIGNED - OWNER VOICE ENROLLMENT STORAGE PLAN / NO RUNTIME CHANGE; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS; TASK-263 DONE - Windows Unicode owner voice enrollment storage smoke PASS; TASK-264 DONE - Windows stored centroid verification smoke PASS; TASK-265 DONE - Windows backend verify-files smoke PASS; TASK-266 DONE - Manual Mic dry-run only / no hard block; TASK-267 DONE - Conversation Mode dry-run only / no hard block; TASK-268 DONE - diagnostics polish only / no hard block; TASK-269 DONE - hard gate opt-in design / no runtime change; TASK-270 DONE - candidate WAV temporary policy / dry-run only / no hard block
 
 Date: 2026-06-05
 
@@ -638,6 +638,7 @@ Runtime integration should be split by surface:
 - TASK-267: Conversation Mode dry-run policy (DONE).
 - TASK-268: Dry-run diagnostics / safety summary polish (DONE).
 - TASK-269: Hard gate opt-in policy design (DONE).
+- TASK-270: Candidate WAV temporary policy design / implementation (DONE).
 
 Both must be disabled by default until enrollment exists and the user explicitly
 enables the gate.
@@ -678,6 +679,7 @@ Recommended sequence:
 - TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy (DONE)
 - TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish (DONE)
 - TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy (DONE)
+- TASK-270 Owner Voice Candidate WAV Temporary Policy Design / Implementation (DONE)
 
 TASK-262 calibration is complete on Windows for the small smoke set. Runtime
 gating should still remain explicit, opt-in, and threshold-aware.
@@ -782,16 +784,16 @@ into a hard runtime gate.
 
 ### Candidate audio policy
 
-TASK-266 intentionally does not write Manual Mic audio to disk just to satisfy
-`/owner-voice-gate/verify-files`. The current Manual Mic audio remains
-in-memory. Dry-run verification may call `verify-files` only if a future
-explicit temp-file policy supplies a safe candidate WAV path.
+TASK-266 originally did not write Manual Mic audio to disk just to satisfy
+`/owner-voice-gate/verify-files`. TASK-270 now supplies a bounded temporary WAV
+policy under OS temp for dry-run verification. This is still not a hard gate.
 
-When no safe candidate path exists, Manual Mic diagnostics report:
+When temp WAV creation or conversion is unavailable, Manual Mic diagnostics
+report:
 
 - `ownerVoiceDryRunEnabled=true` when the gate is enrolled and enabled.
 - `ownerVoiceDryRunStatus=not_computed`.
-- `ownerVoiceDryRunReason=no_candidate_file_policy`.
+- `ownerVoiceDryRunReason=candidate_wav_temp_unavailable`.
 - `rawAudioPersisted=false`.
 - `candidateEmbeddingPersisted=false`.
 - `storedCentroidExposed=false`.
@@ -870,14 +872,12 @@ messages, and the loop must return to a stable waiting/listening state.
 
 ### Candidate WAV policy
 
-Hard gate cannot ship until a safe candidate WAV policy exists. The policy must
-define candidate audio source, temp location if disk is used, deletion timing,
-error/timeout cleanup, Unicode path behavior, and logging. Candidate paths
-should not be displayed. Raw audio, waveform, base64 audio, candidate
-embeddings, rejected transcript, and full local paths must never be persisted.
-
-Current dry-run `no_candidate_file_policy` means no safe candidate WAV policy
-has been approved yet.
+Hard gate cannot ship until a safe candidate WAV policy exists and is validated
+under real Manual Mic and Conversation Mode use. TASK-270 implements the first
+dry-run temporary WAV policy, but this still does not enable hard blocking.
+Candidate paths must not be displayed. Raw audio, waveform, base64 audio,
+candidate embeddings, rejected transcript, and full local paths must never be
+persisted beyond the bounded temp WAV lifecycle.
 
 ### Security interaction
 
@@ -893,6 +893,85 @@ gate.
 - TASK-272 Manual Mic Hard Gate Runtime Implementation.
 - TASK-273 Conversation Mode Hard Gate Runtime Implementation.
 - TASK-274 Owner Voice Gate Safety Eval / Regression Corpus.
+
+## 24. TASK-270 Candidate WAV Temporary Policy
+
+TASK-270 implements the safe temporary candidate WAV policy needed for dry-run
+verification. It is not a hard gate and does not change backend Owner Voice
+Gate behavior.
+
+### Runtime behavior
+
+- Manual Mic and Conversation Mode keep their existing STT and `/chat` flows.
+- Owner Voice dry-run remains fire-and-forget and non-blocking.
+- Accept, reject, verify error, disabled, not enrolled, and temp creation
+  failure never block Manual Mic textarea fill, auto-send, Conversation Mode
+  STT, or `/chat`.
+- Dry-run continues to use the existing
+  `POST /owner-voice-gate/verify-files` endpoint.
+- No `/stt/transcribe` schema change.
+- No `/chat` schema change.
+- No backend endpoint change.
+- No Pet Window or Output Queue behavior change.
+- No hard gate or authentication claim.
+
+### Temporary WAV lifecycle
+
+The renderer prepares candidate WAV bytes from the in-memory recording Blob:
+
+- Existing `audio/wav` blobs are forwarded as WAV bytes.
+- Other browser-recorded blobs are decoded with Web Audio when available and
+  encoded as 16 kHz mono PCM WAV.
+- If conversion is unavailable or fails, dry-run reports
+  `candidate_wav_temp_unavailable` and fails open.
+
+The main process owns the disk write:
+
+- Temp files are written only under the OS temp directory:
+  `app.getPath("temp")/dragon-pet-ai/owner-voice-candidates`.
+- Candidate WAV bytes are bounded by `OWNER_VOICE_CANDIDATE_WAV_MAX_BYTES`.
+- A narrow Electron IPC bridge creates the temp WAV and deletes it.
+- Cleanup is attempted immediately after verification.
+- A cleanup timeout is scheduled as a fallback.
+- Delete requests validate path containment before unlinking.
+
+### Diagnostics and redaction
+
+Voice Diagnostics may show:
+
+- dry-run source
+- status/reason
+- score/threshold
+- accepted
+- checkedAt
+- `runtimeHardBlocked=false`
+- `rawAudioPersisted=false`
+- `candidateEmbeddingPersisted=false`
+- `storedCentroidExposed=false`
+- `candidateWavTemporary`
+- `candidateWavDeleted`
+
+Voice Diagnostics must not show:
+
+- full candidate WAV path
+- raw audio
+- waveform or base64 audio
+- transcript or rejected transcript
+- stored centroid
+- candidate embedding
+- `embeddingAggregate`
+
+`rawAudioPersisted=false` remains true for policy purposes because the temp WAV
+is bounded, app-controlled, created only for verification, and deleted after
+verification or by timeout. It is not stored as enrollment data, chat context,
+diagnostic payload, or LLM context.
+
+### Failure policy
+
+If temp creation, conversion, verification, or deletion fails, the existing
+voice flow continues. The dry-run status records a safe reason such as
+`candidate_wav_temp_unavailable` or `verify_files_error`; `runtimeHardBlocked`
+stays false.
 
 ## 21. TASK-267 Conversation Mode Dry-run Policy
 
@@ -913,17 +992,18 @@ Voice Gate into a hard runtime gate.
 
 ### Candidate audio policy
 
-TASK-267 intentionally does not write Conversation Mode audio to disk just to
-satisfy `/owner-voice-gate/verify-files`. The current Conversation Mode audio
-remains in-memory. Dry-run verification may call `verify-files` only if a
-future explicit temp-file policy supplies a safe candidate WAV path.
+TASK-267 originally did not write Conversation Mode audio to disk just to
+satisfy `/owner-voice-gate/verify-files`. TASK-270 now supplies a bounded
+temporary WAV policy under OS temp for dry-run verification. This is still not
+a hard gate.
 
-When no safe candidate path exists, Conversation Mode diagnostics report:
+When temp WAV creation or conversion is unavailable, Conversation Mode
+diagnostics report:
 
 - `ownerVoiceDryRunEnabled=true` when the gate is enrolled and enabled.
 - `ownerVoiceDryRunSource=conversation_mode`.
 - `ownerVoiceDryRunStatus=not_computed`.
-- `ownerVoiceDryRunReason=no_candidate_file_policy`.
+- `ownerVoiceDryRunReason=candidate_wav_temp_unavailable`.
 - `rawAudioPersisted=false`.
 - `candidateEmbeddingPersisted=false`.
 - `storedCentroidExposed=false`.
@@ -967,7 +1047,8 @@ The existing Voice Diagnostics panel now maps dry-run values to readable text:
 - `not_computed` -> `Not computed`.
 - accepted verify result -> `Accepted`.
 - rejected verify result -> `Rejected`.
-- `no_candidate_file_policy` -> `No safe candidate WAV path policy yet`.
+- `candidate_wav_temp_unavailable` -> `Temporary candidate WAV unavailable`.
+- Legacy `no_candidate_file_policy` -> `No safe candidate WAV path policy yet`.
 - `verify_files_error` / `verify_error` -> `Verification error`.
 
 The panel also shows:

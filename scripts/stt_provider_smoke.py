@@ -969,7 +969,7 @@ check("TASK-265" in owner_voice_storage_text,
 # ---------------------------------------------------------------------------
 # TASK-266: Manual Mic dry-run policy static safety checks
 # ---------------------------------------------------------------------------
-print("\n[15/17] TASK-266 - Owner Voice Gate Manual Mic dry-run policy static safety")
+print("\n[15/18] TASK-266 - Owner Voice Gate Manual Mic dry-run policy static safety")
 
 check("OWNER_VOICE_MANUAL_MIC_DRY_RUN_ENABLED" in renderer_js_text,
       "renderer defines Manual Mic owner voice dry-run enable flag")
@@ -993,8 +993,8 @@ check("async function runOwnerVoiceManualMicDryRun" in renderer_js_text,
       "renderer defines Manual Mic dry-run helper")
 check("/owner-voice-gate/verify-files" in renderer_js_text,
       "Manual Mic dry-run reuses verify-files endpoint")
-check("no_candidate_file_policy" in renderer_js_text,
-      "Manual Mic dry-run avoids raw-audio persistence when no candidate path policy exists")
+check("candidate_wav_temp_unavailable" in renderer_js_text,
+      "Manual Mic dry-run safely reports unavailable temp WAV policy")
 
 dry_run_start = renderer_js_text.find("async function runOwnerVoiceManualMicDryRun")
 dry_run_section = renderer_js_text[dry_run_start:dry_run_start + 2600] if dry_run_start >= 0 else ""
@@ -1018,7 +1018,7 @@ check("TASK-266" in owner_voice_text,
       "owner voice research doc records TASK-266")
 
 # TASK-267: Conversation Mode dry-run policy static safety checks
-print("\n[16/17] TASK-267 - Owner Voice Gate Conversation Mode dry-run policy static safety")
+print("\n[16/18] TASK-267 - Owner Voice Gate Conversation Mode dry-run policy static safety")
 
 check("OWNER_VOICE_CONVERSATION_MODE_DRY_RUN_ENABLED" in renderer_js_text,
       "renderer defines Conversation Mode owner voice dry-run enable flag")
@@ -1030,8 +1030,8 @@ check("async function runOwnerVoiceConversationModeDryRun" in renderer_js_text,
       "renderer defines Conversation Mode dry-run helper")
 check("runOwnerVoiceConversationModeDryRun(audioBlob);" in renderer_js_text,
       "Conversation Mode dry-run is called from Conversation Mode capture path")
-check("no_candidate_file_policy" in renderer_js_text,
-      "Conversation Mode dry-run reports no_candidate_file_policy when no safe path exists")
+check("candidate_wav_temp_unavailable" in renderer_js_text,
+      "Conversation Mode dry-run reports unavailable temp WAV policy without blocking")
 
 conversation_dry_run_start = renderer_js_text.find("async function runOwnerVoiceConversationModeDryRun")
 conversation_dry_run_section = (
@@ -1070,7 +1070,7 @@ check("TASK-267" in owner_voice_text,
       "owner voice research doc records TASK-267")
 
 # TASK-268: Owner Voice dry-run diagnostics polish static safety checks
-print("\n[17/17] TASK-268 - Owner Voice dry-run diagnostics polish static safety")
+print("\n[17/18] TASK-268 - Owner Voice dry-run diagnostics polish static safety")
 
 check("formatOwnerVoiceDryRunSourceLabel" in renderer_js_text,
       "renderer defines owner voice dry-run source label formatter")
@@ -1082,8 +1082,8 @@ check("ownerVoiceDryRunSafetySummary" in renderer_js_text,
       "renderer defines owner voice dry-run safety summary formatter")
 check("Manual Mic" in renderer_js_text and "Conversation Mode" in renderer_js_text,
       "renderer exposes readable owner voice dry-run source labels")
-check("Not computed" in renderer_js_text and "No safe candidate WAV path policy yet" in renderer_js_text,
-      "renderer exposes readable not_computed/no_candidate_file_policy wording")
+check("Not computed" in renderer_js_text and "Temporary candidate WAV unavailable" in renderer_js_text,
+      "renderer exposes readable not_computed/candidate_wav_temp_unavailable wording")
 check("Dry-run only; existing voice flow is not blocked" in renderer_js_text,
       "renderer exposes readable dry-run only safety summary")
 check("runtimeHardBlocked=" in renderer_js_text,
@@ -1112,6 +1112,67 @@ check("TASK-268" in owner_voice_storage_text,
 check("TASK-268" in owner_voice_text,
       "owner voice research doc records TASK-268")
 
+# TASK-270: Owner Voice candidate WAV temporary policy checks
+print("\n[18/18] TASK-270 - Owner Voice candidate WAV temporary policy static safety")
+
+renderer_preload_path = _os.path.join(REPO_ROOT, "apps", "desktop", "src", "renderer", "preload.js")
+main_js_path = _os.path.join(REPO_ROOT, "apps", "desktop", "src", "main.js")
+try:
+    with open(renderer_preload_path, "r", encoding="utf-8") as f:
+        renderer_preload_text = f.read()
+except Exception:
+    renderer_preload_text = ""
+try:
+    with open(main_js_path, "r", encoding="utf-8") as f:
+        main_js_text = f.read()
+except Exception:
+    main_js_text = ""
+
+check("TASK-270" in renderer_js_text,
+      "renderer records TASK-270 candidate WAV temp policy")
+check("_ownerVoiceBlobToTemporaryWavBytes" in renderer_js_text,
+      "renderer prepares temporary WAV bytes before owner voice verification")
+check("createOwnerVoiceCandidateWavTemp" in renderer_js_text,
+      "renderer calls narrow temp WAV create bridge")
+check("deleteOwnerVoiceCandidateWavTemp" in renderer_js_text,
+      "renderer calls narrow temp WAV delete bridge")
+check("candidateWavTemporary" in renderer_js_text and "candidateWavDeleted" in renderer_js_text,
+      "renderer exposes only candidate WAV temporary/deleted booleans")
+check("candidate_wav_temp_unavailable" in renderer_js_text,
+      "renderer fail-opens with safe candidate_wav_temp_unavailable reason")
+check("/owner-voice-gate/verify-files" in renderer_js_text,
+      "TASK-270 still reuses existing verify-files endpoint")
+check("/stt/transcribe" not in dry_run_section and "/chat" not in dry_run_section,
+      "Manual Mic owner voice dry-run does not call /stt/transcribe or /chat")
+check("/stt/transcribe" not in conversation_dry_run_section and "/chat" not in conversation_dry_run_section,
+      "Conversation Mode owner voice dry-run does not call /stt/transcribe or /chat")
+check("owner-voice:candidate-wav-temp:create" in renderer_preload_text,
+      "preload exposes narrow TASK-270 temp WAV create IPC channel")
+check("owner-voice:candidate-wav-temp:delete" in renderer_preload_text,
+      "preload exposes narrow TASK-270 temp WAV delete IPC channel")
+check("require(\"fs\")" not in renderer_preload_text and "require('fs')" not in renderer_preload_text,
+      "preload does not expose filesystem module")
+check("OWNER_VOICE_CANDIDATE_WAV_MAX_BYTES" in main_js_text,
+      "main bounds candidate WAV temp size")
+check("OWNER_VOICE_CANDIDATE_WAV_TEMP_TTL_MS" in main_js_text,
+      "main schedules candidate WAV cleanup timeout")
+check("getOwnerVoiceCandidateWavTempDir" in main_js_text and 'app.getPath("temp")' in main_js_text,
+      "main stores candidate WAVs under app-controlled OS temp location")
+check("path.relative" in main_js_text and "invalid_candidate_path" in main_js_text,
+      "main validates candidate WAV cleanup path containment")
+check("rawAudioPersisted = false" in renderer_js_text or "rawAudioPersisted: false" in renderer_js_text,
+      "TASK-270 keeps rawAudioPersisted false in diagnostics")
+check("runtimeHardBlocked = false" in renderer_js_text or "runtimeHardBlocked: false" in renderer_js_text,
+      "TASK-270 keeps runtimeHardBlocked false")
+for forbidden in (
+    "perSampleEmbeddings",
+    "base64Audio",
+):
+    check(forbidden not in renderer_js_text,
+          f"TASK-270 renderer does not expose forbidden token {forbidden!r}")
+check("TASK-270" in owner_voice_storage_text,
+      "owner voice storage design doc records TASK-270")
+
 # ---------------------------------------------------------------------------
 # Clean up env so test leaves no side effects
 # ---------------------------------------------------------------------------
@@ -1124,8 +1185,8 @@ print()
 print("=" * 65)
 print(f"  {_pass_count} PASS  {_fail_count} FAIL")
 if _fail_count == 0:
-    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263/264/265/266/267/268 STT Provider Smoke: PASS")
+    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263/264/265/266/267/268/270 STT Provider Smoke: PASS")
 else:
-    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263/264/265/266/267/268 STT Provider Smoke: FAIL")
+    print("  TASK-249/250/253/253rev/254/256/259/260/261/262/263/264/265/266/267/268/270 STT Provider Smoke: FAIL")
 print("=" * 65)
 sys.exit(0 if _fail_count == 0 else 1)

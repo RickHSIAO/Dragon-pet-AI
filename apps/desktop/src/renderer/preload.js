@@ -16,6 +16,8 @@ const CHAT_EXPORT_CHANNEL    = "chat:export-transcript";        // TASK-205
 const PET_EXPRESSION_SUGGESTION_CHANNEL = "pet:expression-suggestion"; // TASK-218
 const PET_REACTION_BUBBLE_CHANNEL = "pet:reaction-bubble"; // TASK-220
 const STT_TRANSCRIBE_CHANNEL = "stt:transcribe";            // TASK-241
+const OWNER_VOICE_CANDIDATE_WAV_CREATE_CHANNEL = "owner-voice:candidate-wav-temp:create"; // TASK-270
+const OWNER_VOICE_CANDIDATE_WAV_DELETE_CHANNEL = "owner-voice:candidate-wav-temp:delete"; // TASK-270
 const EXPRESSION_SUGGESTION_ALLOWLIST = new Set([               // TASK-218: preload-side allowlist
   "neutral", "focused", "happy", "proud", "annoyed", "sleepy",
 ]);
@@ -131,6 +133,21 @@ contextBridge.exposeInMainWorld(
         return Promise.resolve({ status: "error", transcript: "" });
       }
       return ipcRenderer.invoke(STT_TRANSCRIBE_CHANNEL, arrayBuffer);
+    },
+    // TASK-270: narrow Owner Voice candidate WAV temp-file bridge.
+    // Accepts already-prepared WAV bytes only; no paths, transcripts, embeddings,
+    // centroid, or generic filesystem methods are exposed to renderer code.
+    createOwnerVoiceCandidateWavTemp: (arrayBuffer) => {
+      if (!(arrayBuffer instanceof ArrayBuffer)) {
+        return Promise.resolve({ ok: false, reason: "candidate_wav_temp_unavailable" });
+      }
+      return ipcRenderer.invoke(OWNER_VOICE_CANDIDATE_WAV_CREATE_CHANNEL, arrayBuffer);
+    },
+    deleteOwnerVoiceCandidateWavTemp: (filePath) => {
+      if (typeof filePath !== "string" || !filePath) {
+        return Promise.resolve({ ok: false, deleted: false, reason: "invalid_candidate_path" });
+      }
+      return ipcRenderer.invoke(OWNER_VOICE_CANDIDATE_WAV_DELETE_CHANNEL, filePath);
     },
     // TASK-205: narrow file save IPC — opens Save Dialog via main, writes plain text only.
     // Content capped at 200000 chars; defaultPath capped at 255 chars.

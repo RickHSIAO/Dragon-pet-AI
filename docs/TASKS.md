@@ -26699,6 +26699,7 @@ Future task sequence:
 - TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy (DONE).
 - TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish (DONE).
 - TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy (DONE).
+- TASK-270 Owner Voice Candidate WAV Temporary Policy Design / Implementation (DONE).
 
 **TASK-261 — Owner Voice Enrollment UI / Local Storage Stub:**
 
@@ -27381,7 +27382,7 @@ PASS on 2026-06-04 against the stored owner centroid:
 TASK-SEC-001 Security Boundary / Anti Prompt Injection Design and TASK-SEC-002
 Sensitive Data Inventory / Redaction Rules and TASK-SEC-003 Prompt Injection
 Test Corpus and TASK-SEC-004 Tool Permission / User Confirmation Policy are
-complete; TASK-266 Owner Voice Gate Manual Mic Dry-run Policy is DONE; TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy is DONE; TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish is DONE; TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy is DONE.
+complete; TASK-266 Owner Voice Gate Manual Mic Dry-run Policy is DONE; TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy is DONE; TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish is DONE; TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy is DONE; TASK-270 Owner Voice Candidate WAV Temporary Policy is DONE.
 
 ---
 
@@ -27487,6 +27488,7 @@ Before Owner Voice Gate connects to Manual Mic or Conversation Mode runtime:
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
 9. TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy - DONE.
+10. TASK-270 Owner Voice Candidate WAV Temporary Policy Design / Implementation - DONE.
 
 ### Validation
 
@@ -27612,6 +27614,7 @@ TASK-SEC-003 has captured prompt injection and phishing corpora covering:
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
 9. TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy - DONE.
+10. TASK-270 Owner Voice Candidate WAV Temporary Policy Design / Implementation - DONE.
 
 ### Validation
 
@@ -27718,6 +27721,7 @@ structured fixtures and assert that:
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
 9. TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy - DONE.
+10. TASK-270 Owner Voice Candidate WAV Temporary Policy Design / Implementation - DONE.
 
 ### Validation
 
@@ -27840,6 +27844,7 @@ T6 data is blocked from LLM context and outbound actions.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
 9. TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy - DONE.
+10. TASK-270 Owner Voice Candidate WAV Temporary Policy Design / Implementation - DONE.
 
 ### Validation
 
@@ -27948,6 +27953,7 @@ diagnostics, or embeddings enter outbound flows.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
 9. TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy - DONE.
+10. TASK-270 Owner Voice Candidate WAV Temporary Policy Design / Implementation - DONE.
 
 ### Validation
 
@@ -27976,13 +27982,13 @@ authentication claims, and does not treat Owner Voice Gate as identity proof.
 - Manual Mic continues through existing STT and chat flow even when owner voice
   dry-run rejects, is disabled, cannot compute, or errors.
 - Dry-run status is recorded in the existing Voice Diagnostics panel only.
-- The dry-run reuses `POST /owner-voice-gate/verify-files` only when a future
-  explicit candidate WAV file policy supplies a safe local path.
-- Current Manual Mic audio remains in-memory. TASK-266 does not write raw audio
-  to TEMP or any project path to satisfy verification.
-- If no safe candidate path exists, diagnostics report
+- TASK-266 originally reused `POST /owner-voice-gate/verify-files` only when a
+  future explicit candidate WAV file policy supplied a safe local path.
+- TASK-270 now supplies that policy with a bounded temporary WAV under OS temp;
+  this is dry-run only and still not a hard gate.
+- If temp WAV creation or conversion is unavailable, diagnostics report
   `ownerVoiceDryRunStatus=not_computed` and
-  `ownerVoiceDryRunReason=no_candidate_file_policy`.
+  `ownerVoiceDryRunReason=candidate_wav_temp_unavailable`.
 
 ### Dry-run Status Model
 
@@ -28059,6 +28065,7 @@ Added backend pytest regression for:
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
 9. TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy - DONE.
+10. TASK-270 Owner Voice Candidate WAV Temporary Policy Design / Implementation - DONE.
 
 ---
 
@@ -28080,13 +28087,13 @@ Owner Voice Gate as identity proof.
 - Conversation Mode continues through existing STT and `/chat` flow even when
   owner voice dry-run accepts, rejects, is disabled, cannot compute, or errors.
 - Dry-run status is recorded in the existing Voice Diagnostics panel only.
-- The dry-run reuses `POST /owner-voice-gate/verify-files` only when an
-  explicit safe candidate WAV path policy supplies a local path.
-- Current Conversation Mode audio remains in-memory. TASK-267 does not write
-  raw audio to TEMP or any project path to satisfy verification.
-- If no safe candidate path exists, diagnostics report
+- TASK-267 originally reused `POST /owner-voice-gate/verify-files` only when an
+  explicit safe candidate WAV path policy supplied a local path.
+- TASK-270 now supplies that policy with a bounded temporary WAV under OS temp;
+  this is dry-run only and still not a hard gate.
+- If temp WAV creation or conversion is unavailable, diagnostics report
   `ownerVoiceDryRunStatus=not_computed` and
-  `ownerVoiceDryRunReason=no_candidate_file_policy`.
+  `ownerVoiceDryRunReason=candidate_wav_temp_unavailable`.
 
 ### Dry-run Status Model
 
@@ -28180,7 +28187,8 @@ labels:
 - accepted verify result -> `Accepted`.
 - rejected verify result -> `Rejected`.
 - `error` -> `Error`.
-- `no_candidate_file_policy` -> `No safe candidate WAV path policy yet`.
+- `candidate_wav_temp_unavailable` -> `Temporary candidate WAV unavailable`.
+- Legacy `no_candidate_file_policy` -> `No safe candidate WAV path policy yet`.
 - `verification_complete` -> `Verification complete`.
 - `not_enrolled` -> `Owner voice is not enrolled`.
 - `audio_file_not_found` -> `Candidate audio file was not found`.
@@ -28226,7 +28234,7 @@ Added renderer smoke tests for:
 
 - Manual Mic source displays as `Manual Mic`.
 - Conversation Mode source displays as `Conversation Mode`.
-- `not_computed / no_candidate_file_policy` displays as safe dry-run only.
+- `not_computed / candidate_wav_temp_unavailable` displays as safe dry-run only.
 - rejected dry-run still does not block Conversation Mode `/chat`.
 - verify error still does not block existing auto-send `/chat`.
 - Owner Voice diagnostic lines do not expose `embeddingAggregate` or candidate
@@ -28347,8 +28355,11 @@ If a future Conversation Mode hard gate is enabled:
 
 ### Candidate WAV Temporary Policy Requirements
 
-Hard gate requires a safe candidate WAV policy. TASK-266/TASK-267 currently
-report `no_candidate_file_policy` when no safe candidate path exists.
+Hard gate requires a safe candidate WAV policy. TASK-266/TASK-267 previously
+reported `no_candidate_file_policy` when no safe candidate path existed.
+TASK-270 now implements dry-run temp WAV creation/deletion and reports
+`candidate_wav_temp_unavailable` when temp WAV creation or conversion is
+unavailable. Hard gate behavior still remains future work.
 
 Future candidate WAV policy must define:
 
@@ -28442,7 +28453,6 @@ Before implementing hard gate:
 
 ### Recommended Next Tasks
 
-- TASK-270 Candidate WAV Temporary Policy Design / Implementation.
 - TASK-271 Manual Mic Hard Gate Opt-in UI.
 - TASK-272 Manual Mic Hard Gate Runtime Implementation.
 - TASK-273 Conversation Mode Hard Gate Runtime Implementation.
@@ -28450,6 +28460,116 @@ Before implementing hard gate:
 
 ### Validation
 
+- `git diff --check`
+- `git status --short`
+
+---
+
+## TASK-270 | Owner Voice Candidate WAV Temporary Policy Design / Implementation
+
+Status: DONE - DRY-RUN TEMP WAV POLICY / NO HARD GATE (2026-06-05)
+
+### Goal
+
+Define and implement a safe temporary candidate WAV policy for Owner Voice Gate
+dry-run verification in Manual Mic and Conversation Mode.
+
+### Scope
+
+TASK-270 is dry-run only. It does not add hard gating, authentication,
+authorization, blocking behavior, or new backend Owner Voice endpoints.
+
+### Implementation Summary
+
+- Manual Mic and Conversation Mode dry-run now attempt to create a temporary
+  candidate WAV from the in-memory recording Blob.
+- Existing `audio/wav` blobs are forwarded as WAV bytes.
+- Non-WAV browser blobs are decoded with Web Audio when available and encoded
+  as 16 kHz mono PCM WAV.
+- A narrow Electron IPC bridge writes bounded WAV bytes under the OS temp
+  directory: `app.getPath("temp")/dragon-pet-ai/owner-voice-candidates`.
+- The renderer calls the existing `POST /owner-voice-gate/verify-files`
+  endpoint with the temporary path.
+- The temp WAV is deleted after verification, with a cleanup timeout as
+  fallback.
+- Cleanup validates candidate path containment before unlinking.
+
+### Non-Blocking Policy
+
+Manual Mic behavior remains unchanged:
+
+- STT still runs.
+- Textarea fill still runs.
+- Auto-send still runs when enabled.
+- Owner voice accept/reject/error/temp-create failure does not block the flow.
+- `runtimeHardBlocked=false` remains enforced.
+
+Conversation Mode behavior remains unchanged:
+
+- STT still runs.
+- `/chat` still runs for valid transcripts.
+- The conversation loop remains active.
+- Owner voice accept/reject/error/temp-create failure does not block the flow.
+- `runtimeHardBlocked=false` remains enforced.
+
+### Failure Policy
+
+If temp WAV creation, conversion, verification, or cleanup fails:
+
+- Dry-run reports a safe status/reason.
+- Temp creation failure reports `status=not_computed` and
+  `reason=candidate_wav_temp_unavailable`.
+- Verify failure reports `status=error` and `reason=verify_files_error`.
+- Existing Manual Mic and Conversation Mode flow continues.
+
+### Privacy And Redaction
+
+Allowed Owner Voice diagnostic fields:
+
+- source
+- status/reason
+- score/threshold
+- accepted
+- checkedAt
+- `runtimeHardBlocked=false`
+- `rawAudioPersisted=false`
+- `candidateEmbeddingPersisted=false`
+- `storedCentroidExposed=false`
+- `candidateWavTemporary`
+- `candidateWavDeleted`
+
+Forbidden exposure:
+
+- full candidate WAV path in UI/diagnostics/logs
+- raw audio
+- waveform or base64 audio
+- transcript or rejected transcript
+- stored centroid
+- candidate embedding
+- `embeddingAggregate`
+
+### Backend Behavior
+
+No backend behavior changed. TASK-270 reuses
+`POST /owner-voice-gate/verify-files`; `/stt/transcribe` and `/chat` schemas
+are unchanged.
+
+### Files
+
+- `apps/desktop/src/renderer/renderer.js`
+- `apps/desktop/src/renderer/preload.js`
+- `apps/desktop/src/main.js`
+- `apps/desktop/scripts/renderer-chat-smoke.js`
+- `scripts/stt_provider_smoke.py`
+- README/docs status files
+
+### Validation
+
+- `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_routes.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-task270`
+- `backend\.venv\Scripts\python.exe scripts\stt_provider_smoke.py`
+- `node apps/desktop/scripts/renderer-chat-smoke.js`
+- `node apps/desktop/scripts/pet-window-smoke.js`
+- `node apps/desktop/scripts/pet-renderer-smoke.js`
 - `git diff --check`
 - `git status --short`
 

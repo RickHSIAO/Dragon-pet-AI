@@ -628,6 +628,19 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   redaction/privacy rules, UX messages, TASK-SEC interactions, and future
   implementation checklist are documented. No runtime, backend, schema, IPC, Pet
   Window, Output Queue, or Diagnostics runtime behavior changed.
+- TASK-270 DONE - OWNER VOICE CANDIDATE WAV TEMPORARY POLICY (2026-06-05):
+  Manual Mic and Conversation Mode dry-run verification now create a bounded
+  temporary candidate WAV under the OS temp directory through a narrow Electron
+  IPC bridge, call the existing `/owner-voice-gate/verify-files` backend
+  endpoint, and delete the temp WAV after verification or by cleanup timeout.
+  Temp creation, verification reject, and verification error all fail open and
+  never block Manual Mic STT, textarea fill, auto-send, Conversation Mode STT,
+  or `/chat`. Voice Diagnostics show only safe owner voice status fields plus
+  `candidateWavTemporary` and `candidateWavDeleted`; candidate paths, raw audio,
+  transcripts, centroid data, and embeddings are not displayed. No backend
+  endpoint change, `/stt/transcribe` schema change, `/chat` schema change, Pet
+  Window change, Output Queue change, hard gate, or authentication claim was
+  added.
 
 - TASK-256b DONE - WINDOWS DIAGNOSTICS READABILITY SMOKE PASS (2026-06-04): Diagnostics / Voice Panel Readability Polish. CSS-only change: `.voice-diagnostics-display` 10px → 13px, `line-height` 1.55, `max-height` 200px → 340px; `.voice-diagnostics-summary` 12px → 14px + font-weight 500; `.voice-diagnostics-panel` padding 4→8px; `.voice-tuning-label/input/select` 11px → 13px; `.voice-tuning-hint/voice-preview-hint/status` 10px → 12px; `.voice-preview-play-btn` 11px → 13px; `.voice-preview-audio-el` 28px → 32px. Windows smoke PASS: diagnostics readability improved, text/spacing/panel height all visibly better. No STT/warmup/IPC/Pet Window/Output Queue runtime changes. 10 new renderer CSS smoke tests PASS.
 

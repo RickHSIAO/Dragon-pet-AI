@@ -162,6 +162,12 @@ Hard rules:
   `embeddingAggregate`, or full candidate paths. Allowed display remains status,
   reason, score, threshold, accepted/rejected, checkedAt, and safety booleans.
   Owner Voice Gate remains a convenience filter, not authentication.
+- TASK-270 candidate WAV temp policy adds only two safe diagnostics booleans:
+  `candidateWavTemporary` and `candidateWavDeleted`. Full candidate WAV paths
+  remain forbidden in UI, diagnostics, logs, chat history, LLM context, Pet
+  Window, and Output Queue. Temp WAV bytes are bounded, app-controlled, and
+  deleted after verification or by cleanup timeout; they are not enrollment
+  storage and must not be surfaced as raw audio.
 
 ## 7. API Response Rules
 
@@ -289,6 +295,7 @@ content requested it.
 7. TASK-267 Owner Voice Gate Conversation Mode Dry-run Policy - DONE.
 8. TASK-268 Owner Voice Dry-run Diagnostics / Safety Summary Polish - DONE.
 9. TASK-269 Owner Voice Gate Hard Gate Design / Opt-in Policy - DONE.
+10. TASK-270 Owner Voice Candidate WAV Temporary Policy Design / Implementation - DONE.
 
 ## 12. Validation
 

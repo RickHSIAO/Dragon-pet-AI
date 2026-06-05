@@ -14857,7 +14857,7 @@ async function testTask266ManualMicDryRunEnabledWithoutCandidateDoesNotPersistAu
   await settle();
   assert.equal(document.getElementById("message-input").value, "no candidate policy text");
   assert.equal(sandbox.fullAppVoiceDiagnostics.ownerVoiceDryRunStatus, "not_computed");
-  assert.equal(sandbox.fullAppVoiceDiagnostics.ownerVoiceDryRunReason, "no_candidate_file_policy");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.ownerVoiceDryRunReason, "candidate_wav_temp_unavailable");
   assert.equal(sandbox.fullAppVoiceDiagnostics.ownerVoiceDryRunSource, "manual_mic");
   assert.equal(sandbox.fullAppVoiceDiagnostics.rawAudioPersisted, false);
   assert.equal(sandbox.fullAppVoiceDiagnostics.candidateEmbeddingPersisted, false);
@@ -14870,7 +14870,7 @@ async function testTask266ManualMicDryRunEnabledWithoutCandidateDoesNotPersistAu
 function testTask266DryRunNoConversationModeWiringOrSensitiveExposure() {
   const src = fs.readFileSync(rendererPath, "utf8");
   const marker = src.indexOf("async function runOwnerVoiceManualMicDryRun");
-  const body = src.slice(marker, marker + 2300);
+  const body = src.slice(marker, marker + 2800);
   assert.ok(marker !== -1, "TASK-266 runOwnerVoiceManualMicDryRun function must exist");
   assert.ok(body.includes("/owner-voice-gate/verify-files"), "TASK-266 dry-run must reuse verify-files");
   assert.ok(!body.includes("fullAppVoiceConversation"), "TASK-266 dry-run must not wire Conversation Mode");
@@ -14904,7 +14904,7 @@ async function testTask267ConversationDryRunNotComputedStillSendsChat() {
   sandbox._transcribeConversationChunks([new Blob(["x"], { type: "audio/wav" })], "audio/wav");
   await settle();
   assert.equal(sandbox.fullAppVoiceDiagnostics.ownerVoiceDryRunStatus, "not_computed");
-  assert.equal(sandbox.fullAppVoiceDiagnostics.ownerVoiceDryRunReason, "no_candidate_file_policy");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.ownerVoiceDryRunReason, "candidate_wav_temp_unavailable");
   assert.equal(sandbox.fullAppVoiceDiagnostics.ownerVoiceDryRunSource, "conversation_mode");
   assert.equal(sandbox.fullAppVoiceDiagnostics.runtimeHardBlocked, false);
   assert.equal(state.calls.filter((call) => call.url.endsWith("/owner-voice-gate/verify-files")).length, 0,
@@ -14976,7 +14976,7 @@ function testTask267DryRunNoHardGateOrSensitiveExposure() {
   const body = src.slice(marker, marker + 2600);
   assert.ok(marker !== -1, "TASK-267 runOwnerVoiceConversationModeDryRun function must exist");
   assert.ok(body.includes("/owner-voice-gate/verify-files"), "TASK-267 dry-run must reuse verify-files");
-  assert.ok(body.includes("no_candidate_file_policy"), "TASK-267 dry-run must report no_candidate_file_policy when no safe path exists");
+  assert.ok(body.includes("candidate_wav_temp_unavailable"), "TASK-267 dry-run must safely report unavailable temp WAV policy");
   assert.ok(body.includes("runtimeHardBlocked") && body.includes("false"),
     "TASK-267 dry-run must explicitly keep runtimeHardBlocked=false");
   assert.ok(!body.includes("sendMessage("), "TASK-267 dry-run must not call /chat path");
@@ -15024,8 +15024,8 @@ async function testTask268ManualMicNotComputedDiagnosticsWording() {
   const text = ownerLines.join("\n");
   assert.ok(text.includes("Manual Mic (manual_mic)"), "TASK-268 Manual Mic source must be readable");
   assert.ok(text.includes("Not computed (not_computed)"), "TASK-268 not_computed state must be readable");
-  assert.ok(text.includes("No safe candidate WAV path policy yet (no_candidate_file_policy)"),
-    "TASK-268 no_candidate_file_policy reason must be readable");
+  assert.ok(text.includes("Temporary candidate WAV unavailable (candidate_wav_temp_unavailable)"),
+    "TASK-268 candidate_wav_temp_unavailable reason must be readable");
   assert.ok(text.includes("Dry-run only; existing voice flow is not blocked"),
     "TASK-268 safety summary must say dry-run only");
   assert.ok(text.includes("runtimeHardBlocked=false"), "TASK-268 safety line must expose runtimeHardBlocked=false");
@@ -15096,6 +15096,179 @@ async function testTask268VerifyErrorDiagnosticsWording() {
   assert.ok(state.calls.filter((call) => call.url.endsWith("/chat")).length >= 1,
     "TASK-268 verify error must not block existing auto-send /chat flow");
   console.log("  testTask268VerifyErrorDiagnosticsWording PASS");
+}
+
+// ---------------------------------------------------------------------------
+// TASK-270: Owner Voice candidate WAV temporary policy
+// ---------------------------------------------------------------------------
+
+function _task270TempBridge(options = {}) {
+  const calls = { create: [], delete: [] };
+  const tempPath = options.tempPath || "C:\\Users\\owner\\AppData\\Local\\Temp\\dragon-pet-ai\\owner-voice-candidates\\owner-voice-candidate-secret.wav";
+  const transcript = options.transcript || "task270 voice text";
+  return {
+    calls,
+    tempPath,
+    api: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => ({ status: "ok", transcript }),
+      updatePetSpeech: async () => ({ ok: true }),
+      updatePetExpression: async () => ({ ok: true }),
+      createOwnerVoiceCandidateWavTemp: async (arrayBuffer) => {
+        calls.create.push(arrayBuffer);
+        if (options.createMode === "fail") {
+          return { ok: false, reason: "candidate_wav_temp_unavailable" };
+        }
+        return {
+          ok: true,
+          path: tempPath,
+          candidateWavTemporary: true,
+          cleanupScheduled: true,
+          pathRedacted: true,
+        };
+      },
+      deleteOwnerVoiceCandidateWavTemp: async (filePath) => {
+        calls.delete.push(filePath);
+        return { ok: true, deleted: options.deleteMode !== "fail", reason: "deleted" };
+      },
+    },
+  };
+}
+
+function _task270OwnerVoiceLinesText(sandbox) {
+  sandbox.renderFullAppVoiceDiagnostics();
+  const text = sandbox.document.getElementById("voice-diagnostics-display").textContent || "";
+  return text.split("\n").filter((line) => line.startsWith("Owner Voice")).join("\n");
+}
+
+async function testTask270ManualMicTempCandidateAcceptCleanupStillFillsTextarea() {
+  const bridge = _task270TempBridge({ transcript: "task270 manual accepted text" });
+  const { document, sandbox, state } = await loadRenderer({
+    ownerVoiceGateSettings: _task266OwnerVoiceEnabledSettings(),
+    ownerVoiceVerifyMode: "accept",
+    dragonPet: bridge.api,
+  });
+  sandbox.setFullAppVoiceState("transcribing");
+  sandbox._fullAppSttTranscribeChunks([new Blob(["RIFF-task270"], { type: "audio/wav" })], "audio/wav");
+  await settle();
+  const verifyCalls = state.calls.filter((call) => call.url.endsWith("/owner-voice-gate/verify-files"));
+  const verifyBody = JSON.parse(verifyCalls[0].body || "{}");
+  const ownerLines = _task270OwnerVoiceLinesText(sandbox);
+  assert.equal(document.getElementById("message-input").value, "task270 manual accepted text");
+  assert.equal(verifyCalls.length, 1, "TASK-270 Manual Mic temp policy must call verify-files once");
+  assert.deepEqual(verifyBody.paths, [bridge.tempPath]);
+  assert.equal(bridge.calls.create.length, 1, "TASK-270 Manual Mic must create one temp WAV");
+  assert.deepEqual(bridge.calls.delete, [bridge.tempPath], "TASK-270 Manual Mic must delete temp WAV after verification");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.candidateWavTemporary, true);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.candidateWavDeleted, true);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.runtimeHardBlocked, false);
+  assert.ok(!ownerLines.includes(bridge.tempPath), "TASK-270 diagnostics must not expose candidate path");
+  assert.ok(!ownerLines.includes("embeddingAggregate"), "TASK-270 diagnostics must not expose centroid");
+  assert.ok(!ownerLines.toLowerCase().includes("transcript"), "TASK-270 Owner Voice lines must not expose transcript");
+  console.log("  testTask270ManualMicTempCandidateAcceptCleanupStillFillsTextarea PASS");
+}
+
+async function testTask270ManualMicTempCandidateFailureStillFillsTextarea() {
+  const bridge = _task270TempBridge({ transcript: "task270 manual temp fail text", createMode: "fail" });
+  const { document, sandbox, state } = await loadRenderer({
+    ownerVoiceGateSettings: _task266OwnerVoiceEnabledSettings(),
+    dragonPet: bridge.api,
+  });
+  sandbox.setFullAppVoiceState("transcribing");
+  sandbox._fullAppSttTranscribeChunks([new Blob(["RIFF-task270"], { type: "audio/wav" })], "audio/wav");
+  await settle();
+  assert.equal(document.getElementById("message-input").value, "task270 manual temp fail text");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.ownerVoiceDryRunStatus, "not_computed");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.ownerVoiceDryRunReason, "candidate_wav_temp_unavailable");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.runtimeHardBlocked, false);
+  assert.equal(state.calls.filter((call) => call.url.endsWith("/owner-voice-gate/verify-files")).length, 0,
+    "TASK-270 temp creation failure must not call verify-files");
+  assert.equal(bridge.calls.delete.length, 0, "TASK-270 temp creation failure must not call cleanup with no path");
+  console.log("  testTask270ManualMicTempCandidateFailureStillFillsTextarea PASS");
+}
+
+async function testTask270ConversationTempCandidateRejectCleanupStillSendsChat() {
+  const bridge = _task270TempBridge({ transcript: "task270 conversation rejected text" });
+  const { sandbox, state } = await loadRenderer({
+    ownerVoiceGateSettings: _task266OwnerVoiceEnabledSettings(),
+    ownerVoiceVerifyMode: "reject",
+    dragonPet: bridge.api,
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("transcribing");
+  sandbox._transcribeConversationChunks([new Blob(["RIFF-task270"], { type: "audio/wav" })], "audio/wav");
+  await settle();
+  const ownerLines = _task270OwnerVoiceLinesText(sandbox);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.ownerVoiceDryRunStatus, "ok");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.ownerVoiceAccepted, false);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.candidateWavTemporary, true);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.candidateWavDeleted, true);
+  assert.deepEqual(bridge.calls.delete, [bridge.tempPath], "TASK-270 Conversation Mode must delete temp WAV after verification");
+  assert.equal(state.calls.filter((call) => call.url.endsWith("/owner-voice-gate/verify-files")).length, 1,
+    "TASK-270 Conversation Mode temp policy must call verify-files once");
+  assert.ok(state.calls.filter((call) => call.url.endsWith("/chat")).length >= 1,
+    "TASK-270 Conversation Mode reject must not block /chat");
+  assert.ok(!ownerLines.includes(bridge.tempPath), "TASK-270 diagnostics must not expose Conversation Mode candidate path");
+  console.log("  testTask270ConversationTempCandidateRejectCleanupStillSendsChat PASS");
+}
+
+async function testTask270ConversationTempCandidateFailureStillSendsChat() {
+  const bridge = _task270TempBridge({ transcript: "task270 conversation temp fail text", createMode: "fail" });
+  const { sandbox, state } = await loadRenderer({
+    ownerVoiceGateSettings: _task266OwnerVoiceEnabledSettings(),
+    dragonPet: bridge.api,
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("transcribing");
+  sandbox._transcribeConversationChunks([new Blob(["RIFF-task270"], { type: "audio/wav" })], "audio/wav");
+  await settle();
+  assert.equal(sandbox.fullAppVoiceDiagnostics.ownerVoiceDryRunStatus, "not_computed");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.ownerVoiceDryRunReason, "candidate_wav_temp_unavailable");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.runtimeHardBlocked, false);
+  assert.equal(state.calls.filter((call) => call.url.endsWith("/owner-voice-gate/verify-files")).length, 0,
+    "TASK-270 Conversation Mode temp failure must not call verify-files");
+  assert.ok(state.calls.filter((call) => call.url.endsWith("/chat")).length >= 1,
+    "TASK-270 Conversation Mode temp failure must not block /chat");
+  console.log("  testTask270ConversationTempCandidateFailureStillSendsChat PASS");
+}
+
+async function testTask270ManualMicVerifyErrorDeletesTempAndStillAutosends() {
+  const bridge = _task270TempBridge({ transcript: "task270 manual verify error text" });
+  const { sandbox, state } = await loadRenderer({
+    ownerVoiceGateSettings: _task266OwnerVoiceEnabledSettings(),
+    ownerVoiceVerifyMode: "error",
+    dragonPet: bridge.api,
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceAutoSendEnabled = true;
+  sandbox.setFullAppVoiceState("transcribing");
+  sandbox._fullAppSttTranscribeChunks([new Blob(["RIFF-task270"], { type: "audio/wav" })], "audio/wav");
+  await settle();
+  assert.equal(sandbox.fullAppVoiceDiagnostics.ownerVoiceDryRunStatus, "error");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.ownerVoiceDryRunReason, "verify_files_error");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.candidateWavDeleted, true);
+  assert.deepEqual(bridge.calls.delete, [bridge.tempPath], "TASK-270 verify error must still delete temp WAV");
+  assert.ok(state.calls.filter((call) => call.url.endsWith("/chat")).length >= 1,
+    "TASK-270 verify error must not block Manual Mic auto-send /chat");
+  console.log("  testTask270ManualMicVerifyErrorDeletesTempAndStillAutosends PASS");
+}
+
+function testTask270StaticTempPolicySafety() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const preload = fs.readFileSync(path.join(desktopRoot, "src", "renderer", "preload.js"), "utf8");
+  const mainSrc = fs.readFileSync(path.join(desktopRoot, "src", "main.js"), "utf8");
+  assert.ok(src.includes("candidate_wav_temp_unavailable"), "TASK-270 renderer must use safe temp-unavailable reason");
+  assert.ok(src.includes("candidateWavTemporary") && src.includes("candidateWavDeleted"),
+    "TASK-270 diagnostics must expose only temp/deleted booleans");
+  assert.ok(preload.includes("owner-voice:candidate-wav-temp:create"), "TASK-270 preload must expose narrow create channel");
+  assert.ok(preload.includes("owner-voice:candidate-wav-temp:delete"), "TASK-270 preload must expose narrow delete channel");
+  assert.ok(mainSrc.includes("getOwnerVoiceCandidateWavTempDir"), "TASK-270 main must use app-controlled temp dir helper");
+  assert.ok(mainSrc.includes("OWNER_VOICE_CANDIDATE_WAV_MAX_BYTES"), "TASK-270 main must bound candidate WAV bytes");
+  assert.ok(mainSrc.includes("OWNER_VOICE_CANDIDATE_WAV_TEMP_TTL_MS"), "TASK-270 main must schedule cleanup timeout");
+  assert.ok(!src.includes("embeddingAggregate"), "TASK-270 renderer must not expose centroid/embeddingAggregate");
+  console.log("  testTask270StaticTempPolicySafety PASS");
 }
 
 async function main() {
@@ -16095,6 +16268,12 @@ async function main() {
   await testTask268ManualMicNotComputedDiagnosticsWording();
   await testTask268ConversationRejectedDiagnosticsWording();
   await testTask268VerifyErrorDiagnosticsWording();
+  await testTask270ManualMicTempCandidateAcceptCleanupStillFillsTextarea();
+  await testTask270ManualMicTempCandidateFailureStillFillsTextarea();
+  await testTask270ConversationTempCandidateRejectCleanupStillSendsChat();
+  await testTask270ConversationTempCandidateFailureStillSendsChat();
+  await testTask270ManualMicVerifyErrorDeletesTempAndStillAutosends();
+  testTask270StaticTempPolicySafety();
 
   console.log("renderer chat smoke: PASS");
 }

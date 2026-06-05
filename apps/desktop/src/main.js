@@ -38,6 +38,10 @@ const PET_EXPRESSION_SUGGESTION_CHANNEL = "pet:expression-suggestion";          
 const PET_EXPRESSION_SUGGESTION_RECEIVED_CHANNEL = "pet:expression-suggestion-received"; // TASK-218: main → Pet Window
 const PET_REACTION_BUBBLE_CHANNEL = "pet:reaction-bubble";                       // TASK-220: Full App → main
 const PET_REACTION_BUBBLE_RECEIVED_CHANNEL = "pet:reaction-bubble-received";     // TASK-220: main → Pet Window
+const OWNER_VOICE_CANDIDATE_WAV_CREATE_CHANNEL = "owner-voice:candidate-wav-temp:create"; // TASK-270
+const OWNER_VOICE_CANDIDATE_WAV_DELETE_CHANNEL = "owner-voice:candidate-wav-temp:delete"; // TASK-270
+const OWNER_VOICE_CANDIDATE_WAV_MAX_BYTES = 10 * 1024 * 1024;                   // TASK-270
+const OWNER_VOICE_CANDIDATE_WAV_TEMP_TTL_MS = 2 * 60 * 1000;                    // TASK-270
 const INTERACTION_EXPRESSION_SUGGESTION_ALLOWLIST_MAIN = new Set([
   "neutral", "focused", "happy", "proud", "annoyed", "sleepy",
 ]); // TASK-218: expression allowlist for main sanitization
@@ -81,6 +85,7 @@ const PET_CHAT_MIRROR_USER_MAX_LENGTH = 2000;  // TASK-193: max user message cha
 let fullAppWindow = null;
 let petWindow = null;
 let petWindowSaveTimer = null;
+const ownerVoiceCandidateWavCleanupTimers = new Map(); // TASK-270: temp candidate WAV cleanup only
 
 // TASK-166B: resolve scale name to dimension object; unknown/missing falls back to Medium
 function getScaleDimensions(scaleName) {
@@ -95,6 +100,48 @@ function getPetWindowStatePath() {
 
 function getChatHistoryPath() {   // TASK-194
   return path.join(app.getPath("userData"), CHAT_HISTORY_FILE);
+}
+
+function getOwnerVoiceCandidateWavTempDir() { // TASK-270
+  return path.join(app.getPath("temp"), "dragon-pet-ai", "owner-voice-candidates");
+}
+
+function isOwnerVoiceCandidateWavTempPath(filePath) { // TASK-270
+  if (typeof filePath !== "string" || !filePath.toLowerCase().endsWith(".wav")) return false;
+  const tempDir = path.resolve(getOwnerVoiceCandidateWavTempDir());
+  const candidate = path.resolve(filePath);
+  const relative = path.relative(tempDir, candidate);
+  return relative && !relative.startsWith("..") && !path.isAbsolute(relative);
+}
+
+async function deleteOwnerVoiceCandidateWavTempFile(filePath) { // TASK-270
+  if (!isOwnerVoiceCandidateWavTempPath(filePath)) {
+    return { ok: false, deleted: false, reason: "invalid_candidate_path" };
+  }
+  const resolved = path.resolve(filePath);
+  const timer = ownerVoiceCandidateWavCleanupTimers.get(resolved);
+  if (timer) {
+    clearTimeout(timer);
+    ownerVoiceCandidateWavCleanupTimers.delete(resolved);
+  }
+  try {
+    await fs.promises.unlink(resolved);
+    return { ok: true, deleted: true, reason: "deleted" };
+  } catch (exc) {
+    if (exc && exc.code === "ENOENT") {
+      return { ok: true, deleted: true, reason: "already_deleted" };
+    }
+    return { ok: false, deleted: false, reason: "delete_failed" };
+  }
+}
+
+function scheduleOwnerVoiceCandidateWavCleanup(filePath) { // TASK-270
+  const resolved = path.resolve(filePath);
+  const timer = setTimeout(() => {
+    deleteOwnerVoiceCandidateWavTempFile(resolved);
+  }, OWNER_VOICE_CANDIDATE_WAV_TEMP_TTL_MS);
+  if (typeof timer.unref === "function") timer.unref();
+  ownerVoiceCandidateWavCleanupTimers.set(resolved, timer);
 }
 
 // TASK-166B: accepts dims so reset and scale-change can use active scale dimensions
@@ -998,6 +1045,46 @@ ipcMain.handle(SCREEN_CAPTURE_ONCE_CHANNEL, async () => {
 });
 
 
+
+// TASK-270: Owner Voice candidate WAV temporary policy.
+// Writes bounded WAV bytes under OS temp only, never under the repo, and
+// returns the path only to renderer internals so /owner-voice-gate/verify-files
+// can reuse the existing backend endpoint. Cleanup is explicit plus timed.
+ipcMain.handle(OWNER_VOICE_CANDIDATE_WAV_CREATE_CHANNEL, async (_event, arrayBuffer) => {
+  let buffer;
+  try {
+    buffer = Buffer.from(arrayBuffer);
+  } catch (_e) {
+    return { ok: false, reason: "candidate_wav_temp_unavailable" };
+  }
+
+  if (!buffer.length || buffer.length > OWNER_VOICE_CANDIDATE_WAV_MAX_BYTES) {
+    return { ok: false, reason: "candidate_wav_temp_unavailable" };
+  }
+
+  try {
+    const tempDir = getOwnerVoiceCandidateWavTempDir();
+    await fs.promises.mkdir(tempDir, { recursive: true });
+    const suffix = `${Date.now()}-${process.pid}-${Math.random().toString(36).slice(2, 10)}`;
+    const filePath = path.join(tempDir, `owner-voice-candidate-${suffix}.wav`);
+    await fs.promises.writeFile(filePath, buffer, { flag: "wx" });
+    scheduleOwnerVoiceCandidateWavCleanup(filePath);
+    return {
+      ok: true,
+      path: filePath,
+      candidateWavTemporary: true,
+      cleanupScheduled: true,
+      ttlMs: OWNER_VOICE_CANDIDATE_WAV_TEMP_TTL_MS,
+      pathRedacted: true,
+    };
+  } catch (_e) {
+    return { ok: false, reason: "candidate_wav_temp_unavailable" };
+  }
+});
+
+ipcMain.handle(OWNER_VOICE_CANDIDATE_WAV_DELETE_CHANNEL, async (_event, filePath) => {
+  return deleteOwnerVoiceCandidateWavTempFile(filePath);
+});
 
 // TASK-167B: stt:transcribe IPC handler.
 // Receives an ArrayBuffer from the renderer, wraps it in a multipart POST to the
