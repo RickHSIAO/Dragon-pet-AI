@@ -4903,6 +4903,49 @@ function _encodeWavPcm(pcmChunks, sampleRate) {
   return new Blob([buffer], { type: "audio/wav" });
 }
 
+function _conversationPcmSampleCount(pcmChunks) {
+  if (!Array.isArray(pcmChunks)) return 0;
+  var samples = 0;
+  for (var i = 0; i < pcmChunks.length; i++) {
+    var chunk = pcmChunks[i];
+    if (chunk && typeof chunk.length === "number" && chunk.length > 0) {
+      samples += chunk.length;
+    }
+  }
+  return samples;
+}
+
+function _isConversationHeaderOnlyWav(audioBlob, mimeType, recordingMeta) {
+  var type = String(mimeType || (audioBlob && audioBlob.type) || "").toLowerCase();
+  var meta = recordingMeta && typeof recordingMeta === "object" ? recordingMeta : {};
+  return meta.captureSource === "conversation" &&
+    meta.pcmGuardRequired === true &&
+    type.indexOf("audio/wav") !== -1 &&
+    audioBlob &&
+    typeof audioBlob.size === "number" &&
+    audioBlob.size <= 44;
+}
+
+function _dropConversationCapture(reason, recordingMeta) {
+  var safeReason = reason || "capture_audio_unavailable";
+  if (recordingMeta && typeof recordingMeta === "object") {
+    if (!recordingMeta.recordingFinalizedAt) recordingMeta.recordingFinalizedAt = _conversationNowMs();
+    if (!recordingMeta.recordingStoppedAt) recordingMeta.recordingStoppedAt = recordingMeta.recordingFinalizedAt;
+    _updateCaptureTimingDiagnostics(recordingMeta);
+  }
+  fullAppVoiceDiagnostics.sttStatus = "error";
+  fullAppVoiceDiagnostics.emptyTranscript = true;
+  fullAppVoiceDiagnostics.stopReason = safeReason;
+  fullAppVoiceDiagnostics.blobSizeBytes = 0;
+  fullAppVoiceDiagnostics.bytesPerSecond = 0;
+  fullAppVoiceDiagnostics.lastAudioPreviewAvailable = false;
+  if (voicePreviewPlayBtn) voicePreviewPlayBtn.disabled = true;
+  _setConversationQueueAction("dropped", safeReason);
+  _syncConversationQueueDiagnostics();
+  renderFullAppVoiceDiagnostics();
+  _recordVoiceDiagnosticsHistory();
+}
+
 function _startPcmCapture(stream, captureMeta) {
   try {
     _fullAppPcmChunks = [];
@@ -5450,6 +5493,7 @@ function _createConversationCaptureMeta(options) {
     recordingFinalizedAt: _conversationFiniteNumber(opts.recordingFinalizedAt) ? opts.recordingFinalizedAt : 0,
     mimeType: opts.mimeType || "audio/webm",
     triggerRms: _conversationFiniteNumber(opts.triggerRms) ? opts.triggerRms : 0,
+    pcmGuardRequired: Boolean(opts.pcmGuardRequired),
     preRollEnabled: Boolean(opts.preRollEnabled),
     preRollConfiguredMs: _conversationFiniteNumber(opts.preRollConfiguredMs) ? opts.preRollConfiguredMs : 0,
     preRollAppliedMs: _conversationFiniteNumber(opts.preRollAppliedMs) ? opts.preRollAppliedMs : 0,
@@ -5478,6 +5522,7 @@ function _finalizeConversationCaptureMeta(meta, mimeType, finalizedAt) {
     recordingFinalizedAt: recordingFinalizedAt,
     mimeType: mimeType || source.mimeType || "audio/webm",
     triggerRms: _conversationFiniteNumber(source.triggerRms) ? source.triggerRms : 0,
+    pcmGuardRequired: Boolean(source.pcmGuardRequired),
     preRollEnabled: Boolean(source.preRollEnabled),
     preRollConfiguredMs: _conversationFiniteNumber(source.preRollConfiguredMs) ? source.preRollConfiguredMs : 0,
     preRollAppliedMs: _conversationFiniteNumber(source.preRollAppliedMs) ? source.preRollAppliedMs : 0,
@@ -5513,6 +5558,7 @@ function _conversationShutdownCaptureResources(options) {
     fullAppVoiceConversationVadTimer = null;
   }
   var stoppedActiveRecorder = false;
+  var hasFinalizingRecorder = Boolean(fullAppVoiceConversationRecorder) && !opts.discardActiveRecorder;
   try {
     if (fullAppVoiceConversationRecorder && fullAppVoiceConversationRecorder.state !== "inactive") {
       fullAppVoiceConversationDiscardRecorderStop = Boolean(opts.discardActiveRecorder);
@@ -5520,6 +5566,8 @@ function _conversationShutdownCaptureResources(options) {
         fullAppVoiceConversationActiveCaptureMeta.recordingStoppedAt = _conversationNowMs();
       }
       fullAppVoiceConversationRecorder.stop();
+      stoppedActiveRecorder = true;
+    } else if (fullAppVoiceConversationRecorder && !opts.discardActiveRecorder) {
       stoppedActiveRecorder = true;
     }
   } catch (_e) {}
@@ -5556,6 +5604,9 @@ function _conversationShutdownCaptureResources(options) {
     fullAppVoiceConversationProcessingState = "idle";
   }
   _syncConversationQueueDiagnostics();
+  if (hasFinalizingRecorder && stoppedActiveRecorder) {
+    _setConversationQueueAction("draining", opts.reason || "finalizing_recorder");
+  }
   return stoppedActiveRecorder;
 }
 
@@ -5595,6 +5646,7 @@ function _startConversationUtteranceRecorder(triggerRms) {
     recordingStartedAt: vadTriggeredAt,
     mimeType: mimeType || "audio/wav",
     triggerRms: startRms,
+    pcmGuardRequired: true,
     preRollEnabled: FULL_APP_CONVERSATION_PRE_ROLL_ENABLED,
     preRollConfiguredMs: FULL_APP_CONVERSATION_PRE_ROLL_MS
   });
@@ -5628,10 +5680,6 @@ function _startConversationUtteranceRecorder(triggerRms) {
   fullAppVoiceConversationRecorder = recorder;
   recorder.addEventListener("dataavailable", function (ev) {
     if (ev.data && ev.data.size > 0) {
-      if (!captureMeta.firstChunkAt) {
-        captureMeta.firstChunkAt = _conversationNowMs();
-        _updateCaptureTimingDiagnostics(captureMeta);
-      }
       fullAppVoiceConversationChunks.push(ev.data);
     }
   });
@@ -5654,9 +5702,23 @@ function _startConversationUtteranceRecorder(triggerRms) {
       _setConversationQueueAction("discarded", "stop");
       return;
     }
-    var wavBlob = _encodeWavPcm(_convPcmChunks, FULL_APP_STT_PCM_SAMPLE_RATE);
     if (stopMeta) stopMeta.recordingFinalizedAt = _conversationNowMs();
     var finalizedMeta = _finalizeConversationCaptureMeta(stopMeta, "audio/wav", _conversationNowMs());
+    var pcmSampleCount = _conversationPcmSampleCount(_convPcmChunks);
+    if (pcmSampleCount <= 0) {
+      _convPcmChunks = [];
+      fullAppVoiceConversationChunks = [];
+      if (fullAppVoiceConversationActiveCaptureMeta && fullAppVoiceConversationActiveCaptureMeta.turnId === finalizedMeta.turnId) {
+        fullAppVoiceConversationActiveCaptureMeta = null;
+      }
+      _setConversationCaptureState(fullAppVoiceConversationStopRequested ? "off" : "listening");
+      _dropConversationCapture("pcm_capture_empty", finalizedMeta);
+      if (fullAppVoiceConversationDrainPending && !fullAppVoiceConversationProcessingPromise && fullAppVoiceConversationPendingQueue.length === 0) {
+        _completeConversationDrain();
+      }
+      return;
+    }
+    var wavBlob = _encodeWavPcm(_convPcmChunks, FULL_APP_STT_PCM_SAMPLE_RATE);
     _convPcmChunks = [];
     fullAppVoiceConversationChunks = [];
     if (fullAppVoiceConversationActiveCaptureMeta && fullAppVoiceConversationActiveCaptureMeta.turnId === finalizedMeta.turnId) {
@@ -5720,6 +5782,10 @@ function _enqueueConversationAudioBlob(audioBlob, mimeType, chunksCount, recordi
     return Promise.resolve(false);
   }
   var itemMeta = _finalizeConversationCaptureMeta(recordingMeta, mimeType || "audio/webm", recordingMeta && recordingMeta.finalizedAt);
+  if (_isConversationHeaderOnlyWav(audioBlob, mimeType || itemMeta.mimeType, itemMeta)) {
+    _dropConversationCapture("pcm_capture_empty", itemMeta);
+    return Promise.resolve(false);
+  }
   if (!fullAppVoiceConversationEnabled && !fullAppVoiceConversationDrainPending) {
     _setConversationQueueAction("dropped", "conversation_inactive");
     renderFullAppVoiceDiagnostics();
@@ -5786,8 +5852,6 @@ async function _processConversationQueueItem(item) {
     _recordVoiceDiagnosticsHistory();
     return;
   }
-
-  if (!fullAppVoiceConversationEnabled && !fullAppVoiceConversationDrainPending) return;
 
   _updateConversationAudioDiagnostics(audioBlob, item.chunksCount, item.mimeType, item);
 
@@ -5880,6 +5944,10 @@ function _transcribeConversationChunks(chunks, mimeType, recordingMeta) {
   }
 
   var _recordingMeta = _finalizeConversationCaptureMeta(recordingMeta, mimeType || "audio/webm", _conversationNowMs());
+  if (_isConversationHeaderOnlyWav(audioBlob, mimeType || "audio/webm", _recordingMeta)) {
+    _dropConversationCapture("pcm_capture_empty", _recordingMeta);
+    return Promise.resolve(false);
+  }
   _updateConversationAudioDiagnostics(audioBlob, (chunks || []).length, mimeType || "audio/webm", _recordingMeta);
   return _enqueueConversationAudioBlob(
     audioBlob,
@@ -5954,6 +6022,9 @@ function _resumeConversationAudioContextIfSuspended() {
     }
   } else {
     fullAppVoiceDiagnostics.audioContextState = "none";
+  }
+  if (_convPcmCtx && _convPcmCtx.state === "suspended") {
+    _convPcmCtx.resume().catch(function () {});
   }
 }
 

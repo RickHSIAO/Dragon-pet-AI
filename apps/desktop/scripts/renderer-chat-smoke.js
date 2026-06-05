@@ -13529,6 +13529,39 @@ function _taskConv001InstallFakeRecorder(sandbox) {
   return recorders;
 }
 
+function _taskConv001InstallDelayedStopRecorder(sandbox) {
+  const recorders = [];
+  class FakeMediaRecorder {
+    constructor(_stream, opts = {}) {
+      this.state = "inactive";
+      this.mimeType = opts.mimeType || "";
+      this._listeners = {};
+      recorders.push(this);
+    }
+    addEventListener(type, fn) {
+      this._listeners[type] = fn;
+    }
+    start() {
+      this.state = "recording";
+    }
+    stop() {
+      this.state = "inactive";
+    }
+    fireStop() {
+      if (typeof this._listeners.stop === "function") this._listeners.stop();
+    }
+    static isTypeSupported() {
+      return true;
+    }
+  }
+  sandbox.MediaRecorder = FakeMediaRecorder;
+  sandbox.fullAppVoiceConversationStream = {
+    getTracks: () => [{ stop() {} }],
+    getAudioTracks: () => [{ getSettings: () => ({}) }],
+  };
+  return recorders;
+}
+
 async function testTaskConv001StopDuringChatProcessingDrainsTwoPendingWithoutParallelChat() {
   const transcripts = ["first drain chat.", "second drain chat.", "third drain chat."];
   const { sandbox, state } = await loadRenderer({
@@ -13597,6 +13630,7 @@ async function testTaskConv001StopDuringActiveRecordingFinalizesLastTurn() {
   const recorders = _taskConv001InstallFakeRecorder(sandbox);
   sandbox.fullAppVoiceConversationEnabled = true;
   sandbox.setConversationState("waiting");
+  sandbox._appendConversationPreRollChunk(new Float32Array(400));
   sandbox._startConversationUtteranceRecorder(0.05);
   assert.equal(recorders.length, 1);
   assert.equal(sandbox.fullAppVoiceConversationCaptureState, "recording");
@@ -13613,6 +13647,40 @@ async function testTaskConv001StopDuringActiveRecordingFinalizesLastTurn() {
   assert.equal(sandbox.fullAppVoiceConversationCaptureState, "off");
   assert.equal(sandbox.fullAppVoiceConversationProcessingState, "idle");
   console.log("  testTaskConv001StopDuringActiveRecordingFinalizesLastTurn PASS");
+}
+
+async function testTaskConv001StopPreservesFinalizingRecorderUntilOnstop() {
+  const { sandbox, state } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => ({ status: "ok", transcript: "delayed final turn." }),
+      updatePetSpeech: async () => ({ ok: true }),
+      updatePetExpression: async () => ({ ok: true }),
+    },
+    chatMode: "success",
+  });
+  const recorders = _taskConv001InstallDelayedStopRecorder(sandbox);
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("waiting");
+  sandbox._appendConversationPreRollChunk(new Float32Array(500));
+  sandbox._startConversationUtteranceRecorder(0.06);
+  sandbox._stopConversationUtteranceRecorder();
+  assert.equal(recorders[0].state, "inactive");
+  assert.equal(sandbox.fullAppVoiceConversationPendingQueue.length, 0);
+  sandbox.stopConversationMode();
+  assert.equal(sandbox.fullAppVoiceConversationCaptureState, "off");
+  assert.equal(sandbox.fullAppVoiceConversationPendingQueue.length, 0,
+    "TASK-CONV-001 delayed onstop setup must not have finalized before Stop");
+  recorders[0].fireStop();
+  await settle();
+  const chatBodies = state.calls
+    .filter((call) => call.url.endsWith("/chat"))
+    .map((call) => JSON.parse(call.body || "{}").message);
+  assert.deepEqual(chatBodies, ["delayed final turn."],
+    "TASK-CONV-001 Stop must preserve an inactive recorder until delayed onstop queues the final turn");
+  assert.equal(sandbox.fullAppVoiceConversationProcessingState, "idle");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.conversationStopMode, "drain_complete");
+  console.log("  testTaskConv001StopPreservesFinalizingRecorderUntilOnstop PASS");
 }
 
 async function testTaskConv001NoPostStopUtteranceEntersQueue() {
@@ -13965,6 +14033,82 @@ async function testTaskAudio001PreRollClearedAfterStop() {
   assert.equal(chunks.length, 0, "TASK-AUDIO-001 Stop must clear stale pre-roll audio");
   assert.equal(sandbox.fullAppVoiceConversationCaptureState, "off");
   console.log("  testTaskAudio001PreRollClearedAfterStop PASS");
+}
+
+async function testTaskAudio001HeaderOnlyConversationWavDroppedBeforeSttOwnerVoicePreview() {
+  let transcribeCalls = 0;
+  const { sandbox, state } = await loadRenderer({
+    ownerVoiceGateSettings: _task266OwnerVoiceEnabledSettings(),
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => {
+        transcribeCalls += 1;
+        return { status: "ok", transcript: "should not run" };
+      },
+      updatePetSpeech: async () => ({ ok: true }),
+      updatePetExpression: async () => ({ ok: true }),
+    },
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("transcribing");
+  const headerOnly = new Blob([new ArrayBuffer(44)], { type: "audio/wav" });
+  const meta = {
+    captureSource: "conversation",
+    recordingStartedAt: 1000,
+    recordingStoppedAt: 1600,
+    finalizedAt: 1600,
+    mimeType: "audio/wav",
+    pcmGuardRequired: true,
+  };
+  const result = await sandbox._transcribeConversationChunks([headerOnly], "audio/wav", meta);
+  await settle();
+  assert.equal(result, false, "TASK-AUDIO-001 header-only WAV must be dropped");
+  assert.equal(transcribeCalls, 0, "TASK-AUDIO-001 header-only WAV must not reach STT");
+  assert.equal(state.calls.filter((call) => call.url.endsWith("/owner-voice-gate/verify-files")).length, 0,
+    "TASK-AUDIO-001 header-only WAV must not reach Owner Voice verify");
+  assert.equal(state.calls.filter((call) => call.url.endsWith("/chat")).length, 0,
+    "TASK-AUDIO-001 header-only WAV must not send chat");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.lastAudioPreviewAvailable, false,
+    "TASK-AUDIO-001 header-only WAV must not become previewable");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.conversationLastQueueAction, "dropped");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.conversationLastQueueReason, "pcm_capture_empty");
+  console.log("  testTaskAudio001HeaderOnlyConversationWavDroppedBeforeSttOwnerVoicePreview PASS");
+}
+
+async function testTaskAudio001ConversationPcmContextResumesWithVadContext() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  const contexts = [];
+  class FakeAudioContext {
+    constructor() {
+      this.state = "suspended";
+      this.resumeCalled = false;
+      contexts.push(this);
+    }
+    createMediaStreamSource() {
+      return { connect() {}, disconnect() {} };
+    }
+    createScriptProcessor() {
+      return { connect() {}, disconnect() {}, onaudioprocess: null };
+    }
+    resume() {
+      this.resumeCalled = true;
+      this.state = "running";
+      return Promise.resolve();
+    }
+    close() {
+      this.state = "closed";
+      return Promise.resolve();
+    }
+  }
+  sandbox.AudioContext = FakeAudioContext;
+  sandbox._startConvPcmCapture({ getTracks: () => [] });
+  assert.equal(contexts.length, 1, "TASK-AUDIO-001 test setup must create one PCM context");
+  sandbox._resumeConversationAudioContextIfSuspended();
+  assert.equal(contexts[0].resumeCalled, true,
+    "TASK-AUDIO-001 suspended PCM capture context must be resumed with VAD context");
+  sandbox._stopConvPcmCapture();
+  console.log("  testTaskAudio001ConversationPcmContextResumesWithVadContext PASS");
 }
 
 async function testTaskAudio001ManualMicPreparingIsNotRecording() {
@@ -17014,6 +17158,7 @@ async function main() {
   await testTaskConv001StopGracefullyDrainsPendingTurns();
   await testTaskConv001StopDuringChatProcessingDrainsTwoPendingWithoutParallelChat();
   await testTaskConv001StopDuringActiveRecordingFinalizesLastTurn();
+  await testTaskConv001StopPreservesFinalizingRecorderUntilOnstop();
   await testTaskConv001NoPostStopUtteranceEntersQueue();
   await testTaskConv001DrainErrorDoesNotDeadlockRemainingTurn();
   await testTaskConv001OwnerVoiceDryRunRemainsNonBlocking();
@@ -17027,6 +17172,8 @@ async function main() {
   await testTaskAudio001TimingMetaNonNegative();
   await testTaskAudio001ConversationPreRollBoundedAndPrepended();
   await testTaskAudio001PreRollClearedAfterStop();
+  await testTaskAudio001HeaderOnlyConversationWavDroppedBeforeSttOwnerVoicePreview();
+  await testTaskAudio001ConversationPcmContextResumesWithVadContext();
   await testTaskAudio001ManualMicPreparingIsNotRecording();
 
   // TASK-246: STT Model Quality / Whisper Model Upgrade
