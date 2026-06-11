@@ -28871,7 +28871,7 @@ Windows runtime smoke still needs actual local, non-private audio:
 
 ## TASK-STT-004 | STT No-Speech / Silence Hallucination Guard
 
-Status: IMPLEMENTED - SECOND RUNTIME GUARD MISS FIXED / NEEDS WINDOWS SILENCE RERUN (2026-06-11)
+Status: DONE - WINDOWS RUNTIME NO-SPEECH SMOKE PASS / DEFAULT UNCHANGED (2026-06-11)
 
 ### Runtime Root Cause
 
@@ -29062,16 +29062,31 @@ Automated validation:
 - `git diff --check`: PASS, CRLF warnings only
 - `git status --short`: reviewed; unrelated `docs/開啟方式.txt` remains modified and uncommitted
 
-### Windows Runtime Smoke Needed
+### Windows Runtime Smoke Closeout
 
-1. Start backend with `DRAGON_STT_MODEL=small`.
-2. Use Manual Mic and intentionally stay silent for about 5-8 seconds.
-3. Confirm diagnostics show `STT:no_speech`, `noSpeechGuardApplied=true`,
-   `audioRms` / `audioPeak` near zero, empty final transcript, no textarea fill,
-   and no `/chat` send.
-4. Repeat with `DRAGON_STT_MODEL=base`.
-5. Repeat Conversation Mode silence and graceful Stop cases.
-6. Confirm real speech still produces finalTranscript and reaches `/chat`.
+Windows runtime no-speech smoke PASS after commit
+`c69c60574e69618216d21ca3ed869cf6cc2570da`
+(`fix: harden STT silence hallucination guard`):
+
+- Manual Mic silence with `DRAGON_STT_MODEL=small`: PASS
+- Manual Mic real speech with `DRAGON_STT_MODEL=small`: PASS
+- Manual Mic silence with `DRAGON_STT_MODEL=base`: PASS
+- Manual Mic real speech with `DRAGON_STT_MODEL=base`: PASS
+- Conversation Mode silence / no-speech path: PASS
+- No hallucinated subtitle-credit text appeared.
+- No creator-CTA hallucination text appeared.
+- No extra text appeared during silence tests.
+- Real speech was not suppressed.
+- No normal chat send occurred for silence/no-speech.
+- Runtime default remained unchanged at `tiny`.
+
+Known runtime evidence from the `small` silence check: STT status `no_speech`,
+empty final transcript, `noSpeechGuardApplied=true`, reason `silent_audio`,
+decision trace `suppress:near_silent_single_short_segment`, and 0 voiced
+samples. The UI showed no speech detected instead of filling hallucinated text.
+
+`base` and `small` remain runtime override candidates only; no committed default
+model switch was made.
 
 ---
 

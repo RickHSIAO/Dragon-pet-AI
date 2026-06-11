@@ -678,7 +678,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   behavior change, schema break, IPC change, raw audio persistence, or
   aggressive rewrite was added.
 
-- TASK-STT-004 IMPLEMENTED - SECOND RUNTIME GUARD MISS FIXED / NEEDS WINDOWS SILENCE RERUN (2026-06-11):
+- TASK-STT-004 DONE - WINDOWS RUNTIME NO-SPEECH SMOKE PASS / DEFAULT UNCHANGED (2026-06-11):
   Adds and hardens a conservative no-speech guard after Windows
   `DRAGON_STT_MODEL=small` smoke found a faster-whisper subtitle-credit-like
   hallucination on intentional Manual Mic silence. The first follow-up runtime miss was
@@ -696,7 +696,12 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   Guarded results return `status=no_speech`, empty `finalTranscript`, and safe
   diagnostics; Manual Mic does not fill textarea or auto-send, and Conversation
   Mode does not enqueue/send `/chat` while preserving rearm and graceful drain.
-  Runtime default remains `tiny`; `base` and `small` remain candidates. No
+  Windows runtime closeout PASS: Manual Mic silence and real speech passed with
+  both `DRAGON_STT_MODEL=small` and `DRAGON_STT_MODEL=base`; Conversation Mode
+  silence / no-speech path passed; silence did not fill hallucinated subtitle
+  credit or creator-CTA text and did not send normal chat; real speech was not
+  suppressed. Runtime default remains `tiny`; `base` and `small` remain override
+  candidates only. No
   `/chat` schema change, Owner Voice hard gate, raw audio persistence, private
   sample commit, or aggressive rewrite was added. Windows silence runtime smoke
   still needs rerun before closeout.
