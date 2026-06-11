@@ -183,7 +183,7 @@ def test_task_stt_004_silent_wav_hallucination_suppressed(monkeypatch):
     assert result["correctionReason"] == "no_speech_guard"
     assert result["noSpeechGuardSignals"]["nearSilentAudio"] is True
     assert result["noSpeechGuardSignals"]["suspiciousTranscript"] is True
-    assert result["noSpeechGuardDecisionTrace"] == "suppress:near_silent_suspicious_transcript"
+    assert result["noSpeechGuardDecisionTrace"] == "suppress:weak_speech_suspicious_transcript"
 
 
 def test_task_stt_004_runtime_small_model_silence_hallucination_suppressed(monkeypatch):
@@ -221,7 +221,48 @@ def test_task_stt_004_runtime_small_model_silence_hallucination_suppressed(monke
     assert result["suspiciousTranscriptPattern"] == "subtitle_credit"
     assert result["noSpeechGuardSignals"]["highNoSpeechProbability"] is True
     assert result["noSpeechGuardThresholds"]["noSpeechProbability"] == 0.60
-    assert result["noSpeechGuardDecisionTrace"] == "suppress:near_silent_suspicious_transcript"
+    assert result["noSpeechGuardDecisionTrace"] == "suppress:weak_speech_suspicious_transcript"
+
+
+def test_task_stt_004_creator_cta_runtime_silence_hallucination_suppressed(monkeypatch):
+    """TASK-STT-004: Windows creator-CTA silence hallucination returns no_speech."""
+
+    class _CreatorCtaHallucinatingModel:
+        def transcribe(self, _buf, **_kwargs):
+            seg = SimpleNamespace(
+                text="霂瑞韏?霈ａ? 頧砍? ?? ??",
+                no_speech_prob=0.52816,
+                avg_logprob=-1.2,
+                compression_ratio=1.0,
+            )
+            return iter([seg]), SimpleNamespace(language="zh")
+
+    monkeypatch.setattr(stt_service, "_WHISPER_AVAILABLE", True)
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(stt_service, "_load_model", lambda: _CreatorCtaHallucinatingModel())
+
+    result = stt_service.transcribe_audio_bytes(
+        _task_stt_004_pulsed_pcm16_wav(3410, 244, frames=86640),
+        mime_type="audio/wav",
+        language="zh",
+    )
+
+    assert result["status"] == "no_speech"
+    assert result["transcript"] == ""
+    assert result["finalTranscript"] == ""
+    assert result["noSpeechGuardApplied"] is True
+    assert result["noSpeechGuardReason"] == "no_speech_hallucination_guard"
+    assert result["audioSpeechDetected"] is False
+    assert result["audioRms"] == pytest.approx(0.005523, abs=0.00001)
+    assert result["audioPeak"] == pytest.approx(0.104068, abs=0.00001)
+    assert result["audioSignalRatio"] == pytest.approx(0.002816, abs=0.00001)
+    assert result["audioVoicedSampleCount"] == 244
+    assert result["audioTransientPeakDetected"] is True
+    assert result["sttNoSpeechProbability"] == 0.52816
+    assert result["suspiciousTranscriptPattern"] == "creator_cta"
+    assert result["noSpeechGuardSignals"]["creatorCtaTranscript"] is True
+    assert result["noSpeechGuardSignals"]["transientPeak"] is True
+    assert result["noSpeechGuardDecisionTrace"] == "suppress:weak_speech_suspicious_transcript"
 
 
 def test_task_stt_004_silent_short_transcript_suppressed(monkeypatch):
@@ -271,6 +312,20 @@ def test_task_stt_004_low_energy_high_no_speech_probability_suppressed(monkeypat
     assert result["noSpeechGuardDecisionTrace"] == "suppress:near_silent_high_no_speech_probability"
 
 
+def test_task_stt_004_transient_peak_is_not_speech_evidence():
+    meta = stt_service._audio_energy_metadata(
+        _task_stt_004_pulsed_pcm16_wav(3410, 244, frames=86640),
+        "audio/wav",
+    )
+
+    assert meta["audioRms"] == pytest.approx(0.005523, abs=0.00001)
+    assert meta["audioPeak"] == pytest.approx(0.104068, abs=0.00001)
+    assert meta["audioSignalRatio"] == pytest.approx(0.002816, abs=0.00001)
+    assert meta["audioVoicedSampleCount"] == 244
+    assert meta["audioSpeechDetected"] is False
+    assert meta["audioTransientPeakDetected"] is True
+
+
 def test_task_stt_004_real_energy_suspicious_phrase_not_suppressed(monkeypatch):
     """TASK-STT-004: suspicious text is blocked only with strong no-speech audio evidence."""
 
@@ -299,6 +354,37 @@ def test_task_stt_004_real_energy_suspicious_phrase_not_suppressed(monkeypatch):
     assert result["audioSpeechDetected"] is True
     assert result["finalTranscript"]
     assert "摮?" in result["rawTranscript"]
+    assert result["noSpeechGuardDecisionTrace"] == "allow:audio_energy_detected"
+
+
+def test_task_stt_004_real_energy_creator_cta_phrase_not_suppressed(monkeypatch):
+    """TASK-STT-004: CTA-like text is blocked only with weak/no-speech audio evidence."""
+
+    class _RealSpeechModel:
+        def transcribe(self, _buf, **_kwargs):
+            seg = SimpleNamespace(
+                text="我真的說了閮這個詞",
+                no_speech_prob=0.1,
+                avg_logprob=-0.1,
+                compression_ratio=1.0,
+            )
+            return iter([seg]), SimpleNamespace(language="zh")
+
+    monkeypatch.setattr(stt_service, "_WHISPER_AVAILABLE", True)
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(stt_service, "_load_model", lambda: _RealSpeechModel())
+
+    result = stt_service.transcribe_audio_bytes(
+        _task_stt_004_pulsed_pcm16_wav(14352, 177),
+        mime_type="audio/wav",
+        language="zh",
+    )
+
+    assert result["status"] == "ok"
+    assert result["noSpeechGuardApplied"] is False
+    assert result["audioSpeechDetected"] is True
+    assert result["suspiciousTranscriptPattern"] == "creator_cta"
+    assert result["noSpeechGuardSignals"]["creatorCtaTranscript"] is True
     assert result["noSpeechGuardDecisionTrace"] == "allow:audio_energy_detected"
 
 
@@ -351,6 +437,27 @@ def test_task_stt_004_runtime_real_speech_energy_not_suppressed(monkeypatch):
 )
 def test_task_stt_004_suspicious_subtitle_credit_variants_detected(text):
     assert stt_service._detect_suspicious_transcript_pattern(text) == "subtitle_credit"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "霂瑞韏?",
+        "隢?霈",
+        "?寡?",
+        "暺?",
+        "霈ａ?",
+        "閮",
+        "頧砍?",
+        "頧",
+        "??",
+        "?寡? 霈ａ? 頧砍? ??",
+        "?? ??",
+        "like and subscribe",
+    ],
+)
+def test_task_stt_004_suspicious_creator_cta_variants_detected(text):
+    assert stt_service._detect_suspicious_transcript_pattern(text) == "creator_cta"
 
 
 # -- /stt/transcribe endpoint tests ------------------------------------------

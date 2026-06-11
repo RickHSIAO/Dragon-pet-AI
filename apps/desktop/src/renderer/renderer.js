@@ -350,6 +350,10 @@ var fullAppVoiceDiagnostics = {
   audioRms: null,
   audioPeak: null,
   audioSpeechDetected: null,
+  audioSignalRatio: null,
+  audioUsableSampleCount: 0,
+  audioVoicedSampleCount: 0,
+  audioTransientPeakDetected: false,
   sttNoSpeechProbability: null,
   suspiciousTranscriptPattern: "none",
   // TASK-255: voice capture focus/minimize resilience diagnostics
@@ -4765,6 +4769,10 @@ async function transcribeFullAppAudioBlob(blob) {
     fullAppVoiceDiagnostics.audioSpeechDetected = Object.prototype.hasOwnProperty.call(result, "audioSpeechDetected")
       ? result.audioSpeechDetected
       : null;
+    fullAppVoiceDiagnostics.audioSignalRatio = typeof result.audioSignalRatio === "number" ? result.audioSignalRatio : null;
+    fullAppVoiceDiagnostics.audioUsableSampleCount = typeof result.audioUsableSampleCount === "number" ? result.audioUsableSampleCount : 0;
+    fullAppVoiceDiagnostics.audioVoicedSampleCount = typeof result.audioVoicedSampleCount === "number" ? result.audioVoicedSampleCount : 0;
+    fullAppVoiceDiagnostics.audioTransientPeakDetected = Boolean(result.audioTransientPeakDetected);
     fullAppVoiceDiagnostics.sttNoSpeechProbability = typeof result.sttNoSpeechProbability === "number"
       ? result.sttNoSpeechProbability
       : null;
@@ -6458,6 +6466,9 @@ function renderFullAppVoiceDiagnostics() {
     "Audio energy: rms=" + (d.audioRms === null || d.audioRms === undefined ? "—" : d.audioRms) +
       " peak=" + (d.audioPeak === null || d.audioPeak === undefined ? "—" : d.audioPeak) +
       " speechDetected=" + (d.audioSpeechDetected === null || d.audioSpeechDetected === undefined ? "unknown" : (d.audioSpeechDetected ? "true" : "false")),
+    "Audio voice evidence: voiced=" + (d.audioVoicedSampleCount || 0) + "/" + (d.audioUsableSampleCount || 0) +
+      " ratio=" + (d.audioSignalRatio === null || d.audioSignalRatio === undefined ? "—" : d.audioSignalRatio) +
+      " transientPeak=" + (d.audioTransientPeakDetected ? "true" : "false"),
     "STT no-speech probability: " + (d.sttNoSpeechProbability === null || d.sttNoSpeechProbability === undefined ? "—" : d.sttNoSpeechProbability) +
       " suspiciousPattern=" + (d.suspiciousTranscriptPattern || "none"),
     "焦點安全: " + (d.voiceCaptureFocusSafe ? "是" : "否") + "  可見: " + (d.lastVisibilityState || "visible") + "  焦點: " + (d.lastWindowFocusState || "focused"),
@@ -6621,6 +6632,10 @@ function resetFullAppVoiceDiagnosticsForRecording(mode, recordingMeta) {
   fullAppVoiceDiagnostics.audioRms                       = null;
   fullAppVoiceDiagnostics.audioPeak                      = null;
   fullAppVoiceDiagnostics.audioSpeechDetected            = null;
+  fullAppVoiceDiagnostics.audioSignalRatio               = null;
+  fullAppVoiceDiagnostics.audioUsableSampleCount         = 0;
+  fullAppVoiceDiagnostics.audioVoicedSampleCount         = 0;
+  fullAppVoiceDiagnostics.audioTransientPeakDetected     = false;
   fullAppVoiceDiagnostics.sttNoSpeechProbability         = null;
   fullAppVoiceDiagnostics.suspiciousTranscriptPattern    = "none";
   // TASK-266/267: reset owner-voice dry-run status; settings sync will flip

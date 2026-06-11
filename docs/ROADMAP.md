@@ -678,17 +678,21 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   behavior change, schema break, IPC change, raw audio persistence, or
   aggressive rewrite was added.
 
-- TASK-STT-004 IMPLEMENTED - RUNTIME GUARD MISS FIXED / NEEDS WINDOWS SILENCE RERUN (2026-06-11):
+- TASK-STT-004 IMPLEMENTED - SECOND RUNTIME GUARD MISS FIXED / NEEDS WINDOWS SILENCE RERUN (2026-06-11):
   Adds and hardens a conservative no-speech guard after Windows
   `DRAGON_STT_MODEL=small` smoke found a faster-whisper subtitle-credit-like
-  hallucination on intentional Manual Mic silence. The follow-up runtime miss was
+  hallucination on intentional Manual Mic silence. The first follow-up runtime miss was
   `audioRms=0.001863`, `audioPeak=0.016968`, `sttNoSpeechProbability=0.620446`,
-  `finalTranscript=摮?by蝝Ｗ憡`; the first guard treated that low-energy spike
-  profile as speech and missed the mojibake subtitle-credit pattern. Backend STT
-  now computes WAV PCM audio energy metadata (`audioRms`, `audioPeak`,
-  `audioSpeechDetected`, signal ratio, usable samples), exposes safe guard
-  thresholds/signals/decision trace diagnostics, and combines near-silent audio
-  with faster-whisper segment metadata and suspicious subtitle-credit variants.
+  `finalTranscript=摮?by蝝Ｗ憡`. A second miss was `audioRms=0.005523`,
+  `audioPeak=0.104068`, `sttNoSpeechProbability=0.52816`,
+  `finalTranscript=霂瑞韏?霈ａ? 頧砍? ?? ??`; peak/RMS alone treated a
+  short transient spike as speech and missed a creator-CTA hallucination.
+  Backend STT now computes WAV PCM audio energy metadata (`audioRms`,
+  `audioPeak`, `audioSpeechDetected`, signal ratio, usable samples, voiced
+  sample count, transient peak), exposes safe guard thresholds/signals/decision
+  trace diagnostics, and combines weak/no-speech audio evidence with
+  faster-whisper segment metadata plus suspicious subtitle-credit and
+  creator-CTA variants.
   Guarded results return `status=no_speech`, empty `finalTranscript`, and safe
   diagnostics; Manual Mic does not fill textarea or auto-send, and Conversation
   Mode does not enqueue/send `/chat` while preserving rearm and graceful drain.

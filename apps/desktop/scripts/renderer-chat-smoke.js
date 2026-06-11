@@ -14310,6 +14310,10 @@ function _taskStt004NoSpeechResult() {
     audioRms: 0,
     audioPeak: 0,
     audioSpeechDetected: false,
+    audioSignalRatio: 0,
+    audioUsableSampleCount: 16000,
+    audioVoicedSampleCount: 0,
+    audioTransientPeakDetected: false,
     sttNoSpeechProbability: 0.91,
     suspiciousTranscriptPattern: "subtitle_credit",
   };
@@ -14326,6 +14330,9 @@ function testTaskStt004RendererHasNoSpeechFields() {
   assert.ok(src.includes("audioRms"), "TASK-STT-004 diagnostics must include audioRms");
   assert.ok(src.includes("audioPeak"), "TASK-STT-004 diagnostics must include audioPeak");
   assert.ok(src.includes("audioSpeechDetected"), "TASK-STT-004 diagnostics must include audioSpeechDetected");
+  assert.ok(src.includes("audioSignalRatio"), "TASK-STT-004 diagnostics must include audioSignalRatio");
+  assert.ok(src.includes("audioVoicedSampleCount"), "TASK-STT-004 diagnostics must include audioVoicedSampleCount");
+  assert.ok(src.includes("audioTransientPeakDetected"), "TASK-STT-004 diagnostics must include audioTransientPeakDetected");
   assert.ok(src.includes("sttNoSpeechProbability"), "TASK-STT-004 diagnostics must include sttNoSpeechProbability");
   assert.ok(src.includes("suspiciousTranscriptPattern"), "TASK-STT-004 diagnostics must include suspiciousTranscriptPattern");
   console.log("  testTaskStt004RendererHasNoSpeechFields PASS");
@@ -14341,6 +14348,7 @@ function testTaskStt004DiagnosticsRenderIncludesNoSpeechLines() {
   assert.ok(renderFn.includes("No-speech thresholds"), "TASK-STT-004 render must include threshold line");
   assert.ok(renderFn.includes("No-speech signals"), "TASK-STT-004 render must include signal line");
   assert.ok(renderFn.includes("Audio energy"), "TASK-STT-004 render must include audio energy line");
+  assert.ok(renderFn.includes("Audio voice evidence"), "TASK-STT-004 render must include sustained voice evidence line");
   assert.ok(renderFn.includes("sttNoSpeechProbability"), "TASK-STT-004 render must include STT no-speech probability");
   assert.ok(!renderFn.includes("innerHTML"), "TASK-STT-004 render must not use innerHTML");
   console.log("  testTaskStt004DiagnosticsRenderIncludesNoSpeechLines PASS");
@@ -14357,6 +14365,10 @@ async function testTaskStt004DiagnosticsDefaultsAndReset() {
   assert.equal(sandbox.fullAppVoiceDiagnostics.audioRms, null);
   assert.equal(sandbox.fullAppVoiceDiagnostics.audioPeak, null);
   assert.equal(sandbox.fullAppVoiceDiagnostics.audioSpeechDetected, null);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.audioSignalRatio, null);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.audioUsableSampleCount, 0);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.audioVoicedSampleCount, 0);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.audioTransientPeakDetected, false);
   assert.equal(sandbox.fullAppVoiceDiagnostics.sttNoSpeechProbability, null);
   assert.equal(sandbox.fullAppVoiceDiagnostics.suspiciousTranscriptPattern, "none");
   sandbox.fullAppVoiceDiagnostics.noSpeechGuardApplied = true;
@@ -14367,6 +14379,10 @@ async function testTaskStt004DiagnosticsDefaultsAndReset() {
   sandbox.fullAppVoiceDiagnostics.audioRms = 0;
   sandbox.fullAppVoiceDiagnostics.audioPeak = 0;
   sandbox.fullAppVoiceDiagnostics.audioSpeechDetected = false;
+  sandbox.fullAppVoiceDiagnostics.audioSignalRatio = 0.001;
+  sandbox.fullAppVoiceDiagnostics.audioUsableSampleCount = 16000;
+  sandbox.fullAppVoiceDiagnostics.audioVoicedSampleCount = 20;
+  sandbox.fullAppVoiceDiagnostics.audioTransientPeakDetected = true;
   sandbox.fullAppVoiceDiagnostics.sttNoSpeechProbability = 0.9;
   sandbox.fullAppVoiceDiagnostics.suspiciousTranscriptPattern = "subtitle_credit";
   sandbox.resetFullAppVoiceDiagnosticsForRecording("manual_mic");
@@ -14378,6 +14394,10 @@ async function testTaskStt004DiagnosticsDefaultsAndReset() {
   assert.equal(sandbox.fullAppVoiceDiagnostics.audioRms, null);
   assert.equal(sandbox.fullAppVoiceDiagnostics.audioPeak, null);
   assert.equal(sandbox.fullAppVoiceDiagnostics.audioSpeechDetected, null);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.audioSignalRatio, null);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.audioUsableSampleCount, 0);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.audioVoicedSampleCount, 0);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.audioTransientPeakDetected, false);
   assert.equal(sandbox.fullAppVoiceDiagnostics.sttNoSpeechProbability, null);
   assert.equal(sandbox.fullAppVoiceDiagnostics.suspiciousTranscriptPattern, "none");
   console.log("  testTaskStt004DiagnosticsDefaultsAndReset PASS");

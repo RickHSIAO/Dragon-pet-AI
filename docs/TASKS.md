@@ -28871,16 +28871,18 @@ Windows runtime smoke still needs actual local, non-private audio:
 
 ## TASK-STT-004 | STT No-Speech / Silence Hallucination Guard
 
-Status: IMPLEMENTED - RUNTIME GUARD MISS FIXED / NEEDS WINDOWS SILENCE RERUN (2026-06-11)
+Status: IMPLEMENTED - SECOND RUNTIME GUARD MISS FIXED / NEEDS WINDOWS SILENCE RERUN (2026-06-11)
 
 ### Runtime Root Cause
 
 Windows candidate smoke confirmed that `DRAGON_STT_MODEL=base` and
 `DRAGON_STT_MODEL=small` overrides work. `small` produced better transcripts for
 some Conversation Mode phrases, but Manual Mic with intentional silence produced
-a faster-whisper hallucination. The first guard implementation missed a later
+faster-whisper hallucinations. The first guard implementation missed a later
 runtime silence case because its suspicious-pattern matcher was too narrow and
-its energy thresholds treated low-level capture spikes as speech:
+its energy thresholds treated low-level capture spikes as speech. A second
+runtime silence case then showed that peak/RMS alone still accepted a short
+transient spike and missed a creator-CTA hallucination:
 
 - mode: `manual_mic`
 - duration: 6856 ms
@@ -28897,6 +28899,23 @@ its energy thresholds treated low-level capture spikes as speech:
 - VAD speech detected: `false`
 - Owner Voice candidate WAV cleanup still completed after settled check
 
+Second guard miss:
+
+- mode: `manual_mic`
+- duration: 5415 ms
+- blob: 163884 bytes WAV
+- model: `small`
+- STT status: `success`
+- finalTranscript: `霂瑞韏?霈ａ? 頧砍? ?? ??`
+- no-speech guard: `enabled=true`, `applied=false`, `reason=none`
+- decision trace: `allow:audio_energy_detected`
+- backend audio energy: `audioRms=0.005523`, `audioPeak=0.104068`,
+  `audioSpeechDetected=true`
+- STT no-speech probability: `0.52816`
+- suspicious pattern: `none`
+- VAD last/max RMS: `0.0000`
+- VAD speech detected: `false`
+
 Interpretation: this is a no-speech / silence hallucination, not a valid user
 utterance.
 
@@ -28911,6 +28930,8 @@ accepting STT output:
 - `audioSpeechDetected`
 - `audioSignalRatio`
 - `audioUsableSampleCount`
+- `audioVoicedSampleCount`
+- `audioTransientPeakDetected`
 - `noSpeechGuardThresholds`
 - `noSpeechGuardSignals`
 - `noSpeechGuardDecisionTrace`
@@ -28924,13 +28945,19 @@ For faster-whisper, the backend also inspects segment metadata when present:
 
 The guard suppresses a result only when strong audio-level no-speech evidence is
 present. The hardened thresholds treat runtime silence evidence around
-`audioRms=0.001863` and `audioPeak=0.016968` as near-silent, while real speech
-observed around `audioRms=0.04627` and `audioPeak=0.438002` remains accepted.
+`audioRms=0.001863` / `audioPeak=0.016968` and
+`audioRms=0.005523` / `audioPeak=0.104068` as weak speech evidence unless the
+audio also has sustained voiced samples. Short transient peaks no longer count
+as speech by themselves. Real speech observed around `audioRms=0.04627` and
+`audioPeak=0.438002` remains accepted.
+
 Suspicious subtitle-credit patterns such as `subtitles by`, `caption by`,
 Chinese subtitle-credit variants, and the observed mojibake `摮?by...` /
 `摮?嚗...` / `摮?蝏...` patterns are considered only in combination with
-silent / near-silent audio evidence. Real speech is not blocked just because the
-transcript contains a bare `摮?` marker.
+silent / near-silent audio evidence. Creator-CTA hallucination patterns such as
+`霂瑞韏?`, `霈ａ?`, `頧砍?`, repeated `??`, and `like and subscribe` are
+handled by the same weak-speech evidence rule. Real speech is not blocked just
+because the transcript contains a bare `摮?` marker or a CTA-like token.
 
 ### Runtime Behavior
 
@@ -29004,21 +29031,30 @@ The follow-up fix adds tests for:
 
 - exact runtime hallucination `摮?by蝝Ｗ憡` with `audioRms=0.001863`,
   `audioPeak=0.016968`, and `sttNoSpeechProbability=0.620446`
+- exact runtime hallucination `霂瑞韏?霈ａ? 頧砍? ?? ??` with
+  `audioRms=0.005523`, `audioPeak=0.104068`,
+  `sttNoSpeechProbability=0.52816`, low voiced ratio, and transient peak
 - suspicious subtitle-credit variants: `摮?by`, `摮? by`, `摮? By`,
   `摮?BY`, `摮?嚗`, `摮?蝏`, `subtitles by`, `caption by`, and
   Chinese subtitle-credit variants
+- suspicious creator-CTA variants: `霂瑞韏?`, `隢?霈`, `?寡?`,
+  `暺?`, `霈ａ?`, `閮`, `頧砍?`, `頧`, repeated `??`, and
+  `like and subscribe`
 - low energy plus high no-speech probability when the pattern matcher misses
+- transient peak with weak RMS / low voiced ratio does not count as speech
 - real speech energy around `audioRms=0.046` and `audioPeak=0.438` remaining
   accepted
+- real speech containing CTA-like text remaining accepted with strong speech
+  evidence
 - renderer diagnostics carrying thresholds, signals, and decision trace
 
 ### Validation
 
 Automated validation:
 
-- targeted `pytest -k "task_stt_004 or model_override"`: 20 passed
-- `.\backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_routes.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-stt004b`: 233 passed
-- `.\backend\.venv\Scripts\python.exe scripts\stt_provider_smoke.py`: 443 PASS / 0 FAIL
+- targeted `pytest -k "task_stt_004 or model_override"`: 35 passed, 213 deselected
+- `.\backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_routes.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-stt004c`: 248 passed
+- `.\backend\.venv\Scripts\python.exe scripts\stt_provider_smoke.py`: 461 PASS / 0 FAIL
 - `.\backend\.venv\Scripts\python.exe scripts\stt_quality_probe.py --help`: PASS
 - `node apps/desktop/scripts/renderer-chat-smoke.js`: PASS
 - `node apps/desktop/scripts/pet-window-smoke.js`: 92 checks PASS

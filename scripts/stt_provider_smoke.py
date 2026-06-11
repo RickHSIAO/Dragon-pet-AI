@@ -583,10 +583,14 @@ print("\n[11/20] TASK-STT-004 - STT no-speech guard runtime safety")
 
 check('_STT_DEFAULT_MODEL = "tiny"' in stt_service_text,
       "TASK-STT-004 preserves committed STT default model=tiny")
-check("_NO_SPEECH_RMS_THRESHOLD = 0.005" in stt_service_text,
+check("_NO_SPEECH_RMS_THRESHOLD = 0.008" in stt_service_text,
       "TASK-STT-004 runtime silence RMS threshold covers Windows low-energy evidence")
 check("_NO_SPEECH_PEAK_THRESHOLD = 0.03" in stt_service_text,
       "TASK-STT-004 runtime silence peak threshold covers low-level capture spikes")
+check("_NO_SPEECH_MIN_VOICED_SAMPLES = 120" in stt_service_text,
+      "TASK-STT-004 requires sustained voiced samples before accepting peak spikes")
+check("_NO_SPEECH_STRONG_RMS_THRESHOLD = 0.012" in stt_service_text,
+      "TASK-STT-004 keeps strong real speech energy accepted")
 check("_NO_SPEECH_PROBABILITY_THRESHOLD = 0.60" in stt_service_text,
       "TASK-STT-004 no-speech probability threshold covers small-model silence evidence")
 for variant in (
@@ -602,12 +606,30 @@ for variant in (
 ):
     check(stt._detect_suspicious_transcript_pattern(variant) == "subtitle_credit",
           f"TASK-STT-004 detects suspicious subtitle-credit variant {variant!r}")
+for variant in (
+    "霂瑞韏?",
+    "隢?霈",
+    "?寡?",
+    "暺?",
+    "霈ａ?",
+    "閮",
+    "頧砍?",
+    "頧",
+    "??",
+    "?寡? 霈ａ? 頧砍? ??",
+    "?? ??",
+    "like and subscribe",
+):
+    check(stt._detect_suspicious_transcript_pattern(variant) == "creator_cta",
+          f"TASK-STT-004 detects suspicious creator-CTA variant {variant!r}")
 check(stt._detect_suspicious_transcript_pattern("我真的說了摮?這個詞") == "none",
       "TASK-STT-004 does not flag bare mojibake marker without subtitle-credit evidence")
 for token in (
     "noSpeechGuardThresholds",
     "noSpeechGuardSignals",
     "noSpeechGuardDecisionTrace",
+    "audioVoicedSampleCount",
+    "audioTransientPeakDetected",
 ):
     check(token in stt_service_text,
           f"TASK-STT-004 backend response includes {token}")
@@ -615,8 +637,8 @@ for token in (
           f"TASK-STT-004 renderer diagnostics include {token}")
 check("allow:audio_energy_detected" in stt_service_text,
       "TASK-STT-004 records allow trace when real audio energy is detected")
-check("suppress:near_silent_suspicious_transcript" in stt_service_text,
-      "TASK-STT-004 records suppress trace for low-energy subtitle-credit hallucinations")
+check("suppress:weak_speech_suspicious_transcript" in stt_service_text,
+      "TASK-STT-004 records suppress trace for low-energy suspicious hallucinations")
 check('status === "no_speech"' in renderer_js_text and 'return ""' in renderer_js_text,
       "TASK-STT-004 renderer returns empty transcript for no_speech")
 

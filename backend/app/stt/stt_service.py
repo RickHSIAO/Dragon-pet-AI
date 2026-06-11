@@ -209,10 +209,12 @@ _STT_MODEL_LOAD_ERROR: str | None = None
 
 # TASK-STT-004: conservative no-speech guard for silent WAV captures.
 _NO_SPEECH_GUARD_ENABLED = True
-_NO_SPEECH_RMS_THRESHOLD = 0.005
+_NO_SPEECH_RMS_THRESHOLD = 0.008
 _NO_SPEECH_PEAK_THRESHOLD = 0.03
-_NO_SPEECH_SIGNAL_RATIO_THRESHOLD = 0.02
+_NO_SPEECH_SIGNAL_RATIO_THRESHOLD = 0.005
 _NO_SPEECH_MIN_USABLE_SAMPLES = 160
+_NO_SPEECH_MIN_VOICED_SAMPLES = 120
+_NO_SPEECH_STRONG_RMS_THRESHOLD = 0.012
 _NO_SPEECH_PROBABILITY_THRESHOLD = 0.60
 _NO_SPEECH_SHORT_TRANSCRIPT_CHARS = 40
 _SUSPICIOUS_TRANSCRIPT_PATTERNS = (
@@ -226,6 +228,27 @@ _SUSPICIOUS_TRANSCRIPT_PATTERNS = (
             r"|字幕\s*(?:由|提供|製作|制作|組|组|小組|小组)"
             r"|摮.{0,8}\?\s*(?:[bＢ][yＹ]|嚗|蝏)"
             r"|摮.{0,8}\?[^\s]{0,16}(?:蝝|憡||嚗|蝏)"
+            r")",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "creator_cta",
+        re.compile(
+            r"("
+            r"like\s+(?:and\s+)?subscribe"
+            r"|subscribe\s+(?:and\s+)?like"
+            r"|霂瑞.{0,4}韏"
+            r"|隢.{0,4}霈"
+            r"|\?寡\?"
+            r"|暺.{0,4}\?"
+            r"|霈ａ\?"
+            r"|閮.{0,4}"
+            r"|頧砍\?"
+            r"|頧"
+            r"|\?\?"
+            r"|\?寡\?.{0,24}霈ａ\?.{0,24}頧砍\?.{0,24}\?\?"
+            r"|\?\?\s+\?\?"
             r")",
             re.IGNORECASE,
         ),
@@ -692,6 +715,8 @@ def _empty_no_speech_metadata() -> dict:
             "peak": _NO_SPEECH_PEAK_THRESHOLD,
             "signalRatio": _NO_SPEECH_SIGNAL_RATIO_THRESHOLD,
             "minUsableSamples": _NO_SPEECH_MIN_USABLE_SAMPLES,
+            "minVoicedSamples": _NO_SPEECH_MIN_VOICED_SAMPLES,
+            "strongRms": _NO_SPEECH_STRONG_RMS_THRESHOLD,
             "noSpeechProbability": _NO_SPEECH_PROBABILITY_THRESHOLD,
             "shortTranscriptChars": _NO_SPEECH_SHORT_TRANSCRIPT_CHARS,
         },
@@ -700,8 +725,11 @@ def _empty_no_speech_metadata() -> dict:
             "nearSilentAudio": False,
             "highNoSpeechProbability": False,
             "suspiciousTranscript": False,
+            "subtitleCreditTranscript": False,
+            "creatorCtaTranscript": False,
             "shortTranscript": False,
             "singleShortSegment": False,
+            "transientPeak": False,
         },
         "noSpeechGuardDecisionTrace": "not_evaluated",
         "audioDurationMs": 0,
@@ -710,6 +738,8 @@ def _empty_no_speech_metadata() -> dict:
         "audioSpeechDetected": None,
         "audioSignalRatio": None,
         "audioUsableSampleCount": 0,
+        "audioVoicedSampleCount": 0,
+        "audioTransientPeakDetected": False,
         "sttNoSpeechProbability": None,
         "sttAvgLogprob": None,
         "sttCompressionRatio": None,
@@ -786,11 +816,24 @@ def _audio_energy_metadata(audio_bytes: bytes, mime_type: str) -> dict:
 
     rms = (sum_squares / usable) ** 0.5
     signal_ratio = signal_samples / usable
-    speech_detected = not (
+    has_sustained_voiced_signal = (
+        signal_samples >= _NO_SPEECH_MIN_VOICED_SAMPLES
+        and signal_ratio >= _NO_SPEECH_SIGNAL_RATIO_THRESHOLD
+    )
+    speech_detected = (
         usable >= _NO_SPEECH_MIN_USABLE_SAMPLES
-        and rms <= _NO_SPEECH_RMS_THRESHOLD
-        and peak <= _NO_SPEECH_PEAK_THRESHOLD
-        and signal_ratio <= _NO_SPEECH_SIGNAL_RATIO_THRESHOLD
+        and (
+            rms >= _NO_SPEECH_STRONG_RMS_THRESHOLD
+            or (
+                rms > _NO_SPEECH_RMS_THRESHOLD
+                and peak > _NO_SPEECH_PEAK_THRESHOLD
+                and has_sustained_voiced_signal
+            )
+        )
+    )
+    transient_peak = (
+        peak > _NO_SPEECH_PEAK_THRESHOLD
+        and not has_sustained_voiced_signal
     )
     meta.update({
         "noSpeechGuardReason": "none",
@@ -800,6 +843,8 @@ def _audio_energy_metadata(audio_bytes: bytes, mime_type: str) -> dict:
         "audioSpeechDetected": speech_detected,
         "audioSignalRatio": round(signal_ratio, 6),
         "audioUsableSampleCount": usable,
+        "audioVoicedSampleCount": signal_samples,
+        "audioTransientPeakDetected": transient_peak,
     })
     return meta
 
@@ -852,8 +897,11 @@ def _should_apply_no_speech_guard(text: str, guard_meta: dict) -> tuple[bool, st
         "nearSilentAudio": near_silent_audio,
         "highNoSpeechProbability": high_no_speech,
         "suspiciousTranscript": pattern != "none",
+        "subtitleCreditTranscript": pattern == "subtitle_credit",
+        "creatorCtaTranscript": pattern == "creator_cta",
         "shortTranscript": short_transcript,
         "singleShortSegment": segment_count > 0 and segment_count <= 1 and short_transcript,
+        "transientPeak": bool(guard_meta.get("audioTransientPeakDetected")),
     }
     guard_meta["noSpeechGuardSignals"] = signals
 
@@ -862,7 +910,7 @@ def _should_apply_no_speech_guard(text: str, guard_meta: dict) -> tuple[bool, st
         return False, "none"
 
     if pattern != "none":
-        guard_meta["noSpeechGuardDecisionTrace"] = "suppress:near_silent_suspicious_transcript"
+        guard_meta["noSpeechGuardDecisionTrace"] = "suppress:weak_speech_suspicious_transcript"
         return True, "no_speech_hallucination_guard"
     if high_no_speech:
         guard_meta["noSpeechGuardDecisionTrace"] = "suppress:near_silent_high_no_speech_probability"
@@ -1493,6 +1541,8 @@ def transcribe_audio_bytes(
         "audioSpeechDetected"        : bool | None
         "audioSignalRatio"           : float | None
         "audioUsableSampleCount"     : int
+        "audioVoicedSampleCount"     : int
+        "audioTransientPeakDetected" : bool
         "sttNoSpeechProbability"     : float | None
         "sttAvgLogprob"              : float | None
         "sttCompressionRatio"        : float | None
