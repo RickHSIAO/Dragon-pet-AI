@@ -780,6 +780,27 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   ordering, max pending `2`, no parallel `/chat`, and graceful Stop/drain
   behavior remain unchanged.
 
+- TASK-CONV-003 IMPLEMENTED - AUTOMATED BACKPRESSURE SMOKE PASS / NEEDS WINDOWS RUNTIME 4-TURN RE-SMOKE (2026-06-11):
+  Investigates the extra `turn#5 dropped reason=queue_full` surfaced by the
+  TASK-CONV-002 runtime smoke. Root cause found in diagnostics/classification:
+  queue overflow lifecycle rows did not copy duration, Blob bytes, chunk count,
+  or audio classification, so an overflow could render as `durationMs=0
+  bytes=0` and look like an empty artifact. The queue limit remains `2`; real
+  overflow still appears as `reason=queue_full`. Added safe lifecycle fields
+  `audioClass`, `dropStage`, `finalizeAttemptCount`,
+  `duplicateFinalizePrevented`, `alreadyFinalized`, `stopFinalizeSource`,
+  `recorderStateAtFinalize`, `captureStateAtFinalize`, and
+  `pcmUsableSampleCount`. `0B` artifacts now drop before queue admission as
+  `reason=empty_artifact`, `audio=empty_artifact`, and
+  `dropStage=before_queue`; real overflow shows `audio=usable_audio`,
+  `dropStage=at_queue`, and non-zero bytes when present. Duplicate recorder
+  finalization callbacks are prevented without overwriting the first terminal
+  lifecycle status. Renderer smoke PASS; Windows actual-audio 4-turn re-smoke
+  remains required before DONE. No STT default, Owner Voice hard gate, schema,
+  IPC, Pet Window, Output Queue, raw audio persistence, path exposure,
+  transcript exposure, centroid exposure, embedding exposure, queue ordering,
+  graceful Stop/drain, or no-parallel `/chat` behavior changed.
+
 - TASK-AUDIO-001 IMPLEMENTED - CAPTURE START LATENCY MEASUREMENT / CONVERSATION PRE-ROLL BUFFER (2026-06-05):
   Voice Diagnostics now records safe per-capture timing metadata:
   `captureRequestedAt`, `mediaStreamReadyAt`, `recorderStartRequestedAt`,

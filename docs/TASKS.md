@@ -29533,6 +29533,84 @@ Investigation.
 
 ---
 
+## TASK-CONV-003 | Conversation Mode Queue Backpressure / Extra Dropped Turn Investigation
+
+Status: IMPLEMENTED - AUTOMATED BACKPRESSURE SMOKE PASS / NEEDS WINDOWS RUNTIME 4-TURN RE-SMOKE (2026-06-11)
+
+### Goal
+
+Investigate the extra `turn#5 dropped reason=queue_full` row observed during the
+TASK-CONV-002 Windows 4-turn runtime smoke, and make queue backpressure
+diagnostics distinguish real overflow from empty/duplicate recorder artifacts.
+
+### Root Cause / Findings
+
+The automated investigation identified a diagnostics classification gap in the
+renderer queue path: `queue_full` lifecycle rows were recorded without copying
+the candidate Blob size, duration, chunk count, or audio classification into the
+lifecycle entry. As a result, a dropped overflow row could render as
+`durationMs=0 bytes=0` even when the dropped candidate was not proven to be an
+empty artifact. This made the Windows `turn#5 queue_full` row ambiguous.
+
+The implementation does not blindly increase the queue limit. The pending queue
+limit remains `2`, and real overflow still remains visible as `queue_full`.
+
+### Implementation Summary
+
+- Added safe per-turn lifecycle fields:
+  `audioClass`, `dropStage`, `finalizeAttemptCount`,
+  `duplicateFinalizePrevented`, `alreadyFinalized`, `stopFinalizeSource`,
+  `recorderStateAtFinalize`, `captureStateAtFinalize`, and
+  `pcmUsableSampleCount`.
+- `0B` candidate artifacts are dropped before queue admission as
+  `reason=empty_artifact`, `audio=empty_artifact`, and
+  `dropStage=before_queue`; they no longer appear as `queue_full`.
+- Real queue overflow still records `reason=queue_full`, now with
+  `audio=usable_audio`, `dropStage=at_queue`, duration, Blob bytes, and chunk
+  count.
+- Duplicate recorder `stop`/finalization callbacks are ignored after the first
+  finalization and set `duplicateFinalizePrevented=true` without overwriting the
+  original terminal lifecycle status.
+- Voice Diagnostics still renders bounded `turn#N lifecycle ...` rows via
+  `textContent`; lifecycle visibility was not reduced.
+
+### Preserved Boundaries
+
+- No STT default change.
+- No Owner Voice hard gate behavior change.
+- No `/stt/transcribe` or `/chat` schema change.
+- No new Conversation Mode IPC.
+- No Pet Window or Output Queue change.
+- No raw audio persistence, full path exposure, transcript exposure, centroid
+  exposure, candidate embedding exposure, or local settings exposure.
+- TASK-CONV-001 ordered sequential queue processing and no parallel `/chat`
+  behavior are preserved.
+- Normal Stop remains graceful drain: no new capture after Stop, already-recorded
+  turns remain queued/sent in order, and drain completion remains visible.
+
+### Automated Validation
+
+- `node apps/desktop/scripts/renderer-chat-smoke.js`: PASS
+  - `testTaskConv003RendererHasBackpressureDiagnostics`
+  - `testTaskConv003ZeroByteArtifactIsDroppedBeforeQueueNotQueueFull`
+  - `testTaskConv003RealQueueFullKeepsBytesAndAtQueueStage`
+  - `testTaskConv003DuplicateRecorderFinalizationDoesNotOverwriteTerminalStatus`
+
+### Remaining Runtime Smoke
+
+Run Windows Conversation Mode with actual audio again and confirm:
+
+- A clean 4-turn test shows `turn#1` through `turn#4` completed/sent, or any
+  extra turn is clearly classified.
+- `0ms/0B` candidates show `reason=empty_artifact` and
+  `dropStage=before_queue`, not `queue_full`.
+- Real overflow, if it occurs, shows `reason=queue_full`, `audio=usable_audio`,
+  `dropStage=at_queue`, and non-zero bytes.
+- Final state reaches capture `off`, processing `idle`, pending `0/2`,
+  `activeTurnId=0`, and `stopMode=drain_complete`.
+
+---
+
 ## TASK-AUDIO-001 | Capture Start Latency Measurement / Conversation Pre-roll Buffer
 
 Status: IMPLEMENTED - AUTOMATED RENDERER SMOKE PASS / NEEDS WINDOWS RUNTIME SMOKE (2026-06-05)

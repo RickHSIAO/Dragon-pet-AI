@@ -14138,6 +14138,105 @@ async function testTaskConv002StopDrainLifecycleVisible() {
   console.log("  testTaskConv002StopDrainLifecycleVisible PASS");
 }
 
+// TASK-CONV-003: Conversation Mode Queue Backpressure / Extra Dropped Turn Investigation
+
+function testTaskConv003RendererHasBackpressureDiagnostics() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  for (const token of [
+    "audioClass",
+    "dropStage",
+    "finalizeAttemptCount",
+    "duplicateFinalizePrevented",
+    "alreadyFinalized",
+    "stopFinalizeSource",
+    "recorderStateAtFinalize",
+    "captureStateAtFinalize",
+    "pcmUsableSampleCount",
+    "empty_artifact",
+  ]) {
+    assert.ok(src.includes(token), "TASK-CONV-003 renderer must include safe backpressure diagnostic token " + token);
+  }
+  assert.ok(!src.includes("conversation:backpressure"), "TASK-CONV-003 must not add Conversation backpressure IPC");
+  console.log("  testTaskConv003RendererHasBackpressureDiagnostics PASS");
+}
+
+async function testTaskConv003ZeroByteArtifactIsDroppedBeforeQueueNotQueueFull() {
+  const { sandbox } = await loadRenderer({
+    dragonPet: taskConv002Bridge([{ status: "ok", transcript: "should not transcribe artifact" }]),
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("waiting");
+  sandbox.fullAppVoiceConversationPendingQueue = [
+    { turnId: 91, audioBlob: new Blob(["active"], { type: "audio/wav" }), mimeType: "audio/wav" },
+    { turnId: 92, audioBlob: new Blob(["pending"], { type: "audio/wav" }), mimeType: "audio/wav" },
+  ];
+  await sandbox._transcribeConversationChunks([new Blob([], { type: "audio/wav" })], "audio/wav", taskConv002ConversationMeta(8, 8000));
+  await settle();
+  const entry = sandbox.fullAppVoiceConversationTurnLifecycleHistory.find((item) => item.turnId === 8);
+  assert.equal(entry.status, "dropped");
+  assert.equal(entry.reason, "empty_artifact",
+    "TASK-CONV-003 zero-byte artifacts must be classified before queue overflow");
+  assert.equal(entry.audioClass, "empty_artifact");
+  assert.equal(entry.dropStage, "before_queue");
+  assert.equal(entry.blobSizeBytes, 0);
+  assert.notEqual(entry.reason, "queue_full");
+  const text = taskConv002LifecycleText(sandbox);
+  assert.ok(text.includes("reason=empty_artifact"), "TASK-CONV-003 diagnostics must render empty_artifact");
+  assert.ok(text.includes("audio=empty_artifact"), "TASK-CONV-003 diagnostics must render audio class");
+  assert.ok(text.includes("dropStage=before_queue"), "TASK-CONV-003 diagnostics must render before_queue drop stage");
+  console.log("  testTaskConv003ZeroByteArtifactIsDroppedBeforeQueueNotQueueFull PASS");
+}
+
+async function testTaskConv003RealQueueFullKeepsBytesAndAtQueueStage() {
+  const { sandbox } = await loadRenderer({
+    dragonPet: taskConv002Bridge([{ status: "ok", transcript: "real overflow should not send" }]),
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("waiting");
+  sandbox.fullAppVoiceConversationPendingQueue = [
+    { turnId: 93, audioBlob: new Blob(["active"], { type: "audio/wav" }), mimeType: "audio/wav" },
+    { turnId: 94, audioBlob: new Blob(["pending"], { type: "audio/wav" }), mimeType: "audio/wav" },
+  ];
+  await sandbox._transcribeConversationChunks([new Blob(["real-audio"], { type: "audio/wav" })], "audio/wav", taskConv002ConversationMeta(9, 9000));
+  await settle();
+  const entry = sandbox.fullAppVoiceConversationTurnLifecycleHistory.find((item) => item.turnId === 9);
+  assert.equal(entry.status, "dropped");
+  assert.equal(entry.reason, "queue_full", "TASK-CONV-003 real overflow must remain visible as queue_full");
+  assert.equal(entry.audioClass, "usable_audio");
+  assert.equal(entry.dropStage, "at_queue");
+  assert.equal(entry.durationMs, 600);
+  assert.ok(entry.blobSizeBytes > 0, "TASK-CONV-003 queue_full diagnostics must carry blob bytes");
+  const text = taskConv002LifecycleText(sandbox);
+  assert.ok(text.includes("reason=queue_full"), "TASK-CONV-003 diagnostics must still render real queue_full");
+  assert.ok(text.includes("audio=usable_audio"), "TASK-CONV-003 diagnostics must render usable_audio for real overflow");
+  assert.ok(text.includes("dropStage=at_queue"), "TASK-CONV-003 diagnostics must render at_queue drop stage");
+  console.log("  testTaskConv003RealQueueFullKeepsBytesAndAtQueueStage PASS");
+}
+
+async function testTaskConv003DuplicateRecorderFinalizationDoesNotOverwriteTerminalStatus() {
+  const { sandbox } = await loadRenderer({
+    dragonPet: taskConv002Bridge([{ status: "ok", transcript: "duplicate should not send" }]),
+    chatMode: "success",
+  });
+  const recorders = _taskConv001InstallDelayedStopRecorder(sandbox);
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("waiting");
+  sandbox._startConversationUtteranceRecorder(0.08);
+  recorders[0].fireStop();
+  recorders[0].fireStop();
+  await settle();
+  const entry = sandbox.fullAppVoiceConversationTurnLifecycleHistory[0];
+  assert.equal(entry.status, "dropped",
+    "TASK-CONV-003 duplicate finalization must not overwrite the first terminal classification");
+  assert.equal(entry.reason, "pcm_capture_empty");
+  assert.equal(entry.duplicateFinalizePrevented, true);
+  assert.equal(entry.finalizeAttemptCount, 2);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.conversationLastQueueReason, "duplicate_finalize");
+  console.log("  testTaskConv003DuplicateRecorderFinalizationDoesNotOverwriteTerminalStatus PASS");
+}
+
 // TASK-AUDIO-001: Capture Start Latency Measurement / Conversation Pre-roll Buffer
 
 function testTaskAudio001RendererHasTimingAndPreRollFields() {
@@ -17751,6 +17850,10 @@ async function main() {
   await testTaskConv002DroppedNoSpeechAndChatErrorLifecycle();
   await testTaskConv002LifecycleHistoryIsBounded();
   await testTaskConv002StopDrainLifecycleVisible();
+  testTaskConv003RendererHasBackpressureDiagnostics();
+  await testTaskConv003ZeroByteArtifactIsDroppedBeforeQueueNotQueueFull();
+  await testTaskConv003RealQueueFullKeepsBytesAndAtQueueStage();
+  await testTaskConv003DuplicateRecorderFinalizationDoesNotOverwriteTerminalStatus();
   testTaskAudio001RendererHasTimingAndPreRollFields();
   testTaskAudio001DiagnosticsRenderIncludesSafeTimingPreRoll();
   await testTaskAudio001TimingMetaNonNegative();

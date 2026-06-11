@@ -5398,7 +5398,8 @@ function _formatConversationTurnLifecycleSummary(entry) {
     " reason=" + (entry.reason || "none") +
     " stt=" + (entry.sttStatus || "none") +
     " chat=" + (entry.chatStatus || "none") +
-    " durationMs=" + (entry.durationMs || 0);
+    " durationMs=" + (entry.durationMs || 0) +
+    " audio=" + (entry.audioClass || "unknown");
 }
 
 function _recordConversationTurnLifecycle(recordingMeta, status, reason, patch) {
@@ -5433,6 +5434,15 @@ function _recordConversationTurnLifecycle(recordingMeta, status, reason, patch) 
       mimeType: _sanitizeConversationLifecycleText(meta.mimeType || "", ""),
       preRollAppliedMs: _conversationFiniteNumber(meta.preRollAppliedMs) ? meta.preRollAppliedMs : 0,
       preRollPreserved: Boolean(meta.sentenceStartPreserved),
+      audioClass: "unknown",
+      dropStage: "none",
+      finalizeAttemptCount: _conversationFiniteNumber(meta.finalizeAttemptCount) ? meta.finalizeAttemptCount : 0,
+      duplicateFinalizePrevented: Boolean(meta.duplicateFinalizePrevented),
+      alreadyFinalized: Boolean(meta.alreadyFinalized),
+      stopFinalizeSource: _sanitizeConversationLifecycleText(meta.stopFinalizeSource || "", ""),
+      recorderStateAtFinalize: _sanitizeConversationLifecycleText(meta.recorderStateAtFinalize || "", ""),
+      captureStateAtFinalize: _sanitizeConversationLifecycleText(meta.captureStateAtFinalize || "", ""),
+      pcmUsableSampleCount: _conversationFiniteNumber(meta.pcmUsableSampleCount) ? meta.pcmUsableSampleCount : 0,
       sttStatus: "none",
       chatStatus: "none",
       ownerVoiceDryRunStatus: fullAppVoiceDiagnostics.ownerVoiceDryRunStatus || "none",
@@ -5466,6 +5476,13 @@ function _recordConversationTurnLifecycle(recordingMeta, status, reason, patch) 
   entry.mimeType = _sanitizeConversationLifecycleText(meta.mimeType || entry.mimeType || "", "");
   entry.preRollAppliedMs = _conversationFiniteNumber(meta.preRollAppliedMs) ? meta.preRollAppliedMs : entry.preRollAppliedMs;
   entry.preRollPreserved = Boolean(meta.sentenceStartPreserved || entry.preRollPreserved);
+  entry.finalizeAttemptCount = _conversationFiniteNumber(meta.finalizeAttemptCount) ? meta.finalizeAttemptCount : entry.finalizeAttemptCount;
+  entry.duplicateFinalizePrevented = Boolean(meta.duplicateFinalizePrevented || entry.duplicateFinalizePrevented);
+  entry.alreadyFinalized = Boolean(meta.alreadyFinalized || entry.alreadyFinalized);
+  entry.stopFinalizeSource = _sanitizeConversationLifecycleText(meta.stopFinalizeSource || entry.stopFinalizeSource || "", "");
+  entry.recorderStateAtFinalize = _sanitizeConversationLifecycleText(meta.recorderStateAtFinalize || entry.recorderStateAtFinalize || "", "");
+  entry.captureStateAtFinalize = _sanitizeConversationLifecycleText(meta.captureStateAtFinalize || entry.captureStateAtFinalize || "", "");
+  entry.pcmUsableSampleCount = _conversationFiniteNumber(meta.pcmUsableSampleCount) ? meta.pcmUsableSampleCount : entry.pcmUsableSampleCount;
   entry.ownerVoiceDryRunStatus = fullAppVoiceDiagnostics.ownerVoiceDryRunStatus || entry.ownerVoiceDryRunStatus || "none";
 
   if (patch && typeof patch === "object") {
@@ -5474,6 +5491,15 @@ function _recordConversationTurnLifecycle(recordingMeta, status, reason, patch) 
     if (_conversationFiniteNumber(patch.durationMs)) entry.durationMs = patch.durationMs;
     if (_conversationFiniteNumber(patch.blobSizeBytes)) entry.blobSizeBytes = patch.blobSizeBytes;
     if (_conversationFiniteNumber(patch.chunksCount)) entry.chunksCount = patch.chunksCount;
+    if (patch.audioClass) entry.audioClass = _sanitizeConversationLifecycleText(patch.audioClass, "unknown");
+    if (patch.dropStage) entry.dropStage = _sanitizeConversationLifecycleText(patch.dropStage, "none");
+    if (_conversationFiniteNumber(patch.finalizeAttemptCount)) entry.finalizeAttemptCount = patch.finalizeAttemptCount;
+    if (patch.duplicateFinalizePrevented !== undefined) entry.duplicateFinalizePrevented = Boolean(patch.duplicateFinalizePrevented);
+    if (patch.alreadyFinalized !== undefined) entry.alreadyFinalized = Boolean(patch.alreadyFinalized);
+    if (patch.stopFinalizeSource) entry.stopFinalizeSource = _sanitizeConversationLifecycleText(patch.stopFinalizeSource, "none");
+    if (patch.recorderStateAtFinalize) entry.recorderStateAtFinalize = _sanitizeConversationLifecycleText(patch.recorderStateAtFinalize, "none");
+    if (patch.captureStateAtFinalize) entry.captureStateAtFinalize = _sanitizeConversationLifecycleText(patch.captureStateAtFinalize, "none");
+    if (_conversationFiniteNumber(patch.pcmUsableSampleCount)) entry.pcmUsableSampleCount = patch.pcmUsableSampleCount;
     if (patch.sttStatus) entry.sttStatus = _sanitizeConversationLifecycleText(patch.sttStatus, "none");
     if (patch.chatStatus) entry.chatStatus = _sanitizeConversationLifecycleText(patch.chatStatus, "none");
     if (patch.ownerVoiceDryRunStatus) entry.ownerVoiceDryRunStatus = _sanitizeConversationLifecycleText(patch.ownerVoiceDryRunStatus, "none");
@@ -5697,7 +5723,14 @@ function _createConversationCaptureMeta(options) {
     preRollEnabled: Boolean(opts.preRollEnabled),
     preRollConfiguredMs: _conversationFiniteNumber(opts.preRollConfiguredMs) ? opts.preRollConfiguredMs : 0,
     preRollAppliedMs: _conversationFiniteNumber(opts.preRollAppliedMs) ? opts.preRollAppliedMs : 0,
-    sentenceStartPreserved: Boolean(opts.sentenceStartPreserved)
+    sentenceStartPreserved: Boolean(opts.sentenceStartPreserved),
+    finalizeAttemptCount: _conversationFiniteNumber(opts.finalizeAttemptCount) ? opts.finalizeAttemptCount : 0,
+    alreadyFinalized: Boolean(opts.alreadyFinalized),
+    duplicateFinalizePrevented: Boolean(opts.duplicateFinalizePrevented),
+    stopFinalizeSource: opts.stopFinalizeSource || "",
+    recorderStateAtFinalize: opts.recorderStateAtFinalize || "",
+    captureStateAtFinalize: opts.captureStateAtFinalize || "",
+    pcmUsableSampleCount: _conversationFiniteNumber(opts.pcmUsableSampleCount) ? opts.pcmUsableSampleCount : 0
   };
 }
 
@@ -5726,7 +5759,14 @@ function _finalizeConversationCaptureMeta(meta, mimeType, finalizedAt) {
     preRollEnabled: Boolean(source.preRollEnabled),
     preRollConfiguredMs: _conversationFiniteNumber(source.preRollConfiguredMs) ? source.preRollConfiguredMs : 0,
     preRollAppliedMs: _conversationFiniteNumber(source.preRollAppliedMs) ? source.preRollAppliedMs : 0,
-    sentenceStartPreserved: Boolean(source.sentenceStartPreserved)
+    sentenceStartPreserved: Boolean(source.sentenceStartPreserved),
+    finalizeAttemptCount: _conversationFiniteNumber(source.finalizeAttemptCount) ? source.finalizeAttemptCount : 0,
+    alreadyFinalized: Boolean(source.alreadyFinalized),
+    duplicateFinalizePrevented: Boolean(source.duplicateFinalizePrevented),
+    stopFinalizeSource: source.stopFinalizeSource || "",
+    recorderStateAtFinalize: source.recorderStateAtFinalize || "",
+    captureStateAtFinalize: source.captureStateAtFinalize || "",
+    pcmUsableSampleCount: _conversationFiniteNumber(source.pcmUsableSampleCount) ? source.pcmUsableSampleCount : 0
   };
 }
 
@@ -5891,6 +5931,38 @@ function _startConversationUtteranceRecorder(triggerRms) {
     var shouldDiscard = fullAppVoiceConversationDiscardRecorderStop || (!fullAppVoiceConversationEnabled && !fullAppVoiceConversationStopRequested);
     fullAppVoiceConversationDiscardRecorderStop = false;
     var stopMeta = recorder._conversationCaptureMeta || fullAppVoiceConversationActiveCaptureMeta || captureMeta;
+    if (stopMeta) {
+      stopMeta.finalizeAttemptCount = (_conversationFiniteNumber(stopMeta.finalizeAttemptCount) ? stopMeta.finalizeAttemptCount : 0) + 1;
+      stopMeta.recorderStateAtFinalize = recorder.state || "unknown";
+      stopMeta.captureStateAtFinalize = fullAppVoiceConversationCaptureState || "unknown";
+      stopMeta.stopFinalizeSource = fullAppVoiceConversationStopRequested ? "graceful_stop" : (fullAppVoiceDiagnostics.stopReason || "recorder_stop");
+      if (stopMeta.alreadyFinalized) {
+        stopMeta.duplicateFinalizePrevented = true;
+        _setConversationQueueAction("ignored", "duplicate_finalize");
+        var existingLifecycle = _findConversationTurnLifecycleEntry(stopMeta.turnId);
+        if (existingLifecycle) {
+          existingLifecycle.finalizeAttemptCount = stopMeta.finalizeAttemptCount;
+          existingLifecycle.duplicateFinalizePrevented = true;
+          existingLifecycle.alreadyFinalized = true;
+          existingLifecycle.updatedAt = _conversationNowMs();
+        } else {
+          _recordConversationTurnLifecycle(stopMeta, "ignored", "duplicate_finalize", {
+            sttStatus: "not_started",
+            chatStatus: "not_sent",
+            audioClass: "duplicate_finalize",
+            dropStage: "before_queue",
+            finalizeAttemptCount: stopMeta.finalizeAttemptCount,
+            duplicateFinalizePrevented: true,
+            alreadyFinalized: true,
+            stopFinalizeSource: stopMeta.stopFinalizeSource,
+            recorderStateAtFinalize: stopMeta.recorderStateAtFinalize,
+            captureStateAtFinalize: stopMeta.captureStateAtFinalize
+          });
+        }
+        renderFullAppVoiceDiagnostics();
+        return;
+      }
+    }
     if (stopMeta && !stopMeta.recordingStoppedAt) {
       stopMeta.recordingStoppedAt = _conversationNowMs();
     }
@@ -5910,10 +5982,26 @@ function _startConversationUtteranceRecorder(triggerRms) {
       });
       return;
     }
-    if (stopMeta) stopMeta.recordingFinalizedAt = _conversationNowMs();
+    if (stopMeta) {
+      stopMeta.recordingFinalizedAt = _conversationNowMs();
+      stopMeta.finalizedAt = stopMeta.recordingFinalizedAt;
+      stopMeta.alreadyFinalized = true;
+    }
     var finalizedMeta = _finalizeConversationCaptureMeta(stopMeta, "audio/wav", _conversationNowMs());
-    _recordConversationTurnLifecycle(finalizedMeta, "finalized", fullAppVoiceDiagnostics.stopReason || "recorder_stop");
     var pcmSampleCount = _conversationPcmSampleCount(_convPcmChunks);
+    finalizedMeta.pcmUsableSampleCount = pcmSampleCount;
+    finalizedMeta.stopFinalizeSource = stopMeta && stopMeta.stopFinalizeSource ? stopMeta.stopFinalizeSource : (fullAppVoiceDiagnostics.stopReason || "recorder_stop");
+    finalizedMeta.recorderStateAtFinalize = stopMeta && stopMeta.recorderStateAtFinalize ? stopMeta.recorderStateAtFinalize : "unknown";
+    finalizedMeta.captureStateAtFinalize = stopMeta && stopMeta.captureStateAtFinalize ? stopMeta.captureStateAtFinalize : fullAppVoiceConversationCaptureState;
+    _recordConversationTurnLifecycle(finalizedMeta, "finalized", fullAppVoiceDiagnostics.stopReason || "recorder_stop", {
+      audioClass: pcmSampleCount > 0 ? "usable_audio" : "empty_artifact",
+      finalizeAttemptCount: finalizedMeta.finalizeAttemptCount,
+      alreadyFinalized: finalizedMeta.alreadyFinalized,
+      stopFinalizeSource: finalizedMeta.stopFinalizeSource,
+      recorderStateAtFinalize: finalizedMeta.recorderStateAtFinalize,
+      captureStateAtFinalize: finalizedMeta.captureStateAtFinalize,
+      pcmUsableSampleCount: pcmSampleCount
+    });
     if (pcmSampleCount <= 0) {
       _convPcmChunks = [];
       fullAppVoiceConversationChunks = [];
@@ -6000,15 +6088,43 @@ function _enqueueConversationAudioBlob(audioBlob, mimeType, chunksCount, recordi
     return Promise.resolve(false);
   }
   var itemMeta = _finalizeConversationCaptureMeta(recordingMeta, mimeType || "audio/webm", recordingMeta && recordingMeta.finalizedAt);
+  var itemDurationMs = _durationMsFromConversationMeta(itemMeta);
+  var itemBlobSize = audioBlob && _conversationFiniteNumber(audioBlob.size) ? audioBlob.size : 0;
+  var itemChunksCount = chunksCount || 0;
   if (_isConversationHeaderOnlyWav(audioBlob, mimeType || itemMeta.mimeType, itemMeta)) {
     _dropConversationCapture("pcm_capture_empty", itemMeta);
+    return Promise.resolve(false);
+  }
+  if (itemBlobSize <= 0) {
+    _setConversationQueueAction("dropped", "empty_artifact");
+    _recordConversationTurnLifecycle(itemMeta, "dropped", "empty_artifact", {
+      sttStatus: "not_started",
+      chatStatus: "not_sent",
+      durationMs: itemDurationMs,
+      blobSizeBytes: itemBlobSize,
+      chunksCount: itemChunksCount,
+      audioClass: "empty_artifact",
+      dropStage: "before_queue",
+      finalizeAttemptCount: itemMeta.finalizeAttemptCount,
+      alreadyFinalized: itemMeta.alreadyFinalized,
+      stopFinalizeSource: itemMeta.stopFinalizeSource,
+      recorderStateAtFinalize: itemMeta.recorderStateAtFinalize,
+      captureStateAtFinalize: itemMeta.captureStateAtFinalize,
+      pcmUsableSampleCount: itemMeta.pcmUsableSampleCount
+    });
+    renderFullAppVoiceDiagnostics();
     return Promise.resolve(false);
   }
   if (!fullAppVoiceConversationEnabled && !fullAppVoiceConversationDrainPending) {
     _setConversationQueueAction("dropped", "conversation_inactive");
     _recordConversationTurnLifecycle(itemMeta, "dropped", "conversation_inactive", {
       sttStatus: "not_started",
-      chatStatus: "not_sent"
+      chatStatus: "not_sent",
+      durationMs: itemDurationMs,
+      blobSizeBytes: itemBlobSize,
+      chunksCount: itemChunksCount,
+      audioClass: "usable_audio",
+      dropStage: "before_queue"
     });
     renderFullAppVoiceDiagnostics();
     return Promise.resolve(false);
@@ -6021,7 +6137,12 @@ function _enqueueConversationAudioBlob(audioBlob, mimeType, chunksCount, recordi
     _setConversationQueueAction("dropped", "stop_requested");
     _recordConversationTurnLifecycle(itemMeta, "dropped", "stop_requested", {
       sttStatus: "not_started",
-      chatStatus: "not_sent"
+      chatStatus: "not_sent",
+      durationMs: itemDurationMs,
+      blobSizeBytes: itemBlobSize,
+      chunksCount: itemChunksCount,
+      audioClass: "usable_audio",
+      dropStage: "before_queue"
     });
     renderFullAppVoiceDiagnostics();
     return Promise.resolve(false);
@@ -6030,7 +6151,18 @@ function _enqueueConversationAudioBlob(audioBlob, mimeType, chunksCount, recordi
     _setConversationQueueAction("dropped", "queue_full");
     _recordConversationTurnLifecycle(itemMeta, "dropped", "queue_full", {
       sttStatus: "not_started",
-      chatStatus: "not_sent"
+      chatStatus: "not_sent",
+      durationMs: itemDurationMs,
+      blobSizeBytes: itemBlobSize,
+      chunksCount: itemChunksCount,
+      audioClass: "usable_audio",
+      dropStage: "at_queue",
+      finalizeAttemptCount: itemMeta.finalizeAttemptCount,
+      alreadyFinalized: itemMeta.alreadyFinalized,
+      stopFinalizeSource: itemMeta.stopFinalizeSource,
+      recorderStateAtFinalize: itemMeta.recorderStateAtFinalize,
+      captureStateAtFinalize: itemMeta.captureStateAtFinalize,
+      pcmUsableSampleCount: itemMeta.pcmUsableSampleCount
     });
     renderFullAppVoiceDiagnostics();
     return Promise.resolve(false);
@@ -6039,7 +6171,7 @@ function _enqueueConversationAudioBlob(audioBlob, mimeType, chunksCount, recordi
     turnId: itemMeta.turnId,
     audioBlob: audioBlob,
     mimeType: itemMeta.mimeType || mimeType || "audio/webm",
-    chunksCount: chunksCount || 0,
+    chunksCount: itemChunksCount,
     captureSource: itemMeta.captureSource,
     captureRequestedAt: itemMeta.captureRequestedAt,
     mediaStreamReadyAt: itemMeta.mediaStreamReadyAt,
@@ -6055,6 +6187,13 @@ function _enqueueConversationAudioBlob(audioBlob, mimeType, chunksCount, recordi
     preRollConfiguredMs: itemMeta.preRollConfiguredMs,
     preRollAppliedMs: itemMeta.preRollAppliedMs,
     sentenceStartPreserved: itemMeta.sentenceStartPreserved,
+    finalizeAttemptCount: itemMeta.finalizeAttemptCount,
+    alreadyFinalized: itemMeta.alreadyFinalized,
+    duplicateFinalizePrevented: itemMeta.duplicateFinalizePrevented,
+    stopFinalizeSource: itemMeta.stopFinalizeSource,
+    recorderStateAtFinalize: itemMeta.recorderStateAtFinalize,
+    captureStateAtFinalize: itemMeta.captureStateAtFinalize,
+    pcmUsableSampleCount: itemMeta.pcmUsableSampleCount,
     stopReason: stopReason || "queued"
   };
   fullAppVoiceConversationPendingQueue.push(item);
@@ -6064,7 +6203,15 @@ function _enqueueConversationAudioBlob(audioBlob, mimeType, chunksCount, recordi
     pendingCountAtEnqueue: fullAppVoiceConversationPendingQueue.length,
     durationMs: _durationMsFromConversationMeta(item),
     blobSizeBytes: audioBlob.size || 0,
-    chunksCount: chunksCount || 0,
+    chunksCount: itemChunksCount,
+    audioClass: "usable_audio",
+    dropStage: "none",
+    finalizeAttemptCount: itemMeta.finalizeAttemptCount,
+    alreadyFinalized: itemMeta.alreadyFinalized,
+    stopFinalizeSource: itemMeta.stopFinalizeSource,
+    recorderStateAtFinalize: itemMeta.recorderStateAtFinalize,
+    captureStateAtFinalize: itemMeta.captureStateAtFinalize,
+    pcmUsableSampleCount: itemMeta.pcmUsableSampleCount,
     sttStatus: "queued",
     chatStatus: "pending"
   });
@@ -6752,6 +6899,9 @@ function renderFullAppVoiceDiagnostics() {
       " durationMs=" + (_t.durationMs || 0) +
       " bytes=" + (_t.blobSizeBytes || 0) +
       " preRollMs=" + (_t.preRollAppliedMs || 0) +
+      " audio=" + (_t.audioClass || "unknown") +
+      " dropStage=" + (_t.dropStage || "none") +
+      " finalizeAttempts=" + (_t.finalizeAttemptCount || 0) +
       " stopMode=" + (_t.stopMode || "none")
     );
   }
