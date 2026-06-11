@@ -14293,6 +14293,8 @@ function testTask246RendererHasModelQualityFields() {
   assert.ok(src.includes('sttRequestedModel: ""'), "TASK-246 fullAppVoiceDiagnostics must have sttRequestedModel field");
   assert.ok(src.includes('sttResolvedModel: ""'),  "TASK-246 fullAppVoiceDiagnostics must have sttResolvedModel field");
   assert.ok(src.includes('sttModelSource: ""'),    "TASK-246 fullAppVoiceDiagnostics must have sttModelSource field");
+  assert.ok(src.includes('sttModelFallbackReason: ""'), "TASK-STT-003 fullAppVoiceDiagnostics must have sttModelFallbackReason field");
+  assert.ok(src.includes('sttModelEnv: ""'),       "TASK-STT-003 fullAppVoiceDiagnostics must have sttModelEnv field");
   assert.ok(src.includes('sttModelLoadStatus: ""'),"TASK-246 fullAppVoiceDiagnostics must have sttModelLoadStatus field");
   assert.ok(src.includes('sttModelLoadError: ""'), "TASK-246 fullAppVoiceDiagnostics must have sttModelLoadError field");
   console.log("  testTask246RendererHasModelQualityFields PASS");
@@ -14306,6 +14308,8 @@ function testTask246DiagnosticsRenderIncludesModelFields() {
   assert.ok(renderFn.includes("sttRequestedModel"),  "TASK-246 render must include sttRequestedModel");
   assert.ok(renderFn.includes("sttResolvedModel"),   "TASK-246 render must include sttResolvedModel");
   assert.ok(renderFn.includes("sttModelSource"),     "TASK-246 render must include sttModelSource");
+  assert.ok(renderFn.includes("sttModelFallbackReason"), "TASK-STT-003 render must include sttModelFallbackReason");
+  assert.ok(renderFn.includes("sttModelEnv"),        "TASK-STT-003 render must include sttModelEnv");
   assert.ok(renderFn.includes("sttModelLoadStatus"), "TASK-246 render must include sttModelLoadStatus");
   assert.ok(renderFn.includes("sttModelLoadError"),  "TASK-246 render must include sttModelLoadError");
   assert.ok(!renderFn.includes("innerHTML"), "TASK-246 render must not use innerHTML");
@@ -14319,11 +14323,15 @@ async function testTask246DiagnosticsDefaultsNewFields() {
   assert.ok("sttRequestedModel"  in d, "TASK-246 diagnostics must have sttRequestedModel");
   assert.ok("sttResolvedModel"   in d, "TASK-246 diagnostics must have sttResolvedModel");
   assert.ok("sttModelSource"     in d, "TASK-246 diagnostics must have sttModelSource");
+  assert.ok("sttModelFallbackReason" in d, "TASK-STT-003 diagnostics must have sttModelFallbackReason");
+  assert.ok("sttModelEnv"        in d, "TASK-STT-003 diagnostics must have sttModelEnv");
   assert.ok("sttModelLoadStatus" in d, "TASK-246 diagnostics must have sttModelLoadStatus");
   assert.ok("sttModelLoadError"  in d, "TASK-246 diagnostics must have sttModelLoadError");
   assert.strictEqual(d.sttRequestedModel,  "", "TASK-246 sttRequestedModel must default to empty string");
   assert.strictEqual(d.sttResolvedModel,   "", "TASK-246 sttResolvedModel must default to empty string");
   assert.strictEqual(d.sttModelSource,     "", "TASK-246 sttModelSource must default to empty string");
+  assert.strictEqual(d.sttModelFallbackReason, "", "TASK-STT-003 sttModelFallbackReason must default to empty string");
+  assert.strictEqual(d.sttModelEnv,        "", "TASK-STT-003 sttModelEnv must default to empty string");
   assert.strictEqual(d.sttModelLoadStatus, "", "TASK-246 sttModelLoadStatus must default to empty string");
   assert.strictEqual(d.sttModelLoadError,  "", "TASK-246 sttModelLoadError must default to empty string");
   console.log("  testTask246DiagnosticsDefaultsNewFields PASS");
@@ -14334,12 +14342,16 @@ async function testTask246ResetClearsModelFields() {
   sandbox.fullAppVoiceDiagnostics.sttRequestedModel  = "small";
   sandbox.fullAppVoiceDiagnostics.sttResolvedModel   = "small";
   sandbox.fullAppVoiceDiagnostics.sttModelSource     = "env";
+  sandbox.fullAppVoiceDiagnostics.sttModelFallbackReason = "none";
+  sandbox.fullAppVoiceDiagnostics.sttModelEnv        = "DRAGON_STT_MODEL";
   sandbox.fullAppVoiceDiagnostics.sttModelLoadStatus = "loaded";
   sandbox.fullAppVoiceDiagnostics.sttModelLoadError  = "none";
   sandbox.resetFullAppVoiceDiagnosticsForRecording("manual_mic");
   assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttRequestedModel,  "", "TASK-246 reset must clear sttRequestedModel");
   assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttResolvedModel,   "", "TASK-246 reset must clear sttResolvedModel");
   assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttModelSource,     "", "TASK-246 reset must clear sttModelSource");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttModelFallbackReason, "", "TASK-STT-003 reset must clear sttModelFallbackReason");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttModelEnv,        "", "TASK-STT-003 reset must clear sttModelEnv");
   assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttModelLoadStatus, "", "TASK-246 reset must clear sttModelLoadStatus");
   assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttModelLoadError,  "", "TASK-246 reset must clear sttModelLoadError");
   console.log("  testTask246ResetClearsModelFields PASS");
@@ -14351,12 +14363,16 @@ async function testTask246UpdateDiagnosticsHandlesModelFields() {
     sttRequestedModel:  "base",
     sttResolvedModel:   "base",
     sttModelSource:     "env",
+    sttModelFallbackReason: "none",
+    sttModelEnv:        "DRAGON_STT_MODEL",
     sttModelLoadStatus: "loaded",
     sttModelLoadError:  "none"
   });
   assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttRequestedModel,  "base",   "TASK-246 update must patch sttRequestedModel");
   assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttResolvedModel,   "base",   "TASK-246 update must patch sttResolvedModel");
   assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttModelSource,     "env",    "TASK-246 update must patch sttModelSource");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttModelFallbackReason, "none", "TASK-STT-003 update must patch sttModelFallbackReason");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttModelEnv,        "DRAGON_STT_MODEL", "TASK-STT-003 update must patch sttModelEnv");
   assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttModelLoadStatus, "loaded", "TASK-246 update must patch sttModelLoadStatus");
   assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttModelLoadError,  "none",   "TASK-246 update must patch sttModelLoadError");
   console.log("  testTask246UpdateDiagnosticsHandlesModelFields PASS");
@@ -14370,6 +14386,8 @@ function testTask246TranscribeFnExtractsModelMetadata() {
   assert.ok(fnBody.includes("sttRequestedModel"),  "TASK-246 transcribeFn must update sttRequestedModel");
   assert.ok(fnBody.includes("sttResolvedModel"),   "TASK-246 transcribeFn must update sttResolvedModel");
   assert.ok(fnBody.includes("sttModelSource"),     "TASK-246 transcribeFn must update sttModelSource");
+  assert.ok(fnBody.includes("sttModelFallbackReason"), "TASK-STT-003 transcribeFn must update sttModelFallbackReason");
+  assert.ok(fnBody.includes("sttModelEnv"),        "TASK-STT-003 transcribeFn must update sttModelEnv");
   assert.ok(fnBody.includes("sttModelLoadStatus"), "TASK-246 transcribeFn must update sttModelLoadStatus");
   assert.ok(fnBody.includes("sttModelLoadError"),  "TASK-246 transcribeFn must update sttModelLoadError");
   assert.ok(fnBody.includes('"unknown"'), "TASK-246 transcribeFn must have 'unknown' fallback for missing model fields");

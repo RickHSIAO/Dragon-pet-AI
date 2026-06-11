@@ -28733,6 +28733,142 @@ TASK-STT-002 does not change the default from `tiny`; it only informs whether
 
 ---
 
+## TASK-STT-003 | Runtime STT Model Override / base-small Candidate Smoke
+
+Status: IMPLEMENTED - AUTOMATED SMOKE PASS / NEEDS WINDOWS RUNTIME CANDIDATE SMOKE (2026-06-11)
+
+### Goal
+
+Allow safe local runtime smoke testing of faster-whisper `base` and `small`
+from Manual Mic and Conversation Mode without committing a default model switch.
+
+TASK-STT-002 safe benchmark observations:
+
+- `tiny` is not acceptable for Chinese interaction.
+- `base` is the first runtime candidate by current CER/latency balance.
+- `small` is a quality candidate for names and mixed Chinese/English technical
+  terms, but is slower and less consistent across the current samples.
+- `number-date` CER over-penalizes Arabic numerals vs Chinese numerals and
+  simplified/traditional differences, so semantic review is still required.
+
+### Override Mechanism
+
+Runtime default remains `tiny`.
+
+Supported env vars:
+
+- `DRAGON_STT_MODEL`: TASK-STT-003 short override; preferred for candidate smoke.
+- `DRAGON_PET_STT_MODEL`: legacy TASK-246 override; still supported.
+
+Resolution order:
+
+1. `DRAGON_STT_MODEL`
+2. `DRAGON_PET_STT_MODEL`
+3. default `tiny`
+
+Allowed values:
+
+- `tiny`
+- `base`
+- `small`
+
+Invalid values fall back to `tiny` with `modelSource=fallback` and
+`modelFallbackReason=invalid_model`. The backend resolves the model at process
+start, so restart the backend after changing either env var.
+
+### Diagnostics
+
+Manual Mic and Conversation Mode diagnostics now surface:
+
+- requested model
+- resolved model
+- model source: `default`, `env`, or `fallback`
+- model env: `DRAGON_STT_MODEL`, `DRAGON_PET_STT_MODEL`, or `none`
+- model fallback reason
+- model load status
+- model load error
+- provider source/load state/fallback
+- raw/corrected/punctuated/final transcript previews
+
+The `/stt/transcribe` response remains backward compatible. TASK-STT-003 adds
+diagnostic fields but does not remove or rename existing fields.
+
+### Manual Mic Candidate Commands
+
+Run Manual Mic with `base`:
+
+```powershell
+$env:DRAGON_STT_MODEL="base"
+.\scripts\dev-start-backend.ps1
+```
+
+Run Manual Mic with `small`:
+
+```powershell
+$env:DRAGON_STT_MODEL="small"
+.\scripts\dev-start-backend.ps1
+```
+
+Reset to committed default:
+
+```powershell
+Remove-Item Env:\DRAGON_STT_MODEL -ErrorAction SilentlyContinue
+Remove-Item Env:\DRAGON_PET_STT_MODEL -ErrorAction SilentlyContinue
+.\scripts\dev-start-backend.ps1
+```
+
+### Boundaries
+
+- No committed default model switch.
+- No Conversation Mode queue behavior change.
+- No TASK-AUDIO-001 pre-roll behavior change.
+- No TASK-CONV-001 graceful drain behavior change.
+- No Owner Voice Gate behavior change.
+- No `/stt/transcribe` request schema change.
+- No `/chat` schema change.
+- No aggressive transcript rewrite.
+- No real audio, private manifest, HuggingFace cache, local settings, temp
+  audio, or Owner Voice settings/embeddings committed.
+
+### Automated Tests
+
+Added/adjusted tests cover:
+
+- default remains `tiny`
+- `DRAGON_STT_MODEL=base`
+- `DRAGON_STT_MODEL=small`
+- legacy `DRAGON_PET_STT_MODEL=base|small`
+- invalid override falls back safely
+- requested/resolved/source/env/fallback diagnostics
+- `/stt/transcribe` compatibility
+- Manual Mic and Conversation Mode still use the final transcript path through
+  existing renderer smoke coverage
+
+### Validation
+
+- `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_routes.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-stt003`
+- `backend\.venv\Scripts\python.exe scripts\stt_provider_smoke.py`
+- `backend\.venv\Scripts\python.exe scripts\stt_quality_probe.py --help`
+- `node apps/desktop/scripts/renderer-chat-smoke.js`
+- `node apps/desktop/scripts/pet-window-smoke.js`
+- `node apps/desktop/scripts/pet-renderer-smoke.js`
+- `git diff --check`
+- `git status --short`
+
+### Remaining Runtime Smoke
+
+Windows runtime smoke still needs actual local, non-private audio:
+
+- Manual Mic with `DRAGON_STT_MODEL=base`.
+- Conversation Mode with `DRAGON_STT_MODEL=base`.
+- Targeted `small` checks for `克莉絲蒂娜`, Dragon Pet AI, Claude Code, CodeX,
+  and mixed Chinese/English technical phrases.
+- Confirm diagnostics show source/env/fallback correctly.
+- Confirm TASK-AUDIO-001 pre-roll and TASK-CONV-001 graceful drain still behave.
+- Confirm Owner Voice dry-run remains non-blocking.
+
+---
+
 ## TASK-CONV-001 | Conversation Mode Continuous Capture / Pending Utterance Queue
 
 Status: IMPLEMENTED - AUTOMATED RENDERER SMOKE PASS / NEEDS WINDOWS RUNTIME SMOKE (2026-06-05)

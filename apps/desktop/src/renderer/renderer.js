@@ -314,6 +314,8 @@ var fullAppVoiceDiagnostics = {
   sttRequestedModel: "",
   sttResolvedModel: "",
   sttModelSource: "",
+  sttModelFallbackReason: "",
+  sttModelEnv: "",
   sttModelLoadStatus: "",
   sttModelLoadError: "",
   // TASK-247: STT transcript correction diagnostics — populated from /stt/transcribe response metadata
@@ -4705,6 +4707,8 @@ async function transcribeFullAppAudioBlob(blob) {
     fullAppVoiceDiagnostics.sttRequestedModel      = result.requestedModel    ? String(result.requestedModel)    : "unknown";
     fullAppVoiceDiagnostics.sttResolvedModel       = result.resolvedModel     ? String(result.resolvedModel)     : "unknown";
     fullAppVoiceDiagnostics.sttModelSource         = result.modelSource       ? String(result.modelSource)       : "unknown";
+    fullAppVoiceDiagnostics.sttModelFallbackReason = result.modelFallbackReason ? String(result.modelFallbackReason) : "none";
+    fullAppVoiceDiagnostics.sttModelEnv            = result.modelEnv          ? String(result.modelEnv)          : "none";
     fullAppVoiceDiagnostics.sttModelLoadStatus     = result.modelLoadStatus   ? String(result.modelLoadStatus)   : "unknown";
     fullAppVoiceDiagnostics.sttModelLoadError      = result.modelLoadError    ? String(result.modelLoadError)    : "none";
     // TASK-247: correction diagnostics — raw/corrected preview, max 30 chars, textContent only
@@ -6380,6 +6384,7 @@ function renderFullAppVoiceDiagnostics() {
     "偵測語言: " + (d.detectedLanguage || "none"),
     "請求模型: " + (d.sttRequestedModel || "unknown") + "  解析模型: " + (d.sttResolvedModel || "unknown"),
     "模型來源: " + (d.sttModelSource || "unknown") + "  載入狀態: " + (d.sttModelLoadStatus || "unknown"),
+    "模型 env: " + (d.sttModelEnv || "none") + "  fallback: " + (d.sttModelFallbackReason || "none"),
     "模型載入錯誤: " + (d.sttModelLoadError || "none"),
     "原始 Transcript: " + (d.sttRawTranscriptPreview || "—"),
     "修正 Transcript: " + (d.sttCorrectedTranscriptPreview || "—"),
@@ -6517,6 +6522,8 @@ function resetFullAppVoiceDiagnosticsForRecording(mode, recordingMeta) {
   fullAppVoiceDiagnostics.sttRequestedModel  = "";
   fullAppVoiceDiagnostics.sttResolvedModel   = "";
   fullAppVoiceDiagnostics.sttModelSource     = "";
+  fullAppVoiceDiagnostics.sttModelFallbackReason = "";
+  fullAppVoiceDiagnostics.sttModelEnv        = "";
   fullAppVoiceDiagnostics.sttModelLoadStatus = "";
   fullAppVoiceDiagnostics.sttModelLoadError  = "";
   // TASK-247: reset correction diagnostics — repopulated after each STT call

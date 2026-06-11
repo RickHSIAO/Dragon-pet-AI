@@ -662,6 +662,22 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   schema change, new IPC, raw audio persistence, or aggressive transcript
   rewrite was added.
 
+- TASK-STT-003 IMPLEMENTED - RUNTIME STT MODEL OVERRIDE / BASE-SMALL CANDIDATE SMOKE (2026-06-11):
+  Adds `DRAGON_STT_MODEL` as the preferred short runtime override for Manual
+  Mic and Conversation Mode candidate smoke while keeping legacy
+  `DRAGON_PET_STT_MODEL` support and preserving committed default `tiny`.
+  Resolution order is `DRAGON_STT_MODEL` -> `DRAGON_PET_STT_MODEL` -> default
+  `tiny`; allowed values are `tiny`, `base`, and `small`; invalid values fall
+  back safely to `tiny`. Diagnostics now include requested/resolved model,
+  model source, model env, fallback reason, load status/error, provider
+  source/load/fallback, and final transcript path. Current candidate status:
+  `base` is the first runtime candidate by TASK-STT-002 CER/latency balance;
+  `small` remains a slower quality candidate for names and mixed technical
+  terms. No committed default model switch, Conversation Mode queue change,
+  TASK-AUDIO-001 pre-roll change, TASK-CONV-001 drain change, Owner Voice Gate
+  behavior change, schema break, IPC change, raw audio persistence, or
+  aggressive rewrite was added.
+
 - TASK-CONV-001 IMPLEMENTED - CONVERSATION MODE CONTINUOUS CAPTURE / PENDING UTTERANCE QUEUE (2026-06-05):
   Conversation Mode now separates capture state (`off/listening/recording`) from
   processing state (`idle/stt_processing/chat_processing`) and uses a bounded

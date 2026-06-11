@@ -40,10 +40,13 @@ _whisper_model: Any = None
 # TASK-245: STT provider name surfaced in diagnostics
 _STT_PROVIDER = "faster-whisper-local"
 
-# TASK-246: configurable model via DRAGON_PET_STT_MODEL env var — safe fallback to "tiny"
+# TASK-246/003: configurable model env vars — safe fallback to "tiny"
 _STT_ALLOWED_MODELS = frozenset({"tiny", "base", "small"})
 _STT_DEFAULT_MODEL = "tiny"
 _STT_MODEL_ENV = "DRAGON_PET_STT_MODEL"
+# TASK-STT-003: short runtime override for base/small candidate smokes.
+# Kept separate from the older TASK-246 name so dev smoke commands stay concise.
+_STT_MODEL_OVERRIDE_ENV = "DRAGON_STT_MODEL"
 
 # TASK-249: configurable provider via DRAGON_PET_STT_PROVIDER env var
 _STT_PROVIDER_ENV = "DRAGON_PET_STT_PROVIDER"
@@ -81,7 +84,7 @@ def _resolve_funasr_python() -> str:
 
 def _resolve_stt_model_name() -> dict:
     """
-    Resolve the STT model name from DRAGON_PET_STT_MODEL env var.
+    Resolve the STT model name from DRAGON_STT_MODEL / DRAGON_PET_STT_MODEL.
 
     Resolved once at process start — restart the app/backend to pick up env changes.
     Falls back to 'tiny' on invalid or missing value; never crashes.
@@ -91,14 +94,24 @@ def _resolve_stt_model_name() -> dict:
         resolved_model   -- the model name that will actually be loaded
         model_source     -- "env" | "default" | "fallback"
         fallback_reason  -- "invalid_model" | "none"
+        model_env        -- env var that supplied the request, or ""
     """
-    requested = os.environ.get(_STT_MODEL_ENV, "").strip()
+    model_env = ""
+    requested = os.environ.get(_STT_MODEL_OVERRIDE_ENV, "").strip()
+    if requested:
+        model_env = _STT_MODEL_OVERRIDE_ENV
+    else:
+        requested = os.environ.get(_STT_MODEL_ENV, "").strip()
+        if requested:
+            model_env = _STT_MODEL_ENV
+
     if not requested:
         return {
             "requested_model": _STT_DEFAULT_MODEL,
             "resolved_model": _STT_DEFAULT_MODEL,
             "model_source": "default",
             "fallback_reason": "none",
+            "model_env": "",
         }
     if requested in _STT_ALLOWED_MODELS:
         return {
@@ -106,10 +119,11 @@ def _resolve_stt_model_name() -> dict:
             "resolved_model": requested,
             "model_source": "env",
             "fallback_reason": "none",
+            "model_env": model_env,
         }
     logger.warning(
-        "TASK-246: invalid %s=%r, falling back to %r. Allowed: %s",
-        _STT_MODEL_ENV, requested, _STT_DEFAULT_MODEL,
+        "TASK-STT-003: invalid %s=%r, falling back to %r. Allowed: %s",
+        model_env or _STT_MODEL_OVERRIDE_ENV, requested, _STT_DEFAULT_MODEL,
         ", ".join(sorted(_STT_ALLOWED_MODELS)),
     )
     return {
@@ -117,6 +131,7 @@ def _resolve_stt_model_name() -> dict:
         "resolved_model": _STT_DEFAULT_MODEL,
         "model_source": "fallback",
         "fallback_reason": "invalid_model",
+        "model_env": model_env,
     }
 
 
@@ -609,6 +624,8 @@ def _get_model_metadata() -> dict:
         "requestedModel": _STT_MODEL_RESOLUTION["requested_model"],
         "resolvedModel": _STT_MODEL_RESOLUTION["resolved_model"],
         "modelSource": _STT_MODEL_RESOLUTION["model_source"],
+        "modelFallbackReason": _STT_MODEL_RESOLUTION["fallback_reason"],
+        "modelEnv": _STT_MODEL_RESOLUTION["model_env"],
         "modelLoadStatus": _STT_MODEL_LOAD_STATUS,
         "modelLoadError": _STT_MODEL_LOAD_ERROR,
     }
@@ -1181,6 +1198,8 @@ def transcribe_audio_bytes(
         "requestedModel"  : str
         "resolvedModel"   : str
         "modelSource"     : str   -- "env" | "default" | "fallback"
+        "modelFallbackReason": str -- "invalid_model" | "none"
+        "modelEnv"        : str   -- "DRAGON_STT_MODEL" | "DRAGON_PET_STT_MODEL" | ""
         "modelLoadStatus" : str   -- "loaded" | "unavailable" | "error" | "not_loaded"
         "modelLoadError"  : str | None
 

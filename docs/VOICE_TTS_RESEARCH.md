@@ -472,6 +472,19 @@ Suggested research and implementation tasks:
   overrides can set `DRAGON_PET_STT_MODEL=small` before backend start, but this
   task does not change the default.
 
+- **TASK-STT-003 Runtime STT Model Override / base-small Candidate Smoke. IMPLEMENTED (2026-06-11):**
+  Adds `DRAGON_STT_MODEL` as the preferred short runtime override for Manual
+  Mic and Conversation Mode candidate smoke. Legacy `DRAGON_PET_STT_MODEL`
+  still works; `DRAGON_STT_MODEL` has priority when both are set. Allowed
+  runtime values are `tiny`, `base`, and `small`; invalid values fall back to
+  `tiny` and surface `modelFallbackReason=invalid_model`. Diagnostics include
+  requested/resolved model, model source, model env, model fallback reason,
+  load status/error, provider load/fallback, and raw/corrected/punctuated/final
+  transcript previews. TASK-STT-002 samples make `base` the first runtime
+  candidate and keep `small` as a slower quality candidate, especially for
+  names and mixed Chinese/English technical terms. The committed default is not
+  changed.
+
 - TASK-STT-016 LLM-based semantic correction. **(PLANNED; future):** Optional
   follow-up to apply a local LLM pass over the corrected transcript for further semantic
   accuracy. Must be guarded by explicit user opt-in and must not replace the deterministic

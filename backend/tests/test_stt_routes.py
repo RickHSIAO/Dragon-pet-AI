@@ -1007,6 +1007,12 @@ def test_stt_service_model_env_constant_exists():
     )
 
 
+def test_task_stt_003_model_override_env_constant_exists():
+    """TASK-STT-003: stt_service must expose DRAGON_STT_MODEL as the short override."""
+    assert hasattr(stt_service, "_STT_MODEL_OVERRIDE_ENV")
+    assert stt_service._STT_MODEL_OVERRIDE_ENV == "DRAGON_STT_MODEL"
+
+
 def test_stt_service_model_resolution_constant_exists():
     """TASK-246: stt_service must expose _STT_MODEL_RESOLUTION dict at module level."""
     assert hasattr(stt_service, "_STT_MODEL_RESOLUTION"), (
@@ -1017,10 +1023,12 @@ def test_stt_service_model_resolution_constant_exists():
     assert "resolved_model"  in res
     assert "model_source"    in res
     assert "fallback_reason" in res
+    assert "model_env"       in res
 
 
 def test_stt_service_model_resolver_default(monkeypatch):
     """TASK-246: _resolve_stt_model_name without env var defaults to 'tiny'."""
+    monkeypatch.delenv("DRAGON_STT_MODEL", raising=False)
     monkeypatch.delenv("DRAGON_PET_STT_MODEL", raising=False)
     result = stt_service._resolve_stt_model_name()
     assert result["resolved_model"] == "tiny", (
@@ -1028,10 +1036,12 @@ def test_stt_service_model_resolver_default(monkeypatch):
     )
     assert result["model_source"] == "default"
     assert result["fallback_reason"] == "none"
+    assert result["model_env"] == ""
 
 
 def test_stt_service_model_resolver_env_small(monkeypatch):
     """TASK-246: DRAGON_PET_STT_MODEL=small resolves to 'small'."""
+    monkeypatch.delenv("DRAGON_STT_MODEL", raising=False)
     monkeypatch.setenv("DRAGON_PET_STT_MODEL", "small")
     result = stt_service._resolve_stt_model_name()
     assert result["resolved_model"] == "small", (
@@ -1039,10 +1049,12 @@ def test_stt_service_model_resolver_env_small(monkeypatch):
     )
     assert result["model_source"] == "env"
     assert result["fallback_reason"] == "none"
+    assert result["model_env"] == "DRAGON_PET_STT_MODEL"
 
 
 def test_stt_service_model_resolver_env_base(monkeypatch):
     """TASK-246: DRAGON_PET_STT_MODEL=base resolves to 'base'."""
+    monkeypatch.delenv("DRAGON_STT_MODEL", raising=False)
     monkeypatch.setenv("DRAGON_PET_STT_MODEL", "base")
     result = stt_service._resolve_stt_model_name()
     assert result["resolved_model"] == "base", (
@@ -1050,10 +1062,36 @@ def test_stt_service_model_resolver_env_base(monkeypatch):
     )
     assert result["model_source"] == "env"
     assert result["fallback_reason"] == "none"
+    assert result["model_env"] == "DRAGON_PET_STT_MODEL"
+
+
+def test_task_stt_003_model_override_env_base(monkeypatch):
+    """TASK-STT-003: DRAGON_STT_MODEL=base resolves as first runtime candidate."""
+    monkeypatch.setenv("DRAGON_STT_MODEL", "base")
+    monkeypatch.setenv("DRAGON_PET_STT_MODEL", "small")
+    result = stt_service._resolve_stt_model_name()
+    assert result["requested_model"] == "base"
+    assert result["resolved_model"] == "base"
+    assert result["model_source"] == "env"
+    assert result["fallback_reason"] == "none"
+    assert result["model_env"] == "DRAGON_STT_MODEL"
+
+
+def test_task_stt_003_model_override_env_small(monkeypatch):
+    """TASK-STT-003: DRAGON_STT_MODEL=small resolves for quality candidate smoke."""
+    monkeypatch.setenv("DRAGON_STT_MODEL", "small")
+    monkeypatch.delenv("DRAGON_PET_STT_MODEL", raising=False)
+    result = stt_service._resolve_stt_model_name()
+    assert result["requested_model"] == "small"
+    assert result["resolved_model"] == "small"
+    assert result["model_source"] == "env"
+    assert result["fallback_reason"] == "none"
+    assert result["model_env"] == "DRAGON_STT_MODEL"
 
 
 def test_stt_service_model_resolver_invalid_fallback(monkeypatch):
     """TASK-246: invalid DRAGON_PET_STT_MODEL falls back to 'tiny' safely — no crash."""
+    monkeypatch.delenv("DRAGON_STT_MODEL", raising=False)
     monkeypatch.setenv("DRAGON_PET_STT_MODEL", "large-v3")
     result = stt_service._resolve_stt_model_name()
     assert result["resolved_model"] == "tiny", (
@@ -1061,6 +1099,19 @@ def test_stt_service_model_resolver_invalid_fallback(monkeypatch):
     )
     assert result["model_source"] == "fallback"
     assert result["fallback_reason"] == "invalid_model"
+    assert result["model_env"] == "DRAGON_PET_STT_MODEL"
+
+
+def test_task_stt_003_invalid_override_fallback(monkeypatch):
+    """TASK-STT-003: invalid DRAGON_STT_MODEL falls back safely and reports source."""
+    monkeypatch.setenv("DRAGON_STT_MODEL", "large-v3")
+    monkeypatch.setenv("DRAGON_PET_STT_MODEL", "base")
+    result = stt_service._resolve_stt_model_name()
+    assert result["requested_model"] == "large-v3"
+    assert result["resolved_model"] == "tiny"
+    assert result["model_source"] == "fallback"
+    assert result["fallback_reason"] == "invalid_model"
+    assert result["model_env"] == "DRAGON_STT_MODEL"
 
 
 def test_stt_service_ok_includes_model_quality_metadata(monkeypatch):
@@ -1081,6 +1132,8 @@ def test_stt_service_ok_includes_model_quality_metadata(monkeypatch):
     assert "requestedModel"  in result, "ok result must include 'requestedModel'"
     assert "resolvedModel"   in result, "ok result must include 'resolvedModel'"
     assert "modelSource"     in result, "ok result must include 'modelSource'"
+    assert "modelFallbackReason" in result, "ok result must include 'modelFallbackReason'"
+    assert "modelEnv"        in result, "ok result must include 'modelEnv'"
     assert "modelLoadStatus" in result, "ok result must include 'modelLoadStatus'"
 
 
@@ -1092,6 +1145,8 @@ def test_stt_service_unavailable_has_model_metadata(monkeypatch):
     assert result["status"] == "unavailable"
     assert "requestedModel"  in result, "unavailable result must include 'requestedModel'"
     assert "resolvedModel"   in result, "unavailable result must include 'resolvedModel'"
+    assert "modelFallbackReason" in result, "unavailable result must include 'modelFallbackReason'"
+    assert "modelEnv"        in result, "unavailable result must include 'modelEnv'"
     assert "modelLoadStatus" in result, "unavailable result must include 'modelLoadStatus'"
     assert result["modelLoadStatus"] == "unavailable"
 
@@ -1113,6 +1168,8 @@ def test_stt_route_response_includes_model_quality_fields():
     assert "requestedModel"  in data, "Response must include 'requestedModel'"
     assert "resolvedModel"   in data, "Response must include 'resolvedModel'"
     assert "modelSource"     in data, "Response must include 'modelSource'"
+    assert "modelFallbackReason" in data, "Response must include 'modelFallbackReason'"
+    assert "modelEnv"        in data, "Response must include 'modelEnv'"
     assert "modelLoadStatus" in data, "Response must include 'modelLoadStatus'"
 
 
