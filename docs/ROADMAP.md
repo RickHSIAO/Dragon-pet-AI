@@ -704,7 +704,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   candidates only. No `/chat` schema change, Owner Voice hard gate, raw audio
   persistence, private sample commit, or aggressive rewrite was added.
 
-- TASK-PERSONA-001 IMPLEMENTED - PROMPT/STATIC SMOKE PASS / NEEDS WINDOWS CHAT TONE SMOKE (2026-06-11):
+- TASK-PERSONA-001 IMPLEMENTED - SECOND PROMPT/STATIC SMOKE PASS / NEEDS WINDOWS CHAT TONE RE-SMOKE (2026-06-11):
   Tunes Christina's runtime persona prompt so the character remains proud,
   tsundere, protective, and witty without sliding into repeated direct
   humiliation or hostile name-calling. The prompt now avoids `下賤的人類` as a
@@ -714,7 +714,12 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   verify the boundary guidance without requiring exact LLM output. No `/chat`
   response schema change, mood schema change, STT behavior change, Owner Voice
   behavior change, Ollama provider behavior change, renderer UI change, or
-  runtime STT default change. Windows chat tone smoke remains required.
+  runtime STT default change. Windows partial tone smoke confirmed the harsh
+  phrase boundary worked, then found overuse of `汝這傢伙` and too-adversarial
+  debug replies. Second-pass prompt tuning now makes `汝這傢伙` rare and
+  non-consecutive, requires direct observation / evidence needed / next check
+  for technical requests, encourages PASS / FAIL / NEEDS EVIDENCE framing, and
+  softens tired/stress contexts. Windows chat tone re-smoke remains required.
 
 - TASK-CONV-001 IMPLEMENTED - CONVERSATION MODE CONTINUOUS CAPTURE / PENDING UTTERANCE QUEUE (2026-06-05):
   Conversation Mode now separates capture state (`off/listening/recording`) from

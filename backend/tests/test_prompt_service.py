@@ -100,6 +100,49 @@ def test_task_persona_001_prompt_has_bad_good_examples_without_brittle_output():
     assert "先確認輸入，再看第一個偏離預期的位置" in prompt
 
 
+def test_task_persona_001_second_pass_discourages_repeated_address_phrase():
+    prompt = build_character_prompt("casual")
+
+    assert "「汝這傢伙」只能少量" in prompt
+    assert "非連續使用" in prompt
+    assert "連續回覆使用同一個稱呼模板" in prompt
+    assert "優先使用「汝」" in prompt
+    assert "完全不加稱呼" in prompt
+
+
+def test_task_persona_001_second_pass_debug_requires_direct_answer_evidence_next_check():
+    prompt = build_character_prompt("debug")
+
+    assert "先直接回答眼前問題" in prompt
+    assert "需要的證據" in prompt
+    assert "下一個檢查點" in prompt
+    assert "PASS / FAIL / NEEDS EVIDENCE" in prompt
+    assert "不要只反問" in prompt
+    assert "turn history" in prompt
+    assert "diagnostics" in prompt
+
+
+def test_task_persona_001_second_pass_debug_examples_are_cooperative_not_dismissive():
+    prompt = build_character_prompt("debug")
+
+    assert "模型是否照設定跑" in prompt
+    assert "Transcript 是否合理" in prompt
+    assert "no-speech guard 有沒有誤判" in prompt
+    assert "history 裡的 #1/#2/#3 turn 是否連續" in prompt
+    assert "validation、runtime smoke、git status" in prompt
+    assert "錄音、STT、queue，還是 chat" in prompt
+
+
+def test_task_persona_001_second_pass_emotional_context_is_protective():
+    prompt = build_character_prompt("support")
+
+    assert "使用者說累" in prompt
+    assert "不要叫對方懶、弱、沒用" in prompt
+    assert "責備式開場" in prompt
+    assert "吾會在這裡陪汝一會兒" in prompt
+    assert "今天不用一次解決全部" in prompt
+
+
 def test_ollama_payload_system_message_contains_persona(monkeypatch):
     from app.llm.ollama_provider import OllamaLocalProvider
     from app.llm.real_provider import ProviderHTTPResponse

@@ -29092,7 +29092,7 @@ model switch was made.
 
 ## TASK-PERSONA-001 | Christina Tsundere Tone Boundaries
 
-Status: IMPLEMENTED - PROMPT/STATIC SMOKE PASS / NEEDS WINDOWS CHAT TONE SMOKE (2026-06-11)
+Status: IMPLEMENTED - SECOND PROMPT/STATIC SMOKE PASS / NEEDS WINDOWS CHAT TONE RE-SMOKE (2026-06-11)
 
 ### Goal
 
@@ -29122,6 +29122,26 @@ abusive character and not neutral customer-service assistant.
 - Updated `docs/CHRISTINA_PERSONA_CONTEXT_PACK.md` with the same tone-boundary
   design notes.
 
+### Second-Pass Runtime Smoke Tuning
+
+Windows runtime tone smoke partially passed: `下賤的人類` no longer appeared.
+However, Christina overused `汝這傢伙` and still sounded too adversarial or
+dismissive in technical/debug contexts.
+
+Second prompt pass:
+
+- `汝這傢伙` is now explicitly rare, low-risk, and non-consecutive.
+- Repeated address templates are discouraged; prefer `汝`, `人類`, `哼`, or no
+  address phrase.
+- Technical/debug replies must start with a direct observation, then state the
+  evidence needed, then give the next check.
+- PASS / FAIL / NEEDS EVIDENCE style is encouraged when appropriate.
+- Conversation Mode / voice-test wording should distinguish "this message was
+  received" from "no utterance was missed", which needs turn history or
+  diagnostics.
+- Tired/stressed user context gets protective wording with less teasing and no
+  lazy/weak framing.
+
 ### Static Smoke Coverage
 
 `backend/tests/test_prompt_service.py` now verifies:
@@ -29132,6 +29152,10 @@ abusive character and not neutral customer-service assistant.
 - prompt no longer includes `下賤的人類`
 - debug prompt explicitly requires cooperation, reproduction steps, and error
   messages
+- second-pass tests verify no consecutive repeated `汝這傢伙` guidance
+- second-pass tests verify direct-answer / evidence / next-check debug guidance
+- second-pass tests verify PASS / FAIL / NEEDS EVIDENCE style guidance
+- second-pass tests verify tired/stressed protective-tone guidance
 - bad/good examples are present without asserting exact LLM output
 
 ### Boundaries
@@ -29147,8 +29171,10 @@ abusive character and not neutral customer-service assistant.
 
 ### Validation
 
-- targeted prompt/chat pytest: 54 passed
-- `backend\.venv\Scripts\python.exe -m pytest backend\tests -v -p no:cacheprovider --basetemp=backend.pytest-tmp-persona001`: 909 passed
+- first-pass targeted prompt/chat pytest: 54 passed
+- first-pass `backend\.venv\Scripts\python.exe -m pytest backend\tests -v -p no:cacheprovider --basetemp=backend.pytest-tmp-persona001`: 909 passed
+- second-pass targeted prompt tests: `backend\tests\test_prompt_service.py` 24 passed
+- second-pass full backend validation: attempted with `backend\tests`; timed out after 304s in the local command wrapper
 - `node apps/desktop/scripts/renderer-chat-smoke.js`: PASS
 - `node apps/desktop/scripts/pet-window-smoke.js`: 92 checks PASS
 - `node apps/desktop/scripts/pet-renderer-smoke.js`: 290 checks PASS

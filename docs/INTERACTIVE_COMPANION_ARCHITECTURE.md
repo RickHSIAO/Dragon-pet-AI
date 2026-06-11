@@ -1,6 +1,6 @@
 # Interactive Companion Architecture Checkpoint
 
-**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-236 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS; TASK-237 IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED; TASK-STT-001 IMPLEMENTED - conservative Chinese STT punctuation restoration; TASK-STT-002 IMPLEMENTED - local Chinese STT quality probe / no runtime default change; TASK-STT-003 IMPLEMENTED - runtime STT model override / base-small candidate smoke; TASK-STT-004 DONE - Windows runtime no-speech smoke PASS / default unchanged; TASK-PERSONA-001 IMPLEMENTED - prompt/static smoke PASS / needs Windows chat tone smoke; TASK-CONV-001 IMPLEMENTED - queued continuous Conversation Mode capture / needs Windows runtime smoke; TASK-AUDIO-001 IMPLEMENTED - capture latency + Conversation pre-roll / needs Windows runtime smoke; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS; TASK-263 DONE - Windows Unicode owner voice enrollment storage smoke PASS; TASK-264 DONE - Windows stored centroid verification smoke PASS; TASK-265 DONE - Windows backend verify-files smoke PASS; TASK-SEC-001 DONE - docs-only security boundary design; TASK-SEC-002 DONE - docs-only sensitive data inventory / redaction rules; TASK-SEC-003 DONE - docs/test-corpus only; TASK-SEC-004 DONE - docs-only tool permission policy; TASK-SEC-005 DONE - docs-only phishing/link safety design; TASK-266 DONE - Manual Mic dry-run only / no hard block; TASK-267 DONE - Conversation Mode dry-run only / no hard block; TASK-268 DONE - diagnostics polish only / no hard block; TASK-269 DONE - hard gate opt-in design / no runtime change; TASK-270 DONE - Windows runtime candidate WAV lifecycle smoke PASS / no hard block
+**Status:** TASK-222 DOCS CHECKPOINT COMPLETE; TASK-236 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS; TASK-237 IMPLEMENTED - DOCS CHECKPOINT / NO WINDOWS SMOKE REQUIRED; TASK-STT-001 IMPLEMENTED - conservative Chinese STT punctuation restoration; TASK-STT-002 IMPLEMENTED - local Chinese STT quality probe / no runtime default change; TASK-STT-003 IMPLEMENTED - runtime STT model override / base-small candidate smoke; TASK-STT-004 DONE - Windows runtime no-speech smoke PASS / default unchanged; TASK-PERSONA-001 IMPLEMENTED - second prompt/static smoke PASS / needs Windows chat tone re-smoke; TASK-CONV-001 IMPLEMENTED - queued continuous Conversation Mode capture / needs Windows runtime smoke; TASK-AUDIO-001 IMPLEMENTED - capture latency + Conversation pre-roll / needs Windows runtime smoke; TASK-261 DONE - WINDOWS OWNER VOICE STORAGE/UI SMOKE PASS; TASK-262 DONE - WINDOWS OWNER VOICE CALIBRATION SMOKE PASS; TASK-263 DONE - Windows Unicode owner voice enrollment storage smoke PASS; TASK-264 DONE - Windows stored centroid verification smoke PASS; TASK-265 DONE - Windows backend verify-files smoke PASS; TASK-SEC-001 DONE - docs-only security boundary design; TASK-SEC-002 DONE - docs-only sensitive data inventory / redaction rules; TASK-SEC-003 DONE - docs/test-corpus only; TASK-SEC-004 DONE - docs-only tool permission policy; TASK-SEC-005 DONE - docs-only phishing/link safety design; TASK-266 DONE - Manual Mic dry-run only / no hard block; TASK-267 DONE - Conversation Mode dry-run only / no hard block; TASK-268 DONE - diagnostics polish only / no hard block; TASK-269 DONE - hard gate opt-in design / no runtime change; TASK-270 DONE - Windows runtime candidate WAV lifecycle smoke PASS / no hard block
 **Date:** 2026-06-01
 **Scope:** Architecture checkpoint for TASK-214 through TASK-230.
 
@@ -56,7 +56,7 @@ user interaction
 | TASK-223 | Character state layer | Summarizes mood, attention, energy, and recent interaction level. DONE - Windows visual smoke PASS. |
 | TASK-224 | Character state preview diagnostics | Formats local reaction, decision, state, and level preview. DONE - Windows visual smoke PASS. |
 | TASK-225 | Persona context pack | Adds Christina persona source, safe adaptation, strength levels, and runtime boundary. DOCS ONLY. |
-| TASK-PERSONA-001 | Christina tsundere tone boundary | Tunes the runtime persona prompt to keep proud / tsundere / protective Christina flavor while discouraging repeated direct humiliation, hostile name-calling, and dismissive technical-debug responses. Adds technical cooperation and emotional-support tone guidance plus bad/good examples. No `/chat` schema, mood schema, STT, Owner Voice, Ollama provider, renderer UI, IPC, or runtime model change. IMPLEMENTED - prompt/static smoke PASS; needs Windows chat tone smoke. |
+| TASK-PERSONA-001 | Christina tsundere tone boundary | Tunes the runtime persona prompt to keep proud / tsundere / protective Christina flavor while discouraging repeated direct humiliation, hostile name-calling, repeated address labels, and dismissive technical-debug responses. Second-pass tuning makes `汝這傢伙` rare/non-consecutive and requires direct observation, needed evidence, and next check for debug requests. No `/chat` schema, mood schema, STT, Owner Voice, Ollama provider, renderer UI, IPC, or runtime model change. IMPLEMENTED - second prompt/static smoke PASS; needs Windows chat tone re-smoke. |
 | TASK-226 | Output queue / priority design | Defines future output arbitration priorities and preemption rules. DOCS ONLY. |
 | TASK-227 | Voice/TTS research | Records local-first speech roadmap, provider candidates, and speech safety boundaries. DOCS ONLY. |
 | TASK-258 | Owner voice gate research | Evaluates local speaker verification before STT as a future convenience filter. RESEARCH ONLY / NO RUNTIME CHANGE. |
@@ -286,11 +286,12 @@ Future tasks may use it as content guidance for:
 TASK-PERSONA-001 is the first runtime prompt use of the tone-boundary layer. It
 adds explicit guidance that Christina should be adorably arrogant and tsundere,
 not abusive: technical/debugging requests should be handled cooperatively with
-clear next steps, emotional/stress contexts should reduce harshness, and repeated
-direct insults or degrading labels should be avoided. This changes only prompt
-content and static tests; it does not change `/chat` response shape, mood schema,
-renderer UI, IPC, STT, Owner Voice, Ollama provider behavior, or runtime model
-defaults.
+direct observation, needed evidence, and a next check; emotional/stress contexts
+should reduce harshness; repeated direct insults, degrading labels, and repeated
+address phrases such as consecutive `汝這傢伙` should be avoided. This changes
+only prompt content and static tests; it does not change `/chat` response shape,
+mood schema, renderer UI, IPC, STT, Owner Voice, Ollama provider behavior, or
+runtime model defaults.
 
 Important: the persona pack is a content/persona layer, not an execution
 controller. It does not control side effects.
