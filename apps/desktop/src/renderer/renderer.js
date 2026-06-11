@@ -69,7 +69,7 @@ const FULL_APP_CONVERSATION_MIN_SPEECH_MS    = 300;
 const FULL_APP_CONVERSATION_MAX_UTTERANCE_MS = 30000;
 const FULL_APP_CONVERSATION_VAD_INTERVAL_MS  = 100;
 const FULL_APP_CONVERSATION_RMS_THRESHOLD    = 0.035;
-const FULL_APP_CONVERSATION_PENDING_MAX      = 2;
+const FULL_APP_CONVERSATION_PENDING_MAX      = 4;
 const FULL_APP_CONVERSATION_LIFECYCLE_HISTORY_MAX = 12;
 const FULL_APP_CONVERSATION_LIFECYCLE_TRANSITION_MAX = 8;
 const FULL_APP_CONVERSATION_PRE_ROLL_ENABLED = true;
@@ -276,6 +276,8 @@ var fullAppVoiceDiagnostics = {
   conversationProcessingState: "idle",
   conversationPendingCount: 0,
   conversationQueueLimit: FULL_APP_CONVERSATION_PENDING_MAX,
+  conversationQueuePressure: "empty",
+  conversationQueueFull: false,
   conversationActiveTurnId: 0,
   conversationLastQueueAction: "none",
   conversationLastQueueReason: "none",
@@ -5358,11 +5360,18 @@ if (voiceAutosendToggle) {
 var _fullAppConversationRefreshingState = false;
 
 function _syncConversationQueueDiagnostics() {
+  var pendingCount = fullAppVoiceConversationPendingQueue.length;
+  var queueLimit = FULL_APP_CONVERSATION_PENDING_MAX;
   fullAppVoiceDiagnostics.conversationState = fullAppVoiceConversationState;
   fullAppVoiceDiagnostics.conversationCaptureState = fullAppVoiceConversationCaptureState;
   fullAppVoiceDiagnostics.conversationProcessingState = fullAppVoiceConversationProcessingState;
-  fullAppVoiceDiagnostics.conversationPendingCount = fullAppVoiceConversationPendingQueue.length;
-  fullAppVoiceDiagnostics.conversationQueueLimit = FULL_APP_CONVERSATION_PENDING_MAX;
+  fullAppVoiceDiagnostics.conversationPendingCount = pendingCount;
+  fullAppVoiceDiagnostics.conversationQueueLimit = queueLimit;
+  fullAppVoiceDiagnostics.conversationQueueFull = pendingCount >= queueLimit;
+  fullAppVoiceDiagnostics.conversationQueuePressure =
+    pendingCount <= 0 ? "empty" :
+      (pendingCount >= queueLimit ? "full" :
+        (pendingCount >= queueLimit - 1 ? "high" : "normal"));
   fullAppVoiceDiagnostics.conversationActiveTurnId = fullAppVoiceConversationActiveTurnId;
   fullAppVoiceDiagnostics.conversationLastQueueAction = fullAppVoiceConversationLastQueueAction;
   fullAppVoiceDiagnostics.conversationLastQueueReason = fullAppVoiceConversationLastQueueReason;
@@ -6806,6 +6815,7 @@ function renderFullAppVoiceDiagnostics() {
     "對話狀態: " + d.conversationState,
     "對話捕捉: " + d.conversationCaptureState + "  處理: " + d.conversationProcessingState,
     "對話佇列: pending=" + d.conversationPendingCount + "/" + d.conversationQueueLimit + " activeTurnId=" + d.conversationActiveTurnId,
+    "對話佇列壓力: " + (d.conversationQueuePressure || "empty") + " full=" + (d.conversationQueueFull ? "true" : "false"),
     "對話佇列動作: " + (d.conversationLastQueueAction || "none") + " reason: " + (d.conversationLastQueueReason || "none"),
     "對話停止: requested=" + (d.conversationStopRequested ? "true" : "false") + " drain=" + (d.conversationDrainPending ? "true" : "false") + " mode=" + (d.conversationStopMode || "none"),
     "對話回合 lifecycle: count=" + d.conversationTurnLifecycleCount + " latest=" + (d.conversationLastTurnLifecycleSummary || "—"),
@@ -6957,6 +6967,8 @@ function resetFullAppVoiceDiagnosticsForRecording(mode, recordingMeta) {
   fullAppVoiceDiagnostics.conversationProcessingState = fullAppVoiceConversationProcessingState;
   fullAppVoiceDiagnostics.conversationPendingCount = fullAppVoiceConversationPendingQueue.length;
   fullAppVoiceDiagnostics.conversationQueueLimit = FULL_APP_CONVERSATION_PENDING_MAX;
+  fullAppVoiceDiagnostics.conversationQueuePressure = fullAppVoiceDiagnostics.conversationPendingCount <= 0 ? "empty" : "normal";
+  fullAppVoiceDiagnostics.conversationQueueFull = fullAppVoiceDiagnostics.conversationPendingCount >= FULL_APP_CONVERSATION_PENDING_MAX;
   fullAppVoiceDiagnostics.conversationActiveTurnId = fullAppVoiceConversationActiveTurnId;
   fullAppVoiceDiagnostics.conversationLastQueueAction = fullAppVoiceConversationLastQueueAction;
   fullAppVoiceDiagnostics.conversationLastQueueReason = fullAppVoiceConversationLastQueueReason;

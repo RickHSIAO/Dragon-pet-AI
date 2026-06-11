@@ -29315,7 +29315,7 @@ returns capture to `listening` if Conversation Mode is still enabled.
 
 ### Queue Policy
 
-- `FULL_APP_CONVERSATION_PENDING_MAX = 2`.
+- `FULL_APP_CONVERSATION_PENDING_MAX = 4` as of TASK-CONV-004.
 - One active processing worker drains the queue.
 - `/chat` calls are still sequential and ordered.
 - No simultaneous multiple `/chat` requests are allowed.
@@ -29471,7 +29471,7 @@ recorded, queued, dropped, sent, skipped, or drained.
 - No new IPC channel, Pet Window change, Output Queue change, raw audio
   persistence, path exposure, transcript exposure, centroid exposure, or
   embedding exposure.
-- TASK-CONV-001 queue ordering, max pending `2`, no parallel `/chat`, and
+- TASK-CONV-001 queue ordering, max pending `4`, no parallel `/chat`, and
   graceful Stop/drain behavior are unchanged.
 - TASK-STT-001 final transcript path and TASK-270 candidate WAV temporary/delete
   lifecycle are unchanged.
@@ -29535,7 +29535,7 @@ Investigation.
 
 ## TASK-CONV-003 | Conversation Mode Queue Backpressure / Extra Dropped Turn Investigation
 
-Status: IMPLEMENTED - AUTOMATED BACKPRESSURE SMOKE PASS / NEEDS WINDOWS RUNTIME 4-TURN RE-SMOKE (2026-06-11)
+Status: IMPLEMENTED - AUTOMATED BACKPRESSURE SMOKE PASS / WINDOWS RE-SMOKE IDENTIFIED REAL QUEUE CAPACITY LIMIT (2026-06-11)
 
 ### Goal
 
@@ -29552,8 +29552,9 @@ lifecycle entry. As a result, a dropped overflow row could render as
 `durationMs=0 bytes=0` even when the dropped candidate was not proven to be an
 empty artifact. This made the Windows `turn#5 queue_full` row ambiguous.
 
-The implementation does not blindly increase the queue limit. The pending queue
-limit remains `2`, and real overflow still remains visible as `queue_full`.
+TASK-CONV-003 did not increase the queue limit. It clarified that real overflow
+remains visible as `queue_full`; the later TASK-CONV-004 policy task changes the
+capacity after Windows runtime evidence showed a usable-audio drop at `2/2`.
 
 ### Implementation Summary
 
@@ -29596,17 +29597,106 @@ limit remains `2`, and real overflow still remains visible as `queue_full`.
   - `testTaskConv003RealQueueFullKeepsBytesAndAtQueueStage`
   - `testTaskConv003DuplicateRecorderFinalizationDoesNotOverwriteTerminalStatus`
 
+### Windows Runtime Re-Smoke Result
+
+Windows actual-audio re-smoke with `DRAGON_STT_MODEL=base` confirmed the missing
+fourth utterance was real usable audio dropped at queue capacity:
+
+- pending queue was `2/2`
+- active turn was `activeTurnId=1`
+- `turn#4 lifecycle status=dropped reason=queue_full`
+- `durationMs=3098`
+- `bytes=106540`
+- `audio=usable_audio`
+- `dropStage=at_queue`
+- `stt=not_started`
+- `chat=not_sent`
+
+This was not an empty artifact, no-speech, or hidden UI row. TASK-CONV-004
+handles the capacity policy.
+
+---
+
+## TASK-CONV-004 | Conversation Mode Queue Capacity / Backpressure Policy
+
+Status: IMPLEMENTED - AUTOMATED QUEUE POLICY SMOKE PASS / NEEDS WINDOWS RUNTIME FAST 4-TURN SMOKE (2026-06-11)
+
+### Goal
+
+Prevent normal four-short-utterance Conversation Mode tests from dropping usable
+audio when the user speaks faster than the current STT/chat pipeline drains.
+
+### Runtime Evidence
+
+TASK-CONV-003 Windows runtime re-smoke showed a real usable-audio overflow:
+
+- Conversation Mode actual audio with `DRAGON_STT_MODEL=base`
+- pending queue capacity was `2/2`
+- active turn during overflow was `activeTurnId=1`
+- `turn#4` dropped with `reason=queue_full`
+- `durationMs=3098`, `bytes=106540`
+- `audio=usable_audio`, `dropStage=at_queue`
+- `stt=not_started`, `chat=not_sent`
+
+### Policy
+
+- Conversation Mode pending queue capacity is now a hardcoded bounded default:
+  `FULL_APP_CONVERSATION_PENDING_MAX = 4`.
+- The queue is still finite; no unbounded buffering was added.
+- STT and `/chat` processing remain one-at-a-time and ordered.
+- No parallel `/chat` requests are allowed.
+- Real overflow beyond four pending turns still drops newest and remains visible
+  as `reason=queue_full`, `audio=usable_audio`, `dropStage=at_queue`, with
+  duration, Blob bytes, and chunk count.
+- `0B` artifacts still drop before queue admission as `reason=empty_artifact`,
+  `audio=empty_artifact`, and `dropStage=before_queue`.
+
+### Diagnostics
+
+Voice Diagnostics now includes safe queue pressure fields:
+
+- `conversationQueueLimit`
+- `conversationPendingCount`
+- `conversationActiveTurnId`
+- `conversationQueuePressure` (`empty`, `normal`, `high`, `full`)
+- `conversationQueueFull`
+- last queue action/reason for accepted/queued, processing, ignored, or dropped
+  turns
+
+Lifecycle rows remain bounded and continue to render with `textContent`.
+
+### Preserved Boundaries
+
+- No STT default change.
+- No Owner Voice hard gate behavior change.
+- No `/stt/transcribe` or `/chat` schema change.
+- No new Conversation Mode IPC.
+- No Pet Window or Output Queue change.
+- No raw audio persistence, full path exposure, transcript exposure, centroid
+  exposure, candidate embedding exposure, or local settings exposure.
+- TASK-CONV-001 graceful Stop/drain remains unchanged: Stop prevents new
+  capture, preserves already-recorded turns, drains in order, and returns to
+  off/idle/pending `0`/active `0`.
+
+### Automated Validation
+
+- `node apps/desktop/scripts/renderer-chat-smoke.js`: PASS
+  - `testTaskConv004RendererHasQueueCapacityFourAndPressureDiagnostics`
+  - `testTaskConv004FourPendingTurnsAcceptedWithoutQueueFullAndNoParallelChat`
+  - `testTaskConv004OverflowBeyondCapacityStillShowsQueueFull`
+
 ### Remaining Runtime Smoke
 
-Run Windows Conversation Mode with actual audio again and confirm:
+Run Windows Conversation Mode with actual audio and `DRAGON_STT_MODEL=base`.
+Speak four short turns quickly enough to reproduce the prior pressure case and
+confirm:
 
-- A clean 4-turn test shows `turn#1` through `turn#4` completed/sent, or any
-  extra turn is clearly classified.
-- `0ms/0B` candidates show `reason=empty_artifact` and
-  `dropStage=before_queue`, not `queue_full`.
-- Real overflow, if it occurs, shows `reason=queue_full`, `audio=usable_audio`,
-  `dropStage=at_queue`, and non-zero bytes.
-- Final state reaches capture `off`, processing `idle`, pending `0/2`,
+- `turn#1` through `turn#4` are visible.
+- Four normal short turns are accepted/sent without usable-audio `queue_full`.
+- Diagnostics show capacity `4` and pressure/full status.
+- If overflow beyond capacity happens, it remains visible as `queue_full` with
+  `audio=usable_audio`, `dropStage=at_queue`, and non-zero bytes.
+- Final state reaches capture `off`, processing `idle`, pending `0/4`,
   `activeTurnId=0`, and `stopMode=drain_complete`.
 
 ---

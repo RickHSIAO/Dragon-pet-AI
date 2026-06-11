@@ -730,7 +730,8 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 - TASK-CONV-001 IMPLEMENTED - CONVERSATION MODE CONTINUOUS CAPTURE / PENDING UTTERANCE QUEUE (2026-06-05):
   Conversation Mode now separates capture state (`off/listening/recording`) from
   processing state (`idle/stt_processing/chat_processing`) and uses a bounded
-  in-memory pending utterance queue (`FULL_APP_CONVERSATION_PENDING_MAX = 2`).
+  in-memory pending utterance queue (`FULL_APP_CONVERSATION_PENDING_MAX = 4`
+  as of TASK-CONV-004).
   After a recording stops and the WAV Blob is finalized, capture can return to
   listening while the queued utterance continues through STT and `/chat`.
   Processing remains sequential and ordered through one active worker, so no
@@ -777,16 +778,17 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   `/stt/transcribe` schema change, `/chat` schema change, IPC, Pet Window,
   Output Queue, raw audio persistence, path exposure, transcript exposure,
   centroid exposure, or embedding exposure was added. TASK-CONV-001 queue
-  ordering, max pending `2`, no parallel `/chat`, and graceful Stop/drain
+  ordering, max pending `4` as of TASK-CONV-004, no parallel `/chat`, and graceful Stop/drain
   behavior remain unchanged.
 
-- TASK-CONV-003 IMPLEMENTED - AUTOMATED BACKPRESSURE SMOKE PASS / NEEDS WINDOWS RUNTIME 4-TURN RE-SMOKE (2026-06-11):
+- TASK-CONV-003 IMPLEMENTED - AUTOMATED BACKPRESSURE SMOKE PASS / WINDOWS RE-SMOKE IDENTIFIED REAL QUEUE CAPACITY LIMIT (2026-06-11):
   Investigates the extra `turn#5 dropped reason=queue_full` surfaced by the
   TASK-CONV-002 runtime smoke. Root cause found in diagnostics/classification:
   queue overflow lifecycle rows did not copy duration, Blob bytes, chunk count,
   or audio classification, so an overflow could render as `durationMs=0
-  bytes=0` and look like an empty artifact. The queue limit remains `2`; real
-  overflow still appears as `reason=queue_full`. Added safe lifecycle fields
+  bytes=0` and look like an empty artifact. TASK-CONV-003 kept the existing
+  capacity while ensuring real overflow still appears as `reason=queue_full`.
+  Added safe lifecycle fields
   `audioClass`, `dropStage`, `finalizeAttemptCount`,
   `duplicateFinalizePrevented`, `alreadyFinalized`, `stopFinalizeSource`,
   `recorderStateAtFinalize`, `captureStateAtFinalize`, and
@@ -795,11 +797,34 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   `dropStage=before_queue`; real overflow shows `audio=usable_audio`,
   `dropStage=at_queue`, and non-zero bytes when present. Duplicate recorder
   finalization callbacks are prevented without overwriting the first terminal
-  lifecycle status. Renderer smoke PASS; Windows actual-audio 4-turn re-smoke
-  remains required before DONE. No STT default, Owner Voice hard gate, schema,
-  IPC, Pet Window, Output Queue, raw audio persistence, path exposure,
-  transcript exposure, centroid exposure, embedding exposure, queue ordering,
-  graceful Stop/drain, or no-parallel `/chat` behavior changed.
+  lifecycle status. Windows actual-audio re-smoke with `DRAGON_STT_MODEL=base`
+  then confirmed the missing fourth utterance was real usable audio dropped at
+  `pending=2/2`, `activeTurnId=1`, `durationMs=3098`, `bytes=106540`,
+  `audio=usable_audio`, and `dropStage=at_queue`. That capacity issue is handled
+  by TASK-CONV-004. No STT default, Owner Voice hard gate, schema, IPC, Pet
+  Window, Output Queue, raw audio persistence, path exposure, transcript
+  exposure, centroid exposure, embedding exposure, queue ordering, graceful
+  Stop/drain, or no-parallel `/chat` behavior changed in TASK-CONV-003.
+
+- TASK-CONV-004 IMPLEMENTED - AUTOMATED QUEUE POLICY SMOKE PASS / NEEDS WINDOWS RUNTIME FAST 4-TURN SMOKE (2026-06-11):
+  Tunes the Conversation Mode backpressure policy after Windows runtime evidence
+  proved a fourth normal utterance could be dropped as real usable-audio overflow
+  while the queue was `2/2`. The pending queue capacity is now a hardcoded
+  bounded default of `FULL_APP_CONVERSATION_PENDING_MAX = 4`. This is not an
+  unbounded queue and does not add parallel processing: STT and `/chat` still
+  drain one turn at a time in capture order. Voice Diagnostics now includes
+  `conversationQueuePressure` and `conversationQueueFull` alongside queue
+  capacity, pending count, active turn ID, and last action/reason. Four valid
+  pending turns can be accepted while one turn is active; overflow beyond four
+  pending turns still drops newest as `reason=queue_full`, `audio=usable_audio`,
+  `dropStage=at_queue`, with duration, bytes, and chunks. Empty artifacts still
+  drop before queue as `reason=empty_artifact`, `audio=empty_artifact`, and
+  `dropStage=before_queue`. Renderer queue policy smoke PASS; Windows fast
+  4-turn actual-audio smoke remains required before DONE. No STT default, Owner
+  Voice hard gate, `/stt/transcribe` schema, `/chat` schema, IPC, Pet Window,
+  Output Queue, raw audio persistence, path exposure, transcript exposure,
+  centroid exposure, embedding exposure, graceful Stop/drain, or no-parallel
+  `/chat` behavior changed.
 
 - TASK-AUDIO-001 IMPLEMENTED - CAPTURE START LATENCY MEASUREMENT / CONVERSATION PRE-ROLL BUFFER (2026-06-05):
   Voice Diagnostics now records safe per-capture timing metadata:

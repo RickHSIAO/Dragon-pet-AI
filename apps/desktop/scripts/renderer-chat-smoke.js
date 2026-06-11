@@ -13255,8 +13255,8 @@ function testTaskStt001NoRuntimeSchemaOrOwnerVoiceRegression() {
 
 function testTaskConv001RendererHasQueueStateFields() {
   const src = fs.readFileSync(rendererPath, "utf8");
-  assert.ok(src.includes("FULL_APP_CONVERSATION_PENDING_MAX      = 2"),
-    "TASK-CONV-001 queue limit must be 2");
+  assert.ok(src.includes("FULL_APP_CONVERSATION_PENDING_MAX      = 4"),
+    "TASK-CONV-004 queue limit must default to 4");
   for (const token of [
     "fullAppVoiceConversationCaptureState",
     "fullAppVoiceConversationProcessingState",
@@ -13287,6 +13287,8 @@ function testTaskConv001DiagnosticsRenderIncludesQueueFields() {
     "conversationCaptureState",
     "conversationProcessingState",
     "conversationPendingCount",
+    "conversationQueuePressure",
+    "conversationQueueFull",
     "conversationActiveTurnId",
     "conversationLastQueueAction",
     "conversationLastQueueReason",
@@ -13306,14 +13308,16 @@ async function testTaskConv001DiagnosticsDefaultsAndReset() {
   assert.equal(d.conversationCaptureState, "off");
   assert.equal(d.conversationProcessingState, "idle");
   assert.equal(d.conversationPendingCount, 0);
-  assert.equal(d.conversationQueueLimit, 2);
+  assert.equal(d.conversationQueueLimit, 4);
+  assert.equal(d.conversationQueuePressure, "empty");
+  assert.equal(d.conversationQueueFull, false);
   assert.equal(d.conversationActiveTurnId, 0);
   sandbox.fullAppVoiceConversationEnabled = true;
   sandbox.setConversationState("waiting");
   sandbox.resetFullAppVoiceDiagnosticsForRecording("conversation");
   assert.equal(d.conversationCaptureState, "listening");
   assert.equal(d.conversationProcessingState, "idle");
-  assert.equal(d.conversationQueueLimit, 2);
+  assert.equal(d.conversationQueueLimit, 4);
   console.log("  testTaskConv001DiagnosticsDefaultsAndReset PASS");
 }
 
@@ -13393,17 +13397,21 @@ async function testTaskConv001QueueLimitDropsNewest() {
   sandbox._transcribeConversationChunks([new Blob(["two"], { type: "audio/wav" })], "audio/wav");
   sandbox._transcribeConversationChunks([new Blob(["three"], { type: "audio/wav" })], "audio/wav");
   sandbox._transcribeConversationChunks([new Blob(["four"], { type: "audio/wav" })], "audio/wav");
+  sandbox._transcribeConversationChunks([new Blob(["five"], { type: "audio/wav" })], "audio/wav");
+  sandbox._transcribeConversationChunks([new Blob(["six"], { type: "audio/wav" })], "audio/wav");
   await settle();
-  assert.equal(sandbox.fullAppVoiceConversationPendingQueue.length, 2,
-    "TASK-CONV-001 pending queue must be capped at 2 while one turn is active");
+  assert.equal(sandbox.fullAppVoiceConversationPendingQueue.length, 4,
+    "TASK-CONV-004 pending queue must be capped at 4 while one turn is active");
   assert.equal(sandbox.fullAppVoiceDiagnostics.conversationLastQueueAction, "dropped");
   assert.equal(sandbox.fullAppVoiceDiagnostics.conversationLastQueueReason, "queue_full");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.conversationQueuePressure, "full");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.conversationQueueFull, true);
   first.resolve({ status: "ok", transcript: "active first" });
   await p1;
   await settle();
   const chatCalls = state.calls.filter((call) => call.url.endsWith("/chat"));
-  assert.equal(chatCalls.length, 3,
-    "TASK-CONV-001 overflow must drop newest utterance instead of sending a fourth /chat");
+  assert.equal(chatCalls.length, 5,
+    "TASK-CONV-004 overflow must drop newest utterance after active plus four queued turns");
   console.log("  testTaskConv001QueueLimitDropsNewest PASS");
 }
 
@@ -14077,6 +14085,8 @@ async function testTaskConv002DroppedNoSpeechAndChatErrorLifecycle() {
   sandbox.fullAppVoiceConversationPendingQueue = [
     { turnId: 99, audioBlob: new Blob(["active"], { type: "audio/wav" }), mimeType: "audio/wav" },
     { turnId: 100, audioBlob: new Blob(["pending"], { type: "audio/wav" }), mimeType: "audio/wav" },
+    { turnId: 101, audioBlob: new Blob(["pending-2"], { type: "audio/wav" }), mimeType: "audio/wav" },
+    { turnId: 102, audioBlob: new Blob(["pending-3"], { type: "audio/wav" }), mimeType: "audio/wav" },
   ];
   sandbox._transcribeConversationChunks([new Blob(["drop"], { type: "audio/wav" })], "audio/wav", taskConv002ConversationMeta(3, 3000));
   sandbox.fullAppVoiceConversationPendingQueue = [];
@@ -14170,6 +14180,8 @@ async function testTaskConv003ZeroByteArtifactIsDroppedBeforeQueueNotQueueFull()
   sandbox.fullAppVoiceConversationPendingQueue = [
     { turnId: 91, audioBlob: new Blob(["active"], { type: "audio/wav" }), mimeType: "audio/wav" },
     { turnId: 92, audioBlob: new Blob(["pending"], { type: "audio/wav" }), mimeType: "audio/wav" },
+    { turnId: 93, audioBlob: new Blob(["pending-2"], { type: "audio/wav" }), mimeType: "audio/wav" },
+    { turnId: 94, audioBlob: new Blob(["pending-3"], { type: "audio/wav" }), mimeType: "audio/wav" },
   ];
   await sandbox._transcribeConversationChunks([new Blob([], { type: "audio/wav" })], "audio/wav", taskConv002ConversationMeta(8, 8000));
   await settle();
@@ -14196,8 +14208,10 @@ async function testTaskConv003RealQueueFullKeepsBytesAndAtQueueStage() {
   sandbox.fullAppVoiceConversationEnabled = true;
   sandbox.setConversationState("waiting");
   sandbox.fullAppVoiceConversationPendingQueue = [
-    { turnId: 93, audioBlob: new Blob(["active"], { type: "audio/wav" }), mimeType: "audio/wav" },
-    { turnId: 94, audioBlob: new Blob(["pending"], { type: "audio/wav" }), mimeType: "audio/wav" },
+    { turnId: 95, audioBlob: new Blob(["active"], { type: "audio/wav" }), mimeType: "audio/wav" },
+    { turnId: 96, audioBlob: new Blob(["pending"], { type: "audio/wav" }), mimeType: "audio/wav" },
+    { turnId: 97, audioBlob: new Blob(["pending-2"], { type: "audio/wav" }), mimeType: "audio/wav" },
+    { turnId: 98, audioBlob: new Blob(["pending-3"], { type: "audio/wav" }), mimeType: "audio/wav" },
   ];
   await sandbox._transcribeConversationChunks([new Blob(["real-audio"], { type: "audio/wav" })], "audio/wav", taskConv002ConversationMeta(9, 9000));
   await settle();
@@ -14235,6 +14249,108 @@ async function testTaskConv003DuplicateRecorderFinalizationDoesNotOverwriteTermi
   assert.equal(entry.finalizeAttemptCount, 2);
   assert.equal(sandbox.fullAppVoiceDiagnostics.conversationLastQueueReason, "duplicate_finalize");
   console.log("  testTaskConv003DuplicateRecorderFinalizationDoesNotOverwriteTerminalStatus PASS");
+}
+
+// TASK-CONV-004: Conversation Mode Queue Capacity / Backpressure Policy
+
+function testTaskConv004RendererHasQueueCapacityFourAndPressureDiagnostics() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("FULL_APP_CONVERSATION_PENDING_MAX      = 4"),
+    "TASK-CONV-004 Conversation Mode pending queue default must be 4");
+  for (const token of [
+    "conversationQueuePressure",
+    "conversationQueueFull",
+    "對話佇列壓力",
+  ]) {
+    assert.ok(src.includes(token), "TASK-CONV-004 diagnostics must include " + token);
+  }
+  assert.ok(!src.includes("conversation:queue-capacity"), "TASK-CONV-004 must not add queue capacity IPC");
+  console.log("  testTaskConv004RendererHasQueueCapacityFourAndPressureDiagnostics PASS");
+}
+
+async function testTaskConv004FourPendingTurnsAcceptedWithoutQueueFullAndNoParallelChat() {
+  const transcripts = [
+    "conv004 active first.",
+    "conv004 queued second.",
+    "conv004 queued third.",
+    "conv004 queued fourth.",
+    "conv004 queued fifth.",
+  ];
+  const { sandbox, state } = await loadRenderer({
+    dragonPet: taskConv002Bridge(transcripts.map((transcript) => ({ status: "ok", transcript }))),
+    chatMode: "success",
+    pauseChat: true,
+  });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("waiting");
+  const p1 = sandbox._transcribeConversationChunks([new Blob(["one"], { type: "audio/wav" })], "audio/wav", taskConv002ConversationMeta(21, 21000));
+  await settle();
+  sandbox._transcribeConversationChunks([new Blob(["two"], { type: "audio/wav" })], "audio/wav", taskConv002ConversationMeta(22, 22000));
+  sandbox._transcribeConversationChunks([new Blob(["three"], { type: "audio/wav" })], "audio/wav", taskConv002ConversationMeta(23, 23000));
+  sandbox._transcribeConversationChunks([new Blob(["four"], { type: "audio/wav" })], "audio/wav", taskConv002ConversationMeta(24, 24000));
+  sandbox._transcribeConversationChunks([new Blob(["five"], { type: "audio/wav" })], "audio/wav", taskConv002ConversationMeta(25, 25000));
+  await settle();
+  assert.equal(sandbox.fullAppVoiceConversationPendingQueue.length, 4,
+    "TASK-CONV-004 active turn plus four pending turns must be accepted");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.conversationLastQueueAction, "queued");
+  assert.notEqual(sandbox.fullAppVoiceDiagnostics.conversationLastQueueReason, "queue_full");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.conversationQueuePressure, "full");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.conversationQueueFull, true);
+  assert.equal(state.calls.filter((call) => call.url.endsWith("/chat")).length, 1,
+    "TASK-CONV-004 must keep /chat sequential while four pending turns wait");
+  const textWhileFull = taskConv002LifecycleText(sandbox);
+  assert.ok(textWhileFull.includes("pending=4/4"), "TASK-CONV-004 lifecycle rows must show 4/4 capacity");
+  state.pauseChat = false;
+  if (typeof state.resolveChat === "function") state.resolveChat();
+  await p1;
+  await settle();
+  const chatBodies = state.calls
+    .filter((call) => call.url.endsWith("/chat"))
+    .map((call) => JSON.parse(call.body || "{}").message);
+  assert.deepEqual(chatBodies.slice(0, 5), transcripts,
+    "TASK-CONV-004 queued turns must drain sequentially in capture order");
+  assert.equal(sandbox.fullAppVoiceConversationProcessingState, "idle");
+  assert.equal(sandbox.fullAppVoiceConversationPendingQueue.length, 0);
+  console.log("  testTaskConv004FourPendingTurnsAcceptedWithoutQueueFullAndNoParallelChat PASS");
+}
+
+async function testTaskConv004OverflowBeyondCapacityStillShowsQueueFull() {
+  const first = createDeferred();
+  let transcribeCalls = 0;
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => {
+        transcribeCalls += 1;
+        if (transcribeCalls === 1) return first.promise;
+        return { status: "ok", transcript: "conv004 overflow kept " + transcribeCalls };
+      },
+      updatePetSpeech: async () => ({ ok: true }),
+      updatePetExpression: async () => ({ ok: true }),
+    },
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("waiting");
+  const p1 = sandbox._transcribeConversationChunks([new Blob(["active"], { type: "audio/wav" })], "audio/wav", taskConv002ConversationMeta(31, 31000));
+  await settle();
+  for (let turnId = 32; turnId <= 36; turnId += 1) {
+    sandbox._transcribeConversationChunks([new Blob(["turn-" + turnId], { type: "audio/wav" })], "audio/wav", taskConv002ConversationMeta(turnId, turnId * 1000));
+  }
+  await settle();
+  const dropped = sandbox.fullAppVoiceConversationTurnLifecycleHistory.find((entry) => entry.turnId === 36);
+  assert.equal(dropped.status, "dropped");
+  assert.equal(dropped.reason, "queue_full",
+    "TASK-CONV-004 fifth pending turn beyond capacity must still show queue_full");
+  assert.equal(dropped.audioClass, "usable_audio");
+  assert.equal(dropped.dropStage, "at_queue");
+  assert.ok(dropped.blobSizeBytes > 0);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.conversationQueuePressure, "full");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.conversationQueueFull, true);
+  first.resolve({ status: "ok", transcript: "conv004 active first" });
+  await p1;
+  await settle();
+  console.log("  testTaskConv004OverflowBeyondCapacityStillShowsQueueFull PASS");
 }
 
 // TASK-AUDIO-001: Capture Start Latency Measurement / Conversation Pre-roll Buffer
@@ -17854,6 +17970,9 @@ async function main() {
   await testTaskConv003ZeroByteArtifactIsDroppedBeforeQueueNotQueueFull();
   await testTaskConv003RealQueueFullKeepsBytesAndAtQueueStage();
   await testTaskConv003DuplicateRecorderFinalizationDoesNotOverwriteTerminalStatus();
+  testTaskConv004RendererHasQueueCapacityFourAndPressureDiagnostics();
+  await testTaskConv004FourPendingTurnsAcceptedWithoutQueueFullAndNoParallelChat();
+  await testTaskConv004OverflowBeyondCapacityStillShowsQueueFull();
   testTaskAudio001RendererHasTimingAndPreRollFields();
   testTaskAudio001DiagnosticsRenderIncludesSafeTimingPreRoll();
   await testTaskAudio001TimingMetaNonNegative();
