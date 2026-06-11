@@ -678,6 +678,21 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   behavior change, schema break, IPC change, raw audio persistence, or
   aggressive rewrite was added.
 
+- TASK-STT-004 IMPLEMENTED - STT NO-SPEECH / SILENCE HALLUCINATION GUARD (2026-06-11):
+  Adds a conservative no-speech guard after Windows `DRAGON_STT_MODEL=small`
+  smoke found a faster-whisper subtitle-credit-like hallucination on intentional
+  Manual Mic silence. Backend STT now computes WAV PCM audio energy metadata
+  (`audioRms`, `audioPeak`, `audioSpeechDetected`, usable samples) and combines
+  it with faster-whisper segment metadata when present (`no_speech_prob`,
+  avg logprob, compression ratio, segment count). Suspicious subtitle-credit
+  phrases are suppressed only when audio-level no-speech evidence is strong.
+  Guarded results return `status=no_speech`, empty `finalTranscript`, and safe
+  diagnostics; Manual Mic does not fill textarea or auto-send, and Conversation
+  Mode does not enqueue/send `/chat` while preserving rearm and graceful drain.
+  Runtime default remains `tiny`; `base` and `small` remain candidates. No
+  `/chat` schema change, Owner Voice hard gate, raw audio persistence, private
+  sample commit, or aggressive rewrite was added.
+
 - TASK-CONV-001 IMPLEMENTED - CONVERSATION MODE CONTINUOUS CAPTURE / PENDING UTTERANCE QUEUE (2026-06-05):
   Conversation Mode now separates capture state (`off/listening/recording`) from
   processing state (`idle/stt_processing/chat_processing`) and uses a bounded

@@ -14285,6 +14285,189 @@ async function testTaskAudio001ManualMicPreparingIsNotRecording() {
 }
 
 // ---------------------------------------------------------------------------
+// TASK-STT-004: STT No-Speech / Silence Hallucination Guard
+// ---------------------------------------------------------------------------
+
+function _taskStt004NoSpeechResult() {
+  return {
+    status: "no_speech",
+    transcript: "",
+    finalTranscript: "",
+    noSpeechGuardEnabled: true,
+    noSpeechGuardApplied: true,
+    noSpeechGuardReason: "no_speech_hallucination_guard",
+    audioRms: 0,
+    audioPeak: 0,
+    audioSpeechDetected: false,
+    sttNoSpeechProbability: 0.91,
+    suspiciousTranscriptPattern: "subtitle_credit",
+  };
+}
+
+function testTaskStt004RendererHasNoSpeechFields() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  assert.ok(src.includes("noSpeechGuardEnabled"), "TASK-STT-004 diagnostics must include noSpeechGuardEnabled");
+  assert.ok(src.includes("noSpeechGuardApplied"), "TASK-STT-004 diagnostics must include noSpeechGuardApplied");
+  assert.ok(src.includes("noSpeechGuardReason"), "TASK-STT-004 diagnostics must include noSpeechGuardReason");
+  assert.ok(src.includes("audioRms"), "TASK-STT-004 diagnostics must include audioRms");
+  assert.ok(src.includes("audioPeak"), "TASK-STT-004 diagnostics must include audioPeak");
+  assert.ok(src.includes("audioSpeechDetected"), "TASK-STT-004 diagnostics must include audioSpeechDetected");
+  assert.ok(src.includes("sttNoSpeechProbability"), "TASK-STT-004 diagnostics must include sttNoSpeechProbability");
+  assert.ok(src.includes("suspiciousTranscriptPattern"), "TASK-STT-004 diagnostics must include suspiciousTranscriptPattern");
+  console.log("  testTaskStt004RendererHasNoSpeechFields PASS");
+}
+
+function testTaskStt004DiagnosticsRenderIncludesNoSpeechLines() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const renderFnStart = src.indexOf("function renderFullAppVoiceDiagnostics");
+  const renderFnEnd = src.indexOf("\n}", renderFnStart) + 2;
+  const renderFn = src.slice(renderFnStart, renderFnEnd);
+  assert.ok(renderFn.includes("No-speech guard"), "TASK-STT-004 render must include no-speech guard line");
+  assert.ok(renderFn.includes("Audio energy"), "TASK-STT-004 render must include audio energy line");
+  assert.ok(renderFn.includes("sttNoSpeechProbability"), "TASK-STT-004 render must include STT no-speech probability");
+  assert.ok(!renderFn.includes("innerHTML"), "TASK-STT-004 render must not use innerHTML");
+  console.log("  testTaskStt004DiagnosticsRenderIncludesNoSpeechLines PASS");
+}
+
+async function testTaskStt004DiagnosticsDefaultsAndReset() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  assert.equal(sandbox.fullAppVoiceDiagnostics.noSpeechGuardEnabled, true);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.noSpeechGuardApplied, false);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.noSpeechGuardReason, "none");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.audioRms, null);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.audioPeak, null);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.audioSpeechDetected, null);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.sttNoSpeechProbability, null);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.suspiciousTranscriptPattern, "none");
+  sandbox.fullAppVoiceDiagnostics.noSpeechGuardApplied = true;
+  sandbox.fullAppVoiceDiagnostics.noSpeechGuardReason = "silent_audio";
+  sandbox.fullAppVoiceDiagnostics.audioRms = 0;
+  sandbox.fullAppVoiceDiagnostics.audioPeak = 0;
+  sandbox.fullAppVoiceDiagnostics.audioSpeechDetected = false;
+  sandbox.fullAppVoiceDiagnostics.sttNoSpeechProbability = 0.9;
+  sandbox.fullAppVoiceDiagnostics.suspiciousTranscriptPattern = "subtitle_credit";
+  sandbox.resetFullAppVoiceDiagnosticsForRecording("manual_mic");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.noSpeechGuardApplied, false);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.noSpeechGuardReason, "none");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.audioRms, null);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.audioPeak, null);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.audioSpeechDetected, null);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.sttNoSpeechProbability, null);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.suspiciousTranscriptPattern, "none");
+  console.log("  testTaskStt004DiagnosticsDefaultsAndReset PASS");
+}
+
+async function testTaskStt004ManualMicNoSpeechDoesNotFillOrSend() {
+  const { document, sandbox, state } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => _taskStt004NoSpeechResult(),
+      updatePetSpeech: async () => ({ ok: true }),
+      updatePetExpression: async () => ({ ok: true }),
+    },
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceAutoSendEnabled = true;
+  sandbox.setFullAppVoiceState("transcribing");
+  sandbox._fullAppSttTranscribeChunks([new Blob(["RIFF-silence"], { type: "audio/wav" })], "audio/wav");
+  await settle();
+  assert.equal(document.getElementById("message-input").value, "",
+    "TASK-STT-004 Manual Mic no_speech must not fill textarea");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.sttStatus, "no_speech");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.noSpeechGuardApplied, true);
+  assert.equal(sandbox.fullAppVoiceDiagnosticsHistory[0].sttStatus, "no_speech");
+  assert.equal(state.calls.filter((call) => call.url.endsWith("/chat")).length, 0,
+    "TASK-STT-004 Manual Mic no_speech must not auto-send /chat");
+  console.log("  testTaskStt004ManualMicNoSpeechDoesNotFillOrSend PASS");
+}
+
+async function testTaskStt004ManualMicRealSpeechStillFillsAndSends() {
+  const { document, sandbox, state } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => ({
+        status: "ok",
+        transcript: "real speech text",
+        finalTranscript: "real speech text",
+        noSpeechGuardEnabled: true,
+        noSpeechGuardApplied: false,
+        audioRms: 0.06,
+        audioPeak: 0.3,
+        audioSpeechDetected: true,
+      }),
+      updatePetSpeech: async () => ({ ok: true }),
+      updatePetExpression: async () => ({ ok: true }),
+    },
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceAutoSendEnabled = true;
+  sandbox.setFullAppVoiceState("transcribing");
+  sandbox._fullAppSttTranscribeChunks([new Blob(["RIFF-speech"], { type: "audio/wav" })], "audio/wav");
+  await settle();
+  const chatCalls = state.calls.filter((call) => call.url.endsWith("/chat"));
+  assert.equal(sandbox.fullAppVoiceDiagnostics.sttStatus, "success");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.noSpeechGuardApplied, false);
+  assert.ok(chatCalls.length >= 1, "TASK-STT-004 real speech must still auto-send when enabled");
+  assert.equal(JSON.parse(chatCalls[0].body).message, "real speech text",
+    "TASK-STT-004 real speech must reach /chat unchanged");
+  assert.equal(document.getElementById("message-input").value, "",
+    "TASK-STT-004 auto-send keeps existing input-clear behavior after send");
+  console.log("  testTaskStt004ManualMicRealSpeechStillFillsAndSends PASS");
+}
+
+async function testTaskStt004ConversationNoSpeechRearmsListening() {
+  const { sandbox, state } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => _taskStt004NoSpeechResult(),
+      updatePetSpeech: async () => ({ ok: true }),
+      updatePetExpression: async () => ({ ok: true }),
+    },
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("transcribing");
+  await sandbox._transcribeConversationChunks([new Blob(["RIFF-silence"], { type: "audio/wav" })], "audio/wav");
+  await settle();
+  assert.equal(sandbox.fullAppVoiceDiagnostics.sttStatus, "no_speech");
+  assert.equal(sandbox.fullAppVoiceConversationCaptureState, "listening",
+    "TASK-STT-004 Conversation no_speech must rearm when still enabled");
+  assert.equal(state.calls.filter((call) => call.url.endsWith("/chat")).length, 0,
+    "TASK-STT-004 Conversation no_speech must not send /chat");
+  console.log("  testTaskStt004ConversationNoSpeechRearmsListening PASS");
+}
+
+async function testTaskStt004ConversationNoSpeechGracefulStopStaysOff() {
+  const { sandbox, state } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async () => _taskStt004NoSpeechResult(),
+      updatePetSpeech: async () => ({ ok: true }),
+      updatePetExpression: async () => ({ ok: true }),
+    },
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceConversationEnabled = false;
+  sandbox.fullAppVoiceConversationStopRequested = true;
+  sandbox.fullAppVoiceConversationDrainPending = true;
+  sandbox.fullAppVoiceConversationStopRequestedAt = 2000;
+  sandbox.fullAppVoiceConversationStopMode = "graceful_drain";
+  sandbox._setConversationCaptureState("off");
+  await sandbox._transcribeConversationChunks(
+    [new Blob(["RIFF-silence"], { type: "audio/wav" })],
+    "audio/wav",
+    { recordingStartedAt: 1000, recordingStoppedAt: 1500, finalizedAt: 1500, mimeType: "audio/wav" }
+  );
+  await settle();
+  assert.equal(sandbox.fullAppVoiceDiagnostics.sttStatus, "no_speech");
+  assert.equal(sandbox.fullAppVoiceConversationCaptureState, "off",
+    "TASK-STT-004 graceful Stop no_speech must stay capture=off");
+  assert.equal(state.calls.filter((call) => call.url.endsWith("/chat")).length, 0,
+    "TASK-STT-004 graceful Stop no_speech must not send /chat");
+  console.log("  testTaskStt004ConversationNoSpeechGracefulStopStaysOff PASS");
+}
+
+// ---------------------------------------------------------------------------
 // TASK-246: STT Model Quality / Whisper Model Upgrade
 // ---------------------------------------------------------------------------
 
@@ -17356,6 +17539,15 @@ async function main() {
   await testTaskAudio001PcmCaptureEmptyRearmsWithoutFakeErrorHistoryOrDuplicatePipeline();
   await testTaskAudio001PcmCaptureEmptyRearmsDuringChatProcessing();
   await testTaskAudio001ManualMicPreparingIsNotRecording();
+
+  // TASK-STT-004: STT No-Speech / Silence Hallucination Guard
+  testTaskStt004RendererHasNoSpeechFields();
+  testTaskStt004DiagnosticsRenderIncludesNoSpeechLines();
+  await testTaskStt004DiagnosticsDefaultsAndReset();
+  await testTaskStt004ManualMicNoSpeechDoesNotFillOrSend();
+  await testTaskStt004ManualMicRealSpeechStillFillsAndSends();
+  await testTaskStt004ConversationNoSpeechRearmsListening();
+  await testTaskStt004ConversationNoSpeechGracefulStopStaysOff();
 
   // TASK-246: STT Model Quality / Whisper Model Upgrade
   testTask246RendererHasModelQualityFields();

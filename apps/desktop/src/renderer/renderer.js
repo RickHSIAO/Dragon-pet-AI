@@ -340,6 +340,15 @@ var fullAppVoiceDiagnostics = {
   sttProviderLoadStatus: "",
   sttProviderLoadError: "",
   sttProviderFallbackReason: "",
+  // TASK-STT-004: no-speech / silence hallucination guard diagnostics
+  noSpeechGuardEnabled: true,
+  noSpeechGuardApplied: false,
+  noSpeechGuardReason: "none",
+  audioRms: null,
+  audioPeak: null,
+  audioSpeechDetected: null,
+  sttNoSpeechProbability: null,
+  suspiciousTranscriptPattern: "none",
   // TASK-255: voice capture focus/minimize resilience diagnostics
   voiceCaptureFocusSafe: true,
   lastVisibilityState: "visible",
@@ -4733,6 +4742,23 @@ async function transcribeFullAppAudioBlob(blob) {
     fullAppVoiceDiagnostics.sttProviderLoadStatus   = result.sttProviderLoadStatus   ? String(result.sttProviderLoadStatus)   : "unknown";
     fullAppVoiceDiagnostics.sttProviderLoadError    = result.sttProviderLoadError    ? String(result.sttProviderLoadError)    : "none";
     fullAppVoiceDiagnostics.sttProviderFallbackReason = result.sttProviderFallbackReason ? String(result.sttProviderFallbackReason) : "none";
+    // TASK-STT-004: no-speech guard diagnostics — safe scalar metadata only.
+    fullAppVoiceDiagnostics.noSpeechGuardEnabled = Object.prototype.hasOwnProperty.call(result, "noSpeechGuardEnabled")
+      ? Boolean(result.noSpeechGuardEnabled)
+      : true;
+    fullAppVoiceDiagnostics.noSpeechGuardApplied = Boolean(result.noSpeechGuardApplied);
+    fullAppVoiceDiagnostics.noSpeechGuardReason = result.noSpeechGuardReason ? String(result.noSpeechGuardReason) : "none";
+    fullAppVoiceDiagnostics.audioRms = typeof result.audioRms === "number" ? result.audioRms : null;
+    fullAppVoiceDiagnostics.audioPeak = typeof result.audioPeak === "number" ? result.audioPeak : null;
+    fullAppVoiceDiagnostics.audioSpeechDetected = Object.prototype.hasOwnProperty.call(result, "audioSpeechDetected")
+      ? result.audioSpeechDetected
+      : null;
+    fullAppVoiceDiagnostics.sttNoSpeechProbability = typeof result.sttNoSpeechProbability === "number"
+      ? result.sttNoSpeechProbability
+      : null;
+    fullAppVoiceDiagnostics.suspiciousTranscriptPattern = result.suspiciousTranscriptPattern
+      ? String(result.suspiciousTranscriptPattern)
+      : "none";
   }
 
   if (!result || typeof result !== "object") throw new Error("stt_error");
@@ -4740,6 +4766,10 @@ async function transcribeFullAppAudioBlob(blob) {
   if (status === "unavailable") throw new Error("stt_unavailable");
   if (status === "offline")     throw new Error("stt_offline");
   if (status === "error")       throw new Error("stt_error");
+  if (status === "no_speech" || status === "capture_drop") {
+    fullAppVoiceDiagnostics.sttStatus = status;
+    return "";
+  }
   if (status === "empty" || !result.transcript) return "";
   return String(result.transcript);
 }
@@ -4792,7 +4822,9 @@ function _fullAppSttTranscribeChunks(chunks, mimeType, recordingMeta) {
     if (!transcript) {
       // TASK-244: empty transcript diagnostics
       fullAppVoiceDiagnostics.emptyTranscript = true;
-      fullAppVoiceDiagnostics.sttStatus = "empty";
+      fullAppVoiceDiagnostics.sttStatus = fullAppVoiceDiagnostics.noSpeechGuardApplied
+        ? "no_speech"
+        : "empty";
       renderFullAppVoiceDiagnostics();
       _recordVoiceDiagnosticsHistory();
       var emptyMsg = "未偵測到語音，請重試。";
@@ -5878,7 +5910,9 @@ async function _processConversationQueueItem(item) {
   if (transcript === null || !transcript) {
     // TASK-244: empty/unavailable diagnostics
     fullAppVoiceDiagnostics.emptyTranscript = true;
-    fullAppVoiceDiagnostics.sttStatus = "empty";
+    fullAppVoiceDiagnostics.sttStatus = fullAppVoiceDiagnostics.noSpeechGuardApplied
+      ? "no_speech"
+      : "empty";
     renderFullAppVoiceDiagnostics();
     _recordVoiceDiagnosticsHistory();
     return;
@@ -6232,7 +6266,9 @@ function _recordVoiceDiagnosticsHistory() {
     captureReadyLatencyMs: d.captureReadyLatencyMs,
     firstChunkLatencyMs: d.firstChunkLatencyMs,
     preRollAppliedMs: d.preRollAppliedMs,
-    sttStatus:       d.sttStatus
+    sttStatus:       d.sttStatus,
+    noSpeechGuardApplied: d.noSpeechGuardApplied,
+    noSpeechGuardReason: d.noSpeechGuardReason
   };
   fullAppVoiceDiagnosticsHistory.unshift(entry);
   if (fullAppVoiceDiagnosticsHistory.length > 2) fullAppVoiceDiagnosticsHistory.length = 2;
@@ -6397,6 +6433,14 @@ function renderFullAppVoiceDiagnostics() {
     "命中 alias: " + (d.sttMatchedAlias || "—") + "  canonical: " + (d.sttCanonicalTerm || "—"),
     "STT Provider: " + (d.sttProviderResolved || "unknown") + "  來源: " + (d.sttProviderSource || "unknown"),
     "Provider 載入: " + (d.sttProviderLoadStatus || "unknown") + "  fallback: " + (d.sttProviderFallbackReason || "none"),
+    "No-speech guard: enabled=" + (d.noSpeechGuardEnabled ? "true" : "false") +
+      " applied=" + (d.noSpeechGuardApplied ? "true" : "false") +
+      " reason=" + (d.noSpeechGuardReason || "none"),
+    "Audio energy: rms=" + (d.audioRms === null || d.audioRms === undefined ? "—" : d.audioRms) +
+      " peak=" + (d.audioPeak === null || d.audioPeak === undefined ? "—" : d.audioPeak) +
+      " speechDetected=" + (d.audioSpeechDetected === null || d.audioSpeechDetected === undefined ? "unknown" : (d.audioSpeechDetected ? "true" : "false")),
+    "STT no-speech probability: " + (d.sttNoSpeechProbability === null || d.sttNoSpeechProbability === undefined ? "—" : d.sttNoSpeechProbability) +
+      " suspiciousPattern=" + (d.suspiciousTranscriptPattern || "none"),
     "焦點安全: " + (d.voiceCaptureFocusSafe ? "是" : "否") + "  可見: " + (d.lastVisibilityState || "visible") + "  焦點: " + (d.lastWindowFocusState || "focused"),
     "AudioCtx 狀態: " + (d.audioContextState || "none") + "  中斷原因: " + (d.captureInterruptedReason || "none") + "  因可見性: " + (d.captureInterruptedByVisibility ? "是" : "否"),
     "Warmup: " + (d.startupWarmupEnabled ? "ON" : "OFF") + "  STT: " + (d.sttWarmupStatus || "pending") + " " + d.sttWarmupLatencyMs + "ms  Ollama: " + (d.ollamaWarmupStatus || "pending") + " " + d.ollamaWarmupLatencyMs + "ms",
@@ -6548,6 +6592,15 @@ function resetFullAppVoiceDiagnosticsForRecording(mode, recordingMeta) {
   fullAppVoiceDiagnostics.sttProviderLoadStatus          = "";
   fullAppVoiceDiagnostics.sttProviderLoadError           = "";
   fullAppVoiceDiagnostics.sttProviderFallbackReason      = "";
+  // TASK-STT-004: reset no-speech guard diagnostics
+  fullAppVoiceDiagnostics.noSpeechGuardEnabled           = true;
+  fullAppVoiceDiagnostics.noSpeechGuardApplied           = false;
+  fullAppVoiceDiagnostics.noSpeechGuardReason            = "none";
+  fullAppVoiceDiagnostics.audioRms                       = null;
+  fullAppVoiceDiagnostics.audioPeak                      = null;
+  fullAppVoiceDiagnostics.audioSpeechDetected            = null;
+  fullAppVoiceDiagnostics.sttNoSpeechProbability         = null;
+  fullAppVoiceDiagnostics.suspiciousTranscriptPattern    = "none";
   // TASK-266/267: reset owner-voice dry-run status; settings sync will flip
   // enabled back on if Owner Voice Gate is enrolled+enabled.
   var _ownerVoiceDryRunSource = _ownerVoiceDryRunSourceForRecordingMode(mode);

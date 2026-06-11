@@ -28869,6 +28869,147 @@ Windows runtime smoke still needs actual local, non-private audio:
 
 ---
 
+## TASK-STT-004 | STT No-Speech / Silence Hallucination Guard
+
+Status: IMPLEMENTED - AUTOMATED SMOKE PASS / NEEDS WINDOWS SILENCE RUNTIME SMOKE (2026-06-11)
+
+### Runtime Root Cause
+
+Windows candidate smoke confirmed that `DRAGON_STT_MODEL=base` and
+`DRAGON_STT_MODEL=small` overrides work. `small` produced better transcripts for
+some Conversation Mode phrases, but Manual Mic with intentional silence produced
+a faster-whisper hallucination:
+
+- mode: `manual_mic`
+- duration: 7404 ms
+- blob: 229420 bytes WAV
+- model: `small`
+- STT status: `success`
+- finalTranscript: subtitle-credit-like mojibake text beginning with `摮...by`
+- VAD last/max RMS: `0.0000`
+- VAD speech detected: `false`
+- Owner Voice dry-run rejected and cleaned temporary candidate WAV
+
+Interpretation: this is a no-speech / silence hallucination, not a valid user
+utterance.
+
+### Guard Design
+
+Backend STT now computes conservative safe audio stats for WAV PCM input before
+accepting STT output:
+
+- `audioDurationMs`
+- `audioRms`
+- `audioPeak`
+- `audioSpeechDetected`
+- `audioSignalRatio`
+- `audioUsableSampleCount`
+
+For faster-whisper, the backend also inspects segment metadata when present:
+
+- `sttNoSpeechProbability`
+- `sttAvgLogprob`
+- `sttCompressionRatio`
+- `sttSegmentCount`
+
+The guard suppresses a result only when strong audio-level no-speech evidence is
+present. Suspicious subtitle-credit patterns such as `subtitles by` or the
+observed `摮...?by` pattern are considered only in combination with silent /
+near-silent audio evidence. Real speech is not blocked just because the
+transcript contains `摮...?`.
+
+### Runtime Behavior
+
+If the guard applies:
+
+- `/stt/transcribe` returns `status=no_speech`
+- `transcript`, `finalTranscript`, `correctedTranscript`, and
+  `punctuatedTranscript` are empty
+- correction and punctuation are not run as if the text were real speech
+- Manual Mic does not fill the textarea
+- Manual Mic auto-send does not call `/chat`
+- Conversation Mode does not enqueue a valid chat turn and does not call `/chat`
+- Conversation Mode rearms listening when still enabled
+- Conversation Mode remains capture=off during graceful Stop and continues valid
+  drain behavior
+- diagnostics/history show `STT:no_speech`, not `STT:success` or fake
+  `STT:error`
+- Owner Voice dry-run remains non-blocking and temporary candidate cleanup is
+  unchanged
+
+### Diagnostics
+
+Manual Mic and Conversation Mode Voice Diagnostics now expose only safe scalar
+fields:
+
+- `noSpeechGuardEnabled`
+- `noSpeechGuardApplied`
+- `noSpeechGuardReason`
+- `audioRms`
+- `audioPeak`
+- `audioSpeechDetected`
+- `sttNoSpeechProbability`
+- `suspiciousTranscriptPattern`
+
+No raw audio, temp paths, embeddings, centroid values, or private file paths are
+exposed.
+
+### Preserved Boundaries
+
+- Runtime default STT model remains `tiny`.
+- TASK-STT-003 `DRAGON_STT_MODEL=base|small|tiny` override remains supported.
+- `base` remains the first runtime candidate; `small` remains a slower quality
+  candidate needing more silence/quality smoke.
+- `/stt/transcribe` request schema is unchanged.
+- `/chat` schema is unchanged.
+- TASK-AUDIO-001 pre-roll behavior is unchanged.
+- TASK-CONV-001 graceful drain behavior is unchanged.
+- Owner Voice Gate remains dry-run / non-blocking.
+- Punctuation/correction path remains intact for real speech.
+- No aggressive semantic rewrite was added.
+- No real audio or `.local-stt-samples` files are committed.
+
+### Tests Added
+
+- silent WAV + subtitle-credit hallucination returns `status=no_speech`
+- silent WAV + short hallucinated transcript is suppressed
+- valid audio energy with suspicious text is not suppressed
+- diagnostics include no-speech guard fields
+- Manual Mic `no_speech` does not fill textarea or auto-send
+- real Manual Mic speech still reaches `/chat`
+- Conversation Mode `no_speech` rearms listening
+- Conversation Mode `no_speech` during graceful Stop stays capture=off
+- TASK-STT-003 model override tests still pass
+
+### Validation
+
+Automated validation:
+
+- `py_compile backend\app\stt\stt_service.py backend\app\api\routes.py`: PASS
+- targeted `pytest -k "task_stt_004 or model_override"`: 6 passed
+- `node apps/desktop/scripts/renderer-chat-smoke.js`: PASS
+- `.\backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_routes.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-stt004`: 219 passed
+- `.\backend\.venv\Scripts\python.exe scripts\stt_provider_smoke.py`: 420 PASS / 0 FAIL
+- `.\backend\.venv\Scripts\python.exe scripts\stt_quality_probe.py --help`: PASS
+- `node apps/desktop/scripts/renderer-chat-smoke.js`: PASS
+- `node apps/desktop/scripts/pet-window-smoke.js`: 92 checks PASS
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: 290 checks PASS
+- `git diff --check`: PASS, CRLF warnings only
+- `git status --short`: reviewed; unrelated `docs/開啟方式.txt` remains modified and uncommitted
+
+### Windows Runtime Smoke Needed
+
+1. Start backend with `DRAGON_STT_MODEL=small`.
+2. Use Manual Mic and intentionally stay silent for about 5-8 seconds.
+3. Confirm diagnostics show `STT:no_speech`, `noSpeechGuardApplied=true`,
+   `audioRms` / `audioPeak` near zero, empty final transcript, no textarea fill,
+   and no `/chat` send.
+4. Repeat with `DRAGON_STT_MODEL=base`.
+5. Repeat Conversation Mode silence and graceful Stop cases.
+6. Confirm real speech still produces finalTranscript and reaches `/chat`.
+
+---
+
 ## TASK-CONV-001 | Conversation Mode Continuous Capture / Pending Utterance Queue
 
 Status: IMPLEMENTED - AUTOMATED RENDERER SMOKE PASS / NEEDS WINDOWS RUNTIME SMOKE (2026-06-05)

@@ -6,7 +6,7 @@ Design boundaries:
 - No raw audio is persisted to disk.
 - No always-listening, wake-word, TTS, screen capture, or vision.
 - No external network calls.
-- Returns {"transcript": str, "status": "ok" | "unavailable" | "empty" | "error"}.
+- Returns {"transcript": str, "status": "ok" | "unavailable" | "empty" | "no_speech" | "error"}.
 - TASK-STT-001 readability pipeline for ok results:
   raw STT transcript -> existing safe-dictionary correction -> conservative punctuation
   restoration -> final transcript returned in "transcript".
@@ -24,6 +24,7 @@ import subprocess
 import threading
 import time
 import uuid
+import wave
 from typing import Any
 
 try:
@@ -205,6 +206,18 @@ _WHISPER_AVAILABLE = _detect_whisper()
 # Load status — updated by _load_model(); initialized based on availability
 _STT_MODEL_LOAD_STATUS: str = "not_loaded" if _WHISPER_AVAILABLE else "unavailable"
 _STT_MODEL_LOAD_ERROR: str | None = None
+
+# TASK-STT-004: conservative no-speech guard for silent WAV captures.
+_NO_SPEECH_GUARD_ENABLED = True
+_NO_SPEECH_RMS_THRESHOLD = 0.0015
+_NO_SPEECH_PEAK_THRESHOLD = 0.005
+_NO_SPEECH_SIGNAL_RATIO_THRESHOLD = 0.001
+_NO_SPEECH_MIN_USABLE_SAMPLES = 160
+_NO_SPEECH_PROBABILITY_THRESHOLD = 0.80
+_NO_SPEECH_SHORT_TRANSCRIPT_CHARS = 40
+_SUSPICIOUS_TRANSCRIPT_PATTERNS = (
+    ("subtitle_credit", re.compile(r"(subtitles?\s+by|摮.{0,4}\?\s*by)", re.IGNORECASE)),
+)
 
 
 def _load_model() -> Any:
@@ -656,6 +669,189 @@ def _get_provider_metadata() -> dict:
     }
 
 
+def _empty_no_speech_metadata() -> dict:
+    return {
+        "noSpeechGuardEnabled": _NO_SPEECH_GUARD_ENABLED,
+        "noSpeechGuardApplied": False,
+        "noSpeechGuardReason": "none",
+        "audioDurationMs": 0,
+        "audioRms": None,
+        "audioPeak": None,
+        "audioSpeechDetected": None,
+        "audioSignalRatio": None,
+        "audioUsableSampleCount": 0,
+        "sttNoSpeechProbability": None,
+        "sttAvgLogprob": None,
+        "sttCompressionRatio": None,
+        "sttSegmentCount": 0,
+        "suspiciousTranscriptPattern": "none",
+    }
+
+
+def _read_pcm_sample(raw: bytes, sample_width: int) -> int:
+    if sample_width == 1:
+        return raw[0] - 128
+    if sample_width == 2:
+        return int.from_bytes(raw, "little", signed=True)
+    if sample_width == 3:
+        sign_byte = b"\xff" if raw[2] & 0x80 else b"\x00"
+        return int.from_bytes(raw + sign_byte, "little", signed=True)
+    if sample_width == 4:
+        return int.from_bytes(raw, "little", signed=True)
+    return 0
+
+
+def _audio_energy_metadata(audio_bytes: bytes, mime_type: str) -> dict:
+    """
+    TASK-STT-004: compute conservative PCM WAV energy diagnostics.
+
+    Unknown/unsupported formats return safe nulls and never block transcription.
+    """
+    meta = _empty_no_speech_metadata()
+    lower_mime = (mime_type or "").lower()
+    looks_wav = lower_mime in ("audio/wav", "audio/wave", "audio/x-wav") or audio_bytes[:4] == b"RIFF"
+    if not looks_wav:
+        meta["noSpeechGuardReason"] = "audio_stats_unavailable"
+        return meta
+
+    try:
+        with getattr(wave, "open")(io.BytesIO(audio_bytes), "rb") as wav:
+            channels = max(1, wav.getnchannels())
+            sample_width = wav.getsampwidth()
+            frame_rate = wav.getframerate()
+            frames = wav.getnframes()
+            raw_frames = wav.readframes(frames)
+    except Exception:  # noqa: BLE001
+        meta["noSpeechGuardReason"] = "audio_stats_unavailable"
+        return meta
+
+    if sample_width not in (1, 2, 3, 4) or frame_rate <= 0 or frames <= 0:
+        meta["noSpeechGuardReason"] = "audio_stats_unavailable"
+        return meta
+
+    max_abs_possible = float((1 << (8 * sample_width - 1)) - 1)
+    frame_size = sample_width * channels
+    usable = 0
+    sum_squares = 0.0
+    peak = 0.0
+    signal_samples = 0
+    for offset in range(0, len(raw_frames) - frame_size + 1, frame_size):
+        mixed = 0.0
+        for ch in range(channels):
+            start = offset + ch * sample_width
+            sample = _read_pcm_sample(raw_frames[start:start + sample_width], sample_width)
+            mixed += sample / max_abs_possible
+        sample_norm = mixed / channels
+        abs_norm = abs(sample_norm)
+        usable += 1
+        sum_squares += sample_norm * sample_norm
+        if abs_norm > peak:
+            peak = abs_norm
+        if abs_norm >= _NO_SPEECH_PEAK_THRESHOLD:
+            signal_samples += 1
+
+    if usable <= 0:
+        meta["noSpeechGuardReason"] = "audio_stats_unavailable"
+        return meta
+
+    rms = (sum_squares / usable) ** 0.5
+    signal_ratio = signal_samples / usable
+    speech_detected = not (
+        usable >= _NO_SPEECH_MIN_USABLE_SAMPLES
+        and rms <= _NO_SPEECH_RMS_THRESHOLD
+        and peak <= _NO_SPEECH_PEAK_THRESHOLD
+        and signal_ratio <= _NO_SPEECH_SIGNAL_RATIO_THRESHOLD
+    )
+    meta.update({
+        "noSpeechGuardReason": "none",
+        "audioDurationMs": round(frames * 1000 / frame_rate),
+        "audioRms": round(rms, 6),
+        "audioPeak": round(peak, 6),
+        "audioSpeechDetected": speech_detected,
+        "audioSignalRatio": round(signal_ratio, 6),
+        "audioUsableSampleCount": usable,
+    })
+    return meta
+
+
+def _segment_metadata(segment_list: list[Any]) -> dict:
+    no_speech_values: list[float] = []
+    avg_logprob_values: list[float] = []
+    compression_values: list[float] = []
+    for seg in segment_list:
+        no_speech_prob = getattr(seg, "no_speech_prob", None)
+        avg_logprob = getattr(seg, "avg_logprob", None)
+        compression_ratio = getattr(seg, "compression_ratio", None)
+        if isinstance(no_speech_prob, (int, float)):
+            no_speech_values.append(float(no_speech_prob))
+        if isinstance(avg_logprob, (int, float)):
+            avg_logprob_values.append(float(avg_logprob))
+        if isinstance(compression_ratio, (int, float)):
+            compression_values.append(float(compression_ratio))
+    return {
+        "sttNoSpeechProbability": round(max(no_speech_values), 6) if no_speech_values else None,
+        "sttAvgLogprob": round(sum(avg_logprob_values) / len(avg_logprob_values), 6)
+            if avg_logprob_values else None,
+        "sttCompressionRatio": round(max(compression_values), 6) if compression_values else None,
+        "sttSegmentCount": len(segment_list),
+    }
+
+
+def _detect_suspicious_transcript_pattern(text: str) -> str:
+    if not text:
+        return "none"
+    for name, pattern in _SUSPICIOUS_TRANSCRIPT_PATTERNS:
+        if pattern.search(text):
+            return name
+    return "none"
+
+
+def _should_apply_no_speech_guard(text: str, guard_meta: dict) -> tuple[bool, str]:
+    if not _NO_SPEECH_GUARD_ENABLED:
+        return False, "disabled"
+    if guard_meta.get("audioSpeechDetected") is not False:
+        return False, "none"
+
+    pattern = _detect_suspicious_transcript_pattern(text)
+    no_speech_prob = guard_meta.get("sttNoSpeechProbability")
+    segment_count = guard_meta.get("sttSegmentCount") or 0
+    short_transcript = len((text or "").strip()) <= _NO_SPEECH_SHORT_TRANSCRIPT_CHARS
+    high_no_speech = isinstance(no_speech_prob, (int, float)) and no_speech_prob >= _NO_SPEECH_PROBABILITY_THRESHOLD
+
+    if pattern != "none":
+        return True, "no_speech_hallucination_guard"
+    if high_no_speech:
+        return True, "no_speech_probability"
+    if segment_count > 0 and segment_count <= 1 and short_transcript:
+        return True, "silent_audio"
+    return False, "none"
+
+
+def _no_speech_response(guard_meta: dict, reason: str) -> dict:
+    meta = dict(guard_meta)
+    meta["noSpeechGuardApplied"] = True
+    meta["noSpeechGuardReason"] = reason
+    return {
+        "transcript": "",
+        "status": "no_speech",
+        **_get_model_metadata(),
+        **_get_provider_metadata(),
+        **meta,
+        "rawTranscript": "",
+        "correctedTranscript": "",
+        "correctionApplied": False,
+        "correctionMode": "safe_dictionary",
+        "correctionReason": "no_speech_guard",
+        "matchedAlias": "",
+        "canonicalTerm": "",
+        "punctuatedTranscript": "",
+        "finalTranscript": "",
+        "punctuationApplied": False,
+        "punctuationMode": "conservative_cjk_terminal",
+        "punctuationReason": "no_speech_guard",
+    }
+
+
 # TASK-247/248: STT transcript correction — deterministic phrase/hotword correction map.
 # Design rules:
 #   - Longer / more specific phrases come first to prevent partial-match shadowing.
@@ -1070,6 +1266,7 @@ def _transcribe_funasr(
     TASK-247/248 correction layer applies when transcription succeeds.
     """
     global _FUNASR_LOAD_STATUS, _FUNASR_LOAD_ERROR
+    guard_meta = _audio_energy_metadata(audio_bytes, mime_type)
 
     if not _FUNASR_AVAILABLE:
         return {
@@ -1077,6 +1274,7 @@ def _transcribe_funasr(
             "status": "unavailable",
             **_get_model_metadata(),
             **_get_provider_metadata(),
+            **guard_meta,
         }
 
     try:
@@ -1090,6 +1288,7 @@ def _transcribe_funasr(
             "status": "error",
             **_get_model_metadata(),
             **_get_provider_metadata(),
+            **guard_meta,
         }
     except Exception as exc:  # noqa: BLE001
         _FUNASR_LOAD_STATUS = "error"
@@ -1100,6 +1299,7 @@ def _transcribe_funasr(
             "status": "error",
             **_get_model_metadata(),
             **_get_provider_metadata(),
+            **guard_meta,
         }
 
     sidecar_status = sidecar_result.get("status", "error")
@@ -1117,6 +1317,7 @@ def _transcribe_funasr(
             "status": "error",
             **_get_model_metadata(),
             **_get_provider_metadata(),
+            **guard_meta,
         }
 
     if sidecar_status == "empty" or not transcript:
@@ -1127,10 +1328,16 @@ def _transcribe_funasr(
             "status": "empty",
             **_get_model_metadata(),
             **_get_provider_metadata(),
+            **guard_meta,
         }
 
     _FUNASR_LOAD_STATUS = "loaded"
     _FUNASR_LOAD_ERROR = None
+    guard_meta["suspiciousTranscriptPattern"] = _detect_suspicious_transcript_pattern(transcript)
+    guard_applies, guard_reason = _should_apply_no_speech_guard(transcript, guard_meta)
+    if guard_applies:
+        return _no_speech_response(guard_meta, guard_reason)
+
     norm = _normalize_funasr_transcript(transcript)
     correction = correct_transcript_text(norm["normalizedTranscript"])
     punctuation = restore_transcript_punctuation(correction["correctedTranscript"])
@@ -1139,6 +1346,7 @@ def _transcribe_funasr(
         "status": "ok",
         **_get_model_metadata(),
         **_get_provider_metadata(),
+        **guard_meta,
         "detectedLanguage": language or "zh",
         "rawTranscript": transcript,
         "normalizedTranscript": norm["normalizedTranscript"],
@@ -1190,7 +1398,7 @@ def transcribe_audio_bytes(
     -------
     dict with keys:
         "transcript"    : str   -- transcribed text (empty string on failure/empty audio)
-        "status"        : str   -- one of "ok", "unavailable", "empty", "error"
+        "status"        : str   -- one of "ok", "unavailable", "empty", "no_speech", "error"
 
     TASK-246 model metadata (present for ok / unavailable / error):
         "provider"        : str
@@ -1227,10 +1435,28 @@ def transcribe_audio_bytes(
         "sttProviderLoadError"     : str | None
         "sttProviderFallbackReason": str   -- "invalid_provider" | "none"
         "sttProviderCandidateNotes": str
+
+    TASK-STT-004 no-speech guard diagnostics:
+        "noSpeechGuardEnabled"       : bool
+        "noSpeechGuardApplied"       : bool
+        "noSpeechGuardReason"        : str
+        "audioDurationMs"            : int
+        "audioRms"                   : float | None
+        "audioPeak"                  : float | None
+        "audioSpeechDetected"        : bool | None
+        "audioSignalRatio"           : float | None
+        "audioUsableSampleCount"     : int
+        "sttNoSpeechProbability"     : float | None
+        "sttAvgLogprob"              : float | None
+        "sttCompressionRatio"        : float | None
+        "sttSegmentCount"            : int
+        "suspiciousTranscriptPattern": str
     """
+    guard_meta = _audio_energy_metadata(audio_bytes, mime_type)
+
     # Empty-bytes check is provider-independent.
     if not audio_bytes:
-        return {"transcript": "", "status": "empty"}
+        return {"transcript": "", "status": "empty", **guard_meta}
 
     resolved = _STT_RESOLVED_PROVIDER
     if resolved == "funasr-local":
@@ -1242,6 +1468,7 @@ def transcribe_audio_bytes(
             "status": "unavailable",
             **_get_model_metadata(),
             **_get_provider_metadata(),
+            **guard_meta,
         }
 
     # Default path: faster-whisper-local
@@ -1251,6 +1478,7 @@ def transcribe_audio_bytes(
             "status": "unavailable",
             **_get_model_metadata(),
             **_get_provider_metadata(),
+            **guard_meta,
         }
 
     model = _load_model()
@@ -1260,6 +1488,7 @@ def transcribe_audio_bytes(
             "status": "unavailable",
             **_get_model_metadata(),
             **_get_provider_metadata(),
+            **guard_meta,
         }
 
     try:
@@ -1268,11 +1497,24 @@ def transcribe_audio_bytes(
         if language:
             transcribe_kwargs["language"] = language
         segments, _info = model.transcribe(audio_buf, **transcribe_kwargs)
-        transcript = "".join(seg.text for seg in segments).strip()
+        segment_list = list(segments)
+        guard_meta.update(_segment_metadata(segment_list))
+        transcript = "".join(seg.text for seg in segment_list).strip()
+        guard_meta["suspiciousTranscriptPattern"] = _detect_suspicious_transcript_pattern(transcript)
         # TASK-245: extract detected language from TranscriptionInfo (None-safe).
         detected_language: str | None = getattr(_info, "language", None)
         if not transcript:
-            return {"transcript": "", "status": "empty"}
+            return {
+                "transcript": "",
+                "status": "empty",
+                **_get_model_metadata(),
+                **_get_provider_metadata(),
+                **guard_meta,
+            }
+        guard_applies, guard_reason = _should_apply_no_speech_guard(transcript, guard_meta)
+        if guard_applies:
+            return _no_speech_response(guard_meta, guard_reason)
+
         # TASK-247/248 then TASK-STT-001:
         # raw STT transcript -> safe dictionary correction -> conservative punctuation.
         correction = correct_transcript_text(transcript)
@@ -1282,6 +1524,7 @@ def transcribe_audio_bytes(
             "status": "ok",
             **_get_model_metadata(),
             **_get_provider_metadata(),
+            **guard_meta,
             "detectedLanguage": detected_language,
             "rawTranscript": correction["rawTranscript"],
             "correctedTranscript": correction["correctedTranscript"],
@@ -1303,4 +1546,5 @@ def transcribe_audio_bytes(
             "status": "error",
             **_get_model_metadata(),
             **_get_provider_metadata(),
+            **guard_meta,
         }

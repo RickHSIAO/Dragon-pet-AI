@@ -485,6 +485,19 @@ Suggested research and implementation tasks:
   names and mixed Chinese/English technical terms. The committed default is not
   changed.
 
+- **TASK-STT-004 STT No-Speech / Silence Hallucination Guard. IMPLEMENTED (2026-06-11):**
+  Windows runtime smoke found that faster-whisper `small` can hallucinate a
+  subtitle-credit-like transcript on intentional Manual Mic silence. This is a
+  no-speech detection failure, not a transcript correction problem. The backend
+  now computes WAV PCM audio energy diagnostics and combines strong silence
+  evidence with faster-whisper segment metadata (`no_speech_prob`, avg logprob,
+  compression ratio, segment count) and conservative subtitle-credit pattern
+  checks. Guarded results return `status=no_speech` with empty final transcript.
+  Manual Mic does not fill textarea or auto-send; Conversation Mode does not
+  enqueue/send chat and still rearms or drains according to existing policy.
+  Real speech is not suppressed merely because it contains a suspicious token.
+  Default runtime model remains `tiny`; `base` and `small` remain candidates.
+
 - TASK-STT-016 LLM-based semantic correction. **(PLANNED; future):** Optional
   follow-up to apply a local LLM pass over the corrected transcript for further semantic
   accuracy. Must be guarded by explicit user opt-in and must not replace the deterministic

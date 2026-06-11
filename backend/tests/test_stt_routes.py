@@ -26,6 +26,21 @@ from app.services.owner_voice_gate_storage import reset_owner_voice_gate_storage
 from app.stt import stt_service  # noqa: E402
 
 
+def _task_stt_004_pcm16_wav(sample_value: int = 0, frames: int = 16000) -> bytes:
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(16000)
+        wav.writeframes(
+            b"".join(
+                int(sample_value).to_bytes(2, "little", signed=True)
+                for _ in range(frames)
+            )
+        )
+    return buf.getvalue()
+
+
 # -- stt_service unit tests ---------------------------------------------------
 
 
@@ -42,7 +57,7 @@ def test_stt_service_returns_dict_with_required_keys():
     assert "transcript" in result
     assert "status" in result
     assert isinstance(result["transcript"], str)
-    assert result["status"] in ("ok", "unavailable", "empty", "error")
+    assert result["status"] in ("ok", "unavailable", "empty", "error", "no_speech")
 
 
 def test_stt_service_unavailable_when_no_whisper(monkeypatch):
@@ -115,6 +130,96 @@ def test_stt_service_ok_transcript(monkeypatch):
     assert result["transcript"] == "hello world"
 
 
+def test_task_stt_004_silent_wav_hallucination_suppressed(monkeypatch):
+    """TASK-STT-004: silent WAV + subtitle-credit hallucination returns no_speech."""
+
+    class _HallucinatingModel:
+        def transcribe(self, _buf, **_kwargs):
+            seg = SimpleNamespace(
+                text="摮?by蝝Ｗ憡",
+                no_speech_prob=0.91,
+                avg_logprob=-2.5,
+                compression_ratio=1.0,
+            )
+            return iter([seg]), SimpleNamespace(language="zh")
+
+    monkeypatch.setattr(stt_service, "_WHISPER_AVAILABLE", True)
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(stt_service, "_load_model", lambda: _HallucinatingModel())
+
+    result = stt_service.transcribe_audio_bytes(
+        _task_stt_004_pcm16_wav(0, frames=16000),
+        mime_type="audio/wav",
+        language="zh",
+    )
+
+    assert result["status"] == "no_speech"
+    assert result["transcript"] == ""
+    assert result["finalTranscript"] == ""
+    assert result["noSpeechGuardApplied"] is True
+    assert result["noSpeechGuardReason"] == "no_speech_hallucination_guard"
+    assert result["audioSpeechDetected"] is False
+    assert result["audioRms"] == 0
+    assert result["audioPeak"] == 0
+    assert result["sttNoSpeechProbability"] == 0.91
+    assert result["suspiciousTranscriptPattern"] == "subtitle_credit"
+    assert result["correctionApplied"] is False
+    assert result["correctionReason"] == "no_speech_guard"
+
+
+def test_task_stt_004_silent_short_transcript_suppressed(monkeypatch):
+    """TASK-STT-004: silent WAV with a short hallucinated transcript is not accepted."""
+
+    class _ShortHallucinationModel:
+        def transcribe(self, _buf, **_kwargs):
+            return iter([SimpleNamespace(text="你好", no_speech_prob=0.2)]), None
+
+    monkeypatch.setattr(stt_service, "_WHISPER_AVAILABLE", True)
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(stt_service, "_load_model", lambda: _ShortHallucinationModel())
+
+    result = stt_service.transcribe_audio_bytes(
+        _task_stt_004_pcm16_wav(0, frames=16000),
+        mime_type="audio/wav",
+        language="zh",
+    )
+
+    assert result["status"] == "no_speech"
+    assert result["transcript"] == ""
+    assert result["noSpeechGuardReason"] == "silent_audio"
+    assert result["audioSpeechDetected"] is False
+
+
+def test_task_stt_004_real_energy_suspicious_phrase_not_suppressed(monkeypatch):
+    """TASK-STT-004: suspicious text is blocked only with strong no-speech audio evidence."""
+
+    class _RealSpeechModel:
+        def transcribe(self, _buf, **_kwargs):
+            seg = SimpleNamespace(
+                text="我真的說了摮?這個詞",
+                no_speech_prob=0.1,
+                avg_logprob=-0.1,
+                compression_ratio=1.0,
+            )
+            return iter([seg]), SimpleNamespace(language="zh")
+
+    monkeypatch.setattr(stt_service, "_WHISPER_AVAILABLE", True)
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(stt_service, "_load_model", lambda: _RealSpeechModel())
+
+    result = stt_service.transcribe_audio_bytes(
+        _task_stt_004_pcm16_wav(4000, frames=16000),
+        mime_type="audio/wav",
+        language="zh",
+    )
+
+    assert result["status"] == "ok"
+    assert result["noSpeechGuardApplied"] is False
+    assert result["audioSpeechDetected"] is True
+    assert result["finalTranscript"]
+    assert "摮?" in result["rawTranscript"]
+
+
 # -- /stt/transcribe endpoint tests ------------------------------------------
 
 
@@ -143,7 +248,7 @@ def test_stt_transcribe_returns_json_with_transcript_and_status():
     assert "transcript" in data, "Response must contain 'transcript'"
     assert "status" in data, "Response must contain 'status'"
     assert isinstance(data["transcript"], str)
-    assert data["status"] in ("ok", "unavailable", "empty", "error")
+    assert data["status"] in ("ok", "unavailable", "empty", "error", "no_speech")
 
 
 def test_stt_transcribe_empty_audio_returns_empty_or_unavailable():
@@ -3031,7 +3136,7 @@ def test_task256_stt_transcribe_regression():
     data = response.json()
     assert "transcript" in data
     assert "status" in data
-    assert data["status"] in ("ok", "unavailable", "empty", "error")
+    assert data["status"] in ("ok", "unavailable", "empty", "error", "no_speech")
 
 
 # -- TASK-265: Backend Owner Voice Gate verify-files endpoint tests -----------
