@@ -704,7 +704,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   candidates only. No `/chat` schema change, Owner Voice hard gate, raw audio
   persistence, private sample commit, or aggressive rewrite was added.
 
-- TASK-PERSONA-001 IMPLEMENTED - FOURTH PROMPT/REPAIR SMOKE PASS / NEEDS WINDOWS CHAT TONE RE-SMOKE (2026-06-11):
+- TASK-PERSONA-001 DONE - WINDOWS CHAT TONE SMOKE PASS / DEBUG FALLBACK REPAIR ENABLED (2026-06-11):
   Tunes Christina's runtime persona prompt so the character remains proud,
   tsundere, protective, and witty without sliding into repeated direct
   humiliation or hostile name-calling. The prompt now avoids `下賤的人類` as a
@@ -722,7 +722,10 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   examples from LLM-visible prompt content, injects user-message-aware
   debug-intent guidance for STT/Conversation/debug messages, and adds a narrow
   post-generation repair for known harsh/evasive templates while preserving
-  normal tsundere replies. Windows chat tone re-smoke remains required.
+  normal tsundere replies. Windows runtime tone smoke PASS after fourth-pass
+  hardening: STT/debug, Conversation Mode, broad issue, closeout, and
+  tired/stress prompts all met the tone boundary and usefulness criteria.
+  Debug fallback repair remains enabled.
 
 - TASK-CONV-001 IMPLEMENTED - CONVERSATION MODE CONTINUOUS CAPTURE / PENDING UTTERANCE QUEUE (2026-06-05):
   Conversation Mode now separates capture state (`off/listening/recording`) from

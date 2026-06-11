@@ -29092,7 +29092,7 @@ model switch was made.
 
 ## TASK-PERSONA-001 | Christina Tsundere Tone Boundaries
 
-Status: IMPLEMENTED - FOURTH PROMPT/REPAIR SMOKE PASS / NEEDS WINDOWS CHAT TONE RE-SMOKE (2026-06-11)
+Status: DONE - WINDOWS CHAT TONE SMOKE PASS / DEBUG FALLBACK REPAIR ENABLED (2026-06-11)
 
 ### Goal
 
@@ -29190,6 +29190,23 @@ Fourth prompt/repair pass:
 - Preserved normal proud / tsundere replies when they do not match known bad
   patterns.
 
+### Windows Runtime Tone Smoke Closeout
+
+Fourth-pass Windows runtime tone smoke PASS:
+
+- STT/debug prompt returned `NEEDS EVIDENCE` with STT model,
+  `finalTranscript`, no-speech guard, audio voice evidence, and next check.
+- Conversation Mode prompt directly asked for conversation history turn
+  continuity, especially #1/#2/#3 ordering.
+- Broad issue prompt asked for diagnostics, log, git status, and STT / queue /
+  chat layer inspection.
+- Closeout prompt required validation and runtime smoke before finishing.
+- Tired/stress prompt used protective, non-contemptuous wording.
+- The known harsh/evasive debug template did not appear.
+- The default debug response did not ask only for "which audio segment".
+- Christina stayed proud / tsundere rather than generic customer-service tone.
+- Debug fallback repair remains enabled.
+
 ### Static Smoke Coverage
 
 `backend/tests/test_prompt_service.py` now verifies:
@@ -29240,23 +29257,20 @@ Fourth prompt/repair pass:
 - third-pass full backend validation: attempted with `backend\tests`; timed out after 304s in the local command wrapper
 - fourth-pass targeted prompt/chat tests: `backend\tests\test_prompt_service.py` 27 passed
 - fourth-pass full backend validation: attempted with `backend\tests`; timed out after 304s in the local command wrapper
+- closeout targeted prompt/chat tests: `backend\tests\test_prompt_service.py` 27 passed
+- closeout full backend validation: not run; prior full backend attempts in this environment timed out at 304s
 - `node apps/desktop/scripts/renderer-chat-smoke.js`: PASS
 - `node apps/desktop/scripts/pet-window-smoke.js`: 92 checks PASS
 - `node apps/desktop/scripts/pet-renderer-smoke.js`: 290 checks PASS
-- `git diff --check`: PASS, CRLF warnings only
+- `py_compile` for chat/prompt services: PASS
+- `git diff --check`: pending final pre-commit check
 - `git status --short`: reviewed; unrelated `docs/開啟方式.txt` remains modified and uncommitted
 
-### Remaining Windows Runtime Tone Smoke
+### Closeout Notes
 
-Run local `/chat` or Full App chat with:
-
-- technical/debug prompt: confirm cooperative, useful, lightly proud tone
-- broad debug prompts: confirm PASS / FAIL / NEEDS EVIDENCE, evidence needed,
-  and next check appear instead of evasive filler
-- emotional/stress prompt: confirm protective tone with reduced harshness
-- casual joke prompt: confirm playful teasing without insult spam
-- repeated debug turns: confirm the known harsh/evasive debug template does not
-  appear and repeated address phrasing is not repeated across nearby turns
+No remaining TASK-PERSONA-001 runtime tone smoke is required. Future tone work
+should be opened as a new task and should preserve debug directness before
+teasing unless deliberately redesigned.
 
 ---
 

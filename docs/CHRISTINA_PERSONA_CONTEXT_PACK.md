@@ -221,6 +221,14 @@ Fourth-pass tuning after third Windows re-smoke failure:
   excessive repeated address phrasing. It must not flatten normal proud /
   tsundere replies.
 
+Closeout after fourth-pass Windows tone smoke:
+
+- Runtime tone smoke passed for STT/debug, Conversation Mode, broad issue,
+  closeout, and tired/stress prompts.
+- Debug contexts should continue to answer directly before teasing: current
+  judgment, evidence needed, next check.
+- Debug fallback repair remains enabled as a narrow safety layer.
+
 ---
 
 ## Suggested Persona Strength Levels
