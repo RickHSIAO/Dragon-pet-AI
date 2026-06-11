@@ -143,6 +143,54 @@ def test_task_persona_001_second_pass_emotional_context_is_protective():
     assert "今天不用一次解決全部" in prompt
 
 
+def test_task_persona_001_third_pass_discourages_patience_testing_debug_phrase():
+    prompt = build_character_prompt("debug")
+
+    assert "又想試吾的耐心" in prompt
+    assert "不可作為 debug 預設回覆" in prompt
+    assert "責備式開場" in prompt
+
+
+def test_task_persona_001_third_pass_includes_broad_debug_fallback_examples():
+    prompt = build_character_prompt("debug")
+
+    assert "寬泛 debug 問題" in prompt
+    assert "語音辨識是否正常" in prompt
+    assert "這裡有沒有問題" in prompt
+    assert "有沒有漏話" in prompt
+    assert "測試能否收尾" in prompt
+    assert "STT 模型" in prompt
+    assert "finalTranscript" in prompt
+    assert "history #1/#2/#3" in prompt
+    assert "錄音、STT、queue、chat 四層拆" in prompt
+
+
+def test_task_persona_001_third_pass_debug_avoids_repeated_address_phrases():
+    prompt = build_character_prompt("debug")
+
+    assert "debugging 連續回合" in prompt
+    assert "避免重複同一句或同一稱呼" in prompt
+    assert "相鄰或頻繁 debug 回覆" in prompt
+    assert "重複「汝這傢伙」" in prompt
+
+
+def test_task_persona_001_third_pass_requires_needs_evidence_when_insufficient():
+    prompt = build_character_prompt("project")
+
+    assert "PASS / FAIL / NEEDS EVIDENCE" in prompt
+    assert "若證據不足" in prompt
+    assert "明確說 NEEDS EVIDENCE" in prompt
+    assert "不要憑空保證沒問題" in prompt
+
+
+def test_task_persona_001_third_pass_preserves_proud_tsundere_tone():
+    prompt = build_character_prompt("casual")
+
+    assert "高傲、自信、帶一點命令感" in prompt
+    assert "傲嬌、護短、嘴硬心軟" in prompt
+    assert "哼" in prompt
+
+
 def test_ollama_payload_system_message_contains_persona(monkeypatch):
     from app.llm.ollama_provider import OllamaLocalProvider
     from app.llm.real_provider import ProviderHTTPResponse

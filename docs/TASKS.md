@@ -29092,7 +29092,7 @@ model switch was made.
 
 ## TASK-PERSONA-001 | Christina Tsundere Tone Boundaries
 
-Status: IMPLEMENTED - SECOND PROMPT/STATIC SMOKE PASS / NEEDS WINDOWS CHAT TONE RE-SMOKE (2026-06-11)
+Status: IMPLEMENTED - THIRD PROMPT/STATIC SMOKE PASS / NEEDS WINDOWS CHAT TONE RE-SMOKE (2026-06-11)
 
 ### Goal
 
@@ -29142,6 +29142,31 @@ Second prompt pass:
 - Tired/stressed user context gets protective wording with less teasing and no
   lazy/weak framing.
 
+### Third-Pass Runtime Smoke Tuning
+
+Windows chat tone re-smoke improved closeout, failure, and stress replies, but
+TASK-PERSONA-001 still cannot close out:
+
+- Good: closeout questions used `NEEDS EVIDENCE` and asked for log,
+  diagnostics, and git status.
+- Good: failure handling used the expected `錄音 / STT / queue / chat` split
+  and protective "吾陪汝一步一步抓" wording.
+- Still failing: broad debug questions could repeat the exact adversarial line
+  `汝這傢伙又想試吾的耐心？先說清楚是哪段語音。`
+- Still failing: `汝這傢伙` could appear too often in nearby technical/debug
+  turns.
+
+Third prompt pass:
+
+- Marks `又想試吾的耐心` / the full failing sentence as disallowed for
+  technical/debug mode and not a default debug response.
+- Adds explicit broad debug fallback behavior for "語音辨識是否正常",
+  "這裡有沒有問題", "有沒有漏話", and "測試能否收尾".
+- Requires a current PASS / FAIL / NEEDS EVIDENCE judgment when possible,
+  followed by evidence needed, next check, and concise reasoning.
+- Strengthens repetition control: do not repeat the same sentence across nearby
+  turns, and avoid frequent or adjacent `汝這傢伙` in debug replies.
+
 ### Static Smoke Coverage
 
 `backend/tests/test_prompt_service.py` now verifies:
@@ -29156,6 +29181,11 @@ Second prompt pass:
 - second-pass tests verify direct-answer / evidence / next-check debug guidance
 - second-pass tests verify PASS / FAIL / NEEDS EVIDENCE style guidance
 - second-pass tests verify tired/stressed protective-tone guidance
+- third-pass tests verify the `又想試吾的耐心` debug phrase is discouraged
+- third-pass tests verify broad debug fallback examples are present
+- third-pass tests verify debug mode avoids repeated address phrases
+- third-pass tests verify NEEDS EVIDENCE framing when evidence is insufficient
+- third-pass tests verify proud / tsundere tone remains present
 - bad/good examples are present without asserting exact LLM output
 
 ### Boundaries
@@ -29175,6 +29205,8 @@ Second prompt pass:
 - first-pass `backend\.venv\Scripts\python.exe -m pytest backend\tests -v -p no:cacheprovider --basetemp=backend.pytest-tmp-persona001`: 909 passed
 - second-pass targeted prompt tests: `backend\tests\test_prompt_service.py` 24 passed
 - second-pass full backend validation: attempted with `backend\tests`; timed out after 304s in the local command wrapper
+- third-pass targeted prompt tests: `backend\tests\test_prompt_service.py` 29 passed
+- third-pass full backend validation: attempted with `backend\tests`; timed out after 304s in the local command wrapper
 - `node apps/desktop/scripts/renderer-chat-smoke.js`: PASS
 - `node apps/desktop/scripts/pet-window-smoke.js`: 92 checks PASS
 - `node apps/desktop/scripts/pet-renderer-smoke.js`: 290 checks PASS
@@ -29186,9 +29218,12 @@ Second prompt pass:
 Run local `/chat` or Full App chat with:
 
 - technical/debug prompt: confirm cooperative, useful, lightly proud tone
+- broad debug prompts: confirm PASS / FAIL / NEEDS EVIDENCE, evidence needed,
+  and next check appear instead of evasive filler
 - emotional/stress prompt: confirm protective tone with reduced harshness
 - casual joke prompt: confirm playful teasing without insult spam
-- repeated debug turns: confirm no repeated harsh demeaning phrase
+- repeated debug turns: confirm `又想試吾的耐心` does not appear and `汝這傢伙`
+  is not repeated across nearby turns
 
 ---
 
