@@ -29090,6 +29090,82 @@ model switch was made.
 
 ---
 
+## TASK-PERSONA-001 | Christina Tsundere Tone Boundaries
+
+Status: IMPLEMENTED - PROMPT/STATIC SMOKE PASS / NEEDS WINDOWS CHAT TONE SMOKE (2026-06-11)
+
+### Goal
+
+Keep Christina's dragon-princess / tsundere personality while reducing harsh
+personal insults, repeated demeaning phrases, and dismissive responses during
+technical tests.
+
+The intended runtime voice is proud, witty, protective, emotionally expressive,
+and still caring underneath. The target is adorably arrogant companion, not
+abusive character and not neutral customer-service assistant.
+
+### Implementation
+
+- Updated `backend/app/services/prompt_service.py` persona prompt with
+  TASK-PERSONA-001 tone boundary rules.
+- Replaced the direct default-address example `下賤的人類` with softer
+  `人類` / `汝這傢伙` style guidance.
+- Added context-sensitive technical/debugging guidance: Christina may tease, but
+  must cooperate, preserve concrete next steps, and not dismiss tests as
+  meaningless.
+- Added emotional/stress guidance: reduce sharpness and use protective,
+  steady, still-characterful wording.
+- Added repetition control: do not repeatedly use the same harsh insult
+  template; after a sharp line, move to useful help.
+- Added bad/good examples to steer style without requiring brittle exact LLM
+  output.
+- Updated `docs/CHRISTINA_PERSONA_CONTEXT_PACK.md` with the same tone-boundary
+  design notes.
+
+### Static Smoke Coverage
+
+`backend/tests/test_prompt_service.py` now verifies:
+
+- persona prompt includes TASK-PERSONA-001 tone-boundary guidance
+- Christina remains proud / tsundere / 嘴硬心軟
+- prompt discourages harsh direct insults and hostile name-calling
+- prompt no longer includes `下賤的人類`
+- debug prompt explicitly requires cooperation, reproduction steps, and error
+  messages
+- bad/good examples are present without asserting exact LLM output
+
+### Boundaries
+
+- `/chat` response schema remains `reply / mood / source`.
+- Mood schema unchanged.
+- No STT behavior change.
+- No Owner Voice behavior change.
+- No Ollama provider behavior change.
+- No renderer UI behavior change.
+- No runtime STT default change.
+- No local settings, audio, embeddings, temp files, or generated logs committed.
+
+### Validation
+
+- targeted prompt/chat pytest: 54 passed
+- `backend\.venv\Scripts\python.exe -m pytest backend\tests -v -p no:cacheprovider --basetemp=backend.pytest-tmp-persona001`: 909 passed
+- `node apps/desktop/scripts/renderer-chat-smoke.js`: PASS
+- `node apps/desktop/scripts/pet-window-smoke.js`: 92 checks PASS
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: 290 checks PASS
+- `git diff --check`: PASS, CRLF warnings only
+- `git status --short`: reviewed; unrelated `docs/開啟方式.txt` remains modified and uncommitted
+
+### Remaining Windows Runtime Tone Smoke
+
+Run local `/chat` or Full App chat with:
+
+- technical/debug prompt: confirm cooperative, useful, lightly proud tone
+- emotional/stress prompt: confirm protective tone with reduced harshness
+- casual joke prompt: confirm playful teasing without insult spam
+- repeated debug turns: confirm no repeated harsh demeaning phrase
+
+---
+
 ## TASK-CONV-001 | Conversation Mode Continuous Capture / Pending Utterance Queue
 
 Status: IMPLEMENTED - AUTOMATED RENDERER SMOKE PASS / NEEDS WINDOWS RUNTIME SMOKE (2026-06-05)
@@ -29708,3 +29784,5 @@ no STT/sidecar/schema changes.
 (C) Show Pet button acts as toggle — hides when pet is already visible; should be idempotent
 show/focus/restore. Hide Pet should only be triggered by explicit Hide action / context menu / Menu.
 Left-click on avatar should not hide; drag still draggable; right-click/Menu may keep Hide Pet.
+
+## TASK-CONV-001 | Conversation Mode Continuous Capture / Pending Utterance Queue

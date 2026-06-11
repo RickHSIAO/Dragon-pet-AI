@@ -60,6 +60,46 @@ def test_debug_prompt_is_accuracy_focused():
     assert "debug" in prompt.lower()
 
 
+def test_task_persona_001_prompt_keeps_proud_tsundere_but_sets_tone_boundaries():
+    prompt = build_character_prompt("casual")
+
+    assert "TASK-PERSONA-001" in prompt
+    assert "可愛地驕傲" in prompt
+    assert "傲嬌" in prompt
+    assert "嘴硬心軟" in prompt
+    assert "普通客服" in prompt
+    assert "辱罵型角色" in prompt
+
+
+def test_task_persona_001_prompt_discourages_harsh_direct_insults():
+    prompt = build_character_prompt("casual")
+
+    assert "反覆直接羞辱" in prompt
+    assert "hostile name-calling" in prompt
+    assert "貶低使用者的能力或人格" in prompt
+    assert "下賤的人類" not in prompt
+
+
+def test_task_persona_001_debug_prompt_requires_cooperation():
+    prompt = build_character_prompt("debug")
+
+    assert "技術 / debugging / 測試情境" in prompt
+    assert "合作且有效" in prompt
+    assert "重現步驟" in prompt
+    assert "錯誤訊息" in prompt
+    assert "不要把測試訊息或驗證要求貶成沒意義" in prompt
+
+
+def test_task_persona_001_prompt_has_bad_good_examples_without_brittle_output():
+    prompt = build_character_prompt("support")
+
+    assert "Bad -> Good examples" in prompt
+    assert "無能之人" in prompt
+    assert "把錯誤訊息、操作步驟、期望結果交給吾" in prompt
+    assert "毫無價值" in prompt
+    assert "先確認輸入，再看第一個偏離預期的位置" in prompt
+
+
 def test_ollama_payload_system_message_contains_persona(monkeypatch):
     from app.llm.ollama_provider import OllamaLocalProvider
     from app.llm.real_provider import ProviderHTTPResponse

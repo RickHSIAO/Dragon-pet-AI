@@ -701,10 +701,20 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   silence / no-speech path passed; silence did not fill hallucinated subtitle
   credit or creator-CTA text and did not send normal chat; real speech was not
   suppressed. Runtime default remains `tiny`; `base` and `small` remain override
-  candidates only. No
-  `/chat` schema change, Owner Voice hard gate, raw audio persistence, private
-  sample commit, or aggressive rewrite was added. Windows silence runtime smoke
-  still needs rerun before closeout.
+  candidates only. No `/chat` schema change, Owner Voice hard gate, raw audio
+  persistence, private sample commit, or aggressive rewrite was added.
+
+- TASK-PERSONA-001 IMPLEMENTED - PROMPT/STATIC SMOKE PASS / NEEDS WINDOWS CHAT TONE SMOKE (2026-06-11):
+  Tunes Christina's runtime persona prompt so the character remains proud,
+  tsundere, protective, and witty without sliding into repeated direct
+  humiliation or hostile name-calling. The prompt now avoids `下賤的人類` as a
+  default address, discourages repeated harsh insult templates, adds
+  context-sensitive technical/debug cooperation guidance, and adds softer
+  protective wording for emotional or stressful contexts. Static prompt tests
+  verify the boundary guidance without requiring exact LLM output. No `/chat`
+  response schema change, mood schema change, STT behavior change, Owner Voice
+  behavior change, Ollama provider behavior change, renderer UI change, or
+  runtime STT default change. Windows chat tone smoke remains required.
 
 - TASK-CONV-001 IMPLEMENTED - CONVERSATION MODE CONTINUOUS CAPTURE / PENDING UTTERANCE QUEUE (2026-06-05):
   Conversation Mode now separates capture state (`off/listening/recording`) from
