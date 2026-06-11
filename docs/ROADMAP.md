@@ -756,7 +756,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   STT recognition quality until TASK-AUDIO-001 Windows capture smoke and a later
   STT quality benchmark pass.
 
-- TASK-CONV-002 IMPLEMENTED - AUTOMATED DIAGNOSTICS SMOKE PASS / NEEDS WINDOWS RUNTIME 4-TURN SMOKE (2026-06-11):
+- TASK-CONV-002 DONE - WINDOWS RUNTIME 4-TURN LIFECYCLE SMOKE PASS (2026-06-11):
   Adds bounded session-only Conversation Mode turn lifecycle diagnostics for
   missing-turn investigation. Voice Diagnostics now shows recent `turn#N`
   lifecycle rows with safe scalar state only: turn ID, capture/processing/queue
@@ -764,13 +764,21 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   duration, blob size, pre-roll milliseconds, STT status, chat status, and
   Owner Voice dry-run status. It records recording, finalized, queued, dropped,
   STT processing/success/error/no-speech/empty, chat sent/error/skipped, and
-  graceful drain completion. No STT default change, Owner Voice hard gate,
+  graceful drain completion. Windows runtime 4-turn smoke PASS with actual
+  Conversation Mode audio and `DRAGON_STT_MODEL=base`: `turn#1` through
+  `turn#4` were visible, completed, had non-negative duration and non-zero
+  bytes, and were sent to chat; final state was capture `off`, processing
+  `idle`, pending `0/2`, `activeTurnId=0`, and `stopMode=drain_complete`.
+  Diagnostics also correctly surfaced `turn#5 dropped reason=queue_full` and
+  `turn#6 status=drain_complete`. The `queue_full` drop is a follow-up
+  candidate for TASK-CONV-003 - Conversation Mode Queue Backpressure / Extra
+  Dropped Turn Investigation, not a TASK-CONV-002 blocker. No STT default
+  change, Owner Voice hard gate,
   `/stt/transcribe` schema change, `/chat` schema change, IPC, Pet Window,
   Output Queue, raw audio persistence, path exposure, transcript exposure,
   centroid exposure, or embedding exposure was added. TASK-CONV-001 queue
   ordering, max pending `2`, no parallel `/chat`, and graceful Stop/drain
-  behavior remain unchanged. Windows 4-turn runtime smoke is still required
-  before DONE.
+  behavior remain unchanged.
 
 - TASK-AUDIO-001 IMPLEMENTED - CAPTURE START LATENCY MEASUREMENT / CONVERSATION PRE-ROLL BUFFER (2026-06-05):
   Voice Diagnostics now records safe per-capture timing metadata:

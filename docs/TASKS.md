@@ -29436,7 +29436,7 @@ capture/pre-roll smoke and a later STT quality benchmark both pass.
 
 ## TASK-CONV-002 | Conversation Mode Turn Lifecycle Visibility / Missing Turn Diagnostics
 
-Status: IMPLEMENTED - AUTOMATED DIAGNOSTICS SMOKE PASS / NEEDS WINDOWS RUNTIME 4-TURN SMOKE (2026-06-11)
+Status: DONE - WINDOWS RUNTIME 4-TURN LIFECYCLE SMOKE PASS (2026-06-11)
 
 ### Goal
 
@@ -29488,14 +29488,48 @@ recorded, queued, dropped, sent, skipped, or drained.
 - Lifecycle history remains bounded and drops oldest entries first.
 - Graceful Stop/drain completion renders `stopMode=drain_complete`.
 
-### Runtime Follow-Up
+### Windows Runtime Smoke
 
-Windows runtime 4-turn smoke is still required before marking TASK-CONV-002
-DONE. The smoke should speak four visible Conversation Mode turns, then confirm
-that diagnostics show turn IDs in order, no missing turn ID, no duplicate turn
-ID, non-negative durations/bytes-per-second, correct dropped/no-speech/error
-classification if triggered, Stop/drain completion visibility, no parallel
-`/chat`, and no sensitive data exposure.
+Windows runtime 4-turn lifecycle smoke PASS with actual Conversation Mode audio
+and `DRAGON_STT_MODEL=base`.
+
+Observed final state:
+
+- capture `off`
+- processing `idle`
+- pending `0/2`
+- `activeTurnId=0`
+- `stopMode=drain_complete`
+- Owner Voice dry-run accepted, candidate WAV temporary/deleted, and
+  `runtimeHardBlocked=false`
+
+Observed lifecycle rows:
+
+- `turn#1` completed, `stt=success`, `chat=sent`, duration `2699ms`, bytes
+  `90156`, pre-roll `256ms`
+- `turn#2` completed, `stt=success`, `chat=sent`, duration `2890ms`, bytes
+  `106540`, pre-roll `256ms`
+- `turn#3` completed, `stt=success`, `chat=sent`, duration `2689ms`, bytes
+  `90156`, pre-roll `256ms`
+- `turn#4` completed, `stt=success`, `chat=sent`, duration `2514ms`, bytes
+  `90156`, pre-roll `256ms`
+- `turn#5` dropped with `reason=queue_full`, `stt=not_started`, and
+  `chat=not_sent`
+- `turn#6` reached `status=drain_complete`, `pending=0/2`, and `active=0`
+
+PASS criteria met: ordered turn IDs were visible; #1/#2/#3/#4 existed,
+completed, and were sent to chat; durations were non-negative; valid turns had
+non-zero blob bytes; dropped-turn visibility worked; graceful Stop/drain
+visibility worked; no sensitive diagnostics exposure was observed; and no
+schema, STT default, or Owner Voice hard-gate behavior changed.
+
+### Follow-Up Candidate
+
+The runtime smoke surfaced a visible extra dropped turn:
+`turn#5 dropped reason=queue_full`. This is not a TASK-CONV-002 failure because
+the diagnostics task successfully made the drop visible. Track separately as
+TASK-CONV-003 - Conversation Mode Queue Backpressure / Extra Dropped Turn
+Investigation.
 
 ---
 
