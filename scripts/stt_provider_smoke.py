@@ -522,7 +522,7 @@ _os.environ.pop("DRAGON_PET_FUNASR_PERSISTENT", None)
 # ---------------------------------------------------------------------------
 # TASK-STT-001: Chinese STT punctuation restoration static/runtime checks
 # ---------------------------------------------------------------------------
-print("\n[10/19] TASK-STT-001 - Chinese STT punctuation restoration")
+print("\n[10/20] TASK-STT-001 - Chinese STT punctuation restoration")
 stt = reload_stt("faster-whisper-local")
 
 check(hasattr(stt, "restore_transcript_punctuation"),
@@ -577,9 +577,53 @@ check("stt:punctuate" not in renderer_preload_text and "stt:punctuate" not in re
       "TASK-STT-001 adds no punctuation IPC channel")
 
 # ---------------------------------------------------------------------------
+# TASK-STT-004: STT no-speech guard static/runtime safety checks
+# ---------------------------------------------------------------------------
+print("\n[11/20] TASK-STT-004 - STT no-speech guard runtime safety")
+
+check('_STT_DEFAULT_MODEL = "tiny"' in stt_service_text,
+      "TASK-STT-004 preserves committed STT default model=tiny")
+check("_NO_SPEECH_RMS_THRESHOLD = 0.005" in stt_service_text,
+      "TASK-STT-004 runtime silence RMS threshold covers Windows low-energy evidence")
+check("_NO_SPEECH_PEAK_THRESHOLD = 0.03" in stt_service_text,
+      "TASK-STT-004 runtime silence peak threshold covers low-level capture spikes")
+check("_NO_SPEECH_PROBABILITY_THRESHOLD = 0.60" in stt_service_text,
+      "TASK-STT-004 no-speech probability threshold covers small-model silence evidence")
+for variant in (
+    "摮?by蝝Ｗ憡",
+    "摮? by",
+    "摮? By",
+    "摮?BY",
+    "摮?嚗",
+    "摮?蝏",
+    "subtitles by",
+    "caption by",
+    "字幕由範例提供",
+):
+    check(stt._detect_suspicious_transcript_pattern(variant) == "subtitle_credit",
+          f"TASK-STT-004 detects suspicious subtitle-credit variant {variant!r}")
+check(stt._detect_suspicious_transcript_pattern("我真的說了摮?這個詞") == "none",
+      "TASK-STT-004 does not flag bare mojibake marker without subtitle-credit evidence")
+for token in (
+    "noSpeechGuardThresholds",
+    "noSpeechGuardSignals",
+    "noSpeechGuardDecisionTrace",
+):
+    check(token in stt_service_text,
+          f"TASK-STT-004 backend response includes {token}")
+    check(token in renderer_js_text,
+          f"TASK-STT-004 renderer diagnostics include {token}")
+check("allow:audio_energy_detected" in stt_service_text,
+      "TASK-STT-004 records allow trace when real audio energy is detected")
+check("suppress:near_silent_suspicious_transcript" in stt_service_text,
+      "TASK-STT-004 records suppress trace for low-energy subtitle-credit hallucinations")
+check('status === "no_speech"' in renderer_js_text and 'return ""' in renderer_js_text,
+      "TASK-STT-004 renderer returns empty transcript for no_speech")
+
+# ---------------------------------------------------------------------------
 # TASK-259/260/261: Owner Voice Gate probe and storage docs static safety checks
 # ---------------------------------------------------------------------------
-print("\n[11/19] TASK-259/260/261 - Owner Voice Gate probe and storage docs static safety")
+print("\n[12/20] TASK-259/260/261 - Owner Voice Gate probe and storage docs static safety")
 probe_path = _os.path.join(REPO_ROOT, "scripts", "owner_voice_gate_probe.py")
 owner_voice_doc = _os.path.join(REPO_ROOT, "docs", "OWNER_VOICE_GATE_RESEARCH.md")
 owner_voice_storage_doc = _os.path.join(REPO_ROOT, "docs", "OWNER_VOICE_GATE_STORAGE_DESIGN.md")
@@ -753,7 +797,7 @@ check('fetch(`${BACKEND_URL}/chat`' not in owner_ui_text,
 # ---------------------------------------------------------------------------
 # TASK-262: Multi-sample calibration probe static safety checks
 # ---------------------------------------------------------------------------
-print("\n[12/19] TASK-262 - Owner Voice Gate multi-sample calibration probe static safety")
+print("\n[13/20] TASK-262 - Owner Voice Gate multi-sample calibration probe static safety")
 
 check("--owner-sample" in probe_source,
       "probe accepts --owner-sample for multi-sample calibration")
@@ -832,7 +876,7 @@ check("calibration" in owner_voice_storage_text,
 # ---------------------------------------------------------------------------
 # TASK-263: Owner voice file enrollment + centroid storage static checks
 # ---------------------------------------------------------------------------
-print("\n[13/19] TASK-263 - Owner Voice Gate file enrollment and centroid storage static safety")
+print("\n[14/20] TASK-263 - Owner Voice Gate file enrollment and centroid storage static safety")
 
 enroll_path = _os.path.join(REPO_ROOT, "scripts", "owner_voice_gate_enroll.py")
 check(_os.path.isfile(enroll_path),
@@ -911,7 +955,7 @@ check("Unicode" in owner_voice_storage_text and "audio_file_not_found" in owner_
 # ---------------------------------------------------------------------------
 # TASK-264: Stored centroid verification probe static safety checks
 # ---------------------------------------------------------------------------
-print("\n[14/19] TASK-264 - Owner Voice Gate stored centroid verification probe static safety")
+print("\n[15/20] TASK-264 - Owner Voice Gate stored centroid verification probe static safety")
 
 verify_path = _os.path.join(REPO_ROOT, "scripts", "owner_voice_gate_verify.py")
 check(_os.path.isfile(verify_path),
@@ -963,7 +1007,7 @@ check("TASK-264" in owner_voice_storage_text,
 # ---------------------------------------------------------------------------
 # TASK-265: Backend verify-files endpoint static safety checks
 # ---------------------------------------------------------------------------
-print("\n[15/19] TASK-265 - Owner Voice Gate backend verify-files endpoint static safety")
+print("\n[16/20] TASK-265 - Owner Voice Gate backend verify-files endpoint static safety")
 
 verify_endpoint_route = "/owner-voice-gate/verify-files"
 check(verify_endpoint_route in routes_source,
@@ -1024,7 +1068,7 @@ check("TASK-265" in owner_voice_storage_text,
 # ---------------------------------------------------------------------------
 # TASK-266: Manual Mic dry-run policy static safety checks
 # ---------------------------------------------------------------------------
-print("\n[16/19] TASK-266 - Owner Voice Gate Manual Mic dry-run policy static safety")
+print("\n[17/20] TASK-266 - Owner Voice Gate Manual Mic dry-run policy static safety")
 
 check("OWNER_VOICE_MANUAL_MIC_DRY_RUN_ENABLED" in renderer_js_text,
       "renderer defines Manual Mic owner voice dry-run enable flag")
@@ -1073,7 +1117,7 @@ check("TASK-266" in owner_voice_text,
       "owner voice research doc records TASK-266")
 
 # TASK-267: Conversation Mode dry-run policy static safety checks
-print("\n[17/19] TASK-267 - Owner Voice Gate Conversation Mode dry-run policy static safety")
+print("\n[18/20] TASK-267 - Owner Voice Gate Conversation Mode dry-run policy static safety")
 
 check("OWNER_VOICE_CONVERSATION_MODE_DRY_RUN_ENABLED" in renderer_js_text,
       "renderer defines Conversation Mode owner voice dry-run enable flag")
@@ -1127,7 +1171,7 @@ check("TASK-267" in owner_voice_text,
       "owner voice research doc records TASK-267")
 
 # TASK-268: Owner Voice dry-run diagnostics polish static safety checks
-print("\n[18/19] TASK-268 - Owner Voice dry-run diagnostics polish static safety")
+print("\n[19/20] TASK-268 - Owner Voice dry-run diagnostics polish static safety")
 
 check("formatOwnerVoiceDryRunSourceLabel" in renderer_js_text,
       "renderer defines owner voice dry-run source label formatter")
@@ -1170,7 +1214,7 @@ check("TASK-268" in owner_voice_text,
       "owner voice research doc records TASK-268")
 
 # TASK-270: Owner Voice candidate WAV temporary policy checks
-print("\n[19/19] TASK-270 - Owner Voice candidate WAV temporary policy static safety")
+print("\n[20/20] TASK-270 - Owner Voice candidate WAV temporary policy static safety")
 
 renderer_preload_path = _os.path.join(REPO_ROOT, "apps", "desktop", "src", "renderer", "preload.js")
 main_js_path = _os.path.join(REPO_ROOT, "apps", "desktop", "src", "main.js")
@@ -1242,8 +1286,8 @@ print()
 print("=" * 65)
 print(f"  {_pass_count} PASS  {_fail_count} FAIL")
 if _fail_count == 0:
-    print("  TASK-249/250/253/253rev/254/256/TASK-STT-001/259/260/261/262/263/264/265/266/267/268/270 STT Provider Smoke: PASS")
+    print("  TASK-249/250/253/253rev/254/256/TASK-STT-001/TASK-STT-004/259/260/261/262/263/264/265/266/267/268/270 STT Provider Smoke: PASS")
 else:
-    print("  TASK-249/250/253/253rev/254/256/TASK-STT-001/259/260/261/262/263/264/265/266/267/268/270 STT Provider Smoke: FAIL")
+    print("  TASK-249/250/253/253rev/254/256/TASK-STT-001/TASK-STT-004/259/260/261/262/263/264/265/266/267/268/270 STT Provider Smoke: FAIL")
 print("=" * 65)
 sys.exit(0 if _fail_count == 0 else 1)

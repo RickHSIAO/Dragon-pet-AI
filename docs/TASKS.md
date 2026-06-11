@@ -28871,24 +28871,31 @@ Windows runtime smoke still needs actual local, non-private audio:
 
 ## TASK-STT-004 | STT No-Speech / Silence Hallucination Guard
 
-Status: IMPLEMENTED - AUTOMATED SMOKE PASS / NEEDS WINDOWS SILENCE RUNTIME SMOKE (2026-06-11)
+Status: IMPLEMENTED - RUNTIME GUARD MISS FIXED / NEEDS WINDOWS SILENCE RERUN (2026-06-11)
 
 ### Runtime Root Cause
 
 Windows candidate smoke confirmed that `DRAGON_STT_MODEL=base` and
 `DRAGON_STT_MODEL=small` overrides work. `small` produced better transcripts for
 some Conversation Mode phrases, but Manual Mic with intentional silence produced
-a faster-whisper hallucination:
+a faster-whisper hallucination. The first guard implementation missed a later
+runtime silence case because its suspicious-pattern matcher was too narrow and
+its energy thresholds treated low-level capture spikes as speech:
 
 - mode: `manual_mic`
-- duration: 7404 ms
-- blob: 229420 bytes WAV
+- duration: 6856 ms
+- blob: 213036 bytes WAV
 - model: `small`
 - STT status: `success`
-- finalTranscript: subtitle-credit-like mojibake text beginning with `摮...by`
+- finalTranscript: `摮?by蝝Ｗ憡`
+- no-speech guard: `enabled=true`, `applied=false`, `reason=none`
+- backend audio energy: `audioRms=0.001863`, `audioPeak=0.016968`,
+  `audioSpeechDetected=true`
+- STT no-speech probability: `0.620446`
+- suspicious pattern: `none`
 - VAD last/max RMS: `0.0000`
 - VAD speech detected: `false`
-- Owner Voice dry-run rejected and cleaned temporary candidate WAV
+- Owner Voice candidate WAV cleanup still completed after settled check
 
 Interpretation: this is a no-speech / silence hallucination, not a valid user
 utterance.
@@ -28904,6 +28911,9 @@ accepting STT output:
 - `audioSpeechDetected`
 - `audioSignalRatio`
 - `audioUsableSampleCount`
+- `noSpeechGuardThresholds`
+- `noSpeechGuardSignals`
+- `noSpeechGuardDecisionTrace`
 
 For faster-whisper, the backend also inspects segment metadata when present:
 
@@ -28913,10 +28923,14 @@ For faster-whisper, the backend also inspects segment metadata when present:
 - `sttSegmentCount`
 
 The guard suppresses a result only when strong audio-level no-speech evidence is
-present. Suspicious subtitle-credit patterns such as `subtitles by` or the
-observed `摮...?by` pattern are considered only in combination with silent /
-near-silent audio evidence. Real speech is not blocked just because the
-transcript contains `摮...?`.
+present. The hardened thresholds treat runtime silence evidence around
+`audioRms=0.001863` and `audioPeak=0.016968` as near-silent, while real speech
+observed around `audioRms=0.04627` and `audioPeak=0.438002` remains accepted.
+Suspicious subtitle-credit patterns such as `subtitles by`, `caption by`,
+Chinese subtitle-credit variants, and the observed mojibake `摮?by...` /
+`摮?嚗...` / `摮?蝏...` patterns are considered only in combination with
+silent / near-silent audio evidence. Real speech is not blocked just because the
+transcript contains a bare `摮?` marker.
 
 ### Runtime Behavior
 
@@ -28950,6 +28964,9 @@ fields:
 - `audioSpeechDetected`
 - `sttNoSpeechProbability`
 - `suspiciousTranscriptPattern`
+- `noSpeechGuardThresholds`
+- `noSpeechGuardSignals`
+- `noSpeechGuardDecisionTrace`
 
 No raw audio, temp paths, embeddings, centroid values, or private file paths are
 exposed.
@@ -28981,15 +28998,27 @@ exposed.
 - Conversation Mode `no_speech` during graceful Stop stays capture=off
 - TASK-STT-003 model override tests still pass
 
+### Runtime Guard-Miss Fix Validation
+
+The follow-up fix adds tests for:
+
+- exact runtime hallucination `摮?by蝝Ｗ憡` with `audioRms=0.001863`,
+  `audioPeak=0.016968`, and `sttNoSpeechProbability=0.620446`
+- suspicious subtitle-credit variants: `摮?by`, `摮? by`, `摮? By`,
+  `摮?BY`, `摮?嚗`, `摮?蝏`, `subtitles by`, `caption by`, and
+  Chinese subtitle-credit variants
+- low energy plus high no-speech probability when the pattern matcher misses
+- real speech energy around `audioRms=0.046` and `audioPeak=0.438` remaining
+  accepted
+- renderer diagnostics carrying thresholds, signals, and decision trace
+
 ### Validation
 
 Automated validation:
 
-- `py_compile backend\app\stt\stt_service.py backend\app\api\routes.py`: PASS
-- targeted `pytest -k "task_stt_004 or model_override"`: 6 passed
-- `node apps/desktop/scripts/renderer-chat-smoke.js`: PASS
-- `.\backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_routes.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-stt004`: 219 passed
-- `.\backend\.venv\Scripts\python.exe scripts\stt_provider_smoke.py`: 420 PASS / 0 FAIL
+- targeted `pytest -k "task_stt_004 or model_override"`: 20 passed
+- `.\backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_routes.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-stt004b`: 233 passed
+- `.\backend\.venv\Scripts\python.exe scripts\stt_provider_smoke.py`: 443 PASS / 0 FAIL
 - `.\backend\.venv\Scripts\python.exe scripts\stt_quality_probe.py --help`: PASS
 - `node apps/desktop/scripts/renderer-chat-smoke.js`: PASS
 - `node apps/desktop/scripts/pet-window-smoke.js`: 92 checks PASS

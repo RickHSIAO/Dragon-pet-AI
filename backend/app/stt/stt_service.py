@@ -209,14 +209,27 @@ _STT_MODEL_LOAD_ERROR: str | None = None
 
 # TASK-STT-004: conservative no-speech guard for silent WAV captures.
 _NO_SPEECH_GUARD_ENABLED = True
-_NO_SPEECH_RMS_THRESHOLD = 0.0015
-_NO_SPEECH_PEAK_THRESHOLD = 0.005
-_NO_SPEECH_SIGNAL_RATIO_THRESHOLD = 0.001
+_NO_SPEECH_RMS_THRESHOLD = 0.005
+_NO_SPEECH_PEAK_THRESHOLD = 0.03
+_NO_SPEECH_SIGNAL_RATIO_THRESHOLD = 0.02
 _NO_SPEECH_MIN_USABLE_SAMPLES = 160
-_NO_SPEECH_PROBABILITY_THRESHOLD = 0.80
+_NO_SPEECH_PROBABILITY_THRESHOLD = 0.60
 _NO_SPEECH_SHORT_TRANSCRIPT_CHARS = 40
 _SUSPICIOUS_TRANSCRIPT_PATTERNS = (
-    ("subtitle_credit", re.compile(r"(subtitles?\s+by|摮.{0,4}\?\s*by)", re.IGNORECASE)),
+    (
+        "subtitle_credit",
+        re.compile(
+            r"("
+            r"subtitles?\s*(?:created\s*)?by"
+            r"|captions?\s*(?:created\s*)?by"
+            r"|caption\s+by"
+            r"|字幕\s*(?:由|提供|製作|制作|組|组|小組|小组)"
+            r"|摮.{0,8}\?\s*(?:[bＢ][yＹ]|嚗|蝏)"
+            r"|摮.{0,8}\?[^\s]{0,16}(?:蝝|憡||嚗|蝏)"
+            r")",
+            re.IGNORECASE,
+        ),
+    ),
 )
 
 
@@ -674,6 +687,23 @@ def _empty_no_speech_metadata() -> dict:
         "noSpeechGuardEnabled": _NO_SPEECH_GUARD_ENABLED,
         "noSpeechGuardApplied": False,
         "noSpeechGuardReason": "none",
+        "noSpeechGuardThresholds": {
+            "rms": _NO_SPEECH_RMS_THRESHOLD,
+            "peak": _NO_SPEECH_PEAK_THRESHOLD,
+            "signalRatio": _NO_SPEECH_SIGNAL_RATIO_THRESHOLD,
+            "minUsableSamples": _NO_SPEECH_MIN_USABLE_SAMPLES,
+            "noSpeechProbability": _NO_SPEECH_PROBABILITY_THRESHOLD,
+            "shortTranscriptChars": _NO_SPEECH_SHORT_TRANSCRIPT_CHARS,
+        },
+        "noSpeechGuardSignals": {
+            "audioStatsAvailable": False,
+            "nearSilentAudio": False,
+            "highNoSpeechProbability": False,
+            "suspiciousTranscript": False,
+            "shortTranscript": False,
+            "singleShortSegment": False,
+        },
+        "noSpeechGuardDecisionTrace": "not_evaluated",
         "audioDurationMs": 0,
         "audioRms": None,
         "audioPeak": None,
@@ -808,22 +838,39 @@ def _detect_suspicious_transcript_pattern(text: str) -> str:
 
 def _should_apply_no_speech_guard(text: str, guard_meta: dict) -> tuple[bool, str]:
     if not _NO_SPEECH_GUARD_ENABLED:
+        guard_meta["noSpeechGuardDecisionTrace"] = "allow:guard_disabled"
         return False, "disabled"
-    if guard_meta.get("audioSpeechDetected") is not False:
-        return False, "none"
 
-    pattern = _detect_suspicious_transcript_pattern(text)
+    pattern = guard_meta.get("suspiciousTranscriptPattern") or _detect_suspicious_transcript_pattern(text)
     no_speech_prob = guard_meta.get("sttNoSpeechProbability")
     segment_count = guard_meta.get("sttSegmentCount") or 0
     short_transcript = len((text or "").strip()) <= _NO_SPEECH_SHORT_TRANSCRIPT_CHARS
     high_no_speech = isinstance(no_speech_prob, (int, float)) and no_speech_prob >= _NO_SPEECH_PROBABILITY_THRESHOLD
+    near_silent_audio = guard_meta.get("audioSpeechDetected") is False
+    signals = {
+        "audioStatsAvailable": guard_meta.get("audioSpeechDetected") is not None,
+        "nearSilentAudio": near_silent_audio,
+        "highNoSpeechProbability": high_no_speech,
+        "suspiciousTranscript": pattern != "none",
+        "shortTranscript": short_transcript,
+        "singleShortSegment": segment_count > 0 and segment_count <= 1 and short_transcript,
+    }
+    guard_meta["noSpeechGuardSignals"] = signals
+
+    if not near_silent_audio:
+        guard_meta["noSpeechGuardDecisionTrace"] = "allow:audio_energy_detected"
+        return False, "none"
 
     if pattern != "none":
+        guard_meta["noSpeechGuardDecisionTrace"] = "suppress:near_silent_suspicious_transcript"
         return True, "no_speech_hallucination_guard"
     if high_no_speech:
+        guard_meta["noSpeechGuardDecisionTrace"] = "suppress:near_silent_high_no_speech_probability"
         return True, "no_speech_probability"
     if segment_count > 0 and segment_count <= 1 and short_transcript:
+        guard_meta["noSpeechGuardDecisionTrace"] = "suppress:near_silent_single_short_segment"
         return True, "silent_audio"
+    guard_meta["noSpeechGuardDecisionTrace"] = "allow:insufficient_no_speech_evidence"
     return False, "none"
 
 

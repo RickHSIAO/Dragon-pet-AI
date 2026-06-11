@@ -678,20 +678,24 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   behavior change, schema break, IPC change, raw audio persistence, or
   aggressive rewrite was added.
 
-- TASK-STT-004 IMPLEMENTED - STT NO-SPEECH / SILENCE HALLUCINATION GUARD (2026-06-11):
-  Adds a conservative no-speech guard after Windows `DRAGON_STT_MODEL=small`
-  smoke found a faster-whisper subtitle-credit-like hallucination on intentional
-  Manual Mic silence. Backend STT now computes WAV PCM audio energy metadata
-  (`audioRms`, `audioPeak`, `audioSpeechDetected`, usable samples) and combines
-  it with faster-whisper segment metadata when present (`no_speech_prob`,
-  avg logprob, compression ratio, segment count). Suspicious subtitle-credit
-  phrases are suppressed only when audio-level no-speech evidence is strong.
+- TASK-STT-004 IMPLEMENTED - RUNTIME GUARD MISS FIXED / NEEDS WINDOWS SILENCE RERUN (2026-06-11):
+  Adds and hardens a conservative no-speech guard after Windows
+  `DRAGON_STT_MODEL=small` smoke found a faster-whisper subtitle-credit-like
+  hallucination on intentional Manual Mic silence. The follow-up runtime miss was
+  `audioRms=0.001863`, `audioPeak=0.016968`, `sttNoSpeechProbability=0.620446`,
+  `finalTranscript=摮?by蝝Ｗ憡`; the first guard treated that low-energy spike
+  profile as speech and missed the mojibake subtitle-credit pattern. Backend STT
+  now computes WAV PCM audio energy metadata (`audioRms`, `audioPeak`,
+  `audioSpeechDetected`, signal ratio, usable samples), exposes safe guard
+  thresholds/signals/decision trace diagnostics, and combines near-silent audio
+  with faster-whisper segment metadata and suspicious subtitle-credit variants.
   Guarded results return `status=no_speech`, empty `finalTranscript`, and safe
   diagnostics; Manual Mic does not fill textarea or auto-send, and Conversation
   Mode does not enqueue/send `/chat` while preserving rearm and graceful drain.
   Runtime default remains `tiny`; `base` and `small` remain candidates. No
   `/chat` schema change, Owner Voice hard gate, raw audio persistence, private
-  sample commit, or aggressive rewrite was added.
+  sample commit, or aggressive rewrite was added. Windows silence runtime smoke
+  still needs rerun before closeout.
 
 - TASK-CONV-001 IMPLEMENTED - CONVERSATION MODE CONTINUOUS CAPTURE / PENDING UTTERANCE QUEUE (2026-06-05):
   Conversation Mode now separates capture state (`off/listening/recording`) from

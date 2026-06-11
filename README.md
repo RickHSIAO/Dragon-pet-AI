@@ -1,6 +1,6 @@
 # Dragon Pet AI
 
-**Latest local status (2026-06-11):** TASK-STT-004 STT No-Speech / Silence Hallucination Guard **IMPLEMENTED - AUTOMATED SMOKE PASS / NEEDS WINDOWS SILENCE RUNTIME SMOKE**. Root cause from Windows runtime smoke: faster-whisper `small` can hallucinate a short subtitle-credit-like transcript on silent Manual Mic WAVs (`VAD RMS=0.0000`, no speech detected). Backend STT now computes conservative WAV PCM audio energy diagnostics and combines strong no-speech evidence with faster-whisper segment metadata / suspicious subtitle-credit patterns before suppressing the result as `status=no_speech`. Manual Mic and Conversation Mode clear `finalTranscript`, do not auto-send or enqueue `/chat`, and record `STT:no_speech` diagnostics instead of `STT:success`. Runtime STT default remains `tiny`; `DRAGON_STT_MODEL=base|small|tiny` override remains candidate-only. No `/chat` schema change, no aggressive rewrite, no Owner Voice hard gate, no raw audio persistence, and no real sample audio committed.
+**Latest local status (2026-06-11):** TASK-STT-004 STT No-Speech / Silence Hallucination Guard **IMPLEMENTED - RUNTIME GUARD MISS FIXED / NEEDS WINDOWS SILENCE RERUN**. Windows Manual Mic silence with faster-whisper `small` exposed a first-pass guard miss: silent/near-silent audio (`audioRms=0.001863`, `audioPeak=0.016968`, `sttNoSpeechProbability=0.620446`) was accepted as `STT:success` with `finalTranscript=摮?by蝝Ｗ憡`. Backend STT now treats that energy profile as near-silent, detects subtitle-credit mojibake variants, and returns safe guard thresholds/signals/decision trace diagnostics before suppressing as `status=no_speech`. Manual Mic and Conversation Mode clear `finalTranscript`, do not auto-send or enqueue `/chat`, and record `STT:no_speech` diagnostics instead of `STT:success`. Runtime STT default remains `tiny`; `DRAGON_STT_MODEL=base|small|tiny` override remains candidate-only. No `/chat` schema change, no aggressive rewrite, no Owner Voice hard gate, no raw audio persistence, and no real sample audio committed.
 
 > **Dragon Pet AI** 是一個本地優先的 Electron + FastAPI 桌面陪伴原型，具備手動記憶、記憶稽核日誌、BYOK 提供者設定、使用量計量、安全審查過的 Test Connection 端點、Anthropic/Ollama 提供者轉接層（隱藏在 feature flag 後）、本地 Ollama `/chat` 執行期 smoke 通過（`source=llm_local`，克莉絲蒂娜人格確認）、Ollama Provider Settings UI（無需 API Key，使用本機 GPU/CPU），以及 Full App 聊天搜尋、高亮、匯出、未讀提示、時間戳、LINE-style 日期分隔線、清除確認、empty state、Undo Clear Chat 與單則訊息刪除/復原。以安全優先的增量開發方式建構，後端 mocked 測試套件共 **586 個測試通過**。
 
@@ -109,7 +109,7 @@ ollama serve
 | 真實 API Key 使用 | ❌ 無 — 所有測試使用 mocked runner |
 | 生產就緒 | ❌ 尚未 — prototype / portfolio 階段 |
 | Demo 可用（本地 Ollama） | ✅ 是 |
-| 下一個任務 | Run Windows silence runtime smoke: Manual Mic silent recording with `DRAGON_STT_MODEL=small` must show `STT:no_speech`, empty final transcript, no textarea fill, no auto-send; then repeat with `base` and Conversation Mode no-speech / graceful Stop. Keep committed default at `tiny`; `base` and `small` remain candidates only. |
+| 下一個任務 | Rerun Windows silence runtime smoke after the guard hardening: Manual Mic silent recording with `DRAGON_STT_MODEL=small` must show `STT:no_speech`, empty final transcript, no textarea fill, no auto-send, and no Owner Voice temp WAV leak; then repeat with `base` and Conversation Mode no-speech / graceful Stop. Keep committed default at `tiny`; `base` and `small` remain candidates only. |
 
 ---
 

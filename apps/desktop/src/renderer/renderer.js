@@ -344,6 +344,9 @@ var fullAppVoiceDiagnostics = {
   noSpeechGuardEnabled: true,
   noSpeechGuardApplied: false,
   noSpeechGuardReason: "none",
+  noSpeechGuardThresholds: null,
+  noSpeechGuardSignals: null,
+  noSpeechGuardDecisionTrace: "",
   audioRms: null,
   audioPeak: null,
   audioSpeechDetected: null,
@@ -4748,6 +4751,15 @@ async function transcribeFullAppAudioBlob(blob) {
       : true;
     fullAppVoiceDiagnostics.noSpeechGuardApplied = Boolean(result.noSpeechGuardApplied);
     fullAppVoiceDiagnostics.noSpeechGuardReason = result.noSpeechGuardReason ? String(result.noSpeechGuardReason) : "none";
+    fullAppVoiceDiagnostics.noSpeechGuardThresholds = result.noSpeechGuardThresholds && typeof result.noSpeechGuardThresholds === "object"
+      ? result.noSpeechGuardThresholds
+      : null;
+    fullAppVoiceDiagnostics.noSpeechGuardSignals = result.noSpeechGuardSignals && typeof result.noSpeechGuardSignals === "object"
+      ? result.noSpeechGuardSignals
+      : null;
+    fullAppVoiceDiagnostics.noSpeechGuardDecisionTrace = result.noSpeechGuardDecisionTrace
+      ? String(result.noSpeechGuardDecisionTrace)
+      : "";
     fullAppVoiceDiagnostics.audioRms = typeof result.audioRms === "number" ? result.audioRms : null;
     fullAppVoiceDiagnostics.audioPeak = typeof result.audioPeak === "number" ? result.audioPeak : null;
     fullAppVoiceDiagnostics.audioSpeechDetected = Object.prototype.hasOwnProperty.call(result, "audioSpeechDetected")
@@ -6436,6 +6448,13 @@ function renderFullAppVoiceDiagnostics() {
     "No-speech guard: enabled=" + (d.noSpeechGuardEnabled ? "true" : "false") +
       " applied=" + (d.noSpeechGuardApplied ? "true" : "false") +
       " reason=" + (d.noSpeechGuardReason || "none"),
+    "No-speech trace: " + (d.noSpeechGuardDecisionTrace || "—"),
+    "No-speech thresholds: rms<=" + (d.noSpeechGuardThresholds && typeof d.noSpeechGuardThresholds.rms === "number" ? d.noSpeechGuardThresholds.rms : "—") +
+      " peak<=" + (d.noSpeechGuardThresholds && typeof d.noSpeechGuardThresholds.peak === "number" ? d.noSpeechGuardThresholds.peak : "—") +
+      " prob>=" + (d.noSpeechGuardThresholds && typeof d.noSpeechGuardThresholds.noSpeechProbability === "number" ? d.noSpeechGuardThresholds.noSpeechProbability : "—"),
+    "No-speech signals: nearSilent=" + (d.noSpeechGuardSignals && d.noSpeechGuardSignals.nearSilentAudio ? "true" : "false") +
+      " highProb=" + (d.noSpeechGuardSignals && d.noSpeechGuardSignals.highNoSpeechProbability ? "true" : "false") +
+      " suspicious=" + (d.noSpeechGuardSignals && d.noSpeechGuardSignals.suspiciousTranscript ? "true" : "false"),
     "Audio energy: rms=" + (d.audioRms === null || d.audioRms === undefined ? "—" : d.audioRms) +
       " peak=" + (d.audioPeak === null || d.audioPeak === undefined ? "—" : d.audioPeak) +
       " speechDetected=" + (d.audioSpeechDetected === null || d.audioSpeechDetected === undefined ? "unknown" : (d.audioSpeechDetected ? "true" : "false")),
@@ -6596,6 +6615,9 @@ function resetFullAppVoiceDiagnosticsForRecording(mode, recordingMeta) {
   fullAppVoiceDiagnostics.noSpeechGuardEnabled           = true;
   fullAppVoiceDiagnostics.noSpeechGuardApplied           = false;
   fullAppVoiceDiagnostics.noSpeechGuardReason            = "none";
+  fullAppVoiceDiagnostics.noSpeechGuardThresholds        = null;
+  fullAppVoiceDiagnostics.noSpeechGuardSignals           = null;
+  fullAppVoiceDiagnostics.noSpeechGuardDecisionTrace     = "";
   fullAppVoiceDiagnostics.audioRms                       = null;
   fullAppVoiceDiagnostics.audioPeak                      = null;
   fullAppVoiceDiagnostics.audioSpeechDetected            = null;

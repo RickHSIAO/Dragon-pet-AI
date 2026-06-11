@@ -41,6 +41,22 @@ def _task_stt_004_pcm16_wav(sample_value: int = 0, frames: int = 16000) -> bytes
     return buf.getvalue()
 
 
+def _task_stt_004_pulsed_pcm16_wav(
+    peak_value: int,
+    pulse_frames: int,
+    frames: int = 16000,
+) -> bytes:
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(16000)
+        samples = [int(peak_value)] * int(pulse_frames)
+        samples.extend([0] * max(0, int(frames) - len(samples)))
+        wav.writeframes(b"".join(sample.to_bytes(2, "little", signed=True) for sample in samples))
+    return buf.getvalue()
+
+
 # -- stt_service unit tests ---------------------------------------------------
 
 
@@ -165,6 +181,47 @@ def test_task_stt_004_silent_wav_hallucination_suppressed(monkeypatch):
     assert result["suspiciousTranscriptPattern"] == "subtitle_credit"
     assert result["correctionApplied"] is False
     assert result["correctionReason"] == "no_speech_guard"
+    assert result["noSpeechGuardSignals"]["nearSilentAudio"] is True
+    assert result["noSpeechGuardSignals"]["suspiciousTranscript"] is True
+    assert result["noSpeechGuardDecisionTrace"] == "suppress:near_silent_suspicious_transcript"
+
+
+def test_task_stt_004_runtime_small_model_silence_hallucination_suppressed(monkeypatch):
+    """TASK-STT-004: Windows small-model silent-runtime evidence returns no_speech."""
+
+    class _RuntimeHallucinatingModel:
+        def transcribe(self, _buf, **_kwargs):
+            seg = SimpleNamespace(
+                text="摮?by蝝Ｗ憡",
+                no_speech_prob=0.620446,
+                avg_logprob=-1.2,
+                compression_ratio=1.0,
+            )
+            return iter([seg]), SimpleNamespace(language="zh")
+
+    monkeypatch.setattr(stt_service, "_WHISPER_AVAILABLE", True)
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(stt_service, "_load_model", lambda: _RuntimeHallucinatingModel())
+
+    result = stt_service.transcribe_audio_bytes(
+        _task_stt_004_pulsed_pcm16_wav(556, 193),
+        mime_type="audio/wav",
+        language="zh",
+    )
+
+    assert result["status"] == "no_speech"
+    assert result["transcript"] == ""
+    assert result["finalTranscript"] == ""
+    assert result["noSpeechGuardApplied"] is True
+    assert result["noSpeechGuardReason"] == "no_speech_hallucination_guard"
+    assert result["audioSpeechDetected"] is False
+    assert result["audioRms"] == pytest.approx(0.001863, abs=0.00001)
+    assert result["audioPeak"] == pytest.approx(0.016969, abs=0.00001)
+    assert result["sttNoSpeechProbability"] == 0.620446
+    assert result["suspiciousTranscriptPattern"] == "subtitle_credit"
+    assert result["noSpeechGuardSignals"]["highNoSpeechProbability"] is True
+    assert result["noSpeechGuardThresholds"]["noSpeechProbability"] == 0.60
+    assert result["noSpeechGuardDecisionTrace"] == "suppress:near_silent_suspicious_transcript"
 
 
 def test_task_stt_004_silent_short_transcript_suppressed(monkeypatch):
@@ -188,6 +245,30 @@ def test_task_stt_004_silent_short_transcript_suppressed(monkeypatch):
     assert result["transcript"] == ""
     assert result["noSpeechGuardReason"] == "silent_audio"
     assert result["audioSpeechDetected"] is False
+
+
+def test_task_stt_004_low_energy_high_no_speech_probability_suppressed(monkeypatch):
+    """TASK-STT-004: low-energy audio plus no-speech metadata suppresses missed patterns."""
+
+    class _MissedPatternModel:
+        def transcribe(self, _buf, **_kwargs):
+            return iter([SimpleNamespace(text="普通錯字", no_speech_prob=0.620446)]), None
+
+    monkeypatch.setattr(stt_service, "_WHISPER_AVAILABLE", True)
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(stt_service, "_load_model", lambda: _MissedPatternModel())
+
+    result = stt_service.transcribe_audio_bytes(
+        _task_stt_004_pulsed_pcm16_wav(556, 193),
+        mime_type="audio/wav",
+        language="zh",
+    )
+
+    assert result["status"] == "no_speech"
+    assert result["noSpeechGuardReason"] == "no_speech_probability"
+    assert result["suspiciousTranscriptPattern"] == "none"
+    assert result["noSpeechGuardSignals"]["highNoSpeechProbability"] is True
+    assert result["noSpeechGuardDecisionTrace"] == "suppress:near_silent_high_no_speech_probability"
 
 
 def test_task_stt_004_real_energy_suspicious_phrase_not_suppressed(monkeypatch):
@@ -218,6 +299,58 @@ def test_task_stt_004_real_energy_suspicious_phrase_not_suppressed(monkeypatch):
     assert result["audioSpeechDetected"] is True
     assert result["finalTranscript"]
     assert "摮?" in result["rawTranscript"]
+    assert result["noSpeechGuardDecisionTrace"] == "allow:audio_energy_detected"
+
+
+def test_task_stt_004_runtime_real_speech_energy_not_suppressed(monkeypatch):
+    """TASK-STT-004: runtime-like real speech energy remains accepted."""
+
+    class _RealSpeechModel:
+        def transcribe(self, _buf, **_kwargs):
+            seg = SimpleNamespace(
+                text="這是真實語音測試",
+                no_speech_prob=0.1,
+                avg_logprob=-0.1,
+                compression_ratio=1.0,
+            )
+            return iter([seg]), SimpleNamespace(language="zh")
+
+    monkeypatch.setattr(stt_service, "_WHISPER_AVAILABLE", True)
+    stt_service._reset_model_for_tests()
+    monkeypatch.setattr(stt_service, "_load_model", lambda: _RealSpeechModel())
+
+    result = stt_service.transcribe_audio_bytes(
+        _task_stt_004_pulsed_pcm16_wav(14352, 177),
+        mime_type="audio/wav",
+        language="zh",
+    )
+
+    assert result["status"] == "ok"
+    assert result["noSpeechGuardApplied"] is False
+    assert result["audioSpeechDetected"] is True
+    assert result["audioRms"] == pytest.approx(0.046, abs=0.001)
+    assert result["audioPeak"] == pytest.approx(0.438, abs=0.001)
+    assert result["finalTranscript"]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "摮?by",
+        "摮? by",
+        "摮? By",
+        "摮?BY",
+        "摮?嚗",
+        "摮?蝏",
+        "摮?by蝝Ｗ憡",
+        "subtitles by example",
+        "caption by example",
+        "字幕由範例提供",
+        "字幕制作範例",
+    ],
+)
+def test_task_stt_004_suspicious_subtitle_credit_variants_detected(text):
+    assert stt_service._detect_suspicious_transcript_pattern(text) == "subtitle_credit"
 
 
 # -- /stt/transcribe endpoint tests ------------------------------------------

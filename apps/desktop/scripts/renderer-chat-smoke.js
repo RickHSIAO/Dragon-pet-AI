@@ -14296,6 +14296,17 @@ function _taskStt004NoSpeechResult() {
     noSpeechGuardEnabled: true,
     noSpeechGuardApplied: true,
     noSpeechGuardReason: "no_speech_hallucination_guard",
+    noSpeechGuardThresholds: {
+      rms: 0.005,
+      peak: 0.03,
+      noSpeechProbability: 0.6,
+    },
+    noSpeechGuardSignals: {
+      nearSilentAudio: true,
+      highNoSpeechProbability: true,
+      suspiciousTranscript: true,
+    },
+    noSpeechGuardDecisionTrace: "suppress:near_silent_suspicious_transcript",
     audioRms: 0,
     audioPeak: 0,
     audioSpeechDetected: false,
@@ -14309,6 +14320,9 @@ function testTaskStt004RendererHasNoSpeechFields() {
   assert.ok(src.includes("noSpeechGuardEnabled"), "TASK-STT-004 diagnostics must include noSpeechGuardEnabled");
   assert.ok(src.includes("noSpeechGuardApplied"), "TASK-STT-004 diagnostics must include noSpeechGuardApplied");
   assert.ok(src.includes("noSpeechGuardReason"), "TASK-STT-004 diagnostics must include noSpeechGuardReason");
+  assert.ok(src.includes("noSpeechGuardThresholds"), "TASK-STT-004 diagnostics must include noSpeechGuardThresholds");
+  assert.ok(src.includes("noSpeechGuardSignals"), "TASK-STT-004 diagnostics must include noSpeechGuardSignals");
+  assert.ok(src.includes("noSpeechGuardDecisionTrace"), "TASK-STT-004 diagnostics must include noSpeechGuardDecisionTrace");
   assert.ok(src.includes("audioRms"), "TASK-STT-004 diagnostics must include audioRms");
   assert.ok(src.includes("audioPeak"), "TASK-STT-004 diagnostics must include audioPeak");
   assert.ok(src.includes("audioSpeechDetected"), "TASK-STT-004 diagnostics must include audioSpeechDetected");
@@ -14323,6 +14337,9 @@ function testTaskStt004DiagnosticsRenderIncludesNoSpeechLines() {
   const renderFnEnd = src.indexOf("\n}", renderFnStart) + 2;
   const renderFn = src.slice(renderFnStart, renderFnEnd);
   assert.ok(renderFn.includes("No-speech guard"), "TASK-STT-004 render must include no-speech guard line");
+  assert.ok(renderFn.includes("No-speech trace"), "TASK-STT-004 render must include decision trace line");
+  assert.ok(renderFn.includes("No-speech thresholds"), "TASK-STT-004 render must include threshold line");
+  assert.ok(renderFn.includes("No-speech signals"), "TASK-STT-004 render must include signal line");
   assert.ok(renderFn.includes("Audio energy"), "TASK-STT-004 render must include audio energy line");
   assert.ok(renderFn.includes("sttNoSpeechProbability"), "TASK-STT-004 render must include STT no-speech probability");
   assert.ok(!renderFn.includes("innerHTML"), "TASK-STT-004 render must not use innerHTML");
@@ -14334,6 +14351,9 @@ async function testTaskStt004DiagnosticsDefaultsAndReset() {
   assert.equal(sandbox.fullAppVoiceDiagnostics.noSpeechGuardEnabled, true);
   assert.equal(sandbox.fullAppVoiceDiagnostics.noSpeechGuardApplied, false);
   assert.equal(sandbox.fullAppVoiceDiagnostics.noSpeechGuardReason, "none");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.noSpeechGuardThresholds, null);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.noSpeechGuardSignals, null);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.noSpeechGuardDecisionTrace, "");
   assert.equal(sandbox.fullAppVoiceDiagnostics.audioRms, null);
   assert.equal(sandbox.fullAppVoiceDiagnostics.audioPeak, null);
   assert.equal(sandbox.fullAppVoiceDiagnostics.audioSpeechDetected, null);
@@ -14341,6 +14361,9 @@ async function testTaskStt004DiagnosticsDefaultsAndReset() {
   assert.equal(sandbox.fullAppVoiceDiagnostics.suspiciousTranscriptPattern, "none");
   sandbox.fullAppVoiceDiagnostics.noSpeechGuardApplied = true;
   sandbox.fullAppVoiceDiagnostics.noSpeechGuardReason = "silent_audio";
+  sandbox.fullAppVoiceDiagnostics.noSpeechGuardThresholds = { rms: 0.005 };
+  sandbox.fullAppVoiceDiagnostics.noSpeechGuardSignals = { nearSilentAudio: true };
+  sandbox.fullAppVoiceDiagnostics.noSpeechGuardDecisionTrace = "suppress:near_silent_single_short_segment";
   sandbox.fullAppVoiceDiagnostics.audioRms = 0;
   sandbox.fullAppVoiceDiagnostics.audioPeak = 0;
   sandbox.fullAppVoiceDiagnostics.audioSpeechDetected = false;
@@ -14349,6 +14372,9 @@ async function testTaskStt004DiagnosticsDefaultsAndReset() {
   sandbox.resetFullAppVoiceDiagnosticsForRecording("manual_mic");
   assert.equal(sandbox.fullAppVoiceDiagnostics.noSpeechGuardApplied, false);
   assert.equal(sandbox.fullAppVoiceDiagnostics.noSpeechGuardReason, "none");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.noSpeechGuardThresholds, null);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.noSpeechGuardSignals, null);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.noSpeechGuardDecisionTrace, "");
   assert.equal(sandbox.fullAppVoiceDiagnostics.audioRms, null);
   assert.equal(sandbox.fullAppVoiceDiagnostics.audioPeak, null);
   assert.equal(sandbox.fullAppVoiceDiagnostics.audioSpeechDetected, null);
