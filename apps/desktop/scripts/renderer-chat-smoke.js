@@ -13966,6 +13966,178 @@ function testTaskConv001NoSchemaIpcOrSensitiveExposure() {
   console.log("  testTaskConv001NoSchemaIpcOrSensitiveExposure PASS");
 }
 
+// TASK-CONV-002: Conversation Mode Turn Lifecycle Visibility / Missing Turn Diagnostics
+
+function testTaskConv002RendererHasLifecycleDiagnostics() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  for (const token of [
+    "FULL_APP_CONVERSATION_LIFECYCLE_HISTORY_MAX",
+    "fullAppVoiceConversationTurnLifecycleHistory",
+    "conversationTurnLifecycleCount",
+    "conversationLastTurnLifecycleSummary",
+    "_recordConversationTurnLifecycle",
+    "_formatConversationTurnLifecycleSummary",
+    "lifecycle status=",
+  ]) {
+    assert.ok(src.includes(token), "TASK-CONV-002 renderer must include " + token);
+  }
+  const renderFnStart = src.indexOf("function renderFullAppVoiceDiagnostics");
+  const renderFnEnd = src.indexOf("function updateFullAppVoiceDiagnostics", renderFnStart);
+  const renderFn = src.slice(renderFnStart, renderFnEnd);
+  assert.ok(renderFn.includes("textContent"), "TASK-CONV-002 lifecycle diagnostics must render through textContent");
+  assert.ok(!renderFn.includes("innerHTML"), "TASK-CONV-002 lifecycle diagnostics must not use innerHTML");
+  assert.ok(!src.includes("conversation:lifecycle"), "TASK-CONV-002 must not add Conversation lifecycle IPC");
+  console.log("  testTaskConv002RendererHasLifecycleDiagnostics PASS");
+}
+
+function taskConv002Bridge(results) {
+  let index = 0;
+  return {
+    chatHistoryLoad: async () => [],
+    transcribeAudio: async () => {
+      const result = results[Math.min(index, results.length - 1)];
+      index += 1;
+      if (result instanceof Error) throw result;
+      return result;
+    },
+    updatePetSpeech: async () => ({ ok: true }),
+    updatePetExpression: async () => ({ ok: true }),
+  };
+}
+
+function taskConv002ConversationMeta(turnId, startedAt = 1000) {
+  return {
+    turnId,
+    captureSource: "conversation",
+    recordingStartedAt: startedAt,
+    recordingStoppedAt: startedAt + 500,
+    finalizedAt: startedAt + 600,
+    recordingFinalizedAt: startedAt + 600,
+    mimeType: "audio/wav",
+    preRollAppliedMs: 120,
+    sentenceStartPreserved: true,
+  };
+}
+
+function taskConv002LifecycleText(sandbox) {
+  sandbox.renderFullAppVoiceDiagnostics();
+  return sandbox.document
+    .getElementById("voice-diagnostics-display")
+    .textContent
+    .split("\n")
+    .filter((line) => line.includes("lifecycle"))
+    .join("\n");
+}
+
+async function testTaskConv002SuccessfulTurnsRenderOrderedLifecycle() {
+  const { sandbox, state } = await loadRenderer({
+    dragonPet: taskConv002Bridge([
+      { status: "ok", transcript: "conv002 first final" },
+      { status: "ok", transcript: "conv002 second final" },
+    ]),
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("waiting");
+  sandbox._transcribeConversationChunks([new Blob(["turn-one"], { type: "audio/wav" })], "audio/wav", taskConv002ConversationMeta(1, 1000));
+  sandbox._transcribeConversationChunks([new Blob(["turn-two"], { type: "audio/wav" })], "audio/wav", taskConv002ConversationMeta(2, 2000));
+  await settle();
+  const history = sandbox.fullAppVoiceConversationTurnLifecycleHistory;
+  assert.equal(history.length, 2, "TASK-CONV-002 must record two recent turns");
+  assert.equal(JSON.stringify(history.map((entry) => entry.turnId)), JSON.stringify([1, 2]),
+    "TASK-CONV-002 lifecycle history must preserve capture order");
+  assert.ok(history.every((entry) => entry.chatStatus === "sent"), "TASK-CONV-002 successful turns must show chat sent");
+  assert.ok(history.every((entry) => entry.sttStatus === "success"), "TASK-CONV-002 successful turns must show STT success");
+  assert.equal(state.calls.filter((call) => call.url.endsWith("/chat")).length, 2,
+    "TASK-CONV-002 lifecycle must not change sequential /chat sending");
+  const text = taskConv002LifecycleText(sandbox);
+  assert.ok(text.includes("turn#1 lifecycle"), "TASK-CONV-002 diagnostics must render turn #1");
+  assert.ok(text.includes("turn#2 lifecycle"), "TASK-CONV-002 diagnostics must render turn #2");
+  assert.ok(text.includes("chat=sent"), "TASK-CONV-002 diagnostics must show chat sent state");
+  assert.ok(!text.includes("conv002 first final"), "TASK-CONV-002 lifecycle must not expose transcript text");
+  console.log("  testTaskConv002SuccessfulTurnsRenderOrderedLifecycle PASS");
+}
+
+async function testTaskConv002DroppedNoSpeechAndChatErrorLifecycle() {
+  const { sandbox } = await loadRenderer({
+    dragonPet: taskConv002Bridge([
+      {
+        status: "no_speech",
+        transcript: "",
+        noSpeechGuardApplied: true,
+        noSpeechGuardReason: "silent_audio",
+      },
+      { status: "ok", transcript: "conv002 chat failure" },
+    ]),
+    chatMode: "success",
+  });
+  sandbox.sendMessage = async () => { throw new Error("chat failed"); };
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("waiting");
+  sandbox.fullAppVoiceConversationPendingQueue = [
+    { turnId: 99, audioBlob: new Blob(["active"], { type: "audio/wav" }), mimeType: "audio/wav" },
+    { turnId: 100, audioBlob: new Blob(["pending"], { type: "audio/wav" }), mimeType: "audio/wav" },
+  ];
+  sandbox._transcribeConversationChunks([new Blob(["drop"], { type: "audio/wav" })], "audio/wav", taskConv002ConversationMeta(3, 3000));
+  sandbox.fullAppVoiceConversationPendingQueue = [];
+  sandbox._transcribeConversationChunks([new Blob(["silence"], { type: "audio/wav" })], "audio/wav", taskConv002ConversationMeta(4, 4000));
+  sandbox._transcribeConversationChunks([new Blob(["chat-fail"], { type: "audio/wav" })], "audio/wav", taskConv002ConversationMeta(5, 5000));
+  await settle();
+  const byTurn = new Map(sandbox.fullAppVoiceConversationTurnLifecycleHistory.map((entry) => [entry.turnId, entry]));
+  assert.equal(byTurn.get(3).status, "dropped", "TASK-CONV-002 queue overflow must be visible as dropped");
+  assert.equal(byTurn.get(3).reason, "queue_full", "TASK-CONV-002 dropped turn must keep sanitized reason");
+  assert.equal(byTurn.get(4).sttStatus, "no_speech", "TASK-CONV-002 no-speech turn must be visible");
+  assert.equal(byTurn.get(4).chatStatus, "not_sent", "TASK-CONV-002 no-speech must show chat not sent");
+  assert.equal(byTurn.get(5).chatStatus, "error", "TASK-CONV-002 chat failure must be visible");
+  const text = taskConv002LifecycleText(sandbox);
+  assert.ok(text.includes("reason=queue_full"), "TASK-CONV-002 diagnostics must render queue_full");
+  assert.ok(text.includes("stt=no_speech"), "TASK-CONV-002 diagnostics must render no_speech");
+  assert.ok(text.includes("chat=error"), "TASK-CONV-002 diagnostics must render chat_error");
+  assert.ok(!/C:\\|candidate|embeddingAggregate|candidateEmbedding|storedCentroid|rawAudio/.test(text),
+    "TASK-CONV-002 lifecycle diagnostics must not expose paths/audio/embeddings");
+  console.log("  testTaskConv002DroppedNoSpeechAndChatErrorLifecycle PASS");
+}
+
+async function testTaskConv002LifecycleHistoryIsBounded() {
+  const { sandbox } = await loadRenderer({
+    dragonPet: taskConv002Bridge(Array.from({ length: 14 }, (_, idx) => ({ status: "ok", transcript: "bounded " + idx }))),
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("waiting");
+  for (let i = 1; i <= 14; i += 1) {
+    sandbox._transcribeConversationChunks([new Blob(["turn-" + i], { type: "audio/wav" })], "audio/wav", taskConv002ConversationMeta(i, 1000 + (i * 1000)));
+  }
+  await settle();
+  const history = sandbox.fullAppVoiceConversationTurnLifecycleHistory;
+  assert.equal(history.length, 12, "TASK-CONV-002 lifecycle history must be capped at 12");
+  assert.ok(history[0].turnId > 1, "TASK-CONV-002 bounded history must drop oldest entries first");
+  assert.equal(history[history.length - 1].turnId, 14, "TASK-CONV-002 bounded history must keep latest entry");
+  assert.ok(history.every((entry, idx) => idx === 0 || entry.turnId > history[idx - 1].turnId),
+    "TASK-CONV-002 bounded history must remain ordered by turn id");
+  console.log("  testTaskConv002LifecycleHistoryIsBounded PASS");
+}
+
+async function testTaskConv002StopDrainLifecycleVisible() {
+  const { sandbox } = await loadRenderer({
+    dragonPet: taskConv002Bridge([{ status: "ok", transcript: "drain final" }]),
+    chatMode: "success",
+  });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.fullAppVoiceConversationDrainPending = true;
+  sandbox.fullAppVoiceConversationStopMode = "graceful_drain";
+  sandbox.setConversationState("transcribing");
+  sandbox._transcribeConversationChunks([new Blob(["drain"], { type: "audio/wav" })], "audio/wav", taskConv002ConversationMeta(7, 7000));
+  await settle();
+  assert.equal(sandbox.fullAppVoiceDiagnostics.conversationStopMode, "drain_complete",
+    "TASK-CONV-002 Stop drain completion must remain visible in diagnostics");
+  const latest = sandbox.fullAppVoiceConversationTurnLifecycleHistory[sandbox.fullAppVoiceConversationTurnLifecycleHistory.length - 1];
+  assert.equal(latest.status, "drain_complete", "TASK-CONV-002 latest lifecycle status must show drain completion");
+  const text = taskConv002LifecycleText(sandbox);
+  assert.ok(text.includes("stopMode=drain_complete"), "TASK-CONV-002 diagnostics must render drain_complete stop mode");
+  console.log("  testTaskConv002StopDrainLifecycleVisible PASS");
+}
+
 // TASK-AUDIO-001: Capture Start Latency Measurement / Conversation Pre-roll Buffer
 
 function testTaskAudio001RendererHasTimingAndPreRollFields() {
@@ -17574,6 +17746,11 @@ async function main() {
   await testTaskConv001DelayedFinalizationIgnoresGlobalStartTimestamp();
   await testTaskConv001VadTriggerRmsSurvivesRecordingReset();
   testTaskConv001NoSchemaIpcOrSensitiveExposure();
+  testTaskConv002RendererHasLifecycleDiagnostics();
+  await testTaskConv002SuccessfulTurnsRenderOrderedLifecycle();
+  await testTaskConv002DroppedNoSpeechAndChatErrorLifecycle();
+  await testTaskConv002LifecycleHistoryIsBounded();
+  await testTaskConv002StopDrainLifecycleVisible();
   testTaskAudio001RendererHasTimingAndPreRollFields();
   testTaskAudio001DiagnosticsRenderIncludesSafeTimingPreRoll();
   await testTaskAudio001TimingMetaNonNegative();

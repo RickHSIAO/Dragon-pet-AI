@@ -29434,6 +29434,71 @@ capture/pre-roll smoke and a later STT quality benchmark both pass.
 
 ---
 
+## TASK-CONV-002 | Conversation Mode Turn Lifecycle Visibility / Missing Turn Diagnostics
+
+Status: IMPLEMENTED - AUTOMATED DIAGNOSTICS SMOKE PASS / NEEDS WINDOWS RUNTIME 4-TURN SMOKE (2026-06-11)
+
+### Goal
+
+Make Conversation Mode turn loss or ordering issues visible without changing the
+runtime queue contract. The diagnostics panel now exposes a bounded recent
+per-turn lifecycle history so Windows runtime smoke can answer which turn was
+recorded, queued, dropped, sent, skipped, or drained.
+
+### Implementation Summary
+
+- Added `fullAppVoiceConversationTurnLifecycleHistory`, capped at 12 recent
+  entries for the current Conversation Mode session.
+- Each entry records safe scalar facts only: `turnId`, capture source,
+  lifecycle status/reason, queue action/reason, pending count, active turn ID,
+  Stop/drain state, recording duration, blob size, chunk count, mime type,
+  pre-roll milliseconds, STT status, chat status, and Owner Voice dry-run
+  status.
+- Lifecycle updates are written at VAD-triggered recording start, recorder
+  finalization, queue enqueue/drop, STT processing, STT error, no-speech/empty
+  transcript, chat send, chat error, skipped send, and graceful drain
+  completion.
+- Voice Diagnostics renders compact `turn#N lifecycle ...` rows through
+  `textContent` only. It does not expose candidate paths, raw audio, transcript
+  text, stored centroid data, embeddings, or local settings.
+
+### Behavior Boundaries
+
+- No `/chat` request or response schema change.
+- No `/stt/transcribe` schema change.
+- No STT default model change.
+- No Owner Voice hard gate or runtime block.
+- No new IPC channel, Pet Window change, Output Queue change, raw audio
+  persistence, path exposure, transcript exposure, centroid exposure, or
+  embedding exposure.
+- TASK-CONV-001 queue ordering, max pending `2`, no parallel `/chat`, and
+  graceful Stop/drain behavior are unchanged.
+- TASK-STT-001 final transcript path and TASK-270 candidate WAV temporary/delete
+  lifecycle are unchanged.
+
+### Automated Smoke Coverage
+
+- Static renderer checks for lifecycle state, bounded history, render hooks, and
+  no new Conversation lifecycle IPC.
+- Successful two-turn Conversation Mode lifecycle renders ordered turn IDs with
+  STT success and chat sent.
+- Queue overflow renders dropped `queue_full` without sending.
+- No-speech renders `stt=no_speech` and `chat=not_sent`.
+- Chat send failure renders `chat=error`.
+- Lifecycle history remains bounded and drops oldest entries first.
+- Graceful Stop/drain completion renders `stopMode=drain_complete`.
+
+### Runtime Follow-Up
+
+Windows runtime 4-turn smoke is still required before marking TASK-CONV-002
+DONE. The smoke should speak four visible Conversation Mode turns, then confirm
+that diagnostics show turn IDs in order, no missing turn ID, no duplicate turn
+ID, non-negative durations/bytes-per-second, correct dropped/no-speech/error
+classification if triggered, Stop/drain completion visibility, no parallel
+`/chat`, and no sensitive data exposure.
+
+---
+
 ## TASK-AUDIO-001 | Capture Start Latency Measurement / Conversation Pre-roll Buffer
 
 Status: IMPLEMENTED - AUTOMATED RENDERER SMOKE PASS / NEEDS WINDOWS RUNTIME SMOKE (2026-06-05)
