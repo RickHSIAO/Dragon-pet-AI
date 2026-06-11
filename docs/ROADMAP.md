@@ -704,7 +704,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   candidates only. No `/chat` schema change, Owner Voice hard gate, raw audio
   persistence, private sample commit, or aggressive rewrite was added.
 
-- TASK-PERSONA-001 IMPLEMENTED - THIRD PROMPT/STATIC SMOKE PASS / NEEDS WINDOWS CHAT TONE RE-SMOKE (2026-06-11):
+- TASK-PERSONA-001 IMPLEMENTED - FOURTH PROMPT/REPAIR SMOKE PASS / NEEDS WINDOWS CHAT TONE RE-SMOKE (2026-06-11):
   Tunes Christina's runtime persona prompt so the character remains proud,
   tsundere, protective, and witty without sliding into repeated direct
   humiliation or hostile name-calling. The prompt now avoids `下賤的人類` as a
@@ -715,13 +715,14 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   response schema change, mood schema change, STT behavior change, Owner Voice
   behavior change, Ollama provider behavior change, renderer UI change, or
   runtime STT default change. Windows partial tone smoke confirmed the harsh
-  phrase boundary worked, then found overuse of `汝這傢伙` and too-adversarial
-  debug replies. Second-pass prompt tuning improved closeout/failure/stress
-  replies, but Windows re-smoke still exposed the recycled `又想試吾的耐心`
-  debug line and repeated address phrasing. Third-pass prompt tuning marks that
-  debug line disallowed, adds broad debug fallback behavior with PASS / FAIL /
-  NEEDS EVIDENCE judgment, evidence needed, and next check, and strengthens
-  nearby-turn repetition control. Windows chat tone re-smoke remains required.
+  phrase boundary worked, then found overuse of repeated address phrasing and
+  too-adversarial debug replies. Second- and third-pass prompt tuning improved
+  closeout/failure/stress replies, but third Windows re-smoke still surfaced the
+  same harsh/evasive debug template. Fourth-pass tuning removes literal negative
+  examples from LLM-visible prompt content, injects user-message-aware
+  debug-intent guidance for STT/Conversation/debug messages, and adds a narrow
+  post-generation repair for known harsh/evasive templates while preserving
+  normal tsundere replies. Windows chat tone re-smoke remains required.
 
 - TASK-CONV-001 IMPLEMENTED - CONVERSATION MODE CONTINUOUS CAPTURE / PENDING UTTERANCE QUEUE (2026-06-05):
   Conversation Mode now separates capture state (`off/listening/recording`) from

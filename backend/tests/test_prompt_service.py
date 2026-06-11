@@ -1,9 +1,14 @@
+from app.llm.types import LLMResponse
+from app.services.chat_service import generate_chat_reply, repair_persona_debug_reply
 from app.services.prompt_service import (
     APPROVED_MEMORY_REFERENCE_INSTRUCTION,
     build_character_prompt,
     format_approved_memory_context,
     normalize_chat_mode,
 )
+
+
+BAD_DEBUG_TEMPLATE = "哼，汝這傢伙又想試吾的耐心？先說清楚是哪段語音。"
 
 
 def test_normalize_chat_mode_none_uses_safe_fallback():
@@ -29,35 +34,25 @@ def test_build_character_prompt_project_returns_non_empty_string():
 def test_all_modes_include_character_name():
     for mode in ("casual", "project", "debug", "support", "reminder"):
         prompt = build_character_prompt(mode)
-        assert "\u514b\u8389\u7d72\u8482\u5a1c" in prompt, f"mode={mode!r}: character name not in prompt"
+        assert "克莉絲蒂娜" in prompt, f"mode={mode!r}: character name not in prompt"
 
 
 def test_all_modes_include_first_person_pronoun():
     for mode in ("casual", "project", "debug", "support", "reminder"):
         prompt = build_character_prompt(mode)
-        assert "\u543e" in prompt, f"mode={mode!r}: pronoun not in prompt"
+        assert "吾" in prompt, f"mode={mode!r}: pronoun not in prompt"
 
 
 def test_all_modes_include_second_person_pronoun():
     for mode in ("casual", "project", "debug", "support", "reminder"):
         prompt = build_character_prompt(mode)
-        assert "\u6c5d" in prompt, f"mode={mode!r}: pronoun not in prompt"
+        assert "汝" in prompt, f"mode={mode!r}: pronoun not in prompt"
 
 
 def test_all_modes_specify_traditional_chinese():
     for mode in ("casual", "project", "debug", "support", "reminder"):
         prompt = build_character_prompt(mode)
-        assert "\u7e41\u9ad4\u4e2d\u6587" in prompt, f"mode={mode!r}: language not in prompt"
-
-
-def test_casual_prompt_includes_tsundere_cue():
-    prompt = build_character_prompt("casual")
-    assert "\u50b2\u5b0c" in prompt
-
-
-def test_debug_prompt_is_accuracy_focused():
-    prompt = build_character_prompt("debug")
-    assert "debug" in prompt.lower()
+        assert "繁體中文" in prompt, f"mode={mode!r}: language not in prompt"
 
 
 def test_task_persona_001_prompt_keeps_proud_tsundere_but_sets_tone_boundaries():
@@ -80,121 +75,162 @@ def test_task_persona_001_prompt_discourages_harsh_direct_insults():
     assert "下賤的人類" not in prompt
 
 
-def test_task_persona_001_debug_prompt_requires_cooperation():
+def test_task_persona_001_fourth_pass_removes_exact_bad_phrase_from_prompt():
+    for mode in ("casual", "project", "debug", "support", "reminder"):
+        prompt = build_character_prompt(mode)
+        assert BAD_DEBUG_TEMPLATE not in prompt
+        assert "又想試吾的耐心" not in prompt
+        assert "先說清楚是哪段語音" not in prompt
+        assert "Bad -> Good examples" not in prompt
+        assert "Bad:" not in prompt
+
+
+def test_task_persona_001_fourth_pass_positive_debug_examples_are_present():
     prompt = build_character_prompt("debug")
 
-    assert "技術 / debugging / 測試情境" in prompt
-    assert "合作且有效" in prompt
-    assert "重現步驟" in prompt
-    assert "錯誤訊息" in prompt
-    assert "不要把測試訊息或驗證要求貶成沒意義" in prompt
-
-
-def test_task_persona_001_prompt_has_bad_good_examples_without_brittle_output():
-    prompt = build_character_prompt("support")
-
-    assert "Bad -> Good examples" in prompt
-    assert "無能之人" in prompt
-    assert "把錯誤訊息、操作步驟、期望結果交給吾" in prompt
-    assert "毫無價值" in prompt
-    assert "先確認輸入，再看第一個偏離預期的位置" in prompt
-
-
-def test_task_persona_001_second_pass_discourages_repeated_address_phrase():
-    prompt = build_character_prompt("casual")
-
-    assert "「汝這傢伙」只能少量" in prompt
-    assert "非連續使用" in prompt
-    assert "連續回覆使用同一個稱呼模板" in prompt
-    assert "優先使用「汝」" in prompt
-    assert "完全不加稱呼" in prompt
-
-
-def test_task_persona_001_second_pass_debug_requires_direct_answer_evidence_next_check():
-    prompt = build_character_prompt("debug")
-
-    assert "先直接回答眼前問題" in prompt
-    assert "需要的證據" in prompt
-    assert "下一個檢查點" in prompt
-    assert "PASS / FAIL / NEEDS EVIDENCE" in prompt
-    assert "不要只反問" in prompt
-    assert "turn history" in prompt
-    assert "diagnostics" in prompt
-
-
-def test_task_persona_001_second_pass_debug_examples_are_cooperative_not_dismissive():
-    prompt = build_character_prompt("debug")
-
-    assert "模型是否照設定跑" in prompt
-    assert "Transcript 是否合理" in prompt
-    assert "no-speech guard 有沒有誤判" in prompt
-    assert "history 裡的 #1/#2/#3 turn 是否連續" in prompt
-    assert "validation、runtime smoke、git status" in prompt
-    assert "錄音、STT、queue，還是 chat" in prompt
-
-
-def test_task_persona_001_second_pass_emotional_context_is_protective():
-    prompt = build_character_prompt("support")
-
-    assert "使用者說累" in prompt
-    assert "不要叫對方懶、弱、沒用" in prompt
-    assert "責備式開場" in prompt
-    assert "吾會在這裡陪汝一會兒" in prompt
-    assert "今天不用一次解決全部" in prompt
-
-
-def test_task_persona_001_third_pass_discourages_patience_testing_debug_phrase():
-    prompt = build_character_prompt("debug")
-
-    assert "又想試吾的耐心" in prompt
-    assert "不可作為 debug 預設回覆" in prompt
-    assert "責備式開場" in prompt
-
-
-def test_task_persona_001_third_pass_includes_broad_debug_fallback_examples():
-    prompt = build_character_prompt("debug")
-
-    assert "寬泛 debug 問題" in prompt
-    assert "語音辨識是否正常" in prompt
-    assert "這裡有沒有問題" in prompt
-    assert "有沒有漏話" in prompt
-    assert "測試能否收尾" in prompt
+    assert "Use this shape for STT / voice-recognition debug" in prompt
     assert "STT 模型" in prompt
     assert "finalTranscript" in prompt
-    assert "history #1/#2/#3" in prompt
-    assert "錄音、STT、queue、chat 四層拆" in prompt
+    assert "no-speech guard" in prompt
+    assert "audio voice evidence" in prompt
+    assert "Use this shape for Conversation Mode" in prompt
+    assert "conversation history" in prompt
+    assert "pending、activeTurnId、queue action" in prompt
+    assert "Use this shape for broad \"any issue?\" debug" in prompt
+    assert "NEEDS EVIDENCE" in prompt
 
 
-def test_task_persona_001_third_pass_debug_avoids_repeated_address_phrases():
-    prompt = build_character_prompt("debug")
+def test_task_persona_001_debug_intent_instruction_is_injected_for_stt_message():
+    prompt = build_character_prompt("casual", user_message="幫我確認 STT finalTranscript 有沒有問題")
 
-    assert "debugging 連續回合" in prompt
-    assert "避免重複同一句或同一稱呼" in prompt
-    assert "相鄰或頻繁 debug 回覆" in prompt
-    assert "重複「汝這傢伙」" in prompt
-
-
-def test_task_persona_001_third_pass_requires_needs_evidence_when_insufficient():
-    prompt = build_character_prompt("project")
-
-    assert "PASS / FAIL / NEEDS EVIDENCE" in prompt
-    assert "若證據不足" in prompt
-    assert "明確說 NEEDS EVIDENCE" in prompt
-    assert "不要憑空保證沒問題" in prompt
+    assert "偵測到 debug / STT / Conversation Mode 意圖" in prompt
+    assert "PASS、FAIL、或 NEEDS EVIDENCE" in prompt
+    assert "證據" in prompt
+    assert "下一個檢查點" in prompt
+    assert "避免只演角色" in prompt
 
 
-def test_task_persona_001_third_pass_preserves_proud_tsundere_tone():
-    prompt = build_character_prompt("casual")
+def test_task_persona_001_debug_intent_instruction_is_injected_for_conversation_message():
+    prompt = build_character_prompt("casual", user_message="conversation mode 有沒有漏掉我的話")
 
-    assert "高傲、自信、帶一點命令感" in prompt
-    assert "傲嬌、護短、嘴硬心軟" in prompt
-    assert "哼" in prompt
+    assert "偵測到 debug / STT / Conversation Mode 意圖" in prompt
+    assert "避免只演角色、只反問、或重複稱呼" in prompt
+
+
+def test_task_persona_001_debug_intent_instruction_not_injected_for_plain_casual_message():
+    prompt = build_character_prompt("casual", user_message="陪我聊一下蛋糕")
+
+    assert "偵測到 debug / STT / Conversation Mode 意圖" not in prompt
+    assert "傲嬌" in prompt
+
+
+def test_task_persona_001_repair_known_bad_stt_reply():
+    repaired = repair_persona_debug_reply(
+        BAD_DEBUG_TEMPLATE,
+        "幫我確認語音辨識是否正常，這次不要漏掉重點。",
+    )
+
+    assert repaired != BAD_DEBUG_TEMPLATE
+    assert "NEEDS EVIDENCE" in repaired
+    assert "STT 模型" in repaired
+    assert "finalTranscript" in repaired
+    assert "語音辨識是否正常" in repaired
+
+
+def test_task_persona_001_repair_known_bad_conversation_reply():
+    repaired = repair_persona_debug_reply(
+        BAD_DEBUG_TEMPLATE,
+        "conversation mode 有沒有漏掉我的話",
+    )
+
+    assert repaired != BAD_DEBUG_TEMPLATE
+    assert "conversation history" in repaired
+    assert "pending" in repaired
+    assert "activeTurnId" in repaired
+    assert "queue action" in repaired
+
+
+def test_task_persona_001_repair_repeated_address_generic_debug_reply():
+    repaired = repair_persona_debug_reply(
+        "哼，汝這傢伙又想問？汝這傢伙先說清楚。",
+        "這裡還有沒有問題？",
+    )
+
+    assert "汝這傢伙" not in repaired
+    assert "NEEDS EVIDENCE" in repaired
+    assert "diagnostics" in repaired
+    assert "git status" in repaired
+
+
+def test_task_persona_001_repair_does_not_over_sanitize_normal_tsundere_reply():
+    reply = "哼，這點小事吾當然會看。把結果交給吾。"
+
+    assert repair_persona_debug_reply(reply, "幫我看一下") == reply
+
+
+def test_task_persona_001_chat_generation_repairs_bad_llm_reply_and_keeps_schema(monkeypatch):
+    captured = []
+
+    class BadPersonaProvider:
+        provider_name = "ollama"
+        model = "qwen3:8b"
+
+        def generate(self, request):
+            captured.append(request)
+            return LLMResponse(
+                text=BAD_DEBUG_TEMPLATE,
+                provider="ollama",
+                model="qwen3:8b",
+            )
+
+    monkeypatch.setenv("LLM_CHAT_ENABLED", "true")
+    monkeypatch.setattr(
+        "app.services.chat_service.get_llm_provider",
+        lambda: BadPersonaProvider(),
+    )
+
+    response = generate_chat_reply(
+        "克莉絲蒂娜，幫我確認語音辨識是否正常，這次不要漏掉重點。",
+        mode="casual",
+    )
+
+    assert set(response.keys()) == {"reply", "mood", "source"}
+    assert response["source"] == "llm_local"
+    assert response["reply"] != BAD_DEBUG_TEMPLATE
+    assert "NEEDS EVIDENCE" in response["reply"]
+    assert "STT 模型" in response["reply"]
+    assert captured
+    assert "偵測到 debug / STT / Conversation Mode 意圖" in captured[0].system_prompt
+
+
+def test_task_persona_001_chat_generation_leaves_normal_llm_reply_unchanged(monkeypatch):
+    class GoodPersonaProvider:
+        provider_name = "ollama"
+        model = "qwen3:8b"
+
+        def generate(self, request):
+            return LLMResponse(
+                text="哼，吾會看。把 diagnostics 貼來。",
+                provider="ollama",
+                model="qwen3:8b",
+            )
+
+    monkeypatch.setenv("LLM_CHAT_ENABLED", "true")
+    monkeypatch.setattr(
+        "app.services.chat_service.get_llm_provider",
+        lambda: GoodPersonaProvider(),
+    )
+
+    response = generate_chat_reply("幫我看 diagnostics", mode="debug")
+
+    assert set(response.keys()) == {"reply", "mood", "source"}
+    assert response["reply"] == "哼，吾會看。把 diagnostics 貼來。"
+    assert response["source"] == "llm_local"
 
 
 def test_ollama_payload_system_message_contains_persona(monkeypatch):
     from app.llm.ollama_provider import OllamaLocalProvider
     from app.llm.real_provider import ProviderHTTPResponse
-    from app.services.chat_service import generate_chat_reply
 
     captured = []
 
@@ -205,7 +241,7 @@ def test_ollama_payload_system_message_contains_persona(monkeypatch):
                 status_code=200,
                 json_data={
                     "model": "qwen3:8b",
-                    "message": {"role": "assistant", "content": "\u543e\u77e5\u9053\u4e86\u3002"},
+                    "message": {"role": "assistant", "content": "吾知道了。"},
                     "done": True,
                     "eval_count": 5,
                     "prompt_eval_count": 30,
@@ -224,7 +260,7 @@ def test_ollama_payload_system_message_contains_persona(monkeypatch):
         lambda: fake_provider,
     )
 
-    generate_chat_reply("\u7a31\u8b9a\u6211\u4e00\u4e0b", mode="casual")
+    generate_chat_reply("稱讚我一下", mode="casual")
 
     assert len(captured) == 1
     payload = captured[0]
@@ -235,14 +271,15 @@ def test_ollama_payload_system_message_contains_persona(monkeypatch):
     assert system_msg["role"] == "system"
     system_content = system_msg["content"]
 
-    assert "\u514b\u8389\u7d72\u8482\u5a1c" in system_content
-    assert "\u543e" in system_content
-    assert "\u6c5d" in system_content
-    assert "\u7e41\u9ad4\u4e2d\u6587" in system_content
+    assert "克莉絲蒂娜" in system_content
+    assert "吾" in system_content
+    assert "汝" in system_content
+    assert "繁體中文" in system_content
+    assert BAD_DEBUG_TEMPLATE not in system_content
 
     user_msg = messages[1]
     assert user_msg["role"] == "user"
-    assert "\u7a31\u8b9a" in user_msg["content"]
+    assert "稱讚" in user_msg["content"]
 
 
 def test_format_approved_memory_context_empty_list_returns_empty_string():

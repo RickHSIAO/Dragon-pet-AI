@@ -100,6 +100,45 @@ LOCAL_PROVIDER_TIMEOUT_FALLBACK_TEXT = (
     "Local Ollama timed out. The model may still be loading or waking up; "
     "wait a moment and try again."
 )
+_HARSH_DEBUG_REPLY_PATTERNS = (
+    "又想試吾的耐心",
+    "先說清楚是哪段語音",
+    "唾岫",
+    "曄??",
+)
+_REPEATED_ADDRESS_PHRASES = ("汝這傢伙", "瘙")
+_STT_DEBUG_TERMS = (
+    "stt",
+    "speech",
+    "transcript",
+    "finaltranscript",
+    "no-speech",
+    "語音辨識",
+    "隤颲刻",
+)
+_CONVERSATION_DEBUG_TERMS = (
+    "conversation mode",
+    "conversation",
+    "history",
+    "turn",
+    "pending",
+    "activeturnid",
+    "queue",
+    "漏掉",
+    "瞍",
+)
+_GENERIC_DEBUG_TERMS = (
+    "diagnostics",
+    "log",
+    "git status",
+    "validation",
+    "runtime smoke",
+    "有沒有問題",
+    "收尾",
+    "測試",
+    "失敗",
+    "嗅偏",
+)
 
 
 def _source_for_llm_response(provider: Any, response: LLMResponse) -> str:
@@ -127,6 +166,52 @@ def _provider_model(provider: Any, response: LLMResponse | None = None) -> str |
     if isinstance(private_model, str) and private_model.strip():
         return private_model.strip()
     return None
+
+
+def _has_known_harsh_debug_reply(reply: str) -> bool:
+    normalized_reply = reply.lower()
+    if any(pattern.lower() in normalized_reply for pattern in _HARSH_DEBUG_REPLY_PATTERNS):
+        return True
+    return any(reply.count(phrase) >= 2 for phrase in _REPEATED_ADDRESS_PHRASES)
+
+
+def _message_matches_any(message: str, terms: tuple[str, ...]) -> bool:
+    normalized_message = message.lower()
+    return any(term.lower() in normalized_message for term in terms)
+
+
+def _safe_debug_fallback_reply(message: str) -> str:
+    if _message_matches_any(message, _STT_DEBUG_TERMS):
+        return (
+            "哼，吾先判斷為 NEEDS EVIDENCE。貼出 STT 模型、finalTranscript、"
+            "no-speech guard、audio voice evidence，吾才能確認語音辨識是否正常。"
+        )
+    if _message_matches_any(message, _CONVERSATION_DEBUG_TERMS):
+        return (
+            "這句有進來。若要確認沒有漏句，要看 conversation history 的 turn "
+            "是否連續，並確認 pending、activeTurnId、queue action。"
+        )
+    if _message_matches_any(message, _GENERIC_DEBUG_TERMS):
+        return (
+            "目前只能說 NEEDS EVIDENCE。把 diagnostics、log、git status 貼出來，"
+            "吾會從 STT、queue、chat 三層拆。"
+        )
+    return (
+        "哼，目前只能說 NEEDS EVIDENCE。把最近的 diagnostics 或 log 貼出來，"
+        "吾再替汝判斷下一步。"
+    )
+
+
+def repair_persona_debug_reply(reply: str, message: str) -> str:
+    """
+    Narrow TASK-PERSONA-001 repair for known harsh/evasive debug templates.
+
+    This intentionally does not sanitize normal tsundere flavor. It only replaces
+    replies that match known bad patterns or excessive repeated address phrases.
+    """
+    if not _has_known_harsh_debug_reply(reply):
+        return reply
+    return _safe_debug_fallback_reply(message)
 
 
 def _with_usage_metadata(
@@ -260,7 +345,7 @@ def generate_chat_reply(
 
         provider = get_llm_provider()
     llm_request = LLMRequest(
-        system_prompt=build_character_prompt(chat_mode),
+        system_prompt=build_character_prompt(chat_mode, user_message=message),
         user_message=message,
         mode=chat_mode,
         memory_context=memory_context,
@@ -293,8 +378,9 @@ def generate_chat_reply(
             include_usage_metadata=include_usage_metadata,
         )
 
+    repaired_reply = repair_persona_debug_reply(llm_response.text, message)
     response = {
-        "reply": llm_response.text,
+        "reply": repaired_reply,
         "mood": select_mock_mood(message),
         "source": _source_for_llm_response(provider, llm_response),
     }

@@ -29092,7 +29092,7 @@ model switch was made.
 
 ## TASK-PERSONA-001 | Christina Tsundere Tone Boundaries
 
-Status: IMPLEMENTED - THIRD PROMPT/STATIC SMOKE PASS / NEEDS WINDOWS CHAT TONE RE-SMOKE (2026-06-11)
+Status: IMPLEMENTED - FOURTH PROMPT/REPAIR SMOKE PASS / NEEDS WINDOWS CHAT TONE RE-SMOKE (2026-06-11)
 
 ### Goal
 
@@ -29145,27 +29145,50 @@ Second prompt pass:
 ### Third-Pass Runtime Smoke Tuning
 
 Windows chat tone re-smoke improved closeout, failure, and stress replies, but
-TASK-PERSONA-001 still cannot close out:
+TASK-PERSONA-001 still could not close out:
 
 - Good: closeout questions used `NEEDS EVIDENCE` and asked for log,
   diagnostics, and git status.
 - Good: failure handling used the expected `錄音 / STT / queue / chat` split
   and protective "吾陪汝一步一步抓" wording.
-- Still failing: broad debug questions could repeat the exact adversarial line
-  `汝這傢伙又想試吾的耐心？先說清楚是哪段語音。`
+- Still failing: broad debug questions could repeat the same harsh/evasive
+  debug template.
 - Still failing: `汝這傢伙` could appear too often in nearby technical/debug
   turns.
 
 Third prompt pass:
 
-- Marks `又想試吾的耐心` / the full failing sentence as disallowed for
-  technical/debug mode and not a default debug response.
+- Marks the known harsh/evasive debug template as disallowed for technical/debug
+  mode and not a default debug response.
 - Adds explicit broad debug fallback behavior for "語音辨識是否正常",
   "這裡有沒有問題", "有沒有漏話", and "測試能否收尾".
 - Requires a current PASS / FAIL / NEEDS EVIDENCE judgment when possible,
   followed by evidence needed, next check, and concise reasoning.
 - Strengthens repetition control: do not repeat the same sentence across nearby
   turns, and avoid frequent or adjacent `汝這傢伙` in debug replies.
+
+### Fourth-Pass Runtime Smoke Tuning
+
+Third Windows runtime tone re-smoke still failed: the known harsh/evasive debug
+template appeared again, Conversation Mode debug questions were not answered
+directly, and repeated address phrasing remained overused. This suggested that
+visible negative examples in the prompt could be copied by the model.
+
+Fourth prompt/repair pass:
+
+- Replaced LLM-visible negative examples with positive-only "Use this shape"
+  examples.
+- Removed the exact known bad debug template from LLM-visible prompt content.
+- Added optional debug-intent guidance in `build_character_prompt(mode,
+  user_message=...)` for STT, Conversation Mode, diagnostics, queue/history,
+  validation, and closeout messages.
+- Updated `/chat` LLM path to pass the current user message into prompt
+  construction without changing request/response schema.
+- Added a narrow post-generation repair that only replaces known harsh/evasive
+  debug templates or excessive repeated address phrasing with safe debug
+  fallbacks.
+- Preserved normal proud / tsundere replies when they do not match known bad
+  patterns.
 
 ### Static Smoke Coverage
 
@@ -29181,12 +29204,20 @@ Third prompt pass:
 - second-pass tests verify direct-answer / evidence / next-check debug guidance
 - second-pass tests verify PASS / FAIL / NEEDS EVIDENCE style guidance
 - second-pass tests verify tired/stressed protective-tone guidance
-- third-pass tests verify the `又想試吾的耐心` debug phrase is discouraged
+- third-pass tests verify the known harsh/evasive debug phrase is discouraged
 - third-pass tests verify broad debug fallback examples are present
 - third-pass tests verify debug mode avoids repeated address phrases
 - third-pass tests verify NEEDS EVIDENCE framing when evidence is insufficient
 - third-pass tests verify proud / tsundere tone remains present
-- bad/good examples are present without asserting exact LLM output
+- fourth-pass tests verify the runtime prompt no longer contains the exact bad
+  debug template or negative-example labels
+- fourth-pass tests verify positive-only debug/STT/Conversation examples are
+  present
+- fourth-pass tests verify debug-intent guidance is injected for STT and
+  Conversation Mode user messages
+- fourth-pass tests verify known bad generated replies are repaired while normal
+  proud/tsundere replies are not over-sanitized
+- fourth-pass tests verify `/chat` schema remains `reply / mood / source`
 
 ### Boundaries
 
@@ -29207,6 +29238,8 @@ Third prompt pass:
 - second-pass full backend validation: attempted with `backend\tests`; timed out after 304s in the local command wrapper
 - third-pass targeted prompt tests: `backend\tests\test_prompt_service.py` 29 passed
 - third-pass full backend validation: attempted with `backend\tests`; timed out after 304s in the local command wrapper
+- fourth-pass targeted prompt/chat tests: `backend\tests\test_prompt_service.py` 27 passed
+- fourth-pass full backend validation: attempted with `backend\tests`; timed out after 304s in the local command wrapper
 - `node apps/desktop/scripts/renderer-chat-smoke.js`: PASS
 - `node apps/desktop/scripts/pet-window-smoke.js`: 92 checks PASS
 - `node apps/desktop/scripts/pet-renderer-smoke.js`: 290 checks PASS
@@ -29222,8 +29255,8 @@ Run local `/chat` or Full App chat with:
   and next check appear instead of evasive filler
 - emotional/stress prompt: confirm protective tone with reduced harshness
 - casual joke prompt: confirm playful teasing without insult spam
-- repeated debug turns: confirm `又想試吾的耐心` does not appear and `汝這傢伙`
-  is not repeated across nearby turns
+- repeated debug turns: confirm the known harsh/evasive debug template does not
+  appear and repeated address phrasing is not repeated across nearby turns
 
 ---
 
