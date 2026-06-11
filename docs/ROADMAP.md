@@ -647,6 +647,21 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   IPC, no Pet Window / Output Queue change, no voice recording change, and no
   Owner Voice Gate behavior or hard-gate policy change.
 
+- TASK-STT-002 IMPLEMENTED - CHINESE STT QUALITY BASELINE / MODEL COMPARISON (2026-06-11):
+  Adds `scripts/stt_quality_probe.py`, a local faster-whisper benchmark for
+  explicit WAV/reference samples or a private manifest. Default comparison is
+  `tiny`, `base`, and `small`; `medium` is opt-in. Missing models are skipped by
+  default unless `--allow-download` is passed. Per sample/model output preserves
+  `rawTranscript`, `correctedTranscript`, `punctuatedTranscript`, and
+  `finalTranscript`, and reports character error rate, raw character error
+  rate, latency, audio duration, real-time factor, repeated-token warnings,
+  empty-transcript warnings, and errors. `sourceType` grouping
+  (`manual_mic`, `conversation_mode`, `external_clean_reference`) supports
+  capture-vs-model diagnosis. No runtime STT default change, Conversation Mode
+  queue change, Owner Voice Gate behavior change, `/stt/transcribe` or `/chat`
+  schema change, new IPC, raw audio persistence, or aggressive transcript
+  rewrite was added.
+
 - TASK-CONV-001 IMPLEMENTED - CONVERSATION MODE CONTINUOUS CAPTURE / PENDING UTTERANCE QUEUE (2026-06-05):
   Conversation Mode now separates capture state (`off/listening/recording`) from
   processing state (`idle/stt_processing/chat_processing`) and uses a bounded

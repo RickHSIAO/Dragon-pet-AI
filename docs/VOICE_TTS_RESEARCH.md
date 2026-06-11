@@ -250,7 +250,13 @@ Suggested research and implementation tasks:
   Full App mic button: toggle-to-record, stop → STT → fills textarea, no auto-send,
   no always-listening. Narrow `transcribeAudio(arrayBuffer)` bridge in renderer
   preload routes to existing `stt:transcribe` IPC handler. No new IPC channel.
-- TASK-STT-002 Local Whisper / faster-whisper spike.
+- TASK-STT-002 Local Whisper / faster-whisper spike. **Covered by TASK-STT-002
+  (IMPLEMENTED - LOCAL QUALITY PROBE / NO RUNTIME DEFAULT CHANGE; 2026-06-11):**
+  Added `scripts/stt_quality_probe.py` for repeatable Chinese STT model quality
+  comparison across faster-whisper `tiny`, `base`, `small`, and optional
+  `medium`, using explicit WAV/reference pairs or a private manifest. Missing
+  models are skipped by default unless `--allow-download` is passed. No runtime
+  default changed.
 - TASK-STT-003 Confirmed transcript to `/chat` flow. **Covered by TASK-241 + TASK-242 (DONE - WINDOWS VISUAL SMOKE PASS 2026-06-02):**
   TASK-241: transcript fills Full App input; user presses Send to trigger existing `/chat` flow.
   TASK-242: Auto-send Transcript toggle (default OFF) calls `sendMessage(trimmed)` after successful
@@ -446,6 +452,25 @@ Suggested research and implementation tasks:
   paraphrase, invented words, hidden prompts, new IPC, `/stt/transcribe` request schema change,
   `/chat` schema change, Pet Window / Output Queue change, recording behavior change, or Owner
   Voice Gate behavior change.
+
+- **TASK-STT-002 Chinese STT Quality Baseline / Model Comparison. IMPLEMENTED (2026-06-11):**
+  Adds `scripts/stt_quality_probe.py`, a local benchmark that accepts repeated
+  `--sample <wav> --reference <text>` pairs or a JSON manifest with `id`,
+  `path`, `reference`, `sourceType`, and optional `notes`. It compares
+  faster-whisper `tiny`, `base`, `small`, and optional `medium`; missing models
+  are cleanly skipped by default unless `--allow-download` is passed. Each
+  result preserves raw STT output and reports raw/corrected/punctuated/final
+  transcripts, reference, character error rate, raw character error rate,
+  latency, audio duration, real-time factor, repeated-token warning,
+  empty-transcript warning, and error text. `sourceType` values
+  `manual_mic`, `conversation_mode`, and `external_clean_reference` help
+  distinguish capture/VAD issues from model quality issues. Recommended
+  non-private Chinese sample categories: long natural sentence, short phrase,
+  names such as `克莉絲蒂娜`, numbers/dates, technical words, repeated-syllable
+  stress, normal volume, and quiet volume. Current runtime still selects
+  faster-whisper `tiny` by default through `DRAGON_PET_STT_MODEL`; test-only
+  overrides can set `DRAGON_PET_STT_MODEL=small` before backend start, but this
+  task does not change the default.
 
 - TASK-STT-016 LLM-based semantic correction. **(PLANNED; future):** Optional
   follow-up to apply a local LLM pass over the corrected transcript for further semantic

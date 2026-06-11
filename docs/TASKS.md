@@ -28578,6 +28578,161 @@ paths, or rejected transcript internals.
 
 ---
 
+## TASK-STT-002 | Chinese STT Quality Baseline / Model Comparison
+
+Status: IMPLEMENTED - LOCAL QUALITY PROBE / NO RUNTIME DEFAULT CHANGE (2026-06-11)
+
+### Goal
+
+Build a repeatable local Chinese STT benchmark so faster-whisper `tiny`,
+`base`, `small`, and optional `medium` can be compared before deciding whether
+the runtime default should change.
+
+This task benchmarks model quality only. It does not switch the default runtime
+STT model, does not change Conversation Mode queue behavior, does not change
+Owner Voice Gate behavior, and does not add aggressive transcript rewriting.
+
+### Probe Script
+
+Added:
+
+- `scripts/stt_quality_probe.py`
+
+Supported inputs:
+
+- repeated `--sample <wav> --reference <text>`
+- `--manifest <json>`
+
+Manifest entries may include:
+
+- `id`
+- `path`
+- `reference`
+- `sourceType`: `manual_mic`, `conversation_mode`, or `external_clean_reference`
+- `notes`
+
+The probe compares faster-whisper models with local cache only by default:
+
+```powershell
+.\backend\.venv\Scripts\python.exe scripts\stt_quality_probe.py `
+  --sample .\path\to\sample.wav `
+  --reference "這是中文語音辨識測試"
+```
+
+Use explicit download permission only when intentionally fetching missing
+models:
+
+```powershell
+.\backend\.venv\Scripts\python.exe scripts\stt_quality_probe.py `
+  --manifest .\local-stt-manifest.json `
+  --allow-download
+```
+
+Do not commit real user WAV files, private manifests, generated benchmark
+reports with private paths, temp audio, candidate WAVs, local settings, Owner
+Voice settings, embeddings, or generated logs.
+
+### Report Fields
+
+Each sample/model result reports:
+
+- `provider`
+- `model`
+- `status`
+- `rawTranscript`
+- `correctedTranscript`
+- `punctuatedTranscript`
+- `finalTranscript`
+- `reference`
+- `charDistance`, `referenceChars`, and `charErrorRate`
+- `rawCharDistance`, `rawReferenceChars`, and `rawCharErrorRate`
+- `latencyMs`
+- `audioDurationMs`
+- `realTimeFactor`
+- `repeatedTokenWarning`
+- `emptyTranscriptWarning`
+- `error`
+
+Bad STT output remains visible. The probe preserves raw output, applies only
+the existing safe dictionary and conservative punctuation helpers for comparable
+pipeline diagnostics, and does not semantically rewrite text.
+
+### Capture-vs-Model Diagnosis
+
+Use `sourceType` consistently:
+
+- `external_clean_reference`: clean audio + bad transcript suggests model issue.
+- `manual_mic`: explicit Manual Mic capture baseline.
+- `conversation_mode`: Conversation Mode capture/VAD baseline.
+
+If Manual Mic is good while Conversation Mode is bad, suspect capture/VAD. If
+clean external audio is bad across models, suspect model/provider quality. If
+both Manual Mic and Conversation Mode are bad, treat it as a model/capture
+combination issue until more samples isolate the cause.
+
+### Recommended Chinese Phrase List
+
+Use non-private phrases only:
+
+- Long natural sentence: `今天天氣很好，我想測試中文語音辨識在長句子的穩定度。`
+- Short phrase: `你好，開始測試。`
+- Names: `克莉絲蒂娜，請打開 Dragon Pet AI 的對話模式。`
+- Numbers and dates: `今天是二零二六年六月十一日，數字是一二三四五。`
+- Technical words: `faster-whisper、FunASR、Claude Code、CodeX、TASK-STT-002。`
+- Repeated syllable stress test: `測試測試測試，語音語音語音。`
+- Normal volume: `這是正常音量的中文語音測試。`
+- Quiet volume: `這是小聲說話的中文語音測試。`
+
+### Runtime Model Inspection
+
+Current runtime selection is unchanged:
+
+- `backend/app/stt/stt_service.py` uses `DRAGON_PET_STT_MODEL`.
+- Allowed runtime values are `tiny`, `base`, and `small`.
+- Missing or invalid env values fall back to `tiny`.
+- The model is resolved at backend process start, so restart the backend after
+  changing the env var.
+
+Test-only override:
+
+```powershell
+$env:DRAGON_PET_STT_MODEL="small"
+.\scripts\dev-start-backend.ps1
+```
+
+Reset to default:
+
+```powershell
+Remove-Item Env:\DRAGON_PET_STT_MODEL
+```
+
+TASK-STT-002 does not change the default from `tiny`; it only informs whether
+`base`, `small`, or another local provider should become a future candidate.
+
+### Boundaries
+
+- No default STT model change.
+- No Conversation Mode queue behavior change.
+- No Owner Voice Gate behavior change.
+- No `/stt/transcribe` request schema change.
+- No `/chat` schema change.
+- No new IPC channel.
+- No raw audio persistence.
+- No aggressive transcript deletion or semantic rewrite.
+
+### Validation
+
+- `backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_routes.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-stt002`
+- `backend\.venv\Scripts\python.exe scripts\stt_provider_smoke.py`
+- `backend\.venv\Scripts\python.exe scripts\stt_quality_probe.py --help`
+- `node apps/desktop/scripts/renderer-chat-smoke.js`
+- `node apps/desktop/scripts/pet-window-smoke.js`
+- `node apps/desktop/scripts/pet-renderer-smoke.js`
+- `git diff --check`
+- `git status --short`
+
+---
+
 ## TASK-CONV-001 | Conversation Mode Continuous Capture / Pending Utterance Queue
 
 Status: IMPLEMENTED - AUTOMATED RENDERER SMOKE PASS / NEEDS WINDOWS RUNTIME SMOKE (2026-06-05)
