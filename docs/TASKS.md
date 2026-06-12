@@ -29271,7 +29271,7 @@ Windows real-audio evaluation PASS:
 
 ## TASK-STT-006B | Deterministic STT Model Scoring
 
-Status: IMPLEMENTED - AUTOMATED SCORING SMOKE PASS / NEEDS WINDOWS SCORING REPORT SMOKE (2026-06-12)
+Status: DONE - WINDOWS SCORING REPORT SMOKE PASS / DETERMINISTIC SCORING READY (2026-06-12)
 
 ### Goal
 
@@ -29330,12 +29330,64 @@ panel, or runtime model auto-switch work.
 - No committed audio sample, generated evaluation report, or generated scoring
   report.
 
+### Windows Scoring Report Smoke
+
+PASS on 2026-06-12 after regenerating a real 006A evaluation report:
+
+- 006A evaluation report:
+  `outputs/stt_model_evaluation/20260612/stt_model_evaluation_report_20260612_184740.json`
+- samples: 2
+- models: `tiny`, `base`, `small`
+- tiny: `success=2 no_speech=0 error=0 avgLatencyMs=1796.0`
+- base: `success=2 no_speech=0 error=0 avgLatencyMs=1321.5`
+- small: `success=2 no_speech=0 error=0 avgLatencyMs=3559.0`
+- 006A recommendation: not generated / data collection only
+
+006B scoring outputs:
+
+- balanced:
+  `outputs/stt_model_scoring/20260612/stt_model_scoring_report_20260612_184823.json`
+  - tiny overallScore `86.72`
+  - base overallScore `92.24`
+  - small overallScore `79.03`
+  - recommendedModel `base`
+  - confidence `medium`
+  - marginToRunnerUp `5.52`
+- conversation:
+  `outputs/stt_model_scoring/20260612/stt_model_scoring_report_20260612_184827.json`
+  - tiny overallScore `83.06`
+  - base overallScore `94.21`
+  - small overallScore `70.70`
+  - recommendedModel `base`
+  - confidence `high`
+  - marginToRunnerUp `11.15`
+- manual_mic:
+  `outputs/stt_model_scoring/20260612/stt_model_scoring_report_20260612_184828.json`
+  - tiny overallScore `89.18`
+  - base overallScore `91.37`
+  - small overallScore `85.57`
+  - recommendedModel `base`
+  - confidence `low`
+  - marginToRunnerUp `2.19`
+
+PASS criteria:
+
+- Scoring script did not crash.
+- Real 006A report was read successfully.
+- Scoring JSON reports were generated.
+- `tiny`/`base`/`small` all have aggregates and model scores.
+- `deterministicRecommendation` exists.
+- No `accuracyScore` is emitted because there are no reference transcripts/WER.
+- Caveats include runtime-suitability-only limitation, no default change, no
+  runtime auto-switch, and no LLM/AI explanation.
+- This remains deterministic backend scoring only.
+
 ### Validation
 
 - `.\backend\.venv\Scripts\python.exe -m py_compile scripts\stt_model_scoring_report.py`
-- `.\backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_model_scoring_report.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-stt006b`
+- `.\backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_model_scoring_report.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-stt006b-closeout`
 - `.\backend\.venv\Scripts\python.exe scripts\stt_model_scoring_report.py --help`
-- Windows scoring report smoke is still required before DONE.
+- Windows scoring report smoke PASS.
 
 ---
 

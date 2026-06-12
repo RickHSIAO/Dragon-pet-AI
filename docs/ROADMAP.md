@@ -743,7 +743,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   `no_speech` or error result. This PASS makes report data collection ready,
   but it does not make any model the recommended default.
 
-- TASK-STT-006B IMPLEMENTED - AUTOMATED SCORING SMOKE PASS / NEEDS WINDOWS SCORING REPORT SMOKE (2026-06-12):
+- TASK-STT-006B DONE - WINDOWS SCORING REPORT SMOKE PASS / DETERMINISTIC SCORING READY (2026-06-12):
   Adds `scripts/stt_model_scoring_report.py`, a deterministic backend scoring
   stage that reads a TASK-STT-006A evaluation JSON and writes scored reports to
   `outputs/stt_model_scoring/YYYYMMDD/`. The scoring report aggregates
@@ -755,7 +755,12 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   reference transcripts. No LLM/AI explanation, frontend comparison panel,
   runtime model auto-switch, STT default change, `/chat` schema change, mood
   schema change, Owner Voice hard-gate change, renderer IPC change, committed
-  audio, or generated report was added.
+  audio, or generated report was added. Windows scoring report smoke PASS:
+  balanced, conversation, and manual_mic profiles all read the real 006A report,
+  generated scoring JSON, produced aggregates/model scores for `tiny`, `base`,
+  and `small`, and emitted `deterministicRecommendation`. `base` ranked highest
+  in all three profiles for this local two-sample runtime-suitability smoke,
+  but the committed default remains `tiny` and no runtime auto-switch is added.
 
 - TASK-PERSONA-001 DONE - WINDOWS CHAT TONE SMOKE PASS / DEBUG FALLBACK REPAIR ENABLED (2026-06-11):
   Tunes Christina's runtime persona prompt so the character remains proud,
