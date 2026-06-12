@@ -29393,7 +29393,7 @@ PASS criteria:
 
 ## TASK-STT-006C | Christina Grounded STT Recommendation Explanation
 
-Status: IMPLEMENTED - AUTOMATED GROUNDED EXPLANATION SMOKE PASS / NEEDS WINDOWS EXPLANATION REPORT SMOKE (2026-06-12)
+Status: DONE - WINDOWS GROUNDED EXPLANATION SMOKE PASS / CHRISTINA ZH-TW EXPLANATION READY (2026-06-12)
 
 ### Goal
 
@@ -29417,6 +29417,11 @@ transcripts.
 - Writes explanation JSON under `outputs/stt_model_explanation/YYYYMMDD/`.
 - Reads only grounded fields from the scoring report: recommendation, confidence,
   margin, reason codes, decision limits, profile, sample count, and model scores.
+- Windows grounded explanation smoke PASS confirmed deterministic explanation
+  report generation from a real TASK-STT-006B scoring report.
+- Christina localization fix PASS confirmed `--style christina` now emits
+  Traditional Chinese, proud/tsundere, helpful, caveated wording without mixed
+  English persona body fragments such as `Hmph` or `sees`.
 
 ### Explanation Schema
 
@@ -29445,6 +29450,8 @@ transcripts.
 - Low-confidence recommendations explicitly say the recommendation is tentative,
   more samples are needed, and the default should not change from that evidence
   alone.
+- Christina explanations are Traditional Chinese and keep the persona flavor
+  proud/tsundere while staying useful and grounded.
 - Missing/null recommendations do not invent a model choice.
 - Forbidden-claim validation checks for unsupported accuracy claims, default
   switch claims, runtime auto-switch claims, final/permanent decision claims,
@@ -29465,9 +29472,10 @@ transcripts.
 ### Validation
 
 - `.\backend\.venv\Scripts\python.exe -m py_compile scripts\stt_model_recommendation_explanation.py`
-- `.\backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_model_recommendation_explanation.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-stt006c`
+- `.\backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_model_recommendation_explanation.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-stt006c-closeout`
 - `.\backend\.venv\Scripts\python.exe scripts\stt_model_recommendation_explanation.py --help`
-- Windows explanation report smoke is still required before DONE.
+- Windows grounded explanation smoke PASS.
+- Christina zh-TW localization fix PASS.
 
 ---
 

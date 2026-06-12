@@ -560,19 +560,23 @@ Suggested research and implementation tasks:
   recommendation. The committed default remains `tiny`; no runtime auto-switch
   is added.
 
-- **TASK-STT-006C Christina Grounded STT Recommendation Explanation. IMPLEMENTED - AUTOMATED GROUNDED EXPLANATION SMOKE PASS / NEEDS WINDOWS EXPLANATION REPORT SMOKE (2026-06-12):**
+- **TASK-STT-006C Christina Grounded STT Recommendation Explanation. DONE - WINDOWS GROUNDED EXPLANATION SMOKE PASS / CHRISTINA ZH-TW EXPLANATION READY (2026-06-12):**
   Adds `scripts/stt_model_recommendation_explanation.py` as the explanation
   stage after deterministic scoring. It reads a TASK-STT-006B scoring report and
   writes `outputs/stt_model_explanation/YYYYMMDD/` JSON containing source
   recommendation facts, model score summary, grounded explanation text, caveats,
   next action, forbidden-claim checks, and explicit `defaultChange.changed=false`
   / `runtimeAutoSwitch.changed=false`. Styles are `christina` and `plain`.
-  The current implementation is deterministic/no-LLM by default; `--use-llm`
-  is accepted only as a future-compatible flag and still falls back to grounded
-  templates. This is not model auto-switching, not a frontend comparison panel,
-  and not a default change. Any persona/AI explanation must stay grounded in
-  the scoring report and must not claim true transcript accuracy or WER without
-  reference transcripts.
+  The completed pipeline is now evaluation report -> deterministic scoring ->
+  grounded Christina/plain explanation. Windows grounded explanation smoke PASS
+  confirmed report generation, and Christina zh-TW localization PASS confirmed
+  Traditional Chinese, proud/tsundere, helpful, caveated wording. The current
+  implementation is deterministic/no-LLM by default; `--use-llm` is accepted
+  only as a future-compatible flag and still falls back to grounded templates.
+  This is not model auto-switching, not a frontend comparison panel, and not a
+  default change. The explanation remains runtime-suitability-only evidence:
+  there is no reference transcript, no true accuracy/WER claim, no default
+  change, no runtime auto-switch, and no LLM used in the current implementation.
 
 - TASK-STT-016 LLM-based semantic correction. **(PLANNED; future):** Optional
   follow-up to apply a local LLM pass over the corrected transcript for further semantic
