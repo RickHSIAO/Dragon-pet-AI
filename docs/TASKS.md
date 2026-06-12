@@ -29479,6 +29479,72 @@ transcripts.
 
 ---
 
+## TASK-STT-007 | STT Model Advisor Runner
+
+Status: IMPLEMENTED - AUTOMATED ADVISOR RUNNER SMOKE PASS / NEEDS WINDOWS END-TO-END RUNNER SMOKE (2026-06-12)
+
+### Goal
+
+Provide one CLI entry point that runs the completed STT model-advisor pipeline:
+TASK-STT-006A evaluation report -> TASK-STT-006B deterministic scoring ->
+TASK-STT-006C grounded Christina/plain explanation.
+
+The runner is orchestration only. It does not change runtime model selection,
+does not alter the committed STT default, does not auto-switch STT, and does
+not claim true transcript accuracy/WER without reference transcripts.
+
+### Implementation
+
+- Added `scripts/stt_model_advisor_runner.py`.
+- CLI supports repeated `--audio`, `--models`, `--language`, `--profile`,
+  `--style`, `--output-root`, `--pretty`, `--keep-intermediate`, `--no-llm`,
+  and future-compatible `--use-llm`.
+- Reuses the existing 006A/006B/006C Python functions instead of duplicating
+  evaluation, scoring, or explanation logic.
+- Writes normal intermediate runtime artifacts under the existing
+  `outputs/stt_model_evaluation/`, `outputs/stt_model_scoring/`, and
+  `outputs/stt_model_explanation/` trees unless `--output-root` is supplied.
+- Writes a final advisor manifest under `outputs/stt_model_advisor/YYYYMMDD/`.
+- Stage failures are reported with the failed stage name and do not silently
+  continue.
+
+### Advisor Manifest
+
+- top-level `schemaVersion`, `task`, `generatedAt`, `language`, `profile`,
+  `style`, `models`, and `sampleCount`
+- `stageReports`: evaluation/scoring/explanation basenames plus local artifact
+  paths marked as local artifacts
+- `deterministicRecommendation`: recommended model, confidence,
+  margin-to-runner-up, and reason codes copied from 006B
+- `explanation`: short recommendation, detailed explanation, caveats, and next
+  action copied from 006C
+- `safety`: `defaultChanged=false`, `runtimeAutoSwitchChanged=false`,
+  `llmUsed=false`, and `noReferenceTranscriptCaveat=true`
+- `caveats`: runtime-suitability only, no reference transcript/no WER, no
+  default change, no auto-switch, and generated reports are runtime artifacts
+
+### Preserved Boundaries
+
+- No runtime STT auto-switch.
+- No committed STT default change; default remains `tiny`.
+- `base` and `small` remain runtime/evaluation candidates only.
+- No frontend comparison panel.
+- No `/chat` schema or mood schema change.
+- No Owner Voice hard-gate behavior change.
+- No generated report, audio sample, `.local-stt-samples`, temp WAV, embedding,
+  local setting, log, or pytest temp artifact committed.
+
+### Validation
+
+- `.\backend\.venv\Scripts\python.exe -m py_compile scripts\stt_model_advisor_runner.py`
+- `.\backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_model_advisor_runner.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-stt007`
+- Related 006A/006B/006C tests should continue passing when refactor risk is
+  present.
+- `.\backend\.venv\Scripts\python.exe scripts\stt_model_advisor_runner.py --help`
+- Windows end-to-end runner smoke is still required before DONE.
+
+---
+
 ## TASK-PERSONA-001 | Christina Tsundere Tone Boundaries
 
 Status: DONE - WINDOWS CHAT TONE SMOKE PASS / DEBUG FALLBACK REPAIR ENABLED (2026-06-11)

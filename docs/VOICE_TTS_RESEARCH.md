@@ -318,7 +318,7 @@ Suggested research and implementation tasks:
   (「這是中文語音辨識測試」→「這文中位與英編輯測試」). Language lock fix validated; model quality
   issue is a separate problem requiring TASK-246 (Whisper model upgrade to `small` or `base`).
 
-- TASK-STT-007 Configurable STT model via env var. **Covered by TASK-246 (DONE - MODEL CONFIG
+- Legacy STT model config note: earlier TASK-STT-007 draft, Configurable STT model via env var. **Covered by TASK-246 (DONE - MODEL CONFIG
   PASS / NEEDS TRANSCRIPT CORRECTION FOLLOW-UP; 2026-06-03):** Added `DRAGON_PET_STT_MODEL`
   env var support; allowed `tiny`/`base`/`small`; safe fallback; model resolution + load status
   surfaced in diagnostics. 10 renderer-chat + 13 backend pytest tests PASS. **Windows smoke
@@ -577,6 +577,18 @@ Suggested research and implementation tasks:
   default change. The explanation remains runtime-suitability-only evidence:
   there is no reference transcript, no true accuracy/WER claim, no default
   change, no runtime auto-switch, and no LLM used in the current implementation.
+
+- **TASK-STT-007 STT Model Advisor Runner. IMPLEMENTED - AUTOMATED ADVISOR RUNNER SMOKE PASS / NEEDS WINDOWS END-TO-END RUNNER SMOKE (2026-06-12):**
+  Adds `scripts/stt_model_advisor_runner.py` as the one-command local advisor
+  CLI. It orchestrates evaluation -> deterministic scoring -> grounded
+  Christina/plain explanation by importing and reusing the existing 006A, 006B,
+  and 006C functions, then writes a final manifest under
+  `outputs/stt_model_advisor/YYYYMMDD/`. The manifest records stage report
+  basenames, deterministic recommendation facts, explanation text, and safety
+  flags. This remains runtime-suitability evidence only: no reference
+  transcript/no WER, no default change, no runtime auto-switch, no frontend
+  comparison panel, and no LLM used by default. Runtime model selection remains
+  manual through the TASK-STT-005 selector.
 
 - TASK-STT-016 LLM-based semantic correction. **(PLANNED; future):** Optional
   follow-up to apply a local LLM pass over the corrected transcript for further semantic
