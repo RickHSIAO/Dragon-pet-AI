@@ -724,6 +724,21 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   channel, queue/pre-roll/drain policy, raw audio persistence, or committed
   sample audio changed.
 
+- TASK-STT-006A IMPLEMENTED - AUTOMATED REPORT SMOKE PASS / NEEDS WINDOWS AUDIO SAMPLE EVALUATION (2026-06-12):
+  Adds `scripts/stt_model_evaluation_report.py`, a backend/script-level report
+  generator for comparing `tiny`, `base`, and `small` on the same local
+  user-provided audio samples. The script uses the existing runtime STT service
+  path with per-request model selection, records safe environment metadata,
+  redacted sample basenames, duration/file size, latency/RTF, raw/final
+  transcripts, no-speech guard diagnostics, provider/model load state,
+  fallback, and errors without aborting the full report when one model fails.
+  Reports write under `outputs/stt_model_evaluation/YYYYMMDD/` by default and
+  print a concise terminal summary. This is data collection only: no
+  recommendation, scoring decision, AI explanation, large frontend comparison
+  panel, committed audio sample, or generated report was added. Runtime default
+  remains `tiny`; `base` and `small` remain runtime candidates only. No
+  `/chat` schema, mood schema, Owner Voice hard gate, or renderer IPC changed.
+
 - TASK-PERSONA-001 DONE - WINDOWS CHAT TONE SMOKE PASS / DEBUG FALLBACK REPAIR ENABLED (2026-06-11):
   Tunes Christina's runtime persona prompt so the character remains proud,
   tsundere, protective, and witty without sliding into repeated direct

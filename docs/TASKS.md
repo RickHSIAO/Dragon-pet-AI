@@ -29191,6 +29191,66 @@ Windows runtime model switch smoke PASS:
 
 ---
 
+## TASK-STT-006A | Backend STT Model Evaluation Report
+
+Status: IMPLEMENTED - AUTOMATED REPORT SMOKE PASS / NEEDS WINDOWS AUDIO SAMPLE EVALUATION (2026-06-12)
+
+### Goal
+
+Create backend-side evaluation data for `tiny`, `base`, and `small` before any
+frontend comparison panel, deterministic scoring, or AI explanation work.
+
+### Implementation
+
+- Added `scripts/stt_model_evaluation_report.py`.
+- Accepts repeated `--audio <path>` inputs, repeated matching `--label <text>`,
+  `--output-dir <path>`, `--language zh`, and `--models tiny,base,small`.
+- Uses the existing runtime STT service path by calling
+  `transcribe_audio_bytes(..., request_model=<candidate>)` for each sample and
+  model.
+- Writes JSON under `outputs/stt_model_evaluation/YYYYMMDD/` by default.
+- Redacts sample paths to basenames in the report while recording file size,
+  MIME type, and WAV duration when available.
+- Continues evaluating other models and samples if one model fails.
+- Prints a concise terminal summary with per-model success/no-speech/error
+  counts and average latency.
+
+### Report Fields
+
+- top-level `generatedAt`, `language`, `modelsEvaluated`, `environment`,
+  `samples`, and `summary`
+- safe environment info: provider name/source/fallback, Python version, and
+  platform
+- per sample: label, redacted sample basename, duration, file size, MIME type
+- per model result: status, runtime status, latency, RTF, raw/final transcript,
+  transcript length, detected language, no-speech probability, no-speech guard
+  applied/reason/decision trace, audio RMS/peak, speech detected, voiced ratio,
+  provider/model load status, request/resolved model metadata, fallback, and
+  error text
+
+### Preserved Boundaries
+
+- Data collection only; no recommended model field or decision is produced.
+- Placeholder `score` fields remain `null`; recommendation fields are not emitted.
+- No subjective AI explanation.
+- No large frontend comparison panel.
+- Runtime default remains `tiny`.
+- `base` and `small` remain runtime candidates only.
+- No `/chat` schema or mood schema change.
+- No Owner Voice hard-gate behavior change.
+- No renderer IPC change.
+- No committed audio sample or generated report.
+
+### Validation
+
+- `.\backend\.venv\Scripts\python.exe -m py_compile scripts\stt_model_evaluation_report.py`
+- `.\backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_model_evaluation_report.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-stt006a`
+- `.\backend\.venv\Scripts\python.exe scripts\stt_model_evaluation_report.py --help`
+- Full renderer and Pet smoke still required for closeout.
+- Windows audio sample evaluation is still required before DONE.
+
+---
+
 ## TASK-PERSONA-001 | Christina Tsundere Tone Boundaries
 
 Status: DONE - WINDOWS CHAT TONE SMOKE PASS / DEBUG FALLBACK REPAIR ENABLED (2026-06-11)

@@ -520,6 +520,19 @@ Suggested research and implementation tasks:
   Conversation Mode. The committed default remains `tiny`; `base` and `small`
   remain runtime candidates only.
 
+- **TASK-STT-006A Backend STT Model Evaluation Report. IMPLEMENTED - AUTOMATED REPORT SMOKE PASS / NEEDS WINDOWS AUDIO SAMPLE EVALUATION (2026-06-12):**
+  Adds `scripts/stt_model_evaluation_report.py` for backend-side data
+  collection before any recommendation or AI explanation layer. The script
+  compares `tiny`, `base`, and `small` over the same local user-provided audio
+  samples through the runtime STT service path, then writes JSON under
+  `outputs/stt_model_evaluation/YYYYMMDD/`. The report captures safe
+  environment info, redacted sample basename, duration/file size, latency/RTF,
+  raw/final transcript, no-speech guard diagnostics, audio RMS/peak/speech
+  signals, provider/model load state, fallback, and per-model errors. This does
+  not choose a `recommendedModel`, does not add subjective AI explanation, and
+  does not add a frontend comparison panel. The committed default remains
+  `tiny`; `base` and `small` remain runtime candidates only.
+
 - TASK-STT-016 LLM-based semantic correction. **(PLANNED; future):** Optional
   follow-up to apply a local LLM pass over the corrected transcript for further semantic
   accuracy. Must be guarded by explicit user opt-in and must not replace the deterministic
