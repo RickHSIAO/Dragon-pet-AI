@@ -727,6 +727,20 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   tired/stress prompts all met the tone boundary and usefulness criteria.
   Debug fallback repair remains enabled.
 
+- TASK-PERSONA-002 IMPLEMENTED - PROMPT/REPAIR SMOKE PASS / NEEDS WINDOWS GENERAL TONE SMOKE (2026-06-12):
+  Extends Christina's runtime tone boundary for non-debug casual/general
+  replies. The prompt now gives positive guidance to keep Christina proud,
+  teasing, witty, slightly arrogant, and protective while avoiding contempt,
+  hostile unclear-input dismissal, dominating framing, and repeated
+  humiliation. `/chat` LLM success now applies a total persona repair path:
+  TASK-PERSONA-001 debug repair first, then a narrow general repair for known
+  harsh fragments, unclear-input hostility, repeated humiliation, and likely
+  garbled-STT input. Safe tsundere lines are preserved. Prompt/chat targeted
+  pytest and Electron smoke passed; full backend pytest was attempted but timed
+  out in the local command wrapper after 364s. No `/chat` schema, mood schema,
+  STT default, Owner Voice hard gate, renderer IPC, provider runtime, or runtime
+  model change.
+
 - TASK-CONV-001 IMPLEMENTED - CONVERSATION MODE CONTINUOUS CAPTURE / PENDING UTTERANCE QUEUE (2026-06-05):
   Conversation Mode now separates capture state (`off/listening/recording`) from
   processing state (`idle/stt_processing/chat_processing`) and uses a bounded

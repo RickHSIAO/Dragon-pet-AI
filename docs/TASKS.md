@@ -29274,6 +29274,91 @@ teasing unless deliberately redesigned.
 
 ---
 
+## TASK-PERSONA-002 | Christina General Tone Sanitizer for Non-Debug Replies
+
+Status: IMPLEMENTED - PROMPT/REPAIR SMOKE PASS / NEEDS WINDOWS GENERAL TONE SMOKE (2026-06-12)
+
+### Goal
+
+Keep Christina proud, teasing, witty, slightly arrogant, and protective in
+non-debug casual/general replies while preventing contempt, hostile
+unclear-input dismissal, repeated humiliation, and garbled-STT mockery.
+
+### Implementation
+
+- Added TASK-PERSONA-002 positive general tone guidance to
+  `backend/app/services/prompt_service.py`.
+- Guidance covers light teasing, non-hostile clarification for unclear input,
+  likely STT recognition-error wording, and repetition control for sharp
+  address phrases.
+- Preserved TASK-PERSONA-001 debug guidance and debug repair behavior.
+- Added `repair_persona_general_reply()` for narrow non-debug repairs.
+- Added `repair_persona_reply()` so `/chat` LLM success applies debug repair
+  first, then general repair.
+- General repair handles only known harsh fragments, unclear-input hostility,
+  repeated humiliation, and likely garbled-STT cases.
+- Safe proud / tsundere replies pass through unchanged.
+
+### Repair Examples
+
+- `瘚芾祥?暹??` -> "哼，汝大概是在測吾吧？說清楚些，吾會替汝看。"
+- `憟湧` -> "哼，這句有點亂。吾會聽，換個說法就能替汝看。"
+- hostile unclear-input / garbled-STT dismissal -> "哼，這句像是 STT 辨識亂了。汝再說一次，或把 diagnostics 貼來，吾替汝看。"
+
+### Static Smoke Coverage
+
+`backend/tests/test_prompt_service.py` now verifies:
+
+- persona prompt includes TASK-PERSONA-002 general tone guidance
+- sanitizer repairs `瘚芾祥?暹??`
+- sanitizer repairs `憟湧`
+- sanitizer handles garbled-STT unclear-input hostility without mocking the user
+- sanitizer preserves safe proud / tsundere lines
+- debug fallback repair still works
+- `/chat` response schema remains `reply / mood / source`
+
+### Boundaries
+
+- `/chat` response schema remains `reply / mood / source`.
+- Mood schema unchanged.
+- No STT default change.
+- No Owner Voice hard-gate behavior change.
+- No renderer IPC change.
+- No provider runtime or runtime model default change.
+- No local settings, audio, embeddings, temp WAVs, pytest temp folders, or logs
+  committed.
+
+### Validation
+
+- `backend\tests\test_prompt_service.py`: 33 passed
+- `backend\tests\test_chat_service.py`: 34 passed
+- full backend pytest attempted with `backend\tests`; timed out after 364s in
+  the local command wrapper
+- `node apps/desktop/scripts/renderer-chat-smoke.js`: PASS
+- `node apps/desktop/scripts/pet-window-smoke.js`: 92 checks PASS
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: 290 checks PASS
+- `py_compile` for chat/prompt services: PASS
+- `git diff --check`: CLEAN (CRLF warnings only)
+- `git status --short`: reviewed; unrelated `docs/開啟方式.txt` remains
+  modified and uncommitted
+
+### Remaining Runtime Smoke
+
+Run Windows general tone smoke with local Ollama enabled. Suggested prompts:
+
+- non-debug casual testing prompt
+- unclear short input
+- garbled-STT-looking input
+- repeated quick casual prompts to check repetition control
+- safe tsundere prompt to ensure sass is preserved
+- one debug/STT prompt to confirm TASK-PERSONA-001 fallback still wins
+
+PASS requires proud / teasing / useful replies without contempt, hostile
+dismissal, repeated humiliation, schema change, STT default change, or Owner
+Voice hard-gate change.
+
+---
+
 ## TASK-CONV-001 | Conversation Mode Continuous Capture / Pending Utterance Queue
 
 Status: IMPLEMENTED - AUTOMATED RENDERER SMOKE PASS / NEEDS WINDOWS RUNTIME SMOKE (2026-06-05)

@@ -1,5 +1,9 @@
 from app.llm.types import LLMResponse
-from app.services.chat_service import generate_chat_reply, repair_persona_debug_reply
+from app.services.chat_service import (
+    generate_chat_reply,
+    repair_persona_debug_reply,
+    repair_persona_general_reply,
+)
 from app.services.prompt_service import (
     APPROVED_MEMORY_REFERENCE_INSTRUCTION,
     build_character_prompt,
@@ -9,6 +13,8 @@ from app.services.prompt_service import (
 
 
 BAD_DEBUG_TEMPLATE = "哼，汝這傢伙又想試吾的耐心？先說清楚是哪段語音。"
+BAD_GENERAL_TEMPLATE = "瘚芾祥?暹??"
+BAD_GENERAL_UNCLEAR_TEMPLATE = "憟湧"
 
 
 def test_normalize_chat_mode_none_uses_safe_fallback():
@@ -124,6 +130,19 @@ def test_task_persona_001_debug_intent_instruction_not_injected_for_plain_casual
     assert "傲嬌" in prompt
 
 
+def test_task_persona_002_prompt_includes_general_tone_boundaries():
+    prompt = build_character_prompt("casual")
+
+    assert "TASK-PERSONA-002" in prompt
+    assert "一般回覆語氣邊界" in prompt
+    assert "輕度調侃" in prompt
+    assert "不要變成輕蔑或情緒攻擊" in prompt
+    assert "不清楚輸入" in prompt
+    assert "STT 辨識亂了" in prompt
+    assert BAD_GENERAL_TEMPLATE not in prompt
+    assert BAD_GENERAL_UNCLEAR_TEMPLATE not in prompt
+
+
 def test_task_persona_001_repair_known_bad_stt_reply():
     repaired = repair_persona_debug_reply(
         BAD_DEBUG_TEMPLATE,
@@ -168,6 +187,42 @@ def test_task_persona_001_repair_does_not_over_sanitize_normal_tsundere_reply():
     assert repair_persona_debug_reply(reply, "幫我看一下") == reply
 
 
+def test_task_persona_002_general_repair_known_harsh_fragment():
+    repaired = repair_persona_general_reply(BAD_GENERAL_TEMPLATE, "陪我聊一下")
+
+    assert repaired != BAD_GENERAL_TEMPLATE
+    assert "吾" in repaired
+    assert "說清楚" in repaired
+    assert "浪費" not in repaired
+
+
+def test_task_persona_002_general_repair_unclear_hostile_fragment():
+    repaired = repair_persona_general_reply(BAD_GENERAL_UNCLEAR_TEMPLATE, "這句我剛剛沒說清楚")
+
+    assert repaired != BAD_GENERAL_UNCLEAR_TEMPLATE
+    assert "吾會聽" in repaired
+    assert "換個說法" in repaired
+
+
+def test_task_persona_002_general_repair_garbled_stt_without_mocking_user():
+    repaired = repair_persona_general_reply(
+        "少拿亂碼浪費吾時間。",
+        "瘚芾祥?暹??",
+    )
+
+    assert repaired != "少拿亂碼浪費吾時間。"
+    assert "STT" in repaired
+    assert "辨識亂了" in repaired
+    assert "diagnostics" in repaired
+    assert "浪費" not in repaired
+
+
+def test_task_persona_002_general_repair_preserves_safe_tsundere_line():
+    reply = "哼，這點小事吾當然能看穿。把結果交給吾。"
+
+    assert repair_persona_general_reply(reply, "陪我測一下") == reply
+
+
 def test_task_persona_001_chat_generation_repairs_bad_llm_reply_and_keeps_schema(monkeypatch):
     captured = []
 
@@ -201,6 +256,33 @@ def test_task_persona_001_chat_generation_repairs_bad_llm_reply_and_keeps_schema
     assert "STT 模型" in response["reply"]
     assert captured
     assert "偵測到 debug / STT / Conversation Mode 意圖" in captured[0].system_prompt
+
+
+def test_task_persona_002_chat_generation_repairs_general_harsh_reply_and_keeps_schema(monkeypatch):
+    class BadGeneralProvider:
+        provider_name = "ollama"
+        model = "qwen3:8b"
+
+        def generate(self, request):
+            return LLMResponse(
+                text=BAD_GENERAL_TEMPLATE,
+                provider="ollama",
+                model="qwen3:8b",
+            )
+
+    monkeypatch.setenv("LLM_CHAT_ENABLED", "true")
+    monkeypatch.setattr(
+        "app.services.chat_service.get_llm_provider",
+        lambda: BadGeneralProvider(),
+    )
+
+    response = generate_chat_reply("陪我聊一下蛋糕", mode="casual")
+
+    assert set(response.keys()) == {"reply", "mood", "source"}
+    assert response["source"] == "llm_local"
+    assert response["reply"] != BAD_GENERAL_TEMPLATE
+    assert "吾" in response["reply"]
+    assert "浪費" not in response["reply"]
 
 
 def test_task_persona_001_chat_generation_leaves_normal_llm_reply_unchanged(monkeypatch):

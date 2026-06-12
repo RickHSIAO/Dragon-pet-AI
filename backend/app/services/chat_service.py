@@ -107,6 +107,41 @@ _HARSH_DEBUG_REPLY_PATTERNS = (
     "曄??",
 )
 _REPEATED_ADDRESS_PHRASES = ("汝這傢伙", "瘙")
+_SAFE_GENERAL_PROUD_REPLY = (
+    "哼，汝大概是在測吾吧？說清楚些，吾會替汝看。"
+)
+_SAFE_GENERAL_UNCLEAR_REPLY = (
+    "哼，這句吾還沒完全聽清。換個說法，吾就能替汝判斷。"
+)
+_SAFE_GARBLED_STT_REPLY = (
+    "哼，這句像是 STT 辨識亂了。汝再說一次，或把 diagnostics 貼來，吾替汝看。"
+)
+_GENERAL_HARSH_REPLY_REPLACEMENTS = {
+    "瘚芾祥?暹??": _SAFE_GENERAL_PROUD_REPLY,
+    "憟湧": "哼，這句有點亂。吾會聽，換個說法就能替汝看。",
+    "銝酗": _SAFE_GENERAL_PROUD_REPLY,
+    "撱Ｙ": _SAFE_GENERAL_UNCLEAR_REPLY,
+    "?Ｚ疏": _SAFE_GENERAL_UNCLEAR_REPLY,
+    "?∠": _SAFE_GENERAL_UNCLEAR_REPLY,
+    "?": _SAFE_GENERAL_UNCLEAR_REPLY,
+}
+_UNCLEAR_INPUT_HOSTILE_PATTERNS = (
+    "聽不懂",
+    "說人話",
+    "浪費吾時間",
+    "浪費時間",
+    "少拿亂碼",
+)
+_MOJIBAKE_USER_MESSAGE_MARKERS = (
+    "瘚",
+    "憟",
+    "銝",
+    "撱",
+    "暹",
+    "瘙",
+    "隤",
+    "蝣",
+)
 _STT_DEBUG_TERMS = (
     "stt",
     "speech",
@@ -175,6 +210,23 @@ def _has_known_harsh_debug_reply(reply: str) -> bool:
     return any(reply.count(phrase) >= 2 for phrase in _REPEATED_ADDRESS_PHRASES)
 
 
+def _message_looks_garbled(message: str) -> bool:
+    if not message:
+        return False
+    marker_count = sum(1 for marker in _MOJIBAKE_USER_MESSAGE_MARKERS if marker in message)
+    private_use_count = sum(1 for char in message if "\ue000" <= char <= "\uf8ff")
+    question_mark_count = message.count("?")
+    return marker_count >= 2 or private_use_count >= 1 or question_mark_count >= 4
+
+
+def _has_unclear_input_hostility(reply: str) -> bool:
+    return any(pattern in reply for pattern in _UNCLEAR_INPUT_HOSTILE_PATTERNS)
+
+
+def _has_repeated_general_humiliation(reply: str) -> bool:
+    return any(reply.count(phrase) >= 2 for phrase in _REPEATED_ADDRESS_PHRASES)
+
+
 def _message_matches_any(message: str, terms: tuple[str, ...]) -> bool:
     normalized_message = message.lower()
     return any(term.lower() in normalized_message for term in terms)
@@ -212,6 +264,48 @@ def repair_persona_debug_reply(reply: str, message: str) -> str:
     if not _has_known_harsh_debug_reply(reply):
         return reply
     return _safe_debug_fallback_reply(message)
+
+
+def repair_persona_general_reply(reply: str, message: str) -> str:
+    """
+    Narrow TASK-PERSONA-002 repair for non-debug contempt or unclear-input hostility.
+
+    This keeps harmless sass intact. It only rewrites known harsh mojibake
+    fragments, hostile unclear-input dismissals, or repeated humiliation.
+    """
+    if not reply:
+        return reply
+
+    for pattern, replacement in _GENERAL_HARSH_REPLY_REPLACEMENTS.items():
+        if pattern in reply:
+            if _message_looks_garbled(message):
+                return _SAFE_GARBLED_STT_REPLY
+            return replacement
+
+    if _has_unclear_input_hostility(reply):
+        if _message_looks_garbled(message):
+            return _SAFE_GARBLED_STT_REPLY
+        return _SAFE_GENERAL_UNCLEAR_REPLY
+
+    if _has_repeated_general_humiliation(reply):
+        if _message_looks_garbled(message):
+            return _SAFE_GARBLED_STT_REPLY
+        return _SAFE_GENERAL_PROUD_REPLY
+
+    return reply
+
+
+def repair_persona_reply(reply: str, message: str) -> str:
+    """
+    Apply persona repairs without changing response schema.
+
+    TASK-PERSONA-001 debug repair runs first; TASK-PERSONA-002 then handles
+    general/non-debug harshness that is not covered by debug intent.
+    """
+    debug_repaired = repair_persona_debug_reply(reply, message)
+    if debug_repaired != reply:
+        return debug_repaired
+    return repair_persona_general_reply(reply, message)
 
 
 def _with_usage_metadata(
@@ -378,7 +472,7 @@ def generate_chat_reply(
             include_usage_metadata=include_usage_metadata,
         )
 
-    repaired_reply = repair_persona_debug_reply(llm_response.text, message)
+    repaired_reply = repair_persona_reply(llm_response.text, message)
     response = {
         "reply": repaired_reply,
         "mood": select_mock_mood(message),
