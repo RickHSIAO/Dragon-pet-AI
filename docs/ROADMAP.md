@@ -778,18 +778,21 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   change the committed default `tiny`, and does not claim transcript
   accuracy/WER without reference transcripts.
 
-- TASK-STT-007 IMPLEMENTED - AUTOMATED ADVISOR RUNNER SMOKE PASS / NEEDS WINDOWS END-TO-END RUNNER SMOKE (2026-06-12):
+- TASK-STT-007 DONE - WINDOWS END-TO-END ADVISOR RUNNER SMOKE PASS / ONE-COMMAND STT ADVISOR READY (2026-06-12):
   Adds `scripts/stt_model_advisor_runner.py`, a one-command CLI orchestration
   layer over TASK-STT-006A evaluation, TASK-STT-006B deterministic scoring, and
   TASK-STT-006C grounded explanation. The runner reuses the existing stage
   functions, writes normal intermediate runtime artifacts, and writes a final
   advisor manifest under `outputs/stt_model_advisor/YYYYMMDD/` with stage
   report basenames, deterministic recommendation facts, explanation text, and
-  explicit safety flags. It is deterministic/no-LLM by default, accepts
-  `--use-llm` only as a future-compatible deterministic fallback, does not add
-  a frontend comparison panel, does not auto-switch runtime STT, does not
-  change committed default `tiny`, and does not claim transcript accuracy/WER
-  without reference transcripts.
+  explicit safety flags. Windows end-to-end runner smoke PASS completed the
+  one-command advisor workflow on two local owner WAV samples and generated
+  evaluation, scoring, explanation, and advisor reports. It is
+  deterministic/no-LLM by default, accepts `--use-llm` only as a
+  future-compatible deterministic fallback, does not add a frontend comparison
+  panel, does not auto-switch runtime STT, does not change committed default
+  `tiny`, and does not claim transcript accuracy/WER without reference
+  transcripts.
 
 - TASK-PERSONA-001 DONE - WINDOWS CHAT TONE SMOKE PASS / DEBUG FALLBACK REPAIR ENABLED (2026-06-11):
   Tunes Christina's runtime persona prompt so the character remains proud,

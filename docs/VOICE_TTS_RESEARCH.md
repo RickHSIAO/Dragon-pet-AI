@@ -578,17 +578,21 @@ Suggested research and implementation tasks:
   there is no reference transcript, no true accuracy/WER claim, no default
   change, no runtime auto-switch, and no LLM used in the current implementation.
 
-- **TASK-STT-007 STT Model Advisor Runner. IMPLEMENTED - AUTOMATED ADVISOR RUNNER SMOKE PASS / NEEDS WINDOWS END-TO-END RUNNER SMOKE (2026-06-12):**
+- **TASK-STT-007 STT Model Advisor Runner. DONE - WINDOWS END-TO-END ADVISOR RUNNER SMOKE PASS / ONE-COMMAND STT ADVISOR READY (2026-06-12):**
   Adds `scripts/stt_model_advisor_runner.py` as the one-command local advisor
   CLI. It orchestrates evaluation -> deterministic scoring -> grounded
   Christina/plain explanation by importing and reusing the existing 006A, 006B,
   and 006C functions, then writes a final manifest under
   `outputs/stt_model_advisor/YYYYMMDD/`. The manifest records stage report
   basenames, deterministic recommendation facts, explanation text, and safety
-  flags. This remains runtime-suitability evidence only: no reference
-  transcript/no WER, no default change, no runtime auto-switch, no frontend
-  comparison panel, and no LLM used by default. Runtime model selection remains
-  manual through the TASK-STT-005 selector.
+  flags. The final one-command workflow is: audio samples -> evaluation ->
+  deterministic scoring -> grounded explanation -> advisor manifest. Windows
+  end-to-end runner smoke PASS completed that workflow with two local owner WAV
+  files and generated evaluation/scoring/explanation/advisor reports. This
+  remains runtime-suitability evidence only: no reference transcript/no WER, no
+  default change, no runtime auto-switch, generated reports are runtime
+  artifacts, no frontend comparison panel, and no LLM used by default. Runtime
+  model selection remains manual through the TASK-STT-005 selector.
 
 - TASK-STT-016 LLM-based semantic correction. **(PLANNED; future):** Optional
   follow-up to apply a local LLM pass over the corrected transcript for further semantic

@@ -29481,7 +29481,7 @@ transcripts.
 
 ## TASK-STT-007 | STT Model Advisor Runner
 
-Status: IMPLEMENTED - AUTOMATED ADVISOR RUNNER SMOKE PASS / NEEDS WINDOWS END-TO-END RUNNER SMOKE (2026-06-12)
+Status: DONE - WINDOWS END-TO-END ADVISOR RUNNER SMOKE PASS / ONE-COMMAND STT ADVISOR READY (2026-06-12)
 
 ### Goal
 
@@ -29507,6 +29507,10 @@ not claim true transcript accuracy/WER without reference transcripts.
 - Writes a final advisor manifest under `outputs/stt_model_advisor/YYYYMMDD/`.
 - Stage failures are reported with the failed stage name and do not silently
   continue.
+- Windows end-to-end advisor runner smoke PASS confirmed the one-command flow
+  on two local owner WAV samples: evaluation/scoring/explanation/advisor reports
+  were generated, `recommendedModel=base`, `confidence=high`,
+  `marginToRunnerUp=11.97`, and `llmUsed=false`.
 
 ### Advisor Manifest
 
@@ -29537,11 +29541,11 @@ not claim true transcript accuracy/WER without reference transcripts.
 ### Validation
 
 - `.\backend\.venv\Scripts\python.exe -m py_compile scripts\stt_model_advisor_runner.py`
-- `.\backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_model_advisor_runner.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-stt007`
+- `.\backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_model_advisor_runner.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-stt007-closeout`
 - Related 006A/006B/006C tests should continue passing when refactor risk is
   present.
 - `.\backend\.venv\Scripts\python.exe scripts\stt_model_advisor_runner.py --help`
-- Windows end-to-end runner smoke is still required before DONE.
+- Windows end-to-end advisor runner smoke PASS.
 
 ---
 
