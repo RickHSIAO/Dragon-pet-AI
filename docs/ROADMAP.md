@@ -727,7 +727,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   tired/stress prompts all met the tone boundary and usefulness criteria.
   Debug fallback repair remains enabled.
 
-- TASK-PERSONA-002 IMPLEMENTED - THIRD PROMPT/REPAIR SMOKE PASS / NEEDS WINDOWS GENERAL TONE RE-SMOKE (2026-06-12):
+- TASK-PERSONA-002 DONE - WINDOWS GENERAL TONE SMOKE PASS / GENERAL REPAIR ENABLED (2026-06-12):
   Extends Christina's runtime tone boundary for non-debug casual/general
   replies. The prompt now gives positive guidance to keep Christina proud,
   teasing, witty, slightly arrogant, and protective while avoiding contempt,
@@ -739,9 +739,12 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   harsh fragments, unclear-input hostility, repeated humiliation, likely
   garbled-STT input, comparative devaluation, threats, waste-time hostility,
   and companion/testing refusal fragments. Safe tsundere lines are preserved.
-  Third-pass targeted prompt tests, chat tests, py_compile, and Electron smoke
-  passed; full backend pytest was
-  attempted but timed out in the local command wrapper after 364s. No `/chat`
+  Windows general tone smoke passed after the companion/testing tone repair:
+  companion/testing prompts now receive cooperative tsundere replies, light sass
+  remains allowed, garbled-STT handling still works, and STT/debug prompts still
+  use `NEEDS EVIDENCE`. No `浪費吾的時間`, `奴隸`, comparative value humiliation,
+  threat phrase, refusal/abandoning phrasing, or `測吾的耐心` appeared. General
+  repair remains enabled after the TASK-PERSONA-001 debug repair. No `/chat`
   schema, mood schema, STT default, Owner Voice hard gate, renderer IPC,
   provider runtime, or runtime model change.
 

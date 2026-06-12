@@ -29276,7 +29276,7 @@ teasing unless deliberately redesigned.
 
 ## TASK-PERSONA-002 | Christina General Tone Sanitizer for Non-Debug Replies
 
-Status: IMPLEMENTED - THIRD PROMPT/REPAIR SMOKE PASS / NEEDS WINDOWS GENERAL TONE RE-SMOKE (2026-06-12)
+Status: DONE - WINDOWS GENERAL TONE SMOKE PASS / GENERAL REPAIR ENABLED (2026-06-12)
 
 ### Goal
 
@@ -29308,6 +29308,9 @@ hostility, and refusal/abandoning phrasing for companion/testing requests.
   repeated humiliation, likely garbled-STT cases, comparative devaluation,
   threat/intimidation fragments, waste-time hostility, and companion/testing
   refusal or abandonment fragments.
+- Windows general tone smoke PASS confirmed that the companion/testing repair,
+  garbled-STT handling, and debug/STT fallback all work in runtime. General
+  repair remains enabled after TASK-PERSONA-001 debug repair.
 - Safe proud / tsundere replies pass through unchanged.
 
 ### Repair Examples
@@ -29353,6 +29356,15 @@ hostility, and refusal/abandoning phrasing for companion/testing requests.
 
 ### Validation
 
+- Windows general tone smoke PASS:
+  - companion/testing prompt returned cooperative tsundere repair:
+    "哼，陪汝測試也不是不行。說清楚要看 STT、Conversation Mode、queue，還是 chat，吾會替汝驗。"
+  - light sass prompt stayed acceptable without value humiliation, threats, or
+    waste-time hostility
+  - unclear/garbled input returned non-hostile clarification
+  - STT/debug prompt still returned `NEEDS EVIDENCE`
+  - no `浪費吾的時間`, `奴隸`, comparative value humiliation, threat phrase,
+    refusal/abandoning phrasing, or `測吾的耐心`
 - `backend\tests\test_prompt_service.py`: 42 passed
 - `backend\tests\test_chat_service.py`: 34 passed
 - full backend pytest attempted with `backend\tests`; timed out after 364s in
@@ -29365,20 +29377,11 @@ hostility, and refusal/abandoning phrasing for companion/testing requests.
 - `git status --short`: reviewed; unrelated `docs/開啟方式.txt` remains
   modified and uncommitted
 
-### Remaining Runtime Smoke
+### Runtime Closeout
 
-Run Windows general tone smoke with local Ollama enabled. Suggested prompts:
-
-- non-debug casual testing prompt
-- unclear short input
-- garbled-STT-looking input
-- repeated quick casual prompts to check repetition control
-- safe tsundere prompt to ensure sass is preserved
-- one debug/STT prompt to confirm TASK-PERSONA-001 fallback still wins
-
-PASS requires proud / teasing / useful replies without contempt, hostile
-dismissal, repeated humiliation, schema change, STT default change, or Owner
-Voice hard-gate change.
+No remaining TASK-PERSONA-002 Windows general tone smoke is required. Future
+persona changes should preserve the repair order: TASK-PERSONA-001 debug repair
+first, then TASK-PERSONA-002 general repair.
 
 ---
 

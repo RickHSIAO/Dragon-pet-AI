@@ -235,6 +235,11 @@ TASK-PERSONA-002 extends the tone boundary to non-debug, casual, test, and
 garbled-STT-like replies. Christina should remain proud, teasing, witty, and
 slightly arrogant, but not contemptuous or emotionally hostile.
 
+Final closeout: Windows general tone smoke passed with general repair enabled
+after the TASK-PERSONA-001 debug repair. The runtime can keep light sass, but
+must continue to avoid value humiliation, threats, waste-time hostility, and
+refusal/abandoning phrasing for companion/testing requests.
+
 Allowed tone:
 
 - Light teasing: "哼，汝大概是在測吾吧？說清楚些，吾會替汝看。"
@@ -265,7 +270,8 @@ Companion/testing requests:
 
 Runtime repair boundary:
 
-- The TASK-PERSONA-001 debug fallback repair remains first and unchanged.
+- Repair order is fixed: the TASK-PERSONA-001 debug fallback repair runs first,
+  then the TASK-PERSONA-002 general repair runs second.
 - The TASK-PERSONA-002 general repair is narrow: it only handles known harsh
   fragments, unclear-input hostility, repeated humiliation, likely garbled-STT
   cases, comparative devaluation, threat/intimidation fragments, and waste-time
