@@ -538,6 +538,19 @@ Suggested research and implementation tasks:
   `small avgLatencyMs=4751.0`. These latency values are recorded only as sample
   evidence; they are not a recommendation and do not make `base` the default.
 
+- **TASK-STT-006B Deterministic STT Model Scoring. IMPLEMENTED - AUTOMATED SCORING SMOKE PASS / NEEDS WINDOWS SCORING REPORT SMOKE (2026-06-12):**
+  Adds `scripts/stt_model_scoring_report.py` for deterministic scoring of a
+  TASK-STT-006A evaluation report. The report aggregates success/error/no-speech
+  rates, latency/RTF, transcript signal, speech evidence, no-speech guard /
+  hallucination-risk signals, fallback counts, and provider/model load errors,
+  then produces 0-100 runtime-suitability scores for `tiny`, `base`, and
+  `small`. Profiles `manual_mic`, `conversation`, and `balanced` adjust the
+  weights; `conversation` penalizes slow models harder. This is not true
+  transcript accuracy or WER scoring unless reference transcripts are added in a
+  later task. It does not add LLM/AI explanation, does not auto-switch runtime
+  models, and does not change the committed default `tiny`; `base` and `small`
+  remain runtime candidates only.
+
 - TASK-STT-016 LLM-based semantic correction. **(PLANNED; future):** Optional
   follow-up to apply a local LLM pass over the corrected transcript for further semantic
   accuracy. Must be guarded by explicit user opt-in and must not replace the deterministic

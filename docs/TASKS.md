@@ -29269,6 +29269,76 @@ Windows real-audio evaluation PASS:
 
 ---
 
+## TASK-STT-006B | Deterministic STT Model Scoring
+
+Status: IMPLEMENTED - AUTOMATED SCORING SMOKE PASS / NEEDS WINDOWS SCORING REPORT SMOKE (2026-06-12)
+
+### Goal
+
+Read a TASK-STT-006A evaluation report JSON and produce deterministic
+runtime-suitability scoring before any LLM/AI explanation, frontend comparison
+panel, or runtime model auto-switch work.
+
+### Implementation
+
+- Added `scripts/stt_model_scoring_report.py`.
+- CLI supports `--input <evaluation_report_json>`, `--output-dir <path>`,
+  `--profile manual_mic|conversation|balanced`, optional `--weights`, `--pretty`,
+  and `--help`.
+- Default profile is `balanced`.
+- Writes scored JSON under `outputs/stt_model_scoring/YYYYMMDD/` by default.
+- Reads 006A `samples[].results[]` and aggregates per model without requiring
+  audio files or generated reports to be committed.
+- Handles missing optional metrics, missing model results, and per-model errors
+  without crashing the whole scoring report.
+
+### Scoring Schema
+
+- top-level `schemaVersion`, `generatedAt`, `inputReportBasename`,
+  `sourceReportGeneratedAt`, `profile`, `models`, `sampleCount`, `weights`,
+  `modelAggregates`, `modelScores`, `deterministicRecommendation`, and `caveats`
+- per-model aggregates: success/no-speech/error counts, sample counts,
+  success/error/no-speech rates, average latency/RTF, transcript length,
+  no-speech probability, audio RMS/peak/voiced ratio, guard/fallback/load-error
+  counts, and metric-gap flags
+- per-model scores: `reliabilityScore`, `speedScore`, `speechEvidenceScore`,
+  `transcriptSignalScore`, `hallucinationRiskScore`, `fallbackPenalty`, and
+  `overallScore`
+- deterministic recommendation includes `recommendedModel`, confidence,
+  runner-up margin, reason codes, a short deterministic summary, and decision
+  limits
+
+### Profiles
+
+- `manual_mic`: more tolerant of latency; weights reliability and transcript
+  signal more heavily
+- `conversation`: latency matters more and slow models are penalized harder
+- `balanced`: middle ground profile
+
+### Preserved Boundaries
+
+- Runtime-suitability scoring only; no `accuracyScore` or WER claim without
+  reference transcripts.
+- No LLM/AI explanation.
+- No frontend comparison panel.
+- No runtime model auto-switch.
+- No committed STT default change; default remains `tiny`.
+- `base` and `small` remain runtime candidates only.
+- No `/chat` schema or mood schema change.
+- No Owner Voice hard-gate behavior change.
+- No renderer IPC change.
+- No committed audio sample, generated evaluation report, or generated scoring
+  report.
+
+### Validation
+
+- `.\backend\.venv\Scripts\python.exe -m py_compile scripts\stt_model_scoring_report.py`
+- `.\backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_model_scoring_report.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-stt006b`
+- `.\backend\.venv\Scripts\python.exe scripts\stt_model_scoring_report.py --help`
+- Windows scoring report smoke is still required before DONE.
+
+---
+
 ## TASK-PERSONA-001 | Christina Tsundere Tone Boundaries
 
 Status: DONE - WINDOWS CHAT TONE SMOKE PASS / DEBUG FALLBACK REPAIR ENABLED (2026-06-11)
