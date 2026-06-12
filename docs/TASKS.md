@@ -30295,6 +30295,74 @@ PASS criteria met:
 
 ---
 
+## TASK-CONV-005 | Conversation Mode Long Session Stability Smoke
+
+Status: IMPLEMENTED - AUTOMATED LONG SESSION DIAGNOSTICS SMOKE PASS / NEEDS WINDOWS 5-10 MIN CONVERSATION SMOKE (2026-06-12)
+
+### Goal
+
+Add a focused long-session smoke checklist and automated diagnostics guard for
+Conversation Mode after the queue capacity policy landed in TASK-CONV-004.
+
+### Implementation
+
+- Added `apps/desktop/scripts/conversation-long-session-smoke.js`.
+- The smoke script verifies renderer source shape for the Conversation Mode
+  diagnostics that matter during longer runs:
+  - bounded queue max remains `4`
+  - queue pressure and queue-full fields remain present
+  - lifecycle count and `drain_complete` remain visible
+  - `queue_full` and `empty_artifact` remain distinguishable
+  - lifecycle rows keep audio class, drop stage, Owner Voice, and candidate WAV
+    cleanup fields visible
+  - Owner Voice dry-run does not become a runtime blocking state
+- The script also validates a synthetic 12-turn long-session fixture covering
+  completed turns, no-speech, queue overflow, empty artifact, chat error,
+  Owner Voice dry-run outcomes, candidate WAV deletion, and final drain state.
+
+### Manual Windows 5-10 Minute Smoke Checklist
+
+- Start Conversation Mode.
+- Select STT model `base`.
+- Speak 8-12 short utterances.
+- Include one pause long enough to trigger silence stop.
+- Press Stop once during active STT/chat processing.
+- Confirm queue drains to `pending=0/4`, `active=0`,
+  `stopMode=drain_complete`.
+- Confirm no usable turn silently disappears.
+- Confirm any usable overflow remains visible as `queue_full`,
+  `audio=usable_audio`, `dropStage=at_queue`.
+- Confirm empty artifacts remain distinguishable as `empty_artifact`,
+  `dropStage=before_queue`.
+- Confirm no candidate WAV remains undeleted after verification.
+- Confirm no hallucinated silence transcript.
+- Confirm Christina debug/persona tone remains acceptable.
+
+### Copyable Runtime Summary Format
+
+```text
+total=<n> completed=<n> no_speech=<n> queue_full=<n> empty_artifact=<n> chat_error=<n> ownerVoice.accepted=<n> ownerVoice.rejected=<n> ownerVoice.unknown=<n> candidateWavDeleted.true=<n> candidateWavDeleted.false=<n> finalPending=<n>/4 finalActive=<n> stopMode=<mode>
+```
+
+### Preserved Boundaries
+
+- No STT default change.
+- No runtime model selector behavior change.
+- No `/chat` schema or mood schema change.
+- No Owner Voice hard gate behavior change.
+- No TTS.
+- No frontend redesign.
+- No Conversation Mode runtime behavior change.
+- No new IPC.
+- No generated report, audio, temp WAV, embedding, local settings, log, or
+  pytest temp artifact committed.
+
+### Automated Validation
+
+- `node apps/desktop/scripts/conversation-long-session-smoke.js`: PASS
+
+---
+
 ## TASK-AUDIO-001 | Capture Start Latency Measurement / Conversation Pre-roll Buffer
 
 Status: IMPLEMENTED - AUTOMATED RENDERER SMOKE PASS / NEEDS WINDOWS RUNTIME SMOKE (2026-06-05)

@@ -944,6 +944,22 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   centroid exposure, embedding exposure, graceful Stop/drain, or no-parallel
   `/chat` behavior changed.
 
+- TASK-CONV-005 IMPLEMENTED - AUTOMATED LONG SESSION DIAGNOSTICS SMOKE PASS / NEEDS WINDOWS 5-10 MIN CONVERSATION SMOKE (2026-06-12):
+  Adds `apps/desktop/scripts/conversation-long-session-smoke.js` plus a Windows
+  5-10 minute runtime checklist for longer Conversation Mode sessions after the
+  TASK-CONV-004 capacity policy. The automated smoke verifies that the bounded
+  queue max remains `4`, queue pressure/full diagnostics remain present,
+  `drain_complete` remains visible, `queue_full` usable-audio overflow stays
+  distinguishable from `empty_artifact` before-queue drops, lifecycle rows keep
+  audio class/drop stage/Owner Voice/candidate WAV cleanup fields visible, and
+  Owner Voice dry-run remains non-blocking. A synthetic 12-turn fixture covers
+  completed turns, no-speech, queue overflow, empty artifact, chat error,
+  Owner Voice accepted/rejected/unknown outcomes, candidate WAV deletion, and
+  final `pending=0/4 active=0 stopMode=drain_complete`. No runtime behavior,
+  STT default, runtime model selector, `/chat` or mood schema, Owner Voice hard
+  gate, TTS, frontend redesign, IPC, Pet Window, Output Queue, raw audio
+  persistence, or generated artifact commit was added.
+
 - TASK-AUDIO-001 IMPLEMENTED - CAPTURE START LATENCY MEASUREMENT / CONVERSATION PRE-ROLL BUFFER (2026-06-05):
   Voice Diagnostics now records safe per-capture timing metadata:
   `captureRequestedAt`, `mediaStreamReadyAt`, `recorderStartRequestedAt`,

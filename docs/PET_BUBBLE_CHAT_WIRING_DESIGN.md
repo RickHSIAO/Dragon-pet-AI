@@ -1028,3 +1028,24 @@ Implementation notes:
 - Added Pet renderer smoke coverage for diagnostic-heavy payloads.
 - Added Pet window smoke coverage that mirrored speech sanitizers drop diagnostic fields.
 - Automated validation passed; Windows manual smoke is required before closing TASK-149.
+
+## TASK-CONV-005 Conversation Diagnostics / Pet Bubble Boundary
+
+Conversation Mode lifecycle diagnostics are a Full App voice diagnostics concern.
+They must make dropped, no-speech, and chat-error turns visible in the Full App
+without widening the Pet bubble mirror contract.
+
+Pet bubble/chat implications:
+
+- Pet bubble mirroring must continue to depend only on explicit successful chat
+  reply state, not on hidden or inferred Conversation Mode turns.
+- Failed turns must not be reconstructed as Pet speech.
+- Usable overflow remains visible in Full App diagnostics as `queue_full`,
+  `audio=usable_audio`, and `dropStage=at_queue`.
+- Empty artifacts remain visible in Full App diagnostics as `empty_artifact` and
+  `dropStage=before_queue`.
+- No-speech and chat-error turns stay lifecycle/debug evidence, not Pet bubble
+  content.
+- The Full App -> Pet mirror payload remains `reply / mood / source`.
+- No `/chat` schema, mood schema, IPC, Pet Window input, TTS, or proactive LLM
+  behavior is added by TASK-CONV-005.
