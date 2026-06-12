@@ -29391,6 +29391,86 @@ PASS criteria:
 
 ---
 
+## TASK-STT-006C | Christina Grounded STT Recommendation Explanation
+
+Status: IMPLEMENTED - AUTOMATED GROUNDED EXPLANATION SMOKE PASS / NEEDS WINDOWS EXPLANATION REPORT SMOKE (2026-06-12)
+
+### Goal
+
+Read a TASK-STT-006B deterministic scoring report and generate a grounded,
+user-facing STT model recommendation explanation. This task is explanation only:
+it does not change runtime model selection, does not alter the committed STT
+default, and does not claim true transcript accuracy/WER without reference
+transcripts.
+
+### Implementation
+
+- Added `scripts/stt_model_recommendation_explanation.py`.
+- CLI supports `--input <scoring_report_json>`, optional
+  `--profile manual_mic|conversation|balanced`, optional
+  `--style christina|plain`, optional `--output-dir <path>`, `--pretty`,
+  `--no-llm`, and `--use-llm`.
+- Default style is `christina`.
+- Default behavior is deterministic/no-LLM. `--use-llm` is accepted for future
+  compatibility but currently falls back to deterministic grounded templates,
+  so tests and local use do not require a real LLM.
+- Writes explanation JSON under `outputs/stt_model_explanation/YYYYMMDD/`.
+- Reads only grounded fields from the scoring report: recommendation, confidence,
+  margin, reason codes, decision limits, profile, sample count, and model scores.
+
+### Explanation Schema
+
+- top-level `schemaVersion`, `task`, `generatedAt`, `inputReportBasename`,
+  `profile`, `style`, `sourceRecommendation`, `modelScoreSummary`,
+  `explanation`, `grounding`, `defaultChange`, and `runtimeAutoSwitch`
+- `sourceRecommendation`: recommended model, confidence, runner-up margin,
+  reason codes, and decision limits copied from the scoring report with wording
+  normalized away from unsupported shorthand claims
+- `modelScoreSummary`: per-model overall, reliability, speed, transcript signal,
+  and hallucination-risk scores
+- `explanation`: short recommendation, detailed explanation, caveats, and next
+  action suggestion
+- `grounding`: facts used, forbidden claims checked, unsupported claims removed,
+  and `llmUsed=false`
+- `defaultChange.changed=false`, `defaultChange.currentDefault=tiny`
+- `runtimeAutoSwitch.changed=false`
+
+### Grounding Rules
+
+- The explanation frames `recommendedModel` as a recommendation to review, not a
+  command to switch.
+- Caveats always include runtime-suitability-only scoring, no reference
+  transcript / no true word-error-rate evidence, small local sample limitations,
+  no default change, and no runtime auto-switch.
+- Low-confidence recommendations explicitly say the recommendation is tentative,
+  more samples are needed, and the default should not change from that evidence
+  alone.
+- Missing/null recommendations do not invent a model choice.
+- Forbidden-claim validation checks for unsupported accuracy claims, default
+  switch claims, runtime auto-switch claims, final/permanent decision claims,
+  unsupported model mentions, and recommendation/model mismatches. If validation
+  fails, the script falls back to a safe deterministic template.
+
+### Preserved Boundaries
+
+- No runtime STT auto-switch.
+- No committed STT default change; default remains `tiny`.
+- `base` and `small` remain runtime/evaluation candidates only.
+- No frontend comparison panel.
+- No `/chat` schema or mood schema change.
+- No Owner Voice hard-gate behavior change.
+- No generated report, audio sample, `.local-stt-samples`, temp WAV, embedding,
+  local setting, log, or pytest temp artifact committed.
+
+### Validation
+
+- `.\backend\.venv\Scripts\python.exe -m py_compile scripts\stt_model_recommendation_explanation.py`
+- `.\backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_model_recommendation_explanation.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-stt006c`
+- `.\backend\.venv\Scripts\python.exe scripts\stt_model_recommendation_explanation.py --help`
+- Windows explanation report smoke is still required before DONE.
+
+---
+
 ## TASK-PERSONA-001 | Christina Tsundere Tone Boundaries
 
 Status: DONE - WINDOWS CHAT TONE SMOKE PASS / DEBUG FALLBACK REPAIR ENABLED (2026-06-11)

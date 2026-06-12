@@ -560,6 +560,20 @@ Suggested research and implementation tasks:
   recommendation. The committed default remains `tiny`; no runtime auto-switch
   is added.
 
+- **TASK-STT-006C Christina Grounded STT Recommendation Explanation. IMPLEMENTED - AUTOMATED GROUNDED EXPLANATION SMOKE PASS / NEEDS WINDOWS EXPLANATION REPORT SMOKE (2026-06-12):**
+  Adds `scripts/stt_model_recommendation_explanation.py` as the explanation
+  stage after deterministic scoring. It reads a TASK-STT-006B scoring report and
+  writes `outputs/stt_model_explanation/YYYYMMDD/` JSON containing source
+  recommendation facts, model score summary, grounded explanation text, caveats,
+  next action, forbidden-claim checks, and explicit `defaultChange.changed=false`
+  / `runtimeAutoSwitch.changed=false`. Styles are `christina` and `plain`.
+  The current implementation is deterministic/no-LLM by default; `--use-llm`
+  is accepted only as a future-compatible flag and still falls back to grounded
+  templates. This is not model auto-switching, not a frontend comparison panel,
+  and not a default change. Any persona/AI explanation must stay grounded in
+  the scoring report and must not claim true transcript accuracy or WER without
+  reference transcripts.
+
 - TASK-STT-016 LLM-based semantic correction. **(PLANNED; future):** Optional
   follow-up to apply a local LLM pass over the corrected transcript for further semantic
   accuracy. Must be guarded by explicit user opt-in and must not replace the deterministic

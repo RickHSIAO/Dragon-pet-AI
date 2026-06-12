@@ -762,6 +762,19 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   in all three profiles for this local two-sample runtime-suitability smoke,
   but the committed default remains `tiny` and no runtime auto-switch is added.
 
+- TASK-STT-006C IMPLEMENTED - AUTOMATED GROUNDED EXPLANATION SMOKE PASS / NEEDS WINDOWS EXPLANATION REPORT SMOKE (2026-06-12):
+  Adds `scripts/stt_model_recommendation_explanation.py`, a deterministic
+  grounded explanation stage that reads a TASK-STT-006B scoring report and
+  writes user-facing explanation JSON to `outputs/stt_model_explanation/YYYYMMDD/`.
+  Styles `christina` and `plain` both use only scoring-report facts:
+  recommended model, confidence, runner-up margin, reason codes, decision
+  limits, profile, sample count, and model scores. The pipeline is now backend
+  evaluation report -> deterministic scoring report -> grounded explanation.
+  This task does not use a real LLM by default, does not add a frontend
+  comparison panel, does not auto-switch runtime STT, does not change the
+  committed default `tiny`, and does not claim transcript accuracy/WER without
+  reference transcripts.
+
 - TASK-PERSONA-001 DONE - WINDOWS CHAT TONE SMOKE PASS / DEBUG FALLBACK REPAIR ENABLED (2026-06-11):
   Tunes Christina's runtime persona prompt so the character remains proud,
   tsundere, protective, and witty without sliding into repeated direct
