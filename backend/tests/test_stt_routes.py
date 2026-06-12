@@ -1199,8 +1199,9 @@ def test_stt_route_passes_language_to_transcribe(monkeypatch):
 
     captured_kwargs: dict = {}
 
-    def _mock_transcribe(audio_bytes, mime_type="audio/webm", language=None):
+    def _mock_transcribe(audio_bytes, mime_type="audio/webm", language=None, request_model=None):
         captured_kwargs["language"] = language
+        captured_kwargs["request_model"] = request_model
         return {"transcript": "test", "status": "ok"}
 
     monkeypatch.setattr(routes_module, "transcribe_audio_bytes", _mock_transcribe)
@@ -1212,6 +1213,28 @@ def test_stt_route_passes_language_to_transcribe(monkeypatch):
     assert captured_kwargs.get("language") == "zh", (
         "Route must pass language='zh' to transcribe_audio_bytes, got %r" % captured_kwargs.get("language")
     )
+    assert captured_kwargs.get("request_model") is None
+
+
+def test_task_stt_005_route_passes_request_model(monkeypatch):
+    """TASK-STT-005: /stt/transcribe accepts optional multipart model field."""
+    import app.api.routes as routes_module
+
+    captured_kwargs: dict = {}
+
+    def _mock_transcribe(audio_bytes, mime_type="audio/webm", language=None, request_model=None):
+        captured_kwargs["request_model"] = request_model
+        return {"transcript": "test", "status": "ok"}
+
+    monkeypatch.setattr(routes_module, "transcribe_audio_bytes", _mock_transcribe)
+    with TestClient(app) as client:
+        response = client.post(
+            "/stt/transcribe",
+            files={"audio": ("audio.webm", io.BytesIO(b"\x01\x02\x03"), "audio/webm")},
+            data={"model": "base"},
+        )
+    assert response.status_code == 200
+    assert captured_kwargs.get("request_model") == "base"
 
 
 def test_stt_route_response_includes_language_metadata():
@@ -1457,6 +1480,60 @@ def test_task_stt_003_invalid_override_fallback(monkeypatch):
     assert result["model_source"] == "fallback"
     assert result["fallback_reason"] == "invalid_model"
     assert result["model_env"] == "DRAGON_STT_MODEL"
+
+
+def test_task_stt_005_request_model_base_resolves(monkeypatch):
+    """TASK-STT-005: explicit request model 'base' resolves from request."""
+    result = stt_service._resolve_stt_model_request("base")
+    assert result["requested_model"] == "base"
+    assert result["resolved_model"] == "base"
+    assert result["model_source"] == "request"
+    assert result["fallback_reason"] == "none"
+    assert result["model_env"] == ""
+
+
+def test_task_stt_005_request_model_small_resolves(monkeypatch):
+    """TASK-STT-005: explicit request model 'small' resolves from request."""
+    result = stt_service._resolve_stt_model_request("small")
+    assert result["requested_model"] == "small"
+    assert result["resolved_model"] == "small"
+    assert result["model_source"] == "request"
+    assert result["fallback_reason"] == "none"
+
+
+def test_task_stt_005_request_model_empty_uses_env_default():
+    """TASK-STT-005: empty request model keeps existing env/default resolution."""
+    result = stt_service._resolve_stt_model_request("")
+    assert result == stt_service._STT_MODEL_RESOLUTION
+
+
+def test_task_stt_005_invalid_request_model_falls_back_without_crash(monkeypatch):
+    """TASK-STT-005: invalid request falls back to env/default and reports request reason."""
+    monkeypatch.setattr(stt_service, "_STT_MODEL_RESOLUTION", {
+        "requested_model": "tiny",
+        "resolved_model": "tiny",
+        "model_source": "default",
+        "fallback_reason": "none",
+        "model_env": "",
+    })
+    result = stt_service._resolve_stt_model_request("large-v3")
+    assert result["requested_model"] == "large-v3"
+    assert result["resolved_model"] == "tiny"
+    assert result["model_source"] == "default"
+    assert result["fallback_reason"] == "invalid_request_model"
+
+
+def test_task_stt_005_unavailable_response_includes_request_model_metadata(monkeypatch):
+    """TASK-STT-005: explicit request diagnostics are present even when Whisper is unavailable."""
+    monkeypatch.setattr(stt_service, "_WHISPER_AVAILABLE", False)
+    stt_service._reset_model_for_tests()
+    result = stt_service.transcribe_audio_bytes(b"\x01\x02\x03", request_model="base")
+    assert result["status"] == "unavailable"
+    assert result["requestedModel"] == "base"
+    assert result["resolvedModel"] == "base"
+    assert result["modelSource"] == "request"
+    assert result["modelFallbackReason"] == "none"
+    assert result["modelLoadStatus"] == "unavailable"
 
 
 def test_stt_service_ok_includes_model_quality_metadata(monkeypatch):
@@ -2116,7 +2193,7 @@ def test_task_stt_001_stt_route_response_includes_punctuation_metadata(monkeypat
     """Endpoint response surfaces punctuation metadata without changing request schema."""
     import app.api.routes as routes_module
 
-    def _mock_transcribe(_audio_bytes, mime_type="audio/webm", language=None):
+    def _mock_transcribe(_audio_bytes, mime_type="audio/webm", language=None, request_model=None):
         return {
             "transcript": "今天天氣很好我們開始測試。",
             "status": "ok",
@@ -3123,13 +3200,14 @@ def test_task254_transcribe_funasr_norm_correction_still_applied(monkeypatch):
 
 
 def test_task254_no_new_endpoint():
-    """TASK-254: no new routes added — transcribe_audio_bytes signature unchanged."""
+    """TASK-254/TASK-STT-005: no new route; transcribe signature keeps optional model."""
     import inspect
     sig = inspect.signature(stt_service.transcribe_audio_bytes)
     params = list(sig.parameters.keys())
     assert "audio_bytes" in params
     assert "mime_type" in params
     assert "language" in params
+    assert "request_model" in params
 
 
 def test_task254_no_audio_persistence_in_loop_script():

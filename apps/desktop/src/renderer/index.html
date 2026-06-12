@@ -163,6 +163,15 @@ Queue: disabled · Items: 0 · Recent: 0 · Next: none</pre>
       <input type="checkbox" id="voice-autosend-toggle" aria-label="自動送出轉錄文字">
       <span>自動送出</span>
     </label>
+    <label class="voice-settings-label" title="Runtime STT model selection; session-only">
+      <span>STT model</span>
+      <select id="stt-model-select" class="voice-settings-select" aria-label="STT model">
+        <option value="">Default / env</option>
+        <option value="tiny">tiny</option>
+        <option value="base">base</option>
+        <option value="small">small</option>
+      </select>
+    </label>
   </div>
 
   <!-- TASK-243: Voice Conversation Mode strip (session-only, not persisted) -->

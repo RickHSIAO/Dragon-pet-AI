@@ -29090,6 +29090,100 @@ model switch was made.
 
 ---
 
+## TASK-STT-005 | Runtime STT Model Selection UI / base-small Candidate Setting
+
+Status: IMPLEMENTED - AUTOMATED MODEL SELECTION SMOKE PASS / NEEDS WINDOWS RUNTIME MODEL SWITCH SMOKE (2026-06-12)
+
+### Goal
+
+Allow Manual Mic and Conversation Mode runtime model switching from the Full App
+voice settings strip without changing the committed STT default or requiring a
+backend restart for each UI candidate check.
+
+### Implementation
+
+- `/stt/transcribe` accepts an optional multipart `model` form field.
+- Allowed request values are `tiny`, `base`, and `small`.
+- Empty or omitted `model` keeps the existing env/default resolution:
+  `DRAGON_STT_MODEL` -> `DRAGON_PET_STT_MODEL` -> committed default `tiny`.
+- Explicit valid request values resolve with `modelSource=request`.
+- Invalid request values do not crash; they fall back to the existing
+  env/default resolution and report `modelFallbackReason=invalid_request_model`
+  (plus env fallback reason when applicable).
+- Faster-whisper request models are cached by model name; the env/default path
+  keeps the existing loader behavior.
+- Full App voice settings add a session-only `STT model` selector with
+  `Default / env`, `tiny`, `base`, and `small`.
+- Manual Mic and Conversation Mode send the selected model through the existing
+  `stt:transcribe` IPC bridge only when the selector is not `Default / env`.
+
+### Diagnostics
+
+Voice Diagnostics now shows:
+
+- UI selected STT model
+- request model sent by the renderer
+- backend requested model
+- backend resolved model
+- source: `request`, `env`, `default`, or `fallback`
+- fallback reason
+- provider load state
+- model load status/error
+
+### Preserved Boundaries
+
+- Runtime default remains `tiny`.
+- `DRAGON_STT_MODEL` and `DRAGON_PET_STT_MODEL` overrides remain supported.
+- No `/chat` schema or mood schema change.
+- No Owner Voice hard-gate behavior change.
+- No renderer IPC channel change.
+- No Conversation Mode queue/pre-roll/drain policy change.
+- No raw audio persistence or committed sample audio.
+
+### Automated Tests
+
+Added/adjusted tests cover:
+
+- no request model uses env/default behavior
+- explicit `base` and `small` request resolution
+- invalid request fallback diagnostics
+- route passes multipart `model` to STT service
+- response diagnostics remain backward compatible
+- selector renders with all four options
+- `base` / `small` selections are sent to the STT bridge
+- `Default / env` sends no model option
+- Manual Mic and Conversation Mode both use the selected model
+- selection does not reset between turns
+- diagnostics render selected/requested/resolved/source/fallback fields
+
+### Validation
+
+Automated validation required for closeout:
+
+- `.\backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_routes.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-stt005`
+- `.\backend\.venv\Scripts\python.exe scripts\stt_provider_smoke.py`
+- `.\backend\.venv\Scripts\python.exe scripts\stt_quality_probe.py --help`
+- `node apps/desktop/scripts/renderer-chat-smoke.js`
+- `node apps/desktop/scripts/pet-window-smoke.js`
+- `node apps/desktop/scripts/pet-renderer-smoke.js`
+- `.\backend\.venv\Scripts\python.exe -m py_compile backend\app\api\routes.py backend\app\stt\stt_service.py`
+- `git diff --check`
+- `git status --short`
+
+### Remaining Runtime Smoke
+
+Windows runtime model switch smoke is still required:
+
+- selector `Default / env` sends no request model and preserves env/default
+  behavior
+- selector `base` changes Manual Mic diagnostics to request/source `base/request`
+- selector `small` changes Manual Mic diagnostics to request/source
+  `small/request`
+- Conversation Mode uses the same selected model across turns
+- no STT default, Owner Voice hard gate, `/chat`, mood, or IPC contract drift
+
+---
+
 ## TASK-PERSONA-001 | Christina Tsundere Tone Boundaries
 
 Status: DONE - WINDOWS CHAT TONE SMOKE PASS / DEBUG FALLBACK REPAIR ENABLED (2026-06-11)

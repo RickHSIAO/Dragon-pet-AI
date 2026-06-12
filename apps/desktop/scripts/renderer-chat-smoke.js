@@ -230,6 +230,16 @@ class FakeDocument {
       if (id === "voice-input-status") element.hidden = true;
       // TASK-242: voice-input-enabled-toggle starts checked (matches HTML `checked` attribute)
       if (id === "voice-input-enabled-toggle") element.checked = true;
+      // TASK-STT-005: STT model selector starts at Default / env.
+      if (id === "stt-model-select") {
+        element.value = "";
+        element.options = [
+          { value: "", textContent: "Default / env" },
+          { value: "tiny", textContent: "tiny" },
+          { value: "base", textContent: "base" },
+          { value: "small", textContent: "small" },
+        ];
+      }
       // TASK-243: conversation-mode-status starts hidden; btn starts data-state="off"
       if (id === "conversation-mode-status") element.hidden = true;
       if (id === "conversation-mode-btn") element.dataset = { state: "off" };
@@ -15011,6 +15021,126 @@ function testTask246TranscribeFnExtractsModelMetadata() {
   console.log("  testTask246TranscribeFnExtractsModelMetadata PASS");
 }
 
+// ---------------------------------------------------------------------------
+// TASK-STT-005: Runtime STT Model Selection UI
+// ---------------------------------------------------------------------------
+
+function testTaskStt005HtmlSelectorExists() {
+  const html = fs.readFileSync(indexPath, "utf8");
+  assert.ok(html.includes('id="stt-model-select"'), "TASK-STT-005 HTML must include #stt-model-select");
+  assert.ok(html.includes("STT model"), "TASK-STT-005 selector label must be STT model");
+  assert.ok(html.includes("Default / env"), "TASK-STT-005 selector must include Default / env option");
+  for (const model of ["tiny", "base", "small"]) {
+    assert.ok(html.includes(`value="${model}"`), "TASK-STT-005 selector must include " + model);
+  }
+  console.log("  testTaskStt005HtmlSelectorExists PASS");
+}
+
+function testTaskStt005CssSelectorStyleExists() {
+  const css = fs.readFileSync(cssPath, "utf8");
+  assert.ok(css.includes(".voice-settings-select"), "TASK-STT-005 CSS must style voice settings select");
+  console.log("  testTaskStt005CssSelectorStyleExists PASS");
+}
+
+async function testTaskStt005SelectorDefaultsSessionOnly() {
+  const { document, sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  const select = document.getElementById("stt-model-select");
+  assert.ok(select, "TASK-STT-005 #stt-model-select must resolve in sandbox");
+  assert.strictEqual(select.value, "", "TASK-STT-005 selector default must be Default / env");
+  assert.strictEqual(sandbox.fullAppSttModelSelection, "", "TASK-STT-005 session state default must be empty");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttUiSelectedModel, "Default / env");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttRequestModelSent, "");
+  console.log("  testTaskStt005SelectorDefaultsSessionOnly PASS");
+}
+
+async function testTaskStt005SelectedModelSentToTranscribe() {
+  const calls = [];
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async (_buf, options) => {
+        calls.push(options || {});
+        return { status: "ok", transcript: "selected model text" };
+      },
+    },
+  });
+  const select = document.getElementById("stt-model-select");
+  select.value = "base";
+  select.dispatchEvent({ type: "change" });
+  const transcript = await sandbox.transcribeFullAppAudioBlob(new Blob(["x"], { type: "audio/wav" }));
+  assert.strictEqual(transcript, "selected model text");
+  assert.strictEqual(calls.length, 1);
+  assert.strictEqual(calls[0].model, "base", "TASK-STT-005 selected base must be sent to STT bridge");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttUiSelectedModel, "base");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttRequestModelSent, "base");
+  console.log("  testTaskStt005SelectedModelSentToTranscribe PASS");
+}
+
+async function testTaskStt005DefaultEnvSendsNoModel() {
+  const calls = [];
+  const { sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async (_buf, options) => {
+        calls.push(options || {});
+        return { status: "ok", transcript: "default env text" };
+      },
+    },
+  });
+  await sandbox.transcribeFullAppAudioBlob(new Blob(["x"], { type: "audio/wav" }));
+  assert.strictEqual(calls.length, 1);
+  assert.ok(!Object.prototype.hasOwnProperty.call(calls[0], "model"),
+    "TASK-STT-005 Default / env must not send model option");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttUiSelectedModel, "Default / env");
+  assert.strictEqual(sandbox.fullAppVoiceDiagnostics.sttRequestModelSent, "");
+  console.log("  testTaskStt005DefaultEnvSendsNoModel PASS");
+}
+
+async function testTaskStt005ManualAndConversationUseSelectedModel() {
+  const calls = [];
+  const { document, sandbox } = await loadRenderer({
+    dragonPet: {
+      chatHistoryLoad: async () => [],
+      transcribeAudio: async (_buf, options) => {
+        calls.push(options || {});
+        return { status: "ok", transcript: calls.length === 1 ? "manual selected" : "conversation selected" };
+      },
+    },
+  });
+  const select = document.getElementById("stt-model-select");
+  select.value = "small";
+  select.dispatchEvent({ type: "change" });
+
+  sandbox.setFullAppVoiceState("transcribing");
+  sandbox._fullAppSttTranscribeChunks([new Blob(["m"], { type: "audio/wav" })], "audio/wav");
+  await settle();
+
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("transcribing");
+  sandbox._transcribeConversationChunks([new Blob(["c"], { type: "audio/wav" })], "audio/wav");
+  await settle();
+
+  assert.ok(calls.length >= 2, "TASK-STT-005 Manual Mic and Conversation Mode must both call STT");
+  assert.strictEqual(calls[0].model, "small", "TASK-STT-005 Manual Mic must send selected model");
+  assert.strictEqual(calls[1].model, "small", "TASK-STT-005 Conversation Mode must send selected model");
+  assert.strictEqual(sandbox.fullAppSttModelSelection, "small", "TASK-STT-005 selection must not reset between turns");
+  console.log("  testTaskStt005ManualAndConversationUseSelectedModel PASS");
+}
+
+function testTaskStt005DiagnosticsRenderIncludesSelectionFields() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  const renderFnStart = src.indexOf("function renderFullAppVoiceDiagnostics");
+  const renderFnEnd = src.indexOf("\n}", renderFnStart) + 2;
+  const renderFn = src.slice(renderFnStart, renderFnEnd);
+  assert.ok(renderFn.includes("sttUiSelectedModel"), "TASK-STT-005 render must include UI selected model");
+  assert.ok(renderFn.includes("sttRequestModelSent"), "TASK-STT-005 render must include request model sent");
+  assert.ok(renderFn.includes("sttRequestedModel"), "TASK-STT-005 render must keep backend requested model");
+  assert.ok(renderFn.includes("sttResolvedModel"), "TASK-STT-005 render must keep backend resolved model");
+  assert.ok(renderFn.includes("sttModelSource"), "TASK-STT-005 render must keep model source");
+  assert.ok(renderFn.includes("sttModelFallbackReason"), "TASK-STT-005 render must keep fallback reason");
+  console.log("  testTaskStt005DiagnosticsRenderIncludesSelectionFields PASS");
+}
+
 function testTask246NoNewIpcChannels() {
   const preloadSrc = fs.readFileSync(
     path.join(desktopRoot, "src", "renderer", "preload.js"), "utf8"
@@ -18001,6 +18131,13 @@ async function main() {
   await testTask246ResetClearsModelFields();
   await testTask246UpdateDiagnosticsHandlesModelFields();
   testTask246TranscribeFnExtractsModelMetadata();
+  testTaskStt005HtmlSelectorExists();
+  testTaskStt005CssSelectorStyleExists();
+  await testTaskStt005SelectorDefaultsSessionOnly();
+  await testTaskStt005SelectedModelSentToTranscribe();
+  await testTaskStt005DefaultEnvSendsNoModel();
+  await testTaskStt005ManualAndConversationUseSelectedModel();
+  testTaskStt005DiagnosticsRenderIncludesSelectionFields();
   testTask246NoNewIpcChannels();
   testTask246NoRawStackInDiagnostics();
   testTask246NoPetWindowCallsInTranscribeFn();

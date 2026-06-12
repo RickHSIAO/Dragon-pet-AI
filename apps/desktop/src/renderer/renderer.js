@@ -158,6 +158,7 @@ const voiceInputStatus = document.getElementById("voice-input-status");
 // TASK-242: voice settings toggle DOM refs
 const voiceInputEnabledToggle = document.getElementById("voice-input-enabled-toggle");
 const voiceAutosendToggle     = document.getElementById("voice-autosend-toggle");
+const sttModelSelect          = document.getElementById("stt-model-select");
 // TASK-243: Voice Conversation Mode DOM refs
 const conversationModeBtn    = document.getElementById("conversation-mode-btn");
 const conversationModeStatus = document.getElementById("conversation-mode-status");
@@ -205,6 +206,7 @@ let _fullAppRecordingTimer = null;
 // TASK-242: voice input settings state — session-only, not persisted
 var fullAppVoiceInputEnabled    = true;  // var: exposed to vm sandbox for smoke tests
 var fullAppVoiceAutoSendEnabled = false; // var: exposed to vm sandbox for smoke tests
+var fullAppSttModelSelection    = "";    // var: session-only; "" means Default / env
 // TASK-243: Voice Conversation Mode state — session-only, not persisted
 var fullAppVoiceConversationEnabled         = false; // var: exposed to vm sandbox
 var fullAppVoiceConversationState           = "off"; // off|waiting|speaking|transcribing|sending|error — var: exposed to vm sandbox
@@ -296,6 +298,8 @@ var fullAppVoiceDiagnostics = {
   speechStarted: false,
   silenceMsAtStop: 0,
   sttStatus: "none",
+  sttUiSelectedModel: "Default / env",
+  sttRequestModelSent: "",
   selectedMimeType: "",
   bytesPerSecond: 0,
   constraintsEchoCancellation: false,
@@ -4687,6 +4691,24 @@ function setFullAppVoiceState(state) {
   }
 }
 
+function normalizeFullAppSttModelSelection(value) {
+  var text = value === null || value === undefined ? "" : String(value).trim();
+  return text === "tiny" || text === "base" || text === "small" ? text : "";
+}
+
+function formatFullAppSttModelSelection(value) {
+  var selected = normalizeFullAppSttModelSelection(value);
+  return selected || "Default / env";
+}
+
+function getFullAppSttRequestOptions() {
+  var selected = normalizeFullAppSttModelSelection(fullAppSttModelSelection);
+  fullAppSttModelSelection = selected;
+  fullAppVoiceDiagnostics.sttUiSelectedModel = formatFullAppSttModelSelection(selected);
+  fullAppVoiceDiagnostics.sttRequestModelSent = selected;
+  return selected ? { model: selected } : {};
+}
+
 async function transcribeFullAppAudioBlob(blob) {
   var api = (typeof window !== "undefined" && window !== null) ? window.dragonPet : null;
   if (!api || typeof api.transcribeAudio !== "function") {
@@ -4709,7 +4731,7 @@ async function transcribeFullAppAudioBlob(blob) {
 
   var result;
   try {
-    result = await Promise.race([api.transcribeAudio(arrayBuffer), timeoutPromise]);
+    result = await Promise.race([api.transcribeAudio(arrayBuffer, getFullAppSttRequestOptions()), timeoutPromise]);
   } catch (err) {
     clearTimeout(timeoutId);
     if (err && (err.message === "stt_timeout" || err.message === "stt_offline")) throw err;
@@ -5350,6 +5372,18 @@ if (voiceInputEnabledToggle) {
 if (voiceAutosendToggle) {
   voiceAutosendToggle.addEventListener("change", function () {
     fullAppVoiceAutoSendEnabled = Boolean(voiceAutosendToggle.checked);
+  });
+}
+if (sttModelSelect) {
+  fullAppSttModelSelection = normalizeFullAppSttModelSelection(sttModelSelect.value);
+  fullAppVoiceDiagnostics.sttUiSelectedModel = formatFullAppSttModelSelection(fullAppSttModelSelection);
+  fullAppVoiceDiagnostics.sttRequestModelSent = "";
+  sttModelSelect.addEventListener("change", function () {
+    fullAppSttModelSelection = normalizeFullAppSttModelSelection(sttModelSelect.value);
+    sttModelSelect.value = fullAppSttModelSelection;
+    fullAppVoiceDiagnostics.sttUiSelectedModel = formatFullAppSttModelSelection(fullAppSttModelSelection);
+    fullAppVoiceDiagnostics.sttRequestModelSent = "";
+    renderFullAppVoiceDiagnostics();
   });
 }
 
@@ -6821,6 +6855,7 @@ function renderFullAppVoiceDiagnostics() {
     "對話回合 lifecycle: count=" + d.conversationTurnLifecycleCount + " latest=" + (d.conversationLastTurnLifecycleSummary || "—"),
     "停止原因: " + d.stopReason,
     "STT 狀態: " + d.sttStatus,
+    "UI selected STT model: " + (d.sttUiSelectedModel || "Default / env") + "  request model sent: " + (d.sttRequestModelSent || "none"),
     "STT 語言: " + (d.sttLanguage || "unknown") + "  已鎖定: " + (d.languageLocked ? "是" : "否"),
     "STT 任務: " + (d.sttTask || "unknown"),
     "STT 提供者: " + (d.sttProvider || "unknown") + "  模型: " + (d.sttModel || "unknown"),
@@ -6985,6 +7020,8 @@ function resetFullAppVoiceDiagnosticsForRecording(mode, recordingMeta) {
   fullAppVoiceDiagnostics.speechStarted      = false;
   fullAppVoiceDiagnostics.silenceMsAtStop    = 0;
   fullAppVoiceDiagnostics.sttStatus          = "none";
+  fullAppVoiceDiagnostics.sttUiSelectedModel = formatFullAppSttModelSelection(fullAppSttModelSelection);
+  fullAppVoiceDiagnostics.sttRequestModelSent = normalizeFullAppSttModelSelection(fullAppSttModelSelection);
   fullAppVoiceDiagnostics.selectedMimeType   = "";
   fullAppVoiceDiagnostics.bytesPerSecond     = 0;
   fullAppVoiceDiagnostics.lastAudioPreviewAvailable = false;

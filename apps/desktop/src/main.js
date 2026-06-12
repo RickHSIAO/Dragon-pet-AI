@@ -1090,10 +1090,15 @@ ipcMain.handle(OWNER_VOICE_CANDIDATE_WAV_DELETE_CHANNEL, async (_event, filePath
 // Receives an ArrayBuffer from the renderer, wraps it in a multipart POST to the
 // backend /stt/transcribe endpoint (local Whisper), and returns the JSON result.
 // No audio is persisted to disk. Click-through is unaffected here (renderer handles CT state).
-ipcMain.handle(PET_STT_TRANSCRIBE_CHANNEL, (_event, arrayBuffer) => {
+ipcMain.handle(PET_STT_TRANSCRIBE_CHANNEL, (_event, payload) => {
   return new Promise((resolve) => {
     let buffer;
+    let selectedModel = "";
     try {
+      const arrayBuffer = payload && typeof payload === "object" &&
+        Object.prototype.hasOwnProperty.call(payload, "audio") ? payload.audio : payload;
+      selectedModel = payload && typeof payload.model === "string" &&
+        ["tiny", "base", "small"].includes(payload.model) ? payload.model : "";
       buffer = Buffer.from(arrayBuffer);
     } catch (_e) {
       resolve({ transcript: "", status: "error" });
@@ -1110,8 +1115,12 @@ ipcMain.handle(PET_STT_TRANSCRIBE_CHANNEL, (_event, arrayBuffer) => {
       `--${boundary}\r\nContent-Disposition: form-data; name="audio"; filename="audio.wav"\r\nContent-Type: audio/wav\r\n\r\n`,
       "utf8"
     );
+    const modelPart = selectedModel ? Buffer.from(
+      `\r\n--${boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\n${selectedModel}`,
+      "utf8"
+    ) : Buffer.alloc(0);
     const partFooter = Buffer.from(`\r\n--${boundary}--\r\n`, "utf8");
-    const body = Buffer.concat([partHeader, buffer, partFooter]);
+    const body = Buffer.concat([partHeader, buffer, modelPart, partFooter]);
 
     // Parse BACKEND_URL host/port (e.g. "http://localhost:8000")
     let hostname = "127.0.0.1";

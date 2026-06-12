@@ -136,6 +136,36 @@ def _resolve_stt_model_name() -> dict:
     }
 
 
+def _resolve_stt_model_request(request_model: str | None = None) -> dict:
+    """
+    Resolve the STT model for one request.
+
+    Empty request values keep the existing env/default resolution. Valid request
+    values are per-request overrides; invalid values fall back to env/default
+    resolution and report a request fallback reason without crashing.
+    """
+    requested = (request_model or "").strip()
+    if not requested:
+        return dict(_STT_MODEL_RESOLUTION)
+    if requested in _STT_ALLOWED_MODELS:
+        return {
+            "requested_model": requested,
+            "resolved_model": requested,
+            "model_source": "request",
+            "fallback_reason": "none",
+            "model_env": "",
+        }
+
+    env_resolution = dict(_STT_MODEL_RESOLUTION)
+    env_reason = env_resolution.get("fallback_reason") or "none"
+    fallback_reason = "invalid_request_model"
+    if env_reason != "none":
+        fallback_reason = fallback_reason + ";" + env_reason
+    env_resolution["requested_model"] = requested
+    env_resolution["fallback_reason"] = fallback_reason
+    return env_resolution
+
+
 def _resolve_stt_provider() -> dict:
     """
     Resolve the STT provider from DRAGON_PET_STT_PROVIDER env var.
@@ -206,6 +236,9 @@ _WHISPER_AVAILABLE = _detect_whisper()
 # Load status — updated by _load_model(); initialized based on availability
 _STT_MODEL_LOAD_STATUS: str = "not_loaded" if _WHISPER_AVAILABLE else "unavailable"
 _STT_MODEL_LOAD_ERROR: str | None = None
+_STT_MODEL_CACHE: dict[str, Any] = {}
+_STT_MODEL_LOAD_STATUS_BY_MODEL: dict[str, str] = {}
+_STT_MODEL_LOAD_ERROR_BY_MODEL: dict[str, str | None] = {}
 
 # TASK-STT-004: conservative no-speech guard for silent WAV captures.
 _NO_SPEECH_GUARD_ENABLED = True
@@ -282,6 +315,55 @@ def _load_model() -> Any:
         _STT_MODEL_LOAD_ERROR = str(exc)[:100]  # truncated — no raw stack trace
         _whisper_model = None
     return _whisper_model
+
+
+def _model_load_status_for(model_name: str) -> str:
+    if model_name == _STT_MODEL_NAME:
+        return _STT_MODEL_LOAD_STATUS
+    if not _WHISPER_AVAILABLE:
+        return "unavailable"
+    return _STT_MODEL_LOAD_STATUS_BY_MODEL.get(model_name, "not_loaded")
+
+
+def _model_load_error_for(model_name: str) -> str | None:
+    if model_name == _STT_MODEL_NAME:
+        return _STT_MODEL_LOAD_ERROR
+    return _STT_MODEL_LOAD_ERROR_BY_MODEL.get(model_name)
+
+
+def _load_model_for_resolution(model_resolution: dict) -> Any:
+    """
+    Load the faster-whisper model named by request-aware resolution.
+
+    The env/default model still goes through _load_model() for compatibility.
+    Explicit request models are cached by model name so the UI can switch among
+    tiny/base/small without changing the committed default.
+    """
+    model_name = str(model_resolution.get("resolved_model") or _STT_MODEL_NAME)
+    if model_name == _STT_MODEL_NAME:
+        return _load_model()
+    if model_name in _STT_MODEL_CACHE:
+        return _STT_MODEL_CACHE[model_name]
+    if not _WHISPER_AVAILABLE:
+        _STT_MODEL_LOAD_STATUS_BY_MODEL[model_name] = "unavailable"
+        _STT_MODEL_LOAD_ERROR_BY_MODEL[model_name] = None
+        return None
+    try:
+        from faster_whisper import WhisperModel  # type: ignore
+        model = WhisperModel(model_name, device="cpu", compute_type="int8")
+        _STT_MODEL_CACHE[model_name] = model
+        _STT_MODEL_LOAD_STATUS_BY_MODEL[model_name] = "loaded"
+        _STT_MODEL_LOAD_ERROR_BY_MODEL[model_name] = None
+        logger.info("TASK-STT-005: faster-whisper %r model loaded for request.", model_name)
+        return model
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "TASK-STT-005: Failed to load faster-whisper request model %r: %s",
+            model_name, exc,
+        )
+        _STT_MODEL_LOAD_STATUS_BY_MODEL[model_name] = "error"
+        _STT_MODEL_LOAD_ERROR_BY_MODEL[model_name] = str(exc)[:100]
+        return None
 
 
 # TASK-251: FunASR sidecar — availability check: does the dedicated venv Python exist?
@@ -665,22 +747,24 @@ def warmup_funasr_sidecar() -> dict:
     }
 
 
-def _get_model_metadata() -> dict:
+def _get_model_metadata(model_resolution: dict | None = None) -> dict:
     """Return current faster-whisper model resolution and load status metadata for diagnostics."""
+    resolution = model_resolution or _STT_MODEL_RESOLUTION
+    resolved_model = str(resolution.get("resolved_model") or _STT_MODEL_NAME)
     return {
         "provider": _STT_PROVIDER,
-        "model": _STT_MODEL_NAME,
-        "requestedModel": _STT_MODEL_RESOLUTION["requested_model"],
-        "resolvedModel": _STT_MODEL_RESOLUTION["resolved_model"],
-        "modelSource": _STT_MODEL_RESOLUTION["model_source"],
-        "modelFallbackReason": _STT_MODEL_RESOLUTION["fallback_reason"],
-        "modelEnv": _STT_MODEL_RESOLUTION["model_env"],
-        "modelLoadStatus": _STT_MODEL_LOAD_STATUS,
-        "modelLoadError": _STT_MODEL_LOAD_ERROR,
+        "model": resolved_model,
+        "requestedModel": resolution["requested_model"],
+        "resolvedModel": resolution["resolved_model"],
+        "modelSource": resolution["model_source"],
+        "modelFallbackReason": resolution["fallback_reason"],
+        "modelEnv": resolution["model_env"],
+        "modelLoadStatus": _model_load_status_for(resolved_model),
+        "modelLoadError": _model_load_error_for(resolved_model),
     }
 
 
-def _get_provider_metadata() -> dict:
+def _get_provider_metadata(model_resolution: dict | None = None) -> dict:
     """Return TASK-249 provider resolution and load status metadata for diagnostics."""
     resolved = _STT_RESOLVED_PROVIDER
     if resolved == "funasr-local":
@@ -692,8 +776,9 @@ def _get_provider_metadata() -> dict:
         load_error = "sherpa-onnx-local not yet implemented (TASK-249 design-only)"
     else:
         # faster-whisper-local
-        load_status = _STT_MODEL_LOAD_STATUS
-        load_error = _STT_MODEL_LOAD_ERROR
+        model_name = str((model_resolution or _STT_MODEL_RESOLUTION).get("resolved_model") or _STT_MODEL_NAME)
+        load_status = _model_load_status_for(model_name)
+        load_error = _model_load_error_for(model_name)
     return {
         "sttProviderRequested": _STT_PROVIDER_RESOLUTION["requested_provider"],
         "sttProviderResolved": resolved,
@@ -922,15 +1007,15 @@ def _should_apply_no_speech_guard(text: str, guard_meta: dict) -> tuple[bool, st
     return False, "none"
 
 
-def _no_speech_response(guard_meta: dict, reason: str) -> dict:
+def _no_speech_response(guard_meta: dict, reason: str, model_resolution: dict | None = None) -> dict:
     meta = dict(guard_meta)
     meta["noSpeechGuardApplied"] = True
     meta["noSpeechGuardReason"] = reason
     return {
         "transcript": "",
         "status": "no_speech",
-        **_get_model_metadata(),
-        **_get_provider_metadata(),
+        **_get_model_metadata(model_resolution),
+        **_get_provider_metadata(model_resolution),
         **meta,
         "rawTranscript": "",
         "correctedTranscript": "",
@@ -1219,6 +1304,9 @@ def _reset_model_for_tests() -> None:
     global _whisper_model, _STT_MODEL_LOAD_STATUS, _STT_MODEL_LOAD_ERROR
     global _FUNASR_LOAD_STATUS, _FUNASR_LOAD_ERROR
     _whisper_model = None
+    _STT_MODEL_CACHE.clear()
+    _STT_MODEL_LOAD_STATUS_BY_MODEL.clear()
+    _STT_MODEL_LOAD_ERROR_BY_MODEL.clear()
     _STT_MODEL_LOAD_STATUS = "not_loaded" if _WHISPER_AVAILABLE else "unavailable"
     _STT_MODEL_LOAD_ERROR = None
     _FUNASR_LOAD_STATUS = "not_loaded" if _FUNASR_AVAILABLE else "unavailable"
@@ -1352,6 +1440,7 @@ def _transcribe_funasr(
     audio_bytes: bytes,
     mime_type: str = "audio/webm",
     language: str | None = None,
+    model_resolution: dict | None = None,
 ) -> dict:
     """
     TASK-251: FunASR Paraformer transcription via sidecar subprocess.
@@ -1367,8 +1456,8 @@ def _transcribe_funasr(
         return {
             "transcript": "",
             "status": "unavailable",
-            **_get_model_metadata(),
-            **_get_provider_metadata(),
+            **_get_model_metadata(model_resolution),
+            **_get_provider_metadata(model_resolution),
             **guard_meta,
         }
 
@@ -1381,8 +1470,8 @@ def _transcribe_funasr(
         return {
             "transcript": "",
             "status": "error",
-            **_get_model_metadata(),
-            **_get_provider_metadata(),
+            **_get_model_metadata(model_resolution),
+            **_get_provider_metadata(model_resolution),
             **guard_meta,
         }
     except Exception as exc:  # noqa: BLE001
@@ -1392,8 +1481,8 @@ def _transcribe_funasr(
         return {
             "transcript": "",
             "status": "error",
-            **_get_model_metadata(),
-            **_get_provider_metadata(),
+            **_get_model_metadata(model_resolution),
+            **_get_provider_metadata(model_resolution),
             **guard_meta,
         }
 
@@ -1410,8 +1499,8 @@ def _transcribe_funasr(
         return {
             "transcript": "",
             "status": "error",
-            **_get_model_metadata(),
-            **_get_provider_metadata(),
+            **_get_model_metadata(model_resolution),
+            **_get_provider_metadata(model_resolution),
             **guard_meta,
         }
 
@@ -1421,8 +1510,8 @@ def _transcribe_funasr(
         return {
             "transcript": "",
             "status": "empty",
-            **_get_model_metadata(),
-            **_get_provider_metadata(),
+            **_get_model_metadata(model_resolution),
+            **_get_provider_metadata(model_resolution),
             **guard_meta,
         }
 
@@ -1431,7 +1520,7 @@ def _transcribe_funasr(
     guard_meta["suspiciousTranscriptPattern"] = _detect_suspicious_transcript_pattern(transcript)
     guard_applies, guard_reason = _should_apply_no_speech_guard(transcript, guard_meta)
     if guard_applies:
-        return _no_speech_response(guard_meta, guard_reason)
+        return _no_speech_response(guard_meta, guard_reason, model_resolution)
 
     norm = _normalize_funasr_transcript(transcript)
     correction = correct_transcript_text(norm["normalizedTranscript"])
@@ -1439,8 +1528,8 @@ def _transcribe_funasr(
     return {
         "transcript": punctuation["finalTranscript"],
         "status": "ok",
-        **_get_model_metadata(),
-        **_get_provider_metadata(),
+        **_get_model_metadata(model_resolution),
+        **_get_provider_metadata(model_resolution),
         **guard_meta,
         "detectedLanguage": language or "zh",
         "rawTranscript": transcript,
@@ -1471,6 +1560,7 @@ def transcribe_audio_bytes(
     audio_bytes: bytes,
     mime_type: str = "audio/webm",
     language: str | None = None,
+    request_model: str | None = None,
 ) -> dict:
     """
     Transcribe raw audio bytes using the resolved local STT provider.
@@ -1550,21 +1640,33 @@ def transcribe_audio_bytes(
         "suspiciousTranscriptPattern": str
     """
     guard_meta = _audio_energy_metadata(audio_bytes, mime_type)
+    model_resolution = _resolve_stt_model_request(request_model)
 
     # Empty-bytes check is provider-independent.
     if not audio_bytes:
-        return {"transcript": "", "status": "empty", **guard_meta}
+        return {
+            "transcript": "",
+            "status": "empty",
+            **_get_model_metadata(model_resolution),
+            **_get_provider_metadata(model_resolution),
+            **guard_meta,
+        }
 
     resolved = _STT_RESOLVED_PROVIDER
     if resolved == "funasr-local":
-        return _transcribe_funasr(audio_bytes, mime_type=mime_type, language=language)
+        return _transcribe_funasr(
+            audio_bytes,
+            mime_type=mime_type,
+            language=language,
+            model_resolution=model_resolution,
+        )
     if resolved == "sherpa-onnx-local":
         # TASK-249: design-only in this release — clean unavailable, no crash.
         return {
             "transcript": "",
             "status": "unavailable",
-            **_get_model_metadata(),
-            **_get_provider_metadata(),
+            **_get_model_metadata(model_resolution),
+            **_get_provider_metadata(model_resolution),
             **guard_meta,
         }
 
@@ -1573,18 +1675,18 @@ def transcribe_audio_bytes(
         return {
             "transcript": "",
             "status": "unavailable",
-            **_get_model_metadata(),
-            **_get_provider_metadata(),
+            **_get_model_metadata(model_resolution),
+            **_get_provider_metadata(model_resolution),
             **guard_meta,
         }
 
-    model = _load_model()
+    model = _load_model_for_resolution(model_resolution)
     if model is None:
         return {
             "transcript": "",
             "status": "unavailable",
-            **_get_model_metadata(),
-            **_get_provider_metadata(),
+            **_get_model_metadata(model_resolution),
+            **_get_provider_metadata(model_resolution),
             **guard_meta,
         }
 
@@ -1604,13 +1706,13 @@ def transcribe_audio_bytes(
             return {
                 "transcript": "",
                 "status": "empty",
-                **_get_model_metadata(),
-                **_get_provider_metadata(),
+                **_get_model_metadata(model_resolution),
+                **_get_provider_metadata(model_resolution),
                 **guard_meta,
             }
         guard_applies, guard_reason = _should_apply_no_speech_guard(transcript, guard_meta)
         if guard_applies:
-            return _no_speech_response(guard_meta, guard_reason)
+            return _no_speech_response(guard_meta, guard_reason, model_resolution)
 
         # TASK-247/248 then TASK-STT-001:
         # raw STT transcript -> safe dictionary correction -> conservative punctuation.
@@ -1619,8 +1721,8 @@ def transcribe_audio_bytes(
         return {
             "transcript": punctuation["finalTranscript"],
             "status": "ok",
-            **_get_model_metadata(),
-            **_get_provider_metadata(),
+            **_get_model_metadata(model_resolution),
+            **_get_provider_metadata(model_resolution),
             **guard_meta,
             "detectedLanguage": detected_language,
             "rawTranscript": correction["rawTranscript"],
@@ -1641,7 +1743,7 @@ def transcribe_audio_bytes(
         return {
             "transcript": "",
             "status": "error",
-            **_get_model_metadata(),
-            **_get_provider_metadata(),
+            **_get_model_metadata(model_resolution),
+            **_get_provider_metadata(model_resolution),
             **guard_meta,
         }

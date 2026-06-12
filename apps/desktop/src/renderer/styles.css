@@ -1746,6 +1746,16 @@ textarea {
   cursor: pointer;
 }
 
+.voice-settings-select {
+  min-width: 104px;
+  padding: 2px 6px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary, #2a2a2a);
+  color: var(--text-primary, #eee);
+}
+
 /* TASK-243: Voice Conversation Mode Strip */
 #voice-conversation-strip {
   display: flex;

@@ -15,7 +15,7 @@ import logging
 import time
 
 import httpx
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import ValidationError
 from sqlmodel import Session
 
@@ -100,9 +100,10 @@ _STT_DEFAULT_TASK = "transcribe"  # explicit assertion — never "translate"
 
 
 @router.post("/stt/transcribe")
-async def stt_transcribe(audio: UploadFile = File(...)):
+async def stt_transcribe(audio: UploadFile = File(...), model: str | None = Form(None)):
     """
     TASK-167B: Transcribe a short audio clip using local Whisper.
+    TASK-STT-005: optional multipart `model` selects tiny/base/small for this request.
 
     Accepts any audio format Whisper supports (webm, wav, ogg, mp4 …).
     Returns {"transcript": str, "status": "ok" | "unavailable" | "empty" | "error",
@@ -146,6 +147,7 @@ async def stt_transcribe(audio: UploadFile = File(...)):
         audio_bytes,
         mime_type=mime_type,
         language=_STT_DEFAULT_LANGUAGE,
+        request_model=model,
     )
     # TASK-245: augment with language-lock metadata so the renderer diagnostics
     # panel can surface it without a new endpoint or IPC channel.

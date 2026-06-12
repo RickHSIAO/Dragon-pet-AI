@@ -704,6 +704,23 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   candidates only. No `/chat` schema change, Owner Voice hard gate, raw audio
   persistence, private sample commit, or aggressive rewrite was added.
 
+- TASK-STT-005 IMPLEMENTED - AUTOMATED MODEL SELECTION SMOKE PASS / NEEDS WINDOWS RUNTIME MODEL SWITCH SMOKE (2026-06-12):
+  Adds a session-only Full App `STT model` selector in the existing voice settings
+  strip with `Default / env`, `tiny`, `base`, and `small`. `/stt/transcribe`
+  accepts an optional multipart `model` field; omitted/empty keeps existing
+  `DRAGON_STT_MODEL` -> `DRAGON_PET_STT_MODEL` -> default `tiny` resolution.
+  Explicit valid request values resolve with `modelSource=request`; invalid
+  request values fall back without crashing and report
+  `modelFallbackReason=invalid_request_model`. Manual Mic and Conversation Mode
+  both send the selected model through the existing `stt:transcribe` bridge, and
+  `Default / env` sends no model field. Diagnostics show UI-selected model,
+  request model sent, backend requested/resolved model, source, fallback reason,
+  provider load state, and model load status/error. Automated model-selection
+  smoke passes; Windows runtime model-switch smoke remains required. Runtime
+  default remains `tiny`; no `/chat` schema, mood schema, Owner Voice hard gate,
+  renderer IPC channel, queue/pre-roll/drain policy, raw audio persistence, or
+  committed sample audio changed.
+
 - TASK-PERSONA-001 DONE - WINDOWS CHAT TONE SMOKE PASS / DEBUG FALLBACK REPAIR ENABLED (2026-06-11):
   Tunes Christina's runtime persona prompt so the character remains proud,
   tsundere, protective, and witty without sliding into repeated direct

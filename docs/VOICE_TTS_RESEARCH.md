@@ -278,7 +278,7 @@ Suggested research and implementation tasks:
   half-duplex, consecutive utterances, stop, Voice Input OFF guard, empty/short audio handling, and
   general regression all confirmed.
 
-- TASK-STT-005 VAD quality diagnostics and threshold tuning. **Covered by TASK-244 (IMPLEMENTED - NEEDS WINDOWS VOICE QUALITY SMOKE; implemented 2026-06-03):**
+- TASK-244 VAD quality diagnostics and threshold tuning. **Covered by TASK-244 (IMPLEMENTED - NEEDS WINDOWS VOICE QUALITY SMOKE; implemented 2026-06-03):**
   Collapsible `<details>` diagnostics panel in Full App. Session-only RMS threshold number input
   (0.01–0.10, step 0.005) and silence duration select (800/1000/1200/1500 ms). Changes update
   session vars `fullAppConversationRmsThreshold` / `fullAppConversationSilenceMs`, which
@@ -501,6 +501,21 @@ Suggested research and implementation tasks:
   Mode silence / no-speech path. Silence did not fill hallucinated subtitle
   credit or creator-CTA text and did not send normal chat. Default runtime model
   remains `tiny`; `base` and `small` remain override candidates only.
+
+- **TASK-STT-005 Runtime STT Model Selection UI / base-small Candidate Setting. IMPLEMENTED - AUTOMATED MODEL SELECTION SMOKE PASS / NEEDS WINDOWS RUNTIME MODEL SWITCH SMOKE (2026-06-12):**
+  Adds a session-only Full App `STT model` selector for runtime testing:
+  `Default / env`, `tiny`, `base`, and `small`. `Default / env` sends no
+  request model and preserves existing env/default resolution. Explicit
+  `tiny`/`base`/`small` selections are sent as a multipart `model` field to
+  `/stt/transcribe` for Manual Mic and Conversation Mode. The committed default
+  remains `tiny`; `base` remains the first runtime candidate from TASK-STT-002
+  and `small` remains the slower quality candidate. Diagnostics now distinguish
+  UI selected model, request model sent, backend requested/resolved model,
+  source, fallback reason, provider load state, and model load error. Invalid
+  request values fall back safely without crashing. This does not add a new IPC
+  channel and does not change `/chat`, mood schema, Owner Voice hard-gate
+  behavior, queue/pre-roll/drain policy, raw audio persistence, or committed
+  sample handling.
 
 - TASK-STT-016 LLM-based semantic correction. **(PLANNED; future):** Optional
   follow-up to apply a local LLM pass over the corrected transcript for further semantic

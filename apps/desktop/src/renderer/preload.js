@@ -128,11 +128,13 @@ contextBridge.exposeInMainWorld(
     // TASK-241: narrow STT IPC bridge for Full App voice input.
     // Accepts ArrayBuffer only — no file paths, no audio storage, no path traversal.
     // Returns { transcript, status } from backend /stt/transcribe via existing handler.
-    transcribeAudio: (arrayBuffer) => {
+    transcribeAudio: (arrayBuffer, options = {}) => {
       if (!(arrayBuffer instanceof ArrayBuffer)) {
         return Promise.resolve({ status: "error", transcript: "" });
       }
-      return ipcRenderer.invoke(STT_TRANSCRIBE_CHANNEL, arrayBuffer);
+      const model = options && typeof options.model === "string" &&
+        ["tiny", "base", "small"].includes(options.model) ? options.model : "";
+      return ipcRenderer.invoke(STT_TRANSCRIBE_CHANNEL, model ? { audio: arrayBuffer, model } : arrayBuffer);
     },
     // TASK-270: narrow Owner Voice candidate WAV temp-file bridge.
     // Accepts already-prepared WAV bytes only; no paths, transcripts, embeddings,
