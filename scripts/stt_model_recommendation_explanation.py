@@ -141,14 +141,16 @@ def _score_for_model(summary: list[dict[str, Any]], model: str | None) -> dict[s
     return None
 
 
-def _ranked_summary(summary: list[dict[str, Any]]) -> str:
+def _ranked_summary(summary: list[dict[str, Any]], language: str = "plain") -> str:
     ranked = sorted(
         (item for item in summary if isinstance(item.get("overallScore"), (int, float))),
         key=lambda item: item["overallScore"],
         reverse=True,
     )
     if not ranked:
-        return "No scored models are available."
+        return "沒有可用的模型分數。" if language == "zh" else "No scored models are available."
+    if language == "zh":
+        return "，".join(f"{item['model']} overallScore {_score_text(item.get('overallScore'))}" for item in ranked)
     return ", ".join(f"{item['model']} overall {_score_text(item.get('overallScore'))}" for item in ranked)
 
 
@@ -159,6 +161,16 @@ def _common_caveats(sample_count: int) -> list[str]:
         f"Local sample count is {sample_count}; add more samples before changing operational policy.",
         f"The committed STT default remains {DEFAULT_MODEL}.",
         "This script does not auto-switch the runtime STT model.",
+    ]
+
+
+def _christina_caveats(sample_count: int) -> list[str]:
+    return [
+        "這只是 runtime suitability scoring，不是真正的逐字稿準確率證明。",
+        "沒有 reference transcript，所以不能當成真正 accuracy 或字詞錯誤率結論。",
+        f"這次 local sample count 是 {sample_count}，樣本可能偏少，還需要更多語音再判斷。",
+        f"committed STT default 仍然是 {DEFAULT_MODEL}。",
+        "這個 script 不會自動切換 runtime STT model。",
     ]
 
 
@@ -212,44 +224,53 @@ def _christina_explanation(
     profile: str,
     sample_count: int,
 ) -> dict[str, Any]:
+    return _christina_explanation_zh(source_rec, summary, profile, sample_count)
+
+
+def _christina_explanation_zh(
+    source_rec: dict[str, Any],
+    summary: list[dict[str, Any]],
+    profile: str,
+    sample_count: int,
+) -> dict[str, Any]:
     model = source_rec.get("recommendedModel")
     confidence = source_rec.get("confidence") or "low"
     margin = source_rec.get("marginToRunnerUp")
-    caveats = _common_caveats(sample_count)
+    caveats = _christina_caveats(sample_count)
     if not model:
         return {
-            "shortRecommendation": "Hmph. The scoring report is not strong enough for a model recommendation.",
+            "shortRecommendation": "哼，這份 scoring report 還不足以讓吾給出模型建議。",
             "detailedExplanation": (
-                "吾 inspected the scoring report, and it does not provide a grounded recommendation. "
-                "I will not invent one just to sound decisive. Bring more samples, then the evidence can speak."
+                "吾已經看過 scoring report，但裡面沒有足夠的 grounded recommendation。"
+                "吾不會為了裝得很果斷就亂編模型選擇；先收集更多樣本，再讓證據說話。"
             ),
             "caveats": caveats,
-            "nextActionSuggestion": "Collect more local speech samples and rerun evaluation, scoring, and explanation.",
+            "nextActionSuggestion": "先收集更多本機語音樣本，再重新跑 evaluation、scoring 與 explanation。",
         }
 
     score = _score_for_model(summary, _text(model)) or {}
     tentative = ""
     if confidence == "low":
         tentative = (
-            " The confidence is low, so even my splendid judgment will call this tentative; "
-            "more samples are needed, and the default must not change from this alone."
+            " confidence 是 low，所以就算是吾也只能把這當成暫定建議；"
+            "還需要更多樣本，不能只靠這份結果改 default。"
         )
-        caveats.append("Low confidence means the recommendation is tentative.")
+        caveats.append("confidence 是 low，代表這個建議偏弱，還需要更多樣本。")
     return {
         "shortRecommendation": (
-            f"Hmph. This scoring report recommends reviewing {model} for the {profile} profile "
-            f"(overall score {_score_text(score.get('overallScore'))}, confidence {confidence})."
+            f"哼，吾看這份 scoring report，{profile} profile 目前建議先檢視 {model}；"
+            f"overallScore {_score_text(score.get('overallScore'))}，confidence {confidence}。"
         ),
         "detailedExplanation": (
-            f"吾 sees {model} at the top of the grounded runtime-suitability score for {profile}. "
-            f"The margin to runner-up is {_score_text(margin)}, and the model scores are: "
-            f"{_ranked_summary(summary)}.{tentative} This is my recommendation to review the candidate, "
-            "not an order to switch the runtime model."
+            f"吾判斷 {model} 是這份 grounded runtime suitability scoring 裡，"
+            f"{profile} profile 的最高分候選。runner-up margin 是 {_score_text(margin)}；"
+            f"模型分數順序是：{_ranked_summary(summary, language='zh')}。{tentative}"
+            "這只是建議汝優先檢視候選模型，不是命令系統切換 runtime model。"
         ),
         "caveats": caveats,
         "nextActionSuggestion": (
-            "Keep the current default, gather more samples, and only promote a model in a later task "
-            "after stronger evidence exists."
+            "先維持目前 default，不要急著改。等收集更多代表性語音、重新確認分數後，"
+            "再由後續任務決定是否調整 runtime policy。"
         ),
     }
 
@@ -263,7 +284,7 @@ def build_explanation(
 ) -> dict[str, Any]:
     if style == "plain":
         return _plain_explanation(source_rec, summary, profile, sample_count)
-    return _christina_explanation(source_rec, summary, profile, sample_count)
+    return _christina_explanation_zh(source_rec, summary, profile, sample_count)
 
 
 def _explanation_text(explanation: dict[str, Any]) -> str:

@@ -112,9 +112,17 @@ def test_task_stt_006c_christina_style_includes_caveats_and_no_auto_switch_claim
     )
     encoded = _encoded_explanation(report)
 
-    assert "Hmph" in report["explanation"]["shortRecommendation"]
-    assert "runtime-suitability" in encoded
-    assert "does not auto-switch" in encoded
+    assert "吾" in encoded
+    assert "建議" in encoded
+    assert "最高分候選" in encoded
+    assert "仍然是 tiny" in encoded
+    assert "不會自動切換" in encoded
+    assert "reference transcript" in encoded
+    assert "字詞錯誤率" in encoded
+    assert "Hmph" not in encoded
+    assert "??sees" not in encoded
+    assert "This scoring report recommends" not in encoded
+    assert "at the top of" not in encoded
     assert report["runtimeAutoSwitch"]["changed"] is False
     assert report["defaultChange"] == {"changed": False, "currentDefault": "tiny"}
 
@@ -153,7 +161,7 @@ def test_task_stt_006c_missing_recommendation_does_not_invent_model_choice():
     encoded = _encoded_explanation(report).lower()
 
     assert report["sourceRecommendation"]["recommendedModel"] is None
-    assert "not strong enough" in encoded or "does not provide" in encoded
+    assert "不足以" in encoded or "沒有足夠" in encoded
     assert "recommends reviewing base" not in encoded
 
 
