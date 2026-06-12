@@ -29535,7 +29535,7 @@ Investigation.
 
 ## TASK-CONV-003 | Conversation Mode Queue Backpressure / Extra Dropped Turn Investigation
 
-Status: IMPLEMENTED - AUTOMATED BACKPRESSURE SMOKE PASS / WINDOWS RE-SMOKE IDENTIFIED REAL QUEUE CAPACITY LIMIT (2026-06-11)
+Status: DONE - AUTOMATED BACKPRESSURE SMOKE PASS / FOLLOW-UP ADDRESSED BY TASK-CONV-004 (2026-06-12)
 
 ### Goal
 
@@ -29613,13 +29613,14 @@ fourth utterance was real usable audio dropped at queue capacity:
 - `chat=not_sent`
 
 This was not an empty artifact, no-speech, or hidden UI row. TASK-CONV-004
-handles the capacity policy.
+handled the capacity policy by raising the bounded pending queue capacity to
+`4` and passing the Windows runtime fast 4-turn smoke.
 
 ---
 
 ## TASK-CONV-004 | Conversation Mode Queue Capacity / Backpressure Policy
 
-Status: IMPLEMENTED - AUTOMATED QUEUE POLICY SMOKE PASS / NEEDS WINDOWS RUNTIME FAST 4-TURN SMOKE (2026-06-11)
+Status: DONE - WINDOWS RUNTIME FAST 4-TURN SMOKE PASS (2026-06-12)
 
 ### Goal
 
@@ -29637,6 +29638,18 @@ TASK-CONV-003 Windows runtime re-smoke showed a real usable-audio overflow:
 - `durationMs=3098`, `bytes=106540`
 - `audio=usable_audio`, `dropStage=at_queue`
 - `stt=not_started`, `chat=not_sent`
+
+TASK-CONV-004 Windows runtime fast 4-turn smoke then passed with actual audio
+and `DRAGON_STT_MODEL=base`:
+
+- queue capacity showed `pending=0/4`
+- queue pressure showed `empty full=false`
+- final state reached conversation `off`, capture `off`, processing `idle`,
+  pending `0/4`, `activeTurnId=0`, queue action `idle`, queue reason
+  `drain_complete`, and stop mode `drain_complete`
+- Owner Voice dry-run remained non-blocking:
+  `accepted=true`, `runtimeHardBlocked=false`,
+  `candidateWavTemporary=true`, `candidateWavDeleted=true`
 
 ### Policy
 
@@ -29685,19 +29698,30 @@ Lifecycle rows remain bounded and continue to render with `textContent`.
   - `testTaskConv004FourPendingTurnsAcceptedWithoutQueueFullAndNoParallelChat`
   - `testTaskConv004OverflowBeyondCapacityStillShowsQueueFull`
 
-### Remaining Runtime Smoke
+### Windows Runtime Fast 4-Turn Smoke Result
 
-Run Windows Conversation Mode with actual audio and `DRAGON_STT_MODEL=base`.
-Speak four short turns quickly enough to reproduce the prior pressure case and
-confirm:
+PASS with actual audio and `DRAGON_STT_MODEL=base`.
 
-- `turn#1` through `turn#4` are visible.
-- Four normal short turns are accepted/sent without usable-audio `queue_full`.
-- Diagnostics show capacity `4` and pressure/full status.
-- If overflow beyond capacity happens, it remains visible as `queue_full` with
-  `audio=usable_audio`, `dropStage=at_queue`, and non-zero bytes.
-- Final state reaches capture `off`, processing `idle`, pending `0/4`,
-  `activeTurnId=0`, and `stopMode=drain_complete`.
+- `turn#1` completed with `stt=success`, `chat=sent`,
+  `audio=usable_audio`, `dropStage=none`.
+- `turn#2` completed with `stt=success`, `chat=sent`,
+  `audio=usable_audio`, `dropStage=none`.
+- `turn#3` completed with `stt=success`, `chat=sent`,
+  `audio=usable_audio`, `dropStage=none`.
+- `turn#4` reached `drain_complete` with `stt=success`, `chat=sent`,
+  `audio=usable_audio`, `dropStage=none`, `bytes=81964`,
+  `preRollMs=256`.
+
+PASS criteria met:
+
+- Turns #1-#4 were accepted and sent.
+- No usable-audio `queue_full` occurred for turns #1-#4.
+- Queue capacity `4` was visible.
+- Final state reached off/idle/pending `0/4`/active `0`/drain_complete.
+- Empty artifact behavior remains separate from queue overflow.
+- Real overflow behavior remains documented for capacity-exceeded cases.
+- Sequential STT/chat behavior remained unchanged.
+- No schema, STT default, or Owner Voice hard-gate change.
 
 ---
 
