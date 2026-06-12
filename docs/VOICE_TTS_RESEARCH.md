@@ -520,7 +520,7 @@ Suggested research and implementation tasks:
   Conversation Mode. The committed default remains `tiny`; `base` and `small`
   remain runtime candidates only.
 
-- **TASK-STT-006A Backend STT Model Evaluation Report. IMPLEMENTED - AUTOMATED REPORT SMOKE PASS / NEEDS WINDOWS AUDIO SAMPLE EVALUATION (2026-06-12):**
+- **TASK-STT-006A Backend STT Model Evaluation Report. DONE - WINDOWS AUDIO SAMPLE EVALUATION PASS / REPORT DATA COLLECTION READY (2026-06-12):**
   Adds `scripts/stt_model_evaluation_report.py` for backend-side data
   collection before any recommendation or AI explanation layer. The script
   compares `tiny`, `base`, and `small` over the same local user-provided audio
@@ -531,7 +531,12 @@ Suggested research and implementation tasks:
   signals, provider/model load state, fallback, and per-model errors. This does
   not choose a `recommendedModel`, does not add subjective AI explanation, and
   does not add a frontend comparison panel. The committed default remains
-  `tiny`; `base` and `small` remain runtime candidates only.
+  `tiny`; `base` and `small` remain runtime candidates only. Windows sample
+  evaluation passed on two local owner WAV samples with all three models
+  producing 2/2 successful results and no `no_speech` or error result. Observed
+  sample evidence: `tiny avgLatencyMs=2689.5`, `base avgLatencyMs=1758.0`, and
+  `small avgLatencyMs=4751.0`. These latency values are recorded only as sample
+  evidence; they are not a recommendation and do not make `base` the default.
 
 - TASK-STT-016 LLM-based semantic correction. **(PLANNED; future):** Optional
   follow-up to apply a local LLM pass over the corrected transcript for further semantic

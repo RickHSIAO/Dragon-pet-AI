@@ -29193,7 +29193,7 @@ Windows runtime model switch smoke PASS:
 
 ## TASK-STT-006A | Backend STT Model Evaluation Report
 
-Status: IMPLEMENTED - AUTOMATED REPORT SMOKE PASS / NEEDS WINDOWS AUDIO SAMPLE EVALUATION (2026-06-12)
+Status: DONE - WINDOWS AUDIO SAMPLE EVALUATION PASS / REPORT DATA COLLECTION READY (2026-06-12)
 
 ### Goal
 
@@ -29241,13 +29241,31 @@ frontend comparison panel, deterministic scoring, or AI explanation work.
 - No renderer IPC change.
 - No committed audio sample or generated report.
 
+### Windows Audio Sample Evaluation
+
+Windows real-audio evaluation PASS:
+
+- command: `.\backend\.venv\Scripts\python.exe scripts\stt_model_evaluation_report.py --audio "$env:TEMP\dragon-pet-voice-probe\owner\owner1.wav" --audio "$env:TEMP\dragon-pet-voice-probe\owner\owner2.wav" --models tiny,base,small --language zh`
+- output: `outputs\stt_model_evaluation\20260612\stt_model_evaluation_report_20260612_174417.json`
+- language: `zh`
+- samples: `2`
+- models: `tiny`, `base`, `small`
+- `tiny`: `success=2 no_speech=0 error=0 avgLatencyMs=2689.5`
+- `base`: `success=2 no_speech=0 error=0 avgLatencyMs=1758.0`
+- `small`: `success=2 no_speech=0 error=0 avgLatencyMs=4751.0`
+- recommendation: not generated; this remains data collection only
+- generated report and source audio remain local-only and uncommitted
+
 ### Validation
 
 - `.\backend\.venv\Scripts\python.exe -m py_compile scripts\stt_model_evaluation_report.py`
-- `.\backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_model_evaluation_report.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-stt006a`
+- `.\backend\.venv\Scripts\python.exe -m pytest backend\tests\test_stt_model_evaluation_report.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-stt006a-closeout`
 - `.\backend\.venv\Scripts\python.exe scripts\stt_model_evaluation_report.py --help`
-- Full renderer and Pet smoke still required for closeout.
-- Windows audio sample evaluation is still required before DONE.
+- `node apps/desktop/scripts/renderer-chat-smoke.js`
+- `node apps/desktop/scripts/pet-window-smoke.js`
+- `node apps/desktop/scripts/pet-renderer-smoke.js`
+- `git diff --check`
+- `git status --short`
 
 ---
 
