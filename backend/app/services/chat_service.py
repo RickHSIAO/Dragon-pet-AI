@@ -125,6 +125,30 @@ _SAFE_GENERAL_THREAT_REPLY = (
 _SAFE_GENERAL_WASTE_TIME_REPLY = (
     "哼，陪汝測試也無妨。把想檢查的點說出來，吾會替汝驗。"
 )
+_SAFE_GENERAL_COMPANION_REPLY = (
+    "哼，陪汝測試也不是不行。說清楚要看 STT、Conversation Mode、queue，還是 chat，吾會替汝驗。"
+)
+_GENERAL_COMPANION_REFUSAL_PATTERNS = (
+    "皜砍??",
+    "閰血??",
+    "銝??注",
+    "?臭?憟",
+    "?曉銝??注",
+    "銝憟",
+)
+_COMPANION_TESTING_REQUEST_TERMS = (
+    "陪",
+    "陪我",
+    "測試",
+    "幫我測",
+    "驗",
+    "verify",
+    "test",
+    "companion",
+    "皜砌",
+    "皜祈岫",
+    "銝",
+)
 _GENERAL_HARSH_REPLY_REPLACEMENTS = {
     "瘚芾祥?暹??": _SAFE_GENERAL_PROUD_REPLY,
     "憟湧": "哼，這句有點亂。吾會聽，換個說法就能替汝看。",
@@ -250,6 +274,14 @@ def _has_repeated_general_humiliation(reply: str) -> bool:
     return any(reply.count(phrase) >= 2 for phrase in _REPEATED_ADDRESS_PHRASES)
 
 
+def _has_companion_refusal(reply: str) -> bool:
+    return any(pattern in reply for pattern in _GENERAL_COMPANION_REFUSAL_PATTERNS)
+
+
+def _message_is_companion_testing_request(message: str) -> bool:
+    return _message_matches_any(message, _COMPANION_TESTING_REQUEST_TERMS)
+
+
 def _message_matches_any(message: str, terms: tuple[str, ...]) -> bool:
     normalized_message = message.lower()
     return any(term.lower() in normalized_message for term in terms)
@@ -298,6 +330,13 @@ def repair_persona_general_reply(reply: str, message: str) -> str:
     """
     if not reply:
         return reply
+
+    if _has_companion_refusal(reply):
+        if _message_is_companion_testing_request(message):
+            return _SAFE_GENERAL_COMPANION_REPLY
+        if _message_looks_garbled(message):
+            return _SAFE_GARBLED_STT_REPLY
+        return _SAFE_GENERAL_COMPANION_REPLY
 
     for pattern, replacement in _GENERAL_HARSH_REPLY_REPLACEMENTS.items():
         if pattern in reply:

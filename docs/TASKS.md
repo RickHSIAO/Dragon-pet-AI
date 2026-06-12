@@ -29276,15 +29276,15 @@ teasing unless deliberately redesigned.
 
 ## TASK-PERSONA-002 | Christina General Tone Sanitizer for Non-Debug Replies
 
-Status: IMPLEMENTED - SECOND PROMPT/REPAIR SMOKE PASS / NEEDS WINDOWS GENERAL TONE RE-SMOKE (2026-06-12)
+Status: IMPLEMENTED - THIRD PROMPT/REPAIR SMOKE PASS / NEEDS WINDOWS GENERAL TONE RE-SMOKE (2026-06-12)
 
 ### Goal
 
 Keep Christina proud, teasing, witty, slightly arrogant, and protective in
 non-debug casual/general replies while preventing contempt, hostile
 unclear-input dismissal, repeated humiliation, garbled-STT mockery,
-comparative devaluation, threat/intimidation phrasing, and "wasting my time"
-hostility.
+comparative devaluation, threat/intimidation phrasing, "wasting my time"
+hostility, and refusal/abandoning phrasing for companion/testing requests.
 
 ### Implementation
 
@@ -29296,16 +29296,23 @@ hostility.
 - Second-pass guidance adds explicit boundaries against comparing the user's
   value to objects, using threats/intimidation to push the conversation, or
   framing companionship/testing prompts as wasted time.
+- Third-pass guidance adds explicit cooperative-tsundere handling for
+  companion/testing/verification requests: ask what subsystem or behavior to
+  check, do not refuse or make the user feel abandoned, and reduce repeated
+  sharp address phrases in nearby general replies.
 - Preserved TASK-PERSONA-001 debug guidance and debug repair behavior.
 - Added `repair_persona_general_reply()` for narrow non-debug repairs.
 - Added `repair_persona_reply()` so `/chat` LLM success applies debug repair
   first, then general repair.
 - General repair handles only known harsh fragments, unclear-input hostility,
   repeated humiliation, likely garbled-STT cases, comparative devaluation,
-  threat/intimidation fragments, and waste-time hostility.
+  threat/intimidation fragments, waste-time hostility, and companion/testing
+  refusal or abandonment fragments.
 - Safe proud / tsundere replies pass through unchanged.
 
 ### Repair Examples
+
+- companion/testing refusal -> "哼，陪汝測試也不是不行。說清楚要看 STT、Conversation Mode、queue，還是 chat，吾會替汝驗。"
 
 - comparative devaluation -> "哼，別把自己拿去和物品比較。說清楚要檢查什麼，吾會替汝看。"
 - threat/intimidation fragment -> "哼，先別急。吾會從 queue、STT、chat 三層替汝拆開看。"
@@ -29326,6 +29333,9 @@ hostility.
 - sanitizer repairs comparative devaluation fragments
 - sanitizer repairs threat/intimidation fragments
 - sanitizer repairs waste-time hostility fragments
+- sanitizer repairs companion/testing refusal and abandoning fragments
+- sanitizer prefers the cooperative-tsundere companion reply over garbled-STT
+  repair when the observed reply is a refusal to a companion/testing request
 - sanitizer preserves safe proud / tsundere lines
 - debug fallback repair still works
 - `/chat` response schema remains `reply / mood / source`
@@ -29343,7 +29353,7 @@ hostility.
 
 ### Validation
 
-- `backend\tests\test_prompt_service.py`: 37 passed
+- `backend\tests\test_prompt_service.py`: 42 passed
 - `backend\tests\test_chat_service.py`: 34 passed
 - full backend pytest attempted with `backend\tests`; timed out after 364s in
   the local command wrapper

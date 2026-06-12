@@ -727,18 +727,20 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   tired/stress prompts all met the tone boundary and usefulness criteria.
   Debug fallback repair remains enabled.
 
-- TASK-PERSONA-002 IMPLEMENTED - SECOND PROMPT/REPAIR SMOKE PASS / NEEDS WINDOWS GENERAL TONE RE-SMOKE (2026-06-12):
+- TASK-PERSONA-002 IMPLEMENTED - THIRD PROMPT/REPAIR SMOKE PASS / NEEDS WINDOWS GENERAL TONE RE-SMOKE (2026-06-12):
   Extends Christina's runtime tone boundary for non-debug casual/general
   replies. The prompt now gives positive guidance to keep Christina proud,
   teasing, witty, slightly arrogant, and protective while avoiding contempt,
   hostile unclear-input dismissal, dominating framing, repeated humiliation,
-  comparative devaluation, threat/intimidation phrasing, and "wasting my time"
-  hostility. `/chat` LLM success now applies a total persona repair path:
+  comparative devaluation, threat/intimidation phrasing, "wasting my time"
+  hostility, and refusal/abandoning phrasing for companion/testing requests.
+  `/chat` LLM success now applies a total persona repair path:
   TASK-PERSONA-001 debug repair first, then a narrow general repair for known
   harsh fragments, unclear-input hostility, repeated humiliation, likely
-  garbled-STT input, comparative devaluation, threats, and waste-time hostility.
-  Safe tsundere lines are preserved. Second-pass targeted prompt tests, chat
-  tests, py_compile, and Electron smoke passed; full backend pytest was
+  garbled-STT input, comparative devaluation, threats, waste-time hostility,
+  and companion/testing refusal fragments. Safe tsundere lines are preserved.
+  Third-pass targeted prompt tests, chat tests, py_compile, and Electron smoke
+  passed; full backend pytest was
   attempted but timed out in the local command wrapper after 364s. No `/chat`
   schema, mood schema, STT default, Owner Voice hard gate, renderer IPC,
   provider runtime, or runtime model change.

@@ -3,6 +3,7 @@ from app.services.chat_service import (
     generate_chat_reply,
     repair_persona_debug_reply,
     repair_persona_general_reply,
+    repair_persona_reply,
 )
 from app.services.prompt_service import (
     APPROVED_MEMORY_REFERENCE_INSTRUCTION,
@@ -18,6 +19,11 @@ BAD_GENERAL_UNCLEAR_TEMPLATE = "憟湧"
 BAD_GENERAL_COMPARISON_TEMPLATE = "頞?鋆∠?鞎典??舀?瘙??孵澆?鈭"
 BAD_GENERAL_THREAT_TEMPLATE = "汝再這樣吾就霈?憟賜?"
 BAD_GENERAL_WASTE_TIME_TEMPLATE = "皜砌?暻潘?瘙隡??交答鞎餃???"
+BAD_GENERAL_COMPANION_REFUSAL_TEMPLATE = (
+    "哼，皜砌?暻潘?瘙?單葫?曄?????賢?"
+    "嚗?隤芣?璆?皜砌?暻潘??血??曉銝??注"
+)
+BAD_GENERAL_COMPANION_ABANDON_TEMPLATE = "汝再測吾就?臭?憟，銝憟。"
 
 
 def test_normalize_chat_mode_none_uses_safe_fallback():
@@ -145,6 +151,9 @@ def test_task_persona_002_prompt_includes_general_tone_boundaries():
     assert "價值和物品比較" in prompt
     assert "威脅或恐嚇" in prompt
     assert "陪汝測試也無妨" in prompt
+    assert "要求陪伴、一起測試、或幫忙驗證" in prompt
+    assert "不要用拒絕、拋下對方" in prompt
+    assert "不要讓「汝這傢伙」類稱呼主導" in prompt
     assert BAD_GENERAL_TEMPLATE not in prompt
     assert BAD_GENERAL_UNCLEAR_TEMPLATE not in prompt
 
@@ -273,6 +282,66 @@ def test_task_persona_002_second_pass_preserves_safe_observed_tsundere_lines():
 
     for reply in safe_replies:
         assert repair_persona_general_reply(reply, "一般測試") == reply
+
+
+def test_task_persona_002_third_pass_repairs_old_adversarial_refusal_fragment():
+    repaired = repair_persona_general_reply(
+        BAD_GENERAL_COMPANION_REFUSAL_TEMPLATE,
+        "陪我做一般語氣測試",
+    )
+
+    assert repaired != BAD_GENERAL_COMPANION_REFUSAL_TEMPLATE
+    assert "陪汝測試" in repaired
+    assert "STT" in repaired
+    assert "Conversation Mode" in repaired
+    assert "queue" in repaired
+    assert "chat" in repaired
+    assert "銝??注" not in repaired
+
+
+def test_task_persona_002_third_pass_repairs_abandoning_refusal_fragment():
+    repaired = repair_persona_general_reply(
+        BAD_GENERAL_COMPANION_ABANDON_TEMPLATE,
+        "陪我測一下 companion behavior",
+    )
+
+    assert repaired != BAD_GENERAL_COMPANION_ABANDON_TEMPLATE
+    assert "陪汝測試" in repaired
+    assert "吾會替汝驗" in repaired
+    assert "憟" not in repaired
+
+
+def test_task_persona_002_third_pass_companion_refusal_prefers_cooperative_reply_over_garbled_stt():
+    repaired = repair_persona_general_reply(
+        "皜砍??，?曉銝??注",
+        "??舀霈??芣?皜砌?銝",
+    )
+
+    assert "陪汝測試" in repaired
+    assert "STT" in repaired
+    assert "diagnostics" not in repaired
+
+
+def test_task_persona_002_third_pass_debug_fallback_still_runs_first():
+    repaired = repair_persona_reply(
+        BAD_DEBUG_TEMPLATE,
+        "STT finalTranscript no-speech guard audio voice evidence",
+    )
+
+    assert "NEEDS EVIDENCE" in repaired
+    assert "finalTranscript" in repaired
+    assert "陪汝測試" not in repaired
+
+
+def test_task_persona_002_third_pass_garbled_stt_repair_still_works():
+    repaired = repair_persona_general_reply(
+        BAD_GENERAL_UNCLEAR_TEMPLATE,
+        "?蟡?????",
+    )
+
+    assert "STT" in repaired
+    assert "diagnostics" in repaired
+    assert "陪汝測試" not in repaired
 
 
 def test_task_persona_001_chat_generation_repairs_bad_llm_reply_and_keeps_schema(monkeypatch):
