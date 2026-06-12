@@ -70,6 +70,8 @@ const FULL_APP_CONVERSATION_MAX_UTTERANCE_MS = 30000;
 const FULL_APP_CONVERSATION_VAD_INTERVAL_MS  = 100;
 const FULL_APP_CONVERSATION_RMS_THRESHOLD    = 0.035;
 const FULL_APP_CONVERSATION_PENDING_MAX      = 4;
+const FULL_APP_CONVERSATION_BACKPRESSURE_PAUSE_PENDING = 3;
+const FULL_APP_CONVERSATION_BACKPRESSURE_RESUME_PENDING = 2;
 const FULL_APP_CONVERSATION_LIFECYCLE_HISTORY_MAX = 12;
 const FULL_APP_CONVERSATION_LIFECYCLE_TRANSITION_MAX = 8;
 const FULL_APP_CONVERSATION_PRE_ROLL_ENABLED = true;
@@ -224,6 +226,9 @@ var fullAppVoiceConversationStopRequested = false; // var: graceful stop request
 var fullAppVoiceConversationDrainPending = false; // var: drain already-recorded queued turns
 var fullAppVoiceConversationStopRequestedAt = 0;
 var fullAppVoiceConversationStopMode = "none"; // none|graceful_drain|drain_complete
+var fullAppVoiceConversationBackpressurePaused = false; // var: pause new VAD turns under queue pressure
+var fullAppVoiceConversationBackpressureReason = "none";
+var fullAppVoiceConversationBackpressureResumeReason = "none";
 var fullAppVoiceConversationStream          = null;
 var fullAppVoiceConversationCaptureRequestedAt = 0;
 var fullAppVoiceConversationMediaStreamReadyAt = 0;
@@ -286,6 +291,9 @@ var fullAppVoiceDiagnostics = {
   conversationStopRequested: false,
   conversationDrainPending: false,
   conversationStopMode: "none",
+  conversationBackpressurePaused: false,
+  conversationBackpressureReason: "none",
+  conversationBackpressureResumeReason: "none",
   conversationTurnLifecycleCount: 0,
   conversationLastTurnLifecycleSummary: "",
   stopReason: "none",
@@ -5412,6 +5420,9 @@ function _syncConversationQueueDiagnostics() {
   fullAppVoiceDiagnostics.conversationStopRequested = fullAppVoiceConversationStopRequested;
   fullAppVoiceDiagnostics.conversationDrainPending = fullAppVoiceConversationDrainPending;
   fullAppVoiceDiagnostics.conversationStopMode = fullAppVoiceConversationStopMode;
+  fullAppVoiceDiagnostics.conversationBackpressurePaused = fullAppVoiceConversationBackpressurePaused;
+  fullAppVoiceDiagnostics.conversationBackpressureReason = fullAppVoiceConversationBackpressureReason;
+  fullAppVoiceDiagnostics.conversationBackpressureResumeReason = fullAppVoiceConversationBackpressureResumeReason;
   fullAppVoiceDiagnostics.conversationTurnLifecycleCount = fullAppVoiceConversationTurnLifecycleHistory.length;
   fullAppVoiceDiagnostics.conversationLastTurnLifecycleSummary = _formatConversationTurnLifecycleSummary(
     fullAppVoiceConversationTurnLifecycleHistory[fullAppVoiceConversationTurnLifecycleHistory.length - 1]
@@ -5597,6 +5608,40 @@ function _setConversationQueueAction(action, reason) {
   fullAppVoiceConversationLastQueueAction = action || "none";
   fullAppVoiceConversationLastQueueReason = reason || "none";
   _syncConversationQueueDiagnostics();
+}
+
+function _conversationShouldPauseForBackpressure() {
+  var pendingCount = fullAppVoiceConversationPendingQueue.length;
+  if (pendingCount >= FULL_APP_CONVERSATION_PENDING_MAX) return "queue_full";
+  if (
+    pendingCount >= FULL_APP_CONVERSATION_BACKPRESSURE_PAUSE_PENDING &&
+    (fullAppVoiceConversationActiveTurnId > 0 || Boolean(fullAppVoiceConversationProcessingPromise))
+  ) {
+    return "queue_high_watermark";
+  }
+  return "none";
+}
+
+function _setConversationBackpressurePaused(reason) {
+  var safeReason = reason || "queue_high_watermark";
+  fullAppVoiceConversationBackpressurePaused = true;
+  fullAppVoiceConversationBackpressureReason = safeReason;
+  fullAppVoiceConversationBackpressureResumeReason = "none";
+  _setConversationQueueAction("paused", safeReason);
+}
+
+function _resumeConversationBackpressureIfReady(reason) {
+  if (!fullAppVoiceConversationBackpressurePaused) return false;
+  var pendingCount = fullAppVoiceConversationPendingQueue.length;
+  var safeReason = reason || "queue_available";
+  if (safeReason !== "drain_complete" && pendingCount > FULL_APP_CONVERSATION_BACKPRESSURE_RESUME_PENDING) {
+    return false;
+  }
+  fullAppVoiceConversationBackpressurePaused = false;
+  fullAppVoiceConversationBackpressureReason = "none";
+  fullAppVoiceConversationBackpressureResumeReason = safeReason;
+  _setConversationQueueAction("resumed", safeReason);
+  return true;
 }
 
 function setConversationState(state) {
@@ -5825,6 +5870,7 @@ function _completeConversationDrain() {
   fullAppVoiceConversationDrainPending = false;
   fullAppVoiceConversationStopRequestedAt = 0;
   fullAppVoiceConversationStopMode = "drain_complete";
+  _resumeConversationBackpressureIfReady("drain_complete");
   fullAppVoiceConversationActiveTurnId = 0;
   fullAppVoiceConversationActiveCaptureMeta = null;
   fullAppVoiceConversationCaptureState = "off";
@@ -5901,6 +5947,9 @@ function _conversationReleaseResources() {
   fullAppVoiceConversationDrainPending = false;
   fullAppVoiceConversationStopRequestedAt = 0;
   fullAppVoiceConversationStopMode = "none";
+  fullAppVoiceConversationBackpressurePaused = false;
+  fullAppVoiceConversationBackpressureReason = "none";
+  fullAppVoiceConversationBackpressureResumeReason = "none";
   _conversationShutdownCaptureResources({
     clearQueue: true,
     discardActiveRecorder: true,
@@ -6390,6 +6439,7 @@ function _processConversationQueue() {
     while (fullAppVoiceConversationPendingQueue.length > 0) {
       var item = fullAppVoiceConversationPendingQueue.shift();
       fullAppVoiceConversationActiveTurnId = item.turnId;
+      _resumeConversationBackpressureIfReady("queue_available");
       _setConversationProcessingState("stt_processing");
       _setConversationQueueAction("processing", "turn_" + item.turnId);
       _recordConversationTurnLifecycle(item, "dequeued", "turn_" + item.turnId, {
@@ -6531,11 +6581,18 @@ function _conversationVadTick() {
 
   // TASK-244: update VAD diagnostics every tick
   fullAppVoiceDiagnostics.lastRms = rms;
-  if (rms > fullAppVoiceDiagnostics.maxRms) fullAppVoiceDiagnostics.maxRms = rms;
+    if (rms > fullAppVoiceDiagnostics.maxRms) fullAppVoiceDiagnostics.maxRms = rms;
   _syncConversationQueueDiagnostics();
   renderFullAppVoiceDiagnostics();
 
   if (captureState === "listening") {
+    var backpressureReason = _conversationShouldPauseForBackpressure();
+    if (backpressureReason !== "none") {
+      _setConversationBackpressurePaused(backpressureReason);
+      renderFullAppVoiceDiagnostics();
+      return;
+    }
+    _resumeConversationBackpressureIfReady("queue_available");
     if (rms >= fullAppConversationRmsThreshold) {
       fullAppVoiceConversationSpeechStartedAt = now;
       fullAppVoiceConversationLastVoiceAt = now;
@@ -6625,6 +6682,9 @@ async function startConversationMode() {
   fullAppVoiceConversationDrainPending = false;
   fullAppVoiceConversationStopRequestedAt = 0;
   fullAppVoiceConversationStopMode = "none";
+  fullAppVoiceConversationBackpressurePaused = false;
+  fullAppVoiceConversationBackpressureReason = "none";
+  fullAppVoiceConversationBackpressureResumeReason = "none";
   _setConversationQueueAction("idle", "session_started");
   _setConversationProcessingState("idle");
   _setConversationCaptureState("listening");
@@ -6648,6 +6708,11 @@ function stopConversationMode() {
   fullAppVoiceConversationStopRequestedAt = stoppedAt;
   fullAppVoiceConversationStopMode = "graceful_drain";
   fullAppVoiceConversationEnabled = false;
+  if (fullAppVoiceConversationBackpressurePaused) {
+    fullAppVoiceConversationBackpressureReason = "graceful_drain";
+    fullAppVoiceConversationBackpressureResumeReason = "none";
+    _syncConversationQueueDiagnostics();
+  }
   var stoppedActiveRecorder = _conversationShutdownCaptureResources({
     clearQueue: false,
     discardActiveRecorder: false,
@@ -6850,6 +6915,7 @@ function renderFullAppVoiceDiagnostics() {
     "對話捕捉: " + d.conversationCaptureState + "  處理: " + d.conversationProcessingState,
     "對話佇列: pending=" + d.conversationPendingCount + "/" + d.conversationQueueLimit + " activeTurnId=" + d.conversationActiveTurnId,
     "對話佇列壓力: " + (d.conversationQueuePressure || "empty") + " full=" + (d.conversationQueueFull ? "true" : "false"),
+    "對話 backpressure: paused=" + (d.conversationBackpressurePaused ? "true" : "false") + " reason=" + (d.conversationBackpressureReason || "none") + " resume=" + (d.conversationBackpressureResumeReason || "none"),
     "對話佇列動作: " + (d.conversationLastQueueAction || "none") + " reason: " + (d.conversationLastQueueReason || "none"),
     "對話停止: requested=" + (d.conversationStopRequested ? "true" : "false") + " drain=" + (d.conversationDrainPending ? "true" : "false") + " mode=" + (d.conversationStopMode || "none"),
     "對話回合 lifecycle: count=" + d.conversationTurnLifecycleCount + " latest=" + (d.conversationLastTurnLifecycleSummary || "—"),
@@ -7010,6 +7076,9 @@ function resetFullAppVoiceDiagnosticsForRecording(mode, recordingMeta) {
   fullAppVoiceDiagnostics.conversationStopRequested = fullAppVoiceConversationStopRequested;
   fullAppVoiceDiagnostics.conversationDrainPending = fullAppVoiceConversationDrainPending;
   fullAppVoiceDiagnostics.conversationStopMode = fullAppVoiceConversationStopMode;
+  fullAppVoiceDiagnostics.conversationBackpressurePaused = fullAppVoiceConversationBackpressurePaused;
+  fullAppVoiceDiagnostics.conversationBackpressureReason = fullAppVoiceConversationBackpressureReason;
+  fullAppVoiceDiagnostics.conversationBackpressureResumeReason = fullAppVoiceConversationBackpressureResumeReason;
   fullAppVoiceDiagnostics.stopReason         = "none";
   fullAppVoiceDiagnostics.lastRms            = _triggerRms;
   fullAppVoiceDiagnostics.maxRms             = _triggerRms;

@@ -1049,3 +1049,12 @@ Pet bubble/chat implications:
 - The Full App -> Pet mirror payload remains `reply / mood / source`.
 - No `/chat` schema, mood schema, IPC, Pet Window input, TTS, or proactive LLM
   behavior is added by TASK-CONV-005.
+
+TASK-CONV-006 backpressure note:
+
+- Backpressure pause/resume diagnostics remain Full App-only voice diagnostics.
+- Pet bubble mirroring still follows explicit successful chat replies only.
+- A paused VAD capture window must not create inferred Pet speech or synthetic
+  chat content.
+- The Full App -> Pet mirror payload remains `reply / mood / source`; no new
+  Pet IPC, TTS, `/chat` schema, or mood schema behavior is added.

@@ -14363,6 +14363,72 @@ async function testTaskConv004OverflowBeyondCapacityStillShowsQueueFull() {
   console.log("  testTaskConv004OverflowBeyondCapacityStillShowsQueueFull PASS");
 }
 
+// TASK-CONV-006: Conversation Mode Backpressure Pause / No Usable Queue-Full Drop
+
+function testTaskConv006RendererHasBackpressurePauseDiagnostics() {
+  const src = fs.readFileSync(rendererPath, "utf8");
+  for (const token of [
+    "FULL_APP_CONVERSATION_BACKPRESSURE_PAUSE_PENDING",
+    "FULL_APP_CONVERSATION_BACKPRESSURE_RESUME_PENDING",
+    "conversationBackpressurePaused",
+    "conversationBackpressureReason",
+    "conversationBackpressureResumeReason",
+    "_conversationShouldPauseForBackpressure",
+    "_setConversationBackpressurePaused",
+    "_resumeConversationBackpressureIfReady",
+    "queue_high_watermark",
+    "queue_available",
+  ]) {
+    assert.ok(src.includes(token), "TASK-CONV-006 renderer must include " + token);
+  }
+  assert.ok(src.includes("對話 backpressure:"), "TASK-CONV-006 diagnostics must render backpressure line");
+  assert.ok(!src.includes("conversation:backpressure"), "TASK-CONV-006 must not add backpressure IPC");
+  console.log("  testTaskConv006RendererHasBackpressurePauseDiagnostics PASS");
+}
+
+async function testTaskConv006VadPauseAndResumeAvoidsNormalQueueFullDrop() {
+  const { sandbox } = await loadRenderer({ dragonPet: { chatHistoryLoad: async () => [] } });
+  sandbox.fullAppVoiceConversationEnabled = true;
+  sandbox.setConversationState("waiting");
+  sandbox.fullAppVoiceConversationPendingQueue = [{ turnId: 1 }, { turnId: 2 }, { turnId: 3 }];
+  sandbox.fullAppVoiceConversationActiveTurnId = 99;
+  sandbox.fullAppVoiceConversationAnalyser = {
+    fftSize: 8,
+    getFloatTimeDomainData(buf) {
+      for (let i = 0; i < buf.length; i += 1) buf[i] = 0.1;
+    },
+  };
+
+  sandbox._conversationVadTick();
+  await settle();
+  assert.equal(sandbox.fullAppVoiceDiagnostics.conversationBackpressurePaused, true);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.conversationBackpressureReason, "queue_high_watermark");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.conversationBackpressureResumeReason, "none");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.conversationLastQueueAction, "paused");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.conversationLastQueueReason, "queue_high_watermark");
+  assert.equal(sandbox.fullAppVoiceConversationCaptureState, "listening");
+  assert.equal(sandbox.fullAppVoiceConversationRecorder, null);
+  assert.equal(sandbox.fullAppVoiceConversationTurnLifecycleHistory.length, 0);
+  assert.notEqual(sandbox.fullAppVoiceDiagnostics.conversationLastQueueReason, "queue_full");
+
+  sandbox.fullAppVoiceConversationPendingQueue = [{ turnId: 2 }, { turnId: 3 }];
+  sandbox.fullAppVoiceConversationAnalyser = {
+    fftSize: 8,
+    getFloatTimeDomainData(buf) {
+      for (let i = 0; i < buf.length; i += 1) buf[i] = 0;
+    },
+  };
+  sandbox._conversationVadTick();
+  await settle();
+  assert.equal(sandbox.fullAppVoiceDiagnostics.conversationBackpressurePaused, false);
+  assert.equal(sandbox.fullAppVoiceDiagnostics.conversationBackpressureReason, "none");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.conversationBackpressureResumeReason, "queue_available");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.conversationLastQueueAction, "resumed");
+  assert.equal(sandbox.fullAppVoiceDiagnostics.conversationLastQueueReason, "queue_available");
+  assert.equal(sandbox.fullAppVoiceConversationCaptureState, "listening");
+  console.log("  testTaskConv006VadPauseAndResumeAvoidsNormalQueueFullDrop PASS");
+}
+
 // TASK-AUDIO-001: Capture Start Latency Measurement / Conversation Pre-roll Buffer
 
 function testTaskAudio001RendererHasTimingAndPreRollFields() {
@@ -18103,6 +18169,8 @@ async function main() {
   testTaskConv004RendererHasQueueCapacityFourAndPressureDiagnostics();
   await testTaskConv004FourPendingTurnsAcceptedWithoutQueueFullAndNoParallelChat();
   await testTaskConv004OverflowBeyondCapacityStillShowsQueueFull();
+  testTaskConv006RendererHasBackpressurePauseDiagnostics();
+  await testTaskConv006VadPauseAndResumeAvoidsNormalQueueFullDrop();
   testTaskAudio001RendererHasTimingAndPreRollFields();
   testTaskAudio001DiagnosticsRenderIncludesSafeTimingPreRoll();
   await testTaskAudio001TimingMetaNonNegative();

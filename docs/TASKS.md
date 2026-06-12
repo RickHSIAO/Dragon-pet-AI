@@ -30320,6 +30320,25 @@ Conversation Mode after the queue capacity policy landed in TASK-CONV-004.
   completed turns, no-speech, queue overflow, empty artifact, chat error,
   Owner Voice dry-run outcomes, candidate WAV deletion, and final drain state.
 
+### Windows Runtime Smoke Follow-up
+
+Windows long-session runtime smoke after TASK-CONV-005 confirmed the diagnostics
+worked and drain completed cleanly, but it exposed repeated real usable-audio
+overflow under sustained pressure:
+
+- final queue drained to `pending=0/4`, `activeTurnId=0`,
+  `queue=idle/drain_complete`, and `stopMode=drain_complete`
+- Owner Voice dry-run remained non-blocking
+- candidate WAV cleanup worked for completed turns
+- no visible no-speech hallucination or chat error occurred
+- turns #19, #20, #21, #22, #24, #25, #27, and #28 dropped as
+  `reason=queue_full`, `audio=usable_audio`, `dropStage=at_queue`
+
+TASK-CONV-006 addresses this by adding a backpressure pause/resume policy.
+TASK-CONV-005 remains implemented but not closed until Windows long-session
+re-smoke confirms normal sessions no longer repeatedly produce usable-audio
+`queue_full` drops.
+
 ### Manual Windows 5-10 Minute Smoke Checklist
 
 - Start Conversation Mode.
@@ -30360,6 +30379,101 @@ total=<n> completed=<n> no_speech=<n> queue_full=<n> empty_artifact=<n> chat_err
 ### Automated Validation
 
 - `node apps/desktop/scripts/conversation-long-session-smoke.js`: PASS
+  - as of TASK-CONV-006, the synthetic fixture expects normal backpressure
+    pause/resume with `queue_full=0` and a separate injected hard fallback row
+
+---
+
+## TASK-CONV-006 | Conversation Mode Backpressure Pause / No Usable Queue-Full Drop
+
+Status: IMPLEMENTED - AUTOMATED BACKPRESSURE SMOKE PASS / NEEDS WINDOWS LONG SESSION RE-SMOKE (2026-06-13)
+
+### Goal
+
+Prevent normal long-session Conversation Mode from repeatedly dropping usable
+speech as `queue_full` while keeping the queue bounded and preserving the hard
+overflow fallback.
+
+### Implementation
+
+- Kept `FULL_APP_CONVERSATION_PENDING_MAX = 4`.
+- Added queue backpressure thresholds:
+  - pause starting new VAD-triggered utterance recorders when pending reaches
+    `4/4`
+  - also pause at high watermark `pending >= 3/4` while an active STT/chat turn
+    is busy
+  - resume once pending falls to `<= 2/4`
+  - clear pause after `drain_complete`
+- Added backpressure state:
+  - `conversationBackpressurePaused`
+  - `conversationBackpressureReason`
+  - `conversationBackpressureResumeReason`
+- During pause, Conversation Mode stays in listening/capture context but does
+  not start a new utterance recorder. This avoids creating a usable Blob that
+  would immediately be dropped as `queue_full`.
+- `queue_full` remains as the hard safety fallback in `_enqueueConversationAudioBlob`
+  if a usable Blob reaches admission after the queue is already full.
+- Empty artifacts still drop before queue admission as `empty_artifact`.
+- Stop/drain is unchanged: Stop prevents new capture, drains already-recorded
+  queued turns, and must finish at `pending=0/4`, `active=0`,
+  `stopMode=drain_complete`.
+
+### Threshold Rationale
+
+The high watermark is `3/4` only while a turn is active or the queue processor is
+busy. This leaves one pending-slot cushion under sustained speech instead of
+waiting until the queue is already full. The resume watermark `2/4` provides
+hysteresis so capture does not rapidly pause/resume at the edge.
+
+### Diagnostics
+
+Voice Diagnostics now shows:
+
+- queue pressure and full state
+- `backpressure paused=true/false`
+- `backpressure reason=queue_full|queue_high_watermark|graceful_drain|none`
+- `backpressure resume=queue_available|drain_complete|none`
+- pending/max and active turn ID
+- lifecycle rows continue to show `queue_full`, `empty_artifact`, audio class,
+  drop stage, Owner Voice, and candidate WAV cleanup facts
+
+### Automated Validation
+
+- `node apps/desktop/scripts/conversation-long-session-smoke.js`: PASS
+  - normal path: `queue_full=0`
+  - backpressure pause/resume visible
+  - injected hard fallback: `hardFallback.queue_full=1`
+- `node apps/desktop/scripts/renderer-chat-smoke.js`: PASS
+  - VAD pauses before recorder start at high watermark
+  - resumes at `pending <= 2/4`
+  - hard fallback `queue_full` still renders for explicit overflow
+
+### Preserved Boundaries
+
+- No STT default change.
+- No STT model selector behavior change.
+- No `/chat` schema or mood schema change.
+- No Owner Voice hard gate behavior change.
+- No TTS.
+- No frontend redesign.
+- No new IPC.
+- No Pet Window or Output Queue contract change.
+- No generated report, audio, temp WAV, embedding, local settings, log, or
+  pytest temp artifact committed.
+
+### Remaining Windows Re-smoke
+
+Run a 5-10 minute Conversation Mode smoke with STT model `base` and confirm:
+
+- normal long-session turns do not repeatedly produce usable-audio
+  `queue_full`
+- backpressure pause/resume appears when pending reaches high pressure
+- final drain reaches `pending=0/4`, `active=0`, `stopMode=drain_complete`
+- any rare hard overflow remains visible as `queue_full`,
+  `audio=usable_audio`, `dropStage=at_queue`
+- empty artifacts remain distinct as `empty_artifact`
+- Owner Voice dry-run remains non-blocking and temporary candidate WAVs are
+  deleted
 
 ---
 

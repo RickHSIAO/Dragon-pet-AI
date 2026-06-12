@@ -952,13 +952,31 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   `drain_complete` remains visible, `queue_full` usable-audio overflow stays
   distinguishable from `empty_artifact` before-queue drops, lifecycle rows keep
   audio class/drop stage/Owner Voice/candidate WAV cleanup fields visible, and
-  Owner Voice dry-run remains non-blocking. A synthetic 12-turn fixture covers
-  completed turns, no-speech, queue overflow, empty artifact, chat error,
-  Owner Voice accepted/rejected/unknown outcomes, candidate WAV deletion, and
-  final `pending=0/4 active=0 stopMode=drain_complete`. No runtime behavior,
+  Owner Voice dry-run remains non-blocking. As of TASK-CONV-006, the synthetic
+  fixture covers completed turns, no-speech, backpressure pause/resume, a
+  separate hard fallback `queue_full`, empty artifact, chat error, Owner Voice
+  accepted/rejected/unknown outcomes, candidate WAV deletion, and final
+  `pending=0/4 active=0 stopMode=drain_complete`. No runtime behavior,
   STT default, runtime model selector, `/chat` or mood schema, Owner Voice hard
   gate, TTS, frontend redesign, IPC, Pet Window, Output Queue, raw audio
   persistence, or generated artifact commit was added.
+
+- TASK-CONV-006 IMPLEMENTED - AUTOMATED BACKPRESSURE SMOKE PASS / NEEDS WINDOWS LONG SESSION RE-SMOKE (2026-06-13):
+  Adds a Conversation Mode backpressure pause/resume policy after Windows
+  long-session runtime smoke exposed repeated usable-audio `queue_full` drops
+  even though diagnostics and drain worked. The queue max remains `4`. New VAD
+  capture starts are paused at `pending=4/4`, or at high watermark
+  `pending>=3/4` while a turn is active/processing, then resumed at
+  `pending<=2/4` or `drain_complete`. Voice Diagnostics now shows
+  `conversationBackpressurePaused`, `conversationBackpressureReason`, and
+  `conversationBackpressureResumeReason`. Normal long-session smoke should use
+  pause/resume instead of repeatedly producing usable-audio `queue_full`; the
+  existing `queue_full` path remains as a hard fallback and still renders
+  `audio=usable_audio`, `dropStage=at_queue`. Empty artifacts remain distinct.
+  Stop/drain behavior remains graceful and should finish at `pending=0/4`,
+  `active=0`, and `stopMode=drain_complete`. No STT default, STT model selector,
+  `/chat` or mood schema, Owner Voice hard gate, TTS, frontend redesign, IPC,
+  Pet Window, Output Queue, or generated artifact commit changed.
 
 - TASK-AUDIO-001 IMPLEMENTED - CAPTURE START LATENCY MEASUREMENT / CONVERSATION PRE-ROLL BUFFER (2026-06-05):
   Voice Diagnostics now records safe per-capture timing metadata:
