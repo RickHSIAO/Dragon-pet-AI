@@ -29092,7 +29092,7 @@ model switch was made.
 
 ## TASK-STT-005 | Runtime STT Model Selection UI / base-small Candidate Setting
 
-Status: IMPLEMENTED - AUTOMATED MODEL SELECTION SMOKE PASS / NEEDS WINDOWS RUNTIME MODEL SWITCH SMOKE (2026-06-12)
+Status: DONE - WINDOWS RUNTIME MODEL SWITCH SMOKE PASS / DEFAULT UNCHANGED (2026-06-12)
 
 ### Goal
 
@@ -29170,16 +29170,23 @@ Automated validation required for closeout:
 - `git diff --check`
 - `git status --short`
 
-### Remaining Runtime Smoke
+### Windows Runtime Smoke
 
-Windows runtime model switch smoke is still required:
+Windows runtime model switch smoke PASS:
 
-- selector `Default / env` sends no request model and preserves env/default
-  behavior
-- selector `base` changes Manual Mic diagnostics to request/source `base/request`
-- selector `small` changes Manual Mic diagnostics to request/source
-  `small/request`
-- Conversation Mode uses the same selected model across turns
+- selector `base` works for Manual Mic with `requestedModel=base`,
+  `resolvedModel=base`, `modelSource=request`, and no fallback
+- selector `small` works for Manual Auto-send with `requestedModel=small`,
+  `resolvedModel=small`, `modelSource=request`, and no fallback
+- selector `Default / env` sends no request model and resolves through the
+  committed default `tiny` when env is absent
+- selector `base` works for Conversation Mode turns; lifecycle completed with
+  `stt=success`, `chat=sent`, final `pending=0/4 active=0`, and
+  `stopMode=drain_complete`
+- diagnostics showed UI selected model, request model sent, requested/resolved
+  model, source, env, fallback, and provider load state
+- Owner Voice dry-run remained non-blocking and temporary candidate WAV cleanup
+  succeeded
 - no STT default, Owner Voice hard gate, `/chat`, mood, or IPC contract drift
 
 ---

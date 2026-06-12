@@ -704,7 +704,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   candidates only. No `/chat` schema change, Owner Voice hard gate, raw audio
   persistence, private sample commit, or aggressive rewrite was added.
 
-- TASK-STT-005 IMPLEMENTED - AUTOMATED MODEL SELECTION SMOKE PASS / NEEDS WINDOWS RUNTIME MODEL SWITCH SMOKE (2026-06-12):
+- TASK-STT-005 DONE - WINDOWS RUNTIME MODEL SWITCH SMOKE PASS / DEFAULT UNCHANGED (2026-06-12):
   Adds a session-only Full App `STT model` selector in the existing voice settings
   strip with `Default / env`, `tiny`, `base`, and `small`. `/stt/transcribe`
   accepts an optional multipart `model` field; omitted/empty keeps existing
@@ -715,11 +715,14 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   both send the selected model through the existing `stt:transcribe` bridge, and
   `Default / env` sends no model field. Diagnostics show UI-selected model,
   request model sent, backend requested/resolved model, source, fallback reason,
-  provider load state, and model load status/error. Automated model-selection
-  smoke passes; Windows runtime model-switch smoke remains required. Runtime
-  default remains `tiny`; no `/chat` schema, mood schema, Owner Voice hard gate,
-  renderer IPC channel, queue/pre-roll/drain policy, raw audio persistence, or
-  committed sample audio changed.
+  provider load state, and model load status/error. Windows runtime model-switch
+  smoke passes for `base` Manual Mic, `small` Manual Auto-send, `Default / env`
+  Manual Auto-send, and `base` Conversation Mode; `Default / env` sends no
+  request model and resolves to committed default `tiny` when env is absent.
+  Runtime default remains `tiny`; `base` and `small` remain runtime candidates
+  only. No `/chat` schema, mood schema, Owner Voice hard gate, renderer IPC
+  channel, queue/pre-roll/drain policy, raw audio persistence, or committed
+  sample audio changed.
 
 - TASK-PERSONA-001 DONE - WINDOWS CHAT TONE SMOKE PASS / DEBUG FALLBACK REPAIR ENABLED (2026-06-11):
   Tunes Christina's runtime persona prompt so the character remains proud,

@@ -502,7 +502,7 @@ Suggested research and implementation tasks:
   credit or creator-CTA text and did not send normal chat. Default runtime model
   remains `tiny`; `base` and `small` remain override candidates only.
 
-- **TASK-STT-005 Runtime STT Model Selection UI / base-small Candidate Setting. IMPLEMENTED - AUTOMATED MODEL SELECTION SMOKE PASS / NEEDS WINDOWS RUNTIME MODEL SWITCH SMOKE (2026-06-12):**
+- **TASK-STT-005 Runtime STT Model Selection UI / base-small Candidate Setting. DONE - WINDOWS RUNTIME MODEL SWITCH SMOKE PASS / DEFAULT UNCHANGED (2026-06-12):**
   Adds a session-only Full App `STT model` selector for runtime testing:
   `Default / env`, `tiny`, `base`, and `small`. `Default / env` sends no
   request model and preserves existing env/default resolution. Explicit
@@ -515,7 +515,10 @@ Suggested research and implementation tasks:
   request values fall back safely without crashing. This does not add a new IPC
   channel and does not change `/chat`, mood schema, Owner Voice hard-gate
   behavior, queue/pre-roll/drain policy, raw audio persistence, or committed
-  sample handling.
+  sample handling. Windows runtime model-switch smoke passed for `base` Manual
+  Mic, `small` Manual Auto-send, `Default / env` Manual Auto-send, and `base`
+  Conversation Mode. The committed default remains `tiny`; `base` and `small`
+  remain runtime candidates only.
 
 - TASK-STT-016 LLM-based semantic correction. **(PLANNED; future):** Optional
   follow-up to apply a local LLM pass over the corrected transcript for further semantic
