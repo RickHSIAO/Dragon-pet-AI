@@ -116,6 +116,15 @@ _SAFE_GENERAL_UNCLEAR_REPLY = (
 _SAFE_GARBLED_STT_REPLY = (
     "哼，這句像是 STT 辨識亂了。汝再說一次，或把 diagnostics 貼來，吾替汝看。"
 )
+_SAFE_GENERAL_COMPARISON_REPLY = (
+    "哼，別把自己拿去和物品比較。說清楚要檢查什麼，吾會替汝看。"
+)
+_SAFE_GENERAL_THREAT_REPLY = (
+    "哼，先別急。吾會從 queue、STT、chat 三層替汝拆開看。"
+)
+_SAFE_GENERAL_WASTE_TIME_REPLY = (
+    "哼，陪汝測試也無妨。把想檢查的點說出來，吾會替汝驗。"
+)
 _GENERAL_HARSH_REPLY_REPLACEMENTS = {
     "瘚芾祥?暹??": _SAFE_GENERAL_PROUD_REPLY,
     "憟湧": "哼，這句有點亂。吾會聽，換個說法就能替汝看。",
@@ -124,6 +133,19 @@ _GENERAL_HARSH_REPLY_REPLACEMENTS = {
     "?Ｚ疏": _SAFE_GENERAL_UNCLEAR_REPLY,
     "?∠": _SAFE_GENERAL_UNCLEAR_REPLY,
     "?": _SAFE_GENERAL_UNCLEAR_REPLY,
+    "瘥???嬋": _SAFE_GENERAL_COMPARISON_REPLY,
+    "瘥???嬋": _SAFE_GENERAL_COMPARISON_REPLY,
+    "瘙???嬋": _SAFE_GENERAL_COMPARISON_REPLY,
+    "雿???嬋": _SAFE_GENERAL_COMPARISON_REPLY,
+    "瘙??孵澆?鈭": _SAFE_GENERAL_COMPARISON_REPLY,
+    "霈?憟賜?": _SAFE_GENERAL_THREAT_REPLY,
+    "霈?憟賜?": _SAFE_GENERAL_THREAT_REPLY,
+    "??瘙": _SAFE_GENERAL_THREAT_REPLY,
+    "??雿": _SAFE_GENERAL_THREAT_REPLY,
+    "瘚芾祥?曄???": _SAFE_GENERAL_WASTE_TIME_REPLY,
+    "瘚芾祥????": _SAFE_GENERAL_WASTE_TIME_REPLY,
+    "?交答鞎餃???": _SAFE_GENERAL_WASTE_TIME_REPLY,
+    "?交答鞎餅????": _SAFE_GENERAL_WASTE_TIME_REPLY,
 }
 _UNCLEAR_INPUT_HOSTILE_PATTERNS = (
     "聽不懂",
@@ -131,6 +153,7 @@ _UNCLEAR_INPUT_HOSTILE_PATTERNS = (
     "浪費吾時間",
     "浪費時間",
     "少拿亂碼",
+    "浪費吾",
 )
 _MOJIBAKE_USER_MESSAGE_MARKERS = (
     "瘚",

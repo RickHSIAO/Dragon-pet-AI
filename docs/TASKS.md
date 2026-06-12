@@ -29276,13 +29276,15 @@ teasing unless deliberately redesigned.
 
 ## TASK-PERSONA-002 | Christina General Tone Sanitizer for Non-Debug Replies
 
-Status: IMPLEMENTED - PROMPT/REPAIR SMOKE PASS / NEEDS WINDOWS GENERAL TONE SMOKE (2026-06-12)
+Status: IMPLEMENTED - SECOND PROMPT/REPAIR SMOKE PASS / NEEDS WINDOWS GENERAL TONE RE-SMOKE (2026-06-12)
 
 ### Goal
 
 Keep Christina proud, teasing, witty, slightly arrogant, and protective in
 non-debug casual/general replies while preventing contempt, hostile
-unclear-input dismissal, repeated humiliation, and garbled-STT mockery.
+unclear-input dismissal, repeated humiliation, garbled-STT mockery,
+comparative devaluation, threat/intimidation phrasing, and "wasting my time"
+hostility.
 
 ### Implementation
 
@@ -29291,15 +29293,23 @@ unclear-input dismissal, repeated humiliation, and garbled-STT mockery.
 - Guidance covers light teasing, non-hostile clarification for unclear input,
   likely STT recognition-error wording, and repetition control for sharp
   address phrases.
+- Second-pass guidance adds explicit boundaries against comparing the user's
+  value to objects, using threats/intimidation to push the conversation, or
+  framing companionship/testing prompts as wasted time.
 - Preserved TASK-PERSONA-001 debug guidance and debug repair behavior.
 - Added `repair_persona_general_reply()` for narrow non-debug repairs.
 - Added `repair_persona_reply()` so `/chat` LLM success applies debug repair
   first, then general repair.
 - General repair handles only known harsh fragments, unclear-input hostility,
-  repeated humiliation, and likely garbled-STT cases.
+  repeated humiliation, likely garbled-STT cases, comparative devaluation,
+  threat/intimidation fragments, and waste-time hostility.
 - Safe proud / tsundere replies pass through unchanged.
 
 ### Repair Examples
+
+- comparative devaluation -> "哼，別把自己拿去和物品比較。說清楚要檢查什麼，吾會替汝看。"
+- threat/intimidation fragment -> "哼，先別急。吾會從 queue、STT、chat 三層替汝拆開看。"
+- waste-time hostility -> "哼，陪汝測試也無妨。把想檢查的點說出來，吾會替汝驗。"
 
 - `瘚芾祥?暹??` -> "哼，汝大概是在測吾吧？說清楚些，吾會替汝看。"
 - `憟湧` -> "哼，這句有點亂。吾會聽，換個說法就能替汝看。"
@@ -29313,6 +29323,9 @@ unclear-input dismissal, repeated humiliation, and garbled-STT mockery.
 - sanitizer repairs `瘚芾祥?暹??`
 - sanitizer repairs `憟湧`
 - sanitizer handles garbled-STT unclear-input hostility without mocking the user
+- sanitizer repairs comparative devaluation fragments
+- sanitizer repairs threat/intimidation fragments
+- sanitizer repairs waste-time hostility fragments
 - sanitizer preserves safe proud / tsundere lines
 - debug fallback repair still works
 - `/chat` response schema remains `reply / mood / source`
@@ -29330,7 +29343,7 @@ unclear-input dismissal, repeated humiliation, and garbled-STT mockery.
 
 ### Validation
 
-- `backend\tests\test_prompt_service.py`: 33 passed
+- `backend\tests\test_prompt_service.py`: 37 passed
 - `backend\tests\test_chat_service.py`: 34 passed
 - full backend pytest attempted with `backend\tests`; timed out after 364s in
   the local command wrapper

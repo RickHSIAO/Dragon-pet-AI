@@ -15,6 +15,9 @@ from app.services.prompt_service import (
 BAD_DEBUG_TEMPLATE = "哼，汝這傢伙又想試吾的耐心？先說清楚是哪段語音。"
 BAD_GENERAL_TEMPLATE = "瘚芾祥?暹??"
 BAD_GENERAL_UNCLEAR_TEMPLATE = "憟湧"
+BAD_GENERAL_COMPARISON_TEMPLATE = "頞?鋆∠?鞎典??舀?瘙??孵澆?鈭"
+BAD_GENERAL_THREAT_TEMPLATE = "汝再這樣吾就霈?憟賜?"
+BAD_GENERAL_WASTE_TIME_TEMPLATE = "皜砌?暻潘?瘙隡??交答鞎餃???"
 
 
 def test_normalize_chat_mode_none_uses_safe_fallback():
@@ -139,6 +142,9 @@ def test_task_persona_002_prompt_includes_general_tone_boundaries():
     assert "不要變成輕蔑或情緒攻擊" in prompt
     assert "不清楚輸入" in prompt
     assert "STT 辨識亂了" in prompt
+    assert "價值和物品比較" in prompt
+    assert "威脅或恐嚇" in prompt
+    assert "陪汝測試也無妨" in prompt
     assert BAD_GENERAL_TEMPLATE not in prompt
     assert BAD_GENERAL_UNCLEAR_TEMPLATE not in prompt
 
@@ -221,6 +227,52 @@ def test_task_persona_002_general_repair_preserves_safe_tsundere_line():
     reply = "哼，這點小事吾當然能看穿。把結果交給吾。"
 
     assert repair_persona_general_reply(reply, "陪我測一下") == reply
+
+
+def test_task_persona_002_second_pass_repairs_comparative_devaluation():
+    repaired = repair_persona_general_reply(
+        BAD_GENERAL_COMPARISON_TEMPLATE,
+        "陪我做一般語氣測試",
+    )
+
+    assert repaired != BAD_GENERAL_COMPARISON_TEMPLATE
+    assert "物品比較" in repaired
+    assert "吾會替汝看" in repaired
+
+
+def test_task_persona_002_second_pass_repairs_threat_phrase():
+    repaired = repair_persona_general_reply(
+        BAD_GENERAL_THREAT_TEMPLATE,
+        "這句是不是太兇",
+    )
+
+    assert repaired != BAD_GENERAL_THREAT_TEMPLATE
+    assert "queue" in repaired
+    assert "STT" in repaired
+    assert "chat" in repaired
+    assert "憟賜" not in repaired
+
+
+def test_task_persona_002_second_pass_repairs_waste_time_hostility():
+    repaired = repair_persona_general_reply(
+        BAD_GENERAL_WASTE_TIME_TEMPLATE,
+        "陪我測試一般對話",
+    )
+
+    assert repaired != BAD_GENERAL_WASTE_TIME_TEMPLATE
+    assert "陪汝測試" in repaired
+    assert "吾會替汝驗" in repaired
+
+
+def test_task_persona_002_second_pass_preserves_safe_observed_tsundere_lines():
+    safe_replies = [
+        "哼，這點小事吾當然會看。把結果交給吾。",
+        "這可不是什麼難題，汝先把要檢查的地方說清楚。",
+        "汝這傢伙，總算肯認真測了。",
+    ]
+
+    for reply in safe_replies:
+        assert repair_persona_general_reply(reply, "一般測試") == reply
 
 
 def test_task_persona_001_chat_generation_repairs_bad_llm_reply_and_keeps_schema(monkeypatch):
