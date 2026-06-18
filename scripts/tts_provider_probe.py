@@ -1,18 +1,21 @@
-"""Local TTS provider candidate probe for TASK-TTS-003 / TASK-TTS-004B2.
+"""Local TTS provider candidate probe for TASK-TTS-003 / TASK-TTS-004C.
 
 This script is evaluation-only. It does not wire TTS into /chat, does not play
 audio, does not auto-speak, and does not generate audio unless a provider probe
 explicitly implements that behind --allow-audio-output. TASK-TTS-004B allows a
 manual VOICEVOX localhost server probe to write a WAV file only when explicitly
 requested. TASK-TTS-004B2 adds stage-specific VOICEVOX timeout/retry
-diagnostics while keeping the probe runtime-unwired and playback-free.
+diagnostics. TASK-TTS-004C adds an optional edge-tts network candidate probe
+that is metadata-only by default and audio-output gated.
 """
 
 from __future__ import annotations
 
 import argparse
+import asyncio
 import datetime as _dt
 import importlib.util
+import importlib
 import json
 import platform
 import sys
@@ -50,6 +53,10 @@ DEFAULT_VOICEVOX_URL = "http://127.0.0.1:50021"
 DEFAULT_VOICEVOX_SPEAKER = 0
 DEFAULT_VOICEVOX_TIMEOUT_SECONDS = 30.0
 DEFAULT_VOICEVOX_RETRIES = 1
+DEFAULT_EDGE_TTS_VOICE = "zh-TW-HsiaoChenNeural"
+DEFAULT_EDGE_TTS_RATE = "+0%"
+DEFAULT_EDGE_TTS_PITCH = "+0Hz"
+DEFAULT_EDGE_TTS_TIMEOUT_SECONDS = 30.0
 DEFAULT_TEXTS = (
     "\u54fc\uff0c\u6c5d\u7e3d\u7b97\u60f3\u8d77\u8981\u4f9d\u9760\u543e\u4e86\u3002",
     "\u9019\u53ea\u662f TTS provider probe\uff0c\u4e0d\u6703\u8b93\u543e\u5728 app \u88e1\u8aaa\u8a71\u3002",
@@ -67,6 +74,9 @@ class ProviderProbeResult:
     audioGenerated: bool = False
     outputPath: str | None = None
     audioBytes: int | None = None
+    voice: str | None = None
+    rate: str | None = None
+    pitch: str | None = None
     voicevoxUrl: str | None = None
     version: str | None = None
     speakerId: int | None = None
@@ -94,6 +104,9 @@ class ProviderProbeResult:
             "audioGenerated": self.audioGenerated,
             "outputPath": self.outputPath,
             "audioBytes": self.audioBytes,
+            "voice": self.voice,
+            "rate": self.rate,
+            "pitch": self.pitch,
             "voicevoxUrl": self.voicevoxUrl,
             "version": self.version,
             "speakerId": self.speakerId,
@@ -582,21 +595,210 @@ def write_voicevox_audio(audio: bytes, *, output_root: Path = DEFAULT_OUTPUT_ROO
     return output_path
 
 
-def probe_edge_tts(chunks: list[str]) -> ProviderProbeResult:
+def probe_edge_tts(
+    chunks: list[str],
+    *,
+    allow_audio_output: bool = False,
+    output_root: Path = DEFAULT_OUTPUT_ROOT,
+    voice: str = DEFAULT_EDGE_TTS_VOICE,
+    rate: str = DEFAULT_EDGE_TTS_RATE,
+    pitch: str = DEFAULT_EDGE_TTS_PITCH,
+    timeout_seconds: float = DEFAULT_EDGE_TTS_TIMEOUT_SECONDS,
+) -> ProviderProbeResult:
+    timeout_seconds = normalize_edge_tts_timeout(timeout_seconds)
+    start = time.perf_counter()
     notes = [
         "Network/cloud-ish candidate only; not default.",
-        "TASK-TTS-003 does not synthesize or send text to this provider.",
+        "Probe-only; not runtime wiring.",
+        "No playback is attempted.",
+        "Chinese voice quality must be manually judged.",
+        "Default metadata-only mode does not send text to Microsoft Edge TTS service.",
+        "If audio output is allowed, text may be sent to Microsoft Edge TTS service.",
     ]
     if importlib.util.find_spec("edge_tts") is None:
-        return _unavailable("edge_tts", chunks, "missing_optional_dependency", notes)
+        return ProviderProbeResult(
+            provider="edge_tts",
+            available=False,
+            reason="missing_optional_dependency",
+            normalizedChunks=chunks,
+            measuredLatencyMs=0,
+            audioGenerated=False,
+            outputPath=None,
+            audioBytes=None,
+            voice=voice,
+            rate=rate,
+            pitch=pitch,
+            synthesisStatus="missing_optional_dependency",
+            timeoutSec=timeout_seconds,
+            notes=notes + ["Install is not required for TASK-TTS-004C."],
+        )
+    if not allow_audio_output:
+        latency_ms = int((time.perf_counter() - start) * 1000)
+        return ProviderProbeResult(
+            provider="edge_tts",
+            available=True,
+            reason="optional_dependency_present",
+            normalizedChunks=chunks,
+            measuredLatencyMs=latency_ms,
+            audioGenerated=False,
+            outputPath=None,
+            audioBytes=None,
+            voice=voice,
+            rate=rate,
+            pitch=pitch,
+            synthesisStatus="metadata_only",
+            timeoutSec=timeout_seconds,
+            notes=notes + ["Audio output disabled; no network synthesis call or MP3 write."],
+        )
+
+    output_path = build_edge_tts_output_path(output_root=output_root)
+    try:
+        _, synthesis_latency_ms = timed_call(
+            lambda: run_edge_tts_synthesis(
+                "\n".join(chunks),
+                output_path=output_path,
+                voice=voice,
+                rate=rate,
+                pitch=pitch,
+                timeout_seconds=timeout_seconds,
+            )
+        )
+    except TimeoutError as exc:
+        cleanup_partial_output(output_path)
+        latency_ms = int((time.perf_counter() - start) * 1000)
+        return ProviderProbeResult(
+            provider="edge_tts",
+            available=True,
+            reason=f"edge_tts_timeout:{type(exc).__name__}",
+            normalizedChunks=chunks,
+            measuredLatencyMs=latency_ms,
+            synthesisLatencyMs=getattr(exc, "edge_tts_latency_ms", None),
+            audioGenerated=False,
+            outputPath=None,
+            audioBytes=None,
+            voice=voice,
+            rate=rate,
+            pitch=pitch,
+            synthesisStatus="edge_tts_timeout",
+            timeoutSec=timeout_seconds,
+            lastExceptionClass=type(exc).__name__,
+            lastExceptionMessage=safe_exception_message(exc),
+            notes=notes + ["edge-tts synthesis timed out before MP3 output was kept."],
+        )
+    except Exception as exc:  # edge-tts can raise provider-specific exceptions.
+        cleanup_partial_output(output_path)
+        latency_ms = int((time.perf_counter() - start) * 1000)
+        return ProviderProbeResult(
+            provider="edge_tts",
+            available=True,
+            reason=f"edge_tts_error:{type(exc).__name__}",
+            normalizedChunks=chunks,
+            measuredLatencyMs=latency_ms,
+            synthesisLatencyMs=getattr(exc, "edge_tts_latency_ms", None),
+            audioGenerated=False,
+            outputPath=None,
+            audioBytes=None,
+            voice=voice,
+            rate=rate,
+            pitch=pitch,
+            synthesisStatus="edge_tts_error",
+            timeoutSec=timeout_seconds,
+            lastExceptionClass=type(exc).__name__,
+            lastExceptionMessage=safe_exception_message(exc),
+            notes=notes + ["edge-tts synthesis failed before MP3 output was kept."],
+        )
+
+    audio_bytes = output_path.stat().st_size
+    latency_ms = int((time.perf_counter() - start) * 1000)
     return ProviderProbeResult(
         provider="edge_tts",
         available=True,
-        reason="optional_dependency_present",
+        reason="edge_tts_success",
         normalizedChunks=chunks,
-        measuredLatencyMs=0,
-        notes=notes,
+        measuredLatencyMs=latency_ms,
+        synthesisLatencyMs=synthesis_latency_ms,
+        audioGenerated=True,
+        outputPath=str(output_path),
+        audioBytes=audio_bytes,
+        voice=voice,
+        rate=rate,
+        pitch=pitch,
+        synthesisStatus="edge_tts_success",
+        timeoutSec=timeout_seconds,
+        notes=notes + ["MP3 generated under ignored local probe outputs. No playback was attempted."],
     )
+
+
+def normalize_edge_tts_timeout(timeout_seconds: float) -> float:
+    try:
+        timeout = float(timeout_seconds)
+    except (TypeError, ValueError):
+        return DEFAULT_EDGE_TTS_TIMEOUT_SECONDS
+    if timeout <= 0:
+        return DEFAULT_EDGE_TTS_TIMEOUT_SECONDS
+    return min(timeout, 120.0)
+
+
+def build_edge_tts_output_path(*, output_root: Path = DEFAULT_OUTPUT_ROOT) -> Path:
+    date_key = _dt.datetime.now().strftime("%Y%m%d")
+    stamp = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    output_dir = output_root / date_key / "audio"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    return output_dir / f"edge_tts_{stamp}.mp3"
+
+
+def cleanup_partial_output(output_path: Path) -> None:
+    try:
+        if output_path.exists():
+            output_path.unlink()
+    except OSError:
+        pass
+
+
+def run_edge_tts_synthesis(
+    text: str,
+    *,
+    output_path: Path,
+    voice: str,
+    rate: str,
+    pitch: str,
+    timeout_seconds: float,
+) -> None:
+    start = time.perf_counter()
+    try:
+        asyncio.run(
+            asyncio.wait_for(
+                _edge_tts_save_audio(
+                    text,
+                    output_path=output_path,
+                    voice=voice,
+                    rate=rate,
+                    pitch=pitch,
+                ),
+                timeout=timeout_seconds,
+            )
+        )
+    except TimeoutError as exc:
+        setattr(exc, "edge_tts_latency_ms", int((time.perf_counter() - start) * 1000))
+        raise
+    except Exception as exc:
+        setattr(exc, "edge_tts_latency_ms", int((time.perf_counter() - start) * 1000))
+        raise
+    if not output_path.exists() or output_path.stat().st_size <= 0:
+        raise ValueError("empty_edge_tts_audio")
+
+
+async def _edge_tts_save_audio(
+    text: str,
+    *,
+    output_path: Path,
+    voice: str,
+    rate: str,
+    pitch: str,
+) -> None:
+    edge_tts = importlib.import_module("edge_tts")
+    communicate = edge_tts.Communicate(text, voice=voice, rate=rate, pitch=pitch)
+    await communicate.save(str(output_path))
 
 
 def probe_future_manual(provider: str, chunks: list[str]) -> ProviderProbeResult:
@@ -624,6 +826,10 @@ def probe_provider(
     voicevox_speaker: int = DEFAULT_VOICEVOX_SPEAKER,
     voicevox_timeout_seconds: float = DEFAULT_VOICEVOX_TIMEOUT_SECONDS,
     voicevox_retries: int = DEFAULT_VOICEVOX_RETRIES,
+    edge_tts_voice: str = DEFAULT_EDGE_TTS_VOICE,
+    edge_tts_rate: str = DEFAULT_EDGE_TTS_RATE,
+    edge_tts_pitch: str = DEFAULT_EDGE_TTS_PITCH,
+    edge_tts_timeout_seconds: float = DEFAULT_EDGE_TTS_TIMEOUT_SECONDS,
 ) -> ProviderProbeResult:
     if provider == "mock":
         return probe_mock(chunks)
@@ -640,7 +846,15 @@ def probe_provider(
             voicevox_retries=voicevox_retries,
         )
     if provider == "edge_tts":
-        return probe_edge_tts(chunks)
+        return probe_edge_tts(
+            chunks,
+            allow_audio_output=allow_audio_output,
+            output_root=output_root,
+            voice=edge_tts_voice,
+            rate=edge_tts_rate,
+            pitch=edge_tts_pitch,
+            timeout_seconds=edge_tts_timeout_seconds,
+        )
     if provider in {"piper_onnx", "gpt_sovits", "style_bert_vits2", "rvc_like"}:
         return probe_future_manual(provider, chunks)
     return _unavailable(
@@ -661,6 +875,10 @@ def build_probe_report(
     voicevox_speaker: int = DEFAULT_VOICEVOX_SPEAKER,
     voicevox_timeout_seconds: float = DEFAULT_VOICEVOX_TIMEOUT_SECONDS,
     voicevox_retries: int = DEFAULT_VOICEVOX_RETRIES,
+    edge_tts_voice: str = DEFAULT_EDGE_TTS_VOICE,
+    edge_tts_rate: str = DEFAULT_EDGE_TTS_RATE,
+    edge_tts_pitch: str = DEFAULT_EDGE_TTS_PITCH,
+    edge_tts_timeout_seconds: float = DEFAULT_EDGE_TTS_TIMEOUT_SECONDS,
 ) -> dict[str, object]:
     normalized_chunks = normalize_tts_text(text)
     provider_results = [
@@ -673,12 +891,16 @@ def build_probe_report(
             voicevox_speaker=voicevox_speaker,
             voicevox_timeout_seconds=voicevox_timeout_seconds,
             voicevox_retries=voicevox_retries,
+            edge_tts_voice=edge_tts_voice,
+            edge_tts_rate=edge_tts_rate,
+            edge_tts_pitch=edge_tts_pitch,
+            edge_tts_timeout_seconds=edge_tts_timeout_seconds,
         ).to_dict()
         for provider in providers
     ]
     audio_generated = any(bool(result["audioGenerated"]) for result in provider_results)
     return {
-        "task": "TASK-TTS-004B2",
+        "task": "TASK-TTS-004C",
         "status": "probe_only_no_runtime_wiring",
         "generatedAt": _dt.datetime.now(_dt.UTC).isoformat(),
         "audioOutputAllowed": bool(allow_audio_output),
@@ -691,6 +913,15 @@ def build_probe_report(
             "timeoutSec": normalize_voicevox_timeout(voicevox_timeout_seconds),
             "retries": normalize_voicevox_retries(voicevox_retries),
             "localhostOnly": True,
+        },
+        "edgeTts": {
+            "voice": edge_tts_voice,
+            "rate": edge_tts_rate,
+            "pitch": edge_tts_pitch,
+            "timeoutSec": normalize_edge_tts_timeout(edge_tts_timeout_seconds),
+            "networkCandidate": True,
+            "textSentOnlyWithAudioOutput": True,
+            "selectedRuntimeProvider": False,
         },
         "safety": {
             "runtimeTtsWired": False,
@@ -749,6 +980,9 @@ def render_markdown_report(report: dict[str, object]) -> str:
                 f"- Audio generated: {str(result['audioGenerated']).lower()}",
                 f"- Output path: {result['outputPath']}",
                 f"- Audio bytes: {result['audioBytes']}",
+                f"- Voice: {result['voice']}",
+                f"- Rate: {result['rate']}",
+                f"- Pitch: {result['pitch']}",
                 f"- VOICEVOX URL: {result['voicevoxUrl']}",
                 f"- VOICEVOX version: {result['version']}",
                 f"- Speaker id: {result['speakerId']}",
@@ -835,6 +1069,27 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=DEFAULT_VOICEVOX_RETRIES,
         help="Finite retry count for local VOICEVOX audio_query/synthesis stages.",
     )
+    parser.add_argument(
+        "--edge-tts-voice",
+        default=DEFAULT_EDGE_TTS_VOICE,
+        help="edge-tts voice for optional audio output. Metadata-only mode does not contact the service.",
+    )
+    parser.add_argument(
+        "--edge-tts-rate",
+        default=DEFAULT_EDGE_TTS_RATE,
+        help="edge-tts speaking rate for optional audio output, for example +0%%.",
+    )
+    parser.add_argument(
+        "--edge-tts-pitch",
+        default=DEFAULT_EDGE_TTS_PITCH,
+        help="edge-tts pitch for optional audio output, for example +0Hz.",
+    )
+    parser.add_argument(
+        "--edge-tts-timeout-sec",
+        type=float,
+        default=DEFAULT_EDGE_TTS_TIMEOUT_SECONDS,
+        help="edge-tts synthesis timeout in seconds for optional audio output.",
+    )
     return parser
 
 
@@ -856,6 +1111,10 @@ def main(argv: list[str] | None = None) -> int:
         voicevox_speaker=args.voicevox_speaker,
         voicevox_timeout_seconds=args.voicevox_timeout_sec,
         voicevox_retries=args.voicevox_retries,
+        edge_tts_voice=args.edge_tts_voice,
+        edge_tts_rate=args.edge_tts_rate,
+        edge_tts_pitch=args.edge_tts_pitch,
+        edge_tts_timeout_seconds=args.edge_tts_timeout_sec,
     )
     report_paths = write_reports(report, output_root=Path(args.output_root))
     report["reportPaths"] = report_paths

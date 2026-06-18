@@ -58,7 +58,7 @@ def test_probe_report_schema_and_safety_defaults():
         providers=["mock"],
     )
 
-    assert report["task"] == "TASK-TTS-004B2"
+    assert report["task"] == "TASK-TTS-004C"
     assert report["status"] == "probe_only_no_runtime_wiring"
     assert report["audioOutputAllowed"] is False
     assert report["audioGenerated"] is False
@@ -130,7 +130,7 @@ def test_report_creation_writes_json_and_markdown(tmp_path):
     assert tmp_path in json_path.parents
     assert tmp_path in markdown_path.parents
     data = json.loads(json_path.read_text(encoding="utf-8"))
-    assert data["task"] == "TASK-TTS-004B2"
+    assert data["task"] == "TASK-TTS-004C"
     assert data["audioGenerated"] is False
     assert "TTS Provider Probe" in markdown_path.read_text(encoding="utf-8")
 
@@ -380,6 +380,231 @@ def test_voicevox_probe_has_no_playback_behavior():
     assert "playsound" not in script_text
     assert "winsound" not in script_text
     assert "subprocess" not in script_text
+
+
+def test_edge_tts_missing_optional_dependency_skips_safely(monkeypatch):
+    def fake_find_spec(name):
+        if name == "edge_tts":
+            return None
+        return tts_probe.importlib.util.find_spec(name)
+
+    monkeypatch.setattr(tts_probe.importlib.util, "find_spec", fake_find_spec)
+
+    result = probe_provider("edge_tts", ["Alpha reply."]).to_dict()
+
+    assert result["provider"] == "edge_tts"
+    assert result["available"] is False
+    assert result["reason"] == "missing_optional_dependency"
+    assert result["synthesisStatus"] == "missing_optional_dependency"
+    assert result["voice"] == "zh-TW-HsiaoChenNeural"
+    assert result["rate"] == "+0%"
+    assert result["pitch"] == "+0Hz"
+    assert result["timeoutSec"] == 30.0
+    assert result["audioGenerated"] is False
+    assert result["outputPath"] is None
+    assert any("Network/cloud-ish" in note for note in result["notes"])
+
+
+def test_edge_tts_metadata_only_does_not_synthesize_or_write_audio(monkeypatch, tmp_path):
+    def fake_find_spec(name):
+        if name == "edge_tts":
+            return object()
+        return tts_probe.importlib.util.find_spec(name)
+
+    def fail_synthesis(*args, **kwargs):
+        raise AssertionError("edge-tts synthesis must not run without allow_audio_output")
+
+    monkeypatch.setattr(tts_probe.importlib.util, "find_spec", fake_find_spec)
+    monkeypatch.setattr(tts_probe, "run_edge_tts_synthesis", fail_synthesis)
+
+    report = build_probe_report(
+        text="Alpha reply.",
+        providers=["edge_tts"],
+        allow_audio_output=False,
+        output_root=tmp_path,
+    )
+    result = report["providers"][0]
+
+    assert report["edgeTts"]["selectedRuntimeProvider"] is False
+    assert report["edgeTts"]["textSentOnlyWithAudioOutput"] is True
+    assert result["available"] is True
+    assert result["reason"] == "optional_dependency_present"
+    assert result["synthesisStatus"] == "metadata_only"
+    assert result["audioGenerated"] is False
+    assert result["outputPath"] is None
+    assert not list(tmp_path.rglob("*.mp3"))
+
+
+def test_edge_tts_allow_audio_output_success_writes_mp3(monkeypatch, tmp_path):
+    audio_bytes = b"ID3 edge tts fake mp3"
+    captured = {}
+
+    def fake_find_spec(name):
+        if name == "edge_tts":
+            return object()
+        return tts_probe.importlib.util.find_spec(name)
+
+    def fake_synthesis(text, *, output_path, voice, rate, pitch, timeout_seconds):
+        captured.update(
+            {
+                "text": text,
+                "voice": voice,
+                "rate": rate,
+                "pitch": pitch,
+                "timeout_seconds": timeout_seconds,
+            }
+        )
+        output_path.write_bytes(audio_bytes)
+
+    monkeypatch.setattr(tts_probe.importlib.util, "find_spec", fake_find_spec)
+    monkeypatch.setattr(tts_probe, "run_edge_tts_synthesis", fake_synthesis)
+
+    report = build_probe_report(
+        text="Alpha reply.",
+        providers=["edge_tts"],
+        allow_audio_output=True,
+        output_root=tmp_path,
+        edge_tts_voice="zh-TW-HsiaoChenNeural",
+        edge_tts_rate="+5%",
+        edge_tts_pitch="+10Hz",
+        edge_tts_timeout_seconds=12.0,
+    )
+    result = report["providers"][0]
+    output_path = Path(result["outputPath"])
+
+    assert report["audioOutputAllowed"] is True
+    assert report["audioGenerated"] is True
+    assert result["available"] is True
+    assert result["reason"] == "edge_tts_success"
+    assert result["synthesisStatus"] == "edge_tts_success"
+    assert result["audioGenerated"] is True
+    assert result["audioBytes"] == len(audio_bytes)
+    assert result["voice"] == "zh-TW-HsiaoChenNeural"
+    assert result["rate"] == "+5%"
+    assert result["pitch"] == "+10Hz"
+    assert result["timeoutSec"] == 12.0
+    assert output_path.exists()
+    assert output_path.suffix == ".mp3"
+    assert output_path.parent.name == "audio"
+    assert tmp_path in output_path.parents
+    assert captured["text"] == "Alpha reply."
+    assert captured["timeout_seconds"] == 12.0
+
+
+def test_edge_tts_timeout_classification(monkeypatch, tmp_path):
+    def fake_find_spec(name):
+        if name == "edge_tts":
+            return object()
+        return tts_probe.importlib.util.find_spec(name)
+
+    def fake_synthesis(*args, **kwargs):
+        raise TimeoutError("edge synthesis took too long")
+
+    monkeypatch.setattr(tts_probe.importlib.util, "find_spec", fake_find_spec)
+    monkeypatch.setattr(tts_probe, "run_edge_tts_synthesis", fake_synthesis)
+
+    report = build_probe_report(
+        text="Alpha reply.",
+        providers=["edge_tts"],
+        allow_audio_output=True,
+        output_root=tmp_path,
+    )
+    result = report["providers"][0]
+
+    assert result["available"] is True
+    assert result["reason"] == "edge_tts_timeout:TimeoutError"
+    assert result["synthesisStatus"] == "edge_tts_timeout"
+    assert result["lastExceptionClass"] == "TimeoutError"
+    assert result["audioGenerated"] is False
+    assert result["outputPath"] is None
+    assert not list(tmp_path.rglob("*.mp3"))
+
+
+def test_edge_tts_error_classification(monkeypatch, tmp_path):
+    def fake_find_spec(name):
+        if name == "edge_tts":
+            return object()
+        return tts_probe.importlib.util.find_spec(name)
+
+    def fake_synthesis(*args, **kwargs):
+        raise RuntimeError("edge service rejected request")
+
+    monkeypatch.setattr(tts_probe.importlib.util, "find_spec", fake_find_spec)
+    monkeypatch.setattr(tts_probe, "run_edge_tts_synthesis", fake_synthesis)
+
+    report = build_probe_report(
+        text="Alpha reply.",
+        providers=["edge_tts"],
+        allow_audio_output=True,
+        output_root=tmp_path,
+    )
+    result = report["providers"][0]
+
+    assert result["available"] is True
+    assert result["reason"] == "edge_tts_error:RuntimeError"
+    assert result["synthesisStatus"] == "edge_tts_error"
+    assert result["lastExceptionClass"] == "RuntimeError"
+    assert result["audioGenerated"] is False
+    assert result["outputPath"] is None
+
+
+def test_edge_tts_report_schema_and_safety_notes(monkeypatch):
+    def fake_find_spec(name):
+        if name == "edge_tts":
+            return object()
+        return tts_probe.importlib.util.find_spec(name)
+
+    monkeypatch.setattr(tts_probe.importlib.util, "find_spec", fake_find_spec)
+
+    report = build_probe_report(text="Alpha reply.", providers=["edge_tts"])
+    result = report["providers"][0]
+
+    assert result["provider"] == "edge_tts"
+    assert "normalizedChunks" in result
+    assert "measuredLatencyMs" in result
+    assert "synthesisLatencyMs" in result
+    assert "timeoutSec" in result
+    assert "audioGenerated" in result
+    assert "outputPath" in result
+    assert "audioBytes" in result
+    assert result["voice"] == "zh-TW-HsiaoChenNeural"
+    assert result["rate"] == "+0%"
+    assert result["pitch"] == "+0Hz"
+    assert any("Microsoft Edge TTS service" in note for note in result["notes"])
+    assert any("Chinese voice quality must be manually judged" in note for note in result["notes"])
+    assert report["providersRequested"] == ["edge_tts"]
+    assert report["edgeTts"]["networkCandidate"] is True
+    assert report["edgeTts"]["selectedRuntimeProvider"] is False
+    assert report["safety"]["runtimeTtsWired"] is False
+    assert report["safety"]["runtimePlaybackAdded"] is False
+
+
+def test_edge_tts_does_not_become_default_provider():
+    assert "edge_tts" not in tts_probe.DEFAULT_PROVIDERS
+    assert parse_provider_list(None) == ["mock", "windows_sapi", "voicevox_server"]
+
+
+def test_edge_tts_cli_options_parse():
+    parser = tts_probe.build_arg_parser()
+    args = parser.parse_args(
+        [
+            "--providers",
+            "edge_tts",
+            "--edge-tts-voice",
+            "zh-TW-HsiaoChenNeural",
+            "--edge-tts-rate",
+            "+5%",
+            "--edge-tts-pitch",
+            "+10Hz",
+            "--edge-tts-timeout-sec",
+            "12.5",
+        ]
+    )
+
+    assert args.edge_tts_voice == "zh-TW-HsiaoChenNeural"
+    assert args.edge_tts_rate == "+5%"
+    assert args.edge_tts_pitch == "+10Hz"
+    assert args.edge_tts_timeout_sec == 12.5
 
 
 def test_voicevox_cli_timeout_and_retries_options_parse():

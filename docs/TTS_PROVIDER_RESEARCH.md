@@ -1,14 +1,15 @@
 # TTS Provider Research
 
-**Task:** TASK-TTS-001 / TASK-TTS-004B2
-**Status:** TASK-TTS-004B2 DONE - VOICEVOX AUDIO OUTPUT SUCCESS / NOT SELECTED FOR CHINESE RUNTIME
+**Task:** TASK-TTS-001 / TASK-TTS-004C
+**Status:** TASK-TTS-004C IMPLEMENTED - EDGE-TTS OPTIONAL PROBE READY / CHINESE AUDIO VALIDATION PENDING
 **Date:** 2026-06-18
 **Scope:** Provider research, implemented mock-provider skeleton boundary,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B manual VOICEVOX
-localhost probe, and TASK-TTS-004B2 timeout/retry hardening. No real
+localhost probe, TASK-TTS-004B2 timeout/retry hardening, and TASK-TTS-004C
+edge-tts optional network candidate probe. No real
 voice-quality provider is selected as final, no model is downloaded, no
 dependency is added, and no runtime synthesis/playback path is implemented by
-TASK-TTS-004B2.
+TASK-TTS-004C.
 
 This document records candidate directions for Christina voice output. It should
 guide later experiments, not lock Dragon Pet AI to a single TTS engine.
@@ -171,7 +172,7 @@ Probe rules:
 | `mock` | Local metadata only | Not a real voice | Not a real voice | None | Very low | Always available; metadata-only smoke provider |
 | `windows_sapi` | Local OS capability if bridge exists | Depends on installed Windows voices | Usually weak/inconsistent | Low if OS voices and bridge exist | Medium; voice list and language vary by system | Availability check only; no synthesis/playback |
 | `voicevox_server` | Localhost server if user runs it | Primarily Japanese; Chinese not native | Strong for Japanese/anime style | Medium; separate server install/start | Medium; local HTTP lifecycle and licensing must be reviewed | Checks `http://127.0.0.1:50021/version`; skipped if absent |
-| `edge_tts` | Network/cloud-ish | Usually has Chinese voices | Depends on service voices | Low package setup, but network required | High for privacy/default policy | Optional dependency check only; not default |
+| `edge_tts` | Network/cloud-ish | Usually has Chinese voices | Depends on service voices | Low package setup, but network required | High for privacy/default policy | Optional TASK-TTS-004C probe implemented; metadata-only by default; not default |
 | `piper_onnx` | Local/offline | Voice availability varies | Usually weak for anime style | Medium; model selection needed | Medium; packaging/model management | Future/manual candidate, not probed |
 | `gpt_sovits` | Local/offline after setup | Possible with correct data/model | Potentially strong | High; data/model workflow | High; licensing, voice data, GPU/runtime complexity | Future research only |
 | `style_bert_vits2` | Local/offline after setup | Primarily Japanese-oriented | Potentially strong | High; model/runtime setup | High; packaging and licensing complexity | Future research only |
@@ -346,6 +347,81 @@ Evaluation notes:
 
 ---
 
+## TASK-TTS-004C Edge-TTS Optional Network Candidate Probe
+
+TASK-TTS-004C extends `scripts/tts_provider_probe.py` for `edge_tts` as an
+optional network/cloud-ish Chinese voice validation candidate. It does not
+install `edge-tts`, does not make it default, does not select it as runtime, and
+does not add app playback.
+
+New CLI options:
+
+- `--edge-tts-voice`, default `zh-TW-HsiaoChenNeural`.
+- `--edge-tts-rate`, default `+0%`.
+- `--edge-tts-pitch`, default `+0Hz`.
+- `--edge-tts-timeout-sec`, default `30`.
+
+Metadata-only command:
+
+```powershell
+.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers edge_tts --text "哼，汝總算想起要依靠吾了。這是 Edge TTS 中文驗證 metadata-only probe。" --pretty
+```
+
+Optional MP3 output command, only after explicitly choosing to install/use
+`edge-tts`:
+
+```powershell
+.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers edge_tts --text "哼，汝總算想起要依靠吾了。這是 Edge TTS 中文語音輸出驗證。" --edge-tts-voice zh-TW-HsiaoChenNeural --allow-audio-output --pretty
+```
+
+Probe behavior:
+
+- If the package is missing, `edge_tts` reports `available=false`,
+  `reason=missing_optional_dependency`, and `synthesisStatus=missing_optional_dependency`.
+- If the package is installed, metadata-only mode reports availability without
+  synthesis with `synthesisStatus=metadata_only`. It does not send text to
+  Microsoft Edge TTS service, write audio, or play audio.
+- If `--allow-audio-output` is explicitly passed, the probe may send text to
+  Microsoft Edge TTS service and writes an MP3 under ignored
+  `outputs/tts_provider_probe/YYYYMMDD/audio/`.
+- Timeout and provider failures are classified as `edge_tts_timeout` and
+  `edge_tts_error`.
+
+Manual metadata-only result on this machine:
+
+- `available=false`
+- `reason=missing_optional_dependency`
+- `synthesisStatus=missing_optional_dependency`
+- `audioGenerated=false`
+- No dependency was installed.
+- No optional audio output was run.
+
+Listening verdict placeholder:
+
+| Field | Result |
+|---|---|
+| Provider | edge-tts |
+| Voice | `zh-TW-HsiaoChenNeural` by default |
+| Audio output | Pending explicit install/use and `--allow-audio-output` |
+| Chinese pronunciation | Pending manual listening |
+| Christina fit | Pending manual listening |
+| Runtime recommendation | Not selected; probe-only candidate |
+
+Provider decision:
+
+- `edge_tts` remains a fast Chinese validation candidate only.
+- It is not local/offline and must not become the default provider.
+- It is not selected as runtime by TASK-TTS-004C.
+- Runtime playback should still wait for explicit provider validation and a
+  separate runtime task.
+
+No runtime TTS wiring, `/chat` integration, Pet Window playback,
+auto-speaking, dependency install, ElevenLabs integration, generated
+audio/report commit, STT behavior change, Conversation Mode queue change, Owner
+Voice gate change, or schema change is part of TASK-TTS-004C.
+
+---
+
 ## 5. Local Candidate Notes
 
 The following are candidate directions for future manual experiments. TASK-TTS-001
@@ -445,7 +521,9 @@ Recommended sequencing:
    guarded by `--allow-audio-output` and remains local-only.
 5. TASK-TTS-004B2: VOICEVOX synthesis timeout / retry hardening and listening
    verdict. DONE - audio output works, but not selected for Chinese runtime.
-6. TASK-TTS-004C: edge-tts optional network candidate probe.
+6. TASK-TTS-004C: edge-tts optional network candidate probe. IMPLEMENTED -
+   metadata-only safe probe ready; Chinese audio validation pending explicit
+   install/use and manual listening.
 7. TASK-TTS-004D: Style-Bert-VITS2 / GPT-SoVITS feasibility research.
 8. TASK-TTS-004: renderer playback queue diagnostics after a real provider
    candidate is validated.

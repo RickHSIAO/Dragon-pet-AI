@@ -322,7 +322,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 **Goal:** Prepare Christina voice output with a provider-neutral, local-first TTS
 architecture before any new runtime provider implementation.
 
-**Status:** VOICEVOX AUDIO OUTPUT SUCCESS / NOT SELECTED FOR CHINESE RUNTIME - TASK-TTS-004B2 DONE.
+**Status:** EDGE-TTS OPTIONAL PROBE READY / CHINESE AUDIO VALIDATION PENDING - TASK-TTS-004C IMPLEMENTED.
 
 | Task | Name | Status |
 |---|---|---|
@@ -332,7 +332,7 @@ architecture before any new runtime provider implementation.
 | TASK-TTS-004A | Local TTS Provider Selection Review / Install-Free Probe Summary | DONE - INSTALL-FREE PROVIDER REVIEW COMPLETE / REAL PROVIDER NOT SELECTED |
 | TASK-TTS-004B | VOICEVOX Local Server Manual Probe / Audio Output Optional | IMPLEMENTED - VOICEVOX MANUAL PROBE READY / OPTIONAL AUDIO OUTPUT LOCAL ONLY |
 | TASK-TTS-004B2 | VOICEVOX Synthesis Timeout / Retry Hardening | DONE - VOICEVOX AUDIO OUTPUT SUCCESS / NOT SELECTED FOR CHINESE RUNTIME |
-| TASK-TTS-004C | Edge-TTS Optional Network Candidate Probe | PLANNED |
+| TASK-TTS-004C | Edge-TTS Optional Network Candidate Probe | IMPLEMENTED - EDGE-TTS OPTIONAL PROBE READY / CHINESE AUDIO VALIDATION PENDING |
 | TASK-TTS-004D | Style-Bert-VITS2 / GPT-SoVITS Feasibility Research | PLANNED |
 | TASK-TTS-004 | Playback queue and renderer diagnostics | PLANNED AFTER REAL PROVIDER CANDIDATE |
 | TASK-TTS-005 | Pet speaking state / bubble sync | PLANNED |
@@ -357,6 +357,10 @@ Track constraints:
   stage-specific diagnostics. Manual listening found good Japanese/anime-style
   character but unacceptable Chinese pronunciation, so VOICEVOX is not selected
   as the main Chinese runtime provider. Runtime playback remains not started.
+- TASK-TTS-004C extends the standalone probe with optional `edge_tts` support
+  for Chinese voice validation. `edge_tts` is network/cloud-ish, not default,
+  not selected as runtime, and metadata-only by default; text is sent to
+  Microsoft Edge TTS service only if `--allow-audio-output` is explicitly used.
 - TTS remains disabled by default for the new provider architecture.
 - First implementation starts with `mock`, not ElevenLabs or a paid external
   provider.
@@ -1145,6 +1149,8 @@ Track constraints:
 - TASK-TTS-004B IMPLEMENTED - VOICEVOX MANUAL PROBE READY / OPTIONAL AUDIO OUTPUT LOCAL ONLY (2026-06-18): VOICEVOX Local Server Manual Probe / Audio Output Optional. Extends `scripts/tts_provider_probe.py` with `voicevox_server` metadata and optional audio checks against a manually started VOICEVOX Engine-compatible localhost server. Default mode checks only `/version` and optional `/speakers`; it does not call synthesis, write audio, or play audio. `--allow-audio-output` explicitly enables `audio_query` + `synthesis` and writes a WAV under ignored `outputs/tts_provider_probe/YYYYMMDD/audio/`. Non-localhost VOICEVOX URLs are rejected before network access. Reports include `voicevoxUrl`, version, speaker id/name when known, latency, `audioGenerated`, `outputPath`, `audioBytes`, and `synthesisStatus`. No runtime TTS wiring, playback, auto-speaking, dependency/install, ElevenLabs integration, `/chat` schema or mood schema change, STT default/model selector change, Conversation Mode queue/backpressure change, or Owner Voice hard-gate change was added.
 
 - TASK-TTS-004B2 DONE - VOICEVOX AUDIO OUTPUT SUCCESS / NOT SELECTED FOR CHINESE RUNTIME (2026-06-18): VOICEVOX Synthesis Timeout / Retry Hardening and listening closeout. Adds `--voicevox-timeout-sec` default `30` and `--voicevox-retries` default `1` to the standalone provider probe, plus `voicevoxStage`, version/speakers/audio_query/synthesis latency, timeout, retry count, and last exception diagnostics. Manual retry reached `voicevox_success` on VOICEVOX `0.25.2` with `audioGenerated=true`, `audioBytes=291372`, and `synthesisLatencyMs=1568`. Listening verdict: Japanese/anime style and tone are good, speed is okay, no strange pauses, overall 7/10, but Chinese text is pronounced as Japanese and is not acceptable for Chinese conversation. VOICEVOX remains an optional Japanese-style/Japanese utterance experiment path, not the main Chinese runtime provider. No runtime TTS wiring, playback, auto-speaking, dependency/install, `/chat` schema or mood schema change, STT default/model selector change, Conversation Mode queue/backpressure change, or Owner Voice hard-gate change was added.
+
+- TASK-TTS-004C IMPLEMENTED - EDGE-TTS OPTIONAL PROBE READY / CHINESE AUDIO VALIDATION PENDING (2026-06-18): Edge-TTS Optional Network Candidate Probe / Chinese Voice Validation. Extends `scripts/tts_provider_probe.py` with `edge_tts` options for `--edge-tts-voice`, `--edge-tts-rate`, `--edge-tts-pitch`, and `--edge-tts-timeout-sec`. Metadata-only mode checks optional dependency availability only and does not synthesize, send text to the network, write audio, or play audio. Optional MP3 output is gated by `--allow-audio-output` and writes only under ignored `outputs/tts_provider_probe/YYYYMMDD/audio/`. Current machine result is safe unavailable: `reason=missing_optional_dependency`, `synthesisStatus=missing_optional_dependency`, `audioGenerated=false`. `edge_tts` remains a network/cloud-ish candidate, not default and not selected as runtime; Chinese quality requires a future explicit listening run. No runtime TTS wiring, playback, auto-speaking, dependency/install, ElevenLabs integration, generated audio/report commit, `/chat` schema or mood schema change, STT default/model selector change, Conversation Mode queue/backpressure change, or Owner Voice hard-gate change was added.
 
 - TASK-227 IMPLEMENTED - DOCS ONLY / NO WINDOWS SMOKE REQUIRED (2026-06-01): Voice/TTS Research Note and Local Speech Roadmap. Adds `docs/VOICE_TTS_RESEARCH.md` as a docs-only voice, TTS, and STT research checkpoint. The note records the user-provided external AI VTuber / Discord voice chain as reference material, then separates what applies to Dragon Pet AI from what should not be copied. Dragon Pet AI remains local-first: TTS is a post-reply audio layer, TTS does not call `/chat`, TTS does not write history, TTS does not read diagnostics, STT is explicit push-to-talk/user action only, no always listening, and future speech work must obey the output queue / priority design. Candidate research tracks include ChatTTS, GPT-SoVITS, F5-TTS, CosyVoice, ElevenLabs as optional cloud reference, local Whisper / faster-whisper, TTS provider interface design, disabled audio skeleton, and confirmed transcript-to-`/chat` design. No runtime prompt wiring, TTS/STT/audio skeleton, IPC, `/chat` change, backend/provider change, renderer change, Pet Window change, assets, voice model, commit, or push.
 

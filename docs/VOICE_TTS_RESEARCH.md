@@ -189,6 +189,25 @@ Risks / unknowns:
   Japanese/Japanese-like pronunciation. Japanese/anime style and tone are good,
   but VOICEVOX is not selected for the main Chinese runtime path.
 
+### edge-tts
+
+Potential value:
+
+- Fast Chinese voice validation candidate with common Microsoft Chinese voices.
+- Useful as a comparison point after VOICEVOX failed Chinese pronunciation.
+- Optional MP3 probe output can support manual listening checks without adding
+  runtime playback.
+
+Risks / unknowns:
+
+- Network/cloud-ish provider; not local/offline.
+- Must not become default and must not be used automatically.
+- Metadata-only probe must not send text to the service.
+- Optional audio output may send probe text to Microsoft Edge TTS service and
+  therefore requires explicit `--allow-audio-output`.
+- Christina fit and Chinese pronunciation require manual listening; TASK-TTS-004C
+  does not select it as runtime.
+
 ### ElevenLabs
 
 Potential value:
@@ -319,6 +338,18 @@ Suggested research and implementation tasks:
   playback, `/chat` integration, auto-speaking, dependency, STT, Conversation
   Mode, Owner Voice, or schema behavior change is added.
 - TASK-TTS-004C Edge-TTS Optional Network Candidate Probe.
+  **IMPLEMENTED - EDGE-TTS OPTIONAL PROBE READY / CHINESE AUDIO VALIDATION
+  PENDING (2026-06-18):** Extended `scripts/tts_provider_probe.py` with
+  `edge_tts` options for voice, rate, pitch, and timeout. Default metadata-only
+  mode checks optional dependency availability only and does not synthesize,
+  send text to the network, write audio, or play audio. Optional MP3 output is
+  gated by `--allow-audio-output` and writes under ignored
+  `outputs/tts_provider_probe/YYYYMMDD/audio/`. Current machine result is safe
+  unavailable (`missing_optional_dependency`, `audioGenerated=false`), and no
+  dependency was installed. `edge_tts` remains a network/cloud-ish Chinese voice
+  validation candidate only, not default and not selected as runtime. No runtime
+  playback, `/chat` integration, auto-speaking, dependency, STT, Conversation
+  Mode, Owner Voice, or schema behavior change is added.
 - TASK-TTS-004D Style-Bert-VITS2 / GPT-SoVITS Feasibility Research.
 - TASK-TTS-004 Playback queue and renderer diagnostics after a real provider
   candidate is validated.

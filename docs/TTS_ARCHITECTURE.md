@@ -1,14 +1,15 @@
 # TTS Architecture
 
-**Task:** TASK-TTS-001 / TASK-TTS-004B2
-**Status:** TASK-TTS-004B2 DONE - VOICEVOX AUDIO OUTPUT SUCCESS / NOT SELECTED FOR CHINESE RUNTIME
+**Task:** TASK-TTS-001 / TASK-TTS-004C
+**Status:** TASK-TTS-004C IMPLEMENTED - EDGE-TTS OPTIONAL PROBE READY / CHINESE AUDIO VALIDATION PENDING
 **Date:** 2026-06-18
 **Scope:** Provider-neutral architecture plus TASK-TTS-002 backend mock skeleton,
-TASK-TTS-004A install-free provider review, and TASK-TTS-004B VOICEVOX manual
-localhost probe, and TASK-TTS-004B2 timeout/retry diagnostics. No runtime
+TASK-TTS-004A install-free provider review, TASK-TTS-004B VOICEVOX manual
+localhost probe, TASK-TTS-004B2 timeout/retry diagnostics, and TASK-TTS-004C
+edge-tts optional network probe. No runtime
 wiring, app playback, dependency, schema change, STT behavior change,
 Conversation Mode behavior change, or Owner Voice behavior change is added by
-TASK-TTS-004B2.
+TASK-TTS-004C.
 
 This document defines the target architecture for Christina voice output and the
 implemented TASK-TTS-002 mock skeleton. It remains provider-neutral: Dragon Pet
@@ -86,6 +87,24 @@ TASK-TTS-004B2 implementation checkpoint:
   or selected Chinese runtime.
 - Provider selection remains unresolved for the main Chinese runtime path.
 
+TASK-TTS-004C implementation checkpoint:
+
+- `edge_tts` supports a deeper optional probe through
+  `scripts/tts_provider_probe.py`.
+- Default `edge_tts` behavior is metadata-only: it checks whether the optional
+  package is installed and does not synthesize, send text to the network, write
+  audio, or play audio.
+- Optional MP3 generation requires `--allow-audio-output`; generated files go
+  under ignored `outputs/tts_provider_probe/YYYYMMDD/audio/`.
+- Reports include `voice`, `rate`, `pitch`, `normalizedChunks`,
+  `measuredLatencyMs`, `synthesisLatencyMs`, `timeoutSec`, `audioGenerated`,
+  `outputPath`, `audioBytes`, `synthesisStatus`, and network safety notes.
+- `edge_tts` is network/cloud-ish, not default, not local/offline, and not
+  selected as runtime.
+- Current machine metadata-only result is safe unavailable:
+  `missing_optional_dependency`, `audioGenerated=false`.
+- Provider selection remains unresolved for the main Chinese runtime path.
+
 ---
 
 ## 1. Goals
@@ -124,7 +143,7 @@ Recommended split:
 | Text normalization | `backend/app/tts/text_normalizer.py` | TASK-TTS-002 implements conservative backend chunking helper; renderer/shared reuse is future. |
 | TTS queue controller | `backend/app/tts/tts_service.py` diagnostics skeleton; renderer queue future task | TASK-TTS-002 exposes disabled queue diagnostics only. No playback queue dispatch. |
 | Provider adapter | `backend/app/tts/providers.py` | TASK-TTS-002 implements `TTSProvider` protocol and metadata-only `MockTTSProvider`. Real synthesis adapters are future. |
-| Provider candidate probe | `scripts/tts_provider_probe.py` | TASK-TTS-004B2 checks optional provider availability and can manually probe VOICEVOX localhost audio only behind `--allow-audio-output`, with timeout/retry stage diagnostics. No runtime wiring or playback. |
+| Provider candidate probe | `scripts/tts_provider_probe.py` | TASK-TTS-004C checks optional provider availability and can manually probe VOICEVOX localhost WAV or edge-tts MP3 only behind `--allow-audio-output`, with timeout/error diagnostics. No runtime wiring or playback. |
 | Provider review | Docs/status only | TASK-TTS-004A records that no real provider is ready except metadata-only `mock`; playback remains blocked pending provider-specific probe. |
 | Local external process | Optional provider-specific sidecar, future task | Run heavy local engines outside Electron renderer/main. |
 | Playback | Renderer/Pet Window, future task | Play audio through browser audio APIs or an explicit playback bridge. |
@@ -518,6 +537,19 @@ TASK-TTS-004B2 automated tests cover:
   root.
 - No playback helper is introduced.
 
+TASK-TTS-004C automated tests cover:
+
+- `edge_tts` missing optional dependency skip behavior.
+- Metadata-only behavior does not synthesize, write audio, or send text to the
+  service.
+- Explicit `--allow-audio-output` success writes MP3 under a caller-supplied
+  output root.
+- Timeout and error classification.
+- Report schema fields for voice, rate, pitch, timeout, synthesis status, audio
+  output, and safety notes.
+- No playback helper is introduced.
+- `edge_tts` does not become a default provider.
+
 Future runtime tests should cover:
 
 - Queue prevents overlapping playback.
@@ -557,7 +589,8 @@ Manual Windows playback smoke checklist for the first runtime task:
 - TASK-TTS-004B2: VOICEVOX synthesis timeout / retry hardening and listening
   verdict. DONE - audio output succeeds, but VOICEVOX is not selected for
   Chinese runtime.
-- TASK-TTS-004C: edge-tts optional network candidate probe.
+- TASK-TTS-004C: edge-tts optional network candidate probe. IMPLEMENTED -
+  metadata-only safe probe ready; Chinese audio validation pending.
 - TASK-TTS-004D: Style-Bert-VITS2 / GPT-SoVITS feasibility research.
 - TASK-TTS-004: Playback queue and renderer diagnostics after a real provider
   candidate is validated.
@@ -653,3 +686,16 @@ TASK-TTS-004B2 is complete when:
 - Manual listening verdict and provider decision are recorded: VOICEVOX remains
   probe-only / optional Japanese-style experiment path and is not selected for
   the Chinese runtime provider.
+
+TASK-TTS-004C is complete when:
+
+- `edge_tts` supports safe missing-dependency reporting without failing the
+  probe.
+- Metadata-only behavior does not synthesize, send text to the network, write
+  audio, or play audio.
+- Optional MP3 output is gated by `--allow-audio-output` and ignored output
+  paths.
+- Reports include edge-tts voice/rate/pitch/audio/timeout/synthesis status
+  fields and network/cloud-ish safety notes.
+- Runtime TTS remains disabled/mock-only with no playback, `/chat`, STT,
+  Conversation Mode, Owner Voice, dependency, or schema changes.

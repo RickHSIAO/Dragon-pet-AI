@@ -24037,6 +24037,156 @@ Generated WAV/report artifacts from this command must remain uncommitted.
 
 ---
 
+## TASK-TTS-004C | Edge-TTS Optional Network Candidate Probe / Chinese Voice Validation
+
+**Status:** IMPLEMENTED - EDGE-TTS OPTIONAL PROBE READY / CHINESE AUDIO VALIDATION PENDING
+**Date:** 2026-06-18
+**Phase:** Phase 5 - Companion Voice Output Architecture
+**Depends on:** TASK-TTS-001, TASK-TTS-002, TASK-TTS-003, TASK-TTS-004A, TASK-TTS-004B2
+
+### Goal
+
+Add an optional `edge_tts` provider probe path for Chinese voice validation while
+keeping TTS runtime disabled, mock-only by default, and playback-free.
+
+### Implementation Summary
+
+Updated:
+
+- `scripts/tts_provider_probe.py`
+- `backend/tests/test_tts_provider_probe.py`
+- `README.md`
+- `docs/ROADMAP.md`
+- `docs/TASKS.md`
+- `docs/TTS_PROVIDER_RESEARCH.md`
+- `docs/TTS_ARCHITECTURE.md`
+- `docs/VOICE_TTS_RESEARCH.md`
+
+Probe additions:
+
+- `--edge-tts-voice`, default `zh-TW-HsiaoChenNeural`.
+- `--edge-tts-rate`, default `+0%`.
+- `--edge-tts-pitch`, default `+0Hz`.
+- `--edge-tts-timeout-sec`, default `30`.
+- Default `edge_tts` probe checks only optional dependency availability and
+  report metadata. It does not synthesize, does not send text to the network,
+  does not write audio, and does not play audio.
+- Optional MP3 generation requires explicit `--allow-audio-output`; output is
+  written only under ignored `outputs/tts_provider_probe/YYYYMMDD/audio/`.
+- If `edge-tts` is missing, the provider reports `available=false`,
+  `reason=missing_optional_dependency`, and does not fail the whole probe.
+
+### Report Fields
+
+`edge_tts` reports include:
+
+- `provider`
+- `available`
+- `reason`
+- `voice`
+- `rate`
+- `pitch`
+- `normalizedChunks`
+- `measuredLatencyMs`
+- `synthesisLatencyMs`
+- `timeoutSec`
+- `audioGenerated`
+- `outputPath`
+- `audioBytes`
+- `synthesisStatus`
+- `notes`
+
+`synthesisStatus` values include:
+
+- `missing_optional_dependency`
+- `metadata_only`
+- `audio_output_disabled`
+- `edge_tts_success`
+- `edge_tts_timeout`
+- `edge_tts_error`
+
+### Safety Notes
+
+- `edge_tts` is a network/cloud-ish candidate, not a local/offline provider.
+- It is not default and is not selected as the runtime provider.
+- Metadata-only mode does not send text to Microsoft Edge TTS service.
+- If audio output is explicitly allowed, probe text may be sent to Microsoft
+  Edge TTS service.
+- Chinese voice quality still requires manual listening after a future explicit
+  optional audio run.
+- No runtime TTS wiring, `/chat` integration, playback, Pet Window playback,
+  auto-speaking, dependency/install, ElevenLabs integration, generated
+  audio/report commit, schema change, STT behavior change, Conversation Mode
+  behavior change, or Owner Voice behavior change is added.
+
+### Manual Commands
+
+Metadata-only:
+
+```powershell
+.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers edge_tts --text "哼，汝總算想起要依靠吾了。這是 Edge TTS 中文驗證 metadata-only probe。" --pretty
+```
+
+Optional audio output, only after explicitly choosing to install/use `edge-tts`:
+
+```powershell
+.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers edge_tts --text "哼，汝總算想起要依靠吾了。這是 Edge TTS 中文語音輸出驗證。" --edge-tts-voice zh-TW-HsiaoChenNeural --allow-audio-output --pretty
+```
+
+Generated MP3/report artifacts from optional audio commands must remain
+uncommitted.
+
+### Manual Probe Result
+
+Current machine result:
+
+- Metadata-only `edge_tts` probe: PASS as safe unavailable.
+- `available=false`
+- `reason=missing_optional_dependency`
+- `synthesisStatus=missing_optional_dependency`
+- `audioGenerated=false`
+- No dependency was installed.
+- No optional audio output was run.
+
+### Listening Verdict Placeholder
+
+| Field | Result |
+|---|---|
+| Provider | edge-tts |
+| Voice | `zh-TW-HsiaoChenNeural` by default |
+| Audio output | Pending explicit install/use and `--allow-audio-output` |
+| Chinese pronunciation | Pending manual listening |
+| Christina fit | Pending manual listening |
+| Runtime recommendation | Not selected; probe-only candidate |
+
+### Validation
+
+- `.\backend\.venv\Scripts\python.exe -m py_compile scripts\tts_provider_probe.py`: PASS.
+- `.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --help`: PASS.
+- `.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers mock --text "<sample>" --pretty`: PASS; `mock` available, `audioGenerated=false`.
+- `.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers edge_tts --text "<sample>" --pretty`: PASS as safe unavailable; `missing_optional_dependency`, `audioGenerated=false`.
+- `.\backend\.venv\Scripts\python.exe -m pytest backend\tests\test_tts_provider_probe.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-tts004c`: PASS, 29 passed.
+- Desktop smoke validation recorded in commit report.
+
+### Acceptance Criteria
+
+- [x] Missing optional dependency reports safe unavailable without failing the
+  whole probe.
+- [x] Metadata-only behavior does not synthesize, write audio, or send text to
+  the network.
+- [x] Optional MP3 output is gated behind `--allow-audio-output`.
+- [x] Timeout and error classifications are covered by mocks.
+- [x] Report schema includes edge-tts voice/rate/pitch/audio/timeout fields.
+- [x] No playback helper is introduced.
+- [x] `edge_tts` does not become a default provider.
+- [x] Safety notes mention network/cloud-ish behavior and manual quality
+  judgment.
+- [x] No runtime TTS wiring, `/chat` integration, playback, auto-speaking,
+  dependency/install, generated audio/report commit, schema change, STT behavior
+  change, Conversation Mode behavior change, or Owner Voice behavior change.
+
+---
+
 ## TASK-228 | Output Queue Runtime Skeleton, Disabled by Default
 
 **Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS
