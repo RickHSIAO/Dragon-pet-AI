@@ -1,16 +1,17 @@
 # TTS Architecture
 
-**Task:** TASK-TTS-001 / TASK-TTS-004C2
-**Status:** TASK-TTS-004C2 DONE - EDGE-TTS AUDIO OUTPUT SUCCESS / TEMP CHINESE PROVIDER ONLY
+**Task:** TASK-TTS-001 / TASK-TTS-004C3
+**Status:** TASK-TTS-004C3 IMPLEMENTED - EDGE-TTS TUNING PROBE READY / MANUAL LISTENING PENDING
 **Date:** 2026-06-18
 **Scope:** Provider-neutral architecture plus TASK-TTS-002 backend mock skeleton,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B VOICEVOX manual
 localhost probe, TASK-TTS-004B2 timeout/retry diagnostics, TASK-TTS-004C
-edge-tts optional network probe, and TASK-TTS-004C2 manual edge-tts dependency
-/ audio output validation. No runtime
+edge-tts optional network probe, TASK-TTS-004C2 manual edge-tts dependency /
+audio output validation, and TASK-TTS-004C3 docs-first edge-tts tuning
+workflow. No runtime
 wiring, app playback, runtime/default dependency, schema change, STT behavior
 change, Conversation Mode behavior change, or Owner Voice behavior change is
-added by TASK-TTS-004C2.
+added by TASK-TTS-004C2 or TASK-TTS-004C3.
 
 This document defines the target architecture for Christina voice output and the
 implemented TASK-TTS-002 mock skeleton. It remains provider-neutral: Dragon Pet
@@ -124,6 +125,18 @@ TASK-TTS-004C2 manual probe checkpoint:
   runtime, and not selected as the final Christina long-term voice.
 - Chinese runtime provider selection remains unresolved; the app runtime remains
   disabled/mock-only.
+
+TASK-TTS-004C3 tuning checkpoint:
+
+- No script/runtime change is required because `scripts/tts_provider_probe.py`
+  already supports edge-tts voice, rate, and pitch options.
+- The tuning workflow compares HsiaoChen, HsiaoYu, and Xiaoxiao Mandarin
+  candidates with slower rates and optional pitch checks.
+- Generated MP3 files and probe reports remain ignored local artifacts under
+  `outputs/tts_provider_probe/YYYYMMDD/`.
+- Manual listening is required before changing the temporary-provider verdict.
+- Runtime TTS remains disabled/mock-only; edge-tts is not default, not wired to
+  `/chat`, not wired to app/Pet Window playback, and not selected as runtime.
 
 ---
 
@@ -615,7 +628,8 @@ Manual Windows playback smoke checklist for the first runtime task:
   output succeeds; manual listening accepts it only as a temporary Chinese
   provider candidate, not final Christina voice.
 - TASK-TTS-004C3: edge-tts voice/rate tuning probe if slower rate or alternate
-  Mandarin voices should be checked.
+  Mandarin voices should be checked. IMPLEMENTED - docs-first tuning matrix and
+  manual commands ready; manual listening pending.
 - TASK-TTS-004D: Style-Bert-VITS2 / GPT-SoVITS feasibility research.
 - TASK-TTS-004: Playback queue and renderer diagnostics after a real provider
   candidate is validated.

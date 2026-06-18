@@ -24316,6 +24316,152 @@ Manual listening result:
 
 ---
 
+## TASK-TTS-004C3 | Edge-TTS Voice / Rate Tuning Probe
+
+**Status:** IMPLEMENTED - EDGE-TTS TUNING PROBE READY / MANUAL LISTENING PENDING
+**Date:** 2026-06-18
+**Phase:** Phase 5 - Companion Voice Output Architecture
+**Depends on:** TASK-TTS-001, TASK-TTS-002, TASK-TTS-003, TASK-TTS-004A, TASK-TTS-004B2, TASK-TTS-004C, TASK-TTS-004C2
+
+### Goal
+
+Define a repeatable manual edge-tts tuning workflow that compares Mandarin
+voices, slower rates, and limited pitch variants for Chinese output quality and
+Christina fit without adding runtime TTS wiring, app playback, Pet Window
+playback, or auto-speaking.
+
+### Implementation Decision
+
+No script change is required for TASK-TTS-004C3 because
+`scripts/tts_provider_probe.py` already supports the required single-run tuning
+parameters:
+
+- `--edge-tts-voice`
+- `--edge-tts-rate`
+- `--edge-tts-pitch`
+- `--allow-audio-output`
+
+TASK-TTS-004C3 is therefore a docs-first tuning workflow. Each candidate is run
+as a separate explicit manual probe. Generated MP3 files remain under ignored
+`outputs/tts_provider_probe/YYYYMMDD/audio/`, and generated JSON/Markdown
+reports remain under ignored `outputs/tts_provider_probe/YYYYMMDD/`.
+
+### Baseline
+
+TASK-TTS-004C2 baseline:
+
+| Voice | Rate | Pitch | Verdict |
+|---|---:|---:|---|
+| `zh-TW-HsiaoChenNeural` | `+0%` | `+0Hz` | Understandable Chinese, slightly fast, general/Taiwanese feel, weak Christina/anime fit, overall `6/10`; temporary Chinese provider candidate only |
+
+### Tuning Matrix
+
+Manual listening is required for all pending cells.
+
+| Candidate | Voice | Rate | Pitch | Generated file path | Chinese intelligibility | Christina fit | Speed | Tone | Overall score |
+|---|---|---:|---:|---|---|---|---|---|---|
+| Baseline | `zh-TW-HsiaoChenNeural` | `+0%` | `+0Hz` | `outputs/tts_provider_probe/20260618/audio/edge_tts_20260618-193335.mp3` | Good | Weak | Slightly fast | Okay | `6/10` |
+| Slow Chen 10 | `zh-TW-HsiaoChenNeural` | `-10%` | `+0Hz` | Pending manual run | Pending | Pending | Pending | Pending | Pending |
+| Slow Chen 15 | `zh-TW-HsiaoChenNeural` | `-15%` | `+0Hz` | Pending manual run | Pending | Pending | Pending | Pending | Pending |
+| HsiaoYu baseline | `zh-TW-HsiaoYuNeural` | `+0%` | `+0Hz` | Pending manual run | Pending | Pending | Pending | Pending | Pending |
+| HsiaoYu slow 10 | `zh-TW-HsiaoYuNeural` | `-10%` | `+0Hz` | Pending manual run | Pending | Pending | Pending | Pending | Pending |
+| HsiaoYu slow 15 | `zh-TW-HsiaoYuNeural` | `-15%` | `+0Hz` | Pending manual run | Pending | Pending | Pending | Pending | Pending |
+| Xiaoxiao baseline | `zh-CN-XiaoxiaoNeural` | `+0%` | `+0Hz` | Pending manual run | Pending | Pending | Pending | Pending | Pending |
+| Xiaoxiao slow 10 | `zh-CN-XiaoxiaoNeural` | `-10%` | `+0Hz` | Pending manual run | Pending | Pending | Pending | Pending | Pending |
+| Optional pitch check | Best candidate voice after rate check | Best candidate rate | `+2Hz` or `+5Hz` | Pending only if cleanly supported | Pending | Pending | Pending | Pending | Pending |
+
+### Manual Probe Commands
+
+Metadata-only sanity check, no synthesis and no network text submission:
+
+```powershell
+.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers edge_tts --text "克莉絲蒂娜，這是 Edge TTS metadata 調音檢查。" --edge-tts-voice zh-TW-HsiaoChenNeural --edge-tts-rate -10% --pretty
+```
+
+Baseline rerun:
+
+```powershell
+.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers edge_tts --text "克莉絲蒂娜，這是 Edge TTS 中文語音輸出調音基準。" --edge-tts-voice zh-TW-HsiaoChenNeural --edge-tts-rate +0% --edge-tts-pitch +0Hz --allow-audio-output --pretty
+```
+
+Slower HsiaoChen:
+
+```powershell
+.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers edge_tts --text "克莉絲蒂娜，這是 Edge TTS 較慢語速的中文調音測試。" --edge-tts-voice zh-TW-HsiaoChenNeural --edge-tts-rate -10% --edge-tts-pitch +0Hz --allow-audio-output --pretty
+```
+
+Alternate Taiwan voice:
+
+```powershell
+.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers edge_tts --text "克莉絲蒂娜，這是另一個台灣中文聲線的調音測試。" --edge-tts-voice zh-TW-HsiaoYuNeural --edge-tts-rate -10% --edge-tts-pitch +0Hz --allow-audio-output --pretty
+```
+
+Mandarin alternate:
+
+```powershell
+.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers edge_tts --text "克莉絲蒂娜，這是另一個中文普通話聲線的調音測試。" --edge-tts-voice zh-CN-XiaoxiaoNeural --edge-tts-rate -10% --edge-tts-pitch +0Hz --allow-audio-output --pretty
+```
+
+Optional pitch check, only if rate tuning finds a usable voice first:
+
+```powershell
+.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers edge_tts --text "克莉絲蒂娜，這是 Edge TTS 音高微調測試。" --edge-tts-voice zh-TW-HsiaoYuNeural --edge-tts-rate -10% --edge-tts-pitch +2Hz --allow-audio-output --pretty
+```
+
+### Manual Listening Checklist
+
+For each generated MP3, record:
+
+- voice
+- rate
+- pitch
+- outputPath
+- Chinese intelligibility
+- anime/character feel
+- Christina suitability
+- speed
+- tone
+- strange pauses or unnatural cuts
+- overall score from 1 to 10
+- whether it improves over the TASK-TTS-004C2 baseline `6/10`
+- whether it is acceptable as a temporary Chinese provider
+- whether it should remain fallback/debug only
+
+### Decision Rule
+
+- `>= 7/10`: acceptable temporary Chinese provider candidate.
+- `< 7/10`: keep as fallback/debug only.
+- Regardless of score, edge-tts is not the final long-term Christina character
+  voice unless a later explicit provider-selection task changes that decision.
+- Runtime TTS remains disabled/mock-only until a separate runtime task selects a
+  provider and adds playback safely.
+
+### Validation
+
+- `.\backend\.venv\Scripts\python.exe -m py_compile scripts\tts_provider_probe.py`: required.
+- `.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --help`: required.
+- Metadata-only edge-tts tuning sanity probe with `--edge-tts-rate -10%`:
+  required.
+- Desktop smoke validation: required.
+
+### Acceptance Criteria
+
+- [x] Tuning workflow uses existing edge-tts voice/rate/pitch CLI options.
+- [x] Tuning matrix documents voices, rates, pitch, output path placeholders,
+  listening fields, and baseline score.
+- [x] Manual commands are documented.
+- [x] Decision rule is documented.
+- [x] Generated audio/reports remain ignored local artifacts and are not
+  committed.
+- [x] `edge_tts` remains optional/network-cloud-ish, temporary candidate only,
+  not default and not selected as runtime.
+- [x] No runtime TTS wiring, `/chat` integration, app playback, Pet Window
+  playback, auto-speaking, ElevenLabs integration, generated artifact commit,
+  schema change, STT behavior change, Conversation Mode behavior change, or
+  Owner Voice behavior change.
+
+---
+
 ## TASK-228 | Output Queue Runtime Skeleton, Disabled by Default
 
 **Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS

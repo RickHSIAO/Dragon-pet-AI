@@ -1,7 +1,7 @@
 # TTS Provider Research
 
-**Task:** TASK-TTS-001 / TASK-TTS-004C2
-**Status:** TASK-TTS-004C2 DONE - EDGE-TTS AUDIO OUTPUT SUCCESS / TEMP CHINESE PROVIDER ONLY
+**Task:** TASK-TTS-001 / TASK-TTS-004C3
+**Status:** TASK-TTS-004C3 IMPLEMENTED - EDGE-TTS TUNING PROBE READY / MANUAL LISTENING PENDING
 **Date:** 2026-06-18
 **Scope:** Provider research, implemented mock-provider skeleton boundary,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B manual VOICEVOX
@@ -10,7 +10,8 @@ edge-tts optional network candidate probe, and TASK-TTS-004C2 manual
 edge-tts dependency/audio output validation. No real
 voice-quality provider is selected as final, no model is downloaded, the
 `edge-tts` install is optional/manual inside `backend\.venv` only, and no
-runtime synthesis/playback path is implemented by TASK-TTS-004C2.
+runtime synthesis/playback path is implemented by TASK-TTS-004C2 or
+TASK-TTS-004C3.
 
 This document records candidate directions for Christina voice output. It should
 guide later experiments, not lock Dragon Pet AI to a single TTS engine.
@@ -507,6 +508,51 @@ Provider decision:
 
 ---
 
+## TASK-TTS-004C3 Edge-TTS Voice / Rate Tuning Probe
+
+TASK-TTS-004C3 defines a docs-first edge-tts tuning workflow. No script change
+is required because the existing standalone probe already supports
+`--edge-tts-voice`, `--edge-tts-rate`, and `--edge-tts-pitch`. Each candidate is
+run as a separate explicit command, and manual listening decides whether it is
+better than the TASK-TTS-004C2 baseline.
+
+Baseline from TASK-TTS-004C2:
+
+| Voice | Rate | Pitch | Result |
+|---|---:|---:|---|
+| `zh-TW-HsiaoChenNeural` | `+0%` | `+0Hz` | Understandable Chinese, slightly fast, weak Christina/anime fit, more general/Taiwanese than Christina-like, `6/10` |
+
+Tuning matrix:
+
+| Candidate | Voice | Rate | Pitch | Generated file path | Chinese intelligibility | Christina fit | Speed | Tone | Overall score |
+|---|---|---:|---:|---|---|---|---|---|---|
+| Baseline | `zh-TW-HsiaoChenNeural` | `+0%` | `+0Hz` | `outputs/tts_provider_probe/20260618/audio/edge_tts_20260618-193335.mp3` | Good | Weak | Slightly fast | Okay | `6/10` |
+| Slow Chen 10 | `zh-TW-HsiaoChenNeural` | `-10%` | `+0Hz` | Pending manual run | Pending | Pending | Pending | Pending | Pending |
+| Slow Chen 15 | `zh-TW-HsiaoChenNeural` | `-15%` | `+0Hz` | Pending manual run | Pending | Pending | Pending | Pending | Pending |
+| HsiaoYu baseline | `zh-TW-HsiaoYuNeural` | `+0%` | `+0Hz` | Pending manual run | Pending | Pending | Pending | Pending | Pending |
+| HsiaoYu slow 10 | `zh-TW-HsiaoYuNeural` | `-10%` | `+0Hz` | Pending manual run | Pending | Pending | Pending | Pending | Pending |
+| HsiaoYu slow 15 | `zh-TW-HsiaoYuNeural` | `-15%` | `+0Hz` | Pending manual run | Pending | Pending | Pending | Pending | Pending |
+| Xiaoxiao baseline | `zh-CN-XiaoxiaoNeural` | `+0%` | `+0Hz` | Pending manual run | Pending | Pending | Pending | Pending | Pending |
+| Xiaoxiao slow 10 | `zh-CN-XiaoxiaoNeural` | `-10%` | `+0Hz` | Pending manual run | Pending | Pending | Pending | Pending | Pending |
+| Optional pitch check | Best candidate voice after rate check | Best candidate rate | `+2Hz` or `+5Hz` | Pending only if cleanly supported | Pending | Pending | Pending | Pending | Pending |
+
+Manual command pattern:
+
+```powershell
+.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers edge_tts --text "克莉絲蒂娜，這是 Edge TTS 中文語音調音測試。" --edge-tts-voice zh-TW-HsiaoChenNeural --edge-tts-rate -10% --edge-tts-pitch +0Hz --allow-audio-output --pretty
+```
+
+Decision rule:
+
+- `>= 7/10`: acceptable temporary Chinese provider candidate.
+- `< 7/10`: keep as fallback/debug only.
+- Regardless of score, edge-tts is not the final long-term Christina character
+  voice unless a later explicit provider-selection task changes that decision.
+- Runtime TTS remains disabled/mock-only; no `/chat` integration, playback,
+  Pet Window playback, or auto-speaking is added by TASK-TTS-004C3.
+
+---
+
 ## 5. Local Candidate Notes
 
 The following are candidate directions for future manual experiments. TASK-TTS-001
@@ -613,7 +659,8 @@ Recommended sequencing:
    output works; manual listening accepts it only as a temporary Chinese
    provider candidate, not final Christina voice.
 8. TASK-TTS-004C3: edge-tts voice/rate tuning probe if slower rate or alternate
-   Mandarin voices should be checked.
+   Mandarin voices should be checked. IMPLEMENTED - docs-first tuning matrix
+   and manual commands ready; manual listening pending.
 9. TASK-TTS-004D: Style-Bert-VITS2 / GPT-SoVITS feasibility research.
 10. TASK-TTS-004: renderer playback queue diagnostics after a real provider
    candidate is validated.

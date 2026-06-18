@@ -213,6 +213,11 @@ Risks / unknowns:
   Christina-like, and overall `6/10`. It remains optional/network/cloud-ish,
   not default, not wired to runtime, and not selected as the final Christina
   long-term voice.
+- TASK-TTS-004C3 uses the existing edge-tts voice/rate/pitch probe options for
+  manual tuning. Baseline remains `zh-TW-HsiaoChenNeural +0% +0Hz = 6/10`:
+  understandable, too general/Taiwanese, slightly fast, and weak for Christina.
+  Manual listening should compare slower `HsiaoChen`, `HsiaoYu`, and
+  `Xiaoxiao` candidates before any temporary-provider decision changes.
 
 ### ElevenLabs
 
@@ -374,6 +379,19 @@ Suggested research and implementation tasks:
   Style-Bert-VITS2 / GPT-SoVITS feasibility for long-term character voice. No
   runtime playback, `/chat` integration, auto-speaking, STT, Conversation Mode,
   Owner Voice, or schema behavior change is added.
+- TASK-TTS-004C3 Edge-TTS Voice / Rate Tuning Probe.
+  **IMPLEMENTED - EDGE-TTS TUNING PROBE READY / MANUAL LISTENING PENDING
+  (2026-06-18):** Docs-only workflow because the standalone probe already
+  supports `--edge-tts-voice`, `--edge-tts-rate`, and `--edge-tts-pitch`.
+  Manual listening matrix covers `zh-TW-HsiaoChenNeural` at `+0%`, `-10%`, and
+  `-15%`; `zh-TW-HsiaoYuNeural` at `+0%`, `-10%`, and `-15%`;
+  `zh-CN-XiaoxiaoNeural` at `+0%` and `-10%`; and optional `+2Hz`/`+5Hz` pitch
+  checks only after a voice/rate candidate is promising. Checklist fields:
+  voice, rate, pitch, outputPath, Chinese intelligibility, anime/character
+  feel, Christina suitability, speed, tone, strange pauses, overall score,
+  baseline improvement, temporary-provider suitability, and fallback/debug-only
+  decision. No runtime playback, `/chat` integration, auto-speaking, STT,
+  Conversation Mode, Owner Voice, or schema behavior change is added.
 - TASK-TTS-004D Style-Bert-VITS2 / GPT-SoVITS Feasibility Research.
 - TASK-TTS-004 Playback queue and renderer diagnostics after a real provider
   candidate is validated.
