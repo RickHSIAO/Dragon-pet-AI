@@ -1,11 +1,11 @@
 # TTS Character Voice Feasibility
 
-**Task:** TASK-TTS-004D / TASK-TTS-004D2
-**Status:** TASK-TTS-004D2 IMPLEMENTED - CHARACTER VOICE ENV CHECK READY / NO INSTALL PERFORMED
+**Task:** TASK-TTS-004D / TASK-TTS-004D2 / TASK-TTS-004D3
+**Status:** TASK-TTS-004D3 DONE - CHARACTER VOICE LAB PLAN READY / NO LAB INSTALL PERFORMED
 **Date:** 2026-06-19
 **Scope:** Documentation-only feasibility research for long-term Christina
-character voice candidates plus environment-check-only readiness inspection. No
-model was installed, downloaded, trained, or run.
+character voice candidates, environment-check-only readiness inspection, and
+isolated lab planning. No model was installed, downloaded, trained, or run.
 
 ---
 
@@ -173,6 +173,28 @@ Rules:
 - Generated audio/reports stay under ignored local outputs.
 - A manual listening table must decide Chinese intelligibility, Christina fit,
   latency, stability, and whether runtime research can continue.
+
+### TASK-TTS-004D3 - Character Voice Lab Environment Plan
+
+See:
+
+- `docs/TTS_CHARACTER_VOICE_LAB_PLAN.md`
+
+Summary:
+
+- Future GPT-SoVITS / Style-Bert-VITS2 work should use an isolated lab outside
+  Dragon Pet AI app code.
+- Recommended path: `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\`.
+- External repos, model weights, checkpoints, voice samples, generated audio,
+  and lab logs belong in the lab only.
+- GPT-SoVITS should start from a dedicated Conda environment with Python `3.10`;
+  Style-Bert-VITS2 should use a separate dedicated Conda environment matching
+  the selected upstream release.
+- CUDA/PyTorch is lab-only and must not be installed into `backend\.venv`.
+- Standalone WAV/MP3 plus manual listening verdict must come before runtime
+  provider selection.
+- No `/chat` wiring, playback, Pet playback, or auto-speaking starts from the
+  lab plan.
 
 ### TASK-TTS-005 - TTS Runtime Playback Queue
 

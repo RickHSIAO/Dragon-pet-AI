@@ -23205,6 +23205,7 @@ STT future boundary:
 - TASK-TTS-004C3 Edge-TTS Voice / Rate Tuning Probe.
 - TASK-TTS-004D Style-Bert-VITS2 / GPT-SoVITS Feasibility Research.
 - TASK-TTS-004D2 Character Voice Feasibility Manual Environment Check.
+- TASK-TTS-004D3 Character Voice Lab Environment Plan / Isolated GPU Env.
 - TASK-TTS-004E GPT-SoVITS / Style-Bert-VITS2 Minimal Local Probe Plan.
 - TASK-TTS-004 Playback queue and renderer diagnostics.
 - TASK-TTS-005 Pet speaking state / bubble sync.
@@ -24638,6 +24639,75 @@ Required:
   generated audio commit, runtime TTS wiring, playback, auto-speaking,
   `/chat` schema change, mood schema change, STT behavior change, Conversation
   Mode behavior change, or Owner Voice behavior change is added.
+
+---
+
+## TASK-TTS-004D3 | Character Voice Lab Environment Plan / Isolated GPU Env
+
+**Status:** DONE - CHARACTER VOICE LAB PLAN READY / NO LAB INSTALL PERFORMED
+**Date:** 2026-06-19
+**Phase:** Phase 5 - Companion Voice Output Architecture
+**Depends on:** TASK-TTS-001, TASK-TTS-002, TASK-TTS-003, TASK-TTS-004A, TASK-TTS-004B2, TASK-TTS-004C, TASK-TTS-004C2, TASK-TTS-004C3, TASK-TTS-004D, TASK-TTS-004D2
+
+### Goal
+
+Create a docs/planning-only lab environment plan for future GPT-SoVITS /
+Style-Bert-VITS2 experiments without touching the main app runtime or
+`backend\.venv`.
+
+### Planning Output
+
+Added:
+
+- `docs/TTS_CHARACTER_VOICE_LAB_PLAN.md`
+- Narrow `.gitignore` entries for accidental local lab artifacts:
+  - `outputs/tts_character_voice_lab/`
+  - `.local-voice-lab/`
+  - `voice-lab/`
+
+Recommended lab location:
+
+```text
+F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\
+```
+
+Acceptable alternate:
+
+```text
+F:\RickHSIAO\Python\dragon-pet-ai-lab\
+```
+
+### Lab Plan Summary
+
+- External repos should be cloned outside `dragon-pet-ai`, under the isolated
+  lab `repos\` folder only.
+- Models, checkpoints, embeddings, voice samples, generated audio, and logs
+  should stay under lab-local `models\`, `datasets\`, `outputs\`, and `logs\`.
+- GPT-SoVITS should start from a dedicated Conda environment with Python `3.10`.
+- Style-Bert-VITS2 should use a separate Conda environment with Python `3.10`
+  or the version required by the selected upstream release.
+- Do not reuse `backend\.venv`.
+- CUDA/PyTorch should be installed and verified only inside the future lab
+  environment after explicit approval.
+- RTX 3070 8 GB is treated as feasible for minimal local experiments and short
+  synthesis checks, not automatically sufficient for large training.
+- Runtime TTS remains disabled/mock-only until a provider passes standalone
+  synthesis, manual listening, licensing/data review, and integration review.
+
+### Acceptance Criteria
+
+- [x] Lab location recommendation documented.
+- [x] Conda/dedicated environment strategy documented.
+- [x] GPU/CUDA/PyTorch lab-only boundary documented.
+- [x] Model/data/generated output storage rules documented.
+- [x] Privacy/licensing constraints documented.
+- [x] Integration boundary and manual listening gate documented.
+- [x] Exit criteria before real model probe documented.
+- [x] No lab folder created, external repo cloned, package installed, model
+  downloaded, training run, inference run, generated audio/report/model/sample
+  commit, runtime TTS wiring, playback, auto-speaking, `/chat` schema change,
+  mood schema change, STT behavior change, Conversation Mode behavior change,
+  or Owner Voice behavior change is added.
 
 ---
 

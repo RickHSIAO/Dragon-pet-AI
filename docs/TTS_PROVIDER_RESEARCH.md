@@ -1,7 +1,7 @@
 # TTS Provider Research
 
-**Task:** TASK-TTS-001 / TASK-TTS-004D2
-**Status:** TASK-TTS-004D2 IMPLEMENTED - CHARACTER VOICE ENV CHECK READY / NO INSTALL PERFORMED
+**Task:** TASK-TTS-001 / TASK-TTS-004D3
+**Status:** TASK-TTS-004D3 DONE - CHARACTER VOICE LAB PLAN READY / NO LAB INSTALL PERFORMED
 **Date:** 2026-06-19
 **Scope:** Provider research, implemented mock-provider skeleton boundary,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B manual VOICEVOX
@@ -9,10 +9,11 @@ localhost probe, TASK-TTS-004B2 timeout/retry hardening, TASK-TTS-004C
 edge-tts optional network candidate probe, and TASK-TTS-004C2 manual
 edge-tts dependency/audio output validation, TASK-TTS-004C3 docs-first
 edge-tts tuning workflow, TASK-TTS-004D character voice feasibility research,
-and TASK-TTS-004D2 environment check workflow. No real voice-quality provider is selected as final, no model is
+TASK-TTS-004D2 environment check workflow, and TASK-TTS-004D3 isolated lab
+plan. No real voice-quality provider is selected as final, no model is
 downloaded, the `edge-tts` install is optional/manual inside `backend\.venv`
 only, and no runtime synthesis/playback path is implemented by TASK-TTS-004C2,
-TASK-TTS-004C3, TASK-TTS-004D, or TASK-TTS-004D2.
+TASK-TTS-004C3, TASK-TTS-004D, TASK-TTS-004D2, or TASK-TTS-004D3.
 
 This document records candidate directions for Christina voice output. It should
 guide later experiments, not lock Dragon Pet AI to a single TTS engine.
@@ -643,6 +644,30 @@ GPU probe, or docs-only follow-up.
 
 ---
 
+## TASK-TTS-004D3 Isolated Character Voice Lab Plan
+
+TASK-TTS-004D3 adds `docs/TTS_CHARACTER_VOICE_LAB_PLAN.md` as the boundary for
+future GPT-SoVITS / Style-Bert-VITS2 experiments.
+
+Provider research rule:
+
+- Do not install GPT-SoVITS, Style-Bert-VITS2, CUDA PyTorch, model weights, or
+  lab helper tools into `backend\.venv`.
+- External provider repos should live outside Dragon Pet AI app code, preferably
+  under `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\repos\`.
+- Models, voice samples, generated audio, checkpoints, embeddings, logs, and
+  local settings stay in the lab only.
+- The first acceptable provider evidence is standalone WAV/MP3 plus a manual
+  listening verdict, not runtime integration.
+- Runtime provider selection remains blocked until licensing/data review,
+  Chinese intelligibility, Christina fit, latency, and failure behavior are
+  documented.
+
+TASK-TTS-004D3 does not create the lab, clone repos, install packages, download
+models, train, infer, synthesize audio, or wire runtime TTS.
+
+---
+
 ## 5. Local Candidate Notes
 
 The following are candidate directions for future manual experiments. TASK-TTS-001
@@ -756,12 +781,14 @@ Recommended sequencing:
    Style-Bert-VITS2 are the leading long-term research candidates.
 10. TASK-TTS-004D2: character voice feasibility manual environment check.
    IMPLEMENTED - env checker ready, no install performed.
-11. TASK-TTS-004E: GPT-SoVITS / Style-Bert-VITS2 minimal local probe plan.
-12. TASK-TTS-004: renderer playback queue diagnostics after a real provider
+11. TASK-TTS-004D3: character voice lab environment plan. DONE - isolated lab
+   boundary ready, no lab install performed.
+12. TASK-TTS-004E: GPT-SoVITS / Style-Bert-VITS2 minimal local probe plan.
+13. TASK-TTS-004: renderer playback queue diagnostics after a real provider
    candidate is validated.
-13. TASK-TTS-005: Pet speaking state and bubble sync.
-14. TASK-TTS-006: Conversation Mode feedback prevention.
-15. Future: provider comparison report and singing research.
+14. TASK-TTS-005: Pet speaking state and bubble sync.
+15. TASK-TTS-006: Conversation Mode feedback prevention.
+16. Future: provider comparison report and singing research.
 
 Do not start by wiring ElevenLabs. Do not hard-code ChatTTS, GPT-SoVITS, F5-TTS,
 or CosyVoice into the product path before a provider abstraction and mock tests

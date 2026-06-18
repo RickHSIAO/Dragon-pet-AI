@@ -322,7 +322,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 **Goal:** Prepare Christina voice output with a provider-neutral, local-first TTS
 architecture before any new runtime provider implementation.
 
-**Status:** CHARACTER VOICE ENV CHECK READY / NO INSTALL PERFORMED - TASK-TTS-004D2 IMPLEMENTED.
+**Status:** CHARACTER VOICE LAB PLAN READY / NO LAB INSTALL PERFORMED - TASK-TTS-004D3 DONE.
 
 | Task | Name | Status |
 |---|---|---|
@@ -337,6 +337,7 @@ architecture before any new runtime provider implementation.
 | TASK-TTS-004C3 | Edge-TTS Voice / Rate Tuning Probe | DONE - EDGE-TTS TUNING REVIEW COMPLETE / NO SUITABLE CHRISTINA VOICE FOUND |
 | TASK-TTS-004D | Style-Bert-VITS2 / GPT-SoVITS Feasibility Research | DONE - CHARACTER VOICE FEASIBILITY RESEARCH COMPLETE / NO MODEL INSTALLED |
 | TASK-TTS-004D2 | Character Voice Environment Check / No Install | IMPLEMENTED - CHARACTER VOICE ENV CHECK READY / NO INSTALL PERFORMED |
+| TASK-TTS-004D3 | Character Voice Lab Environment Plan / Isolated GPU Env | DONE - CHARACTER VOICE LAB PLAN READY / NO LAB INSTALL PERFORMED |
 | TASK-TTS-004 | Playback queue and renderer diagnostics | PLANNED AFTER REAL PROVIDER CANDIDATE |
 | TASK-TTS-005 | Pet speaking state / bubble sync | PLANNED |
 | TASK-TTS-006 | Conversation Mode feedback prevention | PLANNED |
@@ -394,6 +395,13 @@ Track constraints:
   `outputs/tts_character_voice_env_check/YYYYMMDD/`. It performs no install,
   model download, training, inference, runtime TTS wiring, playback, or
   auto-speaking.
+- TASK-TTS-004D3 records the isolated character voice lab plan. Future
+  GPT-SoVITS / Style-Bert-VITS2 repos, models, samples, generated clips, and
+  logs should live outside committed app code, preferably under
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\`. The plan recommends
+  dedicated Conda environments, Python `3.10` for GPT-SoVITS, lab-only
+  CUDA/PyTorch, strict voice-data/licensing review, standalone WAV/MP3 output
+  only, and manual listening gates before runtime provider selection.
 - TTS remains disabled by default for the new provider architecture.
 - First implementation starts with `mock`, not ElevenLabs or a paid external
   provider.
@@ -401,7 +409,7 @@ Track constraints:
   opt-in cost/privacy design.
 - No `/chat` schema, mood schema, STT default, STT selector, Conversation Mode
   backpressure, or Owner Voice hard-gate behavior changes are part of
-  TASK-TTS-001 through TASK-TTS-004D2.
+  TASK-TTS-001 through TASK-TTS-004D3.
 
 ---
 
@@ -1192,6 +1200,8 @@ Track constraints:
 - TASK-TTS-004D DONE - CHARACTER VOICE FEASIBILITY RESEARCH COMPLETE / NO MODEL INSTALLED (2026-06-19): Style-Bert-VITS2 / GPT-SoVITS Feasibility Research. Added `docs/TTS_CHARACTER_VOICE_FEASIBILITY.md` and updated TTS research/architecture status. Conclusion: no final provider is selected; GPT-SoVITS and Style-Bert-VITS2 are the leading long-term character voice research candidates, with GPT-SoVITS first for the next environment/probe check because it has explicit Chinese/cross-lingual and zero/few-shot TTS positioning, while Style-Bert-VITS2 remains valuable for anime/style-control research but needs Chinese and license review. edge-tts remains temporary/debug/fallback only, VOICEVOX remains Japanese-style experiment only, and RVC-like conversion is deferred until a source TTS provider exists. Recommended next paths are TASK-TTS-004D2 manual environment check and TASK-TTS-004E minimal local probe plan. No model install/download, training, inference, runtime TTS wiring, playback, auto-speaking, dependency/default-runtime change, generated audio/report commit, `/chat` schema or mood schema change, STT default/model selector change, Conversation Mode queue/backpressure change, or Owner Voice hard-gate change was added.
 
 - TASK-TTS-004D2 IMPLEMENTED - CHARACTER VOICE ENV CHECK READY / NO INSTALL PERFORMED (2026-06-19): Character Voice Environment Check / No Install. Added `scripts/tts_character_voice_env_check.py`, targeted tests, and ignored output path `outputs/tts_character_voice_env_check/`. The checker records OS/platform, Python executable/version/venv, Git, disk space, `nvidia-smi` GPU/CUDA details when available, PyTorch availability/CUDA/device evidence when already installed, Node/npm, localhost-only VOICEVOX metadata reachability, optional `edge_tts` package availability, warnings, safety flags, and deterministic feasibility verdict. Reports are local JSON/Markdown artifacts under ignored `outputs/tts_character_voice_env_check/YYYYMMDD/`. No package/model install, model download, external repo clone, training, inference, runtime TTS wiring, playback, auto-speaking, generated report commit, `/chat` schema or mood schema change, STT default/model selector change, Conversation Mode queue/backpressure change, or Owner Voice hard-gate change was added.
+
+- TASK-TTS-004D3 DONE - CHARACTER VOICE LAB PLAN READY / NO LAB INSTALL PERFORMED (2026-06-19): Character Voice Lab Environment Plan / Isolated GPU Env. Added `docs/TTS_CHARACTER_VOICE_LAB_PLAN.md` and narrow ignore entries for accidental local lab artifacts. The plan keeps external provider repos, models, voice samples, generated WAV/MP3 clips, and logs outside Dragon Pet AI app code, preferably under `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\`. It recommends dedicated Conda environments, Python `3.10` for GPT-SoVITS, lab-only CUDA/PyTorch, no reuse of `backend\.venv`, strict model/data/license tracking, standalone audio output first, and manual listening gates before provider selection or runtime integration. No lab folder was created, no external repo cloned, no package/model installed, no model download/training/inference run, no runtime TTS wiring, playback, auto-speaking, generated artifact commit, `/chat` schema or mood schema change, STT default/model selector change, Conversation Mode queue/backpressure change, or Owner Voice hard-gate change was added.
 
 - TASK-227 IMPLEMENTED - DOCS ONLY / NO WINDOWS SMOKE REQUIRED (2026-06-01): Voice/TTS Research Note and Local Speech Roadmap. Adds `docs/VOICE_TTS_RESEARCH.md` as a docs-only voice, TTS, and STT research checkpoint. The note records the user-provided external AI VTuber / Discord voice chain as reference material, then separates what applies to Dragon Pet AI from what should not be copied. Dragon Pet AI remains local-first: TTS is a post-reply audio layer, TTS does not call `/chat`, TTS does not write history, TTS does not read diagnostics, STT is explicit push-to-talk/user action only, no always listening, and future speech work must obey the output queue / priority design. Candidate research tracks include ChatTTS, GPT-SoVITS, F5-TTS, CosyVoice, ElevenLabs as optional cloud reference, local Whisper / faster-whisper, TTS provider interface design, disabled audio skeleton, and confirmed transcript-to-`/chat` design. No runtime prompt wiring, TTS/STT/audio skeleton, IPC, `/chat` change, backend/provider change, renderer change, Pet Window change, assets, voice model, commit, or push.
 

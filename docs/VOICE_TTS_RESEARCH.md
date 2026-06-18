@@ -467,6 +467,19 @@ Suggested research and implementation tasks:
   model download, external repo clone, training, inference, runtime playback,
   `/chat` integration, auto-speaking, STT, Conversation Mode, Owner Voice, or
   schema behavior change is added.
+- TASK-TTS-004D3 Character Voice Lab Environment Plan / Isolated GPU Env.
+  **DONE - CHARACTER VOICE LAB PLAN READY / NO LAB INSTALL PERFORMED
+  (2026-06-19):** Added `docs/TTS_CHARACTER_VOICE_LAB_PLAN.md`. Future
+  GPT-SoVITS / Style-Bert-VITS2 experiments should run in an isolated lab,
+  preferably `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\`, with external repos,
+  model weights, datasets, generated WAV/MP3 samples, and logs outside Dragon
+  Pet AI app code. The plan recommends dedicated Conda environments, Python
+  `3.10` for GPT-SoVITS, lab-only CUDA/PyTorch, no reuse of `backend\.venv`,
+  rights/licensing review before voice data use, standalone audio first, and a
+  manual listening gate before runtime provider selection. No lab folder,
+  external repo clone, package/model install, model download, training,
+  inference, runtime playback, `/chat` integration, auto-speaking, STT,
+  Conversation Mode, Owner Voice, or schema behavior change is added.
 - TASK-TTS-004 Playback queue and renderer diagnostics after a real provider
   candidate is validated.
 - TASK-TTS-005 Pet speaking state / bubble sync.
