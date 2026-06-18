@@ -137,12 +137,35 @@ Potential value:
 
 - Strong candidate for local-first character voice research.
 - Better fit for custom voice style experiments.
+- TASK-TTS-004D ranks it as the first long-term feasibility candidate to check
+  next because official project docs describe zero/few-shot TTS, Chinese and
+  cross-lingual support, Windows setup paths, and MIT licensing.
 
 Risks / unknowns:
 
 - Requires careful data preparation.
 - Voice licensing and consent must be explicit.
 - Training/inference complexity needs separate spike work.
+- Traditional Chinese pronunciation, Christina fit, latency, hardware
+  requirements, and model/data terms still require a standalone local probe.
+
+### Style-Bert-VITS2
+
+Potential value:
+
+- Strong candidate for anime-style speech and controllable speaking styles.
+- Useful as a long-term Christina style-control research path, especially if a
+  Japanese/anime delivery direction is prioritized.
+
+Risks / unknowns:
+
+- Chinese main-runtime suitability is unresolved and must be tested directly.
+- Official docs describe CPU synthesis but NVIDIA GPU requirements for training;
+  local latency and VRAM constraints need a manual environment check.
+- AGPL/LGPL project licensing plus model/voice data terms need review before any
+  app integration.
+- Must remain a separate lab/probe path until a standalone synthesis and manual
+  listening verdict passes.
 
 ### F5-TTS
 
@@ -221,6 +244,27 @@ Risks / unknowns:
   `zh-CN-XiaoxiaoNeural -10%` too mainland-China-like for the user's
   preference. No edge-tts candidate reached the desired Christina fit; stop
   edge-tts tuning for now unless explicitly revisited.
+- TASK-TTS-004D confirms edge-tts should stay temporary/debug/fallback only. It
+  solves basic Chinese intelligibility better than VOICEVOX, but not long-term
+  Christina character fit.
+
+### RVC-like conversion
+
+Potential value:
+
+- Could become a later voice-color or conversion layer after a source TTS engine
+  exists.
+- May help preserve a chosen character timbre if licensing and source voice data
+  are clean.
+
+Risks / unknowns:
+
+- It is not a TTS provider by itself and should not be the first runtime TTS
+  path.
+- Adds a second synthesis/conversion stage, more latency, more model lifecycle
+  complexity, and much higher consent/licensing risk.
+- TASK-TTS-004D defers RVC-like conversion until after GPT-SoVITS or
+  Style-Bert-VITS2-style source TTS research produces a viable provider.
 
 ### ElevenLabs
 
@@ -398,6 +442,19 @@ Suggested research and implementation tasks:
   runtime playback, `/chat` integration, auto-speaking, STT, Conversation Mode,
   Owner Voice, or schema behavior change is added.
 - TASK-TTS-004D Style-Bert-VITS2 / GPT-SoVITS Feasibility Research.
+  **DONE - CHARACTER VOICE FEASIBILITY RESEARCH COMPLETE / NO MODEL INSTALLED
+  (2026-06-19):** Added `docs/TTS_CHARACTER_VOICE_FEASIBILITY.md`. No final
+  provider is selected. GPT-SoVITS and Style-Bert-VITS2 are the leading
+  long-term research candidates if Chinese usability and Christina character
+  voice are both required; GPT-SoVITS is first for the next environment/probe
+  check, Style-Bert-VITS2 remains a parallel anime/style-control research path,
+  edge-tts remains temporary/debug/fallback only, VOICEVOX remains
+  Japanese-style experiment only, and RVC-like conversion is deferred until a
+  source TTS provider exists. Recommended next tasks are TASK-TTS-004D2 manual
+  environment check and TASK-TTS-004E minimal local probe plan. No model
+  install/download, training, inference, runtime playback, `/chat` integration,
+  auto-speaking, dependency/default-runtime change, STT, Conversation Mode,
+  Owner Voice, or schema behavior change is added.
 - TASK-TTS-004 Playback queue and renderer diagnostics after a real provider
   candidate is validated.
 - TASK-TTS-005 Pet speaking state / bubble sync.

@@ -1,17 +1,17 @@
 # TTS Architecture
 
-**Task:** TASK-TTS-001 / TASK-TTS-004C3
-**Status:** TASK-TTS-004C3 DONE - EDGE-TTS TUNING REVIEW COMPLETE / NO SUITABLE CHRISTINA VOICE FOUND
-**Date:** 2026-06-18
+**Task:** TASK-TTS-001 / TASK-TTS-004D
+**Status:** TASK-TTS-004D DONE - CHARACTER VOICE FEASIBILITY RESEARCH COMPLETE / NO MODEL INSTALLED
+**Date:** 2026-06-19
 **Scope:** Provider-neutral architecture plus TASK-TTS-002 backend mock skeleton,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B VOICEVOX manual
 localhost probe, TASK-TTS-004B2 timeout/retry diagnostics, TASK-TTS-004C
 edge-tts optional network probe, TASK-TTS-004C2 manual edge-tts dependency /
-audio output validation, and TASK-TTS-004C3 docs-first edge-tts tuning
-workflow. No runtime
-wiring, app playback, runtime/default dependency, schema change, STT behavior
-change, Conversation Mode behavior change, or Owner Voice behavior change is
-added by TASK-TTS-004C2 or TASK-TTS-004C3.
+audio output validation, TASK-TTS-004C3 docs-first edge-tts tuning workflow,
+and TASK-TTS-004D character voice feasibility research. No runtime wiring, app
+playback, runtime/default dependency, schema change, STT behavior change,
+Conversation Mode behavior change, or Owner Voice behavior change is added by
+TASK-TTS-004C2, TASK-TTS-004C3, or TASK-TTS-004D.
 
 This document defines the target architecture for Christina voice output and the
 implemented TASK-TTS-002 mock skeleton. It remains provider-neutral: Dragon Pet
@@ -145,6 +145,24 @@ TASK-TTS-004C3 tuning checkpoint:
 - Runtime TTS remains disabled/mock-only; edge-tts is not default, not wired to
   `/chat`, not wired to app/Pet Window playback, and not selected as runtime.
 
+TASK-TTS-004D feasibility checkpoint:
+
+- `docs/TTS_CHARACTER_VOICE_FEASIBILITY.md` records the long-term character
+  voice feasibility review.
+- No model was installed, downloaded, trained, or run.
+- No final provider is selected. Chinese runtime provider selection remains
+  unresolved.
+- GPT-SoVITS and Style-Bert-VITS2 are the leading long-term research candidates
+  if Chinese usability and Christina character fit are both required.
+- edge-tts remains optional/network/cloud-ish and temporary/debug/fallback only;
+  it is not default and not a runtime provider.
+- VOICEVOX remains a Japanese-style/Japanese utterance experiment candidate.
+- RVC-like conversion is deferred until a source TTS provider exists.
+- Future providers must pass a standalone probe, manual listening verdict,
+  license/data review, and integration boundary review before any runtime
+  `/chat` wiring or playback queue work.
+- Runtime TTS remains disabled/mock-only.
+
 ---
 
 ## 1. Goals
@@ -183,7 +201,7 @@ Recommended split:
 | Text normalization | `backend/app/tts/text_normalizer.py` | TASK-TTS-002 implements conservative backend chunking helper; renderer/shared reuse is future. |
 | TTS queue controller | `backend/app/tts/tts_service.py` diagnostics skeleton; renderer queue future task | TASK-TTS-002 exposes disabled queue diagnostics only. No playback queue dispatch. |
 | Provider adapter | `backend/app/tts/providers.py` | TASK-TTS-002 implements `TTSProvider` protocol and metadata-only `MockTTSProvider`. Real synthesis adapters are future. |
-| Provider candidate probe | `scripts/tts_provider_probe.py` | TASK-TTS-004C checks optional provider availability and can manually probe VOICEVOX localhost WAV or edge-tts MP3 only behind `--allow-audio-output`, with timeout/error diagnostics. No runtime wiring or playback. |
+| Provider candidate probe | `scripts/tts_provider_probe.py` plus docs-only feasibility reports | TASK-TTS-004C checks optional provider availability and can manually probe VOICEVOX localhost WAV or edge-tts MP3 only behind `--allow-audio-output`, with timeout/error diagnostics. TASK-TTS-004D adds research-only GPT-SoVITS / Style-Bert-VITS2 feasibility notes. No runtime wiring or playback. |
 | Provider review | Docs/status only | TASK-TTS-004A records that no real provider is ready except metadata-only `mock`; playback remains blocked pending provider-specific probe. |
 | Local external process | Optional provider-specific sidecar, future task | Run heavy local engines outside Electron renderer/main. |
 | Playback | Renderer/Pet Window, future task | Play audio through browser audio APIs or an explicit playback bridge. |
@@ -637,7 +655,11 @@ Manual Windows playback smoke checklist for the first runtime task:
 - TASK-TTS-004C3: edge-tts voice/rate tuning probe if slower rate or alternate
   Mandarin voices should be checked. DONE - no suitable Christina voice found;
   keep edge-tts temporary/debug/fallback only and stop tuning for now.
-- TASK-TTS-004D: Style-Bert-VITS2 / GPT-SoVITS feasibility research.
+- TASK-TTS-004D: Style-Bert-VITS2 / GPT-SoVITS feasibility research. DONE -
+  no model installed, no final provider selected, GPT-SoVITS /
+  Style-Bert-VITS2 remain long-term research candidates.
+- TASK-TTS-004D2: Character voice feasibility manual environment check.
+- TASK-TTS-004E: GPT-SoVITS / Style-Bert-VITS2 minimal local probe plan.
 - TASK-TTS-004: Playback queue and renderer diagnostics after a real provider
   candidate is validated.
 - TASK-TTS-005: Pet speaking state / bubble sync after playback queue validation.
@@ -758,3 +780,29 @@ TASK-TTS-004C2 is complete when:
   Chinese, temporary provider candidate only, not final Christina voice.
 - Runtime TTS remains disabled/mock-only with no playback, `/chat`, STT,
   Conversation Mode, Owner Voice, default provider, or schema changes.
+
+TASK-TTS-004C3 is complete when:
+
+- Existing edge-tts voice/rate/pitch probe options are documented for manual
+  tuning.
+- Manual tuning verdict records that HsiaoChen `-10%` improved speed but not
+  Christina fit, HsiaoYu `-10%` sounded too old, and Xiaoxiao `-10%` sounded too
+  mainland-China-like.
+- edge-tts remains temporary/debug/fallback only and is not selected as runtime.
+- Runtime TTS remains disabled/mock-only with no playback, `/chat`, STT,
+  Conversation Mode, Owner Voice, default provider, or schema changes.
+
+TASK-TTS-004D is complete when:
+
+- `docs/TTS_CHARACTER_VOICE_FEASIBILITY.md` records the docs-only GPT-SoVITS /
+  Style-Bert-VITS2 / RVC-like feasibility comparison.
+- No model is installed, downloaded, trained, or run.
+- No final provider is selected.
+- Chinese runtime provider remains unresolved.
+- edge-tts remains temporary/debug/fallback only.
+- VOICEVOX remains Japanese-style/Japanese utterance experiment only.
+- Future provider work is gated by standalone probe, manual listening, license
+  and voice-data review, and explicit runtime task approval.
+- Runtime TTS remains disabled/mock-only with no playback, `/chat`, STT,
+  Conversation Mode, Owner Voice, default provider, dependency, or schema
+  changes.

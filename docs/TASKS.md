@@ -23201,7 +23201,11 @@ STT future boundary:
 - TASK-TTS-004A Local TTS Provider Selection Review / Install-Free Probe Summary.
 - TASK-TTS-004B VOICEVOX Local Server Manual Probe / Audio Output Optional.
 - TASK-TTS-004C Edge-TTS Optional Network Candidate Probe.
+- TASK-TTS-004C2 Edge-TTS Manual Dependency Probe / Chinese Audio Output.
+- TASK-TTS-004C3 Edge-TTS Voice / Rate Tuning Probe.
 - TASK-TTS-004D Style-Bert-VITS2 / GPT-SoVITS Feasibility Research.
+- TASK-TTS-004D2 Character Voice Feasibility Manual Environment Check.
+- TASK-TTS-004E GPT-SoVITS / Style-Bert-VITS2 Minimal Local Probe Plan.
 - TASK-TTS-004 Playback queue and renderer diagnostics.
 - TASK-TTS-005 Pet speaking state / bubble sync.
 - TASK-TTS-006 Conversation Mode feedback prevention.
@@ -24474,6 +24478,76 @@ For each generated MP3, record:
   playback, auto-speaking, ElevenLabs integration, generated artifact commit,
   schema change, STT behavior change, Conversation Mode behavior change, or
   Owner Voice behavior change.
+
+---
+
+## TASK-TTS-004D | Style-Bert-VITS2 / GPT-SoVITS Feasibility Research
+
+**Status:** DONE - CHARACTER VOICE FEASIBILITY RESEARCH COMPLETE / NO MODEL INSTALLED
+**Date:** 2026-06-19
+**Phase:** Phase 5 - Companion Voice Output Architecture
+**Depends on:** TASK-TTS-001, TASK-TTS-002, TASK-TTS-003, TASK-TTS-004A, TASK-TTS-004B2, TASK-TTS-004C, TASK-TTS-004C2, TASK-TTS-004C3
+
+### Goal
+
+Research whether Style-Bert-VITS2, GPT-SoVITS, or RVC-like voice conversion
+should be the next long-term Christina character voice path after VOICEVOX failed
+Chinese runtime suitability and edge-tts tuning failed Christina/anime fit.
+
+TASK-TTS-004D is documentation/research only. It does not install packages,
+download models, run training, run inference, generate audio, add runtime code,
+or select a final provider.
+
+### Research Output
+
+Added `docs/TTS_CHARACTER_VOICE_FEASIBILITY.md` with:
+
+- GPT-SoVITS, Style-Bert-VITS2, edge-tts, VOICEVOX, and RVC-like comparison.
+- Chinese support, anime/character suitability, Windows setup, GPU/VRAM,
+  training/data, license, and runtime integration risk notes.
+- Source links to official project repositories.
+- Recommendation to keep runtime disabled/mock-only until a standalone provider
+  probe and manual listening verdict pass.
+
+### Feasibility Conclusion
+
+- No final provider is selected by TASK-TTS-004D.
+- GPT-SoVITS and Style-Bert-VITS2 are the leading long-term research candidates
+  if Chinese usability and Christina character voice are both required.
+- GPT-SoVITS ranks first for the next check because official docs describe
+  Chinese/cross-lingual support, zero/few-shot TTS, Windows setup paths, and MIT
+  licensing, but local quality, latency, model/data requirements, and voice
+  rights still need validation.
+- Style-Bert-VITS2 remains a strong anime/style-control research path, but
+  Chinese runtime suitability and AGPL/LGPL/model-license constraints need
+  separate review.
+- edge-tts remains temporary Chinese provider / debug preview / fallback
+  candidate only.
+- VOICEVOX remains Japanese-style/Japanese utterance experiment only.
+- RVC-like conversion is deferred as a future voice-color layer after a source
+  TTS provider exists; it is not a first TTS runtime.
+
+### Recommended Next Tasks
+
+1. TASK-TTS-004D2 - Character Voice Feasibility Manual Environment Check.
+2. TASK-TTS-004E - GPT-SoVITS / Style-Bert-VITS2 Minimal Local Probe Plan.
+3. TASK-TTS-005 - TTS Runtime Playback Queue, only after provider decision.
+
+### Acceptance Criteria
+
+- [x] `docs/TTS_CHARACTER_VOICE_FEASIBILITY.md` created.
+- [x] GPT-SoVITS / Style-Bert-VITS2 / RVC-like feasibility compared against
+  edge-tts and VOICEVOX.
+- [x] Chinese support, anime/character suitability, Windows setup, GPU/VRAM,
+  training/data, license, and runtime integration risk documented.
+- [x] edge-tts remains temporary/debug/fallback only.
+- [x] VOICEVOX remains Japanese-style experiment only.
+- [x] Runtime TTS remains disabled/mock-only.
+- [x] No model install, model download, training, inference, playback,
+  auto-speaking, dependency/default-runtime change, `/chat` integration, schema
+  change, STT behavior change, Conversation Mode behavior change, Owner Voice
+  behavior change, generated audio/report commit, voice sample commit, temp WAV,
+  embedding, local setting, log, or pytest temp artifact is added.
 
 ---
 

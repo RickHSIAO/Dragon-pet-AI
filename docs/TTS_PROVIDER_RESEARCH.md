@@ -1,17 +1,18 @@
 # TTS Provider Research
 
-**Task:** TASK-TTS-001 / TASK-TTS-004C3
-**Status:** TASK-TTS-004C3 DONE - EDGE-TTS TUNING REVIEW COMPLETE / NO SUITABLE CHRISTINA VOICE FOUND
-**Date:** 2026-06-18
+**Task:** TASK-TTS-001 / TASK-TTS-004D
+**Status:** TASK-TTS-004D DONE - CHARACTER VOICE FEASIBILITY RESEARCH COMPLETE / NO MODEL INSTALLED
+**Date:** 2026-06-19
 **Scope:** Provider research, implemented mock-provider skeleton boundary,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B manual VOICEVOX
 localhost probe, TASK-TTS-004B2 timeout/retry hardening, TASK-TTS-004C
 edge-tts optional network candidate probe, and TASK-TTS-004C2 manual
-edge-tts dependency/audio output validation. No real
-voice-quality provider is selected as final, no model is downloaded, the
-`edge-tts` install is optional/manual inside `backend\.venv` only, and no
-runtime synthesis/playback path is implemented by TASK-TTS-004C2 or
-TASK-TTS-004C3.
+edge-tts dependency/audio output validation, TASK-TTS-004C3 docs-first
+edge-tts tuning workflow, and TASK-TTS-004D character voice feasibility
+research. No real voice-quality provider is selected as final, no model is
+downloaded, the `edge-tts` install is optional/manual inside `backend\.venv`
+only, and no runtime synthesis/playback path is implemented by TASK-TTS-004C2,
+TASK-TTS-004C3, or TASK-TTS-004D.
 
 This document records candidate directions for Christina voice output. It should
 guide later experiments, not lock Dragon Pet AI to a single TTS engine.
@@ -566,6 +567,52 @@ Provider decision:
 
 ---
 
+## TASK-TTS-004D Character Voice Feasibility Research
+
+TASK-TTS-004D closes the docs-only feasibility pass for longer-term Christina
+character voice candidates. It does not install models, download model weights,
+run training/inference, generate audio, add runtime dependencies, or select a
+final provider.
+
+Detailed report:
+
+- `docs/TTS_CHARACTER_VOICE_FEASIBILITY.md`
+
+Feasibility comparison:
+
+| Option | Chinese support | Anime/character suitability | Windows setup | GPU/VRAM | Training/data requirement | License risk | Runtime integration risk | Recommended next action |
+|---|---|---|---|---|---|---|---|---|
+| GPT-SoVITS | Promising; official docs list Chinese and cross-lingual support, but Traditional Chinese pronunciation and mixed project terms need a local probe. | Strong long-term Christina candidate because it supports zero/few-shot and fine-tuned TTS workflows. | High; Windows package and PowerShell/Conda paths exist but should live in a separate lab environment. | Medium/high for quality and training; CPU path exists but latency must be measured. | Requires legally usable source voice/style data and careful text labeling. | Medium; code license is MIT, but voice data and pretrained model terms still need review. | High; heavy model lifecycle, sidecar/API, cancellation, timeout, and output cleanup need explicit design. | First long-term research candidate for TASK-TTS-004D2/004E. |
+| Style-Bert-VITS2 | Unresolved for Chinese main runtime; appears more Japanese-oriented and must prove Chinese quality. | Strong anime/style-control candidate. | High but Windows-friendly; official docs describe Windows scripts, library use, and an API server. | Training requires NVIDIA GPU; synthesis can run on CPU according to official docs, but latency is unknown. | Needs legally usable voice/style data for a Christina-like voice. | High; AGPL/LGPL project licensing and model/voice terms need review before app integration. | High; separate service/process, style controls, model downloads, and license boundaries must be isolated. | Evaluate after or alongside GPT-SoVITS environment check. |
+| edge-tts | Proven understandable Chinese; baseline `zh-TW-HsiaoChenNeural` was `6/10`. | Weak Christina/anime fit; tuning found no suitable voice. | Low package setup, but network/cloud-ish. | None local. | No training. | Medium/high privacy/default risk because optional audio sends text to Microsoft Edge TTS service. | Medium/high; should not become silent default. | Keep temporary/debug/fallback only. |
+| VOICEVOX | Not suitable for main Chinese runtime; Chinese text was spoken with Japanese/Japanese-like pronunciation. | Good Japanese/anime-style tone. | Medium; manually started localhost engine. | Depends on VOICEVOX runtime. | Existing voices only in current path. | Medium; speaker terms require review. | Medium; local HTTP path is manageable, but Chinese failure blocks runtime selection. | Keep Japanese-style/Japanese utterance experiment only. |
+| RVC-like conversion | Depends on source TTS; not a TTS provider by itself. | Possible future voice-color layer. | High; separate WebUI, PyTorch, ffmpeg, and pretrained model setup. | Medium/high for training quality. | Requires target voice data, source TTS, and conversion training. | High; consent/licensing and identity misuse risk. | Very high as a first runtime due to two-stage pipeline. | Defer until a source provider is selected. |
+
+TASK-TTS-004D recommendation:
+
+1. Do not automatically pick a final provider.
+2. Put GPT-SoVITS first for the next manual environment/probe check.
+3. Keep Style-Bert-VITS2 as a parallel long-term anime/style-control research
+   candidate.
+4. Keep edge-tts temporary/debug/fallback only.
+5. Keep VOICEVOX Japanese-style experiment only.
+6. Defer RVC-like conversion until a source TTS provider exists.
+7. Do not start TASK-TTS-005 runtime playback until a standalone provider probe
+   passes manual listening and license/data review.
+
+Recommended next tasks:
+
+1. TASK-TTS-004D2 - Character Voice Feasibility Manual Environment Check.
+2. TASK-TTS-004E - GPT-SoVITS / Style-Bert-VITS2 Minimal Local Probe Plan.
+3. TASK-TTS-005 - TTS Runtime Playback Queue, only after provider decision.
+
+No runtime TTS wiring, `/chat` integration, playback, Pet Window playback,
+auto-speaking, dependency/default-runtime change, generated audio/report/model
+commit, STT behavior change, Conversation Mode queue change, Owner Voice gate
+change, or schema change is part of TASK-TTS-004D.
+
+---
+
 ## 5. Local Candidate Notes
 
 The following are candidate directions for future manual experiments. TASK-TTS-001
@@ -674,12 +721,16 @@ Recommended sequencing:
 8. TASK-TTS-004C3: edge-tts voice/rate tuning probe if slower rate or alternate
    Mandarin voices should be checked. DONE - no suitable Christina voice found;
    keep edge-tts temporary/debug/fallback only and stop tuning for now.
-9. TASK-TTS-004D: Style-Bert-VITS2 / GPT-SoVITS feasibility research.
-10. TASK-TTS-004: renderer playback queue diagnostics after a real provider
+9. TASK-TTS-004D: Style-Bert-VITS2 / GPT-SoVITS feasibility research. DONE -
+   no model installed, no final provider selected; GPT-SoVITS and
+   Style-Bert-VITS2 are the leading long-term research candidates.
+10. TASK-TTS-004D2: character voice feasibility manual environment check.
+11. TASK-TTS-004E: GPT-SoVITS / Style-Bert-VITS2 minimal local probe plan.
+12. TASK-TTS-004: renderer playback queue diagnostics after a real provider
    candidate is validated.
-11. TASK-TTS-005: Pet speaking state and bubble sync.
-12. TASK-TTS-006: Conversation Mode feedback prevention.
-13. Future: provider comparison report and singing research.
+13. TASK-TTS-005: Pet speaking state and bubble sync.
+14. TASK-TTS-006: Conversation Mode feedback prevention.
+15. Future: provider comparison report and singing research.
 
 Do not start by wiring ElevenLabs. Do not hard-code ChatTTS, GPT-SoVITS, F5-TTS,
 or CosyVoice into the product path before a provider abstraction and mock tests
