@@ -1,7 +1,7 @@
 # TTS Provider Research
 
 **Task:** TASK-TTS-001 / TASK-TTS-004C2
-**Status:** TASK-TTS-004C2 DONE - EDGE-TTS MANUAL AUDIO OUTPUT SUCCESS / LISTENING PENDING
+**Status:** TASK-TTS-004C2 DONE - EDGE-TTS AUDIO OUTPUT SUCCESS / TEMP CHINESE PROVIDER ONLY
 **Date:** 2026-06-18
 **Scope:** Provider research, implemented mock-provider skeleton boundary,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B manual VOICEVOX
@@ -455,7 +455,7 @@ Manual probe result:
 | Synthesis latency | `null` | `1613ms` |
 | Output | `null` | `outputs/tts_provider_probe/20260618/audio/edge_tts_20260618-193335.mp3` |
 
-Listening verdict:
+Historical listening placeholder from the audio-probe commit:
 
 | Field | Result |
 |---|---|
@@ -469,14 +469,41 @@ Listening verdict:
 | 是否可作為臨時中文 provider | Pending manual listening |
 | 是否可作為長期 provider | Pending manual listening |
 
+Listening verdict:
+
+| Field | Result |
+|---|---|
+| Provider | edge-tts |
+| Voice | `zh-TW-HsiaoChenNeural` |
+| Synthesis latency | `1613ms` |
+| Audio output | Success |
+| Chinese intelligibility | Good |
+| Anime/Christina suitability | Weak |
+| Speed | Slightly fast |
+| Tone | Okay |
+| Strange pauses | None |
+| Overall acceptability | `6/10` |
+| Runtime recommendation | Temporary Chinese provider only; not final |
+| Retained use | Optional preview/debug/fallback candidate |
+
 Provider decision:
 
 - `edge_tts` is technically usable by the standalone probe after optional
   dependency installation.
 - `edge_tts` remains network/cloud-ish and is not local/offline.
-- `edge_tts` is not selected as the default runtime provider.
-- Chinese voice suitability and Christina fit remain unresolved until manual
-  listening is recorded.
+- `edge_tts` is technically usable for Chinese output and acceptable as a
+  temporary Chinese provider candidate.
+- `edge_tts` is not selected as the final Christina long-term voice because
+  character/anime fit is weak and the voice feels more general/Taiwanese than
+  Christina-like.
+- `edge_tts` remains optional for network/cloud-ish preview, debug, or fallback
+  experiments.
+- `edge_tts` is not selected as the default runtime provider, and no runtime
+  wiring should start from TASK-TTS-004C2.
+- Next provider path: TASK-TTS-004C3 edge-tts voice/rate tuning probe if slower
+  rate or alternate Mandarin voices should be checked; otherwise TASK-TTS-004D
+  Style-Bert-VITS2 / GPT-SoVITS feasibility research for long-term Christina
+  character voice.
 
 ---
 
@@ -583,13 +610,16 @@ Recommended sequencing:
    metadata-only safe probe ready; Chinese audio validation pending explicit
    install/use and manual listening.
 7. TASK-TTS-004C2: edge-tts manual dependency/audio output probe. DONE - MP3
-   output works; manual listening pending.
-8. TASK-TTS-004D: Style-Bert-VITS2 / GPT-SoVITS feasibility research.
-9. TASK-TTS-004: renderer playback queue diagnostics after a real provider
+   output works; manual listening accepts it only as a temporary Chinese
+   provider candidate, not final Christina voice.
+8. TASK-TTS-004C3: edge-tts voice/rate tuning probe if slower rate or alternate
+   Mandarin voices should be checked.
+9. TASK-TTS-004D: Style-Bert-VITS2 / GPT-SoVITS feasibility research.
+10. TASK-TTS-004: renderer playback queue diagnostics after a real provider
    candidate is validated.
-10. TASK-TTS-005: Pet speaking state and bubble sync.
-11. TASK-TTS-006: Conversation Mode feedback prevention.
-12. Future: provider comparison report and singing research.
+11. TASK-TTS-005: Pet speaking state and bubble sync.
+12. TASK-TTS-006: Conversation Mode feedback prevention.
+13. Future: provider comparison report and singing research.
 
 Do not start by wiring ElevenLabs. Do not hard-code ChatTTS, GPT-SoVITS, F5-TTS,
 or CosyVoice into the product path before a provider abstraction and mock tests

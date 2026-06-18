@@ -207,6 +207,12 @@ Risks / unknowns:
   therefore requires explicit `--allow-audio-output`.
 - Christina fit and Chinese pronunciation require manual listening; TASK-TTS-004C
   does not select it as runtime.
+- TASK-TTS-004C2 manual listening found `zh-TW-HsiaoChenNeural` is
+  understandable Chinese and acceptable as a temporary provider candidate, but
+  weak for Christina/anime fit: slightly fast, more general/Taiwanese than
+  Christina-like, and overall `6/10`. It remains optional/network/cloud-ish,
+  not default, not wired to runtime, and not selected as the final Christina
+  long-term voice.
 
 ### ElevenLabs
 
@@ -351,7 +357,7 @@ Suggested research and implementation tasks:
   playback, `/chat` integration, auto-speaking, dependency, STT, Conversation
   Mode, Owner Voice, or schema behavior change is added.
 - TASK-TTS-004C2 Edge-TTS Manual Dependency Probe / Chinese Audio Output.
-  **DONE - EDGE-TTS MANUAL AUDIO OUTPUT SUCCESS / LISTENING PENDING
+  **DONE - EDGE-TTS AUDIO OUTPUT SUCCESS / TEMP CHINESE PROVIDER ONLY
   (2026-06-18):** With explicit approval, installed optional `edge-tts` into
   `backend\.venv` for the manual probe only. Metadata-only probe now reports
   `available=true`, `reason=optional_dependency_present`,
@@ -359,10 +365,15 @@ Suggested research and implementation tasks:
   text to the service. Optional audio probe with `--allow-audio-output`
   generated an ignored MP3 using `zh-TW-HsiaoChenNeural`
   (`audioBytes=30240`, `synthesisLatencyMs=1613`) and did not play audio.
-  Manual listening verdict is pending. `edge_tts` remains network/cloud-ish,
-  optional, not default, and not selected as runtime. No runtime playback,
-  `/chat` integration, auto-speaking, STT, Conversation Mode, Owner Voice, or
-  schema behavior change is added.
+  Manual listening verdict: Chinese is understandable, anime/Christina fit is
+  weak, speed is slightly fast, tone is okay, no strange pauses, overall `6/10`.
+  Provider decision: acceptable as a temporary Chinese provider candidate, not
+  selected as the final Christina long-term voice. `edge_tts` remains
+  network/cloud-ish, optional, not default, and not wired to runtime. Next path
+  is TASK-TTS-004C3 for edge-tts voice/rate tuning if needed, or TASK-TTS-004D
+  Style-Bert-VITS2 / GPT-SoVITS feasibility for long-term character voice. No
+  runtime playback, `/chat` integration, auto-speaking, STT, Conversation Mode,
+  Owner Voice, or schema behavior change is added.
 - TASK-TTS-004D Style-Bert-VITS2 / GPT-SoVITS Feasibility Research.
 - TASK-TTS-004 Playback queue and renderer diagnostics after a real provider
   candidate is validated.

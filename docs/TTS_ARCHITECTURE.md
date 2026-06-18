@@ -1,7 +1,7 @@
 # TTS Architecture
 
 **Task:** TASK-TTS-001 / TASK-TTS-004C2
-**Status:** TASK-TTS-004C2 DONE - EDGE-TTS MANUAL AUDIO OUTPUT SUCCESS / LISTENING PENDING
+**Status:** TASK-TTS-004C2 DONE - EDGE-TTS AUDIO OUTPUT SUCCESS / TEMP CHINESE PROVIDER ONLY
 **Date:** 2026-06-18
 **Scope:** Provider-neutral architecture plus TASK-TTS-002 backend mock skeleton,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B VOICEVOX manual
@@ -116,8 +116,14 @@ TASK-TTS-004C2 manual probe checkpoint:
 - Optional audio probe with `--allow-audio-output` generated an MP3 under
   ignored `outputs/tts_provider_probe/20260618/audio/`.
 - The probe and app did not play the MP3.
-- Manual listening is pending; `edge_tts` remains not default and not selected
-  as runtime.
+- Manual listening found Chinese is understandable and the output is acceptable
+  as a temporary Chinese provider candidate, but character/anime fit is weak:
+  the voice feels more general/Taiwanese than Christina-like, slightly fast,
+  and overall `6/10`.
+- `edge_tts` remains optional/network/cloud-ish, not default, not wired to
+  runtime, and not selected as the final Christina long-term voice.
+- Chinese runtime provider selection remains unresolved; the app runtime remains
+  disabled/mock-only.
 
 ---
 
@@ -606,7 +612,10 @@ Manual Windows playback smoke checklist for the first runtime task:
 - TASK-TTS-004C: edge-tts optional network candidate probe. IMPLEMENTED -
   metadata-only safe probe ready; Chinese audio validation pending.
 - TASK-TTS-004C2: edge-tts manual dependency/audio output probe. DONE - MP3
-  output succeeds; manual listening pending.
+  output succeeds; manual listening accepts it only as a temporary Chinese
+  provider candidate, not final Christina voice.
+- TASK-TTS-004C3: edge-tts voice/rate tuning probe if slower rate or alternate
+  Mandarin voices should be checked.
 - TASK-TTS-004D: Style-Bert-VITS2 / GPT-SoVITS feasibility research.
 - TASK-TTS-004: Playback queue and renderer diagnostics after a real provider
   candidate is validated.
@@ -724,7 +733,7 @@ TASK-TTS-004C2 is complete when:
   network text submission, audio write, or playback.
 - Optional audio probe with `--allow-audio-output` generates MP3 under ignored
   output paths.
-- Manual listening fields are documented as pending until the user plays the
-  generated MP3.
+- Manual listening verdict and provider decision are recorded: understandable
+  Chinese, temporary provider candidate only, not final Christina voice.
 - Runtime TTS remains disabled/mock-only with no playback, `/chat`, STT,
   Conversation Mode, Owner Voice, default provider, or schema changes.

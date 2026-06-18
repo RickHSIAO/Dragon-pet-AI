@@ -24189,7 +24189,7 @@ Current machine result:
 
 ## TASK-TTS-004C2 | Edge-TTS Manual Dependency Probe / Chinese Audio Output
 
-**Status:** DONE - EDGE-TTS MANUAL AUDIO OUTPUT SUCCESS / LISTENING PENDING
+**Status:** DONE - EDGE-TTS AUDIO OUTPUT SUCCESS / TEMP CHINESE PROVIDER ONLY
 **Date:** 2026-06-18
 **Phase:** Phase 5 - Companion Voice Output Architecture
 **Depends on:** TASK-TTS-001, TASK-TTS-002, TASK-TTS-003, TASK-TTS-004A, TASK-TTS-004B2, TASK-TTS-004C
@@ -24258,29 +24258,38 @@ Optional audio output:
 
 ### Listening Verdict
 
-Manual listening is still pending.
+Manual listening result:
 
 | Field | Verdict |
 |---|---|
-| 中文是否能聽懂 | Pending manual listening |
-| 是否像日系角色 | Pending manual listening |
-| 是否適合克莉絲蒂娜 | Pending manual listening |
-| 語速 | Pending manual listening |
-| 音色 | Pending manual listening |
-| 有沒有奇怪斷句 | Pending manual listening |
-| 整體可接受度 1-10 | Pending manual listening |
-| 是否可作為臨時中文 provider | Pending manual listening |
-| 是否可作為長期 provider | Pending manual listening |
+| Chinese intelligibility | Understandable |
+| Japanese/anime character feel | More Taiwan/general voice than anime character; acceptable but weak |
+| Christina suitability | Not very suitable |
+| Speed | Slightly fast |
+| Tone | Okay |
+| Strange pauses | None |
+| Overall acceptability | `6/10` |
+| Temporary Chinese provider | Acceptable |
+| Long-term provider | Consider, but not selected |
 
 ### Provider Decision
 
 - `edge_tts` is technically usable by the standalone probe after optional
   dependency installation.
 - `edge_tts` is network/cloud-ish and not local/offline.
+- `edge_tts` is technically usable for Chinese output and acceptable as a
+  temporary Chinese provider candidate.
+- `edge_tts` is not selected as the final Christina long-term voice because
+  character/anime fit is weak and the voice feels more general/Taiwanese than
+  Christina-like.
 - `edge_tts` is not selected as the default runtime provider.
 - Runtime TTS remains disabled/mock-only.
-- Chinese voice suitability requires manual listening before any future runtime
-  decision.
+- Keep `edge_tts` as an optional network/cloud-ish probe path and temporary
+  fallback candidate.
+- Next provider path: TASK-TTS-004C3 edge-tts voice/rate tuning probe if slower
+  rate or alternate Mandarin voices should be checked; otherwise TASK-TTS-004D
+  Style-Bert-VITS2 / GPT-SoVITS feasibility research for long-term Christina
+  character voice.
 
 ### Validation
 
@@ -24288,6 +24297,8 @@ Manual listening is still pending.
 - `.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --help`: PASS.
 - Metadata-only edge-tts probe: PASS; `optional_dependency_present`, `metadata_only`, `audioGenerated=false`.
 - Optional edge-tts audio probe: PASS; `edge_tts_success`, `audioGenerated=true`, `audioBytes=30240`, no playback.
+- Manual listening verdict: PASS for understandable Chinese and temporary
+  provider use; not selected as final Christina long-term voice.
 - Desktop smoke validation recorded in commit report.
 
 ### Acceptance Criteria
@@ -24297,6 +24308,8 @@ Manual listening is still pending.
 - [x] Optional audio output still requires `--allow-audio-output`.
 - [x] MP3 output is under ignored `outputs/tts_provider_probe/YYYYMMDD/audio/`.
 - [x] `edge_tts` remains not default and not selected as runtime.
+- [x] Manual listening verdict recorded: temporary Chinese provider only; not
+  final Christina voice.
 - [x] No runtime TTS wiring, `/chat` integration, playback, auto-speaking,
   generated audio/report commit, schema change, STT behavior change,
   Conversation Mode behavior change, or Owner Voice behavior change.
