@@ -944,7 +944,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   centroid exposure, embedding exposure, graceful Stop/drain, or no-parallel
   `/chat` behavior changed.
 
-- TASK-CONV-005 IMPLEMENTED - AUTOMATED LONG SESSION DIAGNOSTICS SMOKE PASS / NEEDS WINDOWS 5-10 MIN CONVERSATION SMOKE (2026-06-12):
+- TASK-CONV-005 DONE - ADDRESSED / VALIDATED BY TASK-CONV-006 WINDOWS LONG SESSION RE-SMOKE PASS (2026-06-18):
   Adds `apps/desktop/scripts/conversation-long-session-smoke.js` plus a Windows
   5-10 minute runtime checklist for longer Conversation Mode sessions after the
   TASK-CONV-004 capacity policy. The automated smoke verifies that the bounded
@@ -956,12 +956,15 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   fixture covers completed turns, no-speech, backpressure pause/resume, a
   separate hard fallback `queue_full`, empty artifact, chat error, Owner Voice
   accepted/rejected/unknown outcomes, candidate WAV deletion, and final
-  `pending=0/4 active=0 stopMode=drain_complete`. No runtime behavior,
-  STT default, runtime model selector, `/chat` or mood schema, Owner Voice hard
-  gate, TTS, frontend redesign, IPC, Pet Window, Output Queue, raw audio
-  persistence, or generated artifact commit was added.
+  `pending=0/4 active=0 stopMode=drain_complete`. The TASK-CONV-006 Windows
+  long-session backpressure re-smoke validated this follow-up: `queue_high_watermark`
+  pause was observed, final drain reached `pending=0/4 active=0
+  stopMode=drain_complete`, and no repeated usable-audio `queue_full` drops
+  appeared. No runtime behavior, STT default, runtime model selector, `/chat` or
+  mood schema, Owner Voice hard gate, TTS, frontend redesign, IPC, Pet Window,
+  Output Queue, raw audio persistence, or generated artifact commit was added.
 
-- TASK-CONV-006 IMPLEMENTED - AUTOMATED BACKPRESSURE SMOKE PASS / NEEDS WINDOWS LONG SESSION RE-SMOKE (2026-06-13):
+- TASK-CONV-006 DONE - WINDOWS LONG SESSION BACKPRESSURE RE-SMOKE PASS / NO REPEATED USABLE QUEUE_FULL DROPS (2026-06-18):
   Adds a Conversation Mode backpressure pause/resume policy after Windows
   long-session runtime smoke exposed repeated usable-audio `queue_full` drops
   even though diagnostics and drain worked. The queue max remains `4`. New VAD
@@ -973,10 +976,17 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
   pause/resume instead of repeatedly producing usable-audio `queue_full`; the
   existing `queue_full` path remains as a hard fallback and still renders
   `audio=usable_audio`, `dropStage=at_queue`. Empty artifacts remain distinct.
-  Stop/drain behavior remains graceful and should finish at `pending=0/4`,
-  `active=0`, and `stopMode=drain_complete`. No STT default, STT model selector,
-  `/chat` or mood schema, Owner Voice hard gate, TTS, frontend redesign, IPC,
-  Pet Window, Output Queue, or generated artifact commit changed.
+  Stop/drain behavior remains graceful. Windows long-session backpressure
+  re-smoke with STT model `base` PASS: `queue_high_watermark` pause was observed
+  at `pending=3/4 active=10`, final Conversation state was `pending=0/4`,
+  `activeTurnId=0`, `queue=idle/drain_complete`, and
+  `stopMode=drain_complete`; final backpressure diagnostic was `paused=false`,
+  `reason=none`, `resume=queue_available`; no repeated usable-audio
+  `queue_full`, no `chat_error`, and no no-speech hallucination appeared. Owner
+  Voice dry-run remained non-blocking with temporary candidate WAV deleted. No
+  STT default, STT model selector, `/chat` or mood schema, Owner Voice hard gate,
+  TTS, frontend redesign, IPC, Pet Window, Output Queue, or generated artifact
+  commit changed.
 
 - TASK-AUDIO-001 IMPLEMENTED - CAPTURE START LATENCY MEASUREMENT / CONVERSATION PRE-ROLL BUFFER (2026-06-05):
   Voice Diagnostics now records safe per-capture timing metadata:

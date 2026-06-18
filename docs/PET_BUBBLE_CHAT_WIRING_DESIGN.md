@@ -1058,3 +1058,7 @@ TASK-CONV-006 backpressure note:
   chat content.
 - The Full App -> Pet mirror payload remains `reply / mood / source`; no new
   Pet IPC, TTS, `/chat` schema, or mood schema behavior is added.
+- Windows long-session backpressure re-smoke PASS validated the
+  `queue_high_watermark` pause and clean `drain_complete` path. Queue max
+  remains `4`; `queue_full` remains a hard fallback diagnostics path rather
+  than expected normal long-session Pet bubble behavior.

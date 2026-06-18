@@ -30297,7 +30297,7 @@ PASS criteria met:
 
 ## TASK-CONV-005 | Conversation Mode Long Session Stability Smoke
 
-Status: IMPLEMENTED - AUTOMATED LONG SESSION DIAGNOSTICS SMOKE PASS / NEEDS WINDOWS 5-10 MIN CONVERSATION SMOKE (2026-06-12)
+Status: DONE - ADDRESSED / VALIDATED BY TASK-CONV-006 WINDOWS LONG SESSION RE-SMOKE PASS (2026-06-18)
 
 ### Goal
 
@@ -30334,10 +30334,11 @@ overflow under sustained pressure:
 - turns #19, #20, #21, #22, #24, #25, #27, and #28 dropped as
   `reason=queue_full`, `audio=usable_audio`, `dropStage=at_queue`
 
-TASK-CONV-006 addresses this by adding a backpressure pause/resume policy.
-TASK-CONV-005 remains implemented but not closed until Windows long-session
-re-smoke confirms normal sessions no longer repeatedly produce usable-audio
-`queue_full` drops.
+TASK-CONV-006 addressed this by adding a backpressure pause/resume policy.
+The Windows long-session backpressure re-smoke passed with `queue_high_watermark`
+pause observed, final `pending=0/4 active=0 stopMode=drain_complete`, and no
+repeated usable-audio `queue_full` drops. TASK-CONV-005 is closed as validated
+by the TASK-CONV-006 re-smoke.
 
 ### Manual Windows 5-10 Minute Smoke Checklist
 
@@ -30381,12 +30382,19 @@ total=<n> completed=<n> no_speech=<n> queue_full=<n> empty_artifact=<n> chat_err
 - `node apps/desktop/scripts/conversation-long-session-smoke.js`: PASS
   - as of TASK-CONV-006, the synthetic fixture expects normal backpressure
     pause/resume with `queue_full=0` and a separate injected hard fallback row
+- Windows long-session backpressure re-smoke: PASS
+  - STT model: `base`
+  - observed `turn#10 lifecycle status=completed reason=chat_sent queue=paused/queue_high_watermark pending=3/4 active=10`
+  - final state: `pending=0/4`, `activeTurnId=0`, `queue=idle/drain_complete`, `stopMode=drain_complete`
+  - final backpressure diagnostic: `paused=false`, `reason=none`, `resume=queue_available`
+  - no repeated usable-audio `queue_full` drops, no `chat_error`, and no no-speech hallucination observed
+  - Owner Voice dry-run remained non-blocking: state accepted, `runtimeHardBlocked=false`, candidate WAV temporary/deleted
 
 ---
 
 ## TASK-CONV-006 | Conversation Mode Backpressure Pause / No Usable Queue-Full Drop
 
-Status: IMPLEMENTED - AUTOMATED BACKPRESSURE SMOKE PASS / NEEDS WINDOWS LONG SESSION RE-SMOKE (2026-06-13)
+Status: DONE - WINDOWS LONG SESSION BACKPRESSURE RE-SMOKE PASS / NO REPEATED USABLE QUEUE_FULL DROPS (2026-06-18)
 
 ### Goal
 
@@ -30448,6 +30456,27 @@ Voice Diagnostics now shows:
   - resumes at `pending <= 2/4`
   - hard fallback `queue_full` still renders for explicit overflow
 
+### Windows Long-session Backpressure Re-smoke
+
+- Result: PASS.
+- STT model: `base`.
+- Backpressure pause/high-watermark path observed:
+  `turn#10 lifecycle status=completed reason=chat_sent queue=paused/queue_high_watermark pending=3/4 active=10`.
+- Completed/drain lifecycle confirmed:
+  - `turn#11 status=completed ... stopMode=graceful_drain`
+  - `turn#12 status=completed ... stopMode=graceful_drain`
+  - `turn#13 status=drain_complete ... pending=0/4 active=0 stt=success chat=sent`
+- Final Conversation state: `pending=0/4`, `activeTurnId=0`,
+  `queue=idle/drain_complete`, `stopMode=drain_complete`.
+- Final backpressure diagnostic: `paused=false`, `reason=none`,
+  `resume=queue_available`.
+- No repeated `usable_audio queue_full` drops appeared in the re-smoke.
+- No `chat_error` and no no-speech hallucination observed.
+- Owner Voice dry-run remained non-blocking: state accepted,
+  `runtimeHardBlocked=false`, candidate WAV `temporary=true deleted=true`.
+- Acceptance confirmed: queue max remains `4`; `queue_full` remains hard
+  fallback only, not the expected normal long-session path.
+
 ### Preserved Boundaries
 
 - No STT default change.
@@ -30460,20 +30489,6 @@ Voice Diagnostics now shows:
 - No Pet Window or Output Queue contract change.
 - No generated report, audio, temp WAV, embedding, local settings, log, or
   pytest temp artifact committed.
-
-### Remaining Windows Re-smoke
-
-Run a 5-10 minute Conversation Mode smoke with STT model `base` and confirm:
-
-- normal long-session turns do not repeatedly produce usable-audio
-  `queue_full`
-- backpressure pause/resume appears when pending reaches high pressure
-- final drain reaches `pending=0/4`, `active=0`, `stopMode=drain_complete`
-- any rare hard overflow remains visible as `queue_full`,
-  `audio=usable_audio`, `dropStage=at_queue`
-- empty artifacts remain distinct as `empty_artifact`
-- Owner Voice dry-run remains non-blocking and temporary candidate WAVs are
-  deleted
 
 ---
 
