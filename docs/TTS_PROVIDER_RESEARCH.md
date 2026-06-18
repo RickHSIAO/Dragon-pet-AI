@@ -1,7 +1,7 @@
 # TTS Provider Research
 
 **Task:** TASK-TTS-001 / TASK-TTS-004B2
-**Status:** TASK-TTS-004B2 IMPLEMENTED - VOICEVOX TIMEOUT HARDENING SMOKE PASS / NEEDS MANUAL AUDIO RETRY
+**Status:** TASK-TTS-004B2 DONE - VOICEVOX AUDIO OUTPUT SUCCESS / NOT SELECTED FOR CHINESE RUNTIME
 **Date:** 2026-06-18
 **Scope:** Provider research, implemented mock-provider skeleton boundary,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B manual VOICEVOX
@@ -298,6 +298,37 @@ Manual Windows retry after TASK-TTS-004B2 hardening:
 - Pronunciation/character quality is still not judged by the probe and requires
   manual listening.
 
+Manual listening verdict:
+
+| Field | Result |
+|---|---|
+| Provider | VOICEVOX |
+| Voice | 四国めたん / あまあま |
+| Version | `0.25.2` |
+| Synthesis latency | `1568ms` |
+| Audio output | Success |
+| Japanese/anime style | Good |
+| Chinese pronunciation | Failed; Chinese text was spoken as Japanese / Japanese-like pronunciation |
+| Speed | Okay |
+| Tone | Good |
+| Strange pauses | None |
+| Overall acceptability | `7/10` |
+| Runtime recommendation | Not selected for Chinese main path |
+| Retained use | Japanese-style experimental/fallback candidate |
+
+Provider decision:
+
+- VOICEVOX is technically usable as a local server provider.
+- VOICEVOX can produce WAV with acceptable latency after timeout hardening.
+- VOICEVOX has good Japanese/anime-style character.
+- VOICEVOX is not selected as the main Chinese TTS runtime provider because
+  Chinese text is not pronounced as understandable Chinese.
+- Keep VOICEVOX as an optional Japanese-style or Japanese-utterance experiment
+  path.
+- Next provider path should be TASK-TTS-004C edge-tts optional network
+  candidate for Chinese voice validation, or TASK-TTS-004D Style-Bert-VITS2 /
+  GPT-SoVITS feasibility for long-term character voice.
+
 Evaluation notes:
 
 - Chinese pronunciation and mixed Chinese/Japanese delivery must be judged by
@@ -306,8 +337,8 @@ Evaluation notes:
   native Chinese support.
 - A successful WAV generation proves only local server connectivity and file
   output. It does not approve runtime app playback.
-- Audio quality is not judged yet from the pre-hardening manual run because
-  optional synthesis timed out before a WAV was generated.
+- Audio quality has now been manually judged for this VOICEVOX sample: style and
+  tone are good, but Chinese pronunciation fails the main runtime requirement.
 - No runtime TTS wiring, `/chat` integration, Pet Window playback,
   auto-speaking, dependency install, ElevenLabs integration, STT behavior
   change, Conversation Mode queue change, Owner Voice gate change, or schema
@@ -412,9 +443,8 @@ Recommended sequencing:
 4. TASK-TTS-004B: VOICEVOX local server manual probe / optional audio output.
    DONE - manual localhost metadata probe ready; optional WAV generation is
    guarded by `--allow-audio-output` and remains local-only.
-5. TASK-TTS-004B2: VOICEVOX synthesis timeout / retry hardening. DONE - stage
-   diagnostics and finite audio-stage retry ready; manual audio retry still
-   needed for quality judgment.
+5. TASK-TTS-004B2: VOICEVOX synthesis timeout / retry hardening and listening
+   verdict. DONE - audio output works, but not selected for Chinese runtime.
 6. TASK-TTS-004C: edge-tts optional network candidate probe.
 7. TASK-TTS-004D: Style-Bert-VITS2 / GPT-SoVITS feasibility research.
 8. TASK-TTS-004: renderer playback queue diagnostics after a real provider

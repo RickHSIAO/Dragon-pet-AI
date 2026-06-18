@@ -23888,7 +23888,7 @@ This is an expected safe result when VOICEVOX Engine is not running locally.
 
 ## TASK-TTS-004B2 | VOICEVOX Synthesis Timeout / Retry Hardening
 
-**Status:** IMPLEMENTED - VOICEVOX TIMEOUT HARDENING SMOKE PASS / NEEDS MANUAL AUDIO RETRY
+**Status:** DONE - VOICEVOX AUDIO OUTPUT SUCCESS / NOT SELECTED FOR CHINESE RUNTIME
 **Date:** 2026-06-18
 **Phase:** Phase 5 - Companion Voice Output Architecture
 **Depends on:** TASK-TTS-001, TASK-TTS-002, TASK-TTS-003, TASK-TTS-004A, TASK-TTS-004B
@@ -23913,6 +23913,40 @@ Manual Windows probe after starting VOICEVOX Engine:
   evaluation with `reason=voicevox_error:TimeoutError`,
   `synthesisStatus=voicevox_error`, `measuredLatencyMs=890`,
   `audioGenerated=false`, and `outputPath=null`.
+
+### Manual Listening Verdict
+
+| Field | Verdict |
+|---|---|
+| Provider | VOICEVOX |
+| Version | `0.25.2` |
+| Audio output | Success after timeout hardening |
+| Synthesis latency | `1568ms` |
+| Audio bytes | `291372` |
+| Chinese understandable | No; Chinese text was spoken with Japanese/Japanese-like pronunciation |
+| Japanese/anime style | Yes, very much |
+| Christina fit | Only okay |
+| Speed | Okay |
+| Tone | Good |
+| Strange pauses | None |
+| Overall acceptability | `7/10` |
+| Key problem | Does not speak Chinese correctly |
+
+### Provider Decision
+
+- VOICEVOX is technically usable as a local server provider.
+- VOICEVOX can produce WAV output with acceptable latency after timeout
+  hardening.
+- VOICEVOX has good Japanese/anime-style voice character.
+- VOICEVOX is not selected as the main Chinese TTS runtime provider because
+  Chinese text is pronounced as Japanese and is not acceptable for Chinese
+  conversation.
+- Keep VOICEVOX as an optional Japanese-style / Japanese utterance experiment
+  path.
+- Do not wire VOICEVOX into runtime yet.
+- Next recommended provider path: TASK-TTS-004C edge-tts optional network
+  candidate for Chinese voice validation, or TASK-TTS-004D Style-Bert-VITS2 /
+  GPT-SoVITS feasibility for long-term character voice.
 
 ### Implementation Summary
 

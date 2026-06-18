@@ -1,7 +1,7 @@
 # TTS Architecture
 
 **Task:** TASK-TTS-001 / TASK-TTS-004B2
-**Status:** TASK-TTS-004B2 IMPLEMENTED - VOICEVOX TIMEOUT HARDENING SMOKE PASS / NEEDS MANUAL AUDIO RETRY
+**Status:** TASK-TTS-004B2 DONE - VOICEVOX AUDIO OUTPUT SUCCESS / NOT SELECTED FOR CHINESE RUNTIME
 **Date:** 2026-06-18
 **Scope:** Provider-neutral architecture plus TASK-TTS-002 backend mock skeleton,
 TASK-TTS-004A install-free provider review, and TASK-TTS-004B VOICEVOX manual
@@ -78,8 +78,13 @@ TASK-TTS-004B2 implementation checkpoint:
   and `lastExceptionMessage`.
 - Stage-specific timeout statuses distinguish `audio_query_timeout` from
   `synthesis_timeout`.
-- Runtime TTS remains disabled/mock-only; VOICEVOX is still a manual probe path,
-  not an app playback provider.
+- Manual listening found VOICEVOX is technically usable and strong for
+  Japanese/anime style, but Chinese text is pronounced as Japanese and is not
+  acceptable for Chinese conversation.
+- Runtime TTS remains disabled/mock-only; VOICEVOX is still a manual probe path
+  and optional Japanese-style experiment candidate, not an app playback provider
+  or selected Chinese runtime.
+- Provider selection remains unresolved for the main Chinese runtime path.
 
 ---
 
@@ -549,8 +554,9 @@ Manual Windows playback smoke checklist for the first runtime task:
   reviewed; no real provider selected and `mock` remains the only safe skeleton.
 - TASK-TTS-004B: VOICEVOX local server manual probe / optional audio output.
   IMPLEMENTED - probe-only; optional local WAV output requires explicit flag.
-- TASK-TTS-004B2: VOICEVOX synthesis timeout / retry hardening. IMPLEMENTED -
-  stage diagnostics and longer timeout; manual audio retry still needed.
+- TASK-TTS-004B2: VOICEVOX synthesis timeout / retry hardening and listening
+  verdict. DONE - audio output succeeds, but VOICEVOX is not selected for
+  Chinese runtime.
 - TASK-TTS-004C: edge-tts optional network candidate probe.
 - TASK-TTS-004D: Style-Bert-VITS2 / GPT-SoVITS feasibility research.
 - TASK-TTS-004: Playback queue and renderer diagnostics after a real provider
@@ -644,3 +650,6 @@ TASK-TTS-004B2 is complete when:
   paths.
 - Runtime TTS remains disabled/mock-only with no playback, `/chat`, STT,
   Conversation Mode, Owner Voice, dependency, or schema changes.
+- Manual listening verdict and provider decision are recorded: VOICEVOX remains
+  probe-only / optional Japanese-style experiment path and is not selected for
+  the Chinese runtime provider.

@@ -184,10 +184,10 @@ Risks / unknowns:
   server manually.
 - TASK-TTS-004B is still probe-only: no app integration, no runtime playback,
   no auto-speaking, and no final provider selection.
-- A manual VOICEVOX 0.25.2 metadata probe passed, but the first optional audio
-  probe timed out before a WAV was generated, so audio quality has not been
-  judged yet. TASK-TTS-004B2 generated a local WAV after increasing timeout,
-  but pronunciation/character quality still requires manual listening.
+- A manual VOICEVOX 0.25.2 metadata probe and hardened optional audio probe
+  passed, but manual listening found that Chinese text is spoken with
+  Japanese/Japanese-like pronunciation. Japanese/anime style and tone are good,
+  but VOICEVOX is not selected for the main Chinese runtime path.
 
 ### ElevenLabs
 
@@ -307,14 +307,17 @@ Suggested research and implementation tasks:
   playback, auto-speaking, dependency, `/chat` schema, mood schema, STT,
   Conversation Mode, or Owner Voice behavior change is added.
 - TASK-TTS-004B2 VOICEVOX Synthesis Timeout / Retry Hardening.
-  **IMPLEMENTED - VOICEVOX TIMEOUT HARDENING SMOKE PASS / NEEDS MANUAL AUDIO
-  RETRY (2026-06-18):** Added longer configurable VOICEVOX probe timeout,
-  finite retry, and stage diagnostics after manual metadata succeeded on
-  VOICEVOX Engine `0.25.2` but optional audio timed out before quality
-  evaluation. A hardened retry generated a local WAV, but audio quality remains
-  unjudged until it is listened to manually. No runtime playback, `/chat` integration,
-  auto-speaking, dependency, STT, Conversation Mode, Owner Voice, or schema
-  behavior change is added.
+  **DONE - VOICEVOX AUDIO OUTPUT SUCCESS / NOT SELECTED FOR CHINESE RUNTIME
+  (2026-06-18):** Added longer configurable VOICEVOX probe timeout, finite
+  retry, and stage diagnostics after manual metadata succeeded on VOICEVOX
+  Engine `0.25.2` but optional audio timed out before quality evaluation. A
+  hardened retry generated a local WAV. Manual listening verdict: Japanese/anime
+  style good, tone good, speed okay, no strange pauses, overall `7/10`, but
+  Chinese text was not understandable as Chinese because it was pronounced as
+  Japanese. VOICEVOX remains optional for Japanese-style / Japanese utterance
+  experiments and is not selected for the main Chinese runtime path. No runtime
+  playback, `/chat` integration, auto-speaking, dependency, STT, Conversation
+  Mode, Owner Voice, or schema behavior change is added.
 - TASK-TTS-004C Edge-TTS Optional Network Candidate Probe.
 - TASK-TTS-004D Style-Bert-VITS2 / GPT-SoVITS Feasibility Research.
 - TASK-TTS-004 Playback queue and renderer diagnostics after a real provider
