@@ -253,7 +253,16 @@ Suggested research and implementation tasks:
   diagnostics, and tests. This is not real voice quality evaluation and does
   not add synthesis, playback, generated audio, route/UI controls, dependency,
   or auto-speaking.
-- TASK-TTS-003 Local synthesis provider experiment.
+- TASK-TTS-003 Local TTS Provider Candidate Probe / No Runtime Wiring.
+  **IMPLEMENTED - LOCAL TTS PROVIDER PROBE SMOKE PASS / NO RUNTIME WIRING
+  (2026-06-18):** Added `scripts/tts_provider_probe.py` and
+  `backend/tests/test_tts_provider_probe.py`. The probe reuses TASK-TTS-002
+  normalization, always supports `mock`, checks optional candidates such as
+  `windows_sapi` and `voicevox_server` without requiring install, marks future
+  candidates as unavailable/manual, and writes local ignored reports under
+  `outputs/tts_provider_probe/YYYYMMDD/`. No provider is selected as final; no
+  runtime wiring, playback, generated audio, dependency, or auto-speaking is
+  added.
 - TASK-TTS-004 Playback queue and renderer diagnostics.
 - TASK-TTS-005 Pet speaking state / bubble sync.
 - TASK-TTS-006 Conversation Mode feedback prevention.

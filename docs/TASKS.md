@@ -23197,7 +23197,7 @@ STT future boundary:
 
 - TASK-TTS-001 Local TTS Provider Architecture / Christina Voice Output Design.
 - TASK-TTS-002 Mock TTS Provider Skeleton / Disabled-by-default TTS Queue.
-- TASK-TTS-003 Local synthesis provider experiment.
+- TASK-TTS-003 Local TTS Provider Candidate Probe / No Runtime Wiring.
 - TASK-TTS-004 Playback queue and renderer diagnostics.
 - TASK-TTS-005 Pet speaking state / bubble sync.
 - TASK-TTS-006 Conversation Mode feedback prevention.
@@ -23515,6 +23515,123 @@ for a later explicit UI/playback task.
 - [x] No `/chat`, mood schema, STT default/model selector, Conversation Mode
   queue/backpressure, Owner Voice hard-gate, or audio enrollment behavior
   change.
+
+---
+
+## TASK-TTS-003 | Local TTS Provider Candidate Probe / No Runtime Wiring
+
+**Status:** IMPLEMENTED - LOCAL TTS PROVIDER PROBE SMOKE PASS / NO RUNTIME WIRING
+**Date:** 2026-06-18
+**Phase:** Phase 5 - Companion Voice Output Architecture
+**Depends on:** TASK-TTS-001, TASK-TTS-002
+
+### Goal
+
+Add a local-only provider candidate probe that helps decide which local/offline
+TTS path is worth implementing later, without wiring TTS into runtime chat,
+playback, Full App, or Pet Window.
+
+### Implementation Summary
+
+Added:
+
+- `scripts/tts_provider_probe.py`
+- `backend/tests/test_tts_provider_probe.py`
+
+Updated:
+
+- `.gitignore`
+- `README.md`
+- `docs/ROADMAP.md`
+- `docs/TASKS.md`
+- `docs/TTS_ARCHITECTURE.md`
+- `docs/TTS_PROVIDER_RESEARCH.md`
+- `docs/VOICE_TTS_RESEARCH.md`
+
+Probe behavior:
+
+- Reuses TASK-TTS-002 `normalize_tts_text()` for sample text chunking.
+- Accepts `--text`, or uses built-in Christina probe samples.
+- Accepts `--providers` as a comma-separated list.
+- Always supports `mock`.
+- Gracefully returns `available=false` with a reason for unavailable or unknown
+  providers.
+- Writes JSON and Markdown reports under `outputs/tts_provider_probe/YYYYMMDD/`.
+- Keeps `outputs/tts_provider_probe/` ignored by git.
+- Defaults to metadata-only with `audioOutputAllowed=false`,
+  `audioGenerated=false`, and provider `outputPath=null`.
+
+Supported candidate names:
+
+- `mock`
+- `windows_sapi`
+- `voicevox_server`
+- `edge_tts`
+- `piper_onnx`
+- `gpt_sovits`
+- `style_bert_vits2`
+- `rvc_like`
+
+### Candidate Probe Notes
+
+- `mock`: always available, metadata-only, no voice-quality signal.
+- `windows_sapi`: Windows-only availability check for optional local bridges
+  such as `pyttsx3` or `win32com`; no synthesis or playback.
+- `voicevox_server`: checks only `http://127.0.0.1:50021/version`; missing
+  server is a skipped candidate, not a failure.
+- `edge_tts`: optional network/cloud-ish dependency check only; not default and
+  no text is sent to a provider.
+- `piper_onnx`, `gpt_sovits`, `style_bert_vits2`, `rvc_like`: future/manual
+  candidates marked unavailable until a separate install/model/licensing task.
+
+No provider is selected as final by TASK-TTS-003.
+
+### Preserved Boundaries
+
+- No runtime TTS wiring.
+- No `/chat` integration.
+- No real runtime auto-speaking.
+- No Full App playback.
+- No Pet Window playback.
+- No new route or UI controls.
+- No generated audio by default.
+- No generated audio committed.
+- No generated reports committed.
+- No downloaded model, voice sample, temp WAV, embedding, local setting, log, or
+  pytest temp folder committed.
+- No new package dependency.
+- No ElevenLabs integration.
+- No paid/cloud provider as default.
+- No `/chat` schema or mood schema change.
+- No STT default change.
+- No STT model selector behavior change.
+- No Conversation Mode queue/backpressure behavior change.
+- No Owner Voice hard-gate behavior change.
+
+### Validation
+
+- `.\backend\.venv\Scripts\python.exe -m py_compile scripts\tts_provider_probe.py`: PASS.
+- `.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --help`: PASS.
+- `.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers mock --text "Christina local TTS probe sample." --pretty`: PASS; `mock` available, `audioGenerated=false`, reports written under ignored `outputs/tts_provider_probe/YYYYMMDD/`.
+- `.\backend\.venv\Scripts\python.exe -m pytest backend\tests\test_tts_provider_probe.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-tts003`: PASS, 9 passed.
+- `node apps/desktop/scripts/renderer-chat-smoke.js`: PASS.
+- `node apps/desktop/scripts/pet-window-smoke.js`: PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: PASS.
+- `git diff --check`: PASS; exit code 0 with Windows CRLF conversion warnings only.
+- `git diff --cached --check`: PASS.
+
+### Acceptance Criteria
+
+- [x] Probe script added.
+- [x] Mock provider probe always available.
+- [x] Unavailable providers skip without crashing.
+- [x] Reports write to local ignored output folder.
+- [x] Audio generation disabled by default.
+- [x] Tests cover schema, mock availability, unavailable-provider behavior,
+  report creation, no default audio, and TASK-TTS-002 normalization reuse.
+- [x] No runtime wiring, route/UI/Pet change, playback, auto-speaking,
+  dependency, cloud default, generated audio commit, report commit, schema, STT,
+  Conversation Mode, or Owner Voice behavior change.
 
 ---
 

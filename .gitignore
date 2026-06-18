@@ -47,3 +47,6 @@ backend/data/provider_settings.json.tmp
 # TASK-261 local owner voice gate / pytest temp
 backend/data/owner_voice_gate_settings.json
 backend.pytest-tmp-task261-*/
+
+# TASK-TTS-003 local-only provider probe reports
+outputs/tts_provider_probe/

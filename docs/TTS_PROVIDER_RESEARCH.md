@@ -1,12 +1,12 @@
 # TTS Provider Research
 
-**Task:** TASK-TTS-001 / TASK-TTS-002
-**Status:** TASK-TTS-002 IMPLEMENTED - MOCK TTS SKELETON SMOKE PASS / RUNTIME PLAYBACK NOT STARTED
+**Task:** TASK-TTS-001 / TASK-TTS-003
+**Status:** TASK-TTS-003 IMPLEMENTED - LOCAL TTS PROVIDER PROBE SMOKE PASS / NO RUNTIME WIRING
 **Date:** 2026-06-18
-**Scope:** Provider research and evaluation plan plus implemented mock-provider
-skeleton boundary. No real voice-quality provider is selected as final, no model
-is downloaded, no dependency is added, and no real synthesis/playback path is
-implemented by TASK-TTS-002.
+**Scope:** Provider research, implemented mock-provider skeleton boundary, and
+TASK-TTS-003 local provider candidate probe. No real voice-quality provider is
+selected as final, no model is downloaded, no dependency is added, and no real
+synthesis/playback path is implemented by TASK-TTS-003.
 
 This document records candidate directions for Christina voice output. It should
 guide later experiments, not lock Dragon Pet AI to a single TTS engine.
@@ -147,7 +147,44 @@ TASK-TTS-001 does not add cloud provider architecture beyond this boundary.
 
 ---
 
-## 4. Local Candidate Notes
+## 4. TASK-TTS-003 Provider Candidate Probe
+
+TASK-TTS-003 adds `scripts/tts_provider_probe.py` as a local-only metadata probe.
+It writes JSON/Markdown reports under ignored `outputs/tts_provider_probe/YYYYMMDD/`.
+Generated reports are local artifacts and must not be committed.
+
+Probe rules:
+
+- No runtime TTS wiring.
+- No `/chat` integration.
+- No playback or auto-speaking.
+- No dependency install.
+- No generated audio by default.
+- No provider is selected as final.
+- Optional providers may be unavailable and should report `available=false` with
+  a reason instead of failing the probe.
+
+| Provider | Offline/local? | Chinese support | Anime/Japanese-style suitability | Setup difficulty | Runtime integration risk | Current probe status |
+|---|---|---|---|---|---|---|
+| `mock` | Local metadata only | Not a real voice | Not a real voice | None | Very low | Always available; metadata-only smoke provider |
+| `windows_sapi` | Local OS capability if bridge exists | Depends on installed Windows voices | Usually weak/inconsistent | Low if OS voices and bridge exist | Medium; voice list and language vary by system | Availability check only; no synthesis/playback |
+| `voicevox_server` | Localhost server if user runs it | Primarily Japanese; Chinese not native | Strong for Japanese/anime style | Medium; separate server install/start | Medium; local HTTP lifecycle and licensing must be reviewed | Checks `http://127.0.0.1:50021/version`; skipped if absent |
+| `edge_tts` | Network/cloud-ish | Usually has Chinese voices | Depends on service voices | Low package setup, but network required | High for privacy/default policy | Optional dependency check only; not default |
+| `piper_onnx` | Local/offline | Voice availability varies | Usually weak for anime style | Medium; model selection needed | Medium; packaging/model management | Future/manual candidate, not probed |
+| `gpt_sovits` | Local/offline after setup | Possible with correct data/model | Potentially strong | High; data/model workflow | High; licensing, voice data, GPU/runtime complexity | Future research only |
+| `style_bert_vits2` | Local/offline after setup | Primarily Japanese-oriented | Potentially strong | High; model/runtime setup | High; packaging and licensing complexity | Future research only |
+| `rvc_like` | Local/offline after setup | Voice conversion, not TTS by itself | Potentially useful after TTS source | High; separate source voice and conversion | High; licensing/consent and pipeline complexity | Future research only |
+
+Current recommendation:
+
+- Keep `mock` as the only implemented runtime-safe provider.
+- Use TASK-TTS-003 reports to decide which local provider deserves a later
+  TASK-TTS-004/TASK-TTS-005 implementation spike.
+- Do not make `edge_tts` or any paid/cloud path default.
+
+---
+
+## 5. Local Candidate Notes
 
 The following are candidate directions for future manual experiments. TASK-TTS-001
 does not install, download, benchmark, or endorse any of them as final.
@@ -170,7 +207,7 @@ should explicitly test both:
 
 ---
 
-## 5. Provider Experiment Boundary
+## 6. Provider Experiment Boundary
 
 Future provider spikes should be local-first and isolated:
 
@@ -197,7 +234,7 @@ Recommended experiment corpus:
 
 ---
 
-## 6. Voice Data and Licensing
+## 7. Voice Data and Licensing
 
 Any custom or cloned voice work requires a separate consent/licensing task before
 implementation.
@@ -217,7 +254,7 @@ not an imitation of a specific real actor.
 
 ---
 
-## 7. Singing Research Boundary
+## 8. Singing Research Boundary
 
 Singing is future research only.
 
@@ -231,14 +268,14 @@ Future candidate:
 
 ---
 
-## 8. Recommended Next Provider Path
+## 9. Recommended Next Provider Path
 
 Recommended sequencing:
 
 1. TASK-TTS-002: mock provider skeleton and provider contract. DONE -
    metadata-only backend skeleton; not a voice-quality provider.
-2. TASK-TTS-003: one local provider experiment through `local_sidecar` or
-   `local_http`.
+2. TASK-TTS-003: local provider candidate probe. DONE - metadata-only script;
+   no runtime wiring and no provider selected.
 3. TASK-TTS-004: renderer playback queue diagnostics with mock/provider output.
 4. TASK-TTS-005: Pet speaking state and bubble sync.
 5. TASK-TTS-006: Conversation Mode feedback prevention.
@@ -250,7 +287,7 @@ exist.
 
 ---
 
-## 9. Research Acceptance
+## 10. Research Acceptance
 
 TASK-TTS-001 provider research is complete when:
 
