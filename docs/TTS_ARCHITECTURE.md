@@ -1,0 +1,404 @@
+# TTS Architecture
+
+**Task:** TASK-TTS-001
+**Status:** DONE - TTS ARCHITECTURE DESIGN READY / IMPLEMENTATION NOT STARTED
+**Date:** 2026-06-18
+**Scope:** Documentation and architecture only. No runtime TTS provider, playback
+queue, dependency, generated audio, schema change, STT behavior change, or
+Conversation Mode behavior change is added by this task.
+
+This document defines the target architecture for Christina voice output before
+any new provider implementation begins. It is intentionally provider-neutral:
+Dragon Pet AI should be able to evaluate local and low-cost voices without
+hard-coding one engine as the permanent path.
+
+---
+
+## 1. Goals
+
+- Prepare a local-first TTS architecture for Christina voice output.
+- Support Chinese speech; Taiwan accent is not required.
+- Prefer Japanese/anime-style voice direction where available and legally usable.
+- Keep ElevenLabs and other cloud providers out of the first architecture path.
+- Allow later experiments with multiple local providers.
+- Keep runtime TTS disabled by default until implemented and smoke-tested.
+- Keep Conversation Mode STT/backpressure independent from TTS playback.
+
+Non-goals for TASK-TTS-001:
+
+- No runtime TTS playback implementation.
+- No new package dependency.
+- No external paid API dependency.
+- No ElevenLabs integration.
+- No voice cloning, enrollment, or recording changes.
+- No generated audio, voice samples, temp WAVs, embeddings, local settings, logs,
+  or reports committed.
+- No `/chat` schema or mood schema change.
+- No STT default or STT model selector behavior change.
+- No Conversation Mode queue/backpressure behavior change.
+- No Owner Voice hard-gate behavior change.
+
+---
+
+## 2. Runtime Placement
+
+Recommended split:
+
+| Component | Location | Responsibility |
+|---|---|---|
+| TTS request trigger | Full App renderer and Pet renderer call sites, future task | Submit only accepted assistant replies to the TTS queue when user-enabled. |
+| Text normalization | Shared renderer module or backend utility, future task | Convert reply text into TTS-safe chunks. |
+| TTS queue controller | Full App renderer module first, future task | Order jobs, prevent overlap, support stop/interrupt, publish diagnostics. |
+| Provider adapter | Backend service or local sidecar bridge, future task | Synthesize audio or return playback instructions behind a stable interface. |
+| Local external process | Optional provider-specific sidecar, future task | Run heavy local engines outside Electron renderer/main. |
+| Playback | Renderer/Pet Window, future task | Play audio through browser audio APIs or an explicit playback bridge. |
+| Electron main | Narrow IPC only if needed, future task | Bridge local process/audio file handles without exposing broad filesystem APIs. |
+
+Default architecture decision:
+
+1. Keep orchestration close to the renderer because TTS is a UI output, not a
+   chat decision.
+2. Put heavy local synthesis behind backend or sidecar adapters so model loading
+   and subprocess failures do not freeze the renderer.
+3. Keep Electron main as a narrow bridge only. It should not own TTS policy,
+   prompt text, persona decisions, or provider selection logic.
+4. Treat local external providers as replaceable adapters. Provider-specific
+   setup, model download, and GPU/CPU runtime requirements belong to explicit
+   future tasks.
+
+---
+
+## 3. Target Pipeline
+
+```text
+accepted chat reply
+-> TTS eligibility gate
+-> text normalization
+-> sentence chunking
+-> TTS queue
+-> provider adapter
+-> synthesized audio or stream
+-> playback controller
+-> Pet speaking state / diagnostics
+```
+
+Rules:
+
+- The trigger is an accepted assistant reply only.
+- TTS never calls `/chat`.
+- TTS never sends user audio or generated audio to `/chat`.
+- TTS does not read Full App diagnostics, hidden details, raw provider metadata,
+  prompt text, chain/system/debug metadata, or Output Queue payload internals.
+- TTS-safe text is derived from visible reply text, not from hidden diagnostic
+  state.
+- Provider failure must degrade to visual reply only, not retry `/chat`.
+
+---
+
+## 4. Provider Abstraction
+
+Future interface shape:
+
+```text
+TtsProvider.synthesize(request) -> TtsResult
+
+request:
+  providerId
+  voiceId
+  languageHint
+  styleHint
+  chunkText
+  rate
+  pitch
+  volume
+  requestId
+
+result:
+  ok
+  providerId
+  requestedVoiceId
+  resolvedVoiceId
+  audioRef or audioBytes or streamRef
+  mimeType
+  durationMs
+  synthesisLatencyMs
+  errorCode
+  safeMessage
+```
+
+Provider contract:
+
+- `mock` provider is required first for tests and queue behavior.
+- Local providers must be selectable by configuration, not hard-coded in call
+  sites.
+- Provider adapters must return safe error codes and safe messages, not raw
+  stack traces.
+- Provider-specific model paths, subprocess commands, and local cache paths must
+  not be exposed to Pet Bubble speech.
+- Cloud providers are not part of the first path. If ever added, they require a
+  separate opt-in, cost/privacy design, and explicit user acknowledgement.
+
+Initial provider ids:
+
+| Provider id | Role |
+|---|---|
+| `mock` | Deterministic tests, disabled/default diagnostics, no audio generation. |
+| `web_speech` | Existing platform/browser capability reference; useful fallback, not the architecture lock-in. |
+| `local_sidecar` | Generic local process adapter for model-based experiments. |
+| `local_http` | Generic localhost adapter for a separately launched TTS lab server. |
+
+---
+
+## 5. Text Normalization
+
+TTS text normalization should run before queue admission.
+
+Inputs:
+
+- Visible assistant reply text from `/chat` success path.
+- Optional mood/expression only as a style hint, never as spoken text.
+- Optional language hint, normally `zh-TW` or `zh`.
+
+Required cleanup:
+
+- Strip Markdown code fences and inline code markers.
+- Skip or summarize long code blocks instead of reading them verbatim.
+- Remove debug labels, source labels, hidden details, JSON-like diagnostics,
+  stack traces, local URLs, local file paths, and provider internals.
+- Remove markdown table separators and excessive bullets.
+- Collapse repeated whitespace.
+- Keep Traditional Chinese text readable when present.
+- Keep Christina voice concise; do not read long technical diagnostics unless the
+  user explicitly requests spoken diagnostics in a future task.
+
+Chunking:
+
+- Split on Chinese and Western sentence punctuation.
+- Keep chunks short enough for provider stability.
+- Preserve ordering.
+- Drop empty chunks.
+- Enforce a max chunk count and max characters per chunk.
+- Long replies should either stop after a safe limit or require explicit user
+  action to continue speaking.
+
+Forbidden spoken sources:
+
+- raw user message text outside the visible reply
+- hidden chain/system/developer/debug metadata
+- Voice Diagnostics
+- Owner Voice scores, thresholds, paths, or embeddings
+- Output Queue raw payloads
+- provider stack traces
+- JSON responses
+- screenshots/OCR raw data unless a future task explicitly designs spoken screen
+  summaries
+
+---
+
+## 6. Playback Queue
+
+The TTS queue is separate from the Conversation Mode STT queue.
+
+Queue item shape:
+
+```text
+ttsJob:
+  id
+  sourceReplyId
+  sourceSurface: full_app | pet_window | conversation_mode
+  providerId
+  voiceId
+  chunks[]
+  currentChunkIndex
+  status: queued | synthesizing | ready | playing | stopped | failed | complete
+  interruptible
+  createdAt
+  startedAt
+  completedAt
+```
+
+Queue rules:
+
+- TTS is disabled by default.
+- Only one TTS job may play at a time.
+- New accepted replies should interrupt or replace older speech according to a
+  documented user setting; first implementation should prefer "new reply stops
+  current speech" to avoid overlap.
+- Stop must cancel queued and active chunks.
+- Provider synthesis should be cancellable when the provider supports it; when
+  not supported, ignore late results after stop.
+- Queue diagnostics must remain local, safe, and text-only.
+- The existing Output Queue can record diagnostics later, but TTS dispatch must
+  not be enabled until a future task explicitly connects it.
+
+---
+
+## 7. Conversation Mode Integration
+
+Conversation Mode must remain STT-first and queue-stable.
+
+Rules:
+
+- TTS may only be considered after a Conversation Mode `/chat` reply is accepted.
+- TTS must not block STT transcription, chat queue drain, or backpressure
+  pause/resume.
+- Conversation Mode queue max remains `4`.
+- `queue_full` remains a hard fallback diagnostics path and is not affected by
+  TTS.
+- TTS playback must not be recorded into the microphone. Future implementation
+  must stop, duck, or gate playback before opening a mic recorder.
+- TTS must not trigger a new Conversation Mode turn.
+- TTS failure must not retry STT or `/chat`.
+- Owner Voice dry-run remains non-blocking unless a future hard-gate task
+  explicitly changes it.
+
+Recommended future feedback prevention:
+
+1. If Conversation Mode is listening and TTS starts, pause VAD-triggered capture
+   or mark the period as playback-muted.
+2. If the user starts Manual Mic or Pet mic recording, stop current TTS first.
+3. Diagnostics should show whether playback was stopped due to mic capture.
+4. Do not implement full duplex speech until a separate barge-in design exists.
+
+---
+
+## 8. Pet Window Integration
+
+Pet Window should remain display-oriented.
+
+Future behavior:
+
+- Pet speaking state may show a small speaking indicator while audio plays.
+- Pet expression may use the accepted reply mood/expression already selected by
+  the chat flow.
+- The speech bubble remains the source of visible reply text.
+- TTS failure should leave the visible reply intact and optionally show a small
+  non-speaking status in diagnostics or details.
+- Pet Bubble must not show provider stack traces, model paths, raw JSON, or
+  synthesis diagnostics as normal speech.
+- Pet Window IPC remains narrow and allowlisted.
+
+Suggested UI states:
+
+| State | Meaning |
+|---|---|
+| `tts_disabled` | User has not enabled TTS. |
+| `tts_queued` | Reply is accepted and waiting to synthesize. |
+| `tts_synthesizing` | Provider is generating a chunk. |
+| `tts_playing` | Audio is playing; speaking indicator may show. |
+| `tts_stopped` | User or mic capture stopped speech. |
+| `tts_failed` | Audio failed; visible reply remains available. |
+
+---
+
+## 9. Diagnostics
+
+Future diagnostics should include safe scalar facts:
+
+- TTS enabled/disabled.
+- Provider id.
+- Requested voice id.
+- Resolved voice id.
+- Language hint.
+- Chunk count.
+- Current chunk index.
+- Synthesis latency.
+- Playback latency.
+- Queue length.
+- Active job status.
+- Stop/interrupt reason.
+- Error code and safe fallback.
+- Audio source type: generated fresh, cached, or mock.
+- Whether audio was cached.
+
+Diagnostics must not include:
+
+- raw generated audio bytes
+- local model paths
+- voice sample paths
+- user audio paths
+- owner voice centroid or candidate embeddings
+- stack traces
+- provider secrets
+- hidden prompt/debug/system metadata
+
+---
+
+## 10. Safety and Privacy
+
+- No external network provider by default.
+- No generated voice audio committed.
+- No voice samples committed.
+- No raw user audio persistence.
+- No embeddings or voiceprints committed.
+- No automatic voice enrollment.
+- No silent microphone use.
+- No always-listening or wake word in this TTS architecture.
+- TTS output is not authentication and must not interact with Owner Voice Gate.
+- Provider experiments that require model downloads must be future/manual and
+  clearly documented before use.
+- Any future cloud provider requires separate BYOK/cost/privacy design.
+
+---
+
+## 11. Testing Plan
+
+Automated tests for TASK-TTS-002+ should cover:
+
+- Mock provider returns deterministic safe results.
+- TTS disabled by default.
+- Normalization strips diagnostics, markdown code fences, JSON-like payloads, and
+  stack traces.
+- Sentence chunking preserves order and enforces max length.
+- Queue prevents overlapping playback.
+- Stop clears active and pending jobs.
+- Late provider result after stop is ignored.
+- Conversation Mode accepted reply can enqueue TTS without changing STT queue
+  state.
+- Manual Mic or Pet mic start stops current speech.
+- Pet speaking state toggles only during playback.
+- Provider failure leaves visible reply intact.
+
+Manual Windows playback smoke checklist for the first runtime task:
+
+- TTS default OFF on app start.
+- Enable TTS explicitly.
+- Normal Christina reply speaks once.
+- Long reply chunks in order and can be stopped.
+- New reply interrupts old speech without overlap.
+- Manual Mic start stops speech before recording.
+- Conversation Mode remains drained/backpressure-stable.
+- Pet speaking indicator appears only during playback.
+- Provider failure is clean and does not call `/chat`.
+- No generated audio files or logs are written to the repo.
+
+---
+
+## 12. Phased Implementation Plan
+
+- TASK-TTS-002: Backend/provider skeleton with mock provider.
+- TASK-TTS-003: Local synthesis provider experiment.
+- TASK-TTS-004: Playback queue and renderer diagnostics.
+- TASK-TTS-005: Pet speaking state / bubble sync.
+- TASK-TTS-006: Conversation Mode feedback prevention.
+- Future: voice quality comparison / singing research.
+
+Implementation should stop after each phase for smoke validation before widening
+the runtime surface.
+
+---
+
+## 13. TASK-TTS-001 Acceptance
+
+TASK-TTS-001 is complete when:
+
+- `docs/TTS_ARCHITECTURE.md` records the provider-neutral TTS architecture.
+- `docs/TTS_PROVIDER_RESEARCH.md` records local provider candidates and research
+  boundaries.
+- Existing roadmap/task/persona/Pet Bubble/architecture docs point to the new
+  design.
+- README status is updated.
+- Validation smoke scripts still pass.
+- No runtime TTS implementation, dependency, generated audio, STT behavior,
+  Conversation Mode behavior, Owner Voice behavior, or schema behavior changes
+  are committed.

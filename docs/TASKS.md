@@ -23195,12 +23195,13 @@ STT future boundary:
 
 ### Future Task List
 
-- TASK-TTS-001 ChatTTS lab evaluation.
-- TASK-TTS-002 GPT-SoVITS local character voice spike.
-- TASK-TTS-003 F5-TTS / CosyVoice comparison spike.
-- TASK-TTS-004 TTS provider interface design, docs-only.
-- TASK-TTS-005 Dragon Pet AI audio skeleton, disabled by default.
-- TASK-TTS-006 Local TTS provider integration behind user controls.
+- TASK-TTS-001 Local TTS Provider Architecture / Christina Voice Output Design.
+- TASK-TTS-002 Backend/provider skeleton with mock provider.
+- TASK-TTS-003 Local synthesis provider experiment.
+- TASK-TTS-004 Playback queue and renderer diagnostics.
+- TASK-TTS-005 Pet speaking state / bubble sync.
+- TASK-TTS-006 Conversation Mode feedback prevention.
+- Future: voice quality comparison / singing research.
 - TASK-STT-001 Push-to-talk STT design.
 - TASK-STT-002 Local Whisper / faster-whisper spike.
 - TASK-STT-003 Confirmed transcript to `/chat` flow.
@@ -23243,6 +23244,127 @@ TASK-227 is docs-only:
 - [x] Persona context pack references Voice/TTS research for TTS-safe style.
 - [x] No code/runtime/prompt/TTS/STT/IPC/`/chat` change.
 - [x] No Windows visual smoke required.
+
+---
+
+## TASK-TTS-001 | Local TTS Provider Architecture / Christina Voice Output Design
+
+**Status:** DONE - TTS ARCHITECTURE DESIGN READY / IMPLEMENTATION NOT STARTED
+**Date:** 2026-06-18
+**Phase:** Phase 5 - Companion Voice Output Architecture
+**Depends on:** TASK-227, TASK-CONV-006, TASK-STT-007, TASK-PERSONA-002
+
+### Goal
+
+Create the provider-neutral TTS architecture and provider research plan for
+Christina voice output before any new runtime provider implementation begins.
+
+### Summary
+
+Added:
+
+- `docs/TTS_ARCHITECTURE.md`
+- `docs/TTS_PROVIDER_RESEARCH.md`
+
+Updated:
+
+- `README.md`
+- `docs/ROADMAP.md`
+- `docs/TASKS.md`
+- `docs/INTERACTIVE_COMPANION_ARCHITECTURE.md`
+- `docs/CHRISTINA_PERSONA_CONTEXT_PACK.md`
+- `docs/PET_BUBBLE_CHAT_WIRING_DESIGN.md`
+
+The design defines:
+
+- Runtime placement across renderer, backend/provider adapter, optional local
+  sidecar, Electron main bridge, playback, and Pet speaking state.
+- Provider abstraction with required `mock` provider first, plus local sidecar
+  and local HTTP lab provider paths.
+- Text normalization and sentence chunking before synthesis.
+- TTS playback queue, stop/interrupt, non-overlap, and diagnostics model.
+- Conversation Mode integration that keeps STT queue/backpressure independent.
+- Pet Window speaking-state and bubble sync boundaries.
+- Diagnostics, safety/privacy rules, and generated-audio/voice-sample commit
+  prohibitions.
+- Phased follow-up tasks TASK-TTS-002 through TASK-TTS-006 plus future voice
+  quality comparison / singing research.
+
+### Key Architecture Decisions
+
+- TTS is a post-reply output layer, not a chat driver.
+- TTS must only read TTS-safe visible assistant reply text.
+- TTS never calls `/chat`, never writes chat history, and never reads hidden
+  diagnostics, prompt/debug/system metadata, Owner Voice data, or Output Queue
+  payload internals.
+- TTS provider calls go through an adapter contract. Provider-specific model
+  loading, subprocesses, or local HTTP labs stay behind replaceable adapters.
+- The first implementation task should use a mock provider to test queue,
+  normalization, disabled-default, and diagnostics behavior before any real
+  synthesis provider is wired.
+- Local/offline providers are preferred. ElevenLabs and other cloud providers
+  are not the first architecture path and would require a separate opt-in
+  cost/privacy design.
+- Runtime TTS provider architecture implementation has not started under
+  TASK-TTS-001. Existing older Pet-side speech behavior is not widened or
+  promoted by this task.
+
+### Conversation Mode Boundary
+
+- Conversation Mode queue max remains `4`.
+- TASK-CONV-006 backpressure pause/resume remains unchanged.
+- TTS can only happen after a Conversation Mode `/chat` reply is accepted.
+- TTS must not block STT transcription, chat queue drain, graceful Stop/drain,
+  or backpressure pause/resume.
+- Future implementation must prevent feedback loops by stopping/pausing TTS
+  before microphone capture or VAD-triggered recording.
+
+### Pet Window Boundary
+
+- Pet Window remains display-oriented.
+- Pet Bubble continues to show visible reply text.
+- Future TTS speaking state may add a small playback indicator, but provider
+  diagnostics, stack traces, local paths, raw JSON, and hidden details must not
+  become normal Pet Bubble speech.
+- Full App -> Pet mirror payload remains `reply / mood / source` unless a
+  future task explicitly changes it.
+
+### Preserved Boundaries
+
+- No runtime TTS provider implementation.
+- No new dependency.
+- No generated audio or voice sample committed.
+- No ElevenLabs or paid external API integration.
+- No `/chat` schema or mood schema change.
+- No STT default change.
+- No STT model selector behavior change.
+- No Conversation Mode queue/backpressure behavior change.
+- No Owner Voice hard-gate behavior change.
+- No runtime auto-speaking added.
+- No audio recording/enrollment change.
+
+### Validation
+
+- `node apps/desktop/scripts/renderer-chat-smoke.js`: PASS.
+- `node apps/desktop/scripts/pet-window-smoke.js`: PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: PASS.
+- `git diff --check`: PASS; exit code 0 with Windows CRLF conversion warnings only.
+
+### Acceptance Criteria
+
+- [x] `docs/TTS_ARCHITECTURE.md` created.
+- [x] `docs/TTS_PROVIDER_RESEARCH.md` created.
+- [x] Provider abstraction, mock provider path, and local provider candidates
+  documented.
+- [x] Text normalization, chunking, queue, stop/interrupt, diagnostics, privacy,
+  and testing plan documented.
+- [x] Conversation Mode independence documented.
+- [x] Pet Window speaking-state integration plan documented.
+- [x] Phased TASK-TTS-002 through TASK-TTS-006 plan documented.
+- [x] README, ROADMAP, architecture, persona, and Pet Bubble docs updated.
+- [x] Runtime TTS provider implementation not started.
+- [x] No dependency, generated audio, voice sample, STT, Conversation Mode,
+  Owner Voice, `/chat`, or mood schema behavior change.
 
 ---
 

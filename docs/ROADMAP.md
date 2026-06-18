@@ -317,6 +317,37 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 
 ---
 
+## Phase 5 Extension - TTS Provider Architecture Track
+
+**Goal:** Prepare Christina voice output with a provider-neutral, local-first TTS
+architecture before any new runtime provider implementation.
+
+**Status:** DESIGN READY / IMPLEMENTATION NOT STARTED - TASK-TTS-001 DONE.
+
+| Task | Name | Status |
+|---|---|---|
+| TASK-TTS-001 | Local TTS Provider Architecture / Christina Voice Output Design | DONE - TTS ARCHITECTURE DESIGN READY / IMPLEMENTATION NOT STARTED |
+| TASK-TTS-002 | Backend/provider skeleton with mock provider | PLANNED |
+| TASK-TTS-003 | Local synthesis provider experiment | PLANNED |
+| TASK-TTS-004 | Playback queue and renderer diagnostics | PLANNED |
+| TASK-TTS-005 | Pet speaking state / bubble sync | PLANNED |
+| TASK-TTS-006 | Conversation Mode feedback prevention | PLANNED |
+| Future | Voice quality comparison / singing research | BACKLOG |
+
+Track constraints:
+
+- TTS remains disabled/not implemented for the new provider architecture until a
+  future runtime task explicitly adds it.
+- First implementation starts with `mock`, not ElevenLabs or a paid external
+  provider.
+- Local/offline providers are preferred; cloud providers require separate
+  opt-in cost/privacy design.
+- No `/chat` schema, mood schema, STT default, STT selector, Conversation Mode
+  backpressure, or Owner Voice hard-gate behavior changes are part of
+  TASK-TTS-001.
+
+---
+
 ## Future Product Track ??Streamer Companion Mode
 
 > Status: SIDE TRACK ??design exploration only; not scheduled for implementation
@@ -1082,6 +1113,8 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 - TASK-229 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-01): Output Queue Debug Preview / Snapshot Polish. Full App renderer-only polish on the TASK-228 disabled queue skeleton. Adds `formatOutputQueueSnapshotPreview(snapshot)` and upgrades diagnostics preview to `Queue: disabled 繚 Items: <count> 繚 Recent: <count> 繚 Next: <priority>/<channel>/<source|none>`. `getOutputQueueSnapshot()` now exposes `nextItem` as a sanitized summary only (`id/source/priority/channel/reason/ttlMs`) and the preview does not display id or payload. Fallbacks are fixed to disabled / 0 / 0 / none; invalid priority/source/channel falls back to `Next: none`. Renderer automated smoke PASS covers default and safe-item preview, raw payload/debug/raw text exclusion, raw JSON/undefined/null/NaN/[object Object] exclusion, invalid snapshot fallback, clear queue preview reset, history/copy/export boundary, no `/chat`/history/TTS/mirror side effects, no new IPC, no generic `"pet"` channel, and regression guards. Windows visual smoke PASS: startup shows Queue disabled plus Items/Recent/Next and Pet Window is normal; send keeps chat/expression/reaction bubble normal, Queue disabled, and Next as a safe summary; Delete/Undo, Edit last user, Clear Chat, and Focus remain functional with Queue disabled; diagnostics show no undefined/null/NaN/[object Object]/raw JSON/user text/payload; no new IPC side effect, extra TTS, extra `/chat`, history/copy/export pollution, or Pet Window expression/reaction bubble regression. No backend, `/chat`, history persistence, IPC, Pet Window runtime, Pet Bubble runtime, expression mirror, reaction bubble mirror, TTS/STT/audio, queue dispatch, prompt runtime, persistence, assets, hover action buttons, or message edit rules changed.
 
 - TASK-228 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-01): Output Queue Runtime Skeleton, disabled by default. Full App renderer-only adds local queue constants/state/helpers: `OUTPUT_QUEUE_ENABLED=false`, max 50, recent max 20, P0-P6 priority allowlist, channel/source allowlists, sanitized item schema, snapshot, clear, priority compare, and preemption helpers. Diagnostics preview now includes `Queue: disabled 繚 Items: <count>` inside the existing character-status preview, not inside `#chat-area`. The skeleton may store sanitized local diagnostics/smoke items while disabled, but disabled means no dispatch, no IPC, no Pet Window send, no `/chat`, no history write, no TTS/STT/audio runtime, no prompt runtime, no persistence, and no Pet Bubble/expression/reaction mirror behavior change. Renderer automated smoke PASS covers sanitization, caps, invalid token rejection, priority/preemption rules, preview boundaries, no side effects, no generic `"pet"` channel, and existing TASK-218/TASK-220 narrow channel regression guards. Windows visual smoke PASS: startup shows Queue disabled with a valid Items count and Pet Window is normal; send/delete-undo/edit/clear/focus remain functional with Queue disabled; diagnostics show no undefined/null/NaN/[object Object]/raw JSON/user text; no new IPC side effect, extra TTS, extra `/chat`, history/copy/export pollution, or Pet Window expression/reaction bubble regression.
+
+- TASK-TTS-001 DONE - TTS ARCHITECTURE DESIGN READY / IMPLEMENTATION NOT STARTED (2026-06-18): Local TTS Provider Architecture / Christina Voice Output Design. Adds `docs/TTS_ARCHITECTURE.md` and `docs/TTS_PROVIDER_RESEARCH.md` as the provider-neutral design layer for future Christina voice output. Target pipeline is accepted chat reply -> text normalization -> TTS queue -> provider adapter -> playback -> Pet speaking state. Provider abstraction starts with a required `mock` provider and keeps local sidecar / local HTTP lab providers behind replaceable adapters; ElevenLabs and other cloud providers are not the first architecture path and would require a separate opt-in cost/privacy design. The design covers Chinese speech requirement, Japanese/anime-style preference, text normalization, sentence chunking, stop/interrupt, no-overlap playback, Conversation Mode feedback prevention, Pet speaking state, diagnostics, safety/privacy, generated-audio boundaries, and phased tasks TASK-TTS-002 through TASK-TTS-006. Runtime TTS provider architecture implementation has not started. No runtime TTS provider, new dependency, generated audio, voice samples, `/chat` schema or mood schema change, STT default/model selector change, Conversation Mode queue/backpressure change, Owner Voice hard-gate change, or runtime auto-speaking was added.
 
 - TASK-227 IMPLEMENTED - DOCS ONLY / NO WINDOWS SMOKE REQUIRED (2026-06-01): Voice/TTS Research Note and Local Speech Roadmap. Adds `docs/VOICE_TTS_RESEARCH.md` as a docs-only voice, TTS, and STT research checkpoint. The note records the user-provided external AI VTuber / Discord voice chain as reference material, then separates what applies to Dragon Pet AI from what should not be copied. Dragon Pet AI remains local-first: TTS is a post-reply audio layer, TTS does not call `/chat`, TTS does not write history, TTS does not read diagnostics, STT is explicit push-to-talk/user action only, no always listening, and future speech work must obey the output queue / priority design. Candidate research tracks include ChatTTS, GPT-SoVITS, F5-TTS, CosyVoice, ElevenLabs as optional cloud reference, local Whisper / faster-whisper, TTS provider interface design, disabled audio skeleton, and confirmed transcript-to-`/chat` design. No runtime prompt wiring, TTS/STT/audio skeleton, IPC, `/chat` change, backend/provider change, renderer change, Pet Window change, assets, voice model, commit, or push.
 

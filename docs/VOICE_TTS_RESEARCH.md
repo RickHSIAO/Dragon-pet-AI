@@ -240,12 +240,18 @@ Voice work must remain legally and ethically clean:
 
 Suggested research and implementation tasks:
 
-- TASK-TTS-001 ChatTTS lab evaluation: seed / speaker / quality notes.
-- TASK-TTS-002 GPT-SoVITS local character voice spike.
-- TASK-TTS-003 F5-TTS / CosyVoice comparison spike.
-- TASK-TTS-004 TTS provider interface design, docs-only.
-- TASK-TTS-005 Dragon Pet AI audio skeleton, disabled by default.
-- TASK-TTS-006 Local TTS provider integration behind user controls.
+- TASK-TTS-001 Local TTS Provider Architecture / Christina Voice Output Design. **DONE - TTS ARCHITECTURE DESIGN READY / IMPLEMENTATION NOT STARTED (2026-06-18):**
+  Added `docs/TTS_ARCHITECTURE.md` and `docs/TTS_PROVIDER_RESEARCH.md`.
+  The target pipeline is accepted chat reply -> text normalization -> TTS queue
+  -> provider adapter -> playback -> Pet speaking state. The design starts with
+  a mock provider and local/offline provider experiments; ElevenLabs/cloud is
+  not the first architecture path.
+- TASK-TTS-002 Backend/provider skeleton with mock provider.
+- TASK-TTS-003 Local synthesis provider experiment.
+- TASK-TTS-004 Playback queue and renderer diagnostics.
+- TASK-TTS-005 Pet speaking state / bubble sync.
+- TASK-TTS-006 Conversation Mode feedback prevention.
+- Future: voice quality comparison / singing research.
 - TASK-STT-001 Push-to-talk STT design. **Covered by TASK-241 (DONE - WINDOWS VISUAL SMOKE PASS 2026-06-02).**
   Full App mic button: toggle-to-record, stop → STT → fills textarea, no auto-send,
   no always-listening. Narrow `transcribeAudio(arrayBuffer)` bridge in renderer

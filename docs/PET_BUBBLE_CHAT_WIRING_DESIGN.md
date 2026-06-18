@@ -1062,3 +1062,25 @@ TASK-CONV-006 backpressure note:
   `queue_high_watermark` pause and clean `drain_complete` path. Queue max
   remains `4`; `queue_full` remains a hard fallback diagnostics path rather
   than expected normal long-session Pet bubble behavior.
+
+## TASK-TTS-001 Future TTS Bubble / Speaking-State Boundary
+
+TASK-TTS-001 defines a future provider-neutral TTS architecture only. It does
+not add runtime TTS provider playback, Pet auto-speaking, new IPC, or a Pet
+Bubble contract change.
+
+Future TTS bubble implications:
+
+- TTS may only speak accepted assistant reply text after the normal chat reply
+  path has succeeded.
+- The Full App -> Pet mirror payload remains `reply / mood / source` unless a
+  future implementation task explicitly changes it.
+- Pet Bubble remains the visible source of reply text; TTS-safe spoken text is a
+  derived output and must not expose hidden diagnostics.
+- A future speaking indicator may show playback state, but provider diagnostics,
+  stack traces, local paths, raw JSON, Owner Voice data, and Output Queue payloads
+  must not render as normal Pet Bubble speech.
+- TTS provider failure should leave the visible reply intact and degrade to
+  silent visual reply, not trigger another `/chat` call.
+- Conversation Mode STT/backpressure remains independent; TTS must not create
+  inferred Pet speech, synthetic chat content, or microphone feedback.
