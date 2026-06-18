@@ -322,7 +322,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 **Goal:** Prepare Christina voice output with a provider-neutral, local-first TTS
 architecture before any new runtime provider implementation.
 
-**Status:** VOICEVOX MANUAL PROBE READY / OPTIONAL AUDIO OUTPUT LOCAL ONLY - TASK-TTS-004B IMPLEMENTED.
+**Status:** VOICEVOX TIMEOUT HARDENING SMOKE PASS / NEEDS MANUAL AUDIO RETRY - TASK-TTS-004B2 IMPLEMENTED.
 
 | Task | Name | Status |
 |---|---|---|
@@ -331,6 +331,7 @@ architecture before any new runtime provider implementation.
 | TASK-TTS-003 | Local TTS Provider Candidate Probe / No Runtime Wiring | IMPLEMENTED - LOCAL TTS PROVIDER PROBE SMOKE PASS / NO RUNTIME WIRING |
 | TASK-TTS-004A | Local TTS Provider Selection Review / Install-Free Probe Summary | DONE - INSTALL-FREE PROVIDER REVIEW COMPLETE / REAL PROVIDER NOT SELECTED |
 | TASK-TTS-004B | VOICEVOX Local Server Manual Probe / Audio Output Optional | IMPLEMENTED - VOICEVOX MANUAL PROBE READY / OPTIONAL AUDIO OUTPUT LOCAL ONLY |
+| TASK-TTS-004B2 | VOICEVOX Synthesis Timeout / Retry Hardening | IMPLEMENTED - VOICEVOX TIMEOUT HARDENING SMOKE PASS / NEEDS MANUAL AUDIO RETRY |
 | TASK-TTS-004C | Edge-TTS Optional Network Candidate Probe | PLANNED |
 | TASK-TTS-004D | Style-Bert-VITS2 / GPT-SoVITS Feasibility Research | PLANNED |
 | TASK-TTS-004 | Playback queue and renderer diagnostics | PLANNED AFTER REAL PROVIDER CANDIDATE |
@@ -351,6 +352,9 @@ Track constraints:
 - TASK-TTS-004B extends the standalone probe for a manually started VOICEVOX
   localhost server. Default behavior is metadata-only; WAV generation requires
   explicit `--allow-audio-output` and still never plays audio.
+- TASK-TTS-004B2 hardens the same probe for first-run VOICEVOX synthesis
+  latency with `--voicevox-timeout-sec`, finite `--voicevox-retries`, and
+  stage-specific diagnostics. Runtime playback remains not started.
 - TTS remains disabled by default for the new provider architecture.
 - First implementation starts with `mock`, not ElevenLabs or a paid external
   provider.
@@ -1137,6 +1141,8 @@ Track constraints:
 - TASK-TTS-004A DONE - INSTALL-FREE PROVIDER REVIEW COMPLETE / REAL PROVIDER NOT SELECTED (2026-06-18): Local TTS Provider Selection Review / Install-Free Probe Summary. Records the Windows install-free provider probe result: `mock` available with `mock_metadata_only`; `windows_sapi` unavailable due to `missing_optional_python_bridge`; `voicevox_server` unavailable with `server_unavailable:URLError` at `http://127.0.0.1:50021/version`; `edge_tts` unavailable due to `missing_optional_dependency`; `piper_onnx`, `gpt_sovits`, `style_bert_vits2`, and `rvc_like` remain `future_manual_candidate_not_probed`. Safety flags stayed false for audio output, generated audio, runtime wiring, playback, auto-speaking, and dependency addition. Conclusion: runtime playback should wait because no real provider is ready; `mock` remains the only safe skeleton provider. Recommended next provider tasks are TASK-TTS-004B VOICEVOX local-server manual probe, TASK-TTS-004C edge-tts optional network candidate probe, or TASK-TTS-004D Style-Bert-VITS2 / GPT-SoVITS feasibility research. No runtime TTS wiring, playback, auto-speaking, dependency/install, generated audio/report commit, ElevenLabs integration, `/chat` schema or mood schema change, STT default/model selector change, Conversation Mode queue/backpressure change, or Owner Voice hard-gate change was added.
 
 - TASK-TTS-004B IMPLEMENTED - VOICEVOX MANUAL PROBE READY / OPTIONAL AUDIO OUTPUT LOCAL ONLY (2026-06-18): VOICEVOX Local Server Manual Probe / Audio Output Optional. Extends `scripts/tts_provider_probe.py` with `voicevox_server` metadata and optional audio checks against a manually started VOICEVOX Engine-compatible localhost server. Default mode checks only `/version` and optional `/speakers`; it does not call synthesis, write audio, or play audio. `--allow-audio-output` explicitly enables `audio_query` + `synthesis` and writes a WAV under ignored `outputs/tts_provider_probe/YYYYMMDD/audio/`. Non-localhost VOICEVOX URLs are rejected before network access. Reports include `voicevoxUrl`, version, speaker id/name when known, latency, `audioGenerated`, `outputPath`, `audioBytes`, and `synthesisStatus`. No runtime TTS wiring, playback, auto-speaking, dependency/install, ElevenLabs integration, `/chat` schema or mood schema change, STT default/model selector change, Conversation Mode queue/backpressure change, or Owner Voice hard-gate change was added.
+
+- TASK-TTS-004B2 IMPLEMENTED - VOICEVOX TIMEOUT HARDENING SMOKE PASS / NEEDS MANUAL AUDIO RETRY (2026-06-18): VOICEVOX Synthesis Timeout / Retry Hardening. Adds `--voicevox-timeout-sec` default `30` and `--voicevox-retries` default `1` to the standalone provider probe, plus `voicevoxStage`, version/speakers/audio_query/synthesis latency, timeout, retry count, and last exception diagnostics. This records the manual VOICEVOX 0.25.2 metadata PASS and optional audio `TimeoutError` before hardening. Default metadata-only behavior still does not call synthesis, and optional WAV output remains localhost-only, `--allow-audio-output` gated, and playback-free. No runtime TTS wiring, playback, auto-speaking, dependency/install, `/chat` schema or mood schema change, STT default/model selector change, Conversation Mode queue/backpressure change, or Owner Voice hard-gate change was added.
 
 - TASK-227 IMPLEMENTED - DOCS ONLY / NO WINDOWS SMOKE REQUIRED (2026-06-01): Voice/TTS Research Note and Local Speech Roadmap. Adds `docs/VOICE_TTS_RESEARCH.md` as a docs-only voice, TTS, and STT research checkpoint. The note records the user-provided external AI VTuber / Discord voice chain as reference material, then separates what applies to Dragon Pet AI from what should not be copied. Dragon Pet AI remains local-first: TTS is a post-reply audio layer, TTS does not call `/chat`, TTS does not write history, TTS does not read diagnostics, STT is explicit push-to-talk/user action only, no always listening, and future speech work must obey the output queue / priority design. Candidate research tracks include ChatTTS, GPT-SoVITS, F5-TTS, CosyVoice, ElevenLabs as optional cloud reference, local Whisper / faster-whisper, TTS provider interface design, disabled audio skeleton, and confirmed transcript-to-`/chat` design. No runtime prompt wiring, TTS/STT/audio skeleton, IPC, `/chat` change, backend/provider change, renderer change, Pet Window change, assets, voice model, commit, or push.
 

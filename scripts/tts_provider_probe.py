@@ -1,10 +1,11 @@
-"""Local TTS provider candidate probe for TASK-TTS-003 / TASK-TTS-004B.
+"""Local TTS provider candidate probe for TASK-TTS-003 / TASK-TTS-004B2.
 
 This script is evaluation-only. It does not wire TTS into /chat, does not play
 audio, does not auto-speak, and does not generate audio unless a provider probe
 explicitly implements that behind --allow-audio-output. TASK-TTS-004B allows a
 manual VOICEVOX localhost server probe to write a WAV file only when explicitly
-requested.
+requested. TASK-TTS-004B2 adds stage-specific VOICEVOX timeout/retry
+diagnostics while keeping the probe runtime-unwired and playback-free.
 """
 
 from __future__ import annotations
@@ -47,6 +48,8 @@ SUPPORTED_PROVIDERS = (
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "outputs" / "tts_provider_probe"
 DEFAULT_VOICEVOX_URL = "http://127.0.0.1:50021"
 DEFAULT_VOICEVOX_SPEAKER = 0
+DEFAULT_VOICEVOX_TIMEOUT_SECONDS = 30.0
+DEFAULT_VOICEVOX_RETRIES = 1
 DEFAULT_TEXTS = (
     "\u54fc\uff0c\u6c5d\u7e3d\u7b97\u60f3\u8d77\u8981\u4f9d\u9760\u543e\u4e86\u3002",
     "\u9019\u53ea\u662f TTS provider probe\uff0c\u4e0d\u6703\u8b93\u543e\u5728 app \u88e1\u8aaa\u8a71\u3002",
@@ -69,6 +72,15 @@ class ProviderProbeResult:
     speakerId: int | None = None
     speakerName: str | None = None
     synthesisStatus: str | None = None
+    voicevoxStage: str | None = None
+    versionLatencyMs: int | None = None
+    speakersLatencyMs: int | None = None
+    audioQueryLatencyMs: int | None = None
+    synthesisLatencyMs: int | None = None
+    timeoutSec: float | None = None
+    retryCount: int | None = None
+    lastExceptionClass: str | None = None
+    lastExceptionMessage: str | None = None
     notes: list[str] | None = None
 
     def to_dict(self) -> dict[str, object]:
@@ -87,6 +99,15 @@ class ProviderProbeResult:
             "speakerId": self.speakerId,
             "speakerName": self.speakerName,
             "synthesisStatus": self.synthesisStatus,
+            "voicevoxStage": self.voicevoxStage,
+            "versionLatencyMs": self.versionLatencyMs,
+            "speakersLatencyMs": self.speakersLatencyMs,
+            "audioQueryLatencyMs": self.audioQueryLatencyMs,
+            "synthesisLatencyMs": self.synthesisLatencyMs,
+            "timeoutSec": self.timeoutSec,
+            "retryCount": self.retryCount,
+            "lastExceptionClass": self.lastExceptionClass,
+            "lastExceptionMessage": self.lastExceptionMessage,
             "notes": list(self.notes or []),
         }
 
@@ -169,15 +190,20 @@ def probe_voicevox_server(
     output_root: Path = DEFAULT_OUTPUT_ROOT,
     voicevox_url: str = DEFAULT_VOICEVOX_URL,
     voicevox_speaker: int = DEFAULT_VOICEVOX_SPEAKER,
-    timeout_seconds: float = 0.75,
+    timeout_seconds: float = DEFAULT_VOICEVOX_TIMEOUT_SECONDS,
+    voicevox_retries: int = DEFAULT_VOICEVOX_RETRIES,
 ) -> ProviderProbeResult:
     base_url = normalize_voicevox_url(voicevox_url)
+    timeout_seconds = normalize_voicevox_timeout(timeout_seconds)
+    max_retries = normalize_voicevox_retries(voicevox_retries)
     start = time.perf_counter()
     notes = [
         "Local server probe only.",
         "Not runtime wiring.",
         "Chinese/Japanese pronunciation quality must be manually judged.",
         "No playback is attempted.",
+        f"VOICEVOX timeout seconds: {timeout_seconds:g}.",
+        f"VOICEVOX audio retry limit: {max_retries}.",
     ]
     if base_url is None:
         return ProviderProbeResult(
@@ -192,6 +218,9 @@ def probe_voicevox_server(
             voicevoxUrl=voicevox_url,
             speakerId=voicevox_speaker,
             synthesisStatus="voicevox_error",
+            voicevoxStage="url_validation",
+            timeoutSec=timeout_seconds,
+            retryCount=0,
             notes=notes + ["Only localhost VOICEVOX URLs are allowed for TASK-TTS-004B."],
         )
 
@@ -199,8 +228,13 @@ def probe_voicevox_server(
     version = None
     speaker_name = None
     speaker_count = None
+    version_latency_ms = None
+    speakers_latency_ms = None
     try:
-        version = _voicevox_get_text(version_url, timeout_seconds=timeout_seconds) or None
+        version_raw, version_latency_ms = timed_call(
+            lambda: _voicevox_get_text(version_url, timeout_seconds=timeout_seconds)
+        )
+        version = normalize_voicevox_version(version_raw)
     except (OSError, urllib.error.URLError, TimeoutError) as exc:
         latency_ms = int((time.perf_counter() - start) * 1000)
         return ProviderProbeResult(
@@ -217,11 +251,19 @@ def probe_voicevox_server(
             speakerId=voicevox_speaker,
             speakerName=None,
             synthesisStatus="server_unavailable",
+            voicevoxStage="version",
+            versionLatencyMs=version_latency_ms,
+            timeoutSec=timeout_seconds,
+            retryCount=0,
+            lastExceptionClass=type(exc).__name__,
+            lastExceptionMessage=safe_exception_message(exc),
             notes=notes + [f"Checked {version_url}."],
         )
 
     try:
-        speakers = _voicevox_get_json(f"{base_url}/speakers", timeout_seconds=timeout_seconds)
+        speakers, speakers_latency_ms = timed_call(
+            lambda: _voicevox_get_json(f"{base_url}/speakers", timeout_seconds=timeout_seconds)
+        )
         speaker_count, speaker_name = summarize_voicevox_speakers(speakers, voicevox_speaker)
     except (json.JSONDecodeError, OSError, urllib.error.URLError, TimeoutError, TypeError, ValueError):
         speaker_count = None
@@ -252,29 +294,36 @@ def probe_voicevox_server(
             speakerId=voicevox_speaker,
             speakerName=speaker_name,
             synthesisStatus="audio_output_disabled",
+            voicevoxStage="metadata",
+            versionLatencyMs=version_latency_ms,
+            speakersLatencyMs=speakers_latency_ms,
+            timeoutSec=timeout_seconds,
+            retryCount=0,
             notes=metadata_notes + ["Audio output disabled; no synthesis call or WAV write."],
         )
 
+    audio_query_latency_ms = None
+    synthesis_latency_ms = None
+    retry_count = 0
     try:
-        query = _voicevox_audio_query(
-            base_url,
-            text="\n".join(chunks),
-            speaker_id=voicevox_speaker,
-            timeout_seconds=timeout_seconds,
+        query, audio_query_latency_ms, query_retry_count = call_voicevox_audio_stage(
+            lambda: _voicevox_audio_query(
+                base_url,
+                text="\n".join(chunks),
+                speaker_id=voicevox_speaker,
+                timeout_seconds=timeout_seconds,
+            ),
+            max_retries=max_retries,
         )
-        audio = _voicevox_synthesis(
-            base_url,
-            query=query,
-            speaker_id=voicevox_speaker,
-            timeout_seconds=timeout_seconds,
-        )
-        output_path = write_voicevox_audio(audio, output_root=output_root)
+        retry_count += query_retry_count
     except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
         latency_ms = int((time.perf_counter() - start) * 1000)
+        audio_query_latency_ms = getattr(exc, "voicevox_latency_ms", audio_query_latency_ms)
+        status = "audio_query_timeout" if is_timeout_exception(exc) else "voicevox_error"
         return ProviderProbeResult(
             provider="voicevox_server",
             available=True,
-            reason=f"voicevox_error:{type(exc).__name__}",
+            reason=f"{status}:{type(exc).__name__}",
             normalizedChunks=chunks,
             measuredLatencyMs=latency_ms,
             audioGenerated=False,
@@ -284,8 +333,58 @@ def probe_voicevox_server(
             version=version,
             speakerId=voicevox_speaker,
             speakerName=speaker_name,
-            synthesisStatus="voicevox_error",
-            notes=metadata_notes + ["Audio output was allowed, but VOICEVOX synthesis failed."],
+            synthesisStatus=status,
+            voicevoxStage="audio_query",
+            versionLatencyMs=version_latency_ms,
+            speakersLatencyMs=speakers_latency_ms,
+            audioQueryLatencyMs=audio_query_latency_ms,
+            timeoutSec=timeout_seconds,
+            retryCount=max_retries,
+            lastExceptionClass=type(exc).__name__,
+            lastExceptionMessage=safe_exception_message(exc),
+            notes=metadata_notes + ["Audio query failed; no synthesis call, WAV write, or playback was attempted."],
+        )
+
+    try:
+        audio, synthesis_latency_ms, synthesis_retry_count = call_voicevox_audio_stage(
+            lambda: _voicevox_synthesis(
+                base_url,
+                query=query,
+                speaker_id=voicevox_speaker,
+                timeout_seconds=timeout_seconds,
+            ),
+            max_retries=max_retries,
+        )
+        retry_count += synthesis_retry_count
+        output_path = write_voicevox_audio(audio, output_root=output_root)
+    except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
+        latency_ms = int((time.perf_counter() - start) * 1000)
+        synthesis_latency_ms = getattr(exc, "voicevox_latency_ms", synthesis_latency_ms)
+        status = "synthesis_timeout" if is_timeout_exception(exc) else "voicevox_error"
+        return ProviderProbeResult(
+            provider="voicevox_server",
+            available=True,
+            reason=f"{status}:{type(exc).__name__}",
+            normalizedChunks=chunks,
+            measuredLatencyMs=latency_ms,
+            audioGenerated=False,
+            outputPath=None,
+            audioBytes=None,
+            voicevoxUrl=base_url,
+            version=version,
+            speakerId=voicevox_speaker,
+            speakerName=speaker_name,
+            synthesisStatus=status,
+            voicevoxStage="synthesis",
+            versionLatencyMs=version_latency_ms,
+            speakersLatencyMs=speakers_latency_ms,
+            audioQueryLatencyMs=audio_query_latency_ms,
+            synthesisLatencyMs=synthesis_latency_ms,
+            timeoutSec=timeout_seconds,
+            retryCount=retry_count + max_retries,
+            lastExceptionClass=type(exc).__name__,
+            lastExceptionMessage=safe_exception_message(exc),
+            notes=metadata_notes + ["Audio query succeeded, but VOICEVOX synthesis failed before WAV write."],
         )
 
     latency_ms = int((time.perf_counter() - start) * 1000)
@@ -303,6 +402,13 @@ def probe_voicevox_server(
         speakerId=voicevox_speaker,
         speakerName=speaker_name,
         synthesisStatus="voicevox_success",
+        voicevoxStage="complete",
+        versionLatencyMs=version_latency_ms,
+        speakersLatencyMs=speakers_latency_ms,
+        audioQueryLatencyMs=audio_query_latency_ms,
+        synthesisLatencyMs=synthesis_latency_ms,
+        timeoutSec=timeout_seconds,
+        retryCount=retry_count,
         notes=metadata_notes + ["WAV generated under ignored local probe outputs. No playback was attempted."],
     )
 
@@ -319,6 +425,79 @@ def normalize_voicevox_url(raw_url: str) -> str | None:
         return None
     netloc = parsed.netloc
     return urllib.parse.urlunparse((parsed.scheme, netloc, "", "", "", "")).rstrip("/")
+
+
+def normalize_voicevox_timeout(timeout_seconds: float) -> float:
+    try:
+        timeout = float(timeout_seconds)
+    except (TypeError, ValueError):
+        return DEFAULT_VOICEVOX_TIMEOUT_SECONDS
+    if timeout <= 0:
+        return DEFAULT_VOICEVOX_TIMEOUT_SECONDS
+    return min(timeout, 120.0)
+
+
+def normalize_voicevox_retries(retries: int) -> int:
+    try:
+        value = int(retries)
+    except (TypeError, ValueError):
+        return DEFAULT_VOICEVOX_RETRIES
+    return max(0, min(value, 3))
+
+
+def normalize_voicevox_version(raw_version: str) -> str | None:
+    value = (raw_version or "").strip()
+    if not value:
+        return None
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return value
+    if isinstance(parsed, str):
+        return parsed.strip() or None
+    return value
+
+
+def safe_exception_message(exc: BaseException) -> str:
+    message = str(exc).strip()
+    if not message:
+        return ""
+    return message[:200]
+
+
+def is_timeout_exception(exc: BaseException) -> bool:
+    if isinstance(exc, TimeoutError):
+        return True
+    reason = getattr(exc, "reason", None)
+    if isinstance(reason, TimeoutError):
+        return True
+    name = type(exc).__name__.lower()
+    return "timeout" in name or "timed out" in str(exc).lower()
+
+
+def timed_call(callable_fn):
+    start = time.perf_counter()
+    try:
+        value = callable_fn()
+    finally:
+        latency_ms = int((time.perf_counter() - start) * 1000)
+    return value, latency_ms
+
+
+def call_voicevox_audio_stage(callable_fn, *, max_retries: int):
+    retry_count = 0
+    for attempt_index in range(max_retries + 1):
+        start = time.perf_counter()
+        try:
+            value = callable_fn()
+            latency_ms = int((time.perf_counter() - start) * 1000)
+            return value, latency_ms, retry_count
+        except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
+            setattr(exc, "voicevox_latency_ms", int((time.perf_counter() - start) * 1000))
+            if attempt_index >= max_retries:
+                raise exc
+            retry_count += 1
+    raise RuntimeError("unreachable_voicevox_retry_state")
 
 
 def summarize_voicevox_speakers(speakers: object, speaker_id: int) -> tuple[int | None, str | None]:
@@ -443,6 +622,8 @@ def probe_provider(
     output_root: Path = DEFAULT_OUTPUT_ROOT,
     voicevox_url: str = DEFAULT_VOICEVOX_URL,
     voicevox_speaker: int = DEFAULT_VOICEVOX_SPEAKER,
+    voicevox_timeout_seconds: float = DEFAULT_VOICEVOX_TIMEOUT_SECONDS,
+    voicevox_retries: int = DEFAULT_VOICEVOX_RETRIES,
 ) -> ProviderProbeResult:
     if provider == "mock":
         return probe_mock(chunks)
@@ -455,6 +636,8 @@ def probe_provider(
             output_root=output_root,
             voicevox_url=voicevox_url,
             voicevox_speaker=voicevox_speaker,
+            timeout_seconds=voicevox_timeout_seconds,
+            voicevox_retries=voicevox_retries,
         )
     if provider == "edge_tts":
         return probe_edge_tts(chunks)
@@ -476,6 +659,8 @@ def build_probe_report(
     output_root: Path = DEFAULT_OUTPUT_ROOT,
     voicevox_url: str = DEFAULT_VOICEVOX_URL,
     voicevox_speaker: int = DEFAULT_VOICEVOX_SPEAKER,
+    voicevox_timeout_seconds: float = DEFAULT_VOICEVOX_TIMEOUT_SECONDS,
+    voicevox_retries: int = DEFAULT_VOICEVOX_RETRIES,
 ) -> dict[str, object]:
     normalized_chunks = normalize_tts_text(text)
     provider_results = [
@@ -486,12 +671,14 @@ def build_probe_report(
             output_root=output_root,
             voicevox_url=voicevox_url,
             voicevox_speaker=voicevox_speaker,
+            voicevox_timeout_seconds=voicevox_timeout_seconds,
+            voicevox_retries=voicevox_retries,
         ).to_dict()
         for provider in providers
     ]
     audio_generated = any(bool(result["audioGenerated"]) for result in provider_results)
     return {
-        "task": "TASK-TTS-004B",
+        "task": "TASK-TTS-004B2",
         "status": "probe_only_no_runtime_wiring",
         "generatedAt": _dt.datetime.now(_dt.UTC).isoformat(),
         "audioOutputAllowed": bool(allow_audio_output),
@@ -500,6 +687,11 @@ def build_probe_report(
         "normalizedChunks": normalized_chunks,
         "providersRequested": list(providers),
         "providers": provider_results,
+        "voicevox": {
+            "timeoutSec": normalize_voicevox_timeout(voicevox_timeout_seconds),
+            "retries": normalize_voicevox_retries(voicevox_retries),
+            "localhostOnly": True,
+        },
         "safety": {
             "runtimeTtsWired": False,
             "playbackAdded": False,
@@ -562,6 +754,15 @@ def render_markdown_report(report: dict[str, object]) -> str:
                 f"- Speaker id: {result['speakerId']}",
                 f"- Speaker name: {result['speakerName']}",
                 f"- Synthesis status: {result['synthesisStatus']}",
+                f"- VOICEVOX stage: {result['voicevoxStage']}",
+                f"- Version latency ms: {result['versionLatencyMs']}",
+                f"- Speakers latency ms: {result['speakersLatencyMs']}",
+                f"- Audio query latency ms: {result['audioQueryLatencyMs']}",
+                f"- Synthesis latency ms: {result['synthesisLatencyMs']}",
+                f"- Timeout sec: {result['timeoutSec']}",
+                f"- Retry count: {result['retryCount']}",
+                f"- Last exception class: {result['lastExceptionClass']}",
+                f"- Last exception message: {result['lastExceptionMessage']}",
                 "- Notes:",
             ]
         )
@@ -622,10 +823,26 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=DEFAULT_VOICEVOX_SPEAKER,
         help="VOICEVOX speaker/style id for optional audio output and speaker metadata.",
     )
+    parser.add_argument(
+        "--voicevox-timeout-sec",
+        type=float,
+        default=DEFAULT_VOICEVOX_TIMEOUT_SECONDS,
+        help="VOICEVOX HTTP timeout in seconds for version, speakers, audio_query, and synthesis.",
+    )
+    parser.add_argument(
+        "--voicevox-retries",
+        type=int,
+        default=DEFAULT_VOICEVOX_RETRIES,
+        help="Finite retry count for local VOICEVOX audio_query/synthesis stages.",
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
+    try:
+        sys.stdout.reconfigure(errors="replace")
+    except AttributeError:
+        pass
     parser = build_arg_parser()
     args = parser.parse_args(argv)
     text = build_sample_text(args.text)
@@ -637,6 +854,8 @@ def main(argv: list[str] | None = None) -> int:
         output_root=Path(args.output_root),
         voicevox_url=args.voicevox_url,
         voicevox_speaker=args.voicevox_speaker,
+        voicevox_timeout_seconds=args.voicevox_timeout_sec,
+        voicevox_retries=args.voicevox_retries,
     )
     report_paths = write_reports(report, output_root=Path(args.output_root))
     report["reportPaths"] = report_paths

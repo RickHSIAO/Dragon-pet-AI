@@ -1,13 +1,14 @@
 # TTS Architecture
 
-**Task:** TASK-TTS-001 / TASK-TTS-004B
-**Status:** TASK-TTS-004B IMPLEMENTED - VOICEVOX MANUAL PROBE READY / OPTIONAL AUDIO OUTPUT LOCAL ONLY
+**Task:** TASK-TTS-001 / TASK-TTS-004B2
+**Status:** TASK-TTS-004B2 IMPLEMENTED - VOICEVOX TIMEOUT HARDENING SMOKE PASS / NEEDS MANUAL AUDIO RETRY
 **Date:** 2026-06-18
 **Scope:** Provider-neutral architecture plus TASK-TTS-002 backend mock skeleton,
 TASK-TTS-004A install-free provider review, and TASK-TTS-004B VOICEVOX manual
-localhost probe. No runtime wiring, app playback, dependency, schema change, STT
-behavior change, Conversation Mode behavior change, or Owner Voice behavior
-change is added by TASK-TTS-004B.
+localhost probe, and TASK-TTS-004B2 timeout/retry diagnostics. No runtime
+wiring, app playback, dependency, schema change, STT behavior change,
+Conversation Mode behavior change, or Owner Voice behavior change is added by
+TASK-TTS-004B2.
 
 This document defines the target architecture for Christina voice output and the
 implemented TASK-TTS-002 mock skeleton. It remains provider-neutral: Dragon Pet
@@ -66,6 +67,20 @@ TASK-TTS-004B implementation checkpoint:
 - VOICEVOX remains probe-only. No runtime provider has been selected yet, and
   the app runtime remains disabled/mock-only for the new TTS architecture.
 
+TASK-TTS-004B2 implementation checkpoint:
+
+- `voicevox_server` now supports `--voicevox-timeout-sec` with default `30`
+  seconds for `/version`, `/speakers`, `/audio_query`, and `/synthesis`.
+- `voicevox_server` supports finite `--voicevox-retries` with default `1` for
+  local audio stages only.
+- Reports include stage diagnostics: `voicevoxStage`, version/speakers/audio
+  query/synthesis latency, `timeoutSec`, `retryCount`, `lastExceptionClass`,
+  and `lastExceptionMessage`.
+- Stage-specific timeout statuses distinguish `audio_query_timeout` from
+  `synthesis_timeout`.
+- Runtime TTS remains disabled/mock-only; VOICEVOX is still a manual probe path,
+  not an app playback provider.
+
 ---
 
 ## 1. Goals
@@ -104,7 +119,7 @@ Recommended split:
 | Text normalization | `backend/app/tts/text_normalizer.py` | TASK-TTS-002 implements conservative backend chunking helper; renderer/shared reuse is future. |
 | TTS queue controller | `backend/app/tts/tts_service.py` diagnostics skeleton; renderer queue future task | TASK-TTS-002 exposes disabled queue diagnostics only. No playback queue dispatch. |
 | Provider adapter | `backend/app/tts/providers.py` | TASK-TTS-002 implements `TTSProvider` protocol and metadata-only `MockTTSProvider`. Real synthesis adapters are future. |
-| Provider candidate probe | `scripts/tts_provider_probe.py` | TASK-TTS-004B checks optional provider availability and can manually probe VOICEVOX localhost audio only behind `--allow-audio-output`. No runtime wiring or playback. |
+| Provider candidate probe | `scripts/tts_provider_probe.py` | TASK-TTS-004B2 checks optional provider availability and can manually probe VOICEVOX localhost audio only behind `--allow-audio-output`, with timeout/retry stage diagnostics. No runtime wiring or playback. |
 | Provider review | Docs/status only | TASK-TTS-004A records that no real provider is ready except metadata-only `mock`; playback remains blocked pending provider-specific probe. |
 | Local external process | Optional provider-specific sidecar, future task | Run heavy local engines outside Electron renderer/main. |
 | Playback | Renderer/Pet Window, future task | Play audio through browser audio APIs or an explicit playback bridge. |
@@ -486,6 +501,18 @@ TASK-TTS-004B automated tests cover:
 - VOICEVOX report schema includes safety and audio fields.
 - No playback helper is introduced by the probe script.
 
+TASK-TTS-004B2 automated tests cover:
+
+- Default VOICEVOX timeout and retry values in reports.
+- CLI timeout/retry option parsing and report override.
+- `audio_query_timeout` classification and finite retry count.
+- `synthesis_timeout` classification and finite retry count.
+- Metadata-only behavior still avoids `audio_query` and `synthesis`.
+- Non-localhost rejection still occurs before network access.
+- Successful mocked synthesis still writes WAV under a caller-supplied output
+  root.
+- No playback helper is introduced.
+
 Future runtime tests should cover:
 
 - Queue prevents overlapping playback.
@@ -522,6 +549,8 @@ Manual Windows playback smoke checklist for the first runtime task:
   reviewed; no real provider selected and `mock` remains the only safe skeleton.
 - TASK-TTS-004B: VOICEVOX local server manual probe / optional audio output.
   IMPLEMENTED - probe-only; optional local WAV output requires explicit flag.
+- TASK-TTS-004B2: VOICEVOX synthesis timeout / retry hardening. IMPLEMENTED -
+  stage diagnostics and longer timeout; manual audio retry still needed.
 - TASK-TTS-004C: edge-tts optional network candidate probe.
 - TASK-TTS-004D: Style-Bert-VITS2 / GPT-SoVITS feasibility research.
 - TASK-TTS-004: Playback queue and renderer diagnostics after a real provider
@@ -603,3 +632,15 @@ TASK-TTS-004B is complete when:
   dependency/install, generated audio/report commit, schema change, STT behavior
   change, Conversation Mode behavior change, or Owner Voice behavior change is
   committed.
+
+TASK-TTS-004B2 is complete when:
+
+- `--voicevox-timeout-sec` and `--voicevox-retries` are documented and wired to
+  the VOICEVOX probe.
+- Reports include stage latency, timeout, retry, and last exception diagnostics.
+- Audio query and synthesis timeout failures are classified separately.
+- Default metadata-only behavior still does not call synthesis or write audio.
+- Optional WAV files remain gated by `--allow-audio-output` and ignored output
+  paths.
+- Runtime TTS remains disabled/mock-only with no playback, `/chat`, STT,
+  Conversation Mode, Owner Voice, dependency, or schema changes.

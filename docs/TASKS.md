@@ -23886,6 +23886,123 @@ This is an expected safe result when VOICEVOX Engine is not running locally.
 
 ---
 
+## TASK-TTS-004B2 | VOICEVOX Synthesis Timeout / Retry Hardening
+
+**Status:** IMPLEMENTED - VOICEVOX TIMEOUT HARDENING SMOKE PASS / NEEDS MANUAL AUDIO RETRY
+**Date:** 2026-06-18
+**Phase:** Phase 5 - Companion Voice Output Architecture
+**Depends on:** TASK-TTS-001, TASK-TTS-002, TASK-TTS-003, TASK-TTS-004A, TASK-TTS-004B
+
+### Goal
+
+Harden the manual VOICEVOX provider probe so first-run synthesis/model-load
+latency does not fail only because the HTTP timeout is too short, while keeping
+the task probe-only and runtime-unwired.
+
+### Triggering Manual Result
+
+Manual Windows probe after starting VOICEVOX Engine:
+
+- `Invoke-RestMethod http://127.0.0.1:50021/version` returned `0.25.2`.
+- Metadata-only probe passed with `available=true`,
+  `reason=local_server_metadata_ok`, `voicevoxUrl=http://127.0.0.1:50021`,
+  `version="0.25.2"`, `speakerId=0`,
+  `speakerName=ずんだもん / ノーマル`, speaker count `43`,
+  `synthesisStatus=audio_output_disabled`, and `audioGenerated=false`.
+- Optional audio probe with `--allow-audio-output` failed before quality
+  evaluation with `reason=voicevox_error:TimeoutError`,
+  `synthesisStatus=voicevox_error`, `measuredLatencyMs=890`,
+  `audioGenerated=false`, and `outputPath=null`.
+
+### Implementation Summary
+
+Updated:
+
+- `scripts/tts_provider_probe.py`
+- `backend/tests/test_tts_provider_probe.py`
+- `README.md`
+- `docs/ROADMAP.md`
+- `docs/TASKS.md`
+- `docs/TTS_PROVIDER_RESEARCH.md`
+- `docs/TTS_ARCHITECTURE.md`
+- `docs/VOICE_TTS_RESEARCH.md`
+
+Probe additions:
+
+- `--voicevox-timeout-sec`, default `30`, applies to `/version`, `/speakers`,
+  `/audio_query`, and `/synthesis`.
+- `--voicevox-retries`, default `1`, applies only to local VOICEVOX audio
+  stages.
+- Finite retry only; no infinite retry loop.
+- Non-localhost VOICEVOX URLs remain rejected before network access.
+- Default metadata-only mode still does not call `audio_query` or `synthesis`.
+- Optional WAV output still requires `--allow-audio-output`.
+- No playback helper or runtime TTS wiring was added.
+
+### Stage Diagnostics
+
+`voicevox_server` reports now include:
+
+- `voicevoxStage`
+- `audioQueryLatencyMs`
+- `synthesisLatencyMs`
+- `versionLatencyMs`
+- `speakersLatencyMs`
+- `timeoutSec`
+- `retryCount`
+- `lastExceptionClass`
+- `lastExceptionMessage`
+- `synthesisStatus`
+
+`synthesisStatus` values include:
+
+- `metadata_only`
+- `audio_output_disabled`
+- `audio_query_success`
+- `voicevox_success`
+- `audio_query_timeout`
+- `synthesis_timeout`
+- `voicevox_error`
+- `server_unavailable`
+
+### Manual Retry Command
+
+```powershell
+.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers voicevox_server --text "哼，汝總算想起要依靠吾了。這是 VOICEVOX optional audio retry probe。" --voicevox-speaker 0 --voicevox-timeout-sec 30 --voicevox-retries 1 --allow-audio-output --pretty
+```
+
+Generated WAV/report artifacts from this command must remain uncommitted.
+
+### Validation
+
+- `.\backend\.venv\Scripts\python.exe -m py_compile scripts\tts_provider_probe.py`: PASS.
+- `.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --help`: PASS.
+- `.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers mock --text "<sample>" --pretty`: PASS; `mock` available, `audioGenerated=false`.
+- `.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers voicevox_server --text "<sample>" --voicevox-timeout-sec 30 --pretty`: PASS; VOICEVOX `0.25.2` metadata available, speaker count `43`, `synthesisStatus=audio_output_disabled`, `audioGenerated=false`.
+- Optional manual retry with `--voicevox-timeout-sec 30 --voicevox-retries 1 --allow-audio-output`: PASS; `reason=voicevox_success`, `audioGenerated=true`, `audioBytes=291372`, no playback.
+- `.\backend\.venv\Scripts\python.exe -m pytest backend\tests\test_tts_provider_probe.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-tts004b2`: PASS, 21 passed.
+- `node apps/desktop/scripts/renderer-chat-smoke.js`: PASS.
+- `node apps/desktop/scripts/pet-window-smoke.js`: PASS, 92 checks.
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: PASS, 290 checks.
+
+### Acceptance Criteria
+
+- [x] `--voicevox-timeout-sec` added with safe default.
+- [x] `--voicevox-retries` added with finite retry behavior.
+- [x] Stage diagnostics added for version, speakers, audio query, and synthesis.
+- [x] Audio query timeout and synthesis timeout are classified separately.
+- [x] Default metadata-only mode still avoids audio query/synthesis.
+- [x] `--allow-audio-output` remains required for WAV generation.
+- [x] Localhost-only URL rule preserved.
+- [x] Tests cover timeout defaults, override parsing/reporting, timeout
+  classification, retry count, metadata-only behavior, non-localhost rejection,
+  successful mocked WAV write, and no playback helper.
+- [x] No runtime TTS wiring, `/chat` integration, playback, auto-speaking,
+  dependency/install, generated audio/report commit, schema change, STT behavior
+  change, Conversation Mode behavior change, or Owner Voice behavior change.
+
+---
+
 ## TASK-228 | Output Queue Runtime Skeleton, Disabled by Default
 
 **Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS

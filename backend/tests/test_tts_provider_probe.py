@@ -58,7 +58,7 @@ def test_probe_report_schema_and_safety_defaults():
         providers=["mock"],
     )
 
-    assert report["task"] == "TASK-TTS-004B"
+    assert report["task"] == "TASK-TTS-004B2"
     assert report["status"] == "probe_only_no_runtime_wiring"
     assert report["audioOutputAllowed"] is False
     assert report["audioGenerated"] is False
@@ -130,7 +130,7 @@ def test_report_creation_writes_json_and_markdown(tmp_path):
     assert tmp_path in json_path.parents
     assert tmp_path in markdown_path.parents
     data = json.loads(json_path.read_text(encoding="utf-8"))
-    assert data["task"] == "TASK-TTS-004B"
+    assert data["task"] == "TASK-TTS-004B2"
     assert data["audioGenerated"] is False
     assert "TTS Provider Probe" in markdown_path.read_text(encoding="utf-8")
 
@@ -166,6 +166,10 @@ def test_voicevox_unavailable_skips_safely(monkeypatch):
     assert result["available"] is False
     assert result["reason"].startswith("server_unavailable:")
     assert result["synthesisStatus"] == "server_unavailable"
+    assert result["voicevoxStage"] == "version"
+    assert result["timeoutSec"] == 30.0
+    assert result["retryCount"] == 0
+    assert result["lastExceptionClass"] == "URLError"
     assert result["audioGenerated"] is False
     assert result["outputPath"] is None
     assert result["voicevoxUrl"] == "http://127.0.0.1:50021"
@@ -178,7 +182,7 @@ def test_voicevox_default_metadata_only_does_not_generate_audio(monkeypatch):
         url = request_url(request)
         calls.append(url)
         if url.endswith("/version"):
-            return FakeResponse(b"0.14.0")
+            return FakeResponse(b'"0.14.0"')
         if url.endswith("/speakers"):
             return FakeResponse(
                 json.dumps(
@@ -202,6 +206,11 @@ def test_voicevox_default_metadata_only_does_not_generate_audio(monkeypatch):
     assert result["speakerId"] == 0
     assert result["speakerName"] == "Test Speaker / Normal"
     assert result["synthesisStatus"] == "audio_output_disabled"
+    assert result["voicevoxStage"] == "metadata"
+    assert result["versionLatencyMs"] is not None
+    assert result["speakersLatencyMs"] is not None
+    assert result["timeoutSec"] == 30.0
+    assert result["retryCount"] == 0
     assert result["audioGenerated"] is False
     assert result["outputPath"] is None
     assert not any("/audio_query" in call or "/synthesis" in call for call in calls)
@@ -232,6 +241,7 @@ def test_voicevox_allow_audio_output_required_for_wav_generation(monkeypatch, tm
     assert report["audioGenerated"] is False
     assert result["audioGenerated"] is False
     assert result["outputPath"] is None
+    assert result["synthesisStatus"] == "audio_output_disabled"
 
 
 def test_voicevox_localhost_url_accepted(monkeypatch):
@@ -270,6 +280,7 @@ def test_voicevox_non_localhost_url_rejected_without_network(monkeypatch):
     assert result["available"] is False
     assert result["reason"] == "non_localhost_url_rejected"
     assert result["synthesisStatus"] == "voicevox_error"
+    assert result["voicevoxStage"] == "url_validation"
     assert result["audioGenerated"] is False
     assert result["outputPath"] is None
 
@@ -319,9 +330,12 @@ def test_voicevox_mocked_audio_query_and_synthesis_write_ignored_output(monkeypa
     assert result["available"] is True
     assert result["reason"] == "voicevox_success"
     assert result["synthesisStatus"] == "voicevox_success"
+    assert result["voicevoxStage"] == "complete"
     assert result["speakerName"] == "Test Speaker / Bright"
     assert result["audioGenerated"] is True
     assert result["audioBytes"] == len(audio_bytes)
+    assert result["timeoutSec"] == 30.0
+    assert result["retryCount"] == 0
     assert output_path.exists()
     assert output_path.read_bytes() == audio_bytes
     assert output_path.parent.name == "audio"
@@ -350,6 +364,11 @@ def test_voicevox_report_schema_includes_safety_fields(monkeypatch):
     assert "speakerName" in result
     assert result["audioBytes"] is None
     assert result["synthesisStatus"] == "audio_output_disabled"
+    assert result["voicevoxStage"] == "metadata"
+    assert "voicevoxStage" in result
+    assert "audioQueryLatencyMs" in result
+    assert report["voicevox"]["timeoutSec"] == 30.0
+    assert report["voicevox"]["retries"] == 1
     assert report["safety"]["runtimePlaybackAdded"] is False
     assert report["safety"]["conversationModeChanged"] is False
     assert report["safety"]["ownerVoiceGateChanged"] is False
@@ -361,3 +380,120 @@ def test_voicevox_probe_has_no_playback_behavior():
     assert "playsound" not in script_text
     assert "winsound" not in script_text
     assert "subprocess" not in script_text
+
+
+def test_voicevox_cli_timeout_and_retries_options_parse():
+    parser = tts_probe.build_arg_parser()
+    args = parser.parse_args(
+        [
+            "--providers",
+            "voicevox_server",
+            "--voicevox-timeout-sec",
+            "12.5",
+            "--voicevox-retries",
+            "2",
+        ]
+    )
+
+    assert args.voicevox_timeout_sec == 12.5
+    assert args.voicevox_retries == 2
+
+
+def test_voicevox_timeout_override_in_report(monkeypatch):
+    def fake_urlopen(request, timeout):
+        assert timeout == 5.0
+        url = request_url(request)
+        if url.endswith("/version"):
+            return FakeResponse(b"0.25.2")
+        if url.endswith("/speakers"):
+            return FakeResponse(b"[]")
+        raise AssertionError(f"unexpected VOICEVOX call: {url}")
+
+    monkeypatch.setattr(tts_probe.urllib.request, "urlopen", fake_urlopen)
+
+    report = build_probe_report(
+        text="Alpha reply.",
+        providers=["voicevox_server"],
+        voicevox_timeout_seconds=5.0,
+        voicevox_retries=0,
+    )
+    result = report["providers"][0]
+
+    assert report["voicevox"]["timeoutSec"] == 5.0
+    assert report["voicevox"]["retries"] == 0
+    assert result["timeoutSec"] == 5.0
+    assert result["retryCount"] == 0
+
+
+def test_voicevox_audio_query_timeout_classification_and_retry(monkeypatch):
+    calls = []
+
+    def fake_urlopen(request, timeout):
+        url = request_url(request)
+        calls.append(url)
+        if url.endswith("/version"):
+            return FakeResponse(b"0.25.2")
+        if url.endswith("/speakers"):
+            return FakeResponse(b"[]")
+        if "/audio_query?" in url:
+            raise TimeoutError("audio query took too long")
+        raise AssertionError(f"unexpected VOICEVOX call: {url}")
+
+    monkeypatch.setattr(tts_probe.urllib.request, "urlopen", fake_urlopen)
+
+    report = build_probe_report(
+        text="Alpha reply.",
+        providers=["voicevox_server"],
+        allow_audio_output=True,
+        voicevox_retries=1,
+    )
+    result = report["providers"][0]
+
+    assert result["available"] is True
+    assert result["synthesisStatus"] == "audio_query_timeout"
+    assert result["voicevoxStage"] == "audio_query"
+    assert result["retryCount"] == 1
+    assert result["lastExceptionClass"] == "TimeoutError"
+    assert result["audioQueryLatencyMs"] is not None
+    assert result["synthesisLatencyMs"] is None
+    assert result["audioGenerated"] is False
+    assert sum(1 for call in calls if "/audio_query?" in call) == 2
+    assert not any("/synthesis?" in call for call in calls)
+
+
+def test_voicevox_synthesis_timeout_classification_and_retry(monkeypatch):
+    calls = []
+
+    def fake_urlopen(request, timeout):
+        url = request_url(request)
+        calls.append(url)
+        if url.endswith("/version"):
+            return FakeResponse(b"0.25.2")
+        if url.endswith("/speakers"):
+            return FakeResponse(b"[]")
+        if "/audio_query?" in url:
+            return FakeResponse(b'{"accent_phrases":[],"speedScale":1.0}')
+        if "/synthesis?" in url:
+            raise TimeoutError("synthesis took too long")
+        raise AssertionError(f"unexpected VOICEVOX call: {url}")
+
+    monkeypatch.setattr(tts_probe.urllib.request, "urlopen", fake_urlopen)
+
+    report = build_probe_report(
+        text="Alpha reply.",
+        providers=["voicevox_server"],
+        allow_audio_output=True,
+        voicevox_retries=1,
+    )
+    result = report["providers"][0]
+
+    assert result["available"] is True
+    assert result["synthesisStatus"] == "synthesis_timeout"
+    assert result["voicevoxStage"] == "synthesis"
+    assert result["retryCount"] == 1
+    assert result["lastExceptionClass"] == "TimeoutError"
+    assert result["audioQueryLatencyMs"] is not None
+    assert result["synthesisLatencyMs"] is not None
+    assert result["audioGenerated"] is False
+    assert sum(1 for call in calls if "/audio_query?" in call) == 1
+    assert sum(1 for call in calls if "/synthesis?" in call) == 2

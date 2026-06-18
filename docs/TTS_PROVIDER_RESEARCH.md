@@ -1,13 +1,14 @@
 # TTS Provider Research
 
-**Task:** TASK-TTS-001 / TASK-TTS-004B
-**Status:** TASK-TTS-004B IMPLEMENTED - VOICEVOX MANUAL PROBE READY / OPTIONAL AUDIO OUTPUT LOCAL ONLY
+**Task:** TASK-TTS-001 / TASK-TTS-004B2
+**Status:** TASK-TTS-004B2 IMPLEMENTED - VOICEVOX TIMEOUT HARDENING SMOKE PASS / NEEDS MANUAL AUDIO RETRY
 **Date:** 2026-06-18
 **Scope:** Provider research, implemented mock-provider skeleton boundary,
-TASK-TTS-004A install-free provider review, and TASK-TTS-004B manual VOICEVOX
-localhost probe. No real voice-quality provider is selected as final, no model
-is downloaded, no dependency is added, and no runtime synthesis/playback path is
-implemented by TASK-TTS-004B.
+TASK-TTS-004A install-free provider review, TASK-TTS-004B manual VOICEVOX
+localhost probe, and TASK-TTS-004B2 timeout/retry hardening. No real
+voice-quality provider is selected as final, no model is downloaded, no
+dependency is added, and no runtime synthesis/playback path is implemented by
+TASK-TTS-004B2.
 
 This document records candidate directions for Christina voice output. It should
 guide later experiments, not lock Dragon Pet AI to a single TTS engine.
@@ -246,6 +247,12 @@ Optional local WAV output command:
 .\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers voicevox_server --text "哼，汝總算想起要依靠吾了。這是 VOICEVOX optional audio probe。" --voicevox-speaker 0 --allow-audio-output --pretty
 ```
 
+Longer timeout/retry command after TASK-TTS-004B2:
+
+```powershell
+.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers voicevox_server --text "哼，汝總算想起要依靠吾了。這是 VOICEVOX optional audio retry probe。" --voicevox-speaker 0 --voicevox-timeout-sec 30 --voicevox-retries 1 --allow-audio-output --pretty
+```
+
 VOICEVOX probe behavior:
 
 - Only localhost URLs are allowed by `--voicevox-url`; non-localhost URLs are
@@ -260,6 +267,36 @@ VOICEVOX probe behavior:
 - Reports include `voicevoxUrl`, `version`, `speakerId`, `speakerName`,
   `normalizedChunks`, `measuredLatencyMs`, `audioGenerated`, `outputPath`,
   `audioBytes`, and `synthesisStatus`.
+- TASK-TTS-004B2 adds `voicevoxStage`, `versionLatencyMs`,
+  `speakersLatencyMs`, `audioQueryLatencyMs`, `synthesisLatencyMs`,
+  `timeoutSec`, `retryCount`, `lastExceptionClass`, and
+  `lastExceptionMessage`.
+
+Manual Windows result before TASK-TTS-004B2 hardening:
+
+- `Invoke-RestMethod http://127.0.0.1:50021/version` returned `0.25.2`.
+- Metadata-only probe passed: `available=true`,
+  `reason=local_server_metadata_ok`, `version="0.25.2"`, `speakerId=0`,
+  `speakerName=ずんだもん / ノーマル`, speaker count `43`,
+  `synthesisStatus=audio_output_disabled`, and `audioGenerated=false`.
+- Optional audio probe with `--allow-audio-output` reached the local server but
+  failed before quality evaluation: `reason=voicevox_error:TimeoutError`,
+  `synthesisStatus=voicevox_error`, `measuredLatencyMs=890`,
+  `audioGenerated=false`, and `outputPath=null`.
+- Interpretation: VOICEVOX Engine was running and metadata/speaker discovery
+  worked, but first synthesis/model-load latency exceeded the previous short
+  timeout.
+
+Manual Windows retry after TASK-TTS-004B2 hardening:
+
+- Optional audio probe with `--voicevox-timeout-sec 30 --voicevox-retries 1`
+  reached `reason=voicevox_success`.
+- `audioGenerated=true`, `audioBytes=291372`, `voicevoxStage=complete`,
+  `audioQueryLatencyMs=30`, `synthesisLatencyMs=1568`, and `retryCount=0`.
+- The generated WAV stayed under ignored
+  `outputs/tts_provider_probe/YYYYMMDD/audio/`.
+- Pronunciation/character quality is still not judged by the probe and requires
+  manual listening.
 
 Evaluation notes:
 
@@ -269,10 +306,12 @@ Evaluation notes:
   native Chinese support.
 - A successful WAV generation proves only local server connectivity and file
   output. It does not approve runtime app playback.
+- Audio quality is not judged yet from the pre-hardening manual run because
+  optional synthesis timed out before a WAV was generated.
 - No runtime TTS wiring, `/chat` integration, Pet Window playback,
   auto-speaking, dependency install, ElevenLabs integration, STT behavior
   change, Conversation Mode queue change, Owner Voice gate change, or schema
-  change is part of TASK-TTS-004B.
+  change is part of TASK-TTS-004B2.
 
 ---
 
@@ -373,13 +412,16 @@ Recommended sequencing:
 4. TASK-TTS-004B: VOICEVOX local server manual probe / optional audio output.
    DONE - manual localhost metadata probe ready; optional WAV generation is
    guarded by `--allow-audio-output` and remains local-only.
-5. TASK-TTS-004C: edge-tts optional network candidate probe.
-6. TASK-TTS-004D: Style-Bert-VITS2 / GPT-SoVITS feasibility research.
-7. TASK-TTS-004: renderer playback queue diagnostics after a real provider
+5. TASK-TTS-004B2: VOICEVOX synthesis timeout / retry hardening. DONE - stage
+   diagnostics and finite audio-stage retry ready; manual audio retry still
+   needed for quality judgment.
+6. TASK-TTS-004C: edge-tts optional network candidate probe.
+7. TASK-TTS-004D: Style-Bert-VITS2 / GPT-SoVITS feasibility research.
+8. TASK-TTS-004: renderer playback queue diagnostics after a real provider
    candidate is validated.
-8. TASK-TTS-005: Pet speaking state and bubble sync.
-9. TASK-TTS-006: Conversation Mode feedback prevention.
-10. Future: provider comparison report and singing research.
+9. TASK-TTS-005: Pet speaking state and bubble sync.
+10. TASK-TTS-006: Conversation Mode feedback prevention.
+11. Future: provider comparison report and singing research.
 
 Do not start by wiring ElevenLabs. Do not hard-code ChatTTS, GPT-SoVITS, F5-TTS,
 or CosyVoice into the product path before a provider abstraction and mock tests
