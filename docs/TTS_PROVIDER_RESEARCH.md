@@ -1,18 +1,18 @@
 # TTS Provider Research
 
-**Task:** TASK-TTS-001 / TASK-TTS-004D
-**Status:** TASK-TTS-004D DONE - CHARACTER VOICE FEASIBILITY RESEARCH COMPLETE / NO MODEL INSTALLED
+**Task:** TASK-TTS-001 / TASK-TTS-004D2
+**Status:** TASK-TTS-004D2 IMPLEMENTED - CHARACTER VOICE ENV CHECK READY / NO INSTALL PERFORMED
 **Date:** 2026-06-19
 **Scope:** Provider research, implemented mock-provider skeleton boundary,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B manual VOICEVOX
 localhost probe, TASK-TTS-004B2 timeout/retry hardening, TASK-TTS-004C
 edge-tts optional network candidate probe, and TASK-TTS-004C2 manual
 edge-tts dependency/audio output validation, TASK-TTS-004C3 docs-first
-edge-tts tuning workflow, and TASK-TTS-004D character voice feasibility
-research. No real voice-quality provider is selected as final, no model is
+edge-tts tuning workflow, TASK-TTS-004D character voice feasibility research,
+and TASK-TTS-004D2 environment check workflow. No real voice-quality provider is selected as final, no model is
 downloaded, the `edge-tts` install is optional/manual inside `backend\.venv`
 only, and no runtime synthesis/playback path is implemented by TASK-TTS-004C2,
-TASK-TTS-004C3, or TASK-TTS-004D.
+TASK-TTS-004C3, TASK-TTS-004D, or TASK-TTS-004D2.
 
 This document records candidate directions for Christina voice output. It should
 guide later experiments, not lock Dragon Pet AI to a single TTS engine.
@@ -613,6 +613,36 @@ change, or schema change is part of TASK-TTS-004D.
 
 ---
 
+## TASK-TTS-004D2 Character Voice Environment Check
+
+TASK-TTS-004D2 adds `scripts/tts_character_voice_env_check.py` as an
+environment-check-only workflow before any GPT-SoVITS or Style-Bert-VITS2
+install/probe attempt.
+
+The checker collects existing local evidence only:
+
+- OS/platform and architecture.
+- Python executable, version, and venv detection.
+- Git availability/version.
+- Repo drive disk space.
+- `nvidia-smi` GPU, VRAM, driver, and CUDA evidence when available.
+- PyTorch version, CUDA availability, and GPU device evidence only if already
+  installed.
+- Node/npm versions.
+- Optional localhost-only VOICEVOX metadata reachability.
+- Optional `edge_tts` package availability.
+- Deterministic feasibility verdict.
+
+Reports are JSON/Markdown local artifacts under ignored
+`outputs/tts_character_voice_env_check/YYYYMMDD/` and must not be committed.
+
+TASK-TTS-004D2 does not install packages, download models, clone repos, train or
+run models, synthesize audio, wire TTS into runtime, add playback, or select a
+provider. Its output only informs whether TASK-TTS-004E should plan a CPU probe,
+GPU probe, or docs-only follow-up.
+
+---
+
 ## 5. Local Candidate Notes
 
 The following are candidate directions for future manual experiments. TASK-TTS-001
@@ -725,6 +755,7 @@ Recommended sequencing:
    no model installed, no final provider selected; GPT-SoVITS and
    Style-Bert-VITS2 are the leading long-term research candidates.
 10. TASK-TTS-004D2: character voice feasibility manual environment check.
+   IMPLEMENTED - env checker ready, no install performed.
 11. TASK-TTS-004E: GPT-SoVITS / Style-Bert-VITS2 minimal local probe plan.
 12. TASK-TTS-004: renderer playback queue diagnostics after a real provider
    candidate is validated.

@@ -1,17 +1,18 @@
 # TTS Architecture
 
-**Task:** TASK-TTS-001 / TASK-TTS-004D
-**Status:** TASK-TTS-004D DONE - CHARACTER VOICE FEASIBILITY RESEARCH COMPLETE / NO MODEL INSTALLED
+**Task:** TASK-TTS-001 / TASK-TTS-004D2
+**Status:** TASK-TTS-004D2 IMPLEMENTED - CHARACTER VOICE ENV CHECK READY / NO INSTALL PERFORMED
 **Date:** 2026-06-19
 **Scope:** Provider-neutral architecture plus TASK-TTS-002 backend mock skeleton,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B VOICEVOX manual
 localhost probe, TASK-TTS-004B2 timeout/retry diagnostics, TASK-TTS-004C
 edge-tts optional network probe, TASK-TTS-004C2 manual edge-tts dependency /
 audio output validation, TASK-TTS-004C3 docs-first edge-tts tuning workflow,
-and TASK-TTS-004D character voice feasibility research. No runtime wiring, app
-playback, runtime/default dependency, schema change, STT behavior change,
-Conversation Mode behavior change, or Owner Voice behavior change is added by
-TASK-TTS-004C2, TASK-TTS-004C3, or TASK-TTS-004D.
+TASK-TTS-004D character voice feasibility research, and TASK-TTS-004D2
+environment-check workflow. No runtime wiring, app playback, runtime/default
+dependency, schema change, STT behavior change, Conversation Mode behavior
+change, or Owner Voice behavior change is added by TASK-TTS-004C2,
+TASK-TTS-004C3, TASK-TTS-004D, or TASK-TTS-004D2.
 
 This document defines the target architecture for Christina voice output and the
 implemented TASK-TTS-002 mock skeleton. It remains provider-neutral: Dragon Pet
@@ -161,6 +162,19 @@ TASK-TTS-004D feasibility checkpoint:
 - Future providers must pass a standalone probe, manual listening verdict,
   license/data review, and integration boundary review before any runtime
   `/chat` wiring or playback queue work.
+- Runtime TTS remains disabled/mock-only.
+
+TASK-TTS-004D2 environment checkpoint:
+
+- `scripts/tts_character_voice_env_check.py` records local readiness evidence
+  for future GPT-SoVITS / Style-Bert-VITS2 probe planning.
+- Reports write only under ignored
+  `outputs/tts_character_voice_env_check/YYYYMMDD/`.
+- The checker collects platform, Python, Git, disk, GPU/CUDA, PyTorch,
+  Node/npm, localhost VOICEVOX, optional edge-tts, warnings, safety flags, and
+  deterministic feasibility verdict.
+- It performs no install, model download, external repo clone, training,
+  inference, runtime wiring, playback, or auto-speaking.
 - Runtime TTS remains disabled/mock-only.
 
 ---
@@ -659,6 +673,7 @@ Manual Windows playback smoke checklist for the first runtime task:
   no model installed, no final provider selected, GPT-SoVITS /
   Style-Bert-VITS2 remain long-term research candidates.
 - TASK-TTS-004D2: Character voice feasibility manual environment check.
+  IMPLEMENTED - env checker ready, no install performed.
 - TASK-TTS-004E: GPT-SoVITS / Style-Bert-VITS2 minimal local probe plan.
 - TASK-TTS-004: Playback queue and renderer diagnostics after a real provider
   candidate is validated.
@@ -806,3 +821,14 @@ TASK-TTS-004D is complete when:
 - Runtime TTS remains disabled/mock-only with no playback, `/chat`, STT,
   Conversation Mode, Owner Voice, default provider, dependency, or schema
   changes.
+
+TASK-TTS-004D2 is complete when:
+
+- `scripts/tts_character_voice_env_check.py` records local environment evidence
+  without installing packages or downloading models.
+- Reports write under ignored `outputs/tts_character_voice_env_check/YYYYMMDD/`.
+- Missing GPU/CUDA/PyTorch states are reported gracefully.
+- Tests cover report schema, missing GPU, missing Torch, deterministic verdict,
+  ignored output path, no install command, and no external network requirement.
+- Runtime TTS remains disabled/mock-only with no playback, `/chat`, STT,
+  Conversation Mode, Owner Voice, dependency/default-runtime, or schema changes.

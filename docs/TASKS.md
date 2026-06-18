@@ -24551,6 +24551,96 @@ Added `docs/TTS_CHARACTER_VOICE_FEASIBILITY.md` with:
 
 ---
 
+## TASK-TTS-004D2 | Character Voice Environment Check / No Install
+
+**Status:** IMPLEMENTED - CHARACTER VOICE ENV CHECK READY / NO INSTALL PERFORMED
+**Date:** 2026-06-19
+**Phase:** Phase 5 - Companion Voice Output Architecture
+**Depends on:** TASK-TTS-001, TASK-TTS-002, TASK-TTS-003, TASK-TTS-004A, TASK-TTS-004B2, TASK-TTS-004C, TASK-TTS-004C2, TASK-TTS-004C3, TASK-TTS-004D
+
+### Goal
+
+Add an environment-check-only workflow to determine whether this Windows machine
+has enough local evidence for later GPT-SoVITS / Style-Bert-VITS2 probe work.
+
+TASK-TTS-004D2 must not install packages, download models, clone repos, run
+training, run inference, generate audio, wire runtime TTS, or select a final
+provider.
+
+### Implementation Summary
+
+Added:
+
+- `scripts/tts_character_voice_env_check.py`
+- `backend/tests/test_tts_character_voice_env_check.py`
+- `.gitignore` entry for `outputs/tts_character_voice_env_check/`
+
+The script writes JSON and Markdown reports under:
+
+```text
+outputs/tts_character_voice_env_check/YYYYMMDD/
+```
+
+Collected fields:
+
+- OS/platform and architecture.
+- Python executable, version, and venv detection.
+- Git availability/version.
+- Repo drive disk free space.
+- `nvidia-smi` availability, GPU name, VRAM, driver, and CUDA version when
+  available.
+- PyTorch availability, version, CUDA availability, device count, and device
+  names when already installed.
+- Node/npm versions.
+- Optional localhost-only VOICEVOX metadata reachability.
+- Optional `edge_tts` Python package availability.
+- Deterministic feasibility verdict:
+  `ready_for_docs_only`, `ready_for_cpu_probe`, `ready_for_gpu_probe`, or
+  `not_ready_missing_gpu_or_cuda`.
+
+### Safety Boundary
+
+- No install command is executed.
+- No package manager command is executed except version checks for existing
+  `node`, `npm`, and `git`.
+- No external network URL is used; the optional VOICEVOX check is localhost only.
+- No model is downloaded, loaded, trained, or inferred.
+- No audio is generated or played.
+- No runtime TTS wiring, `/chat` integration, Pet Window playback, or
+  auto-speaking is added.
+- Generated JSON/Markdown env-check reports are ignored local artifacts and must
+  not be committed.
+
+### Validation
+
+Required:
+
+- `.\backend\.venv\Scripts\python.exe -m py_compile scripts\tts_character_voice_env_check.py`
+- `.\backend\.venv\Scripts\python.exe scripts\tts_character_voice_env_check.py --help`
+- `.\backend\.venv\Scripts\python.exe scripts\tts_character_voice_env_check.py --pretty`
+- `.\backend\.venv\Scripts\python.exe -m pytest backend\tests\test_tts_character_voice_env_check.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-tts004d2`
+- Desktop smoke scripts.
+- `git diff --check`
+- `git diff --cached --check`
+
+### Acceptance Criteria
+
+- [x] Environment checker script added.
+- [x] JSON and Markdown reports write only under ignored
+  `outputs/tts_character_voice_env_check/YYYYMMDD/`.
+- [x] Report schema includes platform, Python, Git, disk, GPU/CUDA, PyTorch,
+  Node/npm, VOICEVOX, edge-tts, warnings, safety flags, and feasibility verdict.
+- [x] Missing `nvidia-smi`, missing PyTorch, and missing CUDA are graceful report
+  states, not failures.
+- [x] Tests cover schema, missing GPU, missing Torch, deterministic verdicts,
+  ignored output path, no install command, and no external network requirement.
+- [x] No package/model install, model download, clone, training, inference,
+  generated audio commit, runtime TTS wiring, playback, auto-speaking,
+  `/chat` schema change, mood schema change, STT behavior change, Conversation
+  Mode behavior change, or Owner Voice behavior change is added.
+
+---
+
 ## TASK-228 | Output Queue Runtime Skeleton, Disabled by Default
 
 **Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS

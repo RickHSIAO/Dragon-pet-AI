@@ -455,6 +455,18 @@ Suggested research and implementation tasks:
   install/download, training, inference, runtime playback, `/chat` integration,
   auto-speaking, dependency/default-runtime change, STT, Conversation Mode,
   Owner Voice, or schema behavior change is added.
+- TASK-TTS-004D2 Character Voice Environment Check / No Install.
+  **IMPLEMENTED - CHARACTER VOICE ENV CHECK READY / NO INSTALL PERFORMED
+  (2026-06-19):** Added `scripts/tts_character_voice_env_check.py` and targeted
+  tests. This checks local lab readiness before any GPT-SoVITS or
+  Style-Bert-VITS2 install: OS/platform, Python/venv, Git, disk, GPU/CUDA via
+  `nvidia-smi`, PyTorch only if already installed, Node/npm, localhost-only
+  VOICEVOX metadata reachability, optional `edge_tts` package availability, and
+  deterministic feasibility verdict. Reports write under ignored
+  `outputs/tts_character_voice_env_check/YYYYMMDD/`. No package/model install,
+  model download, external repo clone, training, inference, runtime playback,
+  `/chat` integration, auto-speaking, STT, Conversation Mode, Owner Voice, or
+  schema behavior change is added.
 - TASK-TTS-004 Playback queue and renderer diagnostics after a real provider
   candidate is validated.
 - TASK-TTS-005 Pet speaking state / bubble sync.

@@ -50,3 +50,6 @@ backend.pytest-tmp-task261-*/
 
 # TASK-TTS-003 local-only provider probe reports
 outputs/tts_provider_probe/
+
+# TASK-TTS-004D2 local-only character voice environment reports
+outputs/tts_character_voice_env_check/

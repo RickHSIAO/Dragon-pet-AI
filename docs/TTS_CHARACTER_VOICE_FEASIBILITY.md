@@ -1,10 +1,11 @@
 # TTS Character Voice Feasibility
 
-**Task:** TASK-TTS-004D
-**Status:** DONE - CHARACTER VOICE FEASIBILITY RESEARCH COMPLETE / NO MODEL INSTALLED
+**Task:** TASK-TTS-004D / TASK-TTS-004D2
+**Status:** TASK-TTS-004D2 IMPLEMENTED - CHARACTER VOICE ENV CHECK READY / NO INSTALL PERFORMED
 **Date:** 2026-06-19
 **Scope:** Documentation-only feasibility research for long-term Christina
-character voice candidates. No model was installed, downloaded, trained, or run.
+character voice candidates plus environment-check-only readiness inspection. No
+model was installed, downloaded, trained, or run.
 
 ---
 
@@ -119,14 +120,43 @@ Goal:
 
 - Record local machine constraints for GPT-SoVITS and Style-Bert-VITS2 without
   installing or downloading models unless a later task explicitly allows it.
+- Provide local evidence before any GPT-SoVITS or Style-Bert-VITS2 install,
+  model download, training, inference, or runtime integration is considered.
 
 Checks:
 
 - Windows version and shell path constraints.
-- Python/Conda availability.
+- Python executable, version, and venv state.
+- Git, Node, and npm availability.
+- Repo drive disk budget.
 - GPU model, driver, CUDA compatibility, VRAM, and disk budget.
-- Whether a separate lab folder is required outside Dragon Pet AI.
-- Whether license/data constraints block either candidate.
+- PyTorch availability only if already installed; no install is attempted.
+- Optional localhost-only VOICEVOX metadata reachability.
+- Optional `edge_tts` package availability in the current environment.
+
+Implementation:
+
+- `scripts/tts_character_voice_env_check.py`
+- `backend/tests/test_tts_character_voice_env_check.py`
+- Reports write to ignored `outputs/tts_character_voice_env_check/YYYYMMDD/`.
+
+Verdict values:
+
+- `ready_for_docs_only`
+- `ready_for_cpu_probe`
+- `ready_for_gpu_probe`
+- `not_ready_missing_gpu_or_cuda`
+
+Boundary:
+
+- No package install.
+- No model download.
+- No external repo clone.
+- No model training.
+- No model inference.
+- No runtime TTS wiring.
+- No playback, Pet playback, or auto-speaking.
+- No generated reports committed.
 
 ### TASK-TTS-004E - GPT-SoVITS / Style-Bert-VITS2 Minimal Local Probe Plan
 
