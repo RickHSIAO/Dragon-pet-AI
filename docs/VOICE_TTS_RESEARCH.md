@@ -216,8 +216,11 @@ Risks / unknowns:
 - TASK-TTS-004C3 uses the existing edge-tts voice/rate/pitch probe options for
   manual tuning. Baseline remains `zh-TW-HsiaoChenNeural +0% +0Hz = 6/10`:
   understandable, too general/Taiwanese, slightly fast, and weak for Christina.
-  Manual listening should compare slower `HsiaoChen`, `HsiaoYu`, and
-  `Xiaoxiao` candidates before any temporary-provider decision changes.
+  Manual listening found `zh-TW-HsiaoChenNeural -10%` somewhat better but still
+  not enough, `zh-TW-HsiaoYuNeural -10%` too old, and
+  `zh-CN-XiaoxiaoNeural -10%` too mainland-China-like for the user's
+  preference. No edge-tts candidate reached the desired Christina fit; stop
+  edge-tts tuning for now unless explicitly revisited.
 
 ### ElevenLabs
 
@@ -380,18 +383,20 @@ Suggested research and implementation tasks:
   runtime playback, `/chat` integration, auto-speaking, STT, Conversation Mode,
   Owner Voice, or schema behavior change is added.
 - TASK-TTS-004C3 Edge-TTS Voice / Rate Tuning Probe.
-  **IMPLEMENTED - EDGE-TTS TUNING PROBE READY / MANUAL LISTENING PENDING
-  (2026-06-18):** Docs-only workflow because the standalone probe already
+  **DONE - EDGE-TTS TUNING REVIEW COMPLETE / NO SUITABLE CHRISTINA VOICE FOUND
+  (2026-06-19):** Docs-only workflow because the standalone probe already
   supports `--edge-tts-voice`, `--edge-tts-rate`, and `--edge-tts-pitch`.
-  Manual listening matrix covers `zh-TW-HsiaoChenNeural` at `+0%`, `-10%`, and
-  `-15%`; `zh-TW-HsiaoYuNeural` at `+0%`, `-10%`, and `-15%`;
-  `zh-CN-XiaoxiaoNeural` at `+0%` and `-10%`; and optional `+2Hz`/`+5Hz` pitch
-  checks only after a voice/rate candidate is promising. Checklist fields:
-  voice, rate, pitch, outputPath, Chinese intelligibility, anime/character
-  feel, Christina suitability, speed, tone, strange pauses, overall score,
-  baseline improvement, temporary-provider suitability, and fallback/debug-only
-  decision. No runtime playback, `/chat` integration, auto-speaking, STT,
-  Conversation Mode, Owner Voice, or schema behavior change is added.
+  Manual tuning verdict: `zh-TW-HsiaoChenNeural -10%` feels somewhat better than
+  baseline but still lacks the right Christina/character feel and is not enough
+  to select as provider; `zh-TW-HsiaoYuNeural -10%` is not suitable because it
+  sounds too old; `zh-CN-XiaoxiaoNeural -10%` is not suitable because it sounds
+  too mainland-China-like for the user's preference. Provider decision:
+  edge-tts remains temporary Chinese provider / debug preview / fallback
+  candidate only, not final Christina voice and not runtime provider. Stop
+  further edge-tts tuning for now unless explicitly revisited. Recommended next
+  path is TASK-TTS-004D Style-Bert-VITS2 / GPT-SoVITS feasibility research. No
+  runtime playback, `/chat` integration, auto-speaking, STT, Conversation Mode,
+  Owner Voice, or schema behavior change is added.
 - TASK-TTS-004D Style-Bert-VITS2 / GPT-SoVITS Feasibility Research.
 - TASK-TTS-004 Playback queue and renderer diagnostics after a real provider
   candidate is validated.

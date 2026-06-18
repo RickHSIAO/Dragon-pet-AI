@@ -1,7 +1,7 @@
 # TTS Architecture
 
 **Task:** TASK-TTS-001 / TASK-TTS-004C3
-**Status:** TASK-TTS-004C3 IMPLEMENTED - EDGE-TTS TUNING PROBE READY / MANUAL LISTENING PENDING
+**Status:** TASK-TTS-004C3 DONE - EDGE-TTS TUNING REVIEW COMPLETE / NO SUITABLE CHRISTINA VOICE FOUND
 **Date:** 2026-06-18
 **Scope:** Provider-neutral architecture plus TASK-TTS-002 backend mock skeleton,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B VOICEVOX manual
@@ -134,7 +134,14 @@ TASK-TTS-004C3 tuning checkpoint:
   candidates with slower rates and optional pitch checks.
 - Generated MP3 files and probe reports remain ignored local artifacts under
   `outputs/tts_provider_probe/YYYYMMDD/`.
-- Manual listening is required before changing the temporary-provider verdict.
+- Manual listening found HsiaoChen `-10%` somewhat better but still not enough,
+  HsiaoYu `-10%` too old, and Xiaoxiao `-10%` too mainland-China-like for the
+  user's preference.
+- No edge-tts tuning candidate reached the desired Christina fit. Stop further
+  edge-tts tuning for now unless explicitly revisited.
+- Chinese runtime provider selection remains unresolved. Recommended next path
+  is TASK-TTS-004D Style-Bert-VITS2 / GPT-SoVITS feasibility research for
+  long-term character voice.
 - Runtime TTS remains disabled/mock-only; edge-tts is not default, not wired to
   `/chat`, not wired to app/Pet Window playback, and not selected as runtime.
 
@@ -628,8 +635,8 @@ Manual Windows playback smoke checklist for the first runtime task:
   output succeeds; manual listening accepts it only as a temporary Chinese
   provider candidate, not final Christina voice.
 - TASK-TTS-004C3: edge-tts voice/rate tuning probe if slower rate or alternate
-  Mandarin voices should be checked. IMPLEMENTED - docs-first tuning matrix and
-  manual commands ready; manual listening pending.
+  Mandarin voices should be checked. DONE - no suitable Christina voice found;
+  keep edge-tts temporary/debug/fallback only and stop tuning for now.
 - TASK-TTS-004D: Style-Bert-VITS2 / GPT-SoVITS feasibility research.
 - TASK-TTS-004: Playback queue and renderer diagnostics after a real provider
   candidate is validated.

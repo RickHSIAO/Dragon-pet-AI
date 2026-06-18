@@ -322,7 +322,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 **Goal:** Prepare Christina voice output with a provider-neutral, local-first TTS
 architecture before any new runtime provider implementation.
 
-**Status:** EDGE-TTS TUNING PROBE READY / MANUAL LISTENING PENDING - TASK-TTS-004C3 IMPLEMENTED.
+**Status:** EDGE-TTS TUNING REVIEW COMPLETE / NO SUITABLE CHRISTINA VOICE FOUND - TASK-TTS-004C3 DONE.
 
 | Task | Name | Status |
 |---|---|---|
@@ -334,7 +334,7 @@ architecture before any new runtime provider implementation.
 | TASK-TTS-004B2 | VOICEVOX Synthesis Timeout / Retry Hardening | DONE - VOICEVOX AUDIO OUTPUT SUCCESS / NOT SELECTED FOR CHINESE RUNTIME |
 | TASK-TTS-004C | Edge-TTS Optional Network Candidate Probe | IMPLEMENTED - EDGE-TTS OPTIONAL PROBE READY / CHINESE AUDIO VALIDATION PENDING |
 | TASK-TTS-004C2 | Edge-TTS Manual Dependency Probe / Chinese Audio Output | DONE - EDGE-TTS AUDIO OUTPUT SUCCESS / TEMP CHINESE PROVIDER ONLY |
-| TASK-TTS-004C3 | Edge-TTS Voice / Rate Tuning Probe | IMPLEMENTED - EDGE-TTS TUNING PROBE READY / MANUAL LISTENING PENDING |
+| TASK-TTS-004C3 | Edge-TTS Voice / Rate Tuning Probe | DONE - EDGE-TTS TUNING REVIEW COMPLETE / NO SUITABLE CHRISTINA VOICE FOUND |
 | TASK-TTS-004D | Style-Bert-VITS2 / GPT-SoVITS Feasibility Research | PLANNED |
 | TASK-TTS-004 | Playback queue and renderer diagnostics | PLANNED AFTER REAL PROVIDER CANDIDATE |
 | TASK-TTS-005 | Pet speaking state / bubble sync | PLANNED |
@@ -371,8 +371,12 @@ Track constraints:
 - TASK-TTS-004C3 documents the edge-tts tuning workflow using the existing
   single-run `--edge-tts-voice`, `--edge-tts-rate`, and `--edge-tts-pitch`
   options. It compares HsiaoChen, HsiaoYu, and Xiaoxiao Mandarin candidates
-  with slower rates and optional pitch checks. Manual listening is pending;
-  edge-tts remains temporary candidate only until tuning verdict.
+  with slower rates and optional pitch checks. Manual listening found no
+  suitable Christina voice: HsiaoChen `-10%` was somewhat better but still not
+  enough, HsiaoYu `-10%` sounded too old, and Xiaoxiao `-10%` sounded too
+  mainland-China-like for the user's preference. edge-tts remains
+  temporary/debug/fallback only, not selected as runtime. Next recommended path
+  is TASK-TTS-004D Style-Bert-VITS2 / GPT-SoVITS feasibility research.
 - TTS remains disabled by default for the new provider architecture.
 - First implementation starts with `mock`, not ElevenLabs or a paid external
   provider.
@@ -1166,7 +1170,7 @@ Track constraints:
 
 - TASK-TTS-004C2 DONE - EDGE-TTS AUDIO OUTPUT SUCCESS / TEMP CHINESE PROVIDER ONLY (2026-06-18): Edge-TTS Manual Dependency Probe / Chinese Audio Output. With explicit approval, `edge-tts` was installed into `backend\.venv` as an optional probe dependency only. Metadata-only probe now reports `available=true`, `reason=optional_dependency_present`, `synthesisStatus=metadata_only`, `voice=zh-TW-HsiaoChenNeural`, and `audioGenerated=false`; metadata-only mode still does not send text to Microsoft Edge TTS service. Optional audio probe with `--allow-audio-output` reached `reason=edge_tts_success`, `audioGenerated=true`, `audioBytes=30240`, and `synthesisLatencyMs=1613`, writing an ignored MP3 under `outputs/tts_provider_probe/20260618/audio/`. Manual listening verdict: Chinese is understandable, the voice is slightly fast, tone is okay, no strange pauses, overall `6/10`, but anime/Christina fit is weak and the voice feels more general/Taiwanese than Christina-like. Provider decision: `edge_tts` is technically usable and acceptable as a temporary Chinese provider candidate, but it is not selected as the final Christina long-term voice. Keep it as an optional network/cloud-ish preview/debug/fallback candidate; do not wire it into runtime yet. Next path is TASK-TTS-004C3 edge-tts voice/rate tuning or TASK-TTS-004D Style-Bert-VITS2 / GPT-SoVITS feasibility. No runtime TTS wiring, playback, auto-speaking, ElevenLabs integration, generated audio/report commit, `/chat` schema or mood schema change, STT default/model selector change, Conversation Mode queue/backpressure change, or Owner Voice hard-gate change was added.
 
-- TASK-TTS-004C3 IMPLEMENTED - EDGE-TTS TUNING PROBE READY / MANUAL LISTENING PENDING (2026-06-18): Edge-TTS Voice / Rate Tuning Probe. Docs-only workflow because `scripts/tts_provider_probe.py` already supports `--edge-tts-voice`, `--edge-tts-rate`, and `--edge-tts-pitch`. The tuning matrix covers `zh-TW-HsiaoChenNeural` at `+0%`, `-10%`, and `-15%`; `zh-TW-HsiaoYuNeural` at `+0%`, `-10%`, and `-15%`; `zh-CN-XiaoxiaoNeural` at `+0%` and `-10%`; and optional `+2Hz`/`+5Hz` pitch checks only after a usable voice/rate is found. Decision rule: `>= 7/10` is acceptable as a temporary Chinese provider candidate, `< 7/10` remains fallback/debug only, and regardless of score edge-tts is not the final long-term Christina voice unless explicitly selected later. No runtime TTS wiring, playback, auto-speaking, dependency/default-runtime change, ElevenLabs integration, generated audio/report commit, `/chat` schema or mood schema change, STT default/model selector change, Conversation Mode queue/backpressure change, or Owner Voice hard-gate change was added.
+- TASK-TTS-004C3 DONE - EDGE-TTS TUNING REVIEW COMPLETE / NO SUITABLE CHRISTINA VOICE FOUND (2026-06-19): Edge-TTS Voice / Rate Tuning Probe. Docs-only workflow because `scripts/tts_provider_probe.py` already supports `--edge-tts-voice`, `--edge-tts-rate`, and `--edge-tts-pitch`. Manual tuning verdict: `zh-TW-HsiaoChenNeural -10%` feels somewhat better than baseline but still lacks the right Christina/character feel and is not enough to select as provider; `zh-TW-HsiaoYuNeural -10%` is not suitable because it sounds too old; `zh-CN-XiaoxiaoNeural -10%` is not suitable because it sounds too mainland-China-like for the user's preference. No edge-tts voice reached desired Christina fit. edge-tts remains temporary Chinese provider / debug preview / fallback candidate only, not final voice and not runtime provider. Stop further edge-tts tuning for now unless explicitly revisited. Recommended next path is TASK-TTS-004D Style-Bert-VITS2 / GPT-SoVITS feasibility research. No runtime TTS wiring, playback, auto-speaking, dependency/default-runtime change, ElevenLabs integration, generated audio/report commit, `/chat` schema or mood schema change, STT default/model selector change, Conversation Mode queue/backpressure change, or Owner Voice hard-gate change was added.
 
 - TASK-227 IMPLEMENTED - DOCS ONLY / NO WINDOWS SMOKE REQUIRED (2026-06-01): Voice/TTS Research Note and Local Speech Roadmap. Adds `docs/VOICE_TTS_RESEARCH.md` as a docs-only voice, TTS, and STT research checkpoint. The note records the user-provided external AI VTuber / Discord voice chain as reference material, then separates what applies to Dragon Pet AI from what should not be copied. Dragon Pet AI remains local-first: TTS is a post-reply audio layer, TTS does not call `/chat`, TTS does not write history, TTS does not read diagnostics, STT is explicit push-to-talk/user action only, no always listening, and future speech work must obey the output queue / priority design. Candidate research tracks include ChatTTS, GPT-SoVITS, F5-TTS, CosyVoice, ElevenLabs as optional cloud reference, local Whisper / faster-whisper, TTS provider interface design, disabled audio skeleton, and confirmed transcript-to-`/chat` design. No runtime prompt wiring, TTS/STT/audio skeleton, IPC, `/chat` change, backend/provider change, renderer change, Pet Window change, assets, voice model, commit, or push.
 

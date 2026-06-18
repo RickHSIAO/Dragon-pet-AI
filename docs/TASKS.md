@@ -24318,7 +24318,7 @@ Manual listening result:
 
 ## TASK-TTS-004C3 | Edge-TTS Voice / Rate Tuning Probe
 
-**Status:** IMPLEMENTED - EDGE-TTS TUNING PROBE READY / MANUAL LISTENING PENDING
+**Status:** DONE - EDGE-TTS TUNING REVIEW COMPLETE / NO SUITABLE CHRISTINA VOICE FOUND
 **Date:** 2026-06-18
 **Phase:** Phase 5 - Companion Voice Output Architecture
 **Depends on:** TASK-TTS-001, TASK-TTS-002, TASK-TTS-003, TASK-TTS-004A, TASK-TTS-004B2, TASK-TTS-004C, TASK-TTS-004C2
@@ -24356,19 +24356,29 @@ TASK-TTS-004C2 baseline:
 
 ### Tuning Matrix
 
-Manual listening is required for all pending cells.
+Manual listening result:
 
 | Candidate | Voice | Rate | Pitch | Generated file path | Chinese intelligibility | Christina fit | Speed | Tone | Overall score |
 |---|---|---:|---:|---|---|---|---|---|---|
 | Baseline | `zh-TW-HsiaoChenNeural` | `+0%` | `+0Hz` | `outputs/tts_provider_probe/20260618/audio/edge_tts_20260618-193335.mp3` | Good | Weak | Slightly fast | Okay | `6/10` |
-| Slow Chen 10 | `zh-TW-HsiaoChenNeural` | `-10%` | `+0Hz` | Pending manual run | Pending | Pending | Pending | Pending | Pending |
+| Slow Chen 10 | `zh-TW-HsiaoChenNeural` | `-10%` | `+0Hz` | Local ignored probe output | Good | Still weak; somewhat better than baseline but not enough | Better than baseline | Okay | Below provider-selection threshold |
 | Slow Chen 15 | `zh-TW-HsiaoChenNeural` | `-15%` | `+0Hz` | Pending manual run | Pending | Pending | Pending | Pending | Pending |
 | HsiaoYu baseline | `zh-TW-HsiaoYuNeural` | `+0%` | `+0Hz` | Pending manual run | Pending | Pending | Pending | Pending | Pending |
-| HsiaoYu slow 10 | `zh-TW-HsiaoYuNeural` | `-10%` | `+0Hz` | Pending manual run | Pending | Pending | Pending | Pending | Pending |
+| HsiaoYu slow 10 | `zh-TW-HsiaoYuNeural` | `-10%` | `+0Hz` | Local ignored probe output | Not selected | Not suitable; sounds too old | Not selected | Too old | Not suitable |
 | HsiaoYu slow 15 | `zh-TW-HsiaoYuNeural` | `-15%` | `+0Hz` | Pending manual run | Pending | Pending | Pending | Pending | Pending |
 | Xiaoxiao baseline | `zh-CN-XiaoxiaoNeural` | `+0%` | `+0Hz` | Pending manual run | Pending | Pending | Pending | Pending | Pending |
-| Xiaoxiao slow 10 | `zh-CN-XiaoxiaoNeural` | `-10%` | `+0Hz` | Pending manual run | Pending | Pending | Pending | Pending | Pending |
+| Xiaoxiao slow 10 | `zh-CN-XiaoxiaoNeural` | `-10%` | `+0Hz` | Local ignored probe output | Not selected | Not suitable; too mainland-China-like for preference | Not selected | Not selected | Not suitable |
 | Optional pitch check | Best candidate voice after rate check | Best candidate rate | `+2Hz` or `+5Hz` | Pending only if cleanly supported | Pending | Pending | Pending | Pending | Pending |
+
+Manual verdict summary:
+
+- `zh-TW-HsiaoChenNeural -10%`: somewhat better than the `+0%` baseline, but
+  still lacks the right Christina/character feel and is not enough to select as
+  provider.
+- `zh-TW-HsiaoYuNeural -10%`: not suitable; sounds too old.
+- `zh-CN-XiaoxiaoNeural -10%`: not suitable; sounds too mainland-China-like for
+  the user's preference.
+- No edge-tts tuning candidate reached the desired Christina fit.
 
 ### Manual Probe Commands
 
@@ -24427,12 +24437,17 @@ For each generated MP3, record:
 - whether it is acceptable as a temporary Chinese provider
 - whether it should remain fallback/debug only
 
-### Decision Rule
+### Provider Decision
 
-- `>= 7/10`: acceptable temporary Chinese provider candidate.
-- `< 7/10`: keep as fallback/debug only.
-- Regardless of score, edge-tts is not the final long-term Christina character
-  voice unless a later explicit provider-selection task changes that decision.
+- edge-tts tuning did not find a suitable Christina voice.
+- edge-tts remains usable only as a temporary Chinese provider, debug preview,
+  or fallback candidate.
+- edge-tts is not selected as the final Christina voice and must not be wired
+  into runtime yet.
+- Stop further edge-tts tuning for now unless explicitly revisited.
+- Recommended next path: TASK-TTS-004D Style-Bert-VITS2 / GPT-SoVITS
+  Feasibility Research for long-term character voice paths that may better
+  support anime-style Christina voice while preserving Chinese usability.
 - Runtime TTS remains disabled/mock-only until a separate runtime task selects a
   provider and adds playback safely.
 
@@ -24450,7 +24465,7 @@ For each generated MP3, record:
 - [x] Tuning matrix documents voices, rates, pitch, output path placeholders,
   listening fields, and baseline score.
 - [x] Manual commands are documented.
-- [x] Decision rule is documented.
+- [x] Manual tuning verdict and provider decision are documented.
 - [x] Generated audio/reports remain ignored local artifacts and are not
   committed.
 - [x] `edge_tts` remains optional/network-cloud-ish, temporary candidate only,
