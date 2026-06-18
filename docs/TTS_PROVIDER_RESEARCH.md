@@ -1,15 +1,16 @@
 # TTS Provider Research
 
-**Task:** TASK-TTS-001 / TASK-TTS-004C
-**Status:** TASK-TTS-004C IMPLEMENTED - EDGE-TTS OPTIONAL PROBE READY / CHINESE AUDIO VALIDATION PENDING
+**Task:** TASK-TTS-001 / TASK-TTS-004C2
+**Status:** TASK-TTS-004C2 DONE - EDGE-TTS MANUAL AUDIO OUTPUT SUCCESS / LISTENING PENDING
 **Date:** 2026-06-18
 **Scope:** Provider research, implemented mock-provider skeleton boundary,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B manual VOICEVOX
-localhost probe, TASK-TTS-004B2 timeout/retry hardening, and TASK-TTS-004C
-edge-tts optional network candidate probe. No real
-voice-quality provider is selected as final, no model is downloaded, no
-dependency is added, and no runtime synthesis/playback path is implemented by
-TASK-TTS-004C.
+localhost probe, TASK-TTS-004B2 timeout/retry hardening, TASK-TTS-004C
+edge-tts optional network candidate probe, and TASK-TTS-004C2 manual
+edge-tts dependency/audio output validation. No real
+voice-quality provider is selected as final, no model is downloaded, the
+`edge-tts` install is optional/manual inside `backend\.venv` only, and no
+runtime synthesis/playback path is implemented by TASK-TTS-004C2.
 
 This document records candidate directions for Christina voice output. It should
 guide later experiments, not lock Dragon Pet AI to a single TTS engine.
@@ -422,6 +423,63 @@ Voice gate change, or schema change is part of TASK-TTS-004C.
 
 ---
 
+## TASK-TTS-004C2 Edge-TTS Manual Dependency / Audio Probe
+
+TASK-TTS-004C2 records the explicitly approved manual dependency and audio probe
+for `edge_tts`. This does not make `edge_tts` default, does not add it to app
+runtime wiring, and does not add playback.
+
+Manual dependency install:
+
+```powershell
+.\backend\.venv\Scripts\python.exe -m pip install edge-tts
+```
+
+Result:
+
+- `edge-tts==7.2.8` installed into `backend\.venv` only.
+- No locked/default runtime dependency was changed.
+- No generated audio or reports are committed.
+
+Manual probe result:
+
+| Field | Metadata-only | Optional audio |
+|---|---|---|
+| Provider | `edge_tts` | `edge_tts` |
+| Voice | `zh-TW-HsiaoChenNeural` | `zh-TW-HsiaoChenNeural` |
+| Available | `true` | `true` |
+| Reason | `optional_dependency_present` | `edge_tts_success` |
+| Synthesis status | `metadata_only` | `edge_tts_success` |
+| Audio generated | `false` | `true` |
+| Audio bytes | `null` | `30240` |
+| Synthesis latency | `null` | `1613ms` |
+| Output | `null` | `outputs/tts_provider_probe/20260618/audio/edge_tts_20260618-193335.mp3` |
+
+Listening verdict:
+
+| Field | Result |
+|---|---|
+| 中文是否能聽懂 | Pending manual listening |
+| 是否像日系角色 | Pending manual listening |
+| 是否適合克莉絲蒂娜 | Pending manual listening |
+| 語速 | Pending manual listening |
+| 音色 | Pending manual listening |
+| 有沒有奇怪斷句 | Pending manual listening |
+| 整體可接受度 1-10 | Pending manual listening |
+| 是否可作為臨時中文 provider | Pending manual listening |
+| 是否可作為長期 provider | Pending manual listening |
+
+Provider decision:
+
+- `edge_tts` is technically usable by the standalone probe after optional
+  dependency installation.
+- `edge_tts` remains network/cloud-ish and is not local/offline.
+- `edge_tts` is not selected as the default runtime provider.
+- Chinese voice suitability and Christina fit remain unresolved until manual
+  listening is recorded.
+
+---
+
 ## 5. Local Candidate Notes
 
 The following are candidate directions for future manual experiments. TASK-TTS-001
@@ -524,12 +582,14 @@ Recommended sequencing:
 6. TASK-TTS-004C: edge-tts optional network candidate probe. IMPLEMENTED -
    metadata-only safe probe ready; Chinese audio validation pending explicit
    install/use and manual listening.
-7. TASK-TTS-004D: Style-Bert-VITS2 / GPT-SoVITS feasibility research.
-8. TASK-TTS-004: renderer playback queue diagnostics after a real provider
+7. TASK-TTS-004C2: edge-tts manual dependency/audio output probe. DONE - MP3
+   output works; manual listening pending.
+8. TASK-TTS-004D: Style-Bert-VITS2 / GPT-SoVITS feasibility research.
+9. TASK-TTS-004: renderer playback queue diagnostics after a real provider
    candidate is validated.
-9. TASK-TTS-005: Pet speaking state and bubble sync.
-10. TASK-TTS-006: Conversation Mode feedback prevention.
-11. Future: provider comparison report and singing research.
+10. TASK-TTS-005: Pet speaking state and bubble sync.
+11. TASK-TTS-006: Conversation Mode feedback prevention.
+12. Future: provider comparison report and singing research.
 
 Do not start by wiring ElevenLabs. Do not hard-code ChatTTS, GPT-SoVITS, F5-TTS,
 or CosyVoice into the product path before a provider abstraction and mock tests

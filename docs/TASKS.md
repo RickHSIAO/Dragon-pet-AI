@@ -24187,6 +24187,122 @@ Current machine result:
 
 ---
 
+## TASK-TTS-004C2 | Edge-TTS Manual Dependency Probe / Chinese Audio Output
+
+**Status:** DONE - EDGE-TTS MANUAL AUDIO OUTPUT SUCCESS / LISTENING PENDING
+**Date:** 2026-06-18
+**Phase:** Phase 5 - Companion Voice Output Architecture
+**Depends on:** TASK-TTS-001, TASK-TTS-002, TASK-TTS-003, TASK-TTS-004A, TASK-TTS-004B2, TASK-TTS-004C
+
+### Goal
+
+Validate the TASK-TTS-004C `edge_tts` optional provider probe after manually
+installing the optional dependency into the project backend virtual environment,
+without selecting it as runtime and without adding playback.
+
+### Manual Dependency Step
+
+Installed only after explicit approval:
+
+```powershell
+.\backend\.venv\Scripts\python.exe -m pip install edge-tts
+```
+
+Observed install result:
+
+- `edge-tts==7.2.8`
+- Transitive packages installed into `backend\.venv` only:
+  `aiohttp`, `aiohappyeyeballs`, `aiosignal`, `attrs`, `frozenlist`,
+  `multidict`, `propcache`, `tabulate`, and `yarl`.
+- No project dependency lock/default runtime dependency was changed.
+
+### Manual Probe Commands
+
+Metadata-only:
+
+```powershell
+.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers edge_tts --text "克莉絲蒂娜，這是 Edge TTS 中文語音候選測試。" --pretty
+```
+
+Optional audio output:
+
+```powershell
+.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers edge_tts --text "克莉絲蒂娜，這是 Edge TTS 中文語音輸出測試。" --edge-tts-voice zh-TW-HsiaoChenNeural --allow-audio-output --pretty
+```
+
+### Manual Probe Result
+
+Metadata-only:
+
+- `available=true`
+- `reason=optional_dependency_present`
+- `synthesisStatus=metadata_only`
+- `voice=zh-TW-HsiaoChenNeural`
+- `rate=+0%`
+- `pitch=+0Hz`
+- `audioGenerated=false`
+- Metadata-only mode did not synthesize, send text to Microsoft Edge TTS
+  service, write audio, or play audio.
+
+Optional audio output:
+
+- `reason=edge_tts_success`
+- `audioGenerated=true`
+- `audioBytes=30240`
+- `synthesisLatencyMs=1613`
+- `timeoutSec=30`
+- `outputPath=F:\RickHSIAO\Python\dragon-pet-ai\outputs\tts_provider_probe\20260618\audio\edge_tts_20260618-193335.mp3`
+- Generated MP3/report artifacts stayed under ignored
+  `outputs/tts_provider_probe/`.
+- No playback was attempted by the probe or app.
+
+### Listening Verdict
+
+Manual listening is still pending.
+
+| Field | Verdict |
+|---|---|
+| 中文是否能聽懂 | Pending manual listening |
+| 是否像日系角色 | Pending manual listening |
+| 是否適合克莉絲蒂娜 | Pending manual listening |
+| 語速 | Pending manual listening |
+| 音色 | Pending manual listening |
+| 有沒有奇怪斷句 | Pending manual listening |
+| 整體可接受度 1-10 | Pending manual listening |
+| 是否可作為臨時中文 provider | Pending manual listening |
+| 是否可作為長期 provider | Pending manual listening |
+
+### Provider Decision
+
+- `edge_tts` is technically usable by the standalone probe after optional
+  dependency installation.
+- `edge_tts` is network/cloud-ish and not local/offline.
+- `edge_tts` is not selected as the default runtime provider.
+- Runtime TTS remains disabled/mock-only.
+- Chinese voice suitability requires manual listening before any future runtime
+  decision.
+
+### Validation
+
+- `.\backend\.venv\Scripts\python.exe -m py_compile scripts\tts_provider_probe.py`: PASS.
+- `.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --help`: PASS.
+- Metadata-only edge-tts probe: PASS; `optional_dependency_present`, `metadata_only`, `audioGenerated=false`.
+- Optional edge-tts audio probe: PASS; `edge_tts_success`, `audioGenerated=true`, `audioBytes=30240`, no playback.
+- Desktop smoke validation recorded in commit report.
+
+### Acceptance Criteria
+
+- [x] Optional dependency was installed only after explicit approval.
+- [x] Metadata-only mode remains no-synthesis/no-network-text/no-audio.
+- [x] Optional audio output still requires `--allow-audio-output`.
+- [x] MP3 output is under ignored `outputs/tts_provider_probe/YYYYMMDD/audio/`.
+- [x] `edge_tts` remains not default and not selected as runtime.
+- [x] No runtime TTS wiring, `/chat` integration, playback, auto-speaking,
+  generated audio/report commit, schema change, STT behavior change,
+  Conversation Mode behavior change, or Owner Voice behavior change.
+
+---
+
 ## TASK-228 | Output Queue Runtime Skeleton, Disabled by Default
 
 **Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS

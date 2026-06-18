@@ -1,15 +1,16 @@
 # TTS Architecture
 
-**Task:** TASK-TTS-001 / TASK-TTS-004C
-**Status:** TASK-TTS-004C IMPLEMENTED - EDGE-TTS OPTIONAL PROBE READY / CHINESE AUDIO VALIDATION PENDING
+**Task:** TASK-TTS-001 / TASK-TTS-004C2
+**Status:** TASK-TTS-004C2 DONE - EDGE-TTS MANUAL AUDIO OUTPUT SUCCESS / LISTENING PENDING
 **Date:** 2026-06-18
 **Scope:** Provider-neutral architecture plus TASK-TTS-002 backend mock skeleton,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B VOICEVOX manual
-localhost probe, TASK-TTS-004B2 timeout/retry diagnostics, and TASK-TTS-004C
-edge-tts optional network probe. No runtime
-wiring, app playback, dependency, schema change, STT behavior change,
-Conversation Mode behavior change, or Owner Voice behavior change is added by
-TASK-TTS-004C.
+localhost probe, TASK-TTS-004B2 timeout/retry diagnostics, TASK-TTS-004C
+edge-tts optional network probe, and TASK-TTS-004C2 manual edge-tts dependency
+/ audio output validation. No runtime
+wiring, app playback, runtime/default dependency, schema change, STT behavior
+change, Conversation Mode behavior change, or Owner Voice behavior change is
+added by TASK-TTS-004C2.
 
 This document defines the target architecture for Christina voice output and the
 implemented TASK-TTS-002 mock skeleton. It remains provider-neutral: Dragon Pet
@@ -104,6 +105,19 @@ TASK-TTS-004C implementation checkpoint:
 - Current machine metadata-only result is safe unavailable:
   `missing_optional_dependency`, `audioGenerated=false`.
 - Provider selection remains unresolved for the main Chinese runtime path.
+
+TASK-TTS-004C2 manual probe checkpoint:
+
+- With explicit approval, `edge-tts` was installed into `backend\.venv` only for
+  manual provider probing.
+- Metadata-only `edge_tts` probe now reports `available=true`,
+  `reason=optional_dependency_present`, `synthesisStatus=metadata_only`, and
+  `audioGenerated=false`.
+- Optional audio probe with `--allow-audio-output` generated an MP3 under
+  ignored `outputs/tts_provider_probe/20260618/audio/`.
+- The probe and app did not play the MP3.
+- Manual listening is pending; `edge_tts` remains not default and not selected
+  as runtime.
 
 ---
 
@@ -591,6 +605,8 @@ Manual Windows playback smoke checklist for the first runtime task:
   Chinese runtime.
 - TASK-TTS-004C: edge-tts optional network candidate probe. IMPLEMENTED -
   metadata-only safe probe ready; Chinese audio validation pending.
+- TASK-TTS-004C2: edge-tts manual dependency/audio output probe. DONE - MP3
+  output succeeds; manual listening pending.
 - TASK-TTS-004D: Style-Bert-VITS2 / GPT-SoVITS feasibility research.
 - TASK-TTS-004: Playback queue and renderer diagnostics after a real provider
   candidate is validated.
@@ -699,3 +715,16 @@ TASK-TTS-004C is complete when:
   fields and network/cloud-ish safety notes.
 - Runtime TTS remains disabled/mock-only with no playback, `/chat`, STT,
   Conversation Mode, Owner Voice, dependency, or schema changes.
+
+TASK-TTS-004C2 is complete when:
+
+- Optional `edge-tts` dependency installation is explicitly approved and scoped
+  to `backend\.venv`.
+- Metadata-only probe confirms dependency availability without synthesis,
+  network text submission, audio write, or playback.
+- Optional audio probe with `--allow-audio-output` generates MP3 under ignored
+  output paths.
+- Manual listening fields are documented as pending until the user plays the
+  generated MP3.
+- Runtime TTS remains disabled/mock-only with no playback, `/chat`, STT,
+  Conversation Mode, Owner Voice, default provider, or schema changes.

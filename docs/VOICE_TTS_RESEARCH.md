@@ -350,6 +350,19 @@ Suggested research and implementation tasks:
   validation candidate only, not default and not selected as runtime. No runtime
   playback, `/chat` integration, auto-speaking, dependency, STT, Conversation
   Mode, Owner Voice, or schema behavior change is added.
+- TASK-TTS-004C2 Edge-TTS Manual Dependency Probe / Chinese Audio Output.
+  **DONE - EDGE-TTS MANUAL AUDIO OUTPUT SUCCESS / LISTENING PENDING
+  (2026-06-18):** With explicit approval, installed optional `edge-tts` into
+  `backend\.venv` for the manual probe only. Metadata-only probe now reports
+  `available=true`, `reason=optional_dependency_present`,
+  `synthesisStatus=metadata_only`, and `audioGenerated=false` without sending
+  text to the service. Optional audio probe with `--allow-audio-output`
+  generated an ignored MP3 using `zh-TW-HsiaoChenNeural`
+  (`audioBytes=30240`, `synthesisLatencyMs=1613`) and did not play audio.
+  Manual listening verdict is pending. `edge_tts` remains network/cloud-ish,
+  optional, not default, and not selected as runtime. No runtime playback,
+  `/chat` integration, auto-speaking, STT, Conversation Mode, Owner Voice, or
+  schema behavior change is added.
 - TASK-TTS-004D Style-Bert-VITS2 / GPT-SoVITS Feasibility Research.
 - TASK-TTS-004 Playback queue and renderer diagnostics after a real provider
   candidate is validated.
