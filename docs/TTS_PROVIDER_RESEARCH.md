@@ -1,7 +1,7 @@
 # TTS Provider Research
 
-**Task:** TASK-TTS-001 / TASK-TTS-004D3
-**Status:** TASK-TTS-004D3 DONE - CHARACTER VOICE LAB PLAN READY / NO LAB INSTALL PERFORMED
+**Task:** TASK-TTS-001 / TASK-TTS-004D4
+**Status:** TASK-TTS-004D4 DONE - CHARACTER VOICE LAB BOOTSTRAP CHECKLIST READY / NO SETUP PERFORMED
 **Date:** 2026-06-19
 **Scope:** Provider research, implemented mock-provider skeleton boundary,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B manual VOICEVOX
@@ -9,11 +9,13 @@ localhost probe, TASK-TTS-004B2 timeout/retry hardening, TASK-TTS-004C
 edge-tts optional network candidate probe, and TASK-TTS-004C2 manual
 edge-tts dependency/audio output validation, TASK-TTS-004C3 docs-first
 edge-tts tuning workflow, TASK-TTS-004D character voice feasibility research,
-TASK-TTS-004D2 environment check workflow, and TASK-TTS-004D3 isolated lab
-plan. No real voice-quality provider is selected as final, no model is
+TASK-TTS-004D2 environment check workflow, TASK-TTS-004D3 isolated lab
+plan, and TASK-TTS-004D4 manual bootstrap checklist. No real voice-quality
+provider is selected as final, no model is
 downloaded, the `edge-tts` install is optional/manual inside `backend\.venv`
 only, and no runtime synthesis/playback path is implemented by TASK-TTS-004C2,
-TASK-TTS-004C3, TASK-TTS-004D, TASK-TTS-004D2, or TASK-TTS-004D3.
+TASK-TTS-004C3, TASK-TTS-004D, TASK-TTS-004D2, TASK-TTS-004D3, or
+TASK-TTS-004D4.
 
 This document records candidate directions for Christina voice output. It should
 guide later experiments, not lock Dragon Pet AI to a single TTS engine.
@@ -668,6 +670,30 @@ models, train, infer, synthesize audio, or wire runtime TTS.
 
 ---
 
+## TASK-TTS-004D4 Character Voice Lab Bootstrap Checklist
+
+TASK-TTS-004D4 adds `docs/TTS_CHARACTER_VOICE_LAB_BOOTSTRAP_CHECKLIST.md`.
+
+Provider research rule:
+
+- GPT-SoVITS and Style-Bert-VITS2 work must pass the bootstrap gate before any
+  real setup.
+- The gate requires explicit approval for lab path, provider, Python version,
+  environment tool, GPU/CUDA install, model downloads, inference, generated
+  audio, and artifact cleanup policy.
+- Manual commands for future folder creation, Conda env creation, `nvidia-smi`,
+  Python version checks, and PyTorch CUDA checks are documented but not run.
+- Clone targets remain lab-only:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\repos\GPT-SoVITS\` and
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\repos\Style-Bert-VITS2\`.
+- Generated audio, model weights, source samples, reports, embeddings, logs,
+  and local settings remain lab artifacts and must not be committed.
+
+TASK-TTS-004D4 does not create the lab, clone repos, install packages, download
+models, train, infer, synthesize audio, or wire runtime TTS.
+
+---
+
 ## 5. Local Candidate Notes
 
 The following are candidate directions for future manual experiments. TASK-TTS-001
@@ -783,12 +809,14 @@ Recommended sequencing:
    IMPLEMENTED - env checker ready, no install performed.
 11. TASK-TTS-004D3: character voice lab environment plan. DONE - isolated lab
    boundary ready, no lab install performed.
-12. TASK-TTS-004E: GPT-SoVITS / Style-Bert-VITS2 minimal local probe plan.
-13. TASK-TTS-004: renderer playback queue diagnostics after a real provider
+12. TASK-TTS-004D4: character voice lab bootstrap checklist. DONE - manual
+   commands and human approval gates ready, no setup performed.
+13. TASK-TTS-004E: GPT-SoVITS / Style-Bert-VITS2 minimal local probe plan.
+14. TASK-TTS-004: renderer playback queue diagnostics after a real provider
    candidate is validated.
-14. TASK-TTS-005: Pet speaking state and bubble sync.
-15. TASK-TTS-006: Conversation Mode feedback prevention.
-16. Future: provider comparison report and singing research.
+15. TASK-TTS-005: Pet speaking state and bubble sync.
+16. TASK-TTS-006: Conversation Mode feedback prevention.
+17. Future: provider comparison report and singing research.
 
 Do not start by wiring ElevenLabs. Do not hard-code ChatTTS, GPT-SoVITS, F5-TTS,
 or CosyVoice into the product path before a provider abstraction and mock tests

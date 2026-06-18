@@ -1,7 +1,7 @@
 # TTS Character Voice Lab Plan
 
-**Task:** TASK-TTS-004D3
-**Status:** DONE - CHARACTER VOICE LAB PLAN READY / NO LAB INSTALL PERFORMED
+**Task:** TASK-TTS-004D3 / TASK-TTS-004D4
+**Status:** TASK-TTS-004D4 DONE - CHARACTER VOICE LAB BOOTSTRAP CHECKLIST READY / NO SETUP PERFORMED
 **Date:** 2026-06-19
 **Scope:** Planning-only boundary for future GPT-SoVITS / Style-Bert-VITS2
 experiments in an isolated lab environment. No lab folder was created, no
@@ -31,6 +31,14 @@ F:\RickHSIAO\Python\dragon-pet-ai-lab\
 Both are outside committed app code. The preferred `AI-Labs` path makes it
 clear that external repos, model files, generated clips, and voice samples are
 lab artifacts, not Dragon Pet AI runtime files.
+
+TASK-TTS-004D4 adds the manual bootstrap checklist:
+
+- `docs/TTS_CHARACTER_VOICE_LAB_BOOTSTRAP_CHECKLIST.md`
+
+The checklist contains future PowerShell command examples, GPU/PyTorch checks,
+provider bootstrap notes, and human approval gates. Those commands are manual
+instructions only and were not executed by TASK-TTS-004D4.
 
 ---
 
@@ -266,3 +274,18 @@ Minimum evidence before runtime provider selection:
 - No generated audio/report/model/sample committed.
 - No runtime TTS wiring, playback, Pet playback, auto-speaking, `/chat`, mood
   schema, STT, Conversation Mode, or Owner Voice behavior changed.
+
+---
+
+## 11. TASK-TTS-004D4 Bootstrap Checklist
+
+- Final status: DONE - CHARACTER VOICE LAB BOOTSTRAP CHECKLIST READY / NO SETUP PERFORMED.
+- Checklist doc: `docs/TTS_CHARACTER_VOICE_LAB_BOOTSTRAP_CHECKLIST.md`.
+- Recommended lab path remains
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\`.
+- Manual command examples are documented for later folder creation,
+  environment creation, GPU/CUDA/PyTorch checks, and provider repo placement.
+- Human approval is required before any clone, install, CUDA/PyTorch setup,
+  model download, training, inference, or audio synthesis.
+- TASK-TTS-004D4 does not create the lab, clone repos, install packages,
+  download models, train, infer, synthesize audio, or wire runtime TTS.

@@ -1,11 +1,12 @@
 # TTS Character Voice Feasibility
 
-**Task:** TASK-TTS-004D / TASK-TTS-004D2 / TASK-TTS-004D3
-**Status:** TASK-TTS-004D3 DONE - CHARACTER VOICE LAB PLAN READY / NO LAB INSTALL PERFORMED
+**Task:** TASK-TTS-004D / TASK-TTS-004D2 / TASK-TTS-004D3 / TASK-TTS-004D4
+**Status:** TASK-TTS-004D4 DONE - CHARACTER VOICE LAB BOOTSTRAP CHECKLIST READY / NO SETUP PERFORMED
 **Date:** 2026-06-19
 **Scope:** Documentation-only feasibility research for long-term Christina
-character voice candidates, environment-check-only readiness inspection, and
-isolated lab planning. No model was installed, downloaded, trained, or run.
+character voice candidates, environment-check-only readiness inspection,
+isolated lab planning, and manual bootstrap checklist. No model was installed,
+downloaded, trained, or run.
 
 ---
 
@@ -195,6 +196,28 @@ Summary:
   provider selection.
 - No `/chat` wiring, playback, Pet playback, or auto-speaking starts from the
   lab plan.
+
+### TASK-TTS-004D4 - Character Voice Lab Bootstrap Checklist
+
+See:
+
+- `docs/TTS_CHARACTER_VOICE_LAB_BOOTSTRAP_CHECKLIST.md`
+
+Summary:
+
+- The checklist is manual-only and was not executed.
+- Recommended lab path remains
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\`.
+- Future folder creation commands are documented for `repos\`, `envs\`,
+  `models\`, `datasets\`, `outputs\`, `reports\`, and `scratch\`.
+- Isolated Conda-first setup is preferred; Python `3.10` or `3.11` should be
+  selected for provider compatibility instead of the app backend's Python
+  `3.14.4`.
+- GPU/CUDA/PyTorch checks are documented for a future approved lab install.
+- GPT-SoVITS and Style-Bert-VITS2 work must pass the human approval gate before
+  any clone, install, model download, training, inference, or synthesis.
+- Generated audio, model weights, source samples, reports, embeddings, logs,
+  and local settings remain lab-only artifacts and must not be committed.
 
 ### TASK-TTS-005 - TTS Runtime Playback Queue
 

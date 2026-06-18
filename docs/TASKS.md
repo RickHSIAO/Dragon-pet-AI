@@ -24711,6 +24711,95 @@ F:\RickHSIAO\Python\dragon-pet-ai-lab\
 
 ---
 
+## TASK-TTS-004D4 | Character Voice Lab Bootstrap Checklist / Manual Commands Only
+
+**Status:** DONE - CHARACTER VOICE LAB BOOTSTRAP CHECKLIST READY / NO SETUP PERFORMED
+**Date:** 2026-06-19
+**Phase:** Phase 5 - Companion Voice Output Architecture
+**Depends on:** TASK-TTS-001, TASK-TTS-002, TASK-TTS-003, TASK-TTS-004A, TASK-TTS-004B2, TASK-TTS-004C, TASK-TTS-004C2, TASK-TTS-004C3, TASK-TTS-004D, TASK-TTS-004D2, TASK-TTS-004D3
+
+### Goal
+
+Create a docs-only bootstrap checklist for the future isolated character voice
+lab. The checklist prepares manual commands and safety gates for a later lab
+setup without executing setup.
+
+### Documentation Output
+
+Added:
+
+- `docs/TTS_CHARACTER_VOICE_LAB_BOOTSTRAP_CHECKLIST.md`
+
+Updated:
+
+- `README.md`
+- `docs/ROADMAP.md`
+- `docs/TTS_CHARACTER_VOICE_LAB_PLAN.md`
+- `docs/TTS_CHARACTER_VOICE_FEASIBILITY.md`
+- `docs/TTS_ARCHITECTURE.md`
+- `docs/TTS_PROVIDER_RESEARCH.md`
+- `docs/VOICE_TTS_RESEARCH.md`
+
+Recommended lab path remains:
+
+```text
+F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\
+```
+
+### Checklist Summary
+
+- Pre-flight safety checks confirm repo path, Git status, staged files, and
+  runtime app non-modification.
+- Manual folder creation command examples cover `repos\`, `envs\`, `models\`,
+  `datasets\`, `outputs\`, `reports\`, and `scratch\`.
+- Environment strategy prefers isolated Conda envs. A dedicated venv is allowed
+  only if upstream Python/CUDA compatibility is known.
+- Do not reuse `backend\.venv`.
+- Python `3.10` or `3.11` is recommended for model compatibility instead of the
+  app backend's Python `3.14.4`.
+- GPU/CUDA/PyTorch verification commands are documented for a future approved
+  lab install, including `nvidia-smi`, Python version checks, and PyTorch CUDA
+  availability checks.
+- GPT-SoVITS and Style-Bert-VITS2 future clone paths are documented under the
+  external lab `repos\` folder only.
+- Model weights, datasets, generated samples, reports, scratch files, logs,
+  embeddings, and local settings stay in the lab and out of Dragon Pet AI Git.
+- Voice samples require rights/permission and generated voices remain local
+  artifacts unless a later task defines safe export rules.
+- A human approval gate is required before any install, clone, CUDA/PyTorch
+  setup, model download, training, inference, or audio synthesis.
+
+### Exit Criteria for TASK-TTS-004E
+
+Future real model probe work may begin only after:
+
+- Lab path approved.
+- Environment strategy approved.
+- Python version selected.
+- First provider selected, likely GPT-SoVITS first.
+- Install/download permission explicitly given.
+- Generated artifact policy confirmed.
+- CUDA/PyTorch or CPU-only limitation documented.
+- Provider license and voice-data constraints reviewed.
+- Manual listening verdict template ready.
+- Cleanup plan agreed.
+
+### Acceptance Criteria
+
+- [x] Bootstrap checklist doc added.
+- [x] Manual command examples documented but not executed.
+- [x] Git/artifact safety rules documented.
+- [x] Human approval gates documented.
+- [x] TASK-TTS-004E exit criteria documented.
+- [x] Runtime remains disabled/mock-only.
+- [x] No package/model install, external repo clone, lab setup, model download,
+  training, inference, generated audio/report/model/sample commit, runtime TTS
+  wiring, playback, auto-speaking, `/chat` schema change, mood schema change,
+  STT behavior change, Conversation Mode behavior change, or Owner Voice
+  behavior change is added.
+
+---
+
 ## TASK-228 | Output Queue Runtime Skeleton, Disabled by Default
 
 **Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS

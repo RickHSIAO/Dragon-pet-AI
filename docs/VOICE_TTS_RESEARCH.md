@@ -480,6 +480,18 @@ Suggested research and implementation tasks:
   external repo clone, package/model install, model download, training,
   inference, runtime playback, `/chat` integration, auto-speaking, STT,
   Conversation Mode, Owner Voice, or schema behavior change is added.
+- TASK-TTS-004D4 Character Voice Lab Bootstrap Checklist / Manual Commands Only.
+  **DONE - CHARACTER VOICE LAB BOOTSTRAP CHECKLIST READY / NO SETUP PERFORMED
+  (2026-06-19):** Added
+  `docs/TTS_CHARACTER_VOICE_LAB_BOOTSTRAP_CHECKLIST.md`. The checklist documents
+  pre-flight repo/staging safety checks, manual lab folder commands for
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\`, isolated Conda-first
+  environment strategy, Python `3.10`/`3.11` guidance instead of the app
+  backend's Python `3.14.4`, `nvidia-smi` and PyTorch CUDA verification
+  commands, lab-only GPT-SoVITS / Style-Bert-VITS2 clone locations, model/data
+  storage rules, non-commit artifact policy, and a human approval gate before
+  any clone, install, model download, training, inference, or synthesis. No lab
+  setup was performed, and runtime TTS remains disabled/mock-only.
 - TASK-TTS-004 Playback queue and renderer diagnostics after a real provider
   candidate is validated.
 - TASK-TTS-005 Pet speaking state / bubble sync.

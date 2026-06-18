@@ -1,7 +1,7 @@
 # TTS Architecture
 
-**Task:** TASK-TTS-001 / TASK-TTS-004D3
-**Status:** TASK-TTS-004D3 DONE - CHARACTER VOICE LAB PLAN READY / NO LAB INSTALL PERFORMED
+**Task:** TASK-TTS-001 / TASK-TTS-004D4
+**Status:** TASK-TTS-004D4 DONE - CHARACTER VOICE LAB BOOTSTRAP CHECKLIST READY / NO SETUP PERFORMED
 **Date:** 2026-06-19
 **Scope:** Provider-neutral architecture plus TASK-TTS-002 backend mock skeleton,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B VOICEVOX manual
@@ -9,11 +9,12 @@ localhost probe, TASK-TTS-004B2 timeout/retry diagnostics, TASK-TTS-004C
 edge-tts optional network probe, TASK-TTS-004C2 manual edge-tts dependency /
 audio output validation, TASK-TTS-004C3 docs-first edge-tts tuning workflow,
 TASK-TTS-004D character voice feasibility research, TASK-TTS-004D2
-environment-check workflow, and TASK-TTS-004D3 isolated lab plan. No runtime
+environment-check workflow, TASK-TTS-004D3 isolated lab plan, and
+TASK-TTS-004D4 manual bootstrap checklist. No runtime
 wiring, app playback, runtime/default dependency, schema change, STT behavior
 change, Conversation Mode behavior change, or Owner Voice behavior change is
 added by TASK-TTS-004C2, TASK-TTS-004C3, TASK-TTS-004D, TASK-TTS-004D2, or
-TASK-TTS-004D3.
+TASK-TTS-004D4.
 
 This document defines the target architecture for Christina voice output and the
 implemented TASK-TTS-002 mock skeleton. It remains provider-neutral: Dragon Pet
@@ -189,6 +190,18 @@ TASK-TTS-004D3 lab planning checkpoint:
   licensing/data review, and provider readiness are accepted.
 - Runtime TTS remains disabled/mock-only; no `/chat` wiring, playback, Pet
   playback, or auto-speaking is allowed from the lab plan.
+
+TASK-TTS-004D4 bootstrap checkpoint:
+
+- `docs/TTS_CHARACTER_VOICE_LAB_BOOTSTRAP_CHECKLIST.md` records manual
+  PowerShell examples for later lab folder creation, environment creation,
+  GPU/CUDA/PyTorch checks, and provider repo placement.
+- The checklist remains outside runtime. It is not an app feature, sidecar
+  service, playback path, `/chat` path, or provider adapter.
+- Future GPT-SoVITS / Style-Bert-VITS2 work must pass the human approval gate
+  before any clone, install, model download, training, inference, or synthesis.
+- Character voice lab artifacts remain outside Dragon Pet AI app runtime and
+  outside Git.
 
 ---
 
@@ -689,6 +702,8 @@ Manual Windows playback smoke checklist for the first runtime task:
   IMPLEMENTED - env checker ready, no install performed.
 - TASK-TTS-004D3: Character voice lab environment plan / isolated GPU env. DONE
   - no lab install performed.
+- TASK-TTS-004D4: Character voice lab bootstrap checklist / manual commands
+  only. DONE - no setup performed.
 - TASK-TTS-004E: GPT-SoVITS / Style-Bert-VITS2 minimal local probe plan.
 - TASK-TTS-004: Playback queue and renderer diagnostics after a real provider
   candidate is validated.
@@ -859,3 +874,15 @@ TASK-TTS-004D3 is complete when:
   download, training, inference, generated artifact commit, runtime TTS wiring,
   playback, `/chat`, STT, Conversation Mode, Owner Voice, dependency/default
   runtime, or schema change is added.
+
+TASK-TTS-004D4 is complete when:
+
+- `docs/TTS_CHARACTER_VOICE_LAB_BOOTSTRAP_CHECKLIST.md` records pre-flight
+  safety checks, manual lab folder commands, environment strategy, GPU/CUDA/
+  PyTorch verification commands, external repo boundaries, model/data storage
+  rules, provider-specific bootstrap notes, human approval gates, and TASK-TTS-
+  004E exit criteria.
+- The checklist is manual-only and no setup command is executed.
+- Character voice lab remains outside app runtime.
+- Runtime TTS remains disabled/mock-only with no playback, `/chat`, STT,
+  Conversation Mode, Owner Voice, dependency/default-runtime, or schema changes.
