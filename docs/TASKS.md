@@ -23746,6 +23746,146 @@ any playback queue wiring.
 
 ---
 
+## TASK-TTS-004B | VOICEVOX Local Server Manual Probe / Audio Output Optional
+
+**Status:** IMPLEMENTED - VOICEVOX MANUAL PROBE READY / OPTIONAL AUDIO OUTPUT LOCAL ONLY
+**Date:** 2026-06-18
+**Phase:** Phase 5 - Companion Voice Output Architecture
+**Depends on:** TASK-TTS-001, TASK-TTS-002, TASK-TTS-003, TASK-TTS-004A
+
+### Goal
+
+Extend the local provider probe flow so a manually started VOICEVOX
+Engine-compatible localhost server can be checked safely before any runtime TTS
+wiring is considered.
+
+TASK-TTS-004B remains a probe task. It does not make Christina speak in the app,
+does not add runtime playback, does not add auto-speaking, and does not select a
+runtime provider.
+
+### Implementation Summary
+
+Updated:
+
+- `scripts/tts_provider_probe.py`
+- `backend/tests/test_tts_provider_probe.py`
+- `README.md`
+- `docs/ROADMAP.md`
+- `docs/TASKS.md`
+- `docs/TTS_PROVIDER_RESEARCH.md`
+- `docs/TTS_ARCHITECTURE.md`
+- `docs/VOICE_TTS_RESEARCH.md`
+
+Probe additions:
+
+- `voicevox_server` accepts `--voicevox-url` with default
+  `http://127.0.0.1:50021`.
+- `voicevox_server` accepts `--voicevox-speaker` with conservative default `0`.
+- Non-localhost VOICEVOX URLs are rejected before network access.
+- Default behavior checks `/version` and best-effort `/speakers` only.
+- Default behavior does not call `audio_query`, does not call `synthesis`, does
+  not write audio, and never plays audio.
+- `--allow-audio-output` explicitly enables VOICEVOX `audio_query` and
+  `synthesis`.
+- Optional WAV output is written under ignored
+  `outputs/tts_provider_probe/YYYYMMDD/audio/`.
+- `/speakers` summary is safe and short: speaker count in notes, selected
+  speaker id, and selected speaker name when resolved.
+
+### Report Fields
+
+`voicevox_server` reports include:
+
+- `provider`
+- `available`
+- `reason`
+- `voicevoxUrl`
+- `version`
+- `speakerId`
+- `speakerName`
+- `normalizedChunks`
+- `measuredLatencyMs`
+- `audioGenerated`
+- `outputPath`
+- `audioBytes`
+- `synthesisStatus`
+- `notes`
+
+`synthesisStatus` values:
+
+- `metadata_only`
+- `audio_output_disabled`
+- `voicevox_success`
+- `server_unavailable`
+- `voicevox_error`
+
+Notes explicitly record:
+
+- Local server probe only.
+- Not runtime wiring.
+- Chinese/Japanese pronunciation quality must be manually judged.
+- No playback is attempted.
+
+### Manual Probe Commands
+
+Metadata-only:
+
+```powershell
+.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers voicevox_server --text "哼，汝總算想起要依靠吾了。這是 VOICEVOX metadata-only probe。" --pretty
+```
+
+Optional audio output:
+
+```powershell
+.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers voicevox_server --text "哼，汝總算想起要依靠吾了。這是 VOICEVOX optional audio probe。" --voicevox-speaker 0 --allow-audio-output --pretty
+```
+
+Optional audio output must only be run when a VOICEVOX server is manually
+running and generated WAV/report artifacts are kept uncommitted.
+
+### Local Probe Result
+
+Metadata-only VOICEVOX probe on 2026-06-18:
+
+- `available=false`
+- `reason=server_unavailable:URLError`
+- `voicevoxUrl=http://127.0.0.1:50021`
+- `speakerId=0`
+- `synthesisStatus=server_unavailable`
+- `audioGenerated=false`
+- `outputPath=null`
+
+This is an expected safe result when VOICEVOX Engine is not running locally.
+
+### Validation
+
+- `.\backend\.venv\Scripts\python.exe -m py_compile scripts\tts_provider_probe.py`: PASS.
+- `.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --help`: PASS.
+- `.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers mock --text "<sample>" --pretty`: PASS; `mock` available, `audioGenerated=false`.
+- `.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers voicevox_server --text "<sample>" --pretty`: PASS as safe unavailable; `server_unavailable:URLError`, `audioGenerated=false`.
+- `.\backend\.venv\Scripts\python.exe -m pytest backend\tests\test_tts_provider_probe.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-tts004b`: PASS, 17 passed.
+- `node apps/desktop/scripts/renderer-chat-smoke.js`: PASS.
+- `node apps/desktop/scripts/pet-window-smoke.js`: PASS, 92 checks.
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: PASS, 290 checks.
+
+### Acceptance Criteria
+
+- [x] VOICEVOX unavailable server skips safely.
+- [x] Default VOICEVOX behavior does not generate audio.
+- [x] `--allow-audio-output` is required for WAV generation.
+- [x] Localhost URL is accepted.
+- [x] Non-localhost URL is rejected before network access.
+- [x] Mocked successful `audio_query` and `synthesis` writes WAV output under a
+  caller-supplied ignored output path.
+- [x] Report schema includes VOICEVOX safety fields.
+- [x] No playback behavior exists in the probe.
+- [x] No runtime TTS wiring, `/chat` integration, playback, auto-speaking,
+  dependency/install, ElevenLabs integration, generated audio/report commit,
+  schema change, STT behavior change, Conversation Mode behavior change, or
+  Owner Voice behavior change.
+
+---
+
 ## TASK-228 | Output Queue Runtime Skeleton, Disabled by Default
 
 **Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS

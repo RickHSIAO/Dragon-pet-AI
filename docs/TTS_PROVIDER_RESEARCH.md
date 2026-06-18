@@ -1,12 +1,13 @@
 # TTS Provider Research
 
-**Task:** TASK-TTS-001 / TASK-TTS-004A
-**Status:** TASK-TTS-004A DONE - INSTALL-FREE PROVIDER REVIEW COMPLETE / REAL PROVIDER NOT SELECTED
+**Task:** TASK-TTS-001 / TASK-TTS-004B
+**Status:** TASK-TTS-004B IMPLEMENTED - VOICEVOX MANUAL PROBE READY / OPTIONAL AUDIO OUTPUT LOCAL ONLY
 **Date:** 2026-06-18
-**Scope:** Provider research, implemented mock-provider skeleton boundary, and
-TASK-TTS-004A install-free provider review. No real voice-quality provider is
-selected as final, no model is downloaded, no dependency is added, and no real
-synthesis/playback path is implemented by TASK-TTS-004A.
+**Scope:** Provider research, implemented mock-provider skeleton boundary,
+TASK-TTS-004A install-free provider review, and TASK-TTS-004B manual VOICEVOX
+localhost probe. No real voice-quality provider is selected as final, no model
+is downloaded, no dependency is added, and no runtime synthesis/playback path is
+implemented by TASK-TTS-004B.
 
 This document records candidate directions for Christina voice output. It should
 guide later experiments, not lock Dragon Pet AI to a single TTS engine.
@@ -226,6 +227,55 @@ Owner Voice hard-gate changes.
 
 ---
 
+## TASK-TTS-004B VOICEVOX Manual Localhost Probe
+
+TASK-TTS-004B extends `scripts/tts_provider_probe.py` for a manually started
+VOICEVOX Engine-compatible local server at `http://127.0.0.1:50021`. The probe
+does not install VOICEVOX, does not download models, and does not select
+VOICEVOX as the runtime provider.
+
+Default metadata-only command:
+
+```powershell
+.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers voicevox_server --text "哼，汝總算想起要依靠吾了。這是 VOICEVOX metadata-only probe。" --pretty
+```
+
+Optional local WAV output command:
+
+```powershell
+.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers voicevox_server --text "哼，汝總算想起要依靠吾了。這是 VOICEVOX optional audio probe。" --voicevox-speaker 0 --allow-audio-output --pretty
+```
+
+VOICEVOX probe behavior:
+
+- Only localhost URLs are allowed by `--voicevox-url`; non-localhost URLs are
+  rejected before network access.
+- Without `--allow-audio-output`, the probe checks `/version` and optionally
+  `/speakers` only. It does not call `audio_query`, does not call `synthesis`,
+  does not write audio, and never plays audio.
+- With `--allow-audio-output`, the probe calls `audio_query` and `synthesis`,
+  then writes a WAV under ignored `outputs/tts_provider_probe/YYYYMMDD/audio/`.
+- `/speakers` is best effort. Reports include speaker count in notes and the
+  selected speaker name when it can be resolved.
+- Reports include `voicevoxUrl`, `version`, `speakerId`, `speakerName`,
+  `normalizedChunks`, `measuredLatencyMs`, `audioGenerated`, `outputPath`,
+  `audioBytes`, and `synthesisStatus`.
+
+Evaluation notes:
+
+- Chinese pronunciation and mixed Chinese/Japanese delivery must be judged by
+  listening to the locally generated WAV; the probe cannot score quality.
+- VOICEVOX remains promising for Japanese/anime-style speech but risky for
+  native Chinese support.
+- A successful WAV generation proves only local server connectivity and file
+  output. It does not approve runtime app playback.
+- No runtime TTS wiring, `/chat` integration, Pet Window playback,
+  auto-speaking, dependency install, ElevenLabs integration, STT behavior
+  change, Conversation Mode queue change, Owner Voice gate change, or schema
+  change is part of TASK-TTS-004B.
+
+---
+
 ## 5. Local Candidate Notes
 
 The following are candidate directions for future manual experiments. TASK-TTS-001
@@ -321,6 +371,8 @@ Recommended sequencing:
 3. TASK-TTS-004A: install-free provider review. DONE - no real provider ready;
    `mock` remains the only safe skeleton provider.
 4. TASK-TTS-004B: VOICEVOX local server manual probe / optional audio output.
+   DONE - manual localhost metadata probe ready; optional WAV generation is
+   guarded by `--allow-audio-output` and remains local-only.
 5. TASK-TTS-004C: edge-tts optional network candidate probe.
 6. TASK-TTS-004D: Style-Bert-VITS2 / GPT-SoVITS feasibility research.
 7. TASK-TTS-004: renderer playback queue diagnostics after a real provider

@@ -1,9 +1,10 @@
-"""Local TTS provider candidate probe for TASK-TTS-003.
+"""Local TTS provider candidate probe for TASK-TTS-003 / TASK-TTS-004B.
 
 This script is evaluation-only. It does not wire TTS into /chat, does not play
-audio, does not auto-speak, and does not generate audio unless a future provider
-explicitly implements that behind --allow-audio-output. TASK-TTS-003 keeps every
-implemented probe metadata-only.
+audio, does not auto-speak, and does not generate audio unless a provider probe
+explicitly implements that behind --allow-audio-output. TASK-TTS-004B allows a
+manual VOICEVOX localhost server probe to write a WAV file only when explicitly
+requested.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ import platform
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -43,6 +45,8 @@ SUPPORTED_PROVIDERS = (
     "rvc_like",
 )
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "outputs" / "tts_provider_probe"
+DEFAULT_VOICEVOX_URL = "http://127.0.0.1:50021"
+DEFAULT_VOICEVOX_SPEAKER = 0
 DEFAULT_TEXTS = (
     "\u54fc\uff0c\u6c5d\u7e3d\u7b97\u60f3\u8d77\u8981\u4f9d\u9760\u543e\u4e86\u3002",
     "\u9019\u53ea\u662f TTS provider probe\uff0c\u4e0d\u6703\u8b93\u543e\u5728 app \u88e1\u8aaa\u8a71\u3002",
@@ -58,7 +62,13 @@ class ProviderProbeResult:
     estimatedDurationMs: int | None = None
     measuredLatencyMs: int | None = None
     audioGenerated: bool = False
-    outputPath: None = None
+    outputPath: str | None = None
+    audioBytes: int | None = None
+    voicevoxUrl: str | None = None
+    version: str | None = None
+    speakerId: int | None = None
+    speakerName: str | None = None
+    synthesisStatus: str | None = None
     notes: list[str] | None = None
 
     def to_dict(self) -> dict[str, object]:
@@ -71,6 +81,12 @@ class ProviderProbeResult:
             "measuredLatencyMs": self.measuredLatencyMs,
             "audioGenerated": self.audioGenerated,
             "outputPath": self.outputPath,
+            "audioBytes": self.audioBytes,
+            "voicevoxUrl": self.voicevoxUrl,
+            "version": self.version,
+            "speakerId": self.speakerId,
+            "speakerName": self.speakerName,
+            "synthesisStatus": self.synthesisStatus,
             "notes": list(self.notes or []),
         }
 
@@ -146,16 +162,45 @@ def probe_windows_sapi(chunks: list[str]) -> ProviderProbeResult:
     )
 
 
-def probe_voicevox_server(chunks: list[str], *, timeout_seconds: float = 0.5) -> ProviderProbeResult:
-    url = "http://127.0.0.1:50021/version"
+def probe_voicevox_server(
+    chunks: list[str],
+    *,
+    allow_audio_output: bool = False,
+    output_root: Path = DEFAULT_OUTPUT_ROOT,
+    voicevox_url: str = DEFAULT_VOICEVOX_URL,
+    voicevox_speaker: int = DEFAULT_VOICEVOX_SPEAKER,
+    timeout_seconds: float = 0.75,
+) -> ProviderProbeResult:
+    base_url = normalize_voicevox_url(voicevox_url)
     start = time.perf_counter()
     notes = [
-        "Local server availability check only.",
-        "No audio query, synthesis, file write, or playback is attempted.",
+        "Local server probe only.",
+        "Not runtime wiring.",
+        "Chinese/Japanese pronunciation quality must be manually judged.",
+        "No playback is attempted.",
     ]
+    if base_url is None:
+        return ProviderProbeResult(
+            provider="voicevox_server",
+            available=False,
+            reason="non_localhost_url_rejected",
+            normalizedChunks=chunks,
+            measuredLatencyMs=0,
+            audioGenerated=False,
+            outputPath=None,
+            audioBytes=None,
+            voicevoxUrl=voicevox_url,
+            speakerId=voicevox_speaker,
+            synthesisStatus="voicevox_error",
+            notes=notes + ["Only localhost VOICEVOX URLs are allowed for TASK-TTS-004B."],
+        )
+
+    version_url = f"{base_url}/version"
+    version = None
+    speaker_name = None
+    speaker_count = None
     try:
-        with urllib.request.urlopen(url, timeout=timeout_seconds) as response:
-            body = response.read(200).decode("utf-8", errors="replace").strip()
+        version = _voicevox_get_text(version_url, timeout_seconds=timeout_seconds) or None
     except (OSError, urllib.error.URLError, TimeoutError) as exc:
         latency_ms = int((time.perf_counter() - start) * 1000)
         return ProviderProbeResult(
@@ -164,17 +209,198 @@ def probe_voicevox_server(chunks: list[str], *, timeout_seconds: float = 0.5) ->
             reason=f"server_unavailable:{type(exc).__name__}",
             normalizedChunks=chunks,
             measuredLatencyMs=latency_ms,
-            notes=notes + [f"Checked {url}."],
+            audioGenerated=False,
+            outputPath=None,
+            audioBytes=None,
+            voicevoxUrl=base_url,
+            version=None,
+            speakerId=voicevox_speaker,
+            speakerName=None,
+            synthesisStatus="server_unavailable",
+            notes=notes + [f"Checked {version_url}."],
         )
+
+    try:
+        speakers = _voicevox_get_json(f"{base_url}/speakers", timeout_seconds=timeout_seconds)
+        speaker_count, speaker_name = summarize_voicevox_speakers(speakers, voicevox_speaker)
+    except (json.JSONDecodeError, OSError, urllib.error.URLError, TimeoutError, TypeError, ValueError):
+        speaker_count = None
+        speaker_name = None
+
+    metadata_notes = notes + [
+        f"Checked {version_url}.",
+        f"Version response: {version or 'empty'}.",
+        f"Selected speaker id: {voicevox_speaker}.",
+    ]
+    if speaker_count is not None:
+        metadata_notes.append(f"Speaker count: {speaker_count}.")
+    if speaker_name:
+        metadata_notes.append(f"Selected speaker name: {speaker_name}.")
+    if not allow_audio_output:
+        latency_ms = int((time.perf_counter() - start) * 1000)
+        return ProviderProbeResult(
+            provider="voicevox_server",
+            available=True,
+            reason="local_server_metadata_ok",
+            normalizedChunks=chunks,
+            measuredLatencyMs=latency_ms,
+            audioGenerated=False,
+            outputPath=None,
+            audioBytes=None,
+            voicevoxUrl=base_url,
+            version=version,
+            speakerId=voicevox_speaker,
+            speakerName=speaker_name,
+            synthesisStatus="audio_output_disabled",
+            notes=metadata_notes + ["Audio output disabled; no synthesis call or WAV write."],
+        )
+
+    try:
+        query = _voicevox_audio_query(
+            base_url,
+            text="\n".join(chunks),
+            speaker_id=voicevox_speaker,
+            timeout_seconds=timeout_seconds,
+        )
+        audio = _voicevox_synthesis(
+            base_url,
+            query=query,
+            speaker_id=voicevox_speaker,
+            timeout_seconds=timeout_seconds,
+        )
+        output_path = write_voicevox_audio(audio, output_root=output_root)
+    except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
+        latency_ms = int((time.perf_counter() - start) * 1000)
+        return ProviderProbeResult(
+            provider="voicevox_server",
+            available=True,
+            reason=f"voicevox_error:{type(exc).__name__}",
+            normalizedChunks=chunks,
+            measuredLatencyMs=latency_ms,
+            audioGenerated=False,
+            outputPath=None,
+            audioBytes=None,
+            voicevoxUrl=base_url,
+            version=version,
+            speakerId=voicevox_speaker,
+            speakerName=speaker_name,
+            synthesisStatus="voicevox_error",
+            notes=metadata_notes + ["Audio output was allowed, but VOICEVOX synthesis failed."],
+        )
+
     latency_ms = int((time.perf_counter() - start) * 1000)
     return ProviderProbeResult(
         provider="voicevox_server",
         available=True,
-        reason="local_server_version_ok",
+        reason="voicevox_success",
         normalizedChunks=chunks,
         measuredLatencyMs=latency_ms,
-        notes=notes + [f"Version response: {body or 'empty'}."],
+        audioGenerated=True,
+        outputPath=str(output_path),
+        audioBytes=len(audio),
+        voicevoxUrl=base_url,
+        version=version,
+        speakerId=voicevox_speaker,
+        speakerName=speaker_name,
+        synthesisStatus="voicevox_success",
+        notes=metadata_notes + ["WAV generated under ignored local probe outputs. No playback was attempted."],
     )
+
+
+def normalize_voicevox_url(raw_url: str) -> str | None:
+    parsed = urllib.parse.urlparse(raw_url.strip())
+    if parsed.scheme not in {"http", "https"}:
+        return None
+    hostname = (parsed.hostname or "").lower()
+    if hostname not in {"127.0.0.1", "localhost", "::1"}:
+        return None
+    path = parsed.path.rstrip("/")
+    if path:
+        return None
+    netloc = parsed.netloc
+    return urllib.parse.urlunparse((parsed.scheme, netloc, "", "", "", "")).rstrip("/")
+
+
+def summarize_voicevox_speakers(speakers: object, speaker_id: int) -> tuple[int | None, str | None]:
+    if not isinstance(speakers, list):
+        return None, None
+    speaker_count = len(speakers)
+    for speaker in speakers:
+        if not isinstance(speaker, dict):
+            continue
+        speaker_name = str(speaker.get("name") or "").strip()
+        styles = speaker.get("styles")
+        if not isinstance(styles, list):
+            continue
+        for style in styles:
+            if not isinstance(style, dict):
+                continue
+            if style.get("id") == speaker_id:
+                style_name = str(style.get("name") or "").strip()
+                selected = speaker_name
+                if speaker_name and style_name:
+                    selected = f"{speaker_name} / {style_name}"
+                elif style_name:
+                    selected = style_name
+                return speaker_count, selected or None
+    return speaker_count, None
+
+
+def _voicevox_get_text(url: str, *, timeout_seconds: float) -> str:
+    request = urllib.request.Request(url, method="GET")
+    with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+        return response.read(500).decode("utf-8", errors="replace").strip()
+
+
+def _voicevox_get_json(url: str, *, timeout_seconds: float) -> object:
+    request = urllib.request.Request(url, method="GET")
+    with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+        return json.loads(response.read().decode("utf-8", errors="replace"))
+
+
+def _voicevox_audio_query(
+    base_url: str,
+    *,
+    text: str,
+    speaker_id: int,
+    timeout_seconds: float,
+) -> dict[str, object]:
+    params = urllib.parse.urlencode({"text": text, "speaker": speaker_id})
+    request = urllib.request.Request(f"{base_url}/audio_query?{params}", data=b"", method="POST")
+    with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+        return json.loads(response.read().decode("utf-8", errors="replace"))
+
+
+def _voicevox_synthesis(
+    base_url: str,
+    *,
+    query: dict[str, object],
+    speaker_id: int,
+    timeout_seconds: float,
+) -> bytes:
+    params = urllib.parse.urlencode({"speaker": speaker_id})
+    body = json.dumps(query, ensure_ascii=False).encode("utf-8")
+    request = urllib.request.Request(
+        f"{base_url}/synthesis?{params}",
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+        audio = response.read()
+    if not audio:
+        raise ValueError("empty_voicevox_audio")
+    return audio
+
+
+def write_voicevox_audio(audio: bytes, *, output_root: Path = DEFAULT_OUTPUT_ROOT) -> Path:
+    date_key = _dt.datetime.now().strftime("%Y%m%d")
+    stamp = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    output_dir = output_root / date_key / "audio"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / f"voicevox_server_{stamp}.wav"
+    output_path.write_bytes(audio)
+    return output_path
 
 
 def probe_edge_tts(chunks: list[str]) -> ProviderProbeResult:
@@ -209,13 +435,27 @@ def probe_future_manual(provider: str, chunks: list[str]) -> ProviderProbeResult
     )
 
 
-def probe_provider(provider: str, chunks: list[str]) -> ProviderProbeResult:
+def probe_provider(
+    provider: str,
+    chunks: list[str],
+    *,
+    allow_audio_output: bool = False,
+    output_root: Path = DEFAULT_OUTPUT_ROOT,
+    voicevox_url: str = DEFAULT_VOICEVOX_URL,
+    voicevox_speaker: int = DEFAULT_VOICEVOX_SPEAKER,
+) -> ProviderProbeResult:
     if provider == "mock":
         return probe_mock(chunks)
     if provider == "windows_sapi":
         return probe_windows_sapi(chunks)
     if provider == "voicevox_server":
-        return probe_voicevox_server(chunks)
+        return probe_voicevox_server(
+            chunks,
+            allow_audio_output=allow_audio_output,
+            output_root=output_root,
+            voicevox_url=voicevox_url,
+            voicevox_speaker=voicevox_speaker,
+        )
     if provider == "edge_tts":
         return probe_edge_tts(chunks)
     if provider in {"piper_onnx", "gpt_sovits", "style_bert_vits2", "rvc_like"}:
@@ -233,12 +473,25 @@ def build_probe_report(
     text: str,
     providers: Iterable[str],
     allow_audio_output: bool = False,
+    output_root: Path = DEFAULT_OUTPUT_ROOT,
+    voicevox_url: str = DEFAULT_VOICEVOX_URL,
+    voicevox_speaker: int = DEFAULT_VOICEVOX_SPEAKER,
 ) -> dict[str, object]:
     normalized_chunks = normalize_tts_text(text)
-    provider_results = [probe_provider(provider, normalized_chunks).to_dict() for provider in providers]
+    provider_results = [
+        probe_provider(
+            provider,
+            normalized_chunks,
+            allow_audio_output=allow_audio_output,
+            output_root=output_root,
+            voicevox_url=voicevox_url,
+            voicevox_speaker=voicevox_speaker,
+        ).to_dict()
+        for provider in providers
+    ]
     audio_generated = any(bool(result["audioGenerated"]) for result in provider_results)
     return {
-        "task": "TASK-TTS-003",
+        "task": "TASK-TTS-004B",
         "status": "probe_only_no_runtime_wiring",
         "generatedAt": _dt.datetime.now(_dt.UTC).isoformat(),
         "audioOutputAllowed": bool(allow_audio_output),
@@ -253,6 +506,10 @@ def build_probe_report(
             "autoSpeakEnabled": False,
             "chatSchemaChanged": False,
             "externalDependencyAdded": False,
+            "runtimePlaybackAdded": False,
+            "sttDefaultChanged": False,
+            "conversationModeChanged": False,
+            "ownerVoiceGateChanged": False,
         },
     }
 
@@ -299,6 +556,12 @@ def render_markdown_report(report: dict[str, object]) -> str:
                 f"- Estimated duration ms: {result['estimatedDurationMs']}",
                 f"- Audio generated: {str(result['audioGenerated']).lower()}",
                 f"- Output path: {result['outputPath']}",
+                f"- Audio bytes: {result['audioBytes']}",
+                f"- VOICEVOX URL: {result['voicevoxUrl']}",
+                f"- VOICEVOX version: {result['version']}",
+                f"- Speaker id: {result['speakerId']}",
+                f"- Speaker name: {result['speakerName']}",
+                f"- Synthesis status: {result['synthesisStatus']}",
                 "- Notes:",
             ]
         )
@@ -346,7 +609,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--allow-audio-output",
         action="store_true",
-        help="Reserved future opt-in. TASK-TTS-003 providers remain metadata-only.",
+        help="Allow provider probes that explicitly support it to write local audio files. Never plays audio.",
+    )
+    parser.add_argument(
+        "--voicevox-url",
+        default=DEFAULT_VOICEVOX_URL,
+        help="VOICEVOX Engine-compatible localhost URL. Non-localhost URLs are rejected.",
+    )
+    parser.add_argument(
+        "--voicevox-speaker",
+        type=int,
+        default=DEFAULT_VOICEVOX_SPEAKER,
+        help="VOICEVOX speaker/style id for optional audio output and speaker metadata.",
     )
     return parser
 
@@ -360,6 +634,9 @@ def main(argv: list[str] | None = None) -> int:
         text=text,
         providers=providers,
         allow_audio_output=args.allow_audio_output,
+        output_root=Path(args.output_root),
+        voicevox_url=args.voicevox_url,
+        voicevox_speaker=args.voicevox_speaker,
     )
     report_paths = write_reports(report, output_root=Path(args.output_root))
     report["reportPaths"] = report_paths

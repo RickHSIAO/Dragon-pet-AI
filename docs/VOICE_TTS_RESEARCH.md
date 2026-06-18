@@ -166,6 +166,25 @@ Risks / unknowns:
 - Runtime footprint and licensing need review.
 - Voice consistency and packaging need separate spike work.
 
+### VOICEVOX
+
+Potential value:
+
+- Local server candidate for anime/Japanese-style speech.
+- Useful manual probe path through an explicit localhost adapter before any app
+  runtime wiring.
+- Optional WAV output can support human listening checks without adding
+  playback to Dragon Pet AI.
+
+Risks / unknowns:
+
+- Chinese support is likely weak or workaround-based; quality must be judged by
+  listening to generated local WAV files.
+- Requires the user to install and start a VOICEVOX Engine-compatible local
+  server manually.
+- TASK-TTS-004B is still probe-only: no app integration, no runtime playback,
+  no auto-speaking, and no final provider selection.
+
 ### ElevenLabs
 
 Potential value:
@@ -273,6 +292,16 @@ Suggested research and implementation tasks:
   future/manual candidates. Runtime playback should not start yet; `mock`
   remains the only safe skeleton provider.
 - TASK-TTS-004B VOICEVOX Local Server Manual Probe / Audio Output Optional.
+  **IMPLEMENTED - VOICEVOX MANUAL PROBE READY / OPTIONAL AUDIO OUTPUT LOCAL
+  ONLY (2026-06-18):** Extended `scripts/tts_provider_probe.py` with
+  `voicevox_server` localhost metadata checks, `--voicevox-url`,
+  `--voicevox-speaker`, and optional `--allow-audio-output` WAV generation.
+  Default behavior checks server metadata only and does not call synthesis,
+  write audio, or play audio. Optional WAV files are local-only under ignored
+  `outputs/tts_provider_probe/YYYYMMDD/audio/`; Chinese/Japanese pronunciation
+  quality must be judged manually by listening. No runtime app integration,
+  playback, auto-speaking, dependency, `/chat` schema, mood schema, STT,
+  Conversation Mode, or Owner Voice behavior change is added.
 - TASK-TTS-004C Edge-TTS Optional Network Candidate Probe.
 - TASK-TTS-004D Style-Bert-VITS2 / GPT-SoVITS Feasibility Research.
 - TASK-TTS-004 Playback queue and renderer diagnostics after a real provider

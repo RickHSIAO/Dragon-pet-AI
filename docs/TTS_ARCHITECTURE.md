@@ -1,12 +1,13 @@
 # TTS Architecture
 
-**Task:** TASK-TTS-001 / TASK-TTS-004A
-**Status:** TASK-TTS-004A DONE - INSTALL-FREE PROVIDER REVIEW COMPLETE / REAL PROVIDER NOT SELECTED
+**Task:** TASK-TTS-001 / TASK-TTS-004B
+**Status:** TASK-TTS-004B IMPLEMENTED - VOICEVOX MANUAL PROBE READY / OPTIONAL AUDIO OUTPUT LOCAL ONLY
 **Date:** 2026-06-18
-**Scope:** Provider-neutral architecture plus TASK-TTS-002 backend mock skeleton
-and TASK-TTS-004A install-free provider review. No runtime wiring, real
-synthesis, playback, dependency, generated audio, schema change, STT behavior
-change, or Conversation Mode behavior change is added by TASK-TTS-004A.
+**Scope:** Provider-neutral architecture plus TASK-TTS-002 backend mock skeleton,
+TASK-TTS-004A install-free provider review, and TASK-TTS-004B VOICEVOX manual
+localhost probe. No runtime wiring, app playback, dependency, schema change, STT
+behavior change, Conversation Mode behavior change, or Owner Voice behavior
+change is added by TASK-TTS-004B.
 
 This document defines the target architecture for Christina voice output and the
 implemented TASK-TTS-002 mock skeleton. It remains provider-neutral: Dragon Pet
@@ -50,6 +51,21 @@ TASK-TTS-004A review checkpoint:
   Conversation Mode feedback prevention should wait for a provider-specific
   manual probe.
 
+TASK-TTS-004B implementation checkpoint:
+
+- `voicevox_server` supports a manually started VOICEVOX Engine-compatible
+  localhost server through `scripts/tts_provider_probe.py`.
+- Default behavior remains metadata-only: `/version` plus best-effort
+  `/speakers`, with no synthesis call, no audio write, and no playback.
+- Optional WAV generation requires `--allow-audio-output`; generated files go
+  under ignored `outputs/tts_provider_probe/YYYYMMDD/audio/`.
+- `--voicevox-url` accepts localhost only; non-localhost URLs are rejected before
+  network access.
+- `--voicevox-speaker` selects the VOICEVOX speaker/style id for metadata and
+  optional synthesis.
+- VOICEVOX remains probe-only. No runtime provider has been selected yet, and
+  the app runtime remains disabled/mock-only for the new TTS architecture.
+
 ---
 
 ## 1. Goals
@@ -88,7 +104,7 @@ Recommended split:
 | Text normalization | `backend/app/tts/text_normalizer.py` | TASK-TTS-002 implements conservative backend chunking helper; renderer/shared reuse is future. |
 | TTS queue controller | `backend/app/tts/tts_service.py` diagnostics skeleton; renderer queue future task | TASK-TTS-002 exposes disabled queue diagnostics only. No playback queue dispatch. |
 | Provider adapter | `backend/app/tts/providers.py` | TASK-TTS-002 implements `TTSProvider` protocol and metadata-only `MockTTSProvider`. Real synthesis adapters are future. |
-| Provider candidate probe | `scripts/tts_provider_probe.py` | TASK-TTS-003 checks optional provider availability and writes local reports. No runtime wiring or playback. |
+| Provider candidate probe | `scripts/tts_provider_probe.py` | TASK-TTS-004B checks optional provider availability and can manually probe VOICEVOX localhost audio only behind `--allow-audio-output`. No runtime wiring or playback. |
 | Provider review | Docs/status only | TASK-TTS-004A records that no real provider is ready except metadata-only `mock`; playback remains blocked pending provider-specific probe. |
 | Local external process | Optional provider-specific sidecar, future task | Run heavy local engines outside Electron renderer/main. |
 | Playback | Renderer/Pet Window, future task | Play audio through browser audio APIs or an explicit playback bridge. |
@@ -458,6 +474,18 @@ TASK-TTS-003 automated tests cover:
 - JSON/Markdown report creation under a caller-supplied output root.
 - TASK-TTS-002 text normalization is reused.
 
+TASK-TTS-004B automated tests cover:
+
+- VOICEVOX unavailable server skip behavior.
+- Default metadata-only behavior does not call synthesis or generate audio.
+- `--allow-audio-output` is required for WAV generation.
+- Localhost URLs are accepted and non-localhost URLs are rejected before network
+  access.
+- Mocked `audio_query` and `synthesis` write a WAV under a caller-supplied
+  output root.
+- VOICEVOX report schema includes safety and audio fields.
+- No playback helper is introduced by the probe script.
+
 Future runtime tests should cover:
 
 - Queue prevents overlapping playback.
@@ -493,6 +521,7 @@ Manual Windows playback smoke checklist for the first runtime task:
 - TASK-TTS-004A: Local TTS provider selection review. DONE - install-free probe
   reviewed; no real provider selected and `mock` remains the only safe skeleton.
 - TASK-TTS-004B: VOICEVOX local server manual probe / optional audio output.
+  IMPLEMENTED - probe-only; optional local WAV output requires explicit flag.
 - TASK-TTS-004C: edge-tts optional network candidate probe.
 - TASK-TTS-004D: Style-Bert-VITS2 / GPT-SoVITS feasibility research.
 - TASK-TTS-004: Playback queue and renderer diagnostics after a real provider
@@ -554,6 +583,22 @@ TASK-TTS-004A is complete when:
 - No real provider is selected and runtime playback remains not started.
 - Recommended next paths are documented as TASK-TTS-004B, TASK-TTS-004C, and
   TASK-TTS-004D.
+- No runtime TTS wiring, `/chat` integration, playback, auto-speaking,
+  dependency/install, generated audio/report commit, schema change, STT behavior
+  change, Conversation Mode behavior change, or Owner Voice behavior change is
+  committed.
+
+TASK-TTS-004B is complete when:
+
+- `scripts/tts_provider_probe.py` supports `voicevox_server` localhost metadata
+  checks with `--voicevox-url` and `--voicevox-speaker`.
+- Default VOICEVOX behavior does not call synthesis, write audio, or play audio.
+- `--allow-audio-output` is required before calling `audio_query` and
+  `synthesis`.
+- Optional WAV files are written only under ignored
+  `outputs/tts_provider_probe/YYYYMMDD/audio/`.
+- Non-localhost VOICEVOX URLs are rejected.
+- Reports include VOICEVOX URL/version/speaker/audio/synthesis safety fields.
 - No runtime TTS wiring, `/chat` integration, playback, auto-speaking,
   dependency/install, generated audio/report commit, schema change, STT behavior
   change, Conversation Mode behavior change, or Owner Voice behavior change is
