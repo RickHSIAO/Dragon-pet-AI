@@ -23196,7 +23196,7 @@ STT future boundary:
 ### Future Task List
 
 - TASK-TTS-001 Local TTS Provider Architecture / Christina Voice Output Design.
-- TASK-TTS-002 Backend/provider skeleton with mock provider.
+- TASK-TTS-002 Mock TTS Provider Skeleton / Disabled-by-default TTS Queue.
 - TASK-TTS-003 Local synthesis provider experiment.
 - TASK-TTS-004 Playback queue and renderer diagnostics.
 - TASK-TTS-005 Pet speaking state / bubble sync.
@@ -23365,6 +23365,156 @@ The design defines:
 - [x] Runtime TTS provider implementation not started.
 - [x] No dependency, generated audio, voice sample, STT, Conversation Mode,
   Owner Voice, `/chat`, or mood schema behavior change.
+
+---
+
+## TASK-TTS-002 | Mock TTS Provider Skeleton / Disabled-by-default TTS Queue
+
+**Status:** IMPLEMENTED - MOCK TTS SKELETON SMOKE PASS / RUNTIME PLAYBACK NOT STARTED
+**Date:** 2026-06-18
+**Phase:** Phase 5 - Companion Voice Output Architecture
+**Depends on:** TASK-TTS-001, TASK-CONV-006, TASK-STT-007
+
+### Goal
+
+Add the first safe TTS runtime foundation: backend provider abstraction, mock
+provider, text normalization/chunking, disabled queue diagnostics, and tests.
+
+### Implementation Summary
+
+Added:
+
+- `backend/app/tts/__init__.py`
+- `backend/app/tts/providers.py`
+- `backend/app/tts/text_normalizer.py`
+- `backend/app/tts/tts_service.py`
+- `backend/tests/test_tts_service.py`
+
+Updated:
+
+- `backend/app/core/config.py`
+- `README.md`
+- `docs/ROADMAP.md`
+- `docs/TASKS.md`
+- `docs/TTS_ARCHITECTURE.md`
+- `docs/TTS_PROVIDER_RESEARCH.md`
+- `docs/INTERACTIVE_COMPANION_ARCHITECTURE.md`
+- `docs/CHRISTINA_PERSONA_CONTEXT_PACK.md`
+
+Implemented backend behavior:
+
+- `TTSProvider` protocol and `MockTTSProvider`.
+- `TTSSynthesisRequest` and `TTSSynthesisResult` metadata models.
+- `TTSService` metadata-only preview path.
+- `TTSQueueState` diagnostics model.
+- Conservative `normalize_tts_text()` helper.
+- Environment readers:
+  - `TTS_ENABLED`, default false.
+  - `TTS_PROVIDER`, default `mock`.
+  - `TTS_VOICE`, default `christina_mock`.
+
+### Mock Provider Behavior
+
+`MockTTSProvider` is deterministic and returns metadata only:
+
+- `provider`: `mock`
+- `voice`: `christina_mock` by default
+- `chunks`: normalized text chunks
+- `estimatedDurationMs`: deterministic estimate based on chunk text length
+- `synthesisStatus`: `mock_success` for non-empty chunks, `empty` for no chunks
+- `audioAvailable`: false
+- `audioPath`: null
+
+It does not create WAV/MP3 files, audio bytes, streams, temp files, embeddings,
+voice samples, model artifacts, or logs.
+
+### Text Normalization / Chunking
+
+`normalize_tts_text()`:
+
+- Accepts visible assistant reply text.
+- Preserves Traditional Chinese text.
+- Removes fenced code blocks by default.
+- Strips common Markdown markers conservatively.
+- Removes clearly marked debug/diagnostic/provider/source/Owner Voice/Output
+  Queue lines.
+- Removes obvious local paths and localhost/file URLs.
+- Splits on Chinese and Western sentence punctuation.
+- Splits long chunks on comma boundaries or a max character guard.
+- Drops empty chunks and enforces max chunk count.
+- Does not invent replacement narration.
+
+### Queue Diagnostics
+
+`TTSQueueState.diagnostics()` returns deterministic safe fields:
+
+- `enabled`: false by default
+- `provider`: `mock`
+- `requestedVoice`: `christina_mock`
+- `resolvedVoice`: `christina_mock`
+- `queueLength`: 0
+- `activeJobId`: null
+- `chunksCount`: last preview chunk count
+- `lastSynthesisStatus`: `not_started`, `mock_success`, or `empty`
+- `lastError`: null
+- `playbackStatus`: `disabled` by default, `not_started` only if the env flag
+  is explicitly enabled in tests/future wiring
+- `autoSpeakEnabled`: false
+
+TASK-TTS-002 does not enqueue runtime playback jobs. Preview updates diagnostics
+only and leaves `queueLength=0` and `activeJobId=null`.
+
+### Route / UI / Pet Window Boundary
+
+- No `/tts` route added.
+- No renderer TTS diagnostics section added.
+- No Pet Window runtime change.
+- No playback button or disabled placeholder control added.
+- No real speaking state added.
+
+This keeps TASK-TTS-002 service/test-only while the architecture remains ready
+for a later explicit UI/playback task.
+
+### Preserved Boundaries
+
+- TTS remains disabled by default.
+- No real synthesis.
+- No real audio playback.
+- No generated audio file.
+- No external paid API dependency.
+- No ElevenLabs integration.
+- No voice model download.
+- No route or frontend auto-speaking trigger.
+- No `/chat` schema or mood schema change.
+- No STT default change.
+- No STT model selector behavior change.
+- No Conversation Mode queue/backpressure behavior change.
+- No Owner Voice hard-gate behavior change.
+- No audio recording/enrollment change.
+
+### Validation
+
+- `.\backend\.venv\Scripts\python.exe -m pytest backend\tests\test_tts_service.py -v -p no:cacheprovider --basetemp=backend.pytest-tmp-tts002`: PASS, 12 passed.
+- `.\backend\.venv\Scripts\python.exe -m py_compile backend\app\tts\tts_service.py backend\app\tts\providers.py backend\app\tts\text_normalizer.py`: PASS.
+- `node apps/desktop/scripts/renderer-chat-smoke.js`: PASS.
+- `node apps/desktop/scripts/pet-window-smoke.js`: PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: PASS.
+- `git diff --check`: PASS; exit code 0 with Windows CRLF conversion warnings only.
+
+### Acceptance Criteria
+
+- [x] Provider abstraction and mock provider implemented.
+- [x] Mock provider returns deterministic metadata only.
+- [x] No generated audio, playback, external provider, model, dependency, or
+  ElevenLabs/cloud integration.
+- [x] TTS config defaults disabled with provider `mock`.
+- [x] Text normalization/chunking covers Chinese, Markdown/code, diagnostics,
+  long text, empty text, and punctuation.
+- [x] Queue diagnostics expose disabled/default state and never auto-speak.
+- [x] No route/UI/Pet runtime surface added.
+- [x] No `/chat`, mood schema, STT default/model selector, Conversation Mode
+  queue/backpressure, Owner Voice hard-gate, or audio enrollment behavior
+  change.
 
 ---
 

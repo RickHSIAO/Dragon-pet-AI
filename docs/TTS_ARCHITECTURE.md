@@ -1,16 +1,26 @@
 # TTS Architecture
 
-**Task:** TASK-TTS-001
-**Status:** DONE - TTS ARCHITECTURE DESIGN READY / IMPLEMENTATION NOT STARTED
+**Task:** TASK-TTS-001 / TASK-TTS-002
+**Status:** TASK-TTS-002 IMPLEMENTED - MOCK TTS SKELETON SMOKE PASS / RUNTIME PLAYBACK NOT STARTED
 **Date:** 2026-06-18
-**Scope:** Documentation and architecture only. No runtime TTS provider, playback
-queue, dependency, generated audio, schema change, STT behavior change, or
-Conversation Mode behavior change is added by this task.
+**Scope:** Provider-neutral architecture plus TASK-TTS-002 backend mock skeleton.
+No real synthesis, playback, dependency, generated audio, schema change, STT
+behavior change, or Conversation Mode behavior change is added by TASK-TTS-002.
 
-This document defines the target architecture for Christina voice output before
-any new provider implementation begins. It is intentionally provider-neutral:
-Dragon Pet AI should be able to evaluate local and low-cost voices without
-hard-coding one engine as the permanent path.
+This document defines the target architecture for Christina voice output and the
+implemented TASK-TTS-002 mock skeleton. It remains provider-neutral: Dragon Pet
+AI should be able to evaluate local and low-cost voices without hard-coding one
+engine as the permanent path.
+
+TASK-TTS-002 implementation checkpoint:
+
+- Backend package `backend/app/tts/` now exists.
+- `MockTTSProvider` returns deterministic metadata only.
+- `normalize_tts_text()` produces TTS-safe chunks from visible reply text.
+- `TTSService` exposes metadata-only preview and disabled queue diagnostics.
+- Defaults are `TTS_ENABLED=false`, provider `mock`, voice `christina_mock`.
+- No `/tts` route, renderer controls, Pet Window runtime, real synthesis,
+  playback, generated audio, external dependency, or auto-speaking is added.
 
 ---
 
@@ -46,10 +56,10 @@ Recommended split:
 
 | Component | Location | Responsibility |
 |---|---|---|
-| TTS request trigger | Full App renderer and Pet renderer call sites, future task | Submit only accepted assistant replies to the TTS queue when user-enabled. |
-| Text normalization | Shared renderer module or backend utility, future task | Convert reply text into TTS-safe chunks. |
-| TTS queue controller | Full App renderer module first, future task | Order jobs, prevent overlap, support stop/interrupt, publish diagnostics. |
-| Provider adapter | Backend service or local sidecar bridge, future task | Synthesize audio or return playback instructions behind a stable interface. |
+| TTS request trigger | Full App renderer and Pet renderer call sites, future task | Submit only accepted assistant replies to the TTS queue when user-enabled. Not implemented by TASK-TTS-002. |
+| Text normalization | `backend/app/tts/text_normalizer.py` | TASK-TTS-002 implements conservative backend chunking helper; renderer/shared reuse is future. |
+| TTS queue controller | `backend/app/tts/tts_service.py` diagnostics skeleton; renderer queue future task | TASK-TTS-002 exposes disabled queue diagnostics only. No playback queue dispatch. |
+| Provider adapter | `backend/app/tts/providers.py` | TASK-TTS-002 implements `TTSProvider` protocol and metadata-only `MockTTSProvider`. Real synthesis adapters are future. |
 | Local external process | Optional provider-specific sidecar, future task | Run heavy local engines outside Electron renderer/main. |
 | Playback | Renderer/Pet Window, future task | Play audio through browser audio APIs or an explicit playback bridge. |
 | Electron main | Narrow IPC only if needed, future task | Bridge local process/audio file handles without exposing broad filesystem APIs. |
@@ -97,7 +107,42 @@ Rules:
 
 ## 4. Provider Abstraction
 
-Future interface shape:
+Implemented TASK-TTS-002 shape:
+
+```text
+TTSSynthesisRequest:
+  chunks
+  provider
+  voice
+  language_hint
+  style_hint
+  request_id
+
+TTSSynthesisResult:
+  provider
+  voice
+  chunks
+  estimatedDurationMs
+  synthesisStatus
+  audioAvailable
+  audioPath
+  error
+```
+
+`MockTTSProvider` returns:
+
+- `provider=mock`
+- `voice=christina_mock` by default
+- normalized chunks
+- deterministic estimated duration
+- `synthesisStatus=mock_success` or `empty`
+- `audioAvailable=false`
+- `audioPath=null`
+
+No audio file, audio bytes, stream reference, model load, subprocess, network
+request, or external dependency is used.
+
+Future real-provider interface shape:
 
 ```text
 TtsProvider.synthesize(request) -> TtsResult
@@ -128,7 +173,7 @@ result:
 
 Provider contract:
 
-- `mock` provider is required first for tests and queue behavior.
+- `mock` provider is implemented first for tests and queue behavior.
 - Local providers must be selectable by configuration, not hard-coded in call
   sites.
 - Provider adapters must return safe error codes and safe messages, not raw
@@ -152,6 +197,10 @@ Initial provider ids:
 ## 5. Text Normalization
 
 TTS text normalization should run before queue admission.
+
+TASK-TTS-002 implements the backend helper `normalize_tts_text()` with max chunk
+length/count guards. It accepts visible assistant reply text and returns a list
+of safe chunks; it does not invent replacement narration.
 
 Inputs:
 
@@ -198,6 +247,25 @@ Forbidden spoken sources:
 ## 6. Playback Queue
 
 The TTS queue is separate from the Conversation Mode STT queue.
+
+TASK-TTS-002 implements only a disabled backend queue diagnostics model:
+
+```text
+enabled=false
+provider=mock
+requestedVoice=christina_mock
+resolvedVoice=christina_mock
+queueLength=0
+activeJobId=null
+chunksCount=<last preview chunk count>
+lastSynthesisStatus=not_started | mock_success | empty
+lastError=null
+playbackStatus=disabled
+autoSpeakEnabled=false
+```
+
+Preview does not enqueue runtime playback. `queueLength` remains `0` and
+`activeJobId` remains `null`.
 
 Queue item shape:
 
@@ -343,13 +411,16 @@ Diagnostics must not include:
 
 ## 11. Testing Plan
 
-Automated tests for TASK-TTS-002+ should cover:
+TASK-TTS-002 automated tests cover:
 
 - Mock provider returns deterministic safe results.
 - TTS disabled by default.
 - Normalization strips diagnostics, markdown code fences, JSON-like payloads, and
   stack traces.
 - Sentence chunking preserves order and enforces max length.
+
+Future runtime tests should cover:
+
 - Queue prevents overlapping playback.
 - Stop clears active and pending jobs.
 - Late provider result after stop is ignored.
@@ -376,7 +447,8 @@ Manual Windows playback smoke checklist for the first runtime task:
 
 ## 12. Phased Implementation Plan
 
-- TASK-TTS-002: Backend/provider skeleton with mock provider.
+- TASK-TTS-002: Mock TTS provider skeleton / disabled-by-default queue. DONE -
+  backend metadata-only skeleton; runtime playback not started.
 - TASK-TTS-003: Local synthesis provider experiment.
 - TASK-TTS-004: Playback queue and renderer diagnostics.
 - TASK-TTS-005: Pet speaking state / bubble sync.
@@ -388,7 +460,7 @@ the runtime surface.
 
 ---
 
-## 13. TASK-TTS-001 Acceptance
+## 13. Acceptance
 
 TASK-TTS-001 is complete when:
 
@@ -402,3 +474,14 @@ TASK-TTS-001 is complete when:
 - No runtime TTS implementation, dependency, generated audio, STT behavior,
   Conversation Mode behavior, Owner Voice behavior, or schema behavior changes
   are committed.
+
+TASK-TTS-002 is complete when:
+
+- `backend/app/tts/` provides a mock provider, text normalizer, service facade,
+  and disabled queue diagnostics.
+- `backend/tests/test_tts_service.py` covers config defaults, normalization,
+  mock metadata, and disabled diagnostics.
+- Runtime playback, generated audio, provider downloads, route/UI controls,
+  auto-speaking, and real synthesis remain not started.
+- `/chat`, mood schema, STT defaults, STT selector, Conversation Mode
+  backpressure, and Owner Voice hard-gate behavior remain unchanged.

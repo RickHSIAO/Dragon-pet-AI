@@ -322,12 +322,12 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 **Goal:** Prepare Christina voice output with a provider-neutral, local-first TTS
 architecture before any new runtime provider implementation.
 
-**Status:** DESIGN READY / IMPLEMENTATION NOT STARTED - TASK-TTS-001 DONE.
+**Status:** MOCK SKELETON IMPLEMENTED / RUNTIME PLAYBACK NOT STARTED - TASK-TTS-002 DONE.
 
 | Task | Name | Status |
 |---|---|---|
 | TASK-TTS-001 | Local TTS Provider Architecture / Christina Voice Output Design | DONE - TTS ARCHITECTURE DESIGN READY / IMPLEMENTATION NOT STARTED |
-| TASK-TTS-002 | Backend/provider skeleton with mock provider | PLANNED |
+| TASK-TTS-002 | Mock TTS Provider Skeleton / Disabled-by-default TTS Queue | IMPLEMENTED - MOCK TTS SKELETON SMOKE PASS / RUNTIME PLAYBACK NOT STARTED |
 | TASK-TTS-003 | Local synthesis provider experiment | PLANNED |
 | TASK-TTS-004 | Playback queue and renderer diagnostics | PLANNED |
 | TASK-TTS-005 | Pet speaking state / bubble sync | PLANNED |
@@ -336,15 +336,17 @@ architecture before any new runtime provider implementation.
 
 Track constraints:
 
-- TTS remains disabled/not implemented for the new provider architecture until a
-  future runtime task explicitly adds it.
+- TASK-TTS-002 adds backend metadata-only TTS skeleton diagnostics. Real
+  synthesis, playback, auto-speaking, route/UI controls, and generated audio
+  remain not started until future runtime tasks explicitly add them.
+- TTS remains disabled by default for the new provider architecture.
 - First implementation starts with `mock`, not ElevenLabs or a paid external
   provider.
 - Local/offline providers are preferred; cloud providers require separate
   opt-in cost/privacy design.
 - No `/chat` schema, mood schema, STT default, STT selector, Conversation Mode
   backpressure, or Owner Voice hard-gate behavior changes are part of
-  TASK-TTS-001.
+  TASK-TTS-001/TASK-TTS-002.
 
 ---
 
@@ -1115,6 +1117,8 @@ Track constraints:
 - TASK-228 DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS (2026-06-01): Output Queue Runtime Skeleton, disabled by default. Full App renderer-only adds local queue constants/state/helpers: `OUTPUT_QUEUE_ENABLED=false`, max 50, recent max 20, P0-P6 priority allowlist, channel/source allowlists, sanitized item schema, snapshot, clear, priority compare, and preemption helpers. Diagnostics preview now includes `Queue: disabled 繚 Items: <count>` inside the existing character-status preview, not inside `#chat-area`. The skeleton may store sanitized local diagnostics/smoke items while disabled, but disabled means no dispatch, no IPC, no Pet Window send, no `/chat`, no history write, no TTS/STT/audio runtime, no prompt runtime, no persistence, and no Pet Bubble/expression/reaction mirror behavior change. Renderer automated smoke PASS covers sanitization, caps, invalid token rejection, priority/preemption rules, preview boundaries, no side effects, no generic `"pet"` channel, and existing TASK-218/TASK-220 narrow channel regression guards. Windows visual smoke PASS: startup shows Queue disabled with a valid Items count and Pet Window is normal; send/delete-undo/edit/clear/focus remain functional with Queue disabled; diagnostics show no undefined/null/NaN/[object Object]/raw JSON/user text; no new IPC side effect, extra TTS, extra `/chat`, history/copy/export pollution, or Pet Window expression/reaction bubble regression.
 
 - TASK-TTS-001 DONE - TTS ARCHITECTURE DESIGN READY / IMPLEMENTATION NOT STARTED (2026-06-18): Local TTS Provider Architecture / Christina Voice Output Design. Adds `docs/TTS_ARCHITECTURE.md` and `docs/TTS_PROVIDER_RESEARCH.md` as the provider-neutral design layer for future Christina voice output. Target pipeline is accepted chat reply -> text normalization -> TTS queue -> provider adapter -> playback -> Pet speaking state. Provider abstraction starts with a required `mock` provider and keeps local sidecar / local HTTP lab providers behind replaceable adapters; ElevenLabs and other cloud providers are not the first architecture path and would require a separate opt-in cost/privacy design. The design covers Chinese speech requirement, Japanese/anime-style preference, text normalization, sentence chunking, stop/interrupt, no-overlap playback, Conversation Mode feedback prevention, Pet speaking state, diagnostics, safety/privacy, generated-audio boundaries, and phased tasks TASK-TTS-002 through TASK-TTS-006. Runtime TTS provider architecture implementation has not started. No runtime TTS provider, new dependency, generated audio, voice samples, `/chat` schema or mood schema change, STT default/model selector change, Conversation Mode queue/backpressure change, Owner Voice hard-gate change, or runtime auto-speaking was added.
+
+- TASK-TTS-002 IMPLEMENTED - MOCK TTS SKELETON SMOKE PASS / RUNTIME PLAYBACK NOT STARTED (2026-06-18): Mock TTS Provider Skeleton / Disabled-by-default TTS Queue. Adds `backend/app/tts/` with provider abstraction, deterministic `MockTTSProvider`, conservative text normalization/chunking, metadata-only preview service, and disabled queue diagnostics. Defaults are fail-closed: `TTS_ENABLED=false`, provider `mock`, voice `christina_mock`, auto speak false, playback `disabled`/`not_started`, queue length 0, and active job null. The mock provider returns chunks, estimated duration, `synthesisStatus=mock_success`, `audioAvailable=false`, and `audioPath=null`; it creates no audio files and performs no real synthesis. No `/tts` route, renderer controls, Pet Window runtime, playback button, dependency, ElevenLabs/cloud integration, voice model download, generated audio, `/chat` schema or mood schema change, STT default/model selector change, Conversation Mode queue/backpressure change, Owner Voice hard-gate change, or runtime auto-speaking was added.
 
 - TASK-227 IMPLEMENTED - DOCS ONLY / NO WINDOWS SMOKE REQUIRED (2026-06-01): Voice/TTS Research Note and Local Speech Roadmap. Adds `docs/VOICE_TTS_RESEARCH.md` as a docs-only voice, TTS, and STT research checkpoint. The note records the user-provided external AI VTuber / Discord voice chain as reference material, then separates what applies to Dragon Pet AI from what should not be copied. Dragon Pet AI remains local-first: TTS is a post-reply audio layer, TTS does not call `/chat`, TTS does not write history, TTS does not read diagnostics, STT is explicit push-to-talk/user action only, no always listening, and future speech work must obey the output queue / priority design. Candidate research tracks include ChatTTS, GPT-SoVITS, F5-TTS, CosyVoice, ElevenLabs as optional cloud reference, local Whisper / faster-whisper, TTS provider interface design, disabled audio skeleton, and confirmed transcript-to-`/chat` design. No runtime prompt wiring, TTS/STT/audio skeleton, IPC, `/chat` change, backend/provider change, renderer change, Pet Window change, assets, voice model, commit, or push.
 

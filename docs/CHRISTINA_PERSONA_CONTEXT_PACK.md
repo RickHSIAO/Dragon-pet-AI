@@ -421,6 +421,12 @@ TASK-TTS-001 adds `docs/TTS_ARCHITECTURE.md` and
 design. This persona pack can inform spoken Christina style, but it still does
 not enable runtime speech by itself.
 
+TASK-TTS-002 adds backend mock TTS skeleton normalization only. Runtime persona
+behavior is unchanged; the normalizer derives TTS-safe chunks from already
+accepted visible assistant replies and removes clearly marked code, debug,
+diagnostic, provider, Owner Voice, and Output Queue material before mock preview.
+It does not invent spoken replacement text and does not auto-speak.
+
 Spoken Christina should:
 
 - Stay concise. Spoken output should prefer shorter sentences than full written

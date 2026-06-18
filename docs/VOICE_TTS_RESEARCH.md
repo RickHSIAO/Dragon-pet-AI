@@ -246,7 +246,13 @@ Suggested research and implementation tasks:
   -> provider adapter -> playback -> Pet speaking state. The design starts with
   a mock provider and local/offline provider experiments; ElevenLabs/cloud is
   not the first architecture path.
-- TASK-TTS-002 Backend/provider skeleton with mock provider.
+- TASK-TTS-002 Mock TTS Provider Skeleton / Disabled-by-default TTS Queue.
+  **IMPLEMENTED - MOCK TTS SKELETON SMOKE PASS / RUNTIME PLAYBACK NOT STARTED
+  (2026-06-18):** Added backend metadata-only provider abstraction, deterministic
+  `MockTTSProvider`, conservative text normalization/chunking, disabled queue
+  diagnostics, and tests. This is not real voice quality evaluation and does
+  not add synthesis, playback, generated audio, route/UI controls, dependency,
+  or auto-speaking.
 - TASK-TTS-003 Local synthesis provider experiment.
 - TASK-TTS-004 Playback queue and renderer diagnostics.
 - TASK-TTS-005 Pet speaking state / bubble sync.

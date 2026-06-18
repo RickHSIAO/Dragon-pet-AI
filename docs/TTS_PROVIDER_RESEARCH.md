@@ -1,11 +1,12 @@
 # TTS Provider Research
 
-**Task:** TASK-TTS-001
-**Status:** DONE - TTS ARCHITECTURE DESIGN READY / IMPLEMENTATION NOT STARTED
+**Task:** TASK-TTS-001 / TASK-TTS-002
+**Status:** TASK-TTS-002 IMPLEMENTED - MOCK TTS SKELETON SMOKE PASS / RUNTIME PLAYBACK NOT STARTED
 **Date:** 2026-06-18
-**Scope:** Provider research and evaluation plan only. No provider is selected as
-final, no model is downloaded, no dependency is added, and no runtime TTS path is
-implemented by this task.
+**Scope:** Provider research and evaluation plan plus implemented mock-provider
+skeleton boundary. No real voice-quality provider is selected as final, no model
+is downloaded, no dependency is added, and no real synthesis/playback path is
+implemented by TASK-TTS-002.
 
 This document records candidate directions for Christina voice output. It should
 guide later experiments, not lock Dragon Pet AI to a single TTS engine.
@@ -67,6 +68,10 @@ Use first because:
 Limit:
 
 - Does not prove voice quality.
+- TASK-TTS-002 implements this provider as metadata-only backend code under
+  `backend/app/tts/`. It returns chunks, estimated duration,
+  `synthesisStatus=mock_success`, `audioAvailable=false`, and `audioPath=null`.
+  It is a test/diagnostics provider, not a Christina voice-quality candidate.
 
 ### Existing Platform / Web Speech
 
@@ -230,7 +235,8 @@ Future candidate:
 
 Recommended sequencing:
 
-1. TASK-TTS-002: mock provider skeleton and provider contract.
+1. TASK-TTS-002: mock provider skeleton and provider contract. DONE -
+   metadata-only backend skeleton; not a voice-quality provider.
 2. TASK-TTS-003: one local provider experiment through `local_sidecar` or
    `local_http`.
 3. TASK-TTS-004: renderer playback queue diagnostics with mock/provider output.

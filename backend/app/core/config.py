@@ -101,6 +101,28 @@ def get_llm_fallback_to_mock() -> bool:
 
 
 # ---------------------------------------------------------------------------
+# TTS skeleton config (TASK-TTS-002)
+# ---------------------------------------------------------------------------
+
+def get_tts_enabled() -> bool:
+    """Return True only when TTS is explicitly enabled.
+
+    TASK-TTS-002 keeps runtime TTS disabled by default. This flag is only for
+    future skeleton diagnostics and tests; it does not enable playback or
+    auto-speaking.
+    """
+    return read_bool_env("TTS_ENABLED", default=False)
+
+
+def get_tts_provider_name() -> str:
+    return read_str_env("TTS_PROVIDER", default="mock").lower() or "mock"
+
+
+def get_tts_voice() -> str:
+    return read_str_env("TTS_VOICE", default="christina_mock") or "christina_mock"
+
+
+# ---------------------------------------------------------------------------
 # Ollama local provider config
 # ---------------------------------------------------------------------------
 
