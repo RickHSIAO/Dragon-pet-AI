@@ -322,14 +322,18 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 **Goal:** Prepare Christina voice output with a provider-neutral, local-first TTS
 architecture before any new runtime provider implementation.
 
-**Status:** LOCAL PROVIDER PROBE IMPLEMENTED / NO RUNTIME WIRING - TASK-TTS-003 DONE.
+**Status:** INSTALL-FREE PROVIDER REVIEW COMPLETE / REAL PROVIDER NOT SELECTED - TASK-TTS-004A DONE.
 
 | Task | Name | Status |
 |---|---|---|
 | TASK-TTS-001 | Local TTS Provider Architecture / Christina Voice Output Design | DONE - TTS ARCHITECTURE DESIGN READY / IMPLEMENTATION NOT STARTED |
 | TASK-TTS-002 | Mock TTS Provider Skeleton / Disabled-by-default TTS Queue | IMPLEMENTED - MOCK TTS SKELETON SMOKE PASS / RUNTIME PLAYBACK NOT STARTED |
 | TASK-TTS-003 | Local TTS Provider Candidate Probe / No Runtime Wiring | IMPLEMENTED - LOCAL TTS PROVIDER PROBE SMOKE PASS / NO RUNTIME WIRING |
-| TASK-TTS-004 | Playback queue and renderer diagnostics | PLANNED |
+| TASK-TTS-004A | Local TTS Provider Selection Review / Install-Free Probe Summary | DONE - INSTALL-FREE PROVIDER REVIEW COMPLETE / REAL PROVIDER NOT SELECTED |
+| TASK-TTS-004B | VOICEVOX Local Server Manual Probe / Audio Output Optional | PLANNED |
+| TASK-TTS-004C | Edge-TTS Optional Network Candidate Probe | PLANNED |
+| TASK-TTS-004D | Style-Bert-VITS2 / GPT-SoVITS Feasibility Research | PLANNED |
+| TASK-TTS-004 | Playback queue and renderer diagnostics | PLANNED AFTER REAL PROVIDER CANDIDATE |
 | TASK-TTS-005 | Pet speaking state / bubble sync | PLANNED |
 | TASK-TTS-006 | Conversation Mode feedback prevention | PLANNED |
 | Future | Voice quality comparison / singing research | BACKLOG |
@@ -342,6 +346,8 @@ Track constraints:
 - TASK-TTS-003 adds a standalone local provider candidate probe script only.
   Reports are local ignored artifacts under `outputs/tts_provider_probe/`; no
   probe result selects a final provider.
+- TASK-TTS-004A records the Windows install-free probe review: no real provider
+  is currently ready except `mock`, so runtime playback remains pending.
 - TTS remains disabled by default for the new provider architecture.
 - First implementation starts with `mock`, not ElevenLabs or a paid external
   provider.
@@ -349,7 +355,7 @@ Track constraints:
   opt-in cost/privacy design.
 - No `/chat` schema, mood schema, STT default, STT selector, Conversation Mode
   backpressure, or Owner Voice hard-gate behavior changes are part of
-  TASK-TTS-001/TASK-TTS-003.
+  TASK-TTS-001/TASK-TTS-004A.
 
 ---
 
@@ -1124,6 +1130,8 @@ Track constraints:
 - TASK-TTS-002 IMPLEMENTED - MOCK TTS SKELETON SMOKE PASS / RUNTIME PLAYBACK NOT STARTED (2026-06-18): Mock TTS Provider Skeleton / Disabled-by-default TTS Queue. Adds `backend/app/tts/` with provider abstraction, deterministic `MockTTSProvider`, conservative text normalization/chunking, metadata-only preview service, and disabled queue diagnostics. Defaults are fail-closed: `TTS_ENABLED=false`, provider `mock`, voice `christina_mock`, auto speak false, playback `disabled`/`not_started`, queue length 0, and active job null. The mock provider returns chunks, estimated duration, `synthesisStatus=mock_success`, `audioAvailable=false`, and `audioPath=null`; it creates no audio files and performs no real synthesis. No `/tts` route, renderer controls, Pet Window runtime, playback button, dependency, ElevenLabs/cloud integration, voice model download, generated audio, `/chat` schema or mood schema change, STT default/model selector change, Conversation Mode queue/backpressure change, Owner Voice hard-gate change, or runtime auto-speaking was added.
 
 - TASK-TTS-003 IMPLEMENTED - LOCAL TTS PROVIDER PROBE SMOKE PASS / NO RUNTIME WIRING (2026-06-18): Local TTS Provider Candidate Probe / No Runtime Wiring. Adds `scripts/tts_provider_probe.py` and `backend/tests/test_tts_provider_probe.py` for metadata-only provider candidate checks. The probe reuses TASK-TTS-002 text normalization/chunking, always supports `mock`, gracefully marks unavailable providers with `available=false` and a reason, checks `voicevox_server` only through `http://127.0.0.1:50021/version`, and treats `edge_tts` as a clearly marked network/cloud-ish optional candidate, not a default. Future/manual candidates include `piper_onnx`, `gpt_sovits`, `style_bert_vits2`, and `rvc_like`. Reports are JSON/Markdown local artifacts under ignored `outputs/tts_provider_probe/YYYYMMDD/`. Audio generation is disabled by default and no TASK-TTS-003 provider generates audio. No runtime TTS wiring, `/chat` integration, route/UI/Pet Window change, playback, auto-speaking, new dependency, ElevenLabs integration, paid/cloud default, generated audio/report commit, `/chat` schema or mood schema change, STT default/model selector change, Conversation Mode queue/backpressure change, or Owner Voice hard-gate change was added.
+
+- TASK-TTS-004A DONE - INSTALL-FREE PROVIDER REVIEW COMPLETE / REAL PROVIDER NOT SELECTED (2026-06-18): Local TTS Provider Selection Review / Install-Free Probe Summary. Records the Windows install-free provider probe result: `mock` available with `mock_metadata_only`; `windows_sapi` unavailable due to `missing_optional_python_bridge`; `voicevox_server` unavailable with `server_unavailable:URLError` at `http://127.0.0.1:50021/version`; `edge_tts` unavailable due to `missing_optional_dependency`; `piper_onnx`, `gpt_sovits`, `style_bert_vits2`, and `rvc_like` remain `future_manual_candidate_not_probed`. Safety flags stayed false for audio output, generated audio, runtime wiring, playback, auto-speaking, and dependency addition. Conclusion: runtime playback should wait because no real provider is ready; `mock` remains the only safe skeleton provider. Recommended next provider tasks are TASK-TTS-004B VOICEVOX local-server manual probe, TASK-TTS-004C edge-tts optional network candidate probe, or TASK-TTS-004D Style-Bert-VITS2 / GPT-SoVITS feasibility research. No runtime TTS wiring, playback, auto-speaking, dependency/install, generated audio/report commit, ElevenLabs integration, `/chat` schema or mood schema change, STT default/model selector change, Conversation Mode queue/backpressure change, or Owner Voice hard-gate change was added.
 
 - TASK-227 IMPLEMENTED - DOCS ONLY / NO WINDOWS SMOKE REQUIRED (2026-06-01): Voice/TTS Research Note and Local Speech Roadmap. Adds `docs/VOICE_TTS_RESEARCH.md` as a docs-only voice, TTS, and STT research checkpoint. The note records the user-provided external AI VTuber / Discord voice chain as reference material, then separates what applies to Dragon Pet AI from what should not be copied. Dragon Pet AI remains local-first: TTS is a post-reply audio layer, TTS does not call `/chat`, TTS does not write history, TTS does not read diagnostics, STT is explicit push-to-talk/user action only, no always listening, and future speech work must obey the output queue / priority design. Candidate research tracks include ChatTTS, GPT-SoVITS, F5-TTS, CosyVoice, ElevenLabs as optional cloud reference, local Whisper / faster-whisper, TTS provider interface design, disabled audio skeleton, and confirmed transcript-to-`/chat` design. No runtime prompt wiring, TTS/STT/audio skeleton, IPC, `/chat` change, backend/provider change, renderer change, Pet Window change, assets, voice model, commit, or push.
 

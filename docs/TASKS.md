@@ -23198,6 +23198,10 @@ STT future boundary:
 - TASK-TTS-001 Local TTS Provider Architecture / Christina Voice Output Design.
 - TASK-TTS-002 Mock TTS Provider Skeleton / Disabled-by-default TTS Queue.
 - TASK-TTS-003 Local TTS Provider Candidate Probe / No Runtime Wiring.
+- TASK-TTS-004A Local TTS Provider Selection Review / Install-Free Probe Summary.
+- TASK-TTS-004B VOICEVOX Local Server Manual Probe / Audio Output Optional.
+- TASK-TTS-004C Edge-TTS Optional Network Candidate Probe.
+- TASK-TTS-004D Style-Bert-VITS2 / GPT-SoVITS Feasibility Research.
 - TASK-TTS-004 Playback queue and renderer diagnostics.
 - TASK-TTS-005 Pet speaking state / bubble sync.
 - TASK-TTS-006 Conversation Mode feedback prevention.
@@ -23632,6 +23636,113 @@ No provider is selected as final by TASK-TTS-003.
 - [x] No runtime wiring, route/UI/Pet change, playback, auto-speaking,
   dependency, cloud default, generated audio commit, report commit, schema, STT,
   Conversation Mode, or Owner Voice behavior change.
+
+---
+
+## TASK-TTS-004A | Local TTS Provider Selection Review / Install-Free Probe Summary
+
+**Status:** DONE - INSTALL-FREE PROVIDER REVIEW COMPLETE / REAL PROVIDER NOT SELECTED
+**Date:** 2026-06-18
+**Phase:** Phase 5 - Companion Voice Output Architecture
+**Depends on:** TASK-TTS-001, TASK-TTS-002, TASK-TTS-003
+
+### Goal
+
+Record the Windows install-free provider probe result and choose the next
+provider investigation direction without implementing synthesis, playback, or
+runtime TTS wiring.
+
+### Install-Free Probe Result
+
+Probe command:
+
+```powershell
+.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers mock,windows_sapi,voicevox_server,edge_tts,piper_onnx,gpt_sovits,style_bert_vits2,rvc_like --text "<sample>" --pretty
+```
+
+| Provider | Availability | Probe reason | Local/offline status | Chinese support expectation | Christina/anime suitability | Setup difficulty | Recommended next action |
+|---|---|---|---|---|---|---|---|
+| `mock` | available | `mock_metadata_only` | Local metadata only | None; not a voice provider | None; skeleton/testing only | None | Keep as the only safe runtime skeleton provider. |
+| `windows_sapi` | unavailable | `missing_optional_python_bridge` | Local OS capability if bridge exists | Depends on installed Windows voices | Likely weak for Christina/anime style | Low if bridge/voices are installed | Do not prioritize unless user wants a low-setup baseline. |
+| `voicevox_server` | unavailable | `server_unavailable:URLError` | Localhost server if manually installed/running | Chinese support likely weak or workaround-based | Promising for Japanese/anime style | Medium; server install/start required | Recommended next local-first probe: TASK-TTS-004B. |
+| `edge_tts` | unavailable | `missing_optional_dependency` | Network/cloud-ish optional candidate | Likely strong Chinese voice coverage | Variable; not character-specific | Low package setup, but network/privacy caveats | Optional TASK-TTS-004C if fast Chinese validation is the priority. |
+| `piper_onnx` | unavailable | `future_manual_candidate_not_probed` | Local/offline future path | Voice availability varies | Likely weak for anime style | Medium; model selection needed | Keep as future/manual fallback research. |
+| `gpt_sovits` | unavailable | `future_manual_candidate_not_probed` | Local/offline after setup | Possible with correct model/data | Stronger long-term character direction | High; data/model/licensing complexity | TASK-TTS-004D feasibility research candidate. |
+| `style_bert_vits2` | unavailable | `future_manual_candidate_not_probed` | Local/offline after setup | Primarily Japanese-oriented | Stronger anime-style direction | High; model/runtime/licensing complexity | TASK-TTS-004D feasibility research candidate. |
+| `rvc_like` | unavailable | `future_manual_candidate_not_probed` | Local/offline after setup | Voice conversion, not TTS alone | Potentially useful after source TTS exists | High; consent/licensing/pipeline complexity | Defer; not a first TTS provider. |
+
+Probe safety flags:
+
+- `audioOutputAllowed=false`
+- `audioGenerated=false`
+- `runtimeTtsWired=false`
+- `playbackAdded=false`
+- `autoSpeakEnabled=false`
+- `externalDependencyAdded=false`
+
+### Review Conclusion
+
+- Current machine has no real TTS provider ready except `mock`.
+- `mock` is a skeleton/testing provider only, not a voice-quality provider.
+- Runtime playback should not be implemented yet because no real provider is
+  available.
+- TTS remains disabled/mock-only.
+- No provider is selected as final.
+
+### Recommended Next Provider Path
+
+Recommended next route depends on user priority:
+
+- Local-first/anime-style priority: start `TASK-TTS-004B - VOICEVOX Local Server
+  Manual Probe / Audio Output Optional`.
+- Fast Chinese voice validation priority: start `TASK-TTS-004C - Edge-TTS
+  Optional Network Candidate Probe`, while keeping it non-default and explicit
+  because it is network/cloud-ish.
+- Long-term character/anime quality priority: start `TASK-TTS-004D -
+  Style-Bert-VITS2 / GPT-SoVITS Feasibility Research`.
+
+Default recommendation: TASK-TTS-004B first, because it preserves the local
+server architecture direction and can validate the localhost adapter path before
+any playback queue wiring.
+
+### Preserved Boundaries
+
+- No runtime TTS wiring.
+- No `/chat` integration.
+- No playback.
+- No auto-speaking.
+- No new dependency or package install.
+- No ElevenLabs integration.
+- No paid/cloud provider as default.
+- No generated audio committed.
+- No generated report committed.
+- No voice sample, downloaded model, temp WAV, embedding, local setting, log, or
+  pytest temp folder committed.
+- No `/chat` schema or mood schema change.
+- No STT default or STT model selector behavior change.
+- No Conversation Mode queue/backpressure behavior change.
+- No Owner Voice hard-gate behavior change.
+
+### Validation
+
+- `node apps/desktop/scripts/renderer-chat-smoke.js`: PASS.
+- `node apps/desktop/scripts/pet-window-smoke.js`: PASS.
+- `node apps/desktop/scripts/pet-renderer-smoke.js`: PASS.
+- `git diff --check`: PASS; CRLF conversion warnings only.
+- `git diff --cached --check`: PASS after staging; CRLF conversion warnings only.
+
+### Acceptance Criteria
+
+- [x] Install-free probe result documented.
+- [x] Provider table records availability, reason, local/offline status, Chinese
+  expectation, Christina/anime suitability, setup difficulty, and next action.
+- [x] `mock` remains skeleton/testing only.
+- [x] Real provider not selected.
+- [x] Runtime playback remains pending.
+- [x] Follow-up tasks TASK-TTS-004B, TASK-TTS-004C, and TASK-TTS-004D documented.
+- [x] No runtime wiring, playback, auto-speaking, dependency/install, generated
+  audio/report commit, schema, STT, Conversation Mode, or Owner Voice behavior
+  change.
 
 ---
 

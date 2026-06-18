@@ -263,7 +263,20 @@ Suggested research and implementation tasks:
   `outputs/tts_provider_probe/YYYYMMDD/`. No provider is selected as final; no
   runtime wiring, playback, generated audio, dependency, or auto-speaking is
   added.
-- TASK-TTS-004 Playback queue and renderer diagnostics.
+- TASK-TTS-004A Local TTS Provider Selection Review / Install-Free Probe
+  Summary. **DONE - INSTALL-FREE PROVIDER REVIEW COMPLETE / REAL PROVIDER NOT
+  SELECTED (2026-06-18):** Windows install-free probe found only `mock`
+  available (`mock_metadata_only`). `windows_sapi` lacked the optional Python
+  bridge, `voicevox_server` was unavailable at
+  `http://127.0.0.1:50021/version`, `edge_tts` lacked the optional dependency,
+  and Piper / GPT-SoVITS / Style-Bert-VITS2 / RVC-like paths remain
+  future/manual candidates. Runtime playback should not start yet; `mock`
+  remains the only safe skeleton provider.
+- TASK-TTS-004B VOICEVOX Local Server Manual Probe / Audio Output Optional.
+- TASK-TTS-004C Edge-TTS Optional Network Candidate Probe.
+- TASK-TTS-004D Style-Bert-VITS2 / GPT-SoVITS Feasibility Research.
+- TASK-TTS-004 Playback queue and renderer diagnostics after a real provider
+  candidate is validated.
 - TASK-TTS-005 Pet speaking state / bubble sync.
 - TASK-TTS-006 Conversation Mode feedback prevention.
 - Future: voice quality comparison / singing research.

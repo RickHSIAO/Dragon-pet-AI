@@ -1,12 +1,12 @@
 # TTS Provider Research
 
-**Task:** TASK-TTS-001 / TASK-TTS-003
-**Status:** TASK-TTS-003 IMPLEMENTED - LOCAL TTS PROVIDER PROBE SMOKE PASS / NO RUNTIME WIRING
+**Task:** TASK-TTS-001 / TASK-TTS-004A
+**Status:** TASK-TTS-004A DONE - INSTALL-FREE PROVIDER REVIEW COMPLETE / REAL PROVIDER NOT SELECTED
 **Date:** 2026-06-18
 **Scope:** Provider research, implemented mock-provider skeleton boundary, and
-TASK-TTS-003 local provider candidate probe. No real voice-quality provider is
+TASK-TTS-004A install-free provider review. No real voice-quality provider is
 selected as final, no model is downloaded, no dependency is added, and no real
-synthesis/playback path is implemented by TASK-TTS-003.
+synthesis/playback path is implemented by TASK-TTS-004A.
 
 This document records candidate directions for Christina voice output. It should
 guide later experiments, not lock Dragon Pet AI to a single TTS engine.
@@ -184,6 +184,48 @@ Current recommendation:
 
 ---
 
+## TASK-TTS-004A Install-Free Probe Review
+
+TASK-TTS-004A reviews the Windows install-free probe result and does not select
+a real provider. Runtime playback should not start yet because only `mock` is
+available, and `mock` is metadata-only test infrastructure rather than a
+Christina voice-quality provider.
+
+Safety flags stayed false:
+
+- `audioOutputAllowed=false`
+- `audioGenerated=false`
+- `runtimeTtsWired=false`
+- `playbackAdded=false`
+- `autoSpeakEnabled=false`
+- `externalDependencyAdded=false`
+
+| Provider | Availability | Probe reason | Local/offline status | Chinese support expectation | Christina/anime suitability | Setup difficulty | Recommended next action |
+|---|---|---|---|---|---|---|---|
+| `mock` | Available | `mock_metadata_only` | Local metadata only | Not a real voice | Not a real voice | None | Keep as the only safe skeleton provider |
+| `windows_sapi` | Unavailable | `missing_optional_python_bridge` | Local OS capability if bridge exists | Depends on installed Windows voices | Usually weak/inconsistent | Low if bridge and voices exist | Do not prioritize unless a low-setup baseline is needed |
+| `voicevox_server` | Unavailable | `server_unavailable:URLError` at `http://127.0.0.1:50021/version` | Localhost server if user runs it | Chinese likely weak or workaround-only | Promising for Japanese/anime style | Medium; separate server install/start | Recommended next local-first manual probe: TASK-TTS-004B |
+| `edge_tts` | Unavailable | `missing_optional_dependency` | Network/cloud-ish optional candidate | Likely strong Chinese voice coverage | Variable; not character-specific | Low package setup, but network/privacy caveats | Optional TASK-TTS-004C if fast Chinese validation is priority |
+| `piper_onnx` | Unavailable | `future_manual_candidate_not_probed` | Local/offline after model setup | Voice availability varies | Usually weak for anime style | Medium; model selection and packaging | Keep future/manual |
+| `gpt_sovits` | Unavailable | `future_manual_candidate_not_probed` | Local/offline after setup | Possible with correct data/model | Potentially strong | High; data/model/GPU/licensing workflow | TASK-TTS-004D feasibility research |
+| `style_bert_vits2` | Unavailable | `future_manual_candidate_not_probed` | Local/offline after setup | Primarily Japanese-oriented | Potentially strong | High; model/runtime/licensing complexity | TASK-TTS-004D feasibility research |
+| `rvc_like` | Unavailable | `future_manual_candidate_not_probed` | Local/offline conversion after source TTS | Voice conversion, not TTS by itself | Potentially useful after TTS source | High; consent and pipeline complexity | Keep future/manual |
+
+Recommended next provider path:
+
+1. TASK-TTS-004B: VOICEVOX local server manual probe / optional audio output.
+2. TASK-TTS-004C: edge-tts optional network candidate probe if fast Chinese
+   validation is more important than local-only behavior.
+3. TASK-TTS-004D: Style-Bert-VITS2 / GPT-SoVITS feasibility research for
+   longer-term Christina/anime voice quality.
+
+TASK-TTS-004A does not add runtime TTS wiring, playback, auto-speaking,
+dependencies, generated reports/audio, `/chat` schema changes, mood schema
+changes, STT behavior changes, Conversation Mode queue/backpressure changes, or
+Owner Voice hard-gate changes.
+
+---
+
 ## 5. Local Candidate Notes
 
 The following are candidate directions for future manual experiments. TASK-TTS-001
@@ -276,10 +318,16 @@ Recommended sequencing:
    metadata-only backend skeleton; not a voice-quality provider.
 2. TASK-TTS-003: local provider candidate probe. DONE - metadata-only script;
    no runtime wiring and no provider selected.
-3. TASK-TTS-004: renderer playback queue diagnostics with mock/provider output.
-4. TASK-TTS-005: Pet speaking state and bubble sync.
-5. TASK-TTS-006: Conversation Mode feedback prevention.
-6. Future: provider comparison report and singing research.
+3. TASK-TTS-004A: install-free provider review. DONE - no real provider ready;
+   `mock` remains the only safe skeleton provider.
+4. TASK-TTS-004B: VOICEVOX local server manual probe / optional audio output.
+5. TASK-TTS-004C: edge-tts optional network candidate probe.
+6. TASK-TTS-004D: Style-Bert-VITS2 / GPT-SoVITS feasibility research.
+7. TASK-TTS-004: renderer playback queue diagnostics after a real provider
+   candidate is validated.
+8. TASK-TTS-005: Pet speaking state and bubble sync.
+9. TASK-TTS-006: Conversation Mode feedback prevention.
+10. Future: provider comparison report and singing research.
 
 Do not start by wiring ElevenLabs. Do not hard-code ChatTTS, GPT-SoVITS, F5-TTS,
 or CosyVoice into the product path before a provider abstraction and mock tests

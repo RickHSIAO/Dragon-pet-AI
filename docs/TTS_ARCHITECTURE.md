@@ -1,12 +1,12 @@
 # TTS Architecture
 
-**Task:** TASK-TTS-001 / TASK-TTS-003
-**Status:** TASK-TTS-003 IMPLEMENTED - LOCAL TTS PROVIDER PROBE SMOKE PASS / NO RUNTIME WIRING
+**Task:** TASK-TTS-001 / TASK-TTS-004A
+**Status:** TASK-TTS-004A DONE - INSTALL-FREE PROVIDER REVIEW COMPLETE / REAL PROVIDER NOT SELECTED
 **Date:** 2026-06-18
 **Scope:** Provider-neutral architecture plus TASK-TTS-002 backend mock skeleton
-and TASK-TTS-003 local provider candidate probe. No runtime wiring, real
+and TASK-TTS-004A install-free provider review. No runtime wiring, real
 synthesis, playback, dependency, generated audio, schema change, STT behavior
-change, or Conversation Mode behavior change is added by TASK-TTS-003.
+change, or Conversation Mode behavior change is added by TASK-TTS-004A.
 
 This document defines the target architecture for Christina voice output and the
 implemented TASK-TTS-002 mock skeleton. It remains provider-neutral: Dragon Pet
@@ -35,6 +35,20 @@ TASK-TTS-003 implementation checkpoint:
 - Audio generation is off by default and no TASK-TTS-003 provider generates
   audio.
 - No provider is selected as final.
+
+TASK-TTS-004A review checkpoint:
+
+- Windows install-free probe found no real provider ready except `mock`.
+- `mock` remains the only safe runtime skeleton provider and is not a
+  voice-quality provider.
+- `windows_sapi` lacked the optional Python bridge.
+- `voicevox_server` was unavailable at `http://127.0.0.1:50021/version`.
+- `edge_tts` lacked the optional dependency.
+- Piper, GPT-SoVITS, Style-Bert-VITS2, and RVC-like paths remain future/manual
+  candidates.
+- Runtime playback, renderer queue wiring, Pet speaking state, and
+  Conversation Mode feedback prevention should wait for a provider-specific
+  manual probe.
 
 ---
 
@@ -75,6 +89,7 @@ Recommended split:
 | TTS queue controller | `backend/app/tts/tts_service.py` diagnostics skeleton; renderer queue future task | TASK-TTS-002 exposes disabled queue diagnostics only. No playback queue dispatch. |
 | Provider adapter | `backend/app/tts/providers.py` | TASK-TTS-002 implements `TTSProvider` protocol and metadata-only `MockTTSProvider`. Real synthesis adapters are future. |
 | Provider candidate probe | `scripts/tts_provider_probe.py` | TASK-TTS-003 checks optional provider availability and writes local reports. No runtime wiring or playback. |
+| Provider review | Docs/status only | TASK-TTS-004A records that no real provider is ready except metadata-only `mock`; playback remains blocked pending provider-specific probe. |
 | Local external process | Optional provider-specific sidecar, future task | Run heavy local engines outside Electron renderer/main. |
 | Playback | Renderer/Pet Window, future task | Play audio through browser audio APIs or an explicit playback bridge. |
 | Electron main | Narrow IPC only if needed, future task | Bridge local process/audio file handles without exposing broad filesystem APIs. |
@@ -475,9 +490,16 @@ Manual Windows playback smoke checklist for the first runtime task:
   backend metadata-only skeleton; runtime playback not started.
 - TASK-TTS-003: Local TTS provider candidate probe. DONE - metadata-only
   reports; no runtime wiring, playback, generated audio, or provider selection.
-- TASK-TTS-004: Playback queue and renderer diagnostics.
-- TASK-TTS-005: Pet speaking state / bubble sync.
-- TASK-TTS-006: Conversation Mode feedback prevention.
+- TASK-TTS-004A: Local TTS provider selection review. DONE - install-free probe
+  reviewed; no real provider selected and `mock` remains the only safe skeleton.
+- TASK-TTS-004B: VOICEVOX local server manual probe / optional audio output.
+- TASK-TTS-004C: edge-tts optional network candidate probe.
+- TASK-TTS-004D: Style-Bert-VITS2 / GPT-SoVITS feasibility research.
+- TASK-TTS-004: Playback queue and renderer diagnostics after a real provider
+  candidate is validated.
+- TASK-TTS-005: Pet speaking state / bubble sync after playback queue validation.
+- TASK-TTS-006: Conversation Mode feedback prevention after playback behavior is
+  explicit.
 - Future: voice quality comparison / singing research.
 
 Implementation should stop after each phase for smoke validation before widening
@@ -522,3 +544,17 @@ TASK-TTS-003 is complete when:
 - No runtime wiring, `/chat` integration, playback, auto-speaking, dependency,
   route/UI/Pet Window change, schema change, STT behavior change, Conversation
   Mode behavior change, or Owner Voice behavior change is committed.
+
+TASK-TTS-004A is complete when:
+
+- The install-free Windows probe result is recorded in README, roadmap, tasks,
+  architecture, and provider research docs.
+- `mock` remains documented as the only available safe skeleton provider, not a
+  real voice provider.
+- No real provider is selected and runtime playback remains not started.
+- Recommended next paths are documented as TASK-TTS-004B, TASK-TTS-004C, and
+  TASK-TTS-004D.
+- No runtime TTS wiring, `/chat` integration, playback, auto-speaking,
+  dependency/install, generated audio/report commit, schema change, STT behavior
+  change, Conversation Mode behavior change, or Owner Voice behavior change is
+  committed.
