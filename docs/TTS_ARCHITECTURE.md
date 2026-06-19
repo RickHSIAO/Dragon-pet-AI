@@ -1,7 +1,7 @@
 # TTS Architecture
 
-**Task:** TASK-TTS-001 / TASK-TTS-004E3
-**Status:** TASK-TTS-004E3 DONE - GPT-SOVITS PYTORCH/CUDA COMPATIBILITY REVIEW COMPLETE / INSTALL NOT APPROVED
+**Task:** TASK-TTS-001 / TASK-TTS-004E3A
+**Status:** TASK-TTS-004E3A DONE - GPT-SOVITS LAB PYTORCH CUDA VERIFIED / GPT-SOVITS DEPENDENCIES NOT INSTALLED
 **Date:** 2026-06-19
 **Scope:** Provider-neutral architecture plus TASK-TTS-002 backend mock skeleton,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B VOICEVOX manual
@@ -14,27 +14,29 @@ TASK-TTS-004D4 manual bootstrap checklist, TASK-TTS-004E provider-selection
 checkpoint, TASK-TTS-004E2 blocked Phase 1 bootstrap attempt, and
 TASK-TTS-004E2A blocked isolated Miniconda bootstrap attempt, and
 TASK-TTS-004E2A2 Miniconda failure diagnostics, TASK-TTS-004E2A3 UTF-8 retry,
-and TASK-TTS-004E2B existing-Anaconda Phase 1 resume, plus TASK-TTS-004E3
-PyTorch/CUDA compatibility review. No runtime
+and TASK-TTS-004E2B existing-Anaconda Phase 1 resume, TASK-TTS-004E3
+PyTorch/CUDA compatibility review, and TASK-TTS-004E3A lab-only PyTorch/CUDA
+install verification. No runtime
 wiring, app playback, runtime/default dependency, schema change, STT behavior
 change, Conversation Mode behavior change, or Owner Voice behavior change is
 added by TASK-TTS-004C2, TASK-TTS-004C3, TASK-TTS-004D, TASK-TTS-004D2,
 TASK-TTS-004D4, TASK-TTS-004E, TASK-TTS-004E2, TASK-TTS-004E2A,
-TASK-TTS-004E2A2, TASK-TTS-004E2A3, TASK-TTS-004E2B, or TASK-TTS-004E3.
+TASK-TTS-004E2A2, TASK-TTS-004E2A3, TASK-TTS-004E2B, TASK-TTS-004E3, or
+TASK-TTS-004E3A.
 
-TASK-TTS-004E3 review checkpoint:
+TASK-TTS-004E3A install checkpoint:
 
-- Reviewed GPT-SoVITS commit `b2cff0cd0abd0ac134a16ae7a9695f88e8826104`,
-  the isolated Python `3.10.20` env, NVIDIA RTX 3070 evidence, and official
-  PyTorch/TorchCodec compatibility notes.
-- Primary future recommendation is a separate, lab-only, pinned
-  `torch==2.7.0` + `torchaudio==2.7.0` CUDA `12.8` pip install in
-  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\envs\gpt-sovits-py310`.
-- CUDA `12.6` is the fallback; CPU-only is last resort and does not satisfy the
-  GPU goal.
+- Installed only `torch==2.7.0` and `torchaudio==2.7.0` from PyTorch CUDA
+  `12.8` wheels into the isolated GPT-SoVITS lab env.
+- Verified `torch 2.7.0+cu128`, `torchaudio 2.7.0+cu128`,
+  `torch.version.cuda=12.8`, CUDA availability, RTX 3070 device detection, and
+  a minimal CUDA tensor on `cuda:0`.
+- `numpy` remains uninstalled and torch emitted a non-blocking missing-NumPy
+  warning; no unapproved dependency was added to resolve it.
 - GPT-SoVITS `install.ps1`, TorchCodec, remaining dependencies, models, WebUI,
-  inference, and synthesis remain separate future approvals.
-- No package was installed and runtime TTS remains disabled/mock-only.
+  inference, synthesis, runtime playback, and auto-speaking remain separate
+  future approvals.
+- Runtime TTS remains disabled/mock-only.
 
 This document defines the target architecture for Christina voice output and the
 implemented TASK-TTS-002 mock skeleton. It remains provider-neutral: Dragon Pet

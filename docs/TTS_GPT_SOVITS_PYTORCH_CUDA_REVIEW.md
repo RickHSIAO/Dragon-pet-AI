@@ -10,6 +10,13 @@ Dragon Pet AI runtime change, `/chat` change, STT change, Conversation Mode
 change, Owner Voice change, schema change, playback change, or auto-speaking
 change was performed.
 
+**Follow-up:** TASK-TTS-004E3A later installed only `torch==2.7.0` and
+`torchaudio==2.7.0` from PyTorch CUDA `12.8` wheels in the isolated lab env and
+verified CUDA on the RTX 3070. That follow-up did not install GPT-SoVITS
+dependencies, `install.ps1`, TorchCodec, ffmpeg, models, WebUI, inference,
+synthesis, audio generation, or runtime wiring. See
+`docs/TTS_GPT_SOVITS_PYTORCH_CUDA_INSTALL.md`.
+
 ---
 
 ## 1. Reviewed State

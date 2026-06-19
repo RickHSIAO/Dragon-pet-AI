@@ -1,7 +1,7 @@
 # TTS Provider Research
 
-**Task:** TASK-TTS-001 / TASK-TTS-004E3
-**Status:** TASK-TTS-004E3 DONE - GPT-SOVITS PYTORCH/CUDA COMPATIBILITY REVIEW COMPLETE / INSTALL NOT APPROVED
+**Task:** TASK-TTS-001 / TASK-TTS-004E3A
+**Status:** TASK-TTS-004E3A DONE - GPT-SOVITS LAB PYTORCH CUDA VERIFIED / GPT-SOVITS DEPENDENCIES NOT INSTALLED
 **Date:** 2026-06-19
 **Scope:** Provider research, implemented mock-provider skeleton boundary,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B manual VOICEVOX
@@ -14,17 +14,19 @@ plan, TASK-TTS-004D4 manual bootstrap checklist, TASK-TTS-004E provider
 selection checkpoint, TASK-TTS-004E2 blocked Phase 1 bootstrap attempt, and
 TASK-TTS-004E2A blocked isolated Miniconda bootstrap attempt, and
 TASK-TTS-004E2A2 Miniconda failure diagnostics, and TASK-TTS-004E2A3 UTF-8
-retry, and TASK-TTS-004E2B existing-Anaconda Phase 1 resume. GPT-SoVITS is
-selected as the first isolated lab candidate; TASK-TTS-004E3 reviewed the
-lab-only PyTorch/CUDA compatibility plan without installing anything.
+retry, TASK-TTS-004E2B existing-Anaconda Phase 1 resume, TASK-TTS-004E3
+PyTorch/CUDA compatibility review, and TASK-TTS-004E3A lab-only PyTorch/CUDA
+install verification. GPT-SoVITS is selected as the first isolated lab
+candidate; TASK-TTS-004E3A installed only the approved PyTorch CUDA package
+family and did not install GPT-SoVITS dependencies.
 Style-Bert-VITS2 is the second
 provider / fallback research path, no real voice-quality provider is selected
 as final, no model is
 downloaded, the `edge-tts` install is optional/manual inside `backend\.venv`
 only, and no runtime synthesis/playback path is implemented by TASK-TTS-004C2,
 TASK-TTS-004C3, TASK-TTS-004D, TASK-TTS-004D2, TASK-TTS-004D3,
-TASK-TTS-004E2A, TASK-TTS-004E2A2, TASK-TTS-004E2A3, TASK-TTS-004E2B, or
-TASK-TTS-004E3.
+TASK-TTS-004E2A, TASK-TTS-004E2A2, TASK-TTS-004E2A3, TASK-TTS-004E2B,
+TASK-TTS-004E3, or TASK-TTS-004E3A.
 
 This document records candidate directions for Christina voice output. It should
 guide later experiments, not lock Dragon Pet AI to a single TTS engine.
@@ -33,15 +35,17 @@ guide later experiments, not lock Dragon Pet AI to a single TTS engine.
 
 ## 1. User Preference Summary
 
-TASK-TTS-004E3 PyTorch/CUDA review summary:
+TASK-TTS-004E3A PyTorch/CUDA install summary:
 
-- Current GPT-SoVITS repo evidence favors CUDA `12.8` or `12.6` wheels.
-- Future primary install recommendation is pinned `torch==2.7.0` and
-  `torchaudio==2.7.0` from PyTorch `cu128` wheels in the isolated lab env only.
-- CUDA `12.6` is the fallback; CPU-only is last resort.
+- Installed only pinned `torch==2.7.0` and `torchaudio==2.7.0` from PyTorch
+  `cu128` wheels in the isolated lab env.
+- Verified `torch 2.7.0+cu128`, `torchaudio 2.7.0+cu128`, CUDA build `12.8`,
+  CUDA availability, RTX 3070 detection, and a minimal CUDA tensor.
+- `numpy` remains uninstalled and the torch missing-NumPy warning is recorded as
+  non-blocking for this narrow install task.
 - `install.ps1`, TorchCodec, full GPT-SoVITS dependencies, ffmpeg, model
-  downloads, inference, WebUI, and audio generation remain unapproved.
-- No package was installed by the review.
+  downloads, inference, WebUI, audio generation, runtime playback, and
+  auto-speaking remain unapproved.
 
 - Prefer local/offline or low-cost TTS.
 - Prefer Japanese/anime-style voice direction when practical.
@@ -1019,11 +1023,19 @@ Recommended sequencing:
    first, Style-Bert-VITS2 second, first probe not approved yet.
 14. TASK-TTS-004E2: GPT-SoVITS isolated lab bootstrap Phase 1. BLOCKED -
    Conda not available, no install performed.
-15. TASK-TTS-004: renderer playback queue diagnostics after a real provider
+15. TASK-TTS-004E2B: existing Anaconda GPT-SoVITS Phase 1 resume. DONE -
+   isolated Python 3.10 env and official repo clone ready.
+16. TASK-TTS-004E3: GPT-SoVITS PyTorch/CUDA compatibility review. DONE -
+   install plan documented before installation.
+17. TASK-TTS-004E3A: GPT-SoVITS lab PyTorch/CUDA install. DONE -
+   `torch==2.7.0` and `torchaudio==2.7.0` CUDA `12.8` verified; GPT-SoVITS
+   dependencies not installed.
+18. TASK-TTS-004E4: GPT-SoVITS dependency compatibility review. NOT APPROVED.
+19. TASK-TTS-004: renderer playback queue diagnostics after a real provider
    candidate is validated.
-16. TASK-TTS-005: Pet speaking state and bubble sync.
-17. TASK-TTS-006: Conversation Mode feedback prevention.
-18. Future: provider comparison report and singing research.
+20. TASK-TTS-005: Pet speaking state and bubble sync.
+21. TASK-TTS-006: Conversation Mode feedback prevention.
+22. Future: provider comparison report and singing research.
 
 Do not start by wiring ElevenLabs. Do not hard-code ChatTTS, GPT-SoVITS, F5-TTS,
 or CosyVoice into the product path before a provider abstraction and mock tests

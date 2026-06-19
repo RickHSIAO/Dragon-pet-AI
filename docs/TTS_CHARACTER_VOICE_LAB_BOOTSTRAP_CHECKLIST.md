@@ -1,11 +1,13 @@
 # TTS Character Voice Lab Bootstrap Checklist
 
-**Task:** TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B / TASK-TTS-004E3
-**Status:** TASK-TTS-004E3 DONE - GPT-SOVITS PYTORCH/CUDA COMPATIBILITY REVIEW COMPLETE / INSTALL NOT APPROVED
+**Task:** TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B / TASK-TTS-004E3A
+**Status:** TASK-TTS-004E3A DONE - GPT-SOVITS LAB PYTORCH CUDA VERIFIED / GPT-SOVITS DEPENDENCIES NOT INSTALLED
 **Date:** 2026-06-19
-**Scope:** Manual-command checklist for a future isolated character voice lab.
-This task did not create the lab folder, clone external repos, install
-packages, download models, train, infer, synthesize audio, or wire runtime TTS.
+**Scope:** Manual-command checklist for a future isolated character voice lab
+plus later lab setup checkpoints. TASK-TTS-004E3A installed only approved
+PyTorch CUDA packages in the external lab env. It did not install GPT-SoVITS
+dependencies, download models, train, infer, synthesize audio, or wire runtime
+TTS.
 
 TASK-TTS-004E adds the provider-selection checkpoint:
 
@@ -33,11 +35,11 @@ TASK-TTS-004E2B verified the existing machine-wide Anaconda and completed Phase
 1 resume: isolated Python 3.10 env plus official GPT-SoVITS clone. PyTorch,
 CUDA, dependencies, models, WebUI, inference, and audio remain unapproved.
 
-TASK-TTS-004E3 reviewed the future PyTorch/CUDA plan only. The recommended next
-install task is not approved yet; if approved, it should install pinned
-`torch==2.7.0` and `torchaudio==2.7.0` from PyTorch CUDA `12.8` wheels in the
-isolated env only. CUDA `12.6` is fallback. CPU-only is last resort. Do not run
-GPT-SoVITS `install.ps1` in the PyTorch-only task.
+TASK-TTS-004E3 reviewed the future PyTorch/CUDA plan only. TASK-TTS-004E3A
+then installed only pinned `torch==2.7.0` and `torchaudio==2.7.0` from PyTorch
+CUDA `12.8` wheels in the isolated env and verified CUDA on the RTX 3070. Do
+not run GPT-SoVITS `install.ps1`, dependency installers, WebUI, inference, or
+audio generation until separate approval.
 
 ---
 
@@ -141,9 +143,9 @@ python -c "import torch; print(torch.__version__); print(torch.cuda.is_available
 Rules:
 
 - Do not install PyTorch during TASK-TTS-004D4.
-- TASK-TTS-004E3 also did not install PyTorch; it only reviewed the plan.
+- TASK-TTS-004E3A installed PyTorch/Torchaudio only inside the external lab env.
 - Do not install CUDA/PyTorch into `backend\.venv`.
-- Future primary install path is pinned PyTorch/Torchaudio `2.7.0` on CUDA
+- The verified install path is pinned PyTorch/Torchaudio `2.7.0` on CUDA
   `12.8` wheels, not GPT-SoVITS `install.ps1`.
 - Record GPU name, VRAM, driver/CUDA evidence, Python version, PyTorch version,
   and CUDA availability in a lab report before any synthesis probe.

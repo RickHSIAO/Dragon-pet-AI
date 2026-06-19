@@ -1,21 +1,25 @@
 # TTS Existing Anaconda GPT-SoVITS Phase 1 Resume
 
-**Task:** TASK-TTS-004E2B / TASK-TTS-004E3
-**Status:** TASK-TTS-004E3 DONE - GPT-SOVITS PYTORCH/CUDA COMPATIBILITY REVIEW COMPLETE / INSTALL NOT APPROVED
+**Task:** TASK-TTS-004E2B / TASK-TTS-004E3A
+**Status:** TASK-TTS-004E3A DONE - GPT-SOVITS LAB PYTORCH CUDA VERIFIED / GPT-SOVITS DEPENDENCIES NOT INSTALLED
 **Date:** 2026-06-19
 **Scope:** Validate existing machine-wide Anaconda, create one isolated Python
 3.10 prefix environment, and clone the official GPT-SoVITS repository only
 after environment verification. No Anaconda base modification, PATH/profile/
 registry modification, `conda init`, Miniconda retry, dependency install,
-PyTorch/CUDA install, model download, training, inference, WebUI, synthesis,
-audio generation, runtime TTS wiring, or backend venv change was performed.
+model download, training, inference, WebUI, synthesis, audio generation,
+runtime TTS wiring, or backend venv change was performed by TASK-TTS-004E2B.
+TASK-TTS-004E3A later installed only the approved PyTorch/Torchaudio CUDA
+packages in the isolated lab env.
 
-TASK-TTS-004E3 follow-up:
+TASK-TTS-004E3A follow-up:
 
-- Reviewed GPT-SoVITS PyTorch/CUDA compatibility without installing anything.
-- Primary future recommendation is pinned `torch==2.7.0` +
-  `torchaudio==2.7.0` from PyTorch CUDA `12.8` wheels in the isolated env.
-- CUDA `12.6` is fallback; CPU-only is last resort.
+- Installed only pinned `torch==2.7.0` + `torchaudio==2.7.0` from PyTorch CUDA
+  `12.8` wheels in the isolated env.
+- Verified `torch 2.7.0+cu128`, `torchaudio 2.7.0+cu128`, CUDA build `12.8`,
+  RTX 3070 detection, and a minimal CUDA tensor.
+- `numpy` remains uninstalled; the missing-NumPy warning is non-blocking for
+  this narrow install task.
 - GPT-SoVITS `install.ps1`, TorchCodec, full dependencies, models, WebUI,
   inference, synthesis, and audio generation remain unapproved.
 
@@ -241,5 +245,5 @@ Not performed:
 Recommended next task, not approved yet:
 
 ```text
-TASK-TTS-004E3A - GPT-SoVITS Lab PyTorch/CUDA Install
+TASK-TTS-004E4 - GPT-SoVITS Dependency Compatibility Review
 ```

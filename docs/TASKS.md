@@ -25505,7 +25505,7 @@ F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2B_EXISTING_ANACO
   Mode behavior change, Owner Voice behavior change, backend venv change, or
   dependency-file change was added.
 
-Recommended next task, not approved yet:
+Completed follow-up task:
 
 ```text
 TASK-TTS-004E3 - GPT-SoVITS Lab PyTorch/CUDA Compatibility Review
@@ -25619,6 +25619,148 @@ Recommended next task, not approved yet:
 
 ```text
 TASK-TTS-004E3A - GPT-SoVITS Lab PyTorch/CUDA Install
+```
+
+---
+
+## TASK-TTS-004E3A | GPT-SoVITS Lab PyTorch/CUDA Install
+
+**Status:** DONE - GPT-SOVITS LAB PYTORCH CUDA VERIFIED / GPT-SOVITS DEPENDENCIES NOT INSTALLED
+**Date:** 2026-06-19
+**Phase:** Phase 5 - Companion Voice Output Architecture
+**Depends on:** TASK-TTS-004E3
+
+### Goal
+
+Install only the explicitly approved PyTorch CUDA package family into the
+isolated GPT-SoVITS lab Conda prefix and verify CUDA without installing
+GPT-SoVITS dependencies or running synthesis.
+
+Approved packages:
+
+```text
+torch==2.7.0
+torchaudio==2.7.0
+```
+
+Approved wheel index:
+
+```text
+https://download.pytorch.org/whl/cu128
+```
+
+Approved target env:
+
+```text
+F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\envs\gpt-sovits-py310
+```
+
+### Result
+
+TASK-TTS-004E3A completed:
+
+```text
+DONE - GPT-SOVITS LAB PYTORCH CUDA VERIFIED / GPT-SOVITS DEPENDENCIES NOT INSTALLED
+```
+
+Installed only:
+
+- `torch 2.7.0+cu128`
+- `torchaudio 2.7.0+cu128`
+
+Required transitive dependencies added by pip:
+
+- `filelock==3.29.0`
+- `fsspec==2026.4.0`
+- `Jinja2==3.1.6`
+- `MarkupSafe==3.0.3`
+- `mpmath==1.3.0`
+- `networkx==3.4.2`
+- `sympy==1.14.0`
+- `typing_extensions==4.15.0`
+
+Pre-existing package retained:
+
+- `packaging==26.0`
+
+Verification:
+
+```text
+torch_version= 2.7.0+cu128
+torch_cuda_build= 12.8
+torchaudio_version= 2.7.0+cu128
+cuda_available= True
+device_count= 1
+device_name= NVIDIA GeForce RTX 3070
+cuda_tensor_device= cuda:0
+cuda_tensor_value= 2.0
+```
+
+Observed warning:
+
+```text
+UserWarning: Failed to initialize NumPy: No module named 'numpy'
+```
+
+Interpretation:
+
+- `numpy` was not installed because it was not approved for this task.
+- The warning did not block torch import, torchaudio import, CUDA detection, or
+  the minimal CUDA tensor verification.
+
+Forbidden package check after install:
+
+```text
+torchvision=False
+xformers=False
+triton=False
+flash_attn=False
+deepspeed=False
+faiss=False
+torchcodec=False
+```
+
+Documentation output:
+
+- `docs/TTS_GPT_SOVITS_PYTORCH_CUDA_INSTALL.md`
+- External manifest:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E3A_PYTORCH_CUDA_INSTALL.md`
+- Install log:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E3A_PYTORCH_INSTALL.log`
+- Package snapshots:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E3A_PIP_BEFORE.txt`
+  and
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E3A_PIP_AFTER.txt`
+
+### Acceptance Criteria
+
+- [x] Pre-install `torch` and `torchaudio` absence confirmed.
+- [x] Pre-install package snapshot recorded.
+- [x] Installed only approved `torch==2.7.0` and `torchaudio==2.7.0` from the
+  official PyTorch CUDA `12.8` wheel index.
+- [x] Install log recorded with exit code `0`.
+- [x] Post-install package snapshot recorded.
+- [x] `torch 2.7.0+cu128`, `torchaudio 2.7.0+cu128`, and
+  `torch.version.cuda=12.8` verified.
+- [x] `torch.cuda.is_available()` verified true with one RTX 3070 device.
+- [x] Minimal CUDA tensor verified on `cuda:0`.
+- [x] Forbidden package absence checked for TorchCodec, torchvision, xformers,
+  triton, flash-attn, deepspeed, and faiss.
+- [x] User and machine PATH inspected read-only; no target env PATH entry added.
+- [x] PowerShell profile inspected read-only; no profile created or modified.
+- [x] Anaconda base inspected read-only; no base install/update/remove.
+- [x] Failed partial Miniconda path inspected read-only; not modified.
+- [x] GPT-SoVITS repo status checked; no repo changes.
+- [x] No cu126 fallback, CPU fallback, GPT-SoVITS dependency install,
+  `install.ps1`, TorchCodec, ffmpeg, model/download, WebUI, inference,
+  synthesis, audio generation, runtime TTS, playback, auto-speaking, `/chat`,
+  STT, Conversation Mode, Owner Voice, schema, backend venv, or dependency-file
+  change was added.
+
+Recommended next task, not approved yet:
+
+```text
+TASK-TTS-004E4 - GPT-SoVITS Dependency Compatibility Review
 ```
 
 ---

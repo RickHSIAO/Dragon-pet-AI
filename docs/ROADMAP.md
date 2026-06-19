@@ -322,7 +322,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 **Goal:** Prepare Christina voice output with a provider-neutral, local-first TTS
 architecture before any new runtime provider implementation.
 
-**Status:** GPT-SOVITS PYTORCH/CUDA COMPATIBILITY REVIEW COMPLETE / INSTALL NOT APPROVED / TASK-TTS-004E3 DONE.
+**Status:** GPT-SOVITS LAB PYTORCH CUDA VERIFIED / GPT-SOVITS DEPENDENCIES NOT INSTALLED / TASK-TTS-004E3A DONE.
 
 | Task | Name | Status |
 |---|---|---|
@@ -346,7 +346,8 @@ architecture before any new runtime provider implementation.
 | TASK-TTS-004E2A3 | Miniconda UTF-8 Retry / Same Installer Same Path | BLOCKED - UTF-8 MINICONDA RETRY FAILED / NO FURTHER RETRY PERFORMED |
 | TASK-TTS-004E2B | Existing Anaconda Validation / GPT-SoVITS Phase 1 Resume | DONE - EXISTING ANACONDA VERIFIED / GPT-SOVITS LAB PHASE 1 READY |
 | TASK-TTS-004E3 | GPT-SoVITS Lab PyTorch/CUDA Compatibility Review | DONE - GPT-SOVITS PYTORCH/CUDA COMPATIBILITY REVIEW COMPLETE / INSTALL NOT APPROVED |
-| TASK-TTS-004E3A | GPT-SoVITS Lab PyTorch/CUDA Install | NOT APPROVED |
+| TASK-TTS-004E3A | GPT-SoVITS Lab PyTorch/CUDA Install | DONE - GPT-SOVITS LAB PYTORCH CUDA VERIFIED / GPT-SOVITS DEPENDENCIES NOT INSTALLED |
+| TASK-TTS-004E4 | GPT-SoVITS Dependency Compatibility Review | NOT APPROVED |
 | TASK-TTS-004 | Playback queue and renderer diagnostics | PLANNED AFTER REAL PROVIDER CANDIDATE |
 | TASK-TTS-005 | Pet speaking state / bubble sync | PLANNED |
 | TASK-TTS-006 | Conversation Mode feedback prevention | PLANNED |
@@ -453,6 +454,15 @@ Track constraints:
   GPT-SoVITS prefix env only; CUDA `12.6` is fallback and CPU-only is last
   resort. GPT-SoVITS `install.ps1`, TorchCodec, full dependencies, models,
   WebUI, inference, synthesis, and audio generation remain unapproved.
+- TASK-TTS-004E3A installed only approved `torch==2.7.0` and
+  `torchaudio==2.7.0` from the official PyTorch CUDA `12.8` wheel index into
+  the isolated lab env. Verification passed for `torch 2.7.0+cu128`,
+  `torchaudio 2.7.0+cu128`, CUDA build `12.8`, RTX 3070 device detection, and a
+  minimal CUDA tensor. `numpy` remains uninstalled and its warning is
+  non-blocking. No GPT-SoVITS dependency install, `install.ps1`, TorchCodec,
+  ffmpeg, model/download, WebUI, inference, synthesis, audio generation,
+  runtime TTS, playback, auto-speaking, `/chat`, STT, Conversation Mode, Owner
+  Voice, schema, backend venv, or dependency-file change was added.
 - TTS remains disabled by default for the new provider architecture.
 - First implementation starts with `mock`, not ElevenLabs or a paid external
   provider.
@@ -460,7 +470,7 @@ Track constraints:
   opt-in cost/privacy design.
 - No `/chat` schema, mood schema, STT default, STT selector, Conversation Mode
   backpressure, or Owner Voice hard-gate behavior changes are part of
-  TASK-TTS-001 through TASK-TTS-004E3.
+  TASK-TTS-001 through TASK-TTS-004E3A.
 
 ---
 
@@ -1267,6 +1277,7 @@ Track constraints:
 - TASK-TTS-004E2A3 BLOCKED - UTF-8 MINICONDA RETRY FAILED / NO FURTHER RETRY PERFORMED (2026-06-19): Miniconda UTF-8 Retry / Same Installer Same Path. Added `docs/TTS_MINICONDA_UTF8_RETRY.md` and external manifest `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2A3_MINICONDA_UTF8_RETRY.md`. Deleted only the approved failed partial install root after exact path verification, preserved the official installer and reports, then retried the same verified installer once to the same path with process-local `PYTHONUTF8=1`, `PYTHONIOENCODING=utf-8`, and UTF-8 output encodings. Retry still exited `2`, recreated a partial install, and `.step.log` still reported rollback after a `cp950` `UnicodeDecodeError` while reading existing Conda-related paths. No further retry or post-retry cleanup was performed. No user/system PATH, `conda init`, PowerShell profile, registry, existing machine-wide Anaconda, provider repo, GPT-SoVITS env, dependency/PyTorch/CUDA/model/dataset, training, inference, WebUI, synthesis, audio generation, runtime TTS wiring, or backend venv change was added.
 
 - TASK-TTS-004E2B DONE - EXISTING ANACONDA VERIFIED / GPT-SOVITS LAB PHASE 1 READY (2026-06-19): Existing Anaconda Validation / GPT-SoVITS Phase 1 Resume. Added `docs/TTS_EXISTING_ANACONDA_GPT_SOVITS_PHASE1.md` and external manifest `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2B_EXISTING_ANACONDA_RESUME.md`. Verified machine-wide Anaconda at `C:\ProgramData\anaconda3` with direct `conda.exe`; process-local UTF-8 was required for env list because default code page still hit the known `cp950` issue. Created isolated Python `3.10.20` env at `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\envs\gpt-sovits-py310` using lab package cache `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\pkgs-cache`; PyTorch probe returned `None`. Cloned official GPT-SoVITS origin `https://github.com/RVC-Boss/GPT-SoVITS.git`, branch `main`, commit `b2cff0cd0abd0ac134a16ae7a9695f88e8826104`, license `MIT License`. No Anaconda base package install/update, PATH/profile/registry change, `conda init`, failed Miniconda modification, GPT-SoVITS `install.ps1`, dependency/PyTorch/CUDA/model/dataset download, training, inference, WebUI, synthesis, audio generation, runtime TTS wiring, playback, auto-speaking, `/chat` schema or mood schema change, STT default/model selector change, Conversation Mode change, Owner Voice hard-gate change, backend venv change, or dependency-file change was added.
+- TASK-TTS-004E3A DONE - GPT-SOVITS LAB PYTORCH CUDA VERIFIED / GPT-SOVITS DEPENDENCIES NOT INSTALLED (2026-06-19): GPT-SoVITS Lab PyTorch/CUDA Install. Added `docs/TTS_GPT_SOVITS_PYTORCH_CUDA_INSTALL.md` and external manifest `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E3A_PYTORCH_CUDA_INSTALL.md`. Installed only `torch==2.7.0` and `torchaudio==2.7.0` from the official PyTorch CUDA `12.8` wheel index into `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\envs\gpt-sovits-py310`; verified `torch 2.7.0+cu128`, `torchaudio 2.7.0+cu128`, CUDA build `12.8`, `cuda_available=True`, one RTX 3070 device, and a minimal CUDA tensor on `cuda:0`. `numpy` remains uninstalled and the missing-NumPy warning was non-blocking. No cu126/CPU fallback, GPT-SoVITS dependency install, `install.ps1`, TorchCodec, ffmpeg, model/download, WebUI, inference, synthesis, audio generation, Anaconda base modification, PATH/profile/registry change, runtime TTS, playback, auto-speaking, `/chat` schema or mood schema change, STT default/model selector change, Conversation Mode change, Owner Voice hard-gate change, backend venv change, or dependency-file change was added.
 
 - TASK-227 IMPLEMENTED - DOCS ONLY / NO WINDOWS SMOKE REQUIRED (2026-06-01): Voice/TTS Research Note and Local Speech Roadmap. Adds `docs/VOICE_TTS_RESEARCH.md` as a docs-only voice, TTS, and STT research checkpoint. The note records the user-provided external AI VTuber / Discord voice chain as reference material, then separates what applies to Dragon Pet AI from what should not be copied. Dragon Pet AI remains local-first: TTS is a post-reply audio layer, TTS does not call `/chat`, TTS does not write history, TTS does not read diagnostics, STT is explicit push-to-talk/user action only, no always listening, and future speech work must obey the output queue / priority design. Candidate research tracks include ChatTTS, GPT-SoVITS, F5-TTS, CosyVoice, ElevenLabs as optional cloud reference, local Whisper / faster-whisper, TTS provider interface design, disabled audio skeleton, and confirmed transcript-to-`/chat` design. No runtime prompt wiring, TTS/STT/audio skeleton, IPC, `/chat` change, backend/provider change, renderer change, Pet Window change, assets, voice model, commit, or push.
 

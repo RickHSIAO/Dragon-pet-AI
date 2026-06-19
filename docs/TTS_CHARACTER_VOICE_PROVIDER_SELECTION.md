@@ -1,12 +1,13 @@
 # TTS Character Voice Provider Selection
 
-**Task:** TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B / TASK-TTS-004E3
-**Status:** TASK-TTS-004E3 DONE - GPT-SOVITS PYTORCH/CUDA COMPATIBILITY REVIEW COMPLETE / INSTALL NOT APPROVED
+**Task:** TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B / TASK-TTS-004E3A
+**Status:** TASK-TTS-004E3A DONE - GPT-SOVITS LAB PYTORCH CUDA VERIFIED / GPT-SOVITS DEPENDENCIES NOT INSTALLED
 **Date:** 2026-06-19
 **Scope:** Docs-only provider-selection and first-probe approval plan for the
-future isolated character voice lab. This task does not create the lab, clone
-external repos, install packages, download models, train, infer, synthesize
-audio, or wire runtime TTS.
+future isolated character voice lab, plus later lab setup status checkpoints.
+TASK-TTS-004E3A installed only the approved PyTorch CUDA package family in the
+external lab env. It did not install GPT-SoVITS dependencies, download models,
+train, infer, synthesize audio, or wire runtime TTS.
 
 ---
 
@@ -51,8 +52,15 @@ runtime/provider approval still remains future work.
 TASK-TTS-004E3 reviewed PyTorch/CUDA compatibility only. Primary future
 recommendation is pinned `torch==2.7.0` + `torchaudio==2.7.0` from PyTorch
 CUDA `12.8` wheels in the isolated lab env, with CUDA `12.6` fallback and
-CPU-only last resort. No install was performed and TASK-TTS-004E3A install is
-not approved yet.
+CPU-only last resort. No install was performed during TASK-TTS-004E3.
+
+TASK-TTS-004E3A installed only the approved PyTorch CUDA package family:
+`torch==2.7.0` and `torchaudio==2.7.0` from PyTorch CUDA `12.8` wheels. CUDA
+verification passed on the RTX 3070 with `torch 2.7.0+cu128`, `torchaudio
+2.7.0+cu128`, and a minimal CUDA tensor. GPT-SoVITS dependencies, models,
+WebUI, inference, synthesis, audio generation, and runtime integration remain
+unapproved. TASK-TTS-004E4 dependency compatibility review is the next
+recommended task and is not approved yet.
 
 ---
 

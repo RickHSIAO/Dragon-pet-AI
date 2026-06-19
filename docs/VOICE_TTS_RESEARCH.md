@@ -578,8 +578,8 @@ Suggested research and implementation tasks:
   synthesis, audio generation, runtime playback, `/chat` integration,
   auto-speaking, STT, Conversation Mode, Owner Voice, schema behavior,
   backend venv, or dependency-file change is added. TASK-TTS-004E3 PyTorch/CUDA
-  compatibility review is now complete; TASK-TTS-004E3A install is recommended
-  next but not approved yet.
+  compatibility review is complete and TASK-TTS-004E3A later installed only the
+  approved PyTorch CUDA package family.
 - TASK-TTS-004E3 GPT-SoVITS Lab PyTorch/CUDA Compatibility Review.
   **DONE - GPT-SOVITS PYTORCH/CUDA COMPATIBILITY REVIEW COMPLETE / INSTALL NOT
   APPROVED (2026-06-19):** Added
@@ -596,7 +596,24 @@ Suggested research and implementation tasks:
   generation, Anaconda base modification, PATH/profile/registry change, runtime
   playback, `/chat` integration, auto-speaking, STT, Conversation Mode, Owner
   Voice, schema behavior, backend venv, or dependency-file change is added.
-  TASK-TTS-004E3A PyTorch/CUDA install is recommended next but not approved yet.
+  TASK-TTS-004E3A later installed only the approved PyTorch CUDA package family.
+- TASK-TTS-004E3A GPT-SoVITS Lab PyTorch/CUDA Install.
+  **DONE - GPT-SOVITS LAB PYTORCH CUDA VERIFIED / GPT-SOVITS DEPENDENCIES NOT
+  INSTALLED (2026-06-19):** Added
+  `docs/TTS_GPT_SOVITS_PYTORCH_CUDA_INSTALL.md` and external manifest
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E3A_PYTORCH_CUDA_INSTALL.md`.
+  Installed only `torch==2.7.0` and `torchaudio==2.7.0` from the official
+  PyTorch CUDA `12.8` wheel index into the isolated lab env. Verified
+  `torch 2.7.0+cu128`, `torchaudio 2.7.0+cu128`, CUDA build `12.8`,
+  `cuda_available=True`, one RTX 3070 device, and a minimal CUDA tensor on
+  `cuda:0`. `numpy` remains uninstalled and the missing-NumPy warning is
+  non-blocking. No cu126/CPU fallback, GPT-SoVITS dependency install,
+  `install.ps1`, TorchCodec, ffmpeg, model/download, WebUI, inference,
+  synthesis, audio generation, Anaconda base modification, PATH/profile/
+  registry change, runtime playback, `/chat` integration, auto-speaking, STT,
+  Conversation Mode, Owner Voice, schema behavior, backend venv, or
+  dependency-file change is added. TASK-TTS-004E4 dependency compatibility
+  review is recommended next but not approved yet.
 - TASK-TTS-004 Playback queue and renderer diagnostics after a real provider
   candidate is validated.
 - TASK-TTS-005 Pet speaking state / bubble sync.
