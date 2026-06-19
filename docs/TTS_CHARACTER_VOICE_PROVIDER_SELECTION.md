@@ -1,7 +1,7 @@
 # TTS Character Voice Provider Selection
 
-**Task:** TASK-TTS-004E
-**Status:** DONE - CHARACTER VOICE PROVIDER SELECTION READY / FIRST PROBE NOT APPROVED YET
+**Task:** TASK-TTS-004E / TASK-TTS-004E2
+**Status:** TASK-TTS-004E2 BLOCKED - CONDA NOT AVAILABLE / NO INSTALL PERFORMED
 **Date:** 2026-06-19
 **Scope:** Docs-only provider-selection and first-probe approval plan for the
 future isolated character voice lab. This task does not create the lab, clone
@@ -28,6 +28,10 @@ Deferred or non-primary paths:
 
 No final runtime provider is selected by TASK-TTS-004E. GPT-SoVITS is only the
 first isolated lab candidate.
+
+TASK-TTS-004E2 attempted the approved GPT-SoVITS Phase 1 bootstrap, but Conda
+was not available in the current PowerShell PATH. The first probe remains
+blocked.
 
 ---
 
@@ -181,3 +185,25 @@ local settings, logs, and pytest temp folders must remain uncommitted.
 - External repo clone: not performed.
 - Model download/training/inference/audio generation: not performed.
 - Runtime wiring/playback/auto-speaking: not added.
+
+---
+
+## 10. TASK-TTS-004E2 Blocked Phase 1 Attempt
+
+See:
+
+- `docs/TTS_GPT_SOVITS_LAB_PHASE1.md`
+
+Result:
+
+- Final status: BLOCKED - CONDA NOT AVAILABLE / NO INSTALL PERFORMED.
+- Conda was not available, so setup stopped before lab creation.
+- External lab directory: not created.
+- Official GPT-SoVITS clone: not attempted.
+- Conda Python 3.10 env: not created.
+- External Phase 1 manifest: not written.
+- GPT-SoVITS branch, commit, and local license detection: unavailable because
+  the repository was not cloned.
+- PyTorch presence result in the target env: unavailable because the env does
+  not exist; no PyTorch/CUDA package was installed.
+- Runtime TTS remains disabled/mock-only.

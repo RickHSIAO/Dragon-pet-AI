@@ -1,7 +1,7 @@
 # TTS Architecture
 
-**Task:** TASK-TTS-001 / TASK-TTS-004E
-**Status:** TASK-TTS-004E DONE - CHARACTER VOICE PROVIDER SELECTION READY / FIRST PROBE NOT APPROVED YET
+**Task:** TASK-TTS-001 / TASK-TTS-004E2
+**Status:** TASK-TTS-004E2 BLOCKED - CONDA NOT AVAILABLE / NO INSTALL PERFORMED
 **Date:** 2026-06-19
 **Scope:** Provider-neutral architecture plus TASK-TTS-002 backend mock skeleton,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B VOICEVOX manual
@@ -10,12 +10,12 @@ edge-tts optional network probe, TASK-TTS-004C2 manual edge-tts dependency /
 audio output validation, TASK-TTS-004C3 docs-first edge-tts tuning workflow,
 TASK-TTS-004D character voice feasibility research, TASK-TTS-004D2
 environment-check workflow, TASK-TTS-004D3 isolated lab plan,
-TASK-TTS-004D4 manual bootstrap checklist, and TASK-TTS-004E provider-selection
-checkpoint. No runtime
+TASK-TTS-004D4 manual bootstrap checklist, TASK-TTS-004E provider-selection
+checkpoint, and TASK-TTS-004E2 blocked Phase 1 bootstrap attempt. No runtime
 wiring, app playback, runtime/default dependency, schema change, STT behavior
 change, Conversation Mode behavior change, or Owner Voice behavior change is
 added by TASK-TTS-004C2, TASK-TTS-004C3, TASK-TTS-004D, TASK-TTS-004D2,
-TASK-TTS-004D4, or TASK-TTS-004E.
+TASK-TTS-004D4, TASK-TTS-004E, or TASK-TTS-004E2.
 
 This document defines the target architecture for Christina voice output and the
 implemented TASK-TTS-002 mock skeleton. It remains provider-neutral: Dragon Pet
@@ -215,6 +215,17 @@ TASK-TTS-004E provider-selection checkpoint:
   install, model download, test audio generation, and artifact storage policy.
 - Runtime TTS remains disabled/mock-only; GPT-SoVITS is a lab candidate only,
   not a runtime provider adapter.
+
+TASK-TTS-004E2 blocked bootstrap checkpoint:
+
+- `docs/TTS_GPT_SOVITS_LAB_PHASE1.md` records the attempted Phase 1 bootstrap.
+- Conda is not available in the current PowerShell PATH, so the task stopped
+  before setup.
+- No external lab folder was created, no GPT-SoVITS repo was cloned, no Conda
+  Python 3.10 environment was created, and no external manifest was written.
+- No GPT-SoVITS dependency, PyTorch/CUDA package, model, dataset, training,
+  inference, WebUI, synthesis, app runtime wiring, playback, or auto-speaking
+  was added.
 
 ---
 
@@ -719,8 +730,8 @@ Manual Windows playback smoke checklist for the first runtime task:
   only. DONE - no setup performed.
 - TASK-TTS-004E: Character voice lab provider selection. DONE - GPT-SoVITS
   first, Style-Bert-VITS2 second, first probe not approved yet.
-- TASK-TTS-004E2: GPT-SoVITS first isolated lab probe after explicit setup
-  approval.
+- TASK-TTS-004E2: GPT-SoVITS isolated lab bootstrap Phase 1. BLOCKED - Conda
+  not available, no install performed.
 - TASK-TTS-004: Playback queue and renderer diagnostics after a real provider
   candidate is validated.
 - TASK-TTS-005: Pet speaking state / bubble sync after playback queue validation.

@@ -507,6 +507,18 @@ Suggested research and implementation tasks:
   training, inference, audio generation, runtime playback, `/chat` integration,
   auto-speaking, STT, Conversation Mode, Owner Voice, or schema behavior change
   is added.
+- TASK-TTS-004E2 GPT-SoVITS Isolated Lab Bootstrap Phase 1.
+  **BLOCKED - CONDA NOT AVAILABLE / NO INSTALL PERFORMED (2026-06-19):** Added
+  `docs/TTS_GPT_SOVITS_LAB_PHASE1.md`. The approved Phase 1 scope allowed only
+  external lab directory creation, official GPT-SoVITS clone, and isolated
+  Conda Python 3.10 environment creation. `conda --version`,
+  `conda info --base`, and `conda env list` failed because `conda` is not
+  recognized in PowerShell, so setup stopped before lab creation. No GPT-SoVITS
+  repo was cloned, no Conda env was created, no external manifest was written,
+  no dependency/model/dataset was installed or downloaded, and no training,
+  inference, WebUI, synthesis, runtime playback, `/chat` integration,
+  auto-speaking, STT, Conversation Mode, Owner Voice, or schema behavior change
+  is added.
 - TASK-TTS-004 Playback queue and renderer diagnostics after a real provider
   candidate is validated.
 - TASK-TTS-005 Pet speaking state / bubble sync.

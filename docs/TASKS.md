@@ -23207,8 +23207,8 @@ STT future boundary:
 - TASK-TTS-004D2 Character Voice Feasibility Manual Environment Check.
 - TASK-TTS-004D3 Character Voice Lab Environment Plan / Isolated GPU Env.
 - TASK-TTS-004E Character Voice Lab Provider Selection / First Probe Approval.
-- TASK-TTS-004E2 GPT-SoVITS First Isolated Lab Probe after explicit setup
-  approval.
+- TASK-TTS-004E2 GPT-SoVITS Isolated Lab Bootstrap Phase 1. BLOCKED - Conda
+  not available, no install performed.
 - TASK-TTS-004 Playback queue and renderer diagnostics.
 - TASK-TTS-005 Pet speaking state / bubble sync.
 - TASK-TTS-006 Conversation Mode feedback prevention.
@@ -24534,8 +24534,8 @@ Added `docs/TTS_CHARACTER_VOICE_FEASIBILITY.md` with:
 
 1. TASK-TTS-004D2 - Character Voice Feasibility Manual Environment Check.
 2. TASK-TTS-004E - Character Voice Lab Provider Selection / First Probe Approval.
-3. TASK-TTS-004E2 - GPT-SoVITS first isolated lab probe, only after explicit
-   setup approval.
+3. TASK-TTS-004E2 - GPT-SoVITS isolated lab Phase 1 retry, only after Conda is
+   available or a different isolated environment tool is explicitly approved.
 4. TASK-TTS-005 - TTS Runtime Playback Queue, only after provider decision.
 
 ### Acceptance Criteria
@@ -24910,6 +24910,102 @@ Proposed environment:
   wiring, playback, auto-speaking, `/chat` schema change, mood schema change,
   STT behavior change, Conversation Mode behavior change, or Owner Voice
   behavior change is added.
+
+---
+
+## TASK-TTS-004E2 | GPT-SoVITS Isolated Lab Bootstrap Phase 1
+
+**Status:** BLOCKED - CONDA NOT AVAILABLE / NO INSTALL PERFORMED
+**Date:** 2026-06-19
+**Phase:** Phase 5 - Companion Voice Output Architecture
+**Depends on:** TASK-TTS-001, TASK-TTS-002, TASK-TTS-003, TASK-TTS-004A, TASK-TTS-004B2, TASK-TTS-004C, TASK-TTS-004C2, TASK-TTS-004C3, TASK-TTS-004D, TASK-TTS-004D2, TASK-TTS-004D3, TASK-TTS-004D4, TASK-TTS-004E
+
+### Goal
+
+Start the approved GPT-SoVITS isolated lab Phase 1: create the external lab
+folder, clone the official GPT-SoVITS repository, and create an isolated Conda
+Python 3.10 environment. The task must not install GPT-SoVITS dependencies,
+PyTorch, CUDA packages, models, datasets, or run inference/audio generation.
+
+### Result
+
+Phase 1 is blocked because Conda is not available in the current PowerShell
+PATH.
+
+Commands attempted:
+
+```powershell
+conda --version
+conda info --base
+conda env list
+```
+
+All three failed with `conda` not recognized.
+
+Because Conda was unavailable:
+
+- No external lab folder was created.
+- No official GPT-SoVITS repository was cloned.
+- No Conda Python 3.10 environment was created.
+- No external Phase 1 manifest was written.
+- No dependency, PyTorch, CUDA package, model, dataset, or audio artifact was
+  installed, downloaded, or generated.
+
+### Evidence
+
+Main repo pre-flight:
+
+- `git status --short`: expected unrelated `docs\開啟方式.txt` dirty file only.
+- `git log -1 --oneline`: `79513c2 docs: select first character voice lab candidate`.
+- `git remote -v`: `origin https://github.com/RickHSIAO/Dragon-pet-AI.git`.
+
+External path checks:
+
+- `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\`: not present.
+- `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\repos\GPT-SoVITS\`: not present.
+- `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2_PHASE1.md`: not present.
+
+Hardware evidence from `nvidia-smi`:
+
+- GPU: NVIDIA GeForce RTX 3070.
+- VRAM: 8192 MiB.
+- NVIDIA-SMI / driver evidence: `610.47`.
+- Reported CUDA compatibility: `13.3`.
+
+This `nvidia-smi` CUDA compatibility value does not prove PyTorch CUDA is
+installed in the target environment. The target environment does not exist.
+
+### Documentation Output
+
+Added:
+
+- `docs/TTS_GPT_SOVITS_LAB_PHASE1.md`
+
+Updated:
+
+- `README.md`
+- `docs/ROADMAP.md`
+- `docs/TTS_ARCHITECTURE.md`
+- `docs/TTS_CHARACTER_VOICE_FEASIBILITY.md`
+- `docs/TTS_CHARACTER_VOICE_LAB_PLAN.md`
+- `docs/TTS_CHARACTER_VOICE_LAB_BOOTSTRAP_CHECKLIST.md`
+- `docs/TTS_CHARACTER_VOICE_PROVIDER_SELECTION.md`
+- `docs/TTS_PROVIDER_RESEARCH.md`
+- `docs/VOICE_TTS_RESEARCH.md`
+
+### Acceptance Criteria
+
+- [x] Conda availability checked without installing Conda.
+- [x] Blocked status recorded because Conda is unavailable.
+- [x] Main repo pre-flight recorded.
+- [x] External lab path absence recorded.
+- [x] Hardware evidence recorded.
+- [x] Runtime remains disabled/mock-only.
+- [x] No package/model install, external repo clone, lab setup, model download,
+  training, inference, WebUI startup, generated audio/report/model/sample
+  commit, runtime TTS wiring, playback, auto-speaking, `/chat` schema change,
+  mood schema change, STT behavior change, Conversation Mode behavior change,
+  or Owner Voice behavior change is added.
 
 ---
 

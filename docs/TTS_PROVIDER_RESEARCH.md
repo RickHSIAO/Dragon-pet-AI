@@ -1,7 +1,7 @@
 # TTS Provider Research
 
-**Task:** TASK-TTS-001 / TASK-TTS-004E
-**Status:** TASK-TTS-004E DONE - CHARACTER VOICE PROVIDER SELECTION READY / FIRST PROBE NOT APPROVED YET
+**Task:** TASK-TTS-001 / TASK-TTS-004E2
+**Status:** TASK-TTS-004E2 BLOCKED - CONDA NOT AVAILABLE / NO INSTALL PERFORMED
 **Date:** 2026-06-19
 **Scope:** Provider research, implemented mock-provider skeleton boundary,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B manual VOICEVOX
@@ -10,14 +10,15 @@ edge-tts optional network candidate probe, and TASK-TTS-004C2 manual
 edge-tts dependency/audio output validation, TASK-TTS-004C3 docs-first
 edge-tts tuning workflow, TASK-TTS-004D character voice feasibility research,
 TASK-TTS-004D2 environment check workflow, TASK-TTS-004D3 isolated lab
-plan, TASK-TTS-004D4 manual bootstrap checklist, and TASK-TTS-004E provider
-selection checkpoint. GPT-SoVITS is selected as the first isolated lab
-candidate, Style-Bert-VITS2 is the second provider / fallback research path, no
-real voice-quality provider is selected as final, no model is
+plan, TASK-TTS-004D4 manual bootstrap checklist, TASK-TTS-004E provider
+selection checkpoint, and TASK-TTS-004E2 blocked Phase 1 bootstrap attempt.
+GPT-SoVITS is selected as the first isolated lab candidate, Style-Bert-VITS2 is
+the second provider / fallback research path, no real voice-quality provider is
+selected as final, no model is
 downloaded, the `edge-tts` install is optional/manual inside `backend\.venv`
 only, and no runtime synthesis/playback path is implemented by TASK-TTS-004C2,
 TASK-TTS-004C3, TASK-TTS-004D, TASK-TTS-004D2, TASK-TTS-004D3, or
-TASK-TTS-004E.
+TASK-TTS-004E2.
 
 This document records candidate directions for Christina voice output. It should
 guide later experiments, not lock Dragon Pet AI to a single TTS engine.
@@ -608,8 +609,8 @@ TASK-TTS-004D recommendation:
 Recommended next tasks:
 
 1. TASK-TTS-004E - Character Voice Lab Provider Selection / First Probe Approval.
-2. TASK-TTS-004E2 - GPT-SoVITS first isolated lab probe, only after explicit
-   setup approval.
+2. TASK-TTS-004E2 - GPT-SoVITS isolated lab Phase 1 retry, only after Conda is
+   available or a different isolated environment tool is explicitly approved.
 3. TASK-TTS-005 - TTS Runtime Playback Queue, only after provider decision.
 
 No runtime TTS wiring, `/chat` integration, playback, Pet Window playback,
@@ -748,6 +749,33 @@ models, train, infer, synthesize audio, or wire runtime TTS.
 
 ---
 
+## TASK-TTS-004E2 GPT-SoVITS Isolated Lab Bootstrap Phase 1
+
+TASK-TTS-004E2 adds `docs/TTS_GPT_SOVITS_LAB_PHASE1.md`.
+
+Phase 1 approved scope:
+
+- Create the external lab root.
+- Clone official `https://github.com/RVC-Boss/GPT-SoVITS.git`.
+- Create isolated Conda Python 3.10 environment.
+
+Actual result:
+
+- BLOCKED - CONDA NOT AVAILABLE / NO INSTALL PERFORMED.
+- `conda --version`, `conda info --base`, and `conda env list` failed because
+  `conda` is not recognized in PowerShell.
+- No lab root was created.
+- No GPT-SoVITS repository was cloned.
+- No Conda env was created.
+- No external Phase 1 manifest was written.
+- No dependency, PyTorch/CUDA package, model, dataset, training, inference,
+  WebUI, synthesis, generated audio, app runtime wiring, playback, or
+  auto-speaking was added.
+- Hardware evidence only: NVIDIA GeForce RTX 3070, 8192 MiB VRAM,
+  NVIDIA-SMI/driver evidence `610.47`, CUDA compatibility `13.3`.
+
+---
+
 ## 5. Local Candidate Notes
 
 The following are candidate directions for future manual experiments. TASK-TTS-001
@@ -867,8 +895,8 @@ Recommended sequencing:
    commands and human approval gates ready, no setup performed.
 13. TASK-TTS-004E: character voice lab provider selection. DONE - GPT-SoVITS
    first, Style-Bert-VITS2 second, first probe not approved yet.
-14. TASK-TTS-004E2: GPT-SoVITS first isolated lab probe after explicit setup
-   approval.
+14. TASK-TTS-004E2: GPT-SoVITS isolated lab bootstrap Phase 1. BLOCKED -
+   Conda not available, no install performed.
 15. TASK-TTS-004: renderer playback queue diagnostics after a real provider
    candidate is validated.
 16. TASK-TTS-005: Pet speaking state and bubble sync.

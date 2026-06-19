@@ -1,12 +1,13 @@
 # TTS Character Voice Feasibility
 
-**Task:** TASK-TTS-004D / TASK-TTS-004D2 / TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E
-**Status:** TASK-TTS-004E DONE - CHARACTER VOICE PROVIDER SELECTION READY / FIRST PROBE NOT APPROVED YET
+**Task:** TASK-TTS-004D / TASK-TTS-004D2 / TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2
+**Status:** TASK-TTS-004E2 BLOCKED - CONDA NOT AVAILABLE / NO INSTALL PERFORMED
 **Date:** 2026-06-19
 **Scope:** Documentation-only feasibility research for long-term Christina
 character voice candidates, environment-check-only readiness inspection,
-isolated lab planning, manual bootstrap checklist, and provider-selection
-checkpoint. No model was installed, downloaded, trained, or run.
+isolated lab planning, manual bootstrap checklist, provider-selection
+checkpoint, and blocked GPT-SoVITS Phase 1 bootstrap evidence. No model was
+installed, downloaded, trained, or run.
 
 ---
 
@@ -245,6 +246,27 @@ Summary:
 - Reject the first probe if setup is unsafe, licensing is unclear, voice data
   rights are missing, RTX 3070 8 GB is not sufficient, Chinese output is poor,
   or quality does not beat edge-tts / VOICEVOX enough to justify complexity.
+
+### TASK-TTS-004E2 - GPT-SoVITS Isolated Lab Bootstrap Phase 1
+
+See:
+
+- `docs/TTS_GPT_SOVITS_LAB_PHASE1.md`
+
+Summary:
+
+- Phase 1 is blocked because Conda is not available in the current PowerShell
+  PATH.
+- `conda --version`, `conda info --base`, and `conda env list` all failed with
+  `conda` not recognized.
+- No external lab folder was created.
+- No official GPT-SoVITS repository was cloned.
+- No isolated Python 3.10 environment was created.
+- No external Phase 1 manifest was written.
+- `nvidia-smi` still reports NVIDIA GeForce RTX 3070, 8192 MiB VRAM,
+  NVIDIA-SMI/driver evidence `610.47`, and CUDA compatibility `13.3`, but this
+  does not prove PyTorch CUDA is installed.
+- Runtime TTS remains disabled/mock-only.
 
 ### TASK-TTS-005 - TTS Runtime Playback Queue
 

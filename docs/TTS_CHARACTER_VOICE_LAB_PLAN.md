@@ -1,7 +1,7 @@
 # TTS Character Voice Lab Plan
 
-**Task:** TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E
-**Status:** TASK-TTS-004E DONE - CHARACTER VOICE PROVIDER SELECTION READY / FIRST PROBE NOT APPROVED YET
+**Task:** TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2
+**Status:** TASK-TTS-004E2 BLOCKED - CONDA NOT AVAILABLE / NO INSTALL PERFORMED
 **Date:** 2026-06-19
 **Scope:** Planning-only boundary for future GPT-SoVITS / Style-Bert-VITS2
 experiments in an isolated lab environment. No lab folder was created, no
@@ -11,6 +11,10 @@ no training or inference was run.
 TASK-TTS-004E selects GPT-SoVITS as the first isolated lab candidate and
 Style-Bert-VITS2 as the second provider / fallback research path. No final
 runtime provider is selected and no first probe is approved yet.
+
+TASK-TTS-004E2 attempted approved Phase 1 bootstrap, but Conda was unavailable
+in the current PowerShell PATH. No lab folder was created, no repository was
+cloned, and no isolated environment was created.
 
 ---
 
@@ -249,7 +253,7 @@ prove a candidate voice is worth integrating.
 
 ## 9. Exit Criteria Before Real Model Probe
 
-Before TASK-TTS-004E or any real model probe can start, collect:
+Before TASK-TTS-004E2 can be retried or any real model probe can start, collect:
 
 1. Lab folder chosen outside Dragon Pet AI.
 2. Candidate repo and release selected.
@@ -321,3 +325,25 @@ Minimum evidence before runtime provider selection:
   model download, test audio generation, and artifact storage policy.
 - No lab setup, clone, install, model download, training, inference, synthesis,
   generated artifact commit, or runtime TTS wiring was performed.
+
+---
+
+## 13. TASK-TTS-004E2 Blocked Phase 1 Bootstrap
+
+- Final status: BLOCKED - CONDA NOT AVAILABLE / NO INSTALL PERFORMED.
+- Evidence doc: `docs/TTS_GPT_SOVITS_LAB_PHASE1.md`.
+- Approved actions were limited to external lab directory creation, official
+  GPT-SoVITS clone, and isolated Conda Python 3.10 environment creation.
+- Conda commands failed because `conda` is not recognized in PowerShell.
+- Recommended lab path
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\` was not created.
+- GPT-SoVITS repo path
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\repos\GPT-SoVITS\` was not
+  created.
+- Conda env prefix
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\envs\gpt-sovits-py310` was not
+  created.
+- No external manifest was written because the lab path does not exist.
+- No dependencies, PyTorch/CUDA packages, models, datasets, training,
+  inference, WebUI startup, synthesis, generated audio, or runtime wiring were
+  performed.

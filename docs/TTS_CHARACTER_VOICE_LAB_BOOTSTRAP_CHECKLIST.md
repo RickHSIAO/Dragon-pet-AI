@@ -1,7 +1,7 @@
 # TTS Character Voice Lab Bootstrap Checklist
 
-**Task:** TASK-TTS-004D4 / TASK-TTS-004E
-**Status:** TASK-TTS-004E DONE - CHARACTER VOICE PROVIDER SELECTION READY / FIRST PROBE NOT APPROVED YET
+**Task:** TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2
+**Status:** TASK-TTS-004E2 BLOCKED - CONDA NOT AVAILABLE / NO INSTALL PERFORMED
 **Date:** 2026-06-19
 **Scope:** Manual-command checklist for a future isolated character voice lab.
 This task did not create the lab folder, clone external repos, install
@@ -13,6 +13,9 @@ TASK-TTS-004E adds the provider-selection checkpoint:
 
 GPT-SoVITS is the first isolated lab candidate. Style-Bert-VITS2 is the second
 provider / fallback research path. The first real probe remains unapproved.
+
+TASK-TTS-004E2 attempted approved GPT-SoVITS Phase 1 bootstrap, but Conda was
+not available in the current PowerShell PATH. No lab setup was performed.
 
 ---
 
@@ -338,3 +341,24 @@ Chinese Christina provider remains unresolved.
 - No model download, training, inference, synthesis, or generated audio.
 - No runtime TTS wiring, playback, Pet playback, auto-speaking, `/chat`, mood
   schema, STT, Conversation Mode, or Owner Voice behavior changed.
+
+---
+
+## 14. TASK-TTS-004E2 Blocked Bootstrap Attempt
+
+- Final status: BLOCKED - CONDA NOT AVAILABLE / NO INSTALL PERFORMED.
+- Evidence doc: `docs/TTS_GPT_SOVITS_LAB_PHASE1.md`.
+- `conda --version`, `conda info --base`, and `conda env list` failed because
+  `conda` is not recognized in the current PowerShell PATH.
+- Lab root was not created.
+- GPT-SoVITS repository was not cloned.
+- Conda Python 3.10 environment was not created.
+- External Phase 1 manifest was not written.
+- `nvidia-smi` evidence: NVIDIA GeForce RTX 3070, 8192 MiB VRAM,
+  NVIDIA-SMI/driver evidence `610.47`, CUDA compatibility `13.3`.
+- The CUDA compatibility value from `nvidia-smi` does not prove PyTorch CUDA is
+  installed.
+- No dependency, PyTorch/CUDA package, model, dataset, training, inference,
+  WebUI, synthesis, generated audio, runtime TTS wiring, playback,
+  auto-speaking, `/chat`, mood schema, STT, Conversation Mode, or Owner Voice
+  behavior changed.
