@@ -727,8 +727,11 @@ TASK-TTS-004E4A later installed only this Group A foundation set with
 audio/model dependency group. See
 `docs/TTS_GPT_SOVITS_FOUNDATION_DEPENDENCY_INSTALL.md`.
 
+TASK-TTS-004E5 later completed the audio/text dependency compatibility review
+without installing anything.
+
 Recommended next task, not approved yet:
 
 ```text
-TASK-TTS-004E5 - GPT-SoVITS Audio/Text Dependency Compatibility Review
+TASK-TTS-004E5A - GPT-SoVITS WAV/Chinese Runtime Dependency Install
 ```

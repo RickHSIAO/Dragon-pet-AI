@@ -34,11 +34,13 @@ TASK-TTS-004E4A foundation install checkpoint:
   `torchaudio==2.7.0+cu128`.
 - Verified imports, `pip check`, NumPy/Torch interop, CUDA `12.8`, RTX 3070
   detection, and a CUDA tensor.
-- TorchCodec, audio/model dependency groups, full GPT-SoVITS dependencies,
-  models, WebUI, inference, synthesis, runtime playback, and auto-speaking
-  remain separate future approvals.
-- Recommended next task is TASK-TTS-004E5 Audio/Text Dependency Compatibility
-  Review, not approved yet.
+- TASK-TTS-004E5 completed the audio/text dependency compatibility review
+  without installing anything. Current next task is TASK-TTS-004E5A
+  GPT-SoVITS WAV/Chinese Runtime Dependency Install, not approved yet.
+- TorchCodec, Chinese text dependencies, Japanese/multilingual text
+  dependencies, ffmpeg/PyAV codec layers, model dependencies, full GPT-SoVITS
+  dependencies, models, WebUI, inference, synthesis, runtime playback, and
+  auto-speaking remain separate future approvals.
 - Runtime TTS remains disabled/mock-only.
 
 This document defines the target architecture for Christina voice output and the

@@ -1,8 +1,7 @@
 # TTS Character Voice Feasibility
 
-**Latest TASK-TTS-004E4A status (2026-06-19):** GPT-SoVITS foundation
-dependency install is complete and audio/model dependencies remain not
-installed.
+**Latest TASK-TTS-004E5 status (2026-06-19):** GPT-SoVITS audio/text
+dependency compatibility review is complete and install remains not approved.
 The external lab has isolated Python `3.10.20` at
 `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\envs\gpt-sovits-py310` and the
 official GPT-SoVITS clone at
@@ -11,13 +10,15 @@ official GPT-SoVITS clone at
 `numpy==1.26.4`, `scipy==1.11.4`, `tqdm`, `PyYAML`, `chardet`, and `psutil`
 with constraints protecting `torch==2.7.0+cu128` and
 `torchaudio==2.7.0+cu128`; `colorama` was the only required transitive
-dependency. No TorchCodec, ffmpeg, PyAV, librosa, soundfile, transformers,
-models, WebUI, inference, synthesis, or generated audio was installed or
-created. TASK-TTS-004E5 Audio/Text Dependency Compatibility Review is the next
-recommended task but is not approved yet.
+dependency. TASK-TTS-004E5 then reviewed audio/text compatibility and selected
+future Group B1 low-risk WAV/audio foundation as the first install candidate.
+No TorchCodec, ffmpeg, PyAV, librosa, soundfile, transformers, text
+dependencies, models, WebUI, inference, synthesis, or generated audio was
+installed or created. TASK-TTS-004E5A WAV/Chinese Runtime Dependency Install is
+the next recommended task but is not approved yet.
 
-**Task:** TASK-TTS-004D / TASK-TTS-004D2 / TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E4A
-**Status:** TASK-TTS-004E4A DONE - GPT-SOVITS FOUNDATION DEPENDENCIES VERIFIED / AUDIO AND MODEL DEPENDENCIES NOT INSTALLED
+**Task:** TASK-TTS-004D / TASK-TTS-004D2 / TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E4A / TASK-TTS-004E5
+**Status:** TASK-TTS-004E5 DONE - GPT-SOVITS AUDIO/TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED
 **Date:** 2026-06-19
 **Scope:** Documentation-only feasibility research for long-term Christina
 character voice candidates, environment-check-only readiness inspection,
@@ -48,8 +49,8 @@ The practical conclusion is:
 
 Recommended next path:
 
-1. TASK-TTS-004E5 - GPT-SoVITS audio/text dependency compatibility review,
-   only after explicit approval.
+1. TASK-TTS-004E5A - GPT-SoVITS WAV/Chinese Runtime Dependency Install, only
+   after explicit approval.
 2. Later GPT-SoVITS audio/model/inference probes, only after separate
    dependency/model/audio approvals are granted.
 3. TASK-TTS-005 - TTS Runtime Playback Queue, only after provider decision.

@@ -644,9 +644,16 @@ Suggested research and implementation tasks:
   PyAV, TorchCodec, audio/model dependency group, model/download, WebUI,
   inference, synthesis, generated audio, runtime playback, `/chat`,
   auto-speaking, STT, Conversation Mode, Owner Voice, schema behavior, backend
-  venv, or dependency-file change is added. TASK-TTS-004E5 Audio/Text
-  Dependency Compatibility Review is the next recommended task and is not
-  approved yet.
+  venv, or dependency-file change is added.
+- TASK-TTS-004E5 GPT-SoVITS Audio/Text Dependency Compatibility Review.
+  DONE - install not approved. Reviewed audio/text/inference/preprocessing
+  dependencies read-only, selected future Group B1 low-risk WAV/audio
+  foundation as first install candidate, and deferred Chinese text,
+  Japanese/multilingual text, ffmpeg/PyAV/TorchCodec, models, WebUI,
+  inference, synthesis, generated audio, runtime playback, `/chat`,
+  auto-speaking, STT, Conversation Mode, Owner Voice, schema behavior, backend
+  venv, and dependency-file changes. Current next task is TASK-TTS-004E5A
+  GPT-SoVITS WAV/Chinese Runtime Dependency Install, not approved yet.
 - TASK-TTS-004 Playback queue and renderer diagnostics after a real provider
   candidate is validated.
 - TASK-TTS-005 Pet speaking state / bubble sync.

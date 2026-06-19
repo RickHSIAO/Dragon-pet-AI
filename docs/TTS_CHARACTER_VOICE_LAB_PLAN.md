@@ -1,14 +1,16 @@
 # TTS Character Voice Lab Plan
 
-**Task:** TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B / TASK-TTS-004E4A
-**Status:** TASK-TTS-004E4A DONE - GPT-SOVITS FOUNDATION DEPENDENCIES VERIFIED / AUDIO AND MODEL DEPENDENCIES NOT INSTALLED
+**Task:** TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B / TASK-TTS-004E4A / TASK-TTS-004E5
+**Status:** TASK-TTS-004E5 DONE - GPT-SOVITS AUDIO/TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED
 **Date:** 2026-06-19
 **Scope:** Planning and review boundary for future GPT-SoVITS /
 Style-Bert-VITS2 experiments in an isolated lab environment. GPT-SoVITS Phase 1
 created the isolated Python env and official repo clone; TASK-TTS-004E3A then
 installed only approved PyTorch CUDA packages; TASK-TTS-004E4A then installed
-only approved foundation dependencies. GPT-SoVITS audio/model dependencies,
-models, training, inference, WebUI, and audio generation remain unapproved.
+only approved foundation dependencies; TASK-TTS-004E5 then reviewed audio/text
+dependencies without installing anything. GPT-SoVITS Chinese text,
+Japanese/multilingual text, codec/model dependencies, models, training,
+inference, WebUI, and audio generation remain unapproved.
 
 TASK-TTS-004E selects GPT-SoVITS as the first isolated lab candidate and
 Style-Bert-VITS2 as the second provider / fallback research path. No final
@@ -56,7 +58,9 @@ installed only the approved foundation group with `numpy==1.26.4`,
 lab-local constraints that protect `torch==2.7.0+cu128` and
 `torchaudio==2.7.0+cu128`. Imports, NumPy/Torch interop, `pip check`, CUDA, and
 RTX 3070 verification passed. TASK-TTS-004E5 Audio/Text Dependency
-Compatibility Review is the next recommended task and is not approved yet.
+Compatibility Review then completed without installing anything and selected
+future Group B1 low-risk WAV/audio foundation as the first install candidate.
+TASK-TTS-004E5A is the next recommended task and is not approved yet.
 
 ---
 
@@ -476,5 +480,6 @@ Minimum evidence before runtime provider selection:
   and a minimal CUDA tensor.
 - TASK-TTS-004E4 dependency compatibility review: done.
 - TASK-TTS-004E4A foundation dependency install: done and verified.
-- Next recommended task: TASK-TTS-004E5 Audio/Text Dependency Compatibility
-  Review, not approved yet.
+- TASK-TTS-004E5 audio/text dependency compatibility review: done.
+- Next recommended task: TASK-TTS-004E5A GPT-SoVITS WAV/Chinese Runtime
+  Dependency Install, not approved yet.

@@ -332,8 +332,11 @@ Confirmed not performed:
 DONE - GPT-SOVITS FOUNDATION DEPENDENCIES VERIFIED / AUDIO AND MODEL DEPENDENCIES NOT INSTALLED
 ```
 
+TASK-TTS-004E5 later completed the audio/text dependency compatibility review
+without installing anything.
+
 Recommended next task, not approved yet:
 
 ```text
-TASK-TTS-004E5 - GPT-SoVITS Audio/Text Dependency Compatibility Review
+TASK-TTS-004E5A - GPT-SoVITS WAV/Chinese Runtime Dependency Install
 ```

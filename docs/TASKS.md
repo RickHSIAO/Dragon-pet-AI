@@ -25888,10 +25888,12 @@ Documentation output:
 Recommended next task, not approved yet:
 
 ```text
-TASK-TTS-004E5 - GPT-SoVITS Audio/Text Dependency Compatibility Review
+TASK-TTS-004E5A - GPT-SoVITS WAV/Chinese Runtime Dependency Install
 ```
 
 TASK-TTS-004E4A was later completed as a foundation-only install.
+TASK-TTS-004E5 was later completed as an audio/text dependency compatibility
+review without installing anything.
 
 ---
 
@@ -26013,7 +26015,122 @@ Validation:
 Recommended next task, not approved yet:
 
 ```text
-TASK-TTS-004E5 - GPT-SoVITS Audio/Text Dependency Compatibility Review
+TASK-TTS-004E5A - GPT-SoVITS WAV/Chinese Runtime Dependency Install
+```
+
+---
+
+## TASK-TTS-004E5 | GPT-SoVITS Audio/Text Dependency Compatibility Review
+
+**Status:** DONE - GPT-SOVITS AUDIO/TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED
+**Date:** 2026-06-19
+**Phase:** Phase 5 - Companion Voice Output Architecture
+**Depends on:** TASK-TTS-004E4A
+
+### Goal
+
+Review the next GPT-SoVITS audio/text-processing dependency layer without
+installing anything. Identify a safe future first install group for WAV/audio
+loading and Chinese-first runtime probing while protecting the existing lab
+env:
+
+```text
+F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\envs\gpt-sovits-py310
+```
+
+### Result
+
+TASK-TTS-004E5 completed:
+
+```text
+DONE - GPT-SOVITS AUDIO/TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED
+```
+
+Inspected GPT-SoVITS commit:
+
+```text
+b2cff0cd0abd0ac134a16ae7a9695f88e8826104
+```
+
+Protected packages were verified read-only:
+
+```text
+torch==2.7.0+cu128
+torchaudio==2.7.0+cu128
+torch.version.cuda=12.8
+cuda_available=True
+device=NVIDIA GeForce RTX 3070
+numpy==1.26.4
+scipy==1.11.4
+```
+
+Selected future first install subset, not approved yet:
+
+```text
+Group B1 - Low-risk WAV/audio foundation
+librosa==0.10.2
+soundfile==0.13.1
+numba==0.59.1
+llvmlite==0.42.0
+soxr==0.5.0.post1
+audioread==3.0.1
+scikit-learn==1.4.2
+joblib==1.4.2
+threadpoolctl==3.5.0
+decorator==5.1.1
+pooch==1.8.2
+platformdirs==4.2.2
+requests==2.32.3
+lazy-loader==0.4
+msgpack==1.0.8
+```
+
+Deferred groups:
+
+- Group B2 Chinese text path: deferred because `jieba_fast==0.53` is source-only
+  in PyPI metadata and is directly imported by GPT-SoVITS Chinese processing.
+- Group B3 Japanese/multilingual path: deferred because `pyopenjtalk==0.4.1`
+  is source-only and dictionary assets need a separate review.
+- Group B4 codec/ffmpeg path: deferred because `ffmpeg-python` is only a Python
+  wrapper, system `ffmpeg.exe` is separate, PyAV needs wheel-pinned review, and
+  TorchCodec remains excluded.
+- Group B5 native/extension risk path: deferred for source-build and CUDA
+  extension risks.
+
+Evidence files:
+
+- `docs/TTS_GPT_SOVITS_AUDIO_TEXT_DEPENDENCY_REVIEW.md`
+- External manifest:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E5_AUDIO_TEXT_DEPENDENCY_REVIEW.md`
+
+### Acceptance Criteria
+
+- [x] GPT-SoVITS audio/text/inference/preprocessing files inspected read-only.
+- [x] Audio dependency inventory recorded.
+- [x] Text dependency inventory recorded.
+- [x] ffmpeg wrapper, system ffmpeg binary, PyAV, and TorchCodec boundaries
+  documented separately.
+- [x] Chinese-only first probe requirements documented.
+- [x] Japanese/multilingual requirements deferred.
+- [x] Windows wheel/build risks recorded from PyPI metadata.
+- [x] Protected package conflict analysis documented.
+- [x] Staged audio/text groups defined.
+- [x] Primary next install group selected as Group B1 and marked not approved.
+- [x] Future commands documented and marked `NOT APPROVED / DO NOT RUN YET`.
+- [x] Success and rejection criteria documented.
+- [x] External manifest path recorded.
+- [x] No package install/uninstall, resolver run, model/download, WebUI,
+  training, inference, synthesis, audio generation, Anaconda base change,
+  PATH/profile/registry change, failed Miniconda change, backend venv change,
+  GPT-SoVITS source change, Dragon Pet AI runtime change, `/chat`, STT,
+  Conversation Mode, Owner Voice, schema, playback, or auto-speaking change
+  was added.
+- [x] Unrelated `docs/???孵?.txt` was not staged or committed.
+
+Recommended next task, not approved yet:
+
+```text
+TASK-TTS-004E5A - GPT-SoVITS WAV/Chinese Runtime Dependency Install
 ```
 
 ---
