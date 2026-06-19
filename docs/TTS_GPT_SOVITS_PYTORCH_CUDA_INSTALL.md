@@ -485,8 +485,14 @@ Dependency review follow-up:
 TASK-TTS-004E4 - DONE - GPT-SOVITS DEPENDENCY COMPATIBILITY REVIEW COMPLETE / DEPENDENCY INSTALL NOT APPROVED
 ```
 
+Foundation dependency follow-up:
+
+```text
+TASK-TTS-004E4A - DONE - GPT-SOVITS FOUNDATION DEPENDENCIES VERIFIED / AUDIO AND MODEL DEPENDENCIES NOT INSTALLED
+```
+
 Recommended next task, not approved yet:
 
 ```text
-TASK-TTS-004E4A - GPT-SoVITS Foundation Dependency Install
+TASK-TTS-004E5 - GPT-SoVITS Audio/Text Dependency Compatibility Review
 ```

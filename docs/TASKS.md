@@ -25888,7 +25888,132 @@ Documentation output:
 Recommended next task, not approved yet:
 
 ```text
-TASK-TTS-004E4A - GPT-SoVITS Foundation Dependency Install
+TASK-TTS-004E5 - GPT-SoVITS Audio/Text Dependency Compatibility Review
+```
+
+TASK-TTS-004E4A was later completed as a foundation-only install.
+
+---
+
+## TASK-TTS-004E4A | GPT-SoVITS Foundation Dependency Install
+
+**Status:** DONE - GPT-SOVITS FOUNDATION DEPENDENCIES VERIFIED / AUDIO AND MODEL DEPENDENCIES NOT INSTALLED
+**Date:** 2026-06-19
+**Phase:** Phase 5 - Companion Voice Output Architecture
+**Depends on:** TASK-TTS-004E4
+
+### Goal
+
+Install only the explicitly approved GPT-SoVITS foundation dependency group into
+the isolated external lab env:
+
+```text
+F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\envs\gpt-sovits-py310
+```
+
+Do not install GPT-SoVITS full requirements, audio/model dependency groups,
+WebUI/API packages, training packages, models, datasets, or runtime wiring.
+
+### Result
+
+TASK-TTS-004E4A completed:
+
+```text
+DONE - GPT-SOVITS FOUNDATION DEPENDENCIES VERIFIED / AUDIO AND MODEL DEPENDENCIES NOT INSTALLED
+```
+
+Installed only the approved direct package group from the official PyPI index:
+
+```text
+numpy==1.26.4
+scipy==1.11.4
+tqdm==4.68.3
+PyYAML==6.0.3
+chardet==7.4.3
+psutil==7.2.2
+```
+
+Required transitive dependency added:
+
+```text
+colorama==0.4.6
+```
+
+Protected torch verification after install:
+
+```text
+torch==2.7.0+cu128
+torchaudio==2.7.0+cu128
+torch.version.cuda=12.8
+cuda_available=True
+device_count=1
+device_name=NVIDIA GeForce RTX 3070
+cuda_tensor_device=cuda:0
+cuda_tensor_value=2.0
+```
+
+NumPy/Torch interop:
+
+```text
+numpy_torch_shape=(2,)
+numpy_torch_sum=3.0
+```
+
+Evidence files:
+
+- `docs/TTS_GPT_SOVITS_FOUNDATION_DEPENDENCY_INSTALL.md`
+- External manifest:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E4A_FOUNDATION_INSTALL.md`
+- Install log:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E4A_FOUNDATION_INSTALL.log`
+- Before snapshots:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E4A_PIP_BEFORE.txt`,
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E4A_CONDA_BEFORE.txt`
+- After snapshots:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E4A_PIP_AFTER.txt`,
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E4A_CONDA_AFTER.txt`
+- Constraints:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\constraints\TASK-TTS-004E4A_PROTECTED_TORCH_CU128.txt`
+
+Validation:
+
+- Foundation imports passed.
+- `pip check`: `No broken requirements found.`
+- Forbidden/deferred packages remained absent: TorchCodec, PyAV, librosa,
+  soundfile, transformers, tokenizers, gradio, fastapi, uvicorn,
+  onnxruntime-gpu, torchvision, xformers, triton, flash-attn, deepspeed, and
+  faiss.
+- GPT-SoVITS repo status remained clean apart from user-home git ignore
+  permission warnings.
+- Artifact scan found only Python `.pth` metadata and SciPy wheel test WAV
+  fixtures; no model weights or generated audio were created.
+
+### Acceptance Criteria
+
+- [x] Install targeted only the isolated external GPT-SoVITS lab env.
+- [x] Only approved direct foundation packages were requested.
+- [x] Required transitive dependency was limited to `colorama==0.4.6`.
+- [x] `numpy==1.26.4` and `scipy==1.11.4` installed; no `scipy==1.12.0`
+  fallback was attempted.
+- [x] `torch` and `torchaudio` remained `2.7.0+cu128`.
+- [x] CUDA build remained `12.8`; RTX 3070 remained detected.
+- [x] CUDA tensor verification passed.
+- [x] NumPy/Torch interop passed.
+- [x] Before/after pip and Conda snapshots were recorded externally.
+- [x] No full requirements, `install.ps1`, `install.sh`, Docker script, WebUI
+  launcher, BigVGAN requirements, ffmpeg, PyAV, TorchCodec, librosa, soundfile,
+  transformers, WebUI/API, or training package group was installed.
+- [x] No model, dataset, training, inference, WebUI, synthesis, playback, Pet
+  playback, auto-speaking, or generated audio was performed.
+- [x] No Anaconda base, PATH, PowerShell profile, registry, `conda init`,
+  backend venv, GPT-SoVITS source, Dragon Pet AI runtime, `/chat`, STT,
+  Conversation Mode, Owner Voice, schema, or dependency-file change was added.
+- [x] Unrelated `docs/開啟方式.txt` was not staged or committed.
+
+Recommended next task, not approved yet:
+
+```text
+TASK-TTS-004E5 - GPT-SoVITS Audio/Text Dependency Compatibility Review
 ```
 
 ---

@@ -238,7 +238,9 @@ see `docs/TTS_EXISTING_ANACONDA_GPT_SOVITS_PHASE1.md`.
 
 TASK-TTS-004E3 completed the GPT-SoVITS PyTorch/CUDA compatibility review
 without installing anything. TASK-TTS-004E3A later installed only the approved
-PyTorch CUDA package family and verified CUDA. The next recommended task is
-TASK-TTS-004E4A GPT-SoVITS Foundation Dependency Install. It is not approved
-yet. TASK-TTS-004E4 dependency compatibility review is complete and did not
-install anything.
+PyTorch CUDA package family and verified CUDA. TASK-TTS-004E4 dependency
+compatibility review then completed without installing anything. TASK-TTS-004E4A
+later installed only the approved foundation dependency group and verified
+imports, NumPy/Torch interop, `pip check`, CUDA, and the protected cu128 torch
+stack. The next recommended task is TASK-TTS-004E5 GPT-SoVITS Audio/Text
+Dependency Compatibility Review. It is not approved yet.

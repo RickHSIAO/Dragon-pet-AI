@@ -18,9 +18,11 @@ synthesis, audio generation, or runtime wiring. See
 `docs/TTS_GPT_SOVITS_PYTORCH_CUDA_INSTALL.md`.
 
 **Dependency follow-up:** TASK-TTS-004E4 later reviewed GPT-SoVITS dependency
-compatibility without installing anything. It recommends TASK-TTS-004E4A Group
-A Safe Foundation as the next future task, not approved yet. See
-`docs/TTS_GPT_SOVITS_DEPENDENCY_REVIEW.md`.
+compatibility without installing anything. TASK-TTS-004E4A then installed only
+the approved Group A Safe Foundation packages and verified that torch,
+torchaudio, CUDA, and NumPy/Torch interop still work. See
+`docs/TTS_GPT_SOVITS_DEPENDENCY_REVIEW.md` and
+`docs/TTS_GPT_SOVITS_FOUNDATION_DEPENDENCY_INSTALL.md`.
 
 ---
 

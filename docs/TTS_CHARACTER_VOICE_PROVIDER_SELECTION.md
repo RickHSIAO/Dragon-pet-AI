@@ -1,14 +1,15 @@
 # TTS Character Voice Provider Selection
 
-**Task:** TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B / TASK-TTS-004E4
-**Status:** TASK-TTS-004E4 DONE - GPT-SOVITS DEPENDENCY COMPATIBILITY REVIEW COMPLETE / DEPENDENCY INSTALL NOT APPROVED
+**Task:** TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B / TASK-TTS-004E4A
+**Status:** TASK-TTS-004E4A DONE - GPT-SOVITS FOUNDATION DEPENDENCIES VERIFIED / AUDIO AND MODEL DEPENDENCIES NOT INSTALLED
 **Date:** 2026-06-19
 **Scope:** Docs-only provider-selection and first-probe approval plan for the
 future isolated character voice lab, plus later lab setup status checkpoints.
 TASK-TTS-004E3A installed only the approved PyTorch CUDA package family in the
 external lab env. It did not install GPT-SoVITS dependencies, download models,
 train, infer, synthesize audio, or wire runtime TTS. TASK-TTS-004E4 reviewed
-dependency compatibility only and did not install anything.
+dependency compatibility only. TASK-TTS-004E4A installed only approved
+foundation dependencies and did not install audio/model dependency groups.
 
 ---
 
@@ -63,10 +64,11 @@ WebUI, inference, synthesis, audio generation, and runtime integration remain
 unapproved.
 
 TASK-TTS-004E4 completed that dependency compatibility review without
-installing anything. The next recommended task is TASK-TTS-004E4A Foundation
-Dependency Install, not approved yet, limited to `numpy==1.26.4`,
-`scipy==1.11.4`, `tqdm`, `PyYAML`, `chardet`, and `psutil` with protected
-torch/cu128 constraints.
+installing anything. TASK-TTS-004E4A then installed only the approved
+foundation group, limited to `numpy==1.26.4`, `scipy==1.11.4`, `tqdm`,
+`PyYAML`, `chardet`, and `psutil` with protected torch/cu128 constraints.
+TASK-TTS-004E5 Audio/Text Dependency Compatibility Review is the next
+recommended task and is not approved yet.
 
 ---
 

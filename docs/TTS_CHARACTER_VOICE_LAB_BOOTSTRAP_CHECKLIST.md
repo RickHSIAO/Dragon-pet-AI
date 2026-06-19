@@ -1,14 +1,15 @@
 # TTS Character Voice Lab Bootstrap Checklist
 
-**Task:** TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B / TASK-TTS-004E4
-**Status:** TASK-TTS-004E4 DONE - GPT-SOVITS DEPENDENCY COMPATIBILITY REVIEW COMPLETE / DEPENDENCY INSTALL NOT APPROVED
+**Task:** TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B / TASK-TTS-004E4A
+**Status:** TASK-TTS-004E4A DONE - GPT-SOVITS FOUNDATION DEPENDENCIES VERIFIED / AUDIO AND MODEL DEPENDENCIES NOT INSTALLED
 **Date:** 2026-06-19
 **Scope:** Manual-command checklist for a future isolated character voice lab
 plus later lab setup checkpoints. TASK-TTS-004E3A installed only approved
 PyTorch CUDA packages in the external lab env. It did not install GPT-SoVITS
 dependencies, download models, train, infer, synthesize audio, or wire runtime
-TTS. TASK-TTS-004E4 then reviewed dependency compatibility only and did not
-install anything.
+TTS. TASK-TTS-004E4 then reviewed dependency compatibility only. TASK-TTS-004E4A
+installed only approved foundation dependencies and did not install audio/model
+dependency groups.
 
 TASK-TTS-004E adds the provider-selection checkpoint:
 
@@ -42,10 +43,11 @@ CUDA `12.8` wheels in the isolated env and verified CUDA on the RTX 3070. Do
 not run GPT-SoVITS `install.ps1`, dependency installers, WebUI, inference, or
 audio generation until separate approval.
 
-TASK-TTS-004E4 recommends the next future install task, TASK-TTS-004E4A, as a
-foundation-only group: `numpy==1.26.4`, `scipy==1.11.4`, `tqdm`, `PyYAML`,
-`chardet`, and `psutil`, using lab-local constraints that protect the existing
-cu128 torch stack. TASK-TTS-004E4A is not approved yet.
+TASK-TTS-004E4A installed the foundation-only group: `numpy==1.26.4`,
+`scipy==1.11.4`, `tqdm`, `PyYAML`, `chardet`, and `psutil`, using lab-local
+constraints that protect the existing cu128 torch stack. Validation passed.
+TASK-TTS-004E5 Audio/Text Dependency Compatibility Review is the next
+recommended task and is not approved yet.
 
 ---
 

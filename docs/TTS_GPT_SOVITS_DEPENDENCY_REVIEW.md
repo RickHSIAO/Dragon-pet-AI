@@ -685,10 +685,10 @@ Reject or stop if any of these occur:
 DONE - GPT-SOVITS DEPENDENCY COMPATIBILITY REVIEW COMPLETE / DEPENDENCY INSTALL NOT APPROVED
 ```
 
-Primary recommended next task, not approved yet:
+Foundation dependency follow-up:
 
 ```text
-TASK-TTS-004E4A - GPT-SoVITS Foundation Dependency Install
+TASK-TTS-004E4A - DONE - GPT-SOVITS FOUNDATION DEPENDENCIES VERIFIED / AUDIO AND MODEL DEPENDENCIES NOT INSTALLED
 ```
 
 Primary first install group:
@@ -721,3 +721,14 @@ Confirmed not performed:
 - No Anaconda base, PATH, profile, registry, failed Miniconda, backend venv,
   Dragon Pet AI runtime, `/chat`, STT, Conversation Mode, Owner Voice, schema,
   playback, or auto-speaking change.
+
+TASK-TTS-004E4A later installed only this Group A foundation set with
+`scipy==1.11.4`, no SciPy fallback, no torch/torchaudio replacement, and no
+audio/model dependency group. See
+`docs/TTS_GPT_SOVITS_FOUNDATION_DEPENDENCY_INSTALL.md`.
+
+Recommended next task, not approved yet:
+
+```text
+TASK-TTS-004E5 - GPT-SoVITS Audio/Text Dependency Compatibility Review
+```

@@ -1037,12 +1037,15 @@ Recommended sequencing:
    dependencies not installed.
 18. TASK-TTS-004E4: GPT-SoVITS dependency compatibility review. DONE -
    staged dependency plan ready; dependency install not approved.
-19. TASK-TTS-004E4A: GPT-SoVITS foundation dependency install. NOT APPROVED.
-20. TASK-TTS-004: renderer playback queue diagnostics after a real provider
+19. TASK-TTS-004E4A: GPT-SoVITS foundation dependency install. DONE -
+   foundation dependencies verified; audio/model dependencies not installed.
+20. TASK-TTS-004E5: GPT-SoVITS audio/text dependency compatibility review.
+   NOT APPROVED.
+21. TASK-TTS-004: renderer playback queue diagnostics after a real provider
    candidate is validated.
-21. TASK-TTS-005: Pet speaking state and bubble sync.
-22. TASK-TTS-006: Conversation Mode feedback prevention.
-23. Future: provider comparison report and singing research.
+22. TASK-TTS-005: Pet speaking state and bubble sync.
+23. TASK-TTS-006: Conversation Mode feedback prevention.
+24. Future: provider comparison report and singing research.
 
 Do not start by wiring ElevenLabs. Do not hard-code ChatTTS, GPT-SoVITS, F5-TTS,
 or CosyVoice into the product path before a provider abstraction and mock tests

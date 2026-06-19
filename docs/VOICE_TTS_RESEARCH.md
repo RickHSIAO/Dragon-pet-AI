@@ -622,14 +622,31 @@ Suggested research and implementation tasks:
   Reviewed GPT-SoVITS dependency sources read-only and categorized core,
   audio/codec, ML/GPU-sensitive, Windows native-build, WebUI/API, and optional
   training dependencies. Direct official install scripts, full requirements,
-  Docker scripts, and BigVGAN requirements remain rejected for the next step.
-  Recommended TASK-TTS-004E4A Group A Safe Foundation, not approved yet:
+  Docker scripts, and BigVGAN requirements remain rejected for broad install.
+  Recommended TASK-TTS-004E4A Group A Safe Foundation, later completed:
   `numpy==1.26.4`, `scipy==1.11.4`, `tqdm`, `PyYAML`, `chardet`, and `psutil`,
   with lab-local constraints protecting `torch==2.7.0+cu128` and
   `torchaudio==2.7.0+cu128`. No package install/uninstall, model/download,
   WebUI, inference, synthesis, audio generation, runtime playback, `/chat`
   integration, auto-speaking, STT, Conversation Mode, Owner Voice, schema
   behavior, backend venv, or dependency-file change is added.
+- TASK-TTS-004E4A GPT-SoVITS Foundation Dependency Install.
+  **DONE - GPT-SOVITS FOUNDATION DEPENDENCIES VERIFIED / AUDIO AND MODEL
+  DEPENDENCIES NOT INSTALLED (2026-06-19):** Added
+  `docs/TTS_GPT_SOVITS_FOUNDATION_DEPENDENCY_INSTALL.md` and external manifest
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E4A_FOUNDATION_INSTALL.md`.
+  Installed only `numpy==1.26.4`, `scipy==1.11.4`, `tqdm==4.68.3`,
+  `PyYAML==6.0.3`, `chardet==7.4.3`, and `psutil==7.2.2`; only required
+  transitive `colorama==0.4.6` was added. Verified imports, `pip check`,
+  NumPy/Torch interop, protected `torch 2.7.0+cu128`, `torchaudio
+  2.7.0+cu128`, CUDA build `12.8`, RTX 3070 detection, and a CUDA tensor. No
+  SciPy fallback, torch/torchaudio replacement, full requirements, ffmpeg,
+  PyAV, TorchCodec, audio/model dependency group, model/download, WebUI,
+  inference, synthesis, generated audio, runtime playback, `/chat`,
+  auto-speaking, STT, Conversation Mode, Owner Voice, schema behavior, backend
+  venv, or dependency-file change is added. TASK-TTS-004E5 Audio/Text
+  Dependency Compatibility Review is the next recommended task and is not
+  approved yet.
 - TASK-TTS-004 Playback queue and renderer diagnostics after a real provider
   candidate is validated.
 - TASK-TTS-005 Pet speaking state / bubble sync.

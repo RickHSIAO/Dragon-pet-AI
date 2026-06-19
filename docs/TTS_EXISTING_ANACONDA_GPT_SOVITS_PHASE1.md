@@ -1,7 +1,7 @@
 # TTS Existing Anaconda GPT-SoVITS Phase 1 Resume
 
-**Task:** TASK-TTS-004E2B / TASK-TTS-004E4
-**Status:** TASK-TTS-004E4 DONE - GPT-SOVITS DEPENDENCY COMPATIBILITY REVIEW COMPLETE / DEPENDENCY INSTALL NOT APPROVED
+**Task:** TASK-TTS-004E2B / TASK-TTS-004E4A
+**Status:** TASK-TTS-004E4A DONE - GPT-SOVITS FOUNDATION DEPENDENCIES VERIFIED / AUDIO AND MODEL DEPENDENCIES NOT INSTALLED
 **Date:** 2026-06-19
 **Scope:** Validate existing machine-wide Anaconda, create one isolated Python
 3.10 prefix environment, and clone the official GPT-SoVITS repository only
@@ -28,10 +28,20 @@ TASK-TTS-004E4 follow-up:
 - Reviewed dependency compatibility without installing anything.
 - Rejected direct official install scripts and full requirements for the next
   step.
-- Recommended TASK-TTS-004E4A Group A Safe Foundation only:
+- Recommended TASK-TTS-004E4A Group A Safe Foundation only, later completed:
   `numpy==1.26.4`, `scipy==1.11.4`, `tqdm`, `PyYAML`, `chardet`, and `psutil`.
-- The future install must use lab-local constraints protecting
+- The later install used lab-local constraints protecting
   `torch==2.7.0+cu128` and `torchaudio==2.7.0+cu128`.
+
+TASK-TTS-004E4A follow-up:
+
+- Installed only the approved foundation group: `numpy==1.26.4`,
+  `scipy==1.11.4`, `tqdm`, `PyYAML`, `chardet`, and `psutil`.
+- `colorama==0.4.6` was the only required transitive dependency.
+- Verified imports, NumPy/Torch interop, `pip check`, CUDA `12.8`, RTX 3070,
+  and the protected torch/torchaudio cu128 stack.
+- Audio/model dependencies, WebUI, inference, synthesis, generated audio, and
+  runtime wiring remain unapproved.
 
 ---
 
@@ -255,5 +265,5 @@ Not performed:
 Recommended next task, not approved yet:
 
 ```text
-TASK-TTS-004E4A - GPT-SoVITS Foundation Dependency Install
+TASK-TTS-004E5 - GPT-SoVITS Audio/Text Dependency Compatibility Review
 ```
