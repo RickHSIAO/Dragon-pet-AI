@@ -613,7 +613,23 @@ Suggested research and implementation tasks:
   registry change, runtime playback, `/chat` integration, auto-speaking, STT,
   Conversation Mode, Owner Voice, schema behavior, backend venv, or
   dependency-file change is added. TASK-TTS-004E4 dependency compatibility
-  review is recommended next but not approved yet.
+  review is now complete.
+- TASK-TTS-004E4 GPT-SoVITS Dependency Compatibility Review.
+  **DONE - GPT-SOVITS DEPENDENCY COMPATIBILITY REVIEW COMPLETE / DEPENDENCY
+  INSTALL NOT APPROVED (2026-06-19):** Added
+  `docs/TTS_GPT_SOVITS_DEPENDENCY_REVIEW.md` and external manifest
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E4_DEPENDENCY_COMPATIBILITY_REVIEW.md`.
+  Reviewed GPT-SoVITS dependency sources read-only and categorized core,
+  audio/codec, ML/GPU-sensitive, Windows native-build, WebUI/API, and optional
+  training dependencies. Direct official install scripts, full requirements,
+  Docker scripts, and BigVGAN requirements remain rejected for the next step.
+  Recommended TASK-TTS-004E4A Group A Safe Foundation, not approved yet:
+  `numpy==1.26.4`, `scipy==1.11.4`, `tqdm`, `PyYAML`, `chardet`, and `psutil`,
+  with lab-local constraints protecting `torch==2.7.0+cu128` and
+  `torchaudio==2.7.0+cu128`. No package install/uninstall, model/download,
+  WebUI, inference, synthesis, audio generation, runtime playback, `/chat`
+  integration, auto-speaking, STT, Conversation Mode, Owner Voice, schema
+  behavior, backend venv, or dependency-file change is added.
 - TASK-TTS-004 Playback queue and renderer diagnostics after a real provider
   candidate is validated.
 - TASK-TTS-005 Pet speaking state / bubble sync.

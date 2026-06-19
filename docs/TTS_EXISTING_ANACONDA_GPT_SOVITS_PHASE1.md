@@ -1,7 +1,7 @@
 # TTS Existing Anaconda GPT-SoVITS Phase 1 Resume
 
-**Task:** TASK-TTS-004E2B / TASK-TTS-004E3A
-**Status:** TASK-TTS-004E3A DONE - GPT-SOVITS LAB PYTORCH CUDA VERIFIED / GPT-SOVITS DEPENDENCIES NOT INSTALLED
+**Task:** TASK-TTS-004E2B / TASK-TTS-004E4
+**Status:** TASK-TTS-004E4 DONE - GPT-SOVITS DEPENDENCY COMPATIBILITY REVIEW COMPLETE / DEPENDENCY INSTALL NOT APPROVED
 **Date:** 2026-06-19
 **Scope:** Validate existing machine-wide Anaconda, create one isolated Python
 3.10 prefix environment, and clone the official GPT-SoVITS repository only
@@ -22,6 +22,16 @@ TASK-TTS-004E3A follow-up:
   this narrow install task.
 - GPT-SoVITS `install.ps1`, TorchCodec, full dependencies, models, WebUI,
   inference, synthesis, and audio generation remain unapproved.
+
+TASK-TTS-004E4 follow-up:
+
+- Reviewed dependency compatibility without installing anything.
+- Rejected direct official install scripts and full requirements for the next
+  step.
+- Recommended TASK-TTS-004E4A Group A Safe Foundation only:
+  `numpy==1.26.4`, `scipy==1.11.4`, `tqdm`, `PyYAML`, `chardet`, and `psutil`.
+- The future install must use lab-local constraints protecting
+  `torch==2.7.0+cu128` and `torchaudio==2.7.0+cu128`.
 
 ---
 
@@ -245,5 +255,5 @@ Not performed:
 Recommended next task, not approved yet:
 
 ```text
-TASK-TTS-004E4 - GPT-SoVITS Dependency Compatibility Review
+TASK-TTS-004E4A - GPT-SoVITS Foundation Dependency Install
 ```

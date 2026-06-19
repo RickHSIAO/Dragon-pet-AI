@@ -1,7 +1,7 @@
 # TTS Provider Research
 
-**Task:** TASK-TTS-001 / TASK-TTS-004E3A
-**Status:** TASK-TTS-004E3A DONE - GPT-SOVITS LAB PYTORCH CUDA VERIFIED / GPT-SOVITS DEPENDENCIES NOT INSTALLED
+**Task:** TASK-TTS-001 / TASK-TTS-004E4
+**Status:** TASK-TTS-004E4 DONE - GPT-SOVITS DEPENDENCY COMPATIBILITY REVIEW COMPLETE / DEPENDENCY INSTALL NOT APPROVED
 **Date:** 2026-06-19
 **Scope:** Provider research, implemented mock-provider skeleton boundary,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B manual VOICEVOX
@@ -15,10 +15,10 @@ selection checkpoint, TASK-TTS-004E2 blocked Phase 1 bootstrap attempt, and
 TASK-TTS-004E2A blocked isolated Miniconda bootstrap attempt, and
 TASK-TTS-004E2A2 Miniconda failure diagnostics, and TASK-TTS-004E2A3 UTF-8
 retry, TASK-TTS-004E2B existing-Anaconda Phase 1 resume, TASK-TTS-004E3
-PyTorch/CUDA compatibility review, and TASK-TTS-004E3A lab-only PyTorch/CUDA
-install verification. GPT-SoVITS is selected as the first isolated lab
-candidate; TASK-TTS-004E3A installed only the approved PyTorch CUDA package
-family and did not install GPT-SoVITS dependencies.
+PyTorch/CUDA compatibility review, TASK-TTS-004E3A lab-only PyTorch/CUDA
+install verification, and TASK-TTS-004E4 dependency compatibility review.
+GPT-SoVITS is selected as the first isolated lab candidate; TASK-TTS-004E4
+reviewed a staged dependency plan and did not install GPT-SoVITS dependencies.
 Style-Bert-VITS2 is the second
 provider / fallback research path, no real voice-quality provider is selected
 as final, no model is
@@ -26,7 +26,7 @@ downloaded, the `edge-tts` install is optional/manual inside `backend\.venv`
 only, and no runtime synthesis/playback path is implemented by TASK-TTS-004C2,
 TASK-TTS-004C3, TASK-TTS-004D, TASK-TTS-004D2, TASK-TTS-004D3,
 TASK-TTS-004E2A, TASK-TTS-004E2A2, TASK-TTS-004E2A3, TASK-TTS-004E2B,
-TASK-TTS-004E3, or TASK-TTS-004E3A.
+TASK-TTS-004E3, TASK-TTS-004E3A, or TASK-TTS-004E4.
 
 This document records candidate directions for Christina voice output. It should
 guide later experiments, not lock Dragon Pet AI to a single TTS engine.
@@ -35,15 +35,20 @@ guide later experiments, not lock Dragon Pet AI to a single TTS engine.
 
 ## 1. User Preference Summary
 
-TASK-TTS-004E3A PyTorch/CUDA install summary:
+TASK-TTS-004E4 dependency review summary:
 
-- Installed only pinned `torch==2.7.0` and `torchaudio==2.7.0` from PyTorch
-  `cu128` wheels in the isolated lab env.
-- Verified `torch 2.7.0+cu128`, `torchaudio 2.7.0+cu128`, CUDA build `12.8`,
-  CUDA availability, RTX 3070 detection, and a minimal CUDA tensor.
-- `numpy` remains uninstalled and the torch missing-NumPy warning is recorded as
-  non-blocking for this narrow install task.
-- `install.ps1`, TorchCodec, full GPT-SoVITS dependencies, ffmpeg, model
+- Reviewed `requirements.txt`, `extra-req.txt`, install scripts, Docker files,
+  README install notes, launchers, and BigVGAN requirements without installing
+  anything.
+- Direct full requirements and official install scripts remain rejected for the
+  next step because they can replace torch/torchaudio, force native builds,
+  install system tools, or download models.
+- Recommended first future group is Group A Safe Foundation:
+  `numpy==1.26.4`, `scipy==1.11.4`, `tqdm`, `PyYAML`, `chardet`, and `psutil`.
+- Future install must protect `torch==2.7.0+cu128` and
+  `torchaudio==2.7.0+cu128` with lab-local constraints and verify CUDA after
+  each group.
+- TorchCodec, full GPT-SoVITS dependencies, ffmpeg/system codec setup, model
   downloads, inference, WebUI, audio generation, runtime playback, and
   auto-speaking remain unapproved.
 
@@ -1030,12 +1035,14 @@ Recommended sequencing:
 17. TASK-TTS-004E3A: GPT-SoVITS lab PyTorch/CUDA install. DONE -
    `torch==2.7.0` and `torchaudio==2.7.0` CUDA `12.8` verified; GPT-SoVITS
    dependencies not installed.
-18. TASK-TTS-004E4: GPT-SoVITS dependency compatibility review. NOT APPROVED.
-19. TASK-TTS-004: renderer playback queue diagnostics after a real provider
+18. TASK-TTS-004E4: GPT-SoVITS dependency compatibility review. DONE -
+   staged dependency plan ready; dependency install not approved.
+19. TASK-TTS-004E4A: GPT-SoVITS foundation dependency install. NOT APPROVED.
+20. TASK-TTS-004: renderer playback queue diagnostics after a real provider
    candidate is validated.
-20. TASK-TTS-005: Pet speaking state and bubble sync.
-21. TASK-TTS-006: Conversation Mode feedback prevention.
-22. Future: provider comparison report and singing research.
+21. TASK-TTS-005: Pet speaking state and bubble sync.
+22. TASK-TTS-006: Conversation Mode feedback prevention.
+23. Future: provider comparison report and singing research.
 
 Do not start by wiring ElevenLabs. Do not hard-code ChatTTS, GPT-SoVITS, F5-TTS,
 or CosyVoice into the product path before a provider abstraction and mock tests

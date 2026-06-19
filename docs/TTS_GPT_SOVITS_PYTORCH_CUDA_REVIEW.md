@@ -17,6 +17,11 @@ dependencies, `install.ps1`, TorchCodec, ffmpeg, models, WebUI, inference,
 synthesis, audio generation, or runtime wiring. See
 `docs/TTS_GPT_SOVITS_PYTORCH_CUDA_INSTALL.md`.
 
+**Dependency follow-up:** TASK-TTS-004E4 later reviewed GPT-SoVITS dependency
+compatibility without installing anything. It recommends TASK-TTS-004E4A Group
+A Safe Foundation as the next future task, not approved yet. See
+`docs/TTS_GPT_SOVITS_DEPENDENCY_REVIEW.md`.
+
 ---
 
 ## 1. Reviewed State

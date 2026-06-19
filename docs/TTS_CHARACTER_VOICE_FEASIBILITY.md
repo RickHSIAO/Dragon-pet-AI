@@ -1,21 +1,22 @@
 # TTS Character Voice Feasibility
 
-**Latest TASK-TTS-004E3A status (2026-06-19):** GPT-SoVITS lab PyTorch/CUDA
-install is complete for the approved package family only. The external lab has
-isolated Python `3.10.20` at
+**Latest TASK-TTS-004E4 status (2026-06-19):** GPT-SoVITS dependency
+compatibility review is complete and dependency install remains not approved.
+The external lab has isolated Python `3.10.20` at
 `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\envs\gpt-sovits-py310` and the
 official GPT-SoVITS clone at
 `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\repos\GPT-SoVITS`, commit
-`b2cff0cd0abd0ac134a16ae7a9695f88e8826104`. Installed only `torch==2.7.0` and
-`torchaudio==2.7.0` from PyTorch CUDA `12.8` wheels; verified
-`2.7.0+cu128`, CUDA build `12.8`, RTX 3070 detection, and a minimal CUDA
-tensor. No GPT-SoVITS dependencies, TorchCodec, ffmpeg, models, WebUI,
-inference, synthesis, or audio were installed or generated. TASK-TTS-004E4
-dependency compatibility review is the next recommended task but is not
-approved yet.
+`b2cff0cd0abd0ac134a16ae7a9695f88e8826104`. The review recommends a future
+Group A Safe Foundation install only after explicit approval:
+`numpy==1.26.4`, `scipy==1.11.4`, `tqdm`, `PyYAML`, `chardet`, and `psutil`,
+with constraints protecting `torch==2.7.0+cu128` and
+`torchaudio==2.7.0+cu128`. No GPT-SoVITS dependencies, TorchCodec, ffmpeg,
+models, WebUI, inference, synthesis, or audio were installed or generated.
+TASK-TTS-004E4A foundation dependency install is the next recommended task but
+is not approved yet.
 
-**Task:** TASK-TTS-004D / TASK-TTS-004D2 / TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E3A
-**Status:** TASK-TTS-004E3A DONE - GPT-SOVITS LAB PYTORCH CUDA VERIFIED / GPT-SOVITS DEPENDENCIES NOT INSTALLED
+**Task:** TASK-TTS-004D / TASK-TTS-004D2 / TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E4
+**Status:** TASK-TTS-004E4 DONE - GPT-SOVITS DEPENDENCY COMPATIBILITY REVIEW COMPLETE / DEPENDENCY INSTALL NOT APPROVED
 **Date:** 2026-06-19
 **Scope:** Documentation-only feasibility research for long-term Christina
 character voice candidates, environment-check-only readiness inspection,
@@ -46,9 +47,9 @@ The practical conclusion is:
 
 Recommended next path:
 
-1. TASK-TTS-004E4 - GPT-SoVITS dependency compatibility review, only after
+1. TASK-TTS-004E4A - GPT-SoVITS foundation dependency install, only after
    explicit approval.
-2. A later GPT-SoVITS dependency/model/inference probe, only after separate
+2. Later GPT-SoVITS audio/model/inference probes, only after separate
    dependency/model/audio approvals are granted.
 3. TASK-TTS-005 - TTS Runtime Playback Queue, only after provider decision.
 

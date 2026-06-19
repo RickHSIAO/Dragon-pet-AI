@@ -479,8 +479,14 @@ Confirmed not performed:
 DONE - GPT-SOVITS LAB PYTORCH CUDA VERIFIED / GPT-SOVITS DEPENDENCIES NOT INSTALLED
 ```
 
+Dependency review follow-up:
+
+```text
+TASK-TTS-004E4 - DONE - GPT-SOVITS DEPENDENCY COMPATIBILITY REVIEW COMPLETE / DEPENDENCY INSTALL NOT APPROVED
+```
+
 Recommended next task, not approved yet:
 
 ```text
-TASK-TTS-004E4 - GPT-SoVITS Dependency Compatibility Review
+TASK-TTS-004E4A - GPT-SoVITS Foundation Dependency Install
 ```

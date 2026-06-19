@@ -1,7 +1,7 @@
 # TTS Architecture
 
-**Task:** TASK-TTS-001 / TASK-TTS-004E3A
-**Status:** TASK-TTS-004E3A DONE - GPT-SOVITS LAB PYTORCH CUDA VERIFIED / GPT-SOVITS DEPENDENCIES NOT INSTALLED
+**Task:** TASK-TTS-001 / TASK-TTS-004E4
+**Status:** TASK-TTS-004E4 DONE - GPT-SOVITS DEPENDENCY COMPATIBILITY REVIEW COMPLETE / DEPENDENCY INSTALL NOT APPROVED
 **Date:** 2026-06-19
 **Scope:** Provider-neutral architecture plus TASK-TTS-002 backend mock skeleton,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B VOICEVOX manual
@@ -15,27 +15,29 @@ checkpoint, TASK-TTS-004E2 blocked Phase 1 bootstrap attempt, and
 TASK-TTS-004E2A blocked isolated Miniconda bootstrap attempt, and
 TASK-TTS-004E2A2 Miniconda failure diagnostics, TASK-TTS-004E2A3 UTF-8 retry,
 and TASK-TTS-004E2B existing-Anaconda Phase 1 resume, TASK-TTS-004E3
-PyTorch/CUDA compatibility review, and TASK-TTS-004E3A lab-only PyTorch/CUDA
-install verification. No runtime
+PyTorch/CUDA compatibility review, TASK-TTS-004E3A lab-only PyTorch/CUDA
+install verification, and TASK-TTS-004E4 dependency compatibility review. No
+runtime
 wiring, app playback, runtime/default dependency, schema change, STT behavior
 change, Conversation Mode behavior change, or Owner Voice behavior change is
 added by TASK-TTS-004C2, TASK-TTS-004C3, TASK-TTS-004D, TASK-TTS-004D2,
 TASK-TTS-004D4, TASK-TTS-004E, TASK-TTS-004E2, TASK-TTS-004E2A,
-TASK-TTS-004E2A2, TASK-TTS-004E2A3, TASK-TTS-004E2B, TASK-TTS-004E3, or
-TASK-TTS-004E3A.
+TASK-TTS-004E2A2, TASK-TTS-004E2A3, TASK-TTS-004E2B, TASK-TTS-004E3,
+TASK-TTS-004E3A, or TASK-TTS-004E4.
 
-TASK-TTS-004E3A install checkpoint:
+TASK-TTS-004E4 dependency review checkpoint:
 
-- Installed only `torch==2.7.0` and `torchaudio==2.7.0` from PyTorch CUDA
-  `12.8` wheels into the isolated GPT-SoVITS lab env.
-- Verified `torch 2.7.0+cu128`, `torchaudio 2.7.0+cu128`,
-  `torch.version.cuda=12.8`, CUDA availability, RTX 3070 device detection, and
-  a minimal CUDA tensor on `cuda:0`.
-- `numpy` remains uninstalled and torch emitted a non-blocking missing-NumPy
-  warning; no unapproved dependency was added to resolve it.
-- GPT-SoVITS `install.ps1`, TorchCodec, remaining dependencies, models, WebUI,
-  inference, synthesis, runtime playback, and auto-speaking remain separate
-  future approvals.
+- Reviewed GPT-SoVITS dependency sources without installing anything.
+- Direct official scripts and full requirements remain unsafe for the next
+  step because they can replace torch/torchaudio, force native builds, install
+  system tools, and download models.
+- Recommended first future task is TASK-TTS-004E4A Group A Safe Foundation:
+  `numpy==1.26.4`, `scipy==1.11.4`, `tqdm`, `PyYAML`, `chardet`, and `psutil`,
+  guarded by lab-local constraints protecting `torch==2.7.0+cu128` and
+  `torchaudio==2.7.0+cu128`.
+- TorchCodec, full GPT-SoVITS dependencies, models, WebUI, inference,
+  synthesis, runtime playback, and auto-speaking remain separate future
+  approvals.
 - Runtime TTS remains disabled/mock-only.
 
 This document defines the target architecture for Christina voice output and the

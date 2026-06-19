@@ -1,7 +1,7 @@
 # TTS Character Voice Lab Plan
 
-**Task:** TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B / TASK-TTS-004E3A
-**Status:** TASK-TTS-004E3A DONE - GPT-SOVITS LAB PYTORCH CUDA VERIFIED / GPT-SOVITS DEPENDENCIES NOT INSTALLED
+**Task:** TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B / TASK-TTS-004E4
+**Status:** TASK-TTS-004E4 DONE - GPT-SOVITS DEPENDENCY COMPATIBILITY REVIEW COMPLETE / DEPENDENCY INSTALL NOT APPROVED
 **Date:** 2026-06-19
 **Scope:** Planning and review boundary for future GPT-SoVITS /
 Style-Bert-VITS2 experiments in an isolated lab environment. GPT-SoVITS Phase 1
@@ -48,6 +48,12 @@ wheel index. Verification passed for `torch 2.7.0+cu128`, `torchaudio
 2.7.0+cu128`, CUDA build `12.8`, RTX 3070 detection, and a minimal CUDA tensor.
 `numpy` remains uninstalled; the missing-NumPy warning is recorded as
 non-blocking for this task.
+
+TASK-TTS-004E4 reviewed dependency compatibility only. It recommends a future
+Group A Safe Foundation install with `numpy==1.26.4`, `scipy==1.11.4`, `tqdm`,
+`PyYAML`, `chardet`, and `psutil`, guarded by lab-local constraints that
+protect `torch==2.7.0+cu128` and `torchaudio==2.7.0+cu128`. That future task is
+TASK-TTS-004E4A and is not approved yet.
 
 ---
 
@@ -192,6 +198,7 @@ Plan:
 - Keep CUDA PyTorch lab-only.
 - TASK-TTS-004E3A installed candidate-specific PyTorch/Torchaudio only inside
   the lab Conda prefix environment after explicit approval.
+- TASK-TTS-004E4 reviewed future dependencies only; no package was installed.
 - The verified package family is pinned `torch==2.7.0` + `torchaudio==2.7.0`
   from PyTorch `cu128` wheels.
 - PyTorch `cu126` and CPU-only fallback paths were not used.
@@ -464,5 +471,6 @@ Minimum evidence before runtime provider selection:
 - TASK-TTS-004E3A PyTorch/CUDA install: done and verified with
   `torch 2.7.0+cu128`, `torchaudio 2.7.0+cu128`, CUDA build `12.8`, RTX 3070,
   and a minimal CUDA tensor.
-- Next recommended task: TASK-TTS-004E4 dependency compatibility review, not
+- TASK-TTS-004E4 dependency compatibility review: done, no dependency install.
+- Next recommended task: TASK-TTS-004E4A foundation dependency install, not
   approved yet.

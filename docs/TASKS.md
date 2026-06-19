@@ -25757,10 +25757,138 @@ Documentation output:
   STT, Conversation Mode, Owner Voice, schema, backend venv, or dependency-file
   change was added.
 
-Recommended next task, not approved yet:
+Completed follow-up task:
 
 ```text
 TASK-TTS-004E4 - GPT-SoVITS Dependency Compatibility Review
+```
+
+---
+
+## TASK-TTS-004E4 | GPT-SoVITS Dependency Compatibility Review
+
+**Status:** DONE - GPT-SOVITS DEPENDENCY COMPATIBILITY REVIEW COMPLETE / DEPENDENCY INSTALL NOT APPROVED
+**Date:** 2026-06-19
+**Phase:** Phase 5 - Companion Voice Output Architecture
+**Depends on:** TASK-TTS-004E3A
+
+### Goal
+
+Determine a safe, staged dependency-install plan for GPT-SoVITS on Windows 11,
+Python `3.10.20`, `torch 2.7.0+cu128`, `torchaudio 2.7.0+cu128`, RTX 3070
+8GB, and GPT-SoVITS commit
+`b2cff0cd0abd0ac134a16ae7a9695f88e8826104`, without installing anything.
+
+### Result
+
+TASK-TTS-004E4 completed:
+
+```text
+DONE - GPT-SOVITS DEPENDENCY COMPATIBILITY REVIEW COMPLETE / DEPENDENCY INSTALL NOT APPROVED
+```
+
+Inspected read-only:
+
+- `requirements.txt`
+- `extra-req.txt`
+- `install.ps1`
+- `install.sh`
+- `Dockerfile`
+- `docker-compose.yaml`
+- `docker_build.sh`
+- `Docker/install_wrapper.sh`
+- `Docker/miniforge_install.sh`
+- `GPT_SoVITS/BigVGAN/requirements.txt`
+- `README.md`
+- `go-webui.ps1`
+- `go-webui.bat`
+
+Absent at repo root:
+
+- `pyproject.toml`
+- `setup.py`
+- `environment.yml`
+- `environment.yaml`
+- constraints file
+
+Key findings:
+
+- `requirements.txt` contains `numpy<2.0`, `librosa==0.10.2`, bare
+  `torchaudio`, platform-gated `onnxruntime-gpu`, `funasr==1.0.27`,
+  `transformers>=4.43,<=4.50`, `peft<0.18.0`, `torchmetrics<=1.5`,
+  `pydantic<=2.10.6`, `ctranslate2>=4.0,<5`, `av>=11`, and
+  `fastapi[standard]>=0.115.2`.
+- `requirements.txt` also has `--no-binary=opencc`, which is a Windows native
+  build risk even though PyPI metadata showed Windows cp310 wheels for OpenCC.
+- `extra-req.txt` contains only `faster-whisper`.
+- BigVGAN requirements contain bare `torch` and training/audio packages such as
+  `pesq`, `auraloss`, `nnAudio`, and `ninja`; this is not a foundation install
+  set.
+- `install.ps1` / `install.sh` are rejected for the next step because they can
+  install unpinned `torch torchcodec`, install system tools, install full
+  requirements, and download models/dictionaries.
+- Docker scripts are rejected for the Windows Conda prefix because they install
+  Miniforge/Python/build tools/TorchCodec/flash-attn and use Docker image
+  assumptions.
+
+Primary future install group:
+
+```text
+Group A - Safe Foundation
+numpy==1.26.4
+scipy==1.11.4
+tqdm
+PyYAML
+chardet
+psutil
+```
+
+Fallback:
+
+```text
+Keep numpy==1.26.4 and use scipy==1.12.0 only if scipy==1.11.4 conflicts.
+```
+
+Protected torch strategy:
+
+- Use a lab-local constraints file outside the GPT-SoVITS repo.
+- Pin `torch==2.7.0+cu128` and `torchaudio==2.7.0+cu128`.
+- Use explicit staged package lists rather than official full requirements.
+- Use `--upgrade-strategy only-if-needed`.
+- Verify torch, torchaudio, CUDA availability, RTX 3070 detection, and a
+  minimal CUDA tensor after every future group.
+
+Documentation output:
+
+- `docs/TTS_GPT_SOVITS_DEPENDENCY_REVIEW.md`
+- External manifest:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E4_DEPENDENCY_COMPATIBILITY_REVIEW.md`
+
+### Acceptance Criteria
+
+- [x] GPT-SoVITS dependency sources inspected read-only.
+- [x] Dependency inventory categorized into core runtime, audio/codec,
+  ML/GPU-sensitive, Windows native-build risk, WebUI/API, and optional training
+  groups.
+- [x] Torch/torchaudio replacement risks identified.
+- [x] NumPy recommendation recorded: primary `numpy==1.26.4` +
+  `scipy==1.11.4`; fallback `scipy==1.12.0`.
+- [x] ffmpeg-python, system ffmpeg, PyAV, TorchCodec, and torchaudio codec
+  boundaries documented separately.
+- [x] Windows wheel/build risks recorded from read-only PyPI metadata checks.
+- [x] Staged install groups defined.
+- [x] Future commands documented and marked `NOT APPROVED / DO NOT RUN YET`.
+- [x] First install success criteria and rejection criteria documented.
+- [x] No package install/uninstall, requirements install, model/download, WebUI,
+  inference, synthesis, audio generation, Anaconda base change, PATH/profile/
+  registry change, GPT-SoVITS source change, Dragon Pet AI runtime change,
+  backend venv change, `/chat`, STT, Conversation Mode, Owner Voice, schema,
+  playback, or auto-speaking change was added.
+
+Recommended next task, not approved yet:
+
+```text
+TASK-TTS-004E4A - GPT-SoVITS Foundation Dependency Install
 ```
 
 ---
