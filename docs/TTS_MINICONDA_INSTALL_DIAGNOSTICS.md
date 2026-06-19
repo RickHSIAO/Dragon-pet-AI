@@ -188,9 +188,9 @@ Not performed:
 
 ## 10. Next Step
 
-Do not continue to TASK-TTS-004E2B or retry Miniconda until the user explicitly
-approves cleanup, retry, alternate installer/tooling, or a different isolated
-environment strategy.
+TASK-TTS-004E2B was later explicitly approved and avoided another Miniconda
+retry by using the existing machine-wide Anaconda path. Do not retry Miniconda
+again unless a future task explicitly approves it.
 
 ---
 
@@ -210,3 +210,14 @@ BLOCKED - UTF-8 MINICONDA RETRY FAILED / NO FURTHER RETRY PERFORMED
 ```
 
 See `docs/TTS_MINICONDA_UTF8_RETRY.md`.
+
+---
+
+## 12. TASK-TTS-004E2B Follow-Up
+
+TASK-TTS-004E2B later avoided another Miniconda retry and resumed Phase 1
+through the existing machine-wide Anaconda. It created the isolated Python 3.10
+env and cloned the official GPT-SoVITS repo without touching the failed partial
+Miniconda evidence.
+
+See `docs/TTS_EXISTING_ANACONDA_GPT_SOVITS_PHASE1.md`.

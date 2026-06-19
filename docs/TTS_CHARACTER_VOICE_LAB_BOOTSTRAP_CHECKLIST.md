@@ -1,7 +1,7 @@
 # TTS Character Voice Lab Bootstrap Checklist
 
-**Task:** TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3
-**Status:** TASK-TTS-004E2A3 BLOCKED - UTF-8 MINICONDA RETRY FAILED / NO FURTHER RETRY PERFORMED
+**Task:** TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B
+**Status:** TASK-TTS-004E2B DONE - EXISTING ANACONDA VERIFIED / GPT-SOVITS LAB PHASE 1 READY
 **Date:** 2026-06-19
 **Scope:** Manual-command checklist for a future isolated character voice lab.
 This task did not create the lab folder, clone external repos, install
@@ -28,6 +28,10 @@ exact upstream root cause remains unproven.
 TASK-TTS-004E2A3 performed one approved same-installer same-path retry after
 deleting only the approved partial install root. The retry still failed with
 exit code `2`, and no further retry or post-retry cleanup was performed.
+
+TASK-TTS-004E2B verified the existing machine-wide Anaconda and completed Phase
+1 resume: isolated Python 3.10 env plus official GPT-SoVITS clone. PyTorch,
+CUDA, dependencies, models, WebUI, inference, and audio remain unapproved.
 
 ---
 
@@ -431,3 +435,24 @@ Chinese Christina provider remains unresolved.
   Anaconda removal, provider clone, env creation, dependency install,
   PyTorch/CUDA install, model download, training, inference, WebUI, synthesis,
   audio generation, runtime wiring, or backend venv change was performed.
+
+---
+
+## 18. TASK-TTS-004E2B Existing Anaconda Resume
+
+- Final status: DONE - EXISTING ANACONDA VERIFIED / GPT-SOVITS LAB PHASE 1
+  READY.
+- Evidence doc: `docs/TTS_EXISTING_ANACONDA_GPT_SOVITS_PHASE1.md`.
+- Existing Anaconda root: `C:\ProgramData\anaconda3`.
+- Target env:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\envs\gpt-sovits-py310`.
+- Lab package cache:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\pkgs-cache`.
+- Target Python: `3.10.20`.
+- PyTorch probe: `None`.
+- Official GPT-SoVITS clone verified at commit
+  `b2cff0cd0abd0ac134a16ae7a9695f88e8826104`.
+- `install.ps1` was not run.
+- No dependencies, PyTorch/CUDA packages, models, datasets, training,
+  inference, WebUI, synthesis, generated audio, runtime wiring, playback, or
+  auto-speaking were added.

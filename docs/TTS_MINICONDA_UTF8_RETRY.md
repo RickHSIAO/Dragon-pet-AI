@@ -181,6 +181,7 @@ TASK-TTS-004E2A3 exhausted the approved one-time retry. The failed partial
 install directory exists again because the retry failed with exit code `2`; it
 was not deleted after retry because no post-retry cleanup was approved.
 
-Next action requires new explicit approval for a different remediation path,
-such as manual cleanup plus alternate installer/tooling, existing Anaconda state
-repair, or a different isolated environment strategy.
+TASK-TTS-004E2B later used the existing machine-wide Anaconda instead of
+retrying Miniconda again. It created the isolated Python 3.10 env and cloned the
+official GPT-SoVITS repo; see
+`docs/TTS_EXISTING_ANACONDA_GPT_SOVITS_PHASE1.md`.

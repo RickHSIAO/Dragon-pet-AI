@@ -560,6 +560,25 @@ Suggested research and implementation tasks:
   synthesis, audio generation, runtime playback, `/chat` integration,
   auto-speaking, STT, Conversation Mode, Owner Voice, or schema behavior change
   is added.
+- TASK-TTS-004E2B Existing Anaconda Validation / GPT-SoVITS Phase 1 Resume.
+  **DONE - EXISTING ANACONDA VERIFIED / GPT-SOVITS LAB PHASE 1 READY
+  (2026-06-19):** Added
+  `docs/TTS_EXISTING_ANACONDA_GPT_SOVITS_PHASE1.md` and external manifest
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2B_EXISTING_ANACONDA_RESUME.md`.
+  Existing machine-wide Anaconda at `C:\ProgramData\anaconda3` was verified
+  with direct `conda.exe`; process-local UTF-8 was required for env-list
+  validation. Created isolated Python `3.10.20` env at
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\envs\gpt-sovits-py310`; PyTorch
+  probe returned `None`. Cloned official GPT-SoVITS origin
+  `https://github.com/RVC-Boss/GPT-SoVITS.git`, branch `main`, commit
+  `b2cff0cd0abd0ac134a16ae7a9695f88e8826104`, license `MIT License`. No
+  Anaconda base package install/update, PATH/profile/registry change,
+  `conda init`, failed Miniconda modification, GPT-SoVITS `install.ps1`,
+  dependency/PyTorch/CUDA/model/dataset download, training, inference, WebUI,
+  synthesis, audio generation, runtime playback, `/chat` integration,
+  auto-speaking, STT, Conversation Mode, Owner Voice, schema behavior,
+  backend venv, or dependency-file change is added. TASK-TTS-004E3 PyTorch/CUDA
+  compatibility review is recommended next but not approved yet.
 - TASK-TTS-004 Playback queue and renderer diagnostics after a real provider
   candidate is validated.
 - TASK-TTS-005 Pet speaking state / bubble sync.

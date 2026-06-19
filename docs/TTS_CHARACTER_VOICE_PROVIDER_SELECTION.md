@@ -1,7 +1,7 @@
 # TTS Character Voice Provider Selection
 
-**Task:** TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3
-**Status:** TASK-TTS-004E2A3 BLOCKED - UTF-8 MINICONDA RETRY FAILED / NO FURTHER RETRY PERFORMED
+**Task:** TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B
+**Status:** TASK-TTS-004E2B DONE - EXISTING ANACONDA VERIFIED / GPT-SOVITS LAB PHASE 1 READY
 **Date:** 2026-06-19
 **Scope:** Docs-only provider-selection and first-probe approval plan for the
 future isolated character voice lab. This task does not create the lab, clone
@@ -43,6 +43,10 @@ but exact upstream root cause remains unproven and no retry was performed.
 TASK-TTS-004E2A3 performed one approved same-installer same-path retry with
 process-local UTF-8 settings. It still failed with exit code `2`, so the first
 probe remains blocked.
+
+TASK-TTS-004E2B resumed through the existing machine-wide Anaconda. The first
+lab candidate repo now exists and the isolated Python 3.10 env is ready, but
+runtime/provider approval still remains future work.
 
 ---
 
@@ -279,3 +283,23 @@ Result:
 - Post-retry cleanup: not performed because it was not approved.
 - First probe remains blocked until a human explicitly approves a new
   remediation path.
+
+---
+
+## 14. TASK-TTS-004E2B Existing Anaconda Phase 1 Resume
+
+See:
+
+- `docs/TTS_EXISTING_ANACONDA_GPT_SOVITS_PHASE1.md`
+
+Result:
+
+- Final status: DONE - EXISTING ANACONDA VERIFIED / GPT-SOVITS LAB PHASE 1
+  READY.
+- Isolated Python 3.10 env: created and verified.
+- PyTorch: absent (`None`).
+- Official GPT-SoVITS origin: `https://github.com/RVC-Boss/GPT-SoVITS.git`.
+- Branch: `main`.
+- Commit: `b2cff0cd0abd0ac134a16ae7a9695f88e8826104`.
+- License: `MIT License`.
+- First dependency/CUDA/model/audio probe is not approved yet.

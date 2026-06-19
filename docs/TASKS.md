@@ -25385,6 +25385,134 @@ F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2A3_MINICONDA_UTF
 
 ---
 
+## TASK-TTS-004E2B | Existing Anaconda Validation / GPT-SoVITS Phase 1 Resume
+
+**Status:** DONE - EXISTING ANACONDA VERIFIED / GPT-SOVITS LAB PHASE 1 READY
+**Date:** 2026-06-19
+**Phase:** Phase 5 - Companion Voice Output Architecture
+**Depends on:** TASK-TTS-004E2A3
+
+### Goal
+
+Validate the existing machine-wide Anaconda installation, then resume the
+approved GPT-SoVITS Phase 1 only if that Anaconda is complete and usable. If
+validation passes, create the isolated Python 3.10 prefix environment and clone
+the official GPT-SoVITS repository. Do not modify Anaconda base, PATH, profile,
+registry, the failed Miniconda evidence, Dragon Pet AI runtime, or dependency
+files.
+
+### Result
+
+TASK-TTS-004E2B succeeded:
+
+```text
+DONE - EXISTING ANACONDA VERIFIED / GPT-SOVITS LAB PHASE 1 READY
+```
+
+Selected Anaconda:
+
+- Registry entry:
+  `HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\Anaconda3 2025.12-2 (Python 3.13.9 64-bit)`.
+- Root: `C:\ProgramData\anaconda3`.
+- Conda executable: `C:\ProgramData\anaconda3\Scripts\conda.exe`.
+- Conda version: `conda 25.11.1`.
+- `conda info --base`: `C:\ProgramData\anaconda3`.
+- Base Python: `C:\ProgramData\anaconda3\python.exe`.
+- Base Python version: `Python 3.13.9`.
+
+Validation note:
+
+- Default code-page `conda env list` still fails with the known `cp950`
+  `UnicodeDecodeError`.
+- Direct validation succeeds under process-local `PYTHONUTF8=1` and
+  `PYTHONIOENCODING=utf-8`.
+- No global environment variable, PATH, or profile was modified.
+
+Created isolated env:
+
+- Target prefix:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\envs\gpt-sovits-py310`.
+- Lab package cache:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\pkgs-cache`.
+- Creation exit code: `0`.
+- Target Python: `Python 3.10.20`.
+- Target executable:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\envs\gpt-sovits-py310\python.exe`.
+- PyTorch probe: `None`.
+
+Cloned official GPT-SoVITS:
+
+- Path:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\repos\GPT-SoVITS`.
+- Origin: `https://github.com/RVC-Boss/GPT-SoVITS.git`.
+- Branch: `main`.
+- Commit: `b2cff0cd0abd0ac134a16ae7a9695f88e8826104`.
+- License: `MIT License`.
+- `README.md`, `LICENSE`, and `install.ps1` are present.
+- `install.ps1` was not run.
+
+### Artifact Scan
+
+External lab scan for `*.ckpt`, `*.pth`, `*.pt`, `*.safetensors`, `*.onnx`,
+`*.wav`, `*.mp3`, and `*.flac` found only three tiny
+`distutils-precedence.pth` package metadata files under the new env,
+`pkgs-cache`, and the prior failed Miniconda package cache. They are not model
+weights or audio. No model weights or audio were created.
+
+### Documentation Output
+
+Added:
+
+- `docs/TTS_EXISTING_ANACONDA_GPT_SOVITS_PHASE1.md`
+
+Updated:
+
+- `README.md`
+- `docs/ROADMAP.md`
+- `docs/TASKS.md`
+- `docs/TTS_ARCHITECTURE.md`
+- `docs/TTS_CHARACTER_VOICE_FEASIBILITY.md`
+- `docs/TTS_CHARACTER_VOICE_LAB_PLAN.md`
+- `docs/TTS_CHARACTER_VOICE_LAB_BOOTSTRAP_CHECKLIST.md`
+- `docs/TTS_CHARACTER_VOICE_PROVIDER_SELECTION.md`
+- `docs/TTS_GPT_SOVITS_LAB_PHASE1.md`
+- `docs/TTS_MINICONDA_LAB_BOOTSTRAP.md`
+- `docs/TTS_MINICONDA_INSTALL_DIAGNOSTICS.md`
+- `docs/TTS_MINICONDA_UTF8_RETRY.md`
+- `docs/TTS_PROVIDER_RESEARCH.md`
+- `docs/VOICE_TTS_RESEARCH.md`
+
+External manifest:
+
+```text
+F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2B_EXISTING_ANACONDA_RESUME.md
+```
+
+### Acceptance Criteria
+
+- [x] Existing Anaconda registry entry inspected read-only.
+- [x] Existing Anaconda executable/base/version/base Python/env list verified.
+- [x] Failed lab Miniconda residual `_conda.exe` was not used.
+- [x] Target Python 3.10 prefix env was created and verified.
+- [x] PyTorch probe returned `None`.
+- [x] Official GPT-SoVITS repo cloned and verified.
+- [x] No Anaconda base package install/update, PATH/profile/registry change,
+  `conda init`, Miniconda retry, alternate environment manager install,
+  GPT-SoVITS `install.ps1`, GPT-SoVITS dependency install, `pip install`,
+  PyTorch/CUDA install, model/dataset download, training, inference, WebUI,
+  synthesis, audio generation, runtime TTS wiring, playback, auto-speaking,
+  `/chat` schema change, mood schema change, STT behavior change, Conversation
+  Mode behavior change, Owner Voice behavior change, backend venv change, or
+  dependency-file change was added.
+
+Recommended next task, not approved yet:
+
+```text
+TASK-TTS-004E3 - GPT-SoVITS Lab PyTorch/CUDA Compatibility Review
+```
+
+---
+
 ## TASK-228 | Output Queue Runtime Skeleton, Disabled by Default
 
 **Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS

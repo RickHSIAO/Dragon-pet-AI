@@ -1,5 +1,15 @@
 # TTS Character Voice Feasibility
 
+**Latest TASK-TTS-004E2B status (2026-06-19):** Existing Anaconda is verified
+and GPT-SoVITS Phase 1 is ready. The external lab now has an isolated Python
+`3.10.20` env at `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\envs\gpt-sovits-py310`
+and an official GPT-SoVITS clone at
+`F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\repos\GPT-SoVITS`, commit
+`b2cff0cd0abd0ac134a16ae7a9695f88e8826104`. PyTorch is absent and no
+dependencies/models/audio were installed or generated. TASK-TTS-004E3
+PyTorch/CUDA compatibility review is the next recommended task but is not
+approved yet.
+
 **Task:** TASK-TTS-004D / TASK-TTS-004D2 / TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A
 **Status:** TASK-TTS-004E2A BLOCKED - ISOLATED MINICONDA INSTALL FAILED
 **Date:** 2026-06-19

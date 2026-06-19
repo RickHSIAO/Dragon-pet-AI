@@ -1,7 +1,7 @@
 # TTS Character Voice Lab Plan
 
-**Task:** TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3
-**Status:** TASK-TTS-004E2A3 BLOCKED - UTF-8 MINICONDA RETRY FAILED / NO FURTHER RETRY PERFORMED
+**Task:** TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B
+**Status:** TASK-TTS-004E2B DONE - EXISTING ANACONDA VERIFIED / GPT-SOVITS LAB PHASE 1 READY
 **Date:** 2026-06-19
 **Scope:** Planning-only boundary for future GPT-SoVITS / Style-Bert-VITS2
 experiments in an isolated lab environment. No lab folder was created, no
@@ -30,6 +30,10 @@ TASK-TTS-004E2A3 deleted only the approved failed partial install root and
 retried the same verified installer once with process-local UTF-8 settings. The
 retry still failed with exit code `2`, recreated a partial install, and no
 further retry or post-retry cleanup was performed.
+
+TASK-TTS-004E2B used the existing machine-wide Anaconda instead, created the
+isolated Python 3.10 GPT-SoVITS prefix env, and cloned the official GPT-SoVITS
+repository. Dependency/PyTorch/CUDA/model/audio work remains unapproved.
 
 ---
 
@@ -377,8 +381,8 @@ Minimum evidence before runtime provider selection:
 - PATH/Python registration inspection did not show Miniconda in persistent user,
   machine, or process PATH.
 - `conda init` was not run and the PowerShell profile was not modified.
-- Do not proceed to TASK-TTS-004E2B until the failed install is manually
-  reviewed or the user explicitly approves retry/cleanup.
+- This blocker was superseded by TASK-TTS-004E2B, which used the existing
+  machine-wide Anaconda instead of another Miniconda retry.
 
 ---
 
@@ -417,3 +421,24 @@ Minimum evidence before runtime provider selection:
 - Installer exit code remained `2`.
 - Required Conda/Python files remain missing.
 - No further retry or post-retry cleanup was performed.
+
+---
+
+## 17. TASK-TTS-004E2B Existing Anaconda Phase 1 Resume
+
+- Final status: DONE - EXISTING ANACONDA VERIFIED / GPT-SOVITS LAB PHASE 1
+  READY.
+- Evidence doc: `docs/TTS_EXISTING_ANACONDA_GPT_SOVITS_PHASE1.md`.
+- External manifest:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2B_EXISTING_ANACONDA_RESUME.md`.
+- Selected Anaconda root: `C:\ProgramData\anaconda3`.
+- Conda version: `25.11.1`.
+- Target env:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\envs\gpt-sovits-py310`.
+- Target Python: `3.10.20`.
+- PyTorch probe: `None`.
+- Official GPT-SoVITS clone:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\repos\GPT-SoVITS`.
+- Commit: `b2cff0cd0abd0ac134a16ae7a9695f88e8826104`.
+- Next recommended task: TASK-TTS-004E3 PyTorch/CUDA compatibility review, not
+  approved yet.

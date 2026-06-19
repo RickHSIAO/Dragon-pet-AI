@@ -1,7 +1,7 @@
 # TTS Provider Research
 
-**Task:** TASK-TTS-001 / TASK-TTS-004E2A3
-**Status:** TASK-TTS-004E2A3 BLOCKED - UTF-8 MINICONDA RETRY FAILED / NO FURTHER RETRY PERFORMED
+**Task:** TASK-TTS-001 / TASK-TTS-004E2B
+**Status:** TASK-TTS-004E2B DONE - EXISTING ANACONDA VERIFIED / GPT-SOVITS LAB PHASE 1 READY
 **Date:** 2026-06-19
 **Scope:** Provider research, implemented mock-provider skeleton boundary,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B manual VOICEVOX
@@ -14,14 +14,14 @@ plan, TASK-TTS-004D4 manual bootstrap checklist, TASK-TTS-004E provider
 selection checkpoint, TASK-TTS-004E2 blocked Phase 1 bootstrap attempt, and
 TASK-TTS-004E2A blocked isolated Miniconda bootstrap attempt, and
 TASK-TTS-004E2A2 Miniconda failure diagnostics, and TASK-TTS-004E2A3 UTF-8
-retry. GPT-SoVITS is
+retry, and TASK-TTS-004E2B existing-Anaconda Phase 1 resume. GPT-SoVITS is
 selected as the first isolated lab candidate, Style-Bert-VITS2 is the second
 provider / fallback research path, no real voice-quality provider is selected
 as final, no model is
 downloaded, the `edge-tts` install is optional/manual inside `backend\.venv`
 only, and no runtime synthesis/playback path is implemented by TASK-TTS-004C2,
 TASK-TTS-004C3, TASK-TTS-004D, TASK-TTS-004D2, TASK-TTS-004D3,
-TASK-TTS-004E2A, TASK-TTS-004E2A2, or TASK-TTS-004E2A3.
+TASK-TTS-004E2A, TASK-TTS-004E2A2, TASK-TTS-004E2A3, or TASK-TTS-004E2B.
 
 This document records candidate directions for Christina voice output. It should
 guide later experiments, not lock Dragon Pet AI to a single TTS engine.
@@ -852,6 +852,36 @@ Actual result:
   generated audio, runtime wiring, playback, or backend venv change was added.
 - External retry manifest:
   `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2A3_MINICONDA_UTF8_RETRY.md`.
+
+---
+
+## TASK-TTS-004E2B Existing Anaconda GPT-SoVITS Phase 1 Resume
+
+TASK-TTS-004E2B adds `docs/TTS_EXISTING_ANACONDA_GPT_SOVITS_PHASE1.md`.
+
+Actual result:
+
+- DONE - EXISTING ANACONDA VERIFIED / GPT-SOVITS LAB PHASE 1 READY.
+- Existing machine-wide Anaconda root: `C:\ProgramData\anaconda3`.
+- Conda version: `25.11.1`.
+- Process-local UTF-8 was required for direct env-list validation because the
+  default code page still hit the known `cp950` issue.
+- Isolated env:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\envs\gpt-sovits-py310`.
+- Target Python: `3.10.20`.
+- PyTorch probe: `None`.
+- Official GPT-SoVITS clone:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\repos\GPT-SoVITS`.
+- Origin: `https://github.com/RVC-Boss/GPT-SoVITS.git`.
+- Branch: `main`.
+- Commit: `b2cff0cd0abd0ac134a16ae7a9695f88e8826104`.
+- License: `MIT License`.
+- No base Anaconda package install/update, PATH/profile/registry change,
+  `conda init`, failed Miniconda modification, dependency/PyTorch/CUDA
+  install, model/dataset download, training, inference, WebUI, synthesis,
+  generated audio, runtime wiring, playback, or backend venv change was added.
+- External manifest:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2B_EXISTING_ANACONDA_RESUME.md`.
 
 ---
 

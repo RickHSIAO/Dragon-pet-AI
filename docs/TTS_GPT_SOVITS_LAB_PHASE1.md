@@ -1,7 +1,7 @@
 # GPT-SoVITS Isolated Lab Phase 1
 
 **Task:** TASK-TTS-004E2
-**Status:** SUPERSEDED BY TASK-TTS-004E2A3 BLOCKED - UTF-8 MINICONDA RETRY FAILED / NO FURTHER RETRY PERFORMED
+**Status:** TASK-TTS-004E2B DONE - EXISTING ANACONDA VERIFIED / GPT-SOVITS LAB PHASE 1 READY
 **Date:** 2026-06-19
 **Scope:** Approved Phase 1 bootstrap for the external GPT-SoVITS lab, limited
 to creating the external lab folder, cloning the official GPT-SoVITS repository,
@@ -223,6 +223,9 @@ retried the same verified installer once to the same path with process-local
 UTF-8 settings. The retry still failed with exit code `2`; see
 `docs/TTS_MINICONDA_UTF8_RETRY.md`.
 
-The previously suggested next task, TASK-TTS-004E3 GPT-SoVITS Lab
-PyTorch/CUDA Compatibility Review, is not approved and cannot start from this
-blocked state.
+TASK-TTS-004E2B resumed Phase 1 through the existing machine-wide Anaconda,
+created the isolated Python 3.10 env, and cloned the official GPT-SoVITS repo;
+see `docs/TTS_EXISTING_ANACONDA_GPT_SOVITS_PHASE1.md`.
+
+The next recommended task is TASK-TTS-004E3 GPT-SoVITS Lab PyTorch/CUDA
+Compatibility Review. It is not approved yet.

@@ -1,7 +1,7 @@
 # TTS Miniconda Lab Bootstrap
 
-**Task:** TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3
-**Status:** TASK-TTS-004E2A3 BLOCKED - UTF-8 MINICONDA RETRY FAILED / NO FURTHER RETRY PERFORMED
+**Task:** TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B
+**Status:** TASK-TTS-004E2B DONE - EXISTING ANACONDA VERIFIED / GPT-SOVITS LAB PHASE 1 READY
 **Date:** 2026-06-19
 **Scope:** Approved isolated Miniconda bootstrap for the external character
 voice lab. This task was allowed to download the official Miniconda Windows
@@ -269,12 +269,11 @@ BLOCKED - UTF-8 MINICONDA RETRY FAILED / NO FURTHER RETRY PERFORMED
 
 ## 9. Next Step
 
-Do not continue to TASK-TTS-004E2B until the failed isolated Miniconda
-installation is manually reviewed or the user explicitly approves a retry,
-cleanup, alternate installer/tooling, or different environment strategy.
+TASK-TTS-004E2B later resumed Phase 1 through the existing machine-wide
+Anaconda instead of retrying Miniconda. See
+`docs/TTS_EXISTING_ANACONDA_GPT_SOVITS_PHASE1.md`.
 
-The intended TASK-TTS-004E2B scope, if later approved, is limited to resuming
-GPT-SoVITS Phase 1: creating the isolated Python 3.10 environment and cloning /
-verifying the official GPT-SoVITS repository. It still must not install
-GPT-SoVITS dependencies, PyTorch/CUDA packages, models, or run inference unless
-separately approved.
+TASK-TTS-004E2B completed only the Phase 1 resume scope: creating the isolated
+Python 3.10 environment and cloning / verifying the official GPT-SoVITS
+repository. It did not install GPT-SoVITS dependencies, PyTorch/CUDA packages,
+models, or run inference. Those remain separate approval gates.
