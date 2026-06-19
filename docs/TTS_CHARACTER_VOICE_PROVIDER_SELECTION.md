@@ -1,7 +1,7 @@
 # TTS Character Voice Provider Selection
 
-**Task:** TASK-TTS-004E / TASK-TTS-004E2
-**Status:** TASK-TTS-004E2 BLOCKED - CONDA NOT AVAILABLE / NO INSTALL PERFORMED
+**Task:** TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A
+**Status:** TASK-TTS-004E2A BLOCKED - ISOLATED MINICONDA INSTALL FAILED
 **Date:** 2026-06-19
 **Scope:** Docs-only provider-selection and first-probe approval plan for the
 future isolated character voice lab. This task does not create the lab, clone
@@ -32,6 +32,9 @@ first isolated lab candidate.
 TASK-TTS-004E2 attempted the approved GPT-SoVITS Phase 1 bootstrap, but Conda
 was not available in the current PowerShell PATH. The first probe remains
 blocked.
+
+TASK-TTS-004E2A attempted isolated Miniconda bootstrap, but the verified
+official installer failed and rolled back. The first probe remains blocked.
 
 ---
 
@@ -207,3 +210,22 @@ Result:
 - PyTorch presence result in the target env: unavailable because the env does
   not exist; no PyTorch/CUDA package was installed.
 - Runtime TTS remains disabled/mock-only.
+
+---
+
+## 11. TASK-TTS-004E2A Blocked Miniconda Attempt
+
+See:
+
+- `docs/TTS_MINICONDA_LAB_BOOTSTRAP.md`
+
+Result:
+
+- Final status: BLOCKED - ISOLATED MINICONDA INSTALL FAILED.
+- Official installer download: succeeded.
+- SHA-256 verification: matched official index.
+- Installer exit code: `2`.
+- Valid isolated Conda installation: no.
+- Global PATH/Python pollution detected: no.
+- First probe remains blocked until the failed install is manually reviewed or
+  retry/cleanup is explicitly approved.

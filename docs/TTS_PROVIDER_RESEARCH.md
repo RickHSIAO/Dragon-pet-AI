@@ -1,7 +1,7 @@
 # TTS Provider Research
 
-**Task:** TASK-TTS-001 / TASK-TTS-004E2
-**Status:** TASK-TTS-004E2 BLOCKED - CONDA NOT AVAILABLE / NO INSTALL PERFORMED
+**Task:** TASK-TTS-001 / TASK-TTS-004E2A
+**Status:** TASK-TTS-004E2A BLOCKED - ISOLATED MINICONDA INSTALL FAILED
 **Date:** 2026-06-19
 **Scope:** Provider research, implemented mock-provider skeleton boundary,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B manual VOICEVOX
@@ -11,14 +11,15 @@ edge-tts dependency/audio output validation, TASK-TTS-004C3 docs-first
 edge-tts tuning workflow, TASK-TTS-004D character voice feasibility research,
 TASK-TTS-004D2 environment check workflow, TASK-TTS-004D3 isolated lab
 plan, TASK-TTS-004D4 manual bootstrap checklist, TASK-TTS-004E provider
-selection checkpoint, and TASK-TTS-004E2 blocked Phase 1 bootstrap attempt.
-GPT-SoVITS is selected as the first isolated lab candidate, Style-Bert-VITS2 is
-the second provider / fallback research path, no real voice-quality provider is
-selected as final, no model is
+selection checkpoint, TASK-TTS-004E2 blocked Phase 1 bootstrap attempt, and
+TASK-TTS-004E2A blocked isolated Miniconda bootstrap attempt. GPT-SoVITS is
+selected as the first isolated lab candidate, Style-Bert-VITS2 is the second
+provider / fallback research path, no real voice-quality provider is selected
+as final, no model is
 downloaded, the `edge-tts` install is optional/manual inside `backend\.venv`
 only, and no runtime synthesis/playback path is implemented by TASK-TTS-004C2,
 TASK-TTS-004C3, TASK-TTS-004D, TASK-TTS-004D2, TASK-TTS-004D3, or
-TASK-TTS-004E2.
+TASK-TTS-004E2A.
 
 This document records candidate directions for Christina voice output. It should
 guide later experiments, not lock Dragon Pet AI to a single TTS engine.
@@ -773,6 +774,27 @@ Actual result:
   auto-speaking was added.
 - Hardware evidence only: NVIDIA GeForce RTX 3070, 8192 MiB VRAM,
   NVIDIA-SMI/driver evidence `610.47`, CUDA compatibility `13.3`.
+
+---
+
+## TASK-TTS-004E2A Isolated Miniconda Bootstrap
+
+TASK-TTS-004E2A adds `docs/TTS_MINICONDA_LAB_BOOTSTRAP.md`.
+
+Actual result:
+
+- BLOCKED - ISOLATED MINICONDA INSTALL FAILED.
+- Official installer download succeeded.
+- Downloaded SHA-256 matched the official SHA-256.
+- Silent install returned exit code `2` and rolled back.
+- Required direct Conda/Python files are missing.
+- PATH inspection found no user, machine, or process PATH pollution.
+- `conda init` was not run and the PowerShell profile was not modified.
+- No GPT-SoVITS/Style-Bert repo, Conda env, dependency, PyTorch/CUDA package,
+  model, dataset, training, inference, WebUI, synthesis, generated audio,
+  runtime wiring, playback, or auto-speaking was added.
+- External manifest:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2A_MINICONDA_BOOTSTRAP.md`.
 
 ---
 

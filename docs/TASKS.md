@@ -25009,6 +25009,132 @@ Updated:
 
 ---
 
+## TASK-TTS-004E2A | Isolated Miniconda Bootstrap
+
+**Status:** BLOCKED - ISOLATED MINICONDA INSTALL FAILED
+**Date:** 2026-06-19
+**Phase:** Phase 5 - Companion Voice Output Architecture
+**Depends on:** TASK-TTS-004E2
+
+### Goal
+
+Bootstrap an isolated Miniconda installation for the external character voice
+lab without modifying system Python, user/system PATH, PowerShell profile, app
+dependencies, or Dragon Pet AI runtime behavior.
+
+### Result
+
+The official installer downloaded successfully and SHA-256 matched the official
+Miniconda index, but the silent install failed:
+
+- Installer exit code: `2`.
+- Expected installer exit code: `0`.
+- `.step.log` shows rollback after a `cp950` `UnicodeDecodeError` while reading
+  existing Conda-related paths.
+- Required direct verification files are missing:
+  - `condabin\conda.bat`
+  - `Scripts\conda.exe`
+  - `python.exe`
+  - `Uninstall-Miniconda3.exe`
+
+Residual `_conda.exe` exists and reports `conda 26.1.1`, but `_conda.exe info
+--base` points to a temporary extraction path, not the approved install path.
+This is not a valid isolated Miniconda installation.
+
+### Evidence
+
+Installer source:
+
+```text
+https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe
+```
+
+Installer path:
+
+```text
+F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\tools\installers\Miniconda3-latest-Windows-x86_64.exe
+```
+
+Installer size:
+
+```text
+99155816 bytes
+```
+
+Downloaded SHA-256:
+
+```text
+fe980247dfd30af229a55d9505b57e7c8dfbdb9d24c5bc66fb6078b6a2d53414
+```
+
+Official SHA-256:
+
+```text
+fe980247dfd30af229a55d9505b57e7c8dfbdb9d24c5bc66fb6078b6a2d53414
+```
+
+Hash match: true.
+
+Attempted install path:
+
+```text
+F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\tools\miniconda3
+```
+
+External manifest:
+
+```text
+F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2A_MINICONDA_BOOTSTRAP.md
+```
+
+PATH and registration:
+
+- User PATH contains install path: false.
+- Machine PATH contains install path: false.
+- Process PATH contains install path: false.
+- `Get-Command conda`: no command found.
+- `where.exe conda`: no command found.
+- `Get-Command python -All`: existing user Python commands only, not Miniconda.
+- `conda init`: not run.
+- PowerShell profile: not created or modified by this task.
+
+### Documentation Output
+
+Added:
+
+- `docs/TTS_MINICONDA_LAB_BOOTSTRAP.md`
+
+Updated:
+
+- `README.md`
+- `docs/ROADMAP.md`
+- `docs/TTS_ARCHITECTURE.md`
+- `docs/TTS_CHARACTER_VOICE_FEASIBILITY.md`
+- `docs/TTS_CHARACTER_VOICE_LAB_PLAN.md`
+- `docs/TTS_CHARACTER_VOICE_LAB_BOOTSTRAP_CHECKLIST.md`
+- `docs/TTS_CHARACTER_VOICE_PROVIDER_SELECTION.md`
+- `docs/TTS_GPT_SOVITS_LAB_PHASE1.md`
+- `docs/TTS_PROVIDER_RESEARCH.md`
+- `docs/VOICE_TTS_RESEARCH.md`
+
+### Acceptance Criteria
+
+- [x] Official installer source used.
+- [x] SHA-256 verified against official Miniconda index.
+- [x] Isolated installer attempted with `RegisterPython=0` and `AddToPath=0`.
+- [x] Install failure recorded accurately instead of claiming success.
+- [x] PATH/Python registration inspection recorded.
+- [x] External manifest written outside Dragon Pet AI.
+- [x] Runtime remains disabled/mock-only.
+- [x] No GPT-SoVITS or Style-Bert repo clone, Conda environment creation,
+  dependency install, PyTorch/CUDA install, model/dataset download, training,
+  inference, WebUI startup, synthesis, audio generation, runtime TTS wiring,
+  playback, auto-speaking, `/chat` schema change, mood schema change, STT
+  behavior change, Conversation Mode behavior change, or Owner Voice behavior
+  change is added.
+
+---
+
 ## TASK-228 | Output Queue Runtime Skeleton, Disabled by Default
 
 **Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS

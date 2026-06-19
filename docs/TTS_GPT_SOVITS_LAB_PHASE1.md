@@ -1,7 +1,7 @@
 # GPT-SoVITS Isolated Lab Phase 1
 
 **Task:** TASK-TTS-004E2
-**Status:** BLOCKED - CONDA NOT AVAILABLE / NO INSTALL PERFORMED
+**Status:** SUPERSEDED BY TASK-TTS-004E2A BLOCKED - ISOLATED MINICONDA INSTALL FAILED
 **Date:** 2026-06-19
 **Scope:** Approved Phase 1 bootstrap for the external GPT-SoVITS lab, limited
 to creating the external lab folder, cloning the official GPT-SoVITS repository,
@@ -207,6 +207,10 @@ Runtime TTS remains disabled/mock-only.
 
 TASK-TTS-004E2 remains blocked until Conda is available in the shell or the user
 explicitly approves a different isolated environment tool.
+
+TASK-TTS-004E2A approved an isolated Miniconda bootstrap. That attempt downloaded
+and verified the official installer, but the silent install failed with exit
+code `2`; see `docs/TTS_MINICONDA_LAB_BOOTSTRAP.md`.
 
 The previously suggested next task, TASK-TTS-004E3 GPT-SoVITS Lab
 PyTorch/CUDA Compatibility Review, is not approved and cannot start from this

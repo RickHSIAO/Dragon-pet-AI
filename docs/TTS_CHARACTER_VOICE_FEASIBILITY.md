@@ -1,13 +1,14 @@
 # TTS Character Voice Feasibility
 
-**Task:** TASK-TTS-004D / TASK-TTS-004D2 / TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2
-**Status:** TASK-TTS-004E2 BLOCKED - CONDA NOT AVAILABLE / NO INSTALL PERFORMED
+**Task:** TASK-TTS-004D / TASK-TTS-004D2 / TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A
+**Status:** TASK-TTS-004E2A BLOCKED - ISOLATED MINICONDA INSTALL FAILED
 **Date:** 2026-06-19
 **Scope:** Documentation-only feasibility research for long-term Christina
 character voice candidates, environment-check-only readiness inspection,
 isolated lab planning, manual bootstrap checklist, provider-selection
-checkpoint, and blocked GPT-SoVITS Phase 1 bootstrap evidence. No model was
-installed, downloaded, trained, or run.
+checkpoint, blocked GPT-SoVITS Phase 1 bootstrap evidence, and blocked isolated
+Miniconda bootstrap evidence. No model was installed, downloaded, trained, or
+run.
 
 ---
 
@@ -267,6 +268,25 @@ Summary:
   NVIDIA-SMI/driver evidence `610.47`, and CUDA compatibility `13.3`, but this
   does not prove PyTorch CUDA is installed.
 - Runtime TTS remains disabled/mock-only.
+
+### TASK-TTS-004E2A - Isolated Miniconda Bootstrap
+
+See:
+
+- `docs/TTS_MINICONDA_LAB_BOOTSTRAP.md`
+
+Summary:
+
+- Official Miniconda installer was downloaded from the approved source.
+- Downloaded SHA-256 matched the official SHA-256.
+- Silent install to the approved isolated path failed with exit code `2`.
+- Required direct Conda/Python files are missing, so Conda is still not ready
+  for GPT-SoVITS Phase 1 resume.
+- PATH/Python registration inspection did not show Miniconda pollution.
+- External manifest was written under the lab reports directory.
+- No GPT-SoVITS / Style-Bert-VITS2 clone, Conda env, dependency install,
+  PyTorch/CUDA install, model/dataset download, inference, WebUI, synthesis, or
+  runtime integration occurred.
 
 ### TASK-TTS-005 - TTS Runtime Playback Queue
 

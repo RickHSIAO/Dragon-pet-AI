@@ -1,7 +1,7 @@
 # TTS Character Voice Lab Bootstrap Checklist
 
-**Task:** TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2
-**Status:** TASK-TTS-004E2 BLOCKED - CONDA NOT AVAILABLE / NO INSTALL PERFORMED
+**Task:** TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A
+**Status:** TASK-TTS-004E2A BLOCKED - ISOLATED MINICONDA INSTALL FAILED
 **Date:** 2026-06-19
 **Scope:** Manual-command checklist for a future isolated character voice lab.
 This task did not create the lab folder, clone external repos, install
@@ -16,6 +16,9 @@ provider / fallback research path. The first real probe remains unapproved.
 
 TASK-TTS-004E2 attempted approved GPT-SoVITS Phase 1 bootstrap, but Conda was
 not available in the current PowerShell PATH. No lab setup was performed.
+
+TASK-TTS-004E2A attempted isolated Miniconda bootstrap, but the official
+installer failed with exit code `2` after successful SHA-256 verification.
 
 ---
 
@@ -362,3 +365,21 @@ Chinese Christina provider remains unresolved.
   WebUI, synthesis, generated audio, runtime TTS wiring, playback,
   auto-speaking, `/chat`, mood schema, STT, Conversation Mode, or Owner Voice
   behavior changed.
+
+---
+
+## 15. TASK-TTS-004E2A Blocked Miniconda Attempt
+
+- Final status: BLOCKED - ISOLATED MINICONDA INSTALL FAILED.
+- Evidence doc: `docs/TTS_MINICONDA_LAB_BOOTSTRAP.md`.
+- Official installer download and SHA-256 verification succeeded.
+- Silent install returned exit code `2` and rolled back.
+- Required `condabin\conda.bat`, `Scripts\conda.exe`, `python.exe`, and
+  `Uninstall-Miniconda3.exe` are missing.
+- PATH/Python registration inspection did not show Miniconda pollution.
+- `conda init` was not run.
+- PowerShell profile was not created or modified by this task.
+- No GPT-SoVITS / Style-Bert clone, Conda env, dependency install,
+  PyTorch/CUDA install, model/dataset download, training, inference, WebUI,
+  synthesis, audio generation, runtime TTS wiring, playback, auto-speaking,
+  `/chat`, mood schema, STT, Conversation Mode, or Owner Voice behavior changed.

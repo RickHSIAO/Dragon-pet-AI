@@ -1,7 +1,7 @@
 # TTS Character Voice Lab Plan
 
-**Task:** TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2
-**Status:** TASK-TTS-004E2 BLOCKED - CONDA NOT AVAILABLE / NO INSTALL PERFORMED
+**Task:** TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A
+**Status:** TASK-TTS-004E2A BLOCKED - ISOLATED MINICONDA INSTALL FAILED
 **Date:** 2026-06-19
 **Scope:** Planning-only boundary for future GPT-SoVITS / Style-Bert-VITS2
 experiments in an isolated lab environment. No lab folder was created, no
@@ -15,6 +15,11 @@ runtime provider is selected and no first probe is approved yet.
 TASK-TTS-004E2 attempted approved Phase 1 bootstrap, but Conda was unavailable
 in the current PowerShell PATH. No lab folder was created, no repository was
 cloned, and no isolated environment was created.
+
+TASK-TTS-004E2A downloaded and verified the official Miniconda installer, but
+the isolated silent install failed and rolled back. The lab now has tools and
+reports directories plus the installer and partial failed install artifacts, but
+no valid Conda installation.
 
 ---
 
@@ -347,3 +352,20 @@ Minimum evidence before runtime provider selection:
 - No dependencies, PyTorch/CUDA packages, models, datasets, training,
   inference, WebUI startup, synthesis, generated audio, or runtime wiring were
   performed.
+
+---
+
+## 14. TASK-TTS-004E2A Blocked Miniconda Bootstrap
+
+- Final status: BLOCKED - ISOLATED MINICONDA INSTALL FAILED.
+- Evidence doc: `docs/TTS_MINICONDA_LAB_BOOTSTRAP.md`.
+- External manifest:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2A_MINICONDA_BOOTSTRAP.md`.
+- Official Miniconda installer SHA-256 matched the official index.
+- Silent installer returned exit code `2`.
+- Required Conda files are missing, so direct isolated Conda verification failed.
+- PATH/Python registration inspection did not show Miniconda in persistent user,
+  machine, or process PATH.
+- `conda init` was not run and the PowerShell profile was not modified.
+- Do not proceed to TASK-TTS-004E2B until the failed install is manually
+  reviewed or the user explicitly approves retry/cleanup.

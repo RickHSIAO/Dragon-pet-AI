@@ -1,7 +1,7 @@
 # TTS Architecture
 
-**Task:** TASK-TTS-001 / TASK-TTS-004E2
-**Status:** TASK-TTS-004E2 BLOCKED - CONDA NOT AVAILABLE / NO INSTALL PERFORMED
+**Task:** TASK-TTS-001 / TASK-TTS-004E2A
+**Status:** TASK-TTS-004E2A BLOCKED - ISOLATED MINICONDA INSTALL FAILED
 **Date:** 2026-06-19
 **Scope:** Provider-neutral architecture plus TASK-TTS-002 backend mock skeleton,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B VOICEVOX manual
@@ -11,11 +11,12 @@ audio output validation, TASK-TTS-004C3 docs-first edge-tts tuning workflow,
 TASK-TTS-004D character voice feasibility research, TASK-TTS-004D2
 environment-check workflow, TASK-TTS-004D3 isolated lab plan,
 TASK-TTS-004D4 manual bootstrap checklist, TASK-TTS-004E provider-selection
-checkpoint, and TASK-TTS-004E2 blocked Phase 1 bootstrap attempt. No runtime
+checkpoint, TASK-TTS-004E2 blocked Phase 1 bootstrap attempt, and
+TASK-TTS-004E2A blocked isolated Miniconda bootstrap attempt. No runtime
 wiring, app playback, runtime/default dependency, schema change, STT behavior
 change, Conversation Mode behavior change, or Owner Voice behavior change is
 added by TASK-TTS-004C2, TASK-TTS-004C3, TASK-TTS-004D, TASK-TTS-004D2,
-TASK-TTS-004D4, TASK-TTS-004E, or TASK-TTS-004E2.
+TASK-TTS-004D4, TASK-TTS-004E, TASK-TTS-004E2, or TASK-TTS-004E2A.
 
 This document defines the target architecture for Christina voice output and the
 implemented TASK-TTS-002 mock skeleton. It remains provider-neutral: Dragon Pet
@@ -226,6 +227,18 @@ TASK-TTS-004E2 blocked bootstrap checkpoint:
 - No GPT-SoVITS dependency, PyTorch/CUDA package, model, dataset, training,
   inference, WebUI, synthesis, app runtime wiring, playback, or auto-speaking
   was added.
+
+TASK-TTS-004E2A blocked Miniconda checkpoint:
+
+- `docs/TTS_MINICONDA_LAB_BOOTSTRAP.md` records the isolated Miniconda attempt.
+- Official installer download and SHA-256 verification succeeded.
+- Silent install returned exit code `2` and rolled back; required
+  `condabin\conda.bat`, `Scripts\conda.exe`, `python.exe`, and uninstaller are
+  missing.
+- PATH inspection found no Miniconda install path in user, machine, or process
+  PATH. `conda init` was not run and the PowerShell profile was not modified.
+- No provider repo, Conda env, dependency, PyTorch/CUDA package, model, dataset,
+  inference, synthesis, runtime wiring, playback, or auto-speaking was added.
 
 ---
 

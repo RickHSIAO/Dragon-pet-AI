@@ -519,6 +519,18 @@ Suggested research and implementation tasks:
   inference, WebUI, synthesis, runtime playback, `/chat` integration,
   auto-speaking, STT, Conversation Mode, Owner Voice, or schema behavior change
   is added.
+- TASK-TTS-004E2A Isolated Miniconda Bootstrap.
+  **BLOCKED - ISOLATED MINICONDA INSTALL FAILED (2026-06-19):** Added
+  `docs/TTS_MINICONDA_LAB_BOOTSTRAP.md`. Official installer download and
+  SHA-256 verification succeeded, but the silent isolated install returned exit
+  code `2` and rolled back. Required `condabin\conda.bat`,
+  `Scripts\conda.exe`, `python.exe`, and uninstaller files are missing. PATH
+  inspection found no Miniconda path in user/machine/process PATH; `conda init`
+  was not run and PowerShell profile was not modified. No provider repo, Conda
+  env, dependency, PyTorch/CUDA package, model/dataset download, training,
+  inference, WebUI, synthesis, runtime playback, `/chat` integration,
+  auto-speaking, STT, Conversation Mode, Owner Voice, or schema behavior change
+  is added.
 - TASK-TTS-004 Playback queue and renderer diagnostics after a real provider
   candidate is validated.
 - TASK-TTS-005 Pet speaking state / bubble sync.
