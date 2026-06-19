@@ -1,7 +1,7 @@
 # TTS Character Voice Lab Plan
 
-**Task:** TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A
-**Status:** TASK-TTS-004E2A BLOCKED - ISOLATED MINICONDA INSTALL FAILED
+**Task:** TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2
+**Status:** TASK-TTS-004E2A2 BLOCKED - MINICONDA INSTALL ROOT CAUSE NOT IDENTIFIED / NO RETRY PERFORMED
 **Date:** 2026-06-19
 **Scope:** Planning-only boundary for future GPT-SoVITS / Style-Bert-VITS2
 experiments in an isolated lab environment. No lab folder was created, no
@@ -20,6 +20,11 @@ TASK-TTS-004E2A downloaded and verified the official Miniconda installer, but
 the isolated silent install failed and rolled back. The lab now has tools and
 reports directories plus the installer and partial failed install artifacts, but
 no valid Conda installation.
+
+TASK-TTS-004E2A2 performed diagnostics only. Evidence narrows the failure to
+rollback after a `cp950` `UnicodeDecodeError` while reading existing
+Conda-related paths, but exact upstream root cause remains unproven and no retry
+or cleanup was performed.
 
 ---
 
@@ -369,3 +374,24 @@ Minimum evidence before runtime provider selection:
 - `conda init` was not run and the PowerShell profile was not modified.
 - Do not proceed to TASK-TTS-004E2B until the failed install is manually
   reviewed or the user explicitly approves retry/cleanup.
+
+---
+
+## 15. TASK-TTS-004E2A2 Miniconda Diagnostics
+
+- Final status: BLOCKED - MINICONDA INSTALL ROOT CAUSE NOT IDENTIFIED / NO RETRY
+  PERFORMED.
+- Evidence doc: `docs/TTS_MINICONDA_INSTALL_DIAGNOSTICS.md`.
+- External manifest:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2A2_MINICONDA_INSTALL_DIAGNOSTICS.md`.
+- No installer retry, GUI install, cleanup, uninstall, alternate Conda tool,
+  Conda env, `conda init`, PATH/profile modification, provider clone, package
+  install, model download, inference, synthesis, audio generation, runtime
+  wiring, or backend venv change was performed.
+- Direct log evidence points to rollback after a `cp950` `UnicodeDecodeError`
+  while reading existing Conda-related paths.
+- Installer hash/signature remained valid, no relevant Application or Defender
+  Error/Warning was found over the install window, and a scoped lab tools write
+  probe passed.
+- Existing machine-wide Anaconda state was found, but exact upstream root cause
+  remains unproven.

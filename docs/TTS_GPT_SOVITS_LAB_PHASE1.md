@@ -1,7 +1,7 @@
 # GPT-SoVITS Isolated Lab Phase 1
 
 **Task:** TASK-TTS-004E2
-**Status:** SUPERSEDED BY TASK-TTS-004E2A BLOCKED - ISOLATED MINICONDA INSTALL FAILED
+**Status:** SUPERSEDED BY TASK-TTS-004E2A2 BLOCKED - MINICONDA INSTALL ROOT CAUSE NOT IDENTIFIED / NO RETRY PERFORMED
 **Date:** 2026-06-19
 **Scope:** Approved Phase 1 bootstrap for the external GPT-SoVITS lab, limited
 to creating the external lab folder, cloning the official GPT-SoVITS repository,
@@ -211,6 +211,12 @@ explicitly approves a different isolated environment tool.
 TASK-TTS-004E2A approved an isolated Miniconda bootstrap. That attempt downloaded
 and verified the official installer, but the silent install failed with exit
 code `2`; see `docs/TTS_MINICONDA_LAB_BOOTSTRAP.md`.
+
+TASK-TTS-004E2A2 then performed diagnostics only. It did not retry the installer
+or clean the partial install. Direct log evidence narrows the failure to
+rollback after a `cp950` `UnicodeDecodeError` while reading existing
+Conda-related paths, but exact upstream root cause remains unproven; see
+`docs/TTS_MINICONDA_INSTALL_DIAGNOSTICS.md`.
 
 The previously suggested next task, TASK-TTS-004E3 GPT-SoVITS Lab
 PyTorch/CUDA Compatibility Review, is not approved and cannot start from this

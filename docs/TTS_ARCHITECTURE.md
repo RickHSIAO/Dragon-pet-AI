@@ -1,7 +1,7 @@
 # TTS Architecture
 
-**Task:** TASK-TTS-001 / TASK-TTS-004E2A
-**Status:** TASK-TTS-004E2A BLOCKED - ISOLATED MINICONDA INSTALL FAILED
+**Task:** TASK-TTS-001 / TASK-TTS-004E2A2
+**Status:** TASK-TTS-004E2A2 BLOCKED - MINICONDA INSTALL ROOT CAUSE NOT IDENTIFIED / NO RETRY PERFORMED
 **Date:** 2026-06-19
 **Scope:** Provider-neutral architecture plus TASK-TTS-002 backend mock skeleton,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B VOICEVOX manual
@@ -12,11 +12,13 @@ TASK-TTS-004D character voice feasibility research, TASK-TTS-004D2
 environment-check workflow, TASK-TTS-004D3 isolated lab plan,
 TASK-TTS-004D4 manual bootstrap checklist, TASK-TTS-004E provider-selection
 checkpoint, TASK-TTS-004E2 blocked Phase 1 bootstrap attempt, and
-TASK-TTS-004E2A blocked isolated Miniconda bootstrap attempt. No runtime
+TASK-TTS-004E2A blocked isolated Miniconda bootstrap attempt, and
+TASK-TTS-004E2A2 Miniconda failure diagnostics. No runtime
 wiring, app playback, runtime/default dependency, schema change, STT behavior
 change, Conversation Mode behavior change, or Owner Voice behavior change is
 added by TASK-TTS-004C2, TASK-TTS-004C3, TASK-TTS-004D, TASK-TTS-004D2,
-TASK-TTS-004D4, TASK-TTS-004E, TASK-TTS-004E2, or TASK-TTS-004E2A.
+TASK-TTS-004D4, TASK-TTS-004E, TASK-TTS-004E2, TASK-TTS-004E2A, or
+TASK-TTS-004E2A2.
 
 This document defines the target architecture for Christina voice output and the
 implemented TASK-TTS-002 mock skeleton. It remains provider-neutral: Dragon Pet
@@ -239,6 +241,20 @@ TASK-TTS-004E2A blocked Miniconda checkpoint:
   PATH. `conda init` was not run and the PowerShell profile was not modified.
 - No provider repo, Conda env, dependency, PyTorch/CUDA package, model, dataset,
   inference, synthesis, runtime wiring, playback, or auto-speaking was added.
+
+TASK-TTS-004E2A2 diagnostics checkpoint:
+
+- `docs/TTS_MINICONDA_INSTALL_DIAGNOSTICS.md` records diagnostics-only evidence.
+- No installer retry, GUI install, cleanup, uninstall, alternate Conda tool,
+  Conda env, `conda init`, PATH/profile modification, provider clone, package
+  install, model download, inference, synthesis, audio generation, runtime
+  wiring, or backend venv change was performed.
+- Direct log evidence points to rollback after a `cp950` `UnicodeDecodeError`
+  while reading existing Conda-related paths.
+- Installer hash/signature evidence remained valid, event logs showed no
+  relevant Application/Defender Error/Warning, and a scoped lab tools write
+  probe passed.
+- Exact upstream root cause remains unproven, so the lab remains blocked.
 
 ---
 

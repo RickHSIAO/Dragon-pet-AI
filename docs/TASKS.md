@@ -25135,6 +25135,129 @@ Updated:
 
 ---
 
+## TASK-TTS-004E2A2 | Miniconda Install Failure Diagnostics / No Retry
+
+**Status:** BLOCKED - MINICONDA INSTALL ROOT CAUSE NOT IDENTIFIED / NO RETRY PERFORMED
+**Date:** 2026-06-19
+**Phase:** Phase 5 - Companion Voice Output Architecture
+**Depends on:** TASK-TTS-004E2A
+
+### Goal
+
+Diagnose why the approved TASK-TTS-004E2A official Miniconda installer exited
+with code `2` and left a partial install, without retrying the installer,
+cleaning the partial install, installing an alternate environment tool, creating
+a Conda environment, cloning GPT-SoVITS, installing packages, generating audio,
+or changing Dragon Pet AI runtime behavior.
+
+### Result
+
+TASK-TTS-004E2A2 is diagnostics-only and remains blocked:
+
+```text
+BLOCKED - MINICONDA INSTALL ROOT CAUSE NOT IDENTIFIED / NO RETRY PERFORMED
+```
+
+The strongest direct evidence is the partial install root `.step.log`: the
+installer prepared and executed a transaction, rolled it back, then reported a
+`cp950` `UnicodeDecodeError` while reading existing Conda-related paths. This
+narrows the failure to installer encoding/path handling around existing Conda
+state, but it does not prove the exact upstream root cause.
+
+### Evidence
+
+Installer:
+
+- Path:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\tools\installers\Miniconda3-latest-Windows-x86_64.exe`.
+- Product/File version: `py313_26.3.2-2`.
+- Product name: `Miniconda3 py313_26.3.2-2 (64-bit)`.
+- File size: `99155816` bytes.
+- SHA-256:
+  `fe980247dfd30af229a55d9505b57e7c8dfbdb9d24c5bc66fb6078b6a2d53414`.
+- Authenticode status: valid.
+- Signer: `Anaconda, Inc.`.
+- Alternate data streams: only `:$DATA`; no `Zone.Identifier` stream was
+  present.
+
+Partial install:
+
+- Attempted install root:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\tools\miniconda3`.
+- Creation time: `2026-06-19 12:38:29`.
+- Last write time: `2026-06-19 12:39:07`.
+- `_conda.exe`: present.
+- `python.exe`: missing.
+- `Scripts\conda.exe`: missing.
+- `condabin\conda.bat`: missing.
+- `Uninstall-Miniconda3.exe`: missing.
+- `conda-meta`: present.
+- `pkgs`: present.
+- `install.log`: present but empty.
+
+Additional diagnostics:
+
+- Approved install root contains no non-ASCII characters and is `58` characters
+  long.
+- External lab tools write probe succeeded, then the probe file was removed.
+- Windows Application event log query found no relevant Error/Warning entry over
+  the install window.
+- Windows Defender Operational event log query found no relevant Error/Warning
+  entry over the install window.
+- Read-only registry inspection found existing machine-wide Anaconda state:
+  `Anaconda3 2025.12-2 (Python 3.13.9 64-bit)` with uninstall string under
+  `C:\ProgramData\anaconda3`.
+- Permission evidence does not show the approved lab tools path as unwritable.
+
+### Documentation Output
+
+Added:
+
+- `docs/TTS_MINICONDA_INSTALL_DIAGNOSTICS.md`
+
+Updated:
+
+- `README.md`
+- `docs/ROADMAP.md`
+- `docs/TASKS.md`
+- `docs/TTS_ARCHITECTURE.md`
+- `docs/TTS_MINICONDA_LAB_BOOTSTRAP.md`
+- `docs/TTS_GPT_SOVITS_LAB_PHASE1.md`
+- `docs/TTS_CHARACTER_VOICE_LAB_PLAN.md`
+- `docs/TTS_CHARACTER_VOICE_LAB_BOOTSTRAP_CHECKLIST.md`
+- `docs/TTS_CHARACTER_VOICE_PROVIDER_SELECTION.md`
+- `docs/TTS_PROVIDER_RESEARCH.md`
+- `docs/VOICE_TTS_RESEARCH.md`
+
+External manifest:
+
+```text
+F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2A2_MINICONDA_INSTALL_DIAGNOSTICS.md
+```
+
+### Acceptance Criteria
+
+- [x] No installer retry, GUI install, delete/rename, uninstall, temp cleanup,
+  alternate environment tool install, Conda env creation, or `conda init`.
+- [x] No PATH/profile modification.
+- [x] Installer metadata, hash, signature, and alternate stream evidence
+  recorded.
+- [x] Partial install inventory and missing direct Conda verification files
+  recorded.
+- [x] `.step.log` rollback and `cp950` decode error evidence recorded without
+  exposing private user paths in repo docs.
+- [x] Registry, event log, Defender, ACL, and write-probe evidence recorded.
+- [x] Root cause not over-claimed beyond the direct log evidence.
+- [x] Runtime remains disabled/mock-only.
+- [x] No GPT-SoVITS or Style-Bert repo clone, Conda environment creation,
+  dependency install, PyTorch/CUDA install, model/dataset download, training,
+  inference, WebUI startup, synthesis, audio generation, runtime TTS wiring,
+  playback, auto-speaking, `/chat` schema change, mood schema change, STT
+  behavior change, Conversation Mode behavior change, or Owner Voice behavior
+  change is added.
+
+---
+
 ## TASK-228 | Output Queue Runtime Skeleton, Disabled by Default
 
 **Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS

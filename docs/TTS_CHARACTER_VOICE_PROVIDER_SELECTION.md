@@ -1,7 +1,7 @@
 # TTS Character Voice Provider Selection
 
-**Task:** TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A
-**Status:** TASK-TTS-004E2A BLOCKED - ISOLATED MINICONDA INSTALL FAILED
+**Task:** TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2
+**Status:** TASK-TTS-004E2A2 BLOCKED - MINICONDA INSTALL ROOT CAUSE NOT IDENTIFIED / NO RETRY PERFORMED
 **Date:** 2026-06-19
 **Scope:** Docs-only provider-selection and first-probe approval plan for the
 future isolated character voice lab. This task does not create the lab, clone
@@ -35,6 +35,10 @@ blocked.
 
 TASK-TTS-004E2A attempted isolated Miniconda bootstrap, but the verified
 official installer failed and rolled back. The first probe remains blocked.
+
+TASK-TTS-004E2A2 performed diagnostics only. It narrowed evidence to rollback
+after a `cp950` `UnicodeDecodeError` while reading existing Conda-related paths,
+but exact upstream root cause remains unproven and no retry was performed.
 
 ---
 
@@ -229,3 +233,25 @@ Result:
 - Global PATH/Python pollution detected: no.
 - First probe remains blocked until the failed install is manually reviewed or
   retry/cleanup is explicitly approved.
+
+---
+
+## 12. TASK-TTS-004E2A2 Miniconda Diagnostics
+
+See:
+
+- `docs/TTS_MINICONDA_INSTALL_DIAGNOSTICS.md`
+
+Result:
+
+- Final status: BLOCKED - MINICONDA INSTALL ROOT CAUSE NOT IDENTIFIED / NO RETRY
+  PERFORMED.
+- Installer retry/cleanup: not performed.
+- Direct failure evidence: `.step.log` rollback after a `cp950`
+  `UnicodeDecodeError` while reading existing Conda-related paths.
+- Installer corruption/signature issue found: no.
+- Relevant Application/Defender event log error found: no.
+- Lab tools write permission issue found: no.
+- Existing machine-wide Anaconda state found: yes.
+- First probe remains blocked until a human explicitly approves cleanup, retry,
+  alternate environment tooling, or a different isolated environment strategy.

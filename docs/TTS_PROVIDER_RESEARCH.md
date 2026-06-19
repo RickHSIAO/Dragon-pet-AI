@@ -1,7 +1,7 @@
 # TTS Provider Research
 
-**Task:** TASK-TTS-001 / TASK-TTS-004E2A
-**Status:** TASK-TTS-004E2A BLOCKED - ISOLATED MINICONDA INSTALL FAILED
+**Task:** TASK-TTS-001 / TASK-TTS-004E2A2
+**Status:** TASK-TTS-004E2A2 BLOCKED - MINICONDA INSTALL ROOT CAUSE NOT IDENTIFIED / NO RETRY PERFORMED
 **Date:** 2026-06-19
 **Scope:** Provider research, implemented mock-provider skeleton boundary,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B manual VOICEVOX
@@ -12,14 +12,15 @@ edge-tts tuning workflow, TASK-TTS-004D character voice feasibility research,
 TASK-TTS-004D2 environment check workflow, TASK-TTS-004D3 isolated lab
 plan, TASK-TTS-004D4 manual bootstrap checklist, TASK-TTS-004E provider
 selection checkpoint, TASK-TTS-004E2 blocked Phase 1 bootstrap attempt, and
-TASK-TTS-004E2A blocked isolated Miniconda bootstrap attempt. GPT-SoVITS is
+TASK-TTS-004E2A blocked isolated Miniconda bootstrap attempt, and
+TASK-TTS-004E2A2 Miniconda failure diagnostics. GPT-SoVITS is
 selected as the first isolated lab candidate, Style-Bert-VITS2 is the second
 provider / fallback research path, no real voice-quality provider is selected
 as final, no model is
 downloaded, the `edge-tts` install is optional/manual inside `backend\.venv`
 only, and no runtime synthesis/playback path is implemented by TASK-TTS-004C2,
-TASK-TTS-004C3, TASK-TTS-004D, TASK-TTS-004D2, TASK-TTS-004D3, or
-TASK-TTS-004E2A.
+TASK-TTS-004C3, TASK-TTS-004D, TASK-TTS-004D2, TASK-TTS-004D3,
+TASK-TTS-004E2A, or TASK-TTS-004E2A2.
 
 This document records candidate directions for Christina voice output. It should
 guide later experiments, not lock Dragon Pet AI to a single TTS engine.
@@ -795,6 +796,34 @@ Actual result:
   runtime wiring, playback, or auto-speaking was added.
 - External manifest:
   `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2A_MINICONDA_BOOTSTRAP.md`.
+
+---
+
+## TASK-TTS-004E2A2 Miniconda Install Failure Diagnostics
+
+TASK-TTS-004E2A2 adds `docs/TTS_MINICONDA_INSTALL_DIAGNOSTICS.md`.
+
+Actual result:
+
+- BLOCKED - MINICONDA INSTALL ROOT CAUSE NOT IDENTIFIED / NO RETRY PERFORMED.
+- No installer retry, GUI install, cleanup, uninstall, alternate Conda tool,
+  Conda env, `conda init`, PATH/profile modification, provider clone, package
+  install, model download, inference, synthesis, generated audio, runtime
+  wiring, playback, or backend venv change was performed.
+- Installer metadata: `Miniconda3 py313_26.3.2-2 (64-bit)`.
+- Installer SHA-256 remained
+  `fe980247dfd30af229a55d9505b57e7c8dfbdb9d24c5bc66fb6078b6a2d53414`.
+- Authenticode signature was valid and signed by `Anaconda, Inc.`.
+- Partial install still lacks `condabin\conda.bat`, `Scripts\conda.exe`,
+  `python.exe`, and `Uninstall-Miniconda3.exe`.
+- Direct failure evidence is `.step.log` rollback after a `cp950`
+  `UnicodeDecodeError` while reading existing Conda-related paths.
+- Read-only registry inspection found existing machine-wide Anaconda state, but
+  exact upstream root cause remains unproven.
+- Application and Defender event log checks found no relevant Error/Warning
+  over the install window.
+- External diagnostics manifest:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2A2_MINICONDA_INSTALL_DIAGNOSTICS.md`.
 
 ---
 

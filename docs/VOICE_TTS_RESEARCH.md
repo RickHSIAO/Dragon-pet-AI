@@ -531,6 +531,19 @@ Suggested research and implementation tasks:
   inference, WebUI, synthesis, runtime playback, `/chat` integration,
   auto-speaking, STT, Conversation Mode, Owner Voice, or schema behavior change
   is added.
+- TASK-TTS-004E2A2 Miniconda Install Failure Diagnostics / No Retry.
+  **BLOCKED - MINICONDA INSTALL ROOT CAUSE NOT IDENTIFIED / NO RETRY PERFORMED
+  (2026-06-19):** Added `docs/TTS_MINICONDA_INSTALL_DIAGNOSTICS.md` and
+  external manifest
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2A2_MINICONDA_INSTALL_DIAGNOSTICS.md`.
+  No installer retry, GUI install, cleanup, uninstall, alternate Conda tool,
+  Conda env, `conda init`, PATH/profile modification, provider clone,
+  dependency/PyTorch/CUDA/model/dataset download, training, inference, WebUI,
+  synthesis, audio generation, runtime playback, `/chat` integration,
+  auto-speaking, STT, Conversation Mode, Owner Voice, or schema behavior change
+  is added. Direct log evidence narrows the failure to rollback after a `cp950`
+  `UnicodeDecodeError` while reading existing Conda-related paths, but exact
+  upstream root cause remains unproven.
 - TASK-TTS-004 Playback queue and renderer diagnostics after a real provider
   candidate is validated.
 - TASK-TTS-005 Pet speaking state / bubble sync.

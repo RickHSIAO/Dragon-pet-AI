@@ -1,7 +1,7 @@
 # TTS Character Voice Lab Bootstrap Checklist
 
-**Task:** TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A
-**Status:** TASK-TTS-004E2A BLOCKED - ISOLATED MINICONDA INSTALL FAILED
+**Task:** TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2
+**Status:** TASK-TTS-004E2A2 BLOCKED - MINICONDA INSTALL ROOT CAUSE NOT IDENTIFIED / NO RETRY PERFORMED
 **Date:** 2026-06-19
 **Scope:** Manual-command checklist for a future isolated character voice lab.
 This task did not create the lab folder, clone external repos, install
@@ -19,6 +19,11 @@ not available in the current PowerShell PATH. No lab setup was performed.
 
 TASK-TTS-004E2A attempted isolated Miniconda bootstrap, but the official
 installer failed with exit code `2` after successful SHA-256 verification.
+
+TASK-TTS-004E2A2 performed diagnostics only. It did not retry the installer or
+clean the partial install. Direct log evidence points to rollback after a
+`cp950` `UnicodeDecodeError` while reading existing Conda-related paths, but
+exact upstream root cause remains unproven.
 
 ---
 
@@ -383,3 +388,22 @@ Chinese Christina provider remains unresolved.
   PyTorch/CUDA install, model/dataset download, training, inference, WebUI,
   synthesis, audio generation, runtime TTS wiring, playback, auto-speaking,
   `/chat`, mood schema, STT, Conversation Mode, or Owner Voice behavior changed.
+
+---
+
+## 16. TASK-TTS-004E2A2 Diagnostics / No Retry
+
+- Final status: BLOCKED - MINICONDA INSTALL ROOT CAUSE NOT IDENTIFIED / NO RETRY
+  PERFORMED.
+- Evidence doc: `docs/TTS_MINICONDA_INSTALL_DIAGNOSTICS.md`.
+- External manifest:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2A2_MINICONDA_INSTALL_DIAGNOSTICS.md`.
+- Installer metadata/hash/signature were recorded and remained valid.
+- `.step.log` is the direct failure source: rollback after a `cp950`
+  `UnicodeDecodeError` while reading existing Conda-related paths.
+- Read-only registry inspection found existing machine-wide Anaconda state.
+- Event log checks found no relevant Application or Defender Error/Warning.
+- A scoped external lab tools write probe passed and the probe file was removed.
+- No retry, cleanup, alternate environment tool, Conda env, package install,
+  provider clone, model download, synthesis, audio generation, runtime wiring,
+  or backend venv change was performed.
