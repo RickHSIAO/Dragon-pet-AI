@@ -19,7 +19,7 @@ or persistent generated audio was installed or created. TASK-TTS-004E6 Chinese
 Text Dependency Review is the next recommended task but is not approved yet.
 
 **Task:** TASK-TTS-004D / TASK-TTS-004D2 / TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E4A / TASK-TTS-004E5 / TASK-TTS-004E5A
-**Status:** TASK-TTS-004E5A DONE - GPT-SOVITS WAV/AUDIO B1 DEPENDENCIES VERIFIED / TEXT MODEL RUNTIME NOT INSTALLED
+**Status:** TASK-TTS-004E6 DONE - GPT-SOVITS CHINESE TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED
 **Date:** 2026-06-19
 **Scope:** Documentation-only feasibility research for long-term Christina
 character voice candidates, environment-check-only readiness inspection,
@@ -329,3 +329,17 @@ Start only after:
 - No runtime TTS wiring added.
 - No `/chat`, mood schema, STT, Conversation Mode, Owner Voice, playback, Pet
   playback, auto-speaking, dependency, or default-runtime behavior changed.
+
+---
+
+## TASK-TTS-004E6 Chinese Text Dependency Review
+
+**Status:** TASK-TTS-004E6 DONE - GPT-SOVITS CHINESE TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED
+**Date:** 2026-06-20
+**Evidence:** `docs/TTS_GPT_SOVITS_CHINESE_TEXT_DEPENDENCY_REVIEW.md`; external manifest `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E6_CHINESE_TEXT_DEPENDENCY_REVIEW.md`.
+
+TASK-TTS-004E6 inspected GPT-SoVITS commit `b2cff0cd0abd0ac134a16ae7a9695f88e8826104` Chinese normalization, segmentation, pinyin/G2P, phoneme mapping, vendored G2PW, OpenCC, LangSegmenter, requirements, and model/dictionary asset boundaries read-only. No install was approved or performed.
+
+Key conclusion: no safe useful Chinese text install group is ready yet. `jieba_fast` is imported unconditionally and PyPI `jieba-fast==0.53` is source-only; the current v2 Chinese path initializes G2PW at import time and can download model assets if missing; OpenCC needs a separate API/build-risk probe. `cn2an` and `pypinyin` are low-risk wheel candidates, but installing only them would not make the current Chinese path pass.
+
+Selected next task, not approved yet: `TASK-TTS-004E6A - Chinese Text Import Graph Probe`. Do not mark Chinese inference ready.

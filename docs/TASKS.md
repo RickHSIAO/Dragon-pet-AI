@@ -26136,6 +26136,105 @@ Recommended next task, not approved yet:
 TASK-TTS-004E6 - GPT-SoVITS Chinese Text Dependency Review
 ```
 
+TASK-TTS-004E6 was later completed as a Chinese text dependency review. It did
+not approve an install. The selected next task is TASK-TTS-004E6A - Chinese
+Text Import Graph Probe.
+
+---
+
+## TASK-TTS-004E6 | GPT-SoVITS Chinese Text Dependency Review
+
+**Status:** DONE - GPT-SOVITS CHINESE TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED
+**Date:** 2026-06-20
+**Phase:** Phase 5 - Companion Voice Output Architecture
+**Depends on:** TASK-TTS-004E5A
+
+### Goal
+
+Review the smallest safe Chinese text-processing dependency path before any
+future Chinese-only GPT-SoVITS probe. This task is review-only: no install,
+uninstall, model download, source patch, inference, WebUI, synthesis, runtime
+TTS, `/chat`, STT, Conversation Mode, Owner Voice, schema, playback, or
+auto-speaking change is approved.
+
+### Result
+
+TASK-TTS-004E6 completed:
+
+```text
+DONE - GPT-SOVITS CHINESE TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED
+```
+
+Evidence:
+
+- `docs/TTS_GPT_SOVITS_CHINESE_TEXT_DEPENDENCY_REVIEW.md`
+- External manifest:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E6_CHINESE_TEXT_DEPENDENCY_REVIEW.md`
+
+Key findings:
+
+- `jieba_fast` is imported unconditionally by `GPT_SoVITS/text/chinese.py`,
+  `GPT_SoVITS/text/chinese2.py`, and `GPT_SoVITS/text/tone_sandhi.py`.
+- PyPI `jieba-fast==0.53` is source-only; no cp310 Windows wheel was listed.
+- Plain `jieba` appears API-compatible for the used functions, but the repo has
+  no fallback, so using it would require a future source patch or fragile
+  pre-import shim.
+- `chinese2.py` hardcodes `is_g2pw = True` and initializes G2PW at import time.
+  If `GPT_SoVITS/text/G2PWModel` is missing, the vendored G2PW code can download
+  `G2PWModel_1.1.zip` from ModelScope.
+- G2PW initialization also uses `AutoTokenizer.from_pretrained(...)`, so BERT
+  tokenizer/model assets must be separately approved and kept offline/local.
+- The actual OpenCC import is `from opencc import OpenCC`, but upstream
+  `requirements.txt` also contains `--no-binary=opencc`; direct wheel use and
+  `opencc-python-reimplemented` substitution both need compatibility proof.
+- `cn2an` and `pypinyin` are low-risk wheel candidates, but installing only them
+  would not make the current Chinese import path pass.
+- `LangSegmenter` eagerly imports `jieba`, `fast_langdetect`, and `split_lang`;
+  Japanese/Korean/English modules are not imported by `clean_text(..., "zh")`
+  itself, but the selected entry point still needs a controlled import graph
+  probe before multilingual packages are declared optional.
+
+### Selected Next Task
+
+```text
+TASK-TTS-004E6A - Chinese Text Import Graph Probe
+```
+
+This is a blocker-resolution probe, not an install task. It is not approved yet.
+
+### Acceptance Criteria
+
+- [x] GPT-SoVITS Chinese text code paths inspected read-only.
+- [x] Chinese normalization, segmentation, pinyin/G2P, phoneme, and
+  model-facing sequence chain recorded.
+- [x] Chinese dependency inventory recorded.
+- [x] `jieba_fast` strict-upstream and plain-`jieba` fallback paths separated.
+- [x] OpenCC package/API/build-risk options separated.
+- [x] G2PW Python runtime, model asset, tokenizer/model asset, and download
+  boundaries separated.
+- [x] `cn2an` and `pypinyin` low-risk status recorded.
+- [x] LangSegmenter and multilingual eager-import risk recorded.
+- [x] Staged groups C1 through C6 recorded.
+- [x] Exactly one next task selected: TASK-TTS-004E6A.
+- [x] Future commands marked `NOT APPROVED / DO NOT RUN YET`.
+- [x] No package install, model/dictionary/tokenizer download, inference,
+  WebUI, synthesis, audio generation, GPT-SoVITS source change, Anaconda base
+  change, PATH/profile/registry change, backend venv change, Dragon Pet AI
+  runtime change, `/chat`, STT, Conversation Mode, Owner Voice, schema,
+  playback, or auto-speaking change was made.
+- [x] Protected packages remained unchanged:
+  `torch==2.7.0+cu128`, `torchaudio==2.7.0+cu128`,
+  `numpy==1.26.4`, `scipy==1.11.4`.
+- [x] Unrelated `docs/????摮?.txt` was not staged or committed.
+
+Recommended next task, not approved yet:
+
+```text
+TASK-TTS-004E6A - Chinese Text Import Graph Probe
+```
+
+---
+
 TASK-TTS-004E5A later installed and verified only this Group B1 subset.
 
 ---

@@ -1,7 +1,7 @@
 # TTS Provider Research
 
 **Task:** TASK-TTS-001 / TASK-TTS-004E4
-**Status:** TASK-TTS-004E4 DONE - GPT-SOVITS DEPENDENCY COMPATIBILITY REVIEW COMPLETE / DEPENDENCY INSTALL NOT APPROVED
+**Status:** TASK-TTS-004E6 DONE - GPT-SOVITS CHINESE TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED
 **Date:** 2026-06-19
 **Scope:** Provider research, implemented mock-provider skeleton boundary,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B manual VOICEVOX
@@ -273,19 +273,19 @@ VOICEVOX as the runtime provider.
 Default metadata-only command:
 
 ```powershell
-.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers voicevox_server --text "哼，汝總算想起要依靠吾了。這是 VOICEVOX metadata-only probe。" --pretty
+.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers voicevox_server --text "?潘?瘙蜇蝞韏瑁?靘??曆?? VOICEVOX metadata-only probe?? --pretty
 ```
 
 Optional local WAV output command:
 
 ```powershell
-.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers voicevox_server --text "哼，汝總算想起要依靠吾了。這是 VOICEVOX optional audio probe。" --voicevox-speaker 0 --allow-audio-output --pretty
+.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers voicevox_server --text "?潘?瘙蜇蝞韏瑁?靘??曆?? VOICEVOX optional audio probe?? --voicevox-speaker 0 --allow-audio-output --pretty
 ```
 
 Longer timeout/retry command after TASK-TTS-004B2:
 
 ```powershell
-.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers voicevox_server --text "哼，汝總算想起要依靠吾了。這是 VOICEVOX optional audio retry probe。" --voicevox-speaker 0 --voicevox-timeout-sec 30 --voicevox-retries 1 --allow-audio-output --pretty
+.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers voicevox_server --text "?潘?瘙蜇蝞韏瑁?靘??曆?? VOICEVOX optional audio retry probe?? --voicevox-speaker 0 --voicevox-timeout-sec 30 --voicevox-retries 1 --allow-audio-output --pretty
 ```
 
 VOICEVOX probe behavior:
@@ -312,7 +312,7 @@ Manual Windows result before TASK-TTS-004B2 hardening:
 - `Invoke-RestMethod http://127.0.0.1:50021/version` returned `0.25.2`.
 - Metadata-only probe passed: `available=true`,
   `reason=local_server_metadata_ok`, `version="0.25.2"`, `speakerId=0`,
-  `speakerName=ずんだもん / ノーマル`, speaker count `43`,
+  `speakerName=??????/ ??`, speaker count `43`,
   `synthesisStatus=audio_output_disabled`, and `audioGenerated=false`.
 - Optional audio probe with `--allow-audio-output` reached the local server but
   failed before quality evaluation: `reason=voicevox_error:TimeoutError`,
@@ -338,7 +338,7 @@ Manual listening verdict:
 | Field | Result |
 |---|---|
 | Provider | VOICEVOX |
-| Voice | 四国めたん / あまあま |
+| Voice | ?????/ ?? |
 | Version | `0.25.2` |
 | Synthesis latency | `1568ms` |
 | Audio output | Success |
@@ -398,14 +398,14 @@ New CLI options:
 Metadata-only command:
 
 ```powershell
-.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers edge_tts --text "哼，汝總算想起要依靠吾了。這是 Edge TTS 中文驗證 metadata-only probe。" --pretty
+.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers edge_tts --text "?潘?瘙蜇蝞韏瑁?靘??曆?? Edge TTS 銝剜?撽? metadata-only probe?? --pretty
 ```
 
 Optional MP3 output command, only after explicitly choosing to install/use
 `edge-tts`:
 
 ```powershell
-.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers edge_tts --text "哼，汝總算想起要依靠吾了。這是 Edge TTS 中文語音輸出驗證。" --edge-tts-voice zh-TW-HsiaoChenNeural --allow-audio-output --pretty
+.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers edge_tts --text "?潘?瘙蜇蝞韏瑁?靘??曆?? Edge TTS 銝剜?隤頛詨撽??? --edge-tts-voice zh-TW-HsiaoChenNeural --allow-audio-output --pretty
 ```
 
 Probe behavior:
@@ -492,15 +492,15 @@ Historical listening placeholder from the audio-probe commit:
 
 | Field | Result |
 |---|---|
-| 中文是否能聽懂 | Pending manual listening |
-| 是否像日系角色 | Pending manual listening |
-| 是否適合克莉絲蒂娜 | Pending manual listening |
-| 語速 | Pending manual listening |
-| 音色 | Pending manual listening |
-| 有沒有奇怪斷句 | Pending manual listening |
-| 整體可接受度 1-10 | Pending manual listening |
-| 是否可作為臨時中文 provider | Pending manual listening |
-| 是否可作為長期 provider | Pending manual listening |
+| 銝剜??臬?質??| Pending manual listening |
+| ?臬?蝟餉???| Pending manual listening |
+| ?臬?拙???蝯脰?憡?| Pending manual listening |
+| 隤?| Pending manual listening |
+| ?唾 | Pending manual listening |
+| ?????芣??| Pending manual listening |
+| ?湧??舀?漲 1-10 | Pending manual listening |
+| ?臬?臭??箄?葉??provider | Pending manual listening |
+| ?臬?臭??粹??provider | Pending manual listening |
 
 Listening verdict:
 
@@ -571,7 +571,7 @@ Tuning matrix:
 Manual command pattern:
 
 ```powershell
-.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers edge_tts --text "克莉絲蒂娜，這是 Edge TTS 中文語音調音測試。" --edge-tts-voice zh-TW-HsiaoChenNeural --edge-tts-rate -10% --edge-tts-pitch +0Hz --allow-audio-output --pretty
+.\backend\.venv\Scripts\python.exe scripts\tts_provider_probe.py --providers edge_tts --text "??蝯脰?憡?? Edge TTS 銝剜?隤隤輸皜祈岫?? --edge-tts-voice zh-TW-HsiaoChenNeural --edge-tts-rate -10% --edge-tts-pitch +0Hz --allow-audio-output --pretty
 ```
 
 Manual tuning verdict:
@@ -1069,3 +1069,17 @@ TASK-TTS-001 provider research is complete when:
 - No provider is selected as final.
 - No runtime provider integration, package dependency, generated audio, voice
   sample, model, embedding, local setting, log, or report is committed.
+
+---
+
+## TASK-TTS-004E6 Chinese Text Dependency Review
+
+**Status:** TASK-TTS-004E6 DONE - GPT-SOVITS CHINESE TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED
+**Date:** 2026-06-20
+**Evidence:** `docs/TTS_GPT_SOVITS_CHINESE_TEXT_DEPENDENCY_REVIEW.md`; external manifest `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E6_CHINESE_TEXT_DEPENDENCY_REVIEW.md`.
+
+TASK-TTS-004E6 inspected GPT-SoVITS commit `b2cff0cd0abd0ac134a16ae7a9695f88e8826104` Chinese normalization, segmentation, pinyin/G2P, phoneme mapping, vendored G2PW, OpenCC, LangSegmenter, requirements, and model/dictionary asset boundaries read-only. No install was approved or performed.
+
+Key conclusion: no safe useful Chinese text install group is ready yet. `jieba_fast` is imported unconditionally and PyPI `jieba-fast==0.53` is source-only; the current v2 Chinese path initializes G2PW at import time and can download model assets if missing; OpenCC needs a separate API/build-risk probe. `cn2an` and `pypinyin` are low-risk wheel candidates, but installing only them would not make the current Chinese path pass.
+
+Selected next task, not approved yet: `TASK-TTS-004E6A - Chinese Text Import Graph Probe`. Do not mark Chinese inference ready.

@@ -1,7 +1,7 @@
 # GPT-SoVITS Foundation Dependency Install
 
 **Task:** TASK-TTS-004E4A
-**Status:** DONE - GPT-SOVITS FOUNDATION DEPENDENCIES VERIFIED / AUDIO AND MODEL DEPENDENCIES NOT INSTALLED
+**Status:** TASK-TTS-004E6 DONE - GPT-SOVITS CHINESE TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED
 **Date:** 2026-06-19
 **Scope:** Install only the approved foundation package group into the isolated
 external GPT-SoVITS lab environment. No GPT-SoVITS full requirements,
@@ -248,20 +248,20 @@ environments:
 
 ```text
 base                     C:\ProgramData\anaconda3
-my_study                 C:\Users\雪狼丸\.conda\envs\my_study
+my_study                 C:\Users\?芰銝稞.conda\envs\my_study
                          F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\envs\gpt-sovits-py310
 ```
 
 Persistent PATH assessment:
 
-- User PATH remained `C:\Users\雪狼丸\AppData\Local\Microsoft\WindowsApps;`.
+- User PATH remained `C:\Users\?芰銝稞AppData\Local\Microsoft\WindowsApps;`.
 - Machine PATH remained the existing system/toolchain PATH and did not include
   the target GPT-SoVITS env.
 - `Get-Command conda` returned no shell command.
 - `Get-Command python -All` returned user-local Python entries, not the target
   GPT-SoVITS env.
 - `$PROFILE` path:
-  `C:\Users\雪狼丸\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1`;
+  `C:\Users\?芰銝稞Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1`;
   it does not exist.
 
 Registry read-only assessment:
@@ -322,7 +322,7 @@ Confirmed not performed:
 - No PATH, PowerShell profile, registry, or `conda init` change.
 - No backend venv change.
 - No Dragon Pet AI runtime TTS/STT/Conversation/Owner Voice/schema change.
-- Unrelated `docs/開啟方式.txt` was not edited, staged, or committed.
+- Unrelated `docs/???孵?.txt` was not edited, staged, or committed.
 
 ---
 
@@ -341,3 +341,17 @@ Recommended next task, not approved yet:
 ```text
 TASK-TTS-004E6 - GPT-SoVITS Chinese Text Dependency Review
 ```
+
+---
+
+## TASK-TTS-004E6 Chinese Text Dependency Review
+
+**Status:** TASK-TTS-004E6 DONE - GPT-SOVITS CHINESE TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED
+**Date:** 2026-06-20
+**Evidence:** `docs/TTS_GPT_SOVITS_CHINESE_TEXT_DEPENDENCY_REVIEW.md`; external manifest `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E6_CHINESE_TEXT_DEPENDENCY_REVIEW.md`.
+
+TASK-TTS-004E6 inspected GPT-SoVITS commit `b2cff0cd0abd0ac134a16ae7a9695f88e8826104` Chinese normalization, segmentation, pinyin/G2P, phoneme mapping, vendored G2PW, OpenCC, LangSegmenter, requirements, and model/dictionary asset boundaries read-only. No install was approved or performed.
+
+Key conclusion: no safe useful Chinese text install group is ready yet. `jieba_fast` is imported unconditionally and PyPI `jieba-fast==0.53` is source-only; the current v2 Chinese path initializes G2PW at import time and can download model assets if missing; OpenCC needs a separate API/build-risk probe. `cn2an` and `pypinyin` are low-risk wheel candidates, but installing only them would not make the current Chinese path pass.
+
+Selected next task, not approved yet: `TASK-TTS-004E6A - Chinese Text Import Graph Probe`. Do not mark Chinese inference ready.
