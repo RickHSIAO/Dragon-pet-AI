@@ -1,7 +1,7 @@
 # TTS Existing Anaconda GPT-SoVITS Phase 1 Resume
 
-**Task:** TASK-TTS-004E2B
-**Status:** DONE - EXISTING ANACONDA VERIFIED / GPT-SOVITS LAB PHASE 1 READY
+**Task:** TASK-TTS-004E2B / TASK-TTS-004E3
+**Status:** TASK-TTS-004E3 DONE - GPT-SOVITS PYTORCH/CUDA COMPATIBILITY REVIEW COMPLETE / INSTALL NOT APPROVED
 **Date:** 2026-06-19
 **Scope:** Validate existing machine-wide Anaconda, create one isolated Python
 3.10 prefix environment, and clone the official GPT-SoVITS repository only
@@ -9,6 +9,15 @@ after environment verification. No Anaconda base modification, PATH/profile/
 registry modification, `conda init`, Miniconda retry, dependency install,
 PyTorch/CUDA install, model download, training, inference, WebUI, synthesis,
 audio generation, runtime TTS wiring, or backend venv change was performed.
+
+TASK-TTS-004E3 follow-up:
+
+- Reviewed GPT-SoVITS PyTorch/CUDA compatibility without installing anything.
+- Primary future recommendation is pinned `torch==2.7.0` +
+  `torchaudio==2.7.0` from PyTorch CUDA `12.8` wheels in the isolated env.
+- CUDA `12.6` is fallback; CPU-only is last resort.
+- GPT-SoVITS `install.ps1`, TorchCodec, full dependencies, models, WebUI,
+  inference, synthesis, and audio generation remain unapproved.
 
 ---
 
@@ -232,5 +241,5 @@ Not performed:
 Recommended next task, not approved yet:
 
 ```text
-TASK-TTS-004E3 - GPT-SoVITS Lab PyTorch/CUDA Compatibility Review
+TASK-TTS-004E3A - GPT-SoVITS Lab PyTorch/CUDA Install
 ```

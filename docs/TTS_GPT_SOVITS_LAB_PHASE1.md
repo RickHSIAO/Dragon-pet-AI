@@ -1,12 +1,16 @@
 # GPT-SoVITS Isolated Lab Phase 1
 
 **Task:** TASK-TTS-004E2
-**Status:** TASK-TTS-004E2B DONE - EXISTING ANACONDA VERIFIED / GPT-SOVITS LAB PHASE 1 READY
+**Status:** TASK-TTS-004E3 DONE - GPT-SOVITS PYTORCH/CUDA COMPATIBILITY REVIEW COMPLETE / INSTALL NOT APPROVED
 **Date:** 2026-06-19
 **Scope:** Approved Phase 1 bootstrap for the external GPT-SoVITS lab, limited
 to creating the external lab folder, cloning the official GPT-SoVITS repository,
 and creating an isolated Conda Python 3.10 environment. This attempt stopped
-before setup because Conda was not available in the current shell.
+before setup because Conda was not available in the current shell. It was later
+resumed by TASK-TTS-004E2B through the existing machine-wide Anaconda. The
+TASK-TTS-004E3 follow-up reviewed PyTorch/CUDA compatibility only; it
+recommended a future lab-only pinned `torch==2.7.0` + `torchaudio==2.7.0`
+CUDA `12.8` install, with CUDA `12.6` fallback, but did not install anything.
 
 ---
 
@@ -227,5 +231,6 @@ TASK-TTS-004E2B resumed Phase 1 through the existing machine-wide Anaconda,
 created the isolated Python 3.10 env, and cloned the official GPT-SoVITS repo;
 see `docs/TTS_EXISTING_ANACONDA_GPT_SOVITS_PHASE1.md`.
 
-The next recommended task is TASK-TTS-004E3 GPT-SoVITS Lab PyTorch/CUDA
-Compatibility Review. It is not approved yet.
+TASK-TTS-004E3 completed the GPT-SoVITS PyTorch/CUDA compatibility review
+without installing anything. The next recommended task is TASK-TTS-004E3A
+GPT-SoVITS Lab PyTorch/CUDA Install. It is not approved yet.

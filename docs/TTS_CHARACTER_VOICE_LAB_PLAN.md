@@ -1,12 +1,12 @@
 # TTS Character Voice Lab Plan
 
-**Task:** TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B
-**Status:** TASK-TTS-004E2B DONE - EXISTING ANACONDA VERIFIED / GPT-SOVITS LAB PHASE 1 READY
+**Task:** TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B / TASK-TTS-004E3
+**Status:** TASK-TTS-004E3 DONE - GPT-SOVITS PYTORCH/CUDA COMPATIBILITY REVIEW COMPLETE / INSTALL NOT APPROVED
 **Date:** 2026-06-19
-**Scope:** Planning-only boundary for future GPT-SoVITS / Style-Bert-VITS2
-experiments in an isolated lab environment. No lab folder was created, no
-external repo was cloned, no package was installed, no model was downloaded, and
-no training or inference was run.
+**Scope:** Planning and review boundary for future GPT-SoVITS /
+Style-Bert-VITS2 experiments in an isolated lab environment. GPT-SoVITS Phase 1
+created the isolated Python env and official repo clone, but no package was
+installed, no model was downloaded, and no training or inference was run.
 
 TASK-TTS-004E selects GPT-SoVITS as the first isolated lab candidate and
 Style-Bert-VITS2 as the second provider / fallback research path. No final
@@ -34,6 +34,12 @@ further retry or post-retry cleanup was performed.
 TASK-TTS-004E2B used the existing machine-wide Anaconda instead, created the
 isolated Python 3.10 GPT-SoVITS prefix env, and cloned the official GPT-SoVITS
 repository. Dependency/PyTorch/CUDA/model/audio work remains unapproved.
+
+TASK-TTS-004E3 reviewed the lab-only PyTorch/CUDA compatibility plan without
+installing anything. Primary future recommendation is pinned `torch==2.7.0` and
+`torchaudio==2.7.0` from PyTorch CUDA `12.8` wheels inside the isolated prefix
+env only; CUDA `12.6` is fallback, CPU-only is last resort, and GPT-SoVITS
+`install.ps1` remains not approved.
 
 ---
 
@@ -176,8 +182,17 @@ TASK-TTS-004D2 found:
 Plan:
 
 - Keep CUDA PyTorch lab-only.
-- Install candidate-specific PyTorch only inside the future lab Conda
+- Install candidate-specific PyTorch only inside the lab Conda prefix
   environment after explicit approval.
+- TASK-TTS-004E3 recommends pinned `torch==2.7.0` + `torchaudio==2.7.0` from
+  PyTorch `cu128` wheels as the primary future install path.
+- Use PyTorch `cu126` wheels only as the CUDA fallback.
+- Use CPU-only wheels only as a last resort because CPU-only does not satisfy
+  the GPU validation goal.
+- Do not run GPT-SoVITS `install.ps1` for the PyTorch-only install.
+- Do not install TorchCodec, ffmpeg, full GPT-SoVITS dependencies, models,
+  WebUI, inference, or audio generation in the PyTorch-only install task unless
+  a later approval explicitly widens scope.
 - Do not install PyTorch into `backend\.venv` for character voice experiments.
 - Verify CUDA inside the lab before any model download:
   - Python version.

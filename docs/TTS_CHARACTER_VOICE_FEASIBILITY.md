@@ -1,17 +1,20 @@
 # TTS Character Voice Feasibility
 
-**Latest TASK-TTS-004E2B status (2026-06-19):** Existing Anaconda is verified
-and GPT-SoVITS Phase 1 is ready. The external lab now has an isolated Python
-`3.10.20` env at `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\envs\gpt-sovits-py310`
-and an official GPT-SoVITS clone at
+**Latest TASK-TTS-004E3 status (2026-06-19):** GPT-SoVITS PyTorch/CUDA
+compatibility review is complete and install remains not approved. The external
+lab still has isolated Python `3.10.20` at
+`F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\envs\gpt-sovits-py310` and the
+official GPT-SoVITS clone at
 `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\repos\GPT-SoVITS`, commit
-`b2cff0cd0abd0ac134a16ae7a9695f88e8826104`. PyTorch is absent and no
-dependencies/models/audio were installed or generated. TASK-TTS-004E3
-PyTorch/CUDA compatibility review is the next recommended task but is not
-approved yet.
+`b2cff0cd0abd0ac134a16ae7a9695f88e8826104`. PyTorch remains absent. The
+primary future recommendation is a separate lab-only pinned
+`torch==2.7.0` + `torchaudio==2.7.0` CUDA `12.8` install, with CUDA `12.6` as
+fallback and CPU-only as last resort. No dependencies/models/audio were
+installed or generated. TASK-TTS-004E3A PyTorch/CUDA install is the next
+recommended task but is not approved yet.
 
-**Task:** TASK-TTS-004D / TASK-TTS-004D2 / TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A
-**Status:** TASK-TTS-004E2A BLOCKED - ISOLATED MINICONDA INSTALL FAILED
+**Task:** TASK-TTS-004D / TASK-TTS-004D2 / TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E3
+**Status:** TASK-TTS-004E3 DONE - GPT-SOVITS PYTORCH/CUDA COMPATIBILITY REVIEW COMPLETE / INSTALL NOT APPROVED
 **Date:** 2026-06-19
 **Scope:** Documentation-only feasibility research for long-term Christina
 character voice candidates, environment-check-only readiness inspection,
@@ -42,8 +45,10 @@ The practical conclusion is:
 
 Recommended next path:
 
-1. TASK-TTS-004E2 - GPT-SoVITS first isolated lab probe, only after explicit
-   setup approval.
+1. TASK-TTS-004E3A - GPT-SoVITS lab PyTorch/CUDA install, only after explicit
+   install approval.
+2. A later GPT-SoVITS dependency/model/inference probe, only after PyTorch/CUDA
+   passes and separate dependency/model/audio approvals are granted.
 3. TASK-TTS-005 - TTS Runtime Playback Queue, only after provider decision.
 
 ---

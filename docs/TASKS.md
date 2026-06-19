@@ -25513,6 +25513,116 @@ TASK-TTS-004E3 - GPT-SoVITS Lab PyTorch/CUDA Compatibility Review
 
 ---
 
+## TASK-TTS-004E3 | GPT-SoVITS Lab PyTorch/CUDA Compatibility Review
+
+**Status:** DONE - GPT-SOVITS PYTORCH/CUDA COMPATIBILITY REVIEW COMPLETE / INSTALL NOT APPROVED
+**Date:** 2026-06-19
+**Phase:** Phase 5 - Companion Voice Output Architecture
+**Depends on:** TASK-TTS-004E2B
+
+### Goal
+
+Determine the safest PyTorch/CUDA installation plan for the isolated
+GPT-SoVITS lab environment without installing PyTorch, CUDA, GPT-SoVITS
+dependencies, ffmpeg, model files, or audio tooling.
+
+### Result
+
+TASK-TTS-004E3 completed as a compatibility review only:
+
+```text
+DONE - GPT-SOVITS PYTORCH/CUDA COMPATIBILITY REVIEW COMPLETE / INSTALL NOT APPROVED
+```
+
+Reviewed evidence:
+
+- Target env:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\envs\gpt-sovits-py310`.
+- Python: `3.10.20`.
+- PyTorch probe: `None`.
+- GPT-SoVITS repo:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\repos\GPT-SoVITS`.
+- Origin: `https://github.com/RVC-Boss/GPT-SoVITS.git`.
+- Commit: `b2cff0cd0abd0ac134a16ae7a9695f88e8826104`.
+- NVIDIA evidence: RTX 3070, 8192 MiB VRAM, NVIDIA-SMI `610.47`, CUDA UMD
+  `13.3`.
+
+Inspected GPT-SoVITS files:
+
+- `README.md`
+- `requirements.txt`
+- `extra-req.txt`
+- `install.ps1`
+- `install.sh`
+- `Dockerfile`
+- `docker-compose.yaml`
+- `docker_build.sh`
+- `Docker\miniforge_install.sh`
+- `GPT_SoVITS\BigVGAN\requirements.txt`
+- `GPT_SoVITS\BigVGAN\README.md`
+- `config.py`
+
+Key findings:
+
+- GPT-SoVITS currently documents Windows install choices `CU126`, `CU128`, and
+  `CPU`.
+- Main repo evidence favors CUDA `12.6` or `12.8`, not CUDA `11.8`, `12.1`, or
+  `12.4`.
+- `requirements.txt` includes `torchaudio` and `onnxruntime-gpu` for
+  x86_64/AMD64, but does not pin `torch` and does not require `torchvision`.
+- `install.ps1` installs unpinned `torch torchcodec`; this is too broad for the
+  first PyTorch/CUDA verification task.
+- RTX 3070 8GB is likely sufficient for inference-only probes after CUDA is
+  verified, but training/inference/WebUI/audio generation are still not
+  approved.
+
+Primary future recommendation:
+
+```text
+NOT APPROVED / DO NOT RUN YET
+
+Target: F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\envs\gpt-sovits-py310
+Installer: pip via direct conda run --prefix
+Primary build: torch==2.7.0 + torchaudio==2.7.0 from PyTorch cu128 wheels
+Fallback build: torch==2.7.0 + torchaudio==2.7.0 from PyTorch cu126 wheels
+Last resort: CPU-only torch==2.7.0 + torchaudio==2.7.0
+```
+
+Do not run GPT-SoVITS `install.ps1` for the PyTorch-only install. Do not install
+TorchCodec unless a later task explicitly widens scope and pins a compatible
+version.
+
+Documentation output:
+
+- `docs/TTS_GPT_SOVITS_PYTORCH_CUDA_REVIEW.md`
+- External manifest:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E3_PYTORCH_CUDA_REVIEW.md`
+
+### Acceptance Criteria
+
+- [x] GPT-SoVITS requirements, install scripts, Docker files, and CUDA notes
+  inspected read-only.
+- [x] `nvidia-smi` evidence recorded.
+- [x] Target Conda env inspected read-only and PyTorch absence confirmed.
+- [x] Compatibility matrix created for CUDA `11.8`, `12.1`, `12.4`, `12.6`,
+  `12.8`, CPU-only, and repository install-script path.
+- [x] One primary recommendation and one CUDA fallback documented.
+- [x] Proposed future commands clearly marked `NOT APPROVED / DO NOT RUN YET`.
+- [x] Future install order, success criteria, and rejection criteria documented.
+- [x] No PyTorch/CUDA/package/dependency/model/dataset install, WebUI,
+  inference, synthesis, audio generation, Anaconda base modification,
+  PATH/profile/registry change, runtime TTS, playback, auto-speaking, STT,
+  Conversation Mode, Owner Voice, schema, backend venv, or dependency-file
+  change was added.
+
+Recommended next task, not approved yet:
+
+```text
+TASK-TTS-004E3A - GPT-SoVITS Lab PyTorch/CUDA Install
+```
+
+---
+
 ## TASK-228 | Output Queue Runtime Skeleton, Disabled by Default
 
 **Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS

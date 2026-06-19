@@ -1,7 +1,7 @@
 # TTS Character Voice Provider Selection
 
-**Task:** TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B
-**Status:** TASK-TTS-004E2B DONE - EXISTING ANACONDA VERIFIED / GPT-SOVITS LAB PHASE 1 READY
+**Task:** TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B / TASK-TTS-004E3
+**Status:** TASK-TTS-004E3 DONE - GPT-SOVITS PYTORCH/CUDA COMPATIBILITY REVIEW COMPLETE / INSTALL NOT APPROVED
 **Date:** 2026-06-19
 **Scope:** Docs-only provider-selection and first-probe approval plan for the
 future isolated character voice lab. This task does not create the lab, clone
@@ -47,6 +47,12 @@ probe remains blocked.
 TASK-TTS-004E2B resumed through the existing machine-wide Anaconda. The first
 lab candidate repo now exists and the isolated Python 3.10 env is ready, but
 runtime/provider approval still remains future work.
+
+TASK-TTS-004E3 reviewed PyTorch/CUDA compatibility only. Primary future
+recommendation is pinned `torch==2.7.0` + `torchaudio==2.7.0` from PyTorch
+CUDA `12.8` wheels in the isolated lab env, with CUDA `12.6` fallback and
+CPU-only last resort. No install was performed and TASK-TTS-004E3A install is
+not approved yet.
 
 ---
 
@@ -120,7 +126,7 @@ test audio generation, the user must explicitly approve:
 4. Conda vs venv.
 5. Whether cloning an external repo is allowed.
 6. Whether package install is allowed.
-7. Whether PyTorch/CUDA install is allowed.
+7. Whether the pinned PyTorch/CUDA install from TASK-TTS-004E3 is allowed.
 8. Whether model download is allowed.
 9. Whether test audio generation is allowed.
 10. Artifact storage and cleanup policy.
@@ -135,6 +141,7 @@ A future approved first probe succeeds only if:
 
 - repo setup completes inside the isolated lab only;
 - CUDA/PyTorch is verified inside the lab if GPU path is chosen;
+- the installed torch family matches the explicitly approved CUDA wheel plan;
 - Dragon Pet AI runtime files remain unchanged;
 - a short standalone Chinese sample can be generated;
 - generated audio remains uncommitted;

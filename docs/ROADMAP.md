@@ -322,7 +322,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 **Goal:** Prepare Christina voice output with a provider-neutral, local-first TTS
 architecture before any new runtime provider implementation.
 
-**Status:** EXISTING ANACONDA VERIFIED / GPT-SOVITS LAB PHASE 1 READY / TASK-TTS-004E2B DONE.
+**Status:** GPT-SOVITS PYTORCH/CUDA COMPATIBILITY REVIEW COMPLETE / INSTALL NOT APPROVED / TASK-TTS-004E3 DONE.
 
 | Task | Name | Status |
 |---|---|---|
@@ -345,7 +345,8 @@ architecture before any new runtime provider implementation.
 | TASK-TTS-004E2A2 | Miniconda Install Failure Diagnostics / No Retry | BLOCKED - MINICONDA INSTALL ROOT CAUSE NOT IDENTIFIED / NO RETRY PERFORMED |
 | TASK-TTS-004E2A3 | Miniconda UTF-8 Retry / Same Installer Same Path | BLOCKED - UTF-8 MINICONDA RETRY FAILED / NO FURTHER RETRY PERFORMED |
 | TASK-TTS-004E2B | Existing Anaconda Validation / GPT-SoVITS Phase 1 Resume | DONE - EXISTING ANACONDA VERIFIED / GPT-SOVITS LAB PHASE 1 READY |
-| TASK-TTS-004E3 | GPT-SoVITS Lab PyTorch/CUDA Compatibility Review | NOT APPROVED |
+| TASK-TTS-004E3 | GPT-SoVITS Lab PyTorch/CUDA Compatibility Review | DONE - GPT-SOVITS PYTORCH/CUDA COMPATIBILITY REVIEW COMPLETE / INSTALL NOT APPROVED |
+| TASK-TTS-004E3A | GPT-SoVITS Lab PyTorch/CUDA Install | NOT APPROVED |
 | TASK-TTS-004 | Playback queue and renderer diagnostics | PLANNED AFTER REAL PROVIDER CANDIDATE |
 | TASK-TTS-005 | Pet speaking state / bubble sync | PLANNED |
 | TASK-TTS-006 | Conversation Mode feedback prevention | PLANNED |
@@ -446,6 +447,12 @@ Track constraints:
   the external lab, and cloned the official GPT-SoVITS repo. PyTorch is absent,
   no GPT-SoVITS dependencies or models were installed/downloaded, and runtime
   wiring remains untouched.
+- TASK-TTS-004E3 reviewed PyTorch/CUDA compatibility without installing
+  anything. Primary future recommendation is pinned `torch==2.7.0` +
+  `torchaudio==2.7.0` from PyTorch CUDA `12.8` wheels inside the isolated
+  GPT-SoVITS prefix env only; CUDA `12.6` is fallback and CPU-only is last
+  resort. GPT-SoVITS `install.ps1`, TorchCodec, full dependencies, models,
+  WebUI, inference, synthesis, and audio generation remain unapproved.
 - TTS remains disabled by default for the new provider architecture.
 - First implementation starts with `mock`, not ElevenLabs or a paid external
   provider.
@@ -453,7 +460,7 @@ Track constraints:
   opt-in cost/privacy design.
 - No `/chat` schema, mood schema, STT default, STT selector, Conversation Mode
   backpressure, or Owner Voice hard-gate behavior changes are part of
-  TASK-TTS-001 through TASK-TTS-004E2B.
+  TASK-TTS-001 through TASK-TTS-004E3.
 
 ---
 

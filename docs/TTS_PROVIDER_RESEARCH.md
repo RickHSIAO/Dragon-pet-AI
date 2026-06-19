@@ -1,7 +1,7 @@
 # TTS Provider Research
 
-**Task:** TASK-TTS-001 / TASK-TTS-004E2B
-**Status:** TASK-TTS-004E2B DONE - EXISTING ANACONDA VERIFIED / GPT-SOVITS LAB PHASE 1 READY
+**Task:** TASK-TTS-001 / TASK-TTS-004E3
+**Status:** TASK-TTS-004E3 DONE - GPT-SOVITS PYTORCH/CUDA COMPATIBILITY REVIEW COMPLETE / INSTALL NOT APPROVED
 **Date:** 2026-06-19
 **Scope:** Provider research, implemented mock-provider skeleton boundary,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B manual VOICEVOX
@@ -15,13 +15,16 @@ selection checkpoint, TASK-TTS-004E2 blocked Phase 1 bootstrap attempt, and
 TASK-TTS-004E2A blocked isolated Miniconda bootstrap attempt, and
 TASK-TTS-004E2A2 Miniconda failure diagnostics, and TASK-TTS-004E2A3 UTF-8
 retry, and TASK-TTS-004E2B existing-Anaconda Phase 1 resume. GPT-SoVITS is
-selected as the first isolated lab candidate, Style-Bert-VITS2 is the second
+selected as the first isolated lab candidate; TASK-TTS-004E3 reviewed the
+lab-only PyTorch/CUDA compatibility plan without installing anything.
+Style-Bert-VITS2 is the second
 provider / fallback research path, no real voice-quality provider is selected
 as final, no model is
 downloaded, the `edge-tts` install is optional/manual inside `backend\.venv`
 only, and no runtime synthesis/playback path is implemented by TASK-TTS-004C2,
 TASK-TTS-004C3, TASK-TTS-004D, TASK-TTS-004D2, TASK-TTS-004D3,
-TASK-TTS-004E2A, TASK-TTS-004E2A2, TASK-TTS-004E2A3, or TASK-TTS-004E2B.
+TASK-TTS-004E2A, TASK-TTS-004E2A2, TASK-TTS-004E2A3, TASK-TTS-004E2B, or
+TASK-TTS-004E3.
 
 This document records candidate directions for Christina voice output. It should
 guide later experiments, not lock Dragon Pet AI to a single TTS engine.
@@ -29,6 +32,16 @@ guide later experiments, not lock Dragon Pet AI to a single TTS engine.
 ---
 
 ## 1. User Preference Summary
+
+TASK-TTS-004E3 PyTorch/CUDA review summary:
+
+- Current GPT-SoVITS repo evidence favors CUDA `12.8` or `12.6` wheels.
+- Future primary install recommendation is pinned `torch==2.7.0` and
+  `torchaudio==2.7.0` from PyTorch `cu128` wheels in the isolated lab env only.
+- CUDA `12.6` is the fallback; CPU-only is last resort.
+- `install.ps1`, TorchCodec, full GPT-SoVITS dependencies, ffmpeg, model
+  downloads, inference, WebUI, and audio generation remain unapproved.
+- No package was installed by the review.
 
 - Prefer local/offline or low-cost TTS.
 - Prefer Japanese/anime-style voice direction when practical.

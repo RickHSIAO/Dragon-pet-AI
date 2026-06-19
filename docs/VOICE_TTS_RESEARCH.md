@@ -578,7 +578,25 @@ Suggested research and implementation tasks:
   synthesis, audio generation, runtime playback, `/chat` integration,
   auto-speaking, STT, Conversation Mode, Owner Voice, schema behavior,
   backend venv, or dependency-file change is added. TASK-TTS-004E3 PyTorch/CUDA
-  compatibility review is recommended next but not approved yet.
+  compatibility review is now complete; TASK-TTS-004E3A install is recommended
+  next but not approved yet.
+- TASK-TTS-004E3 GPT-SoVITS Lab PyTorch/CUDA Compatibility Review.
+  **DONE - GPT-SOVITS PYTORCH/CUDA COMPATIBILITY REVIEW COMPLETE / INSTALL NOT
+  APPROVED (2026-06-19):** Added
+  `docs/TTS_GPT_SOVITS_PYTORCH_CUDA_REVIEW.md` and external manifest
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E3_PYTORCH_CUDA_REVIEW.md`.
+  Reviewed GPT-SoVITS commit
+  `b2cff0cd0abd0ac134a16ae7a9695f88e8826104`, Python `3.10.20`, PyTorch
+  absence, RTX 3070 / 8192 MiB / CUDA UMD `13.3` driver evidence, upstream
+  `CU126` / `CU128` install scripts, PyTorch official wheel guidance, and
+  TorchCodec version coupling. Primary future recommendation is lab-only pinned
+  `torch==2.7.0` + `torchaudio==2.7.0` from PyTorch CUDA `12.8` wheels; CUDA
+  `12.6` is fallback and CPU-only is last resort. No PyTorch/CUDA/package/
+  dependency/model/dataset install, WebUI, inference, synthesis, audio
+  generation, Anaconda base modification, PATH/profile/registry change, runtime
+  playback, `/chat` integration, auto-speaking, STT, Conversation Mode, Owner
+  Voice, schema behavior, backend venv, or dependency-file change is added.
+  TASK-TTS-004E3A PyTorch/CUDA install is recommended next but not approved yet.
 - TASK-TTS-004 Playback queue and renderer diagnostics after a real provider
   candidate is validated.
 - TASK-TTS-005 Pet speaking state / bubble sync.
