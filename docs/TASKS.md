@@ -23206,7 +23206,9 @@ STT future boundary:
 - TASK-TTS-004D Style-Bert-VITS2 / GPT-SoVITS Feasibility Research.
 - TASK-TTS-004D2 Character Voice Feasibility Manual Environment Check.
 - TASK-TTS-004D3 Character Voice Lab Environment Plan / Isolated GPU Env.
-- TASK-TTS-004E GPT-SoVITS / Style-Bert-VITS2 Minimal Local Probe Plan.
+- TASK-TTS-004E Character Voice Lab Provider Selection / First Probe Approval.
+- TASK-TTS-004E2 GPT-SoVITS First Isolated Lab Probe after explicit setup
+  approval.
 - TASK-TTS-004 Playback queue and renderer diagnostics.
 - TASK-TTS-005 Pet speaking state / bubble sync.
 - TASK-TTS-006 Conversation Mode feedback prevention.
@@ -24531,8 +24533,10 @@ Added `docs/TTS_CHARACTER_VOICE_FEASIBILITY.md` with:
 ### Recommended Next Tasks
 
 1. TASK-TTS-004D2 - Character Voice Feasibility Manual Environment Check.
-2. TASK-TTS-004E - GPT-SoVITS / Style-Bert-VITS2 Minimal Local Probe Plan.
-3. TASK-TTS-005 - TTS Runtime Playback Queue, only after provider decision.
+2. TASK-TTS-004E - Character Voice Lab Provider Selection / First Probe Approval.
+3. TASK-TTS-004E2 - GPT-SoVITS first isolated lab probe, only after explicit
+   setup approval.
+4. TASK-TTS-005 - TTS Runtime Playback Queue, only after provider decision.
 
 ### Acceptance Criteria
 
@@ -24791,6 +24795,115 @@ Future real model probe work may begin only after:
 - [x] Git/artifact safety rules documented.
 - [x] Human approval gates documented.
 - [x] TASK-TTS-004E exit criteria documented.
+- [x] Runtime remains disabled/mock-only.
+- [x] No package/model install, external repo clone, lab setup, model download,
+  training, inference, generated audio/report/model/sample commit, runtime TTS
+  wiring, playback, auto-speaking, `/chat` schema change, mood schema change,
+  STT behavior change, Conversation Mode behavior change, or Owner Voice
+  behavior change is added.
+
+---
+
+## TASK-TTS-004E | Character Voice Lab Provider Selection / First Probe Approval
+
+**Status:** DONE - CHARACTER VOICE PROVIDER SELECTION READY / FIRST PROBE NOT APPROVED YET
+**Date:** 2026-06-19
+**Phase:** Phase 5 - Companion Voice Output Architecture
+**Depends on:** TASK-TTS-001, TASK-TTS-002, TASK-TTS-003, TASK-TTS-004A, TASK-TTS-004B2, TASK-TTS-004C, TASK-TTS-004C2, TASK-TTS-004C3, TASK-TTS-004D, TASK-TTS-004D2, TASK-TTS-004D3, TASK-TTS-004D4
+
+### Goal
+
+Create a docs-only provider-selection and first-probe approval plan for the
+future isolated character voice lab. Decide the first long-term provider
+candidate to try later without doing setup.
+
+### Documentation Output
+
+Added:
+
+- `docs/TTS_CHARACTER_VOICE_PROVIDER_SELECTION.md`
+
+Updated:
+
+- `README.md`
+- `docs/ROADMAP.md`
+- `docs/TTS_CHARACTER_VOICE_LAB_BOOTSTRAP_CHECKLIST.md`
+- `docs/TTS_CHARACTER_VOICE_LAB_PLAN.md`
+- `docs/TTS_CHARACTER_VOICE_FEASIBILITY.md`
+- `docs/TTS_PROVIDER_RESEARCH.md`
+- `docs/TTS_ARCHITECTURE.md`
+- `docs/VOICE_TTS_RESEARCH.md`
+
+### Provider Selection
+
+- First isolated lab candidate: GPT-SoVITS.
+- Second provider / fallback research path: Style-Bert-VITS2.
+- Final runtime provider: not selected.
+- RVC-like conversion remains deferred.
+- edge-tts remains temporary Chinese/debug/fallback only.
+- VOICEVOX remains Japanese-style/Japanese utterance experiment only.
+
+GPT-SoVITS is first because it better fits few-shot / reference-voice
+experiments, limited-data character voice exploration, and the next Chinese
+standalone sample probe. Style-Bert-VITS2 remains second because it may be
+valuable for anime/style-control research after Chinese quality, licensing, and
+setup complexity are reviewed.
+
+### First Probe Approval Checklist
+
+Before TASK-TTS-004E2 or any real setup, the user must explicitly approve:
+
+1. Exact lab path.
+2. Exact provider.
+3. Exact Python version.
+4. Conda vs venv.
+5. Whether cloning an external repo is allowed.
+6. Whether package install is allowed.
+7. Whether PyTorch/CUDA install is allowed.
+8. Whether model download is allowed.
+9. Whether test audio generation is allowed.
+10. Artifact storage and cleanup policy.
+
+Proposed lab path:
+
+```text
+F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\
+```
+
+Proposed environment:
+
+- Isolated Conda env preferred.
+- Python `3.10` or `3.11`.
+- Do not reuse `backend\.venv`.
+- PyTorch/CUDA install must be lab-only and explicitly approved later.
+
+### First Probe Success Criteria
+
+- Repo setup completes in the isolated lab only.
+- CUDA/PyTorch is verified inside the lab if GPU path is chosen.
+- No Dragon Pet AI runtime files change.
+- A short standalone Chinese sample can be generated.
+- Generated audio remains uncommitted.
+- Manual listening judges Chinese intelligibility, Christina fit,
+  anime/character feel, latency, and stability.
+
+### First Probe Rejection Criteria
+
+- Setup requires unsafe or unbounded install.
+- License terms are unclear.
+- Voice data rights are missing.
+- The path cannot run acceptably on RTX 3070 8 GB.
+- Chinese output is poor.
+- Sample quality does not beat edge-tts / VOICEVOX enough to justify
+  complexity.
+
+### Acceptance Criteria
+
+- [x] Provider selection doc added.
+- [x] GPT-SoVITS selected as first isolated lab candidate.
+- [x] Style-Bert-VITS2 retained as second provider / fallback research path.
+- [x] First-probe approval checklist documented.
+- [x] Success and rejection criteria documented.
 - [x] Runtime remains disabled/mock-only.
 - [x] No package/model install, external repo clone, lab setup, model download,
   training, inference, generated audio/report/model/sample commit, runtime TTS

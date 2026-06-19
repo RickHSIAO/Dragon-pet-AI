@@ -451,7 +451,8 @@ Suggested research and implementation tasks:
   edge-tts remains temporary/debug/fallback only, VOICEVOX remains
   Japanese-style experiment only, and RVC-like conversion is deferred until a
   source TTS provider exists. Recommended next tasks are TASK-TTS-004D2 manual
-  environment check and TASK-TTS-004E minimal local probe plan. No model
+  environment check and TASK-TTS-004E provider selection / first-probe approval.
+  No model
   install/download, training, inference, runtime playback, `/chat` integration,
   auto-speaking, dependency/default-runtime change, STT, Conversation Mode,
   Owner Voice, or schema behavior change is added.
@@ -492,6 +493,20 @@ Suggested research and implementation tasks:
   storage rules, non-commit artifact policy, and a human approval gate before
   any clone, install, model download, training, inference, or synthesis. No lab
   setup was performed, and runtime TTS remains disabled/mock-only.
+- TASK-TTS-004E Character Voice Lab Provider Selection / First Probe Approval.
+  **DONE - CHARACTER VOICE PROVIDER SELECTION READY / FIRST PROBE NOT APPROVED
+  YET (2026-06-19):** Added
+  `docs/TTS_CHARACTER_VOICE_PROVIDER_SELECTION.md`. GPT-SoVITS is selected as
+  the first isolated lab candidate because it better fits few-shot /
+  reference-voice experiments and limited-data character voice exploration.
+  Style-Bert-VITS2 is the second provider / fallback research path. No final
+  runtime provider is selected. First setup still requires explicit approval
+  for lab path, provider, Python version, Conda vs venv, external clone,
+  package install, PyTorch/CUDA install, model download, test audio generation,
+  and artifact storage policy. No lab setup, clone, install, model download,
+  training, inference, audio generation, runtime playback, `/chat` integration,
+  auto-speaking, STT, Conversation Mode, Owner Voice, or schema behavior change
+  is added.
 - TASK-TTS-004 Playback queue and renderer diagnostics after a real provider
   candidate is validated.
 - TASK-TTS-005 Pet speaking state / bubble sync.

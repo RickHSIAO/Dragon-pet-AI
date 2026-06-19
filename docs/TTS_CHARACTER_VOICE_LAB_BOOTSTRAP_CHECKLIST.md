@@ -1,11 +1,18 @@
 # TTS Character Voice Lab Bootstrap Checklist
 
-**Task:** TASK-TTS-004D4
-**Status:** DONE - CHARACTER VOICE LAB BOOTSTRAP CHECKLIST READY / NO SETUP PERFORMED
+**Task:** TASK-TTS-004D4 / TASK-TTS-004E
+**Status:** TASK-TTS-004E DONE - CHARACTER VOICE PROVIDER SELECTION READY / FIRST PROBE NOT APPROVED YET
 **Date:** 2026-06-19
 **Scope:** Manual-command checklist for a future isolated character voice lab.
 This task did not create the lab folder, clone external repos, install
 packages, download models, train, infer, synthesize audio, or wire runtime TTS.
+
+TASK-TTS-004E adds the provider-selection checkpoint:
+
+- `docs/TTS_CHARACTER_VOICE_PROVIDER_SELECTION.md`
+
+GPT-SoVITS is the first isolated lab candidate. Style-Bert-VITS2 is the second
+provider / fallback research path. The first real probe remains unapproved.
 
 ---
 
@@ -241,19 +248,52 @@ synthesis, the user must explicitly approve:
 2. Exact target provider.
 3. Exact Python version.
 4. Exact environment tool: Conda or venv.
-5. Whether GPU/CUDA install is allowed.
-6. Whether model downloads are allowed.
-7. Whether inference is allowed.
-8. Whether generated audio output is allowed.
-9. Artifact cleanup and non-commit policy.
+5. Whether cloning an external repo is allowed.
+6. Whether package install is allowed.
+7. Whether GPU/CUDA install is allowed.
+8. Whether model downloads are allowed.
+9. Whether inference is allowed.
+10. Whether generated audio output is allowed.
+11. Artifact cleanup and non-commit policy.
 
 Without this approval, stop at docs-only planning.
 
 ---
 
-## 10. Exit Criteria for Future TASK-TTS-004E
+## 10. TASK-TTS-004E Provider Selection
 
-TASK-TTS-004E or any real model probe may begin only after:
+TASK-TTS-004E selects the first lab candidate but does not approve setup.
+
+- First provider candidate: GPT-SoVITS.
+- Second provider / fallback research path: Style-Bert-VITS2.
+- Final runtime provider: not selected.
+- RVC-like conversion: deferred until a source TTS provider exists.
+- edge-tts: temporary Chinese/debug/fallback only.
+- VOICEVOX: Japanese-style/Japanese utterance experiment only.
+
+Success criteria for a later approved first probe:
+
+- Repo setup completes in the isolated lab only.
+- CUDA/PyTorch is verified inside the lab if GPU path is chosen.
+- Dragon Pet AI runtime stays unchanged.
+- A short standalone Chinese sample can be generated.
+- Generated audio remains uncommitted.
+- Manual listening judges Chinese intelligibility, Christina fit,
+  anime/character feel, latency, and stability.
+
+Rejection criteria:
+
+- Setup requires unsafe or unbounded installs.
+- License terms are unclear.
+- Voice data rights are missing.
+- The path cannot run acceptably on RTX 3070 8 GB.
+- Chinese output is poor.
+- Sample quality does not beat edge-tts / VOICEVOX enough to justify added
+  complexity.
+
+## 11. Exit Criteria for Future TASK-TTS-004E2
+
+TASK-TTS-004E2 or any real model probe may begin only after:
 
 - Lab path is approved.
 - Environment strategy is approved.
@@ -271,7 +311,7 @@ Chinese Christina provider remains unresolved.
 
 ---
 
-## 11. TASK-TTS-004D4 Closeout
+## 12. TASK-TTS-004D4 Closeout
 
 - Final status: DONE - CHARACTER VOICE LAB BOOTSTRAP CHECKLIST READY / NO SETUP PERFORMED.
 - New checklist document added.
@@ -279,6 +319,22 @@ Chinese Christina provider remains unresolved.
 - No package/model installed.
 - No external repo cloned.
 - No lab folder created.
+- No model download, training, inference, synthesis, or generated audio.
+- No runtime TTS wiring, playback, Pet playback, auto-speaking, `/chat`, mood
+  schema, STT, Conversation Mode, or Owner Voice behavior changed.
+
+---
+
+## 13. TASK-TTS-004E Closeout
+
+- Final status: DONE - CHARACTER VOICE PROVIDER SELECTION READY / FIRST PROBE NOT APPROVED YET.
+- Provider selection doc added.
+- GPT-SoVITS selected as first isolated lab candidate.
+- Style-Bert-VITS2 kept as second provider / fallback research path.
+- No final runtime provider selected.
+- No lab setup performed.
+- No external repo cloned.
+- No package/model installed.
 - No model download, training, inference, synthesis, or generated audio.
 - No runtime TTS wiring, playback, Pet playback, auto-speaking, `/chat`, mood
   schema, STT, Conversation Mode, or Owner Voice behavior changed.

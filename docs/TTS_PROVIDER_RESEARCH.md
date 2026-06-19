@@ -1,7 +1,7 @@
 # TTS Provider Research
 
-**Task:** TASK-TTS-001 / TASK-TTS-004D4
-**Status:** TASK-TTS-004D4 DONE - CHARACTER VOICE LAB BOOTSTRAP CHECKLIST READY / NO SETUP PERFORMED
+**Task:** TASK-TTS-001 / TASK-TTS-004E
+**Status:** TASK-TTS-004E DONE - CHARACTER VOICE PROVIDER SELECTION READY / FIRST PROBE NOT APPROVED YET
 **Date:** 2026-06-19
 **Scope:** Provider research, implemented mock-provider skeleton boundary,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B manual VOICEVOX
@@ -10,12 +10,14 @@ edge-tts optional network candidate probe, and TASK-TTS-004C2 manual
 edge-tts dependency/audio output validation, TASK-TTS-004C3 docs-first
 edge-tts tuning workflow, TASK-TTS-004D character voice feasibility research,
 TASK-TTS-004D2 environment check workflow, TASK-TTS-004D3 isolated lab
-plan, and TASK-TTS-004D4 manual bootstrap checklist. No real voice-quality
-provider is selected as final, no model is
+plan, TASK-TTS-004D4 manual bootstrap checklist, and TASK-TTS-004E provider
+selection checkpoint. GPT-SoVITS is selected as the first isolated lab
+candidate, Style-Bert-VITS2 is the second provider / fallback research path, no
+real voice-quality provider is selected as final, no model is
 downloaded, the `edge-tts` install is optional/manual inside `backend\.venv`
 only, and no runtime synthesis/playback path is implemented by TASK-TTS-004C2,
 TASK-TTS-004C3, TASK-TTS-004D, TASK-TTS-004D2, TASK-TTS-004D3, or
-TASK-TTS-004D4.
+TASK-TTS-004E.
 
 This document records candidate directions for Christina voice output. It should
 guide later experiments, not lock Dragon Pet AI to a single TTS engine.
@@ -605,14 +607,30 @@ TASK-TTS-004D recommendation:
 
 Recommended next tasks:
 
-1. TASK-TTS-004D2 - Character Voice Feasibility Manual Environment Check.
-2. TASK-TTS-004E - GPT-SoVITS / Style-Bert-VITS2 Minimal Local Probe Plan.
+1. TASK-TTS-004E - Character Voice Lab Provider Selection / First Probe Approval.
+2. TASK-TTS-004E2 - GPT-SoVITS first isolated lab probe, only after explicit
+   setup approval.
 3. TASK-TTS-005 - TTS Runtime Playback Queue, only after provider decision.
 
 No runtime TTS wiring, `/chat` integration, playback, Pet Window playback,
 auto-speaking, dependency/default-runtime change, generated audio/report/model
 commit, STT behavior change, Conversation Mode queue change, Owner Voice gate
 change, or schema change is part of TASK-TTS-004D.
+
+TASK-TTS-004E provider-selection update:
+
+| Provider | TASK-TTS-004E role | Runtime status |
+|---|---|---|
+| GPT-SoVITS | First isolated lab candidate for later approved first probe. | Lab candidate only; not selected as runtime. |
+| Style-Bert-VITS2 | Second provider / fallback research path. | Lab research path only; not selected as runtime. |
+| edge-tts | Temporary Chinese/debug/fallback only. | Not default and not selected as runtime. |
+| VOICEVOX | Japanese-style/Japanese utterance experiment only. | Not selected for Chinese runtime. |
+| RVC-like | Deferred until a source TTS provider exists. | Not a first TTS runtime. |
+
+The first real GPT-SoVITS setup remains unapproved until lab path, provider,
+Python version, Conda vs venv, external clone, package install, PyTorch/CUDA
+install, model download, test audio generation, and artifact storage policy are
+explicitly approved.
 
 ---
 
@@ -690,6 +708,42 @@ Provider research rule:
   and local settings remain lab artifacts and must not be committed.
 
 TASK-TTS-004D4 does not create the lab, clone repos, install packages, download
+models, train, infer, synthesize audio, or wire runtime TTS.
+
+---
+
+## TASK-TTS-004E Character Voice Provider Selection
+
+TASK-TTS-004E adds `docs/TTS_CHARACTER_VOICE_PROVIDER_SELECTION.md`.
+
+Provider decision:
+
+- First isolated lab candidate: GPT-SoVITS.
+- Second provider / fallback research path: Style-Bert-VITS2.
+- Final runtime provider: not selected.
+- RVC-like conversion: deferred.
+- edge-tts: temporary Chinese/debug/fallback only.
+- VOICEVOX: Japanese-style experiment only.
+
+First probe approval gate:
+
+- Exact lab path.
+- Exact provider.
+- Exact Python version.
+- Conda vs venv.
+- External repo clone permission.
+- Package install permission.
+- PyTorch/CUDA install permission.
+- Model download permission.
+- Test audio generation permission.
+- Artifact storage and cleanup policy.
+
+First probe success requires lab-only setup, CUDA/PyTorch verification if GPU
+path is chosen, no main app runtime changes, a short standalone Chinese sample,
+uncommitted generated audio, and manual listening for Chinese intelligibility,
+Christina fit, anime/character feel, latency, and stability.
+
+TASK-TTS-004E does not create the lab, clone repos, install packages, download
 models, train, infer, synthesize audio, or wire runtime TTS.
 
 ---
@@ -811,12 +865,15 @@ Recommended sequencing:
    boundary ready, no lab install performed.
 12. TASK-TTS-004D4: character voice lab bootstrap checklist. DONE - manual
    commands and human approval gates ready, no setup performed.
-13. TASK-TTS-004E: GPT-SoVITS / Style-Bert-VITS2 minimal local probe plan.
-14. TASK-TTS-004: renderer playback queue diagnostics after a real provider
+13. TASK-TTS-004E: character voice lab provider selection. DONE - GPT-SoVITS
+   first, Style-Bert-VITS2 second, first probe not approved yet.
+14. TASK-TTS-004E2: GPT-SoVITS first isolated lab probe after explicit setup
+   approval.
+15. TASK-TTS-004: renderer playback queue diagnostics after a real provider
    candidate is validated.
-15. TASK-TTS-005: Pet speaking state and bubble sync.
-16. TASK-TTS-006: Conversation Mode feedback prevention.
-17. Future: provider comparison report and singing research.
+16. TASK-TTS-005: Pet speaking state and bubble sync.
+17. TASK-TTS-006: Conversation Mode feedback prevention.
+18. Future: provider comparison report and singing research.
 
 Do not start by wiring ElevenLabs. Do not hard-code ChatTTS, GPT-SoVITS, F5-TTS,
 or CosyVoice into the product path before a provider abstraction and mock tests

@@ -1,12 +1,16 @@
 # TTS Character Voice Lab Plan
 
-**Task:** TASK-TTS-004D3 / TASK-TTS-004D4
-**Status:** TASK-TTS-004D4 DONE - CHARACTER VOICE LAB BOOTSTRAP CHECKLIST READY / NO SETUP PERFORMED
+**Task:** TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E
+**Status:** TASK-TTS-004E DONE - CHARACTER VOICE PROVIDER SELECTION READY / FIRST PROBE NOT APPROVED YET
 **Date:** 2026-06-19
 **Scope:** Planning-only boundary for future GPT-SoVITS / Style-Bert-VITS2
 experiments in an isolated lab environment. No lab folder was created, no
 external repo was cloned, no package was installed, no model was downloaded, and
 no training or inference was run.
+
+TASK-TTS-004E selects GPT-SoVITS as the first isolated lab candidate and
+Style-Bert-VITS2 as the second provider / fallback research path. No final
+runtime provider is selected and no first probe is approved yet.
 
 ---
 
@@ -36,9 +40,18 @@ TASK-TTS-004D4 adds the manual bootstrap checklist:
 
 - `docs/TTS_CHARACTER_VOICE_LAB_BOOTSTRAP_CHECKLIST.md`
 
+TASK-TTS-004E adds the provider-selection checkpoint:
+
+- `docs/TTS_CHARACTER_VOICE_PROVIDER_SELECTION.md`
+
 The checklist contains future PowerShell command examples, GPU/PyTorch checks,
 provider bootstrap notes, and human approval gates. Those commands are manual
 instructions only and were not executed by TASK-TTS-004D4.
+
+The provider-selection checkpoint chooses GPT-SoVITS first because it better
+matches few-shot/reference-voice experiments and limited-data character voice
+exploration. Style-Bert-VITS2 remains second because it may be useful for
+anime/style-control research after Chinese quality and license review.
 
 ---
 
@@ -289,3 +302,22 @@ Minimum evidence before runtime provider selection:
   model download, training, inference, or audio synthesis.
 - TASK-TTS-004D4 does not create the lab, clone repos, install packages,
   download models, train, infer, synthesize audio, or wire runtime TTS.
+
+---
+
+## 12. TASK-TTS-004E Provider Selection
+
+- Final status: DONE - CHARACTER VOICE PROVIDER SELECTION READY / FIRST PROBE NOT APPROVED YET.
+- Provider selection doc: `docs/TTS_CHARACTER_VOICE_PROVIDER_SELECTION.md`.
+- First isolated lab candidate: GPT-SoVITS.
+- Second provider / fallback research path: Style-Bert-VITS2.
+- Final runtime provider: not selected.
+- Recommended lab path remains
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\`.
+- Preferred environment remains isolated Conda with Python `3.10` or `3.11`;
+  do not reuse `backend\.venv`.
+- First setup still requires explicit approval for lab path, provider, Python
+  version, Conda vs venv, external clone, package install, PyTorch/CUDA install,
+  model download, test audio generation, and artifact storage policy.
+- No lab setup, clone, install, model download, training, inference, synthesis,
+  generated artifact commit, or runtime TTS wiring was performed.

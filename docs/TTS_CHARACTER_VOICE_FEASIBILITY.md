@@ -1,38 +1,37 @@
 # TTS Character Voice Feasibility
 
-**Task:** TASK-TTS-004D / TASK-TTS-004D2 / TASK-TTS-004D3 / TASK-TTS-004D4
-**Status:** TASK-TTS-004D4 DONE - CHARACTER VOICE LAB BOOTSTRAP CHECKLIST READY / NO SETUP PERFORMED
+**Task:** TASK-TTS-004D / TASK-TTS-004D2 / TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E
+**Status:** TASK-TTS-004E DONE - CHARACTER VOICE PROVIDER SELECTION READY / FIRST PROBE NOT APPROVED YET
 **Date:** 2026-06-19
 **Scope:** Documentation-only feasibility research for long-term Christina
 character voice candidates, environment-check-only readiness inspection,
-isolated lab planning, and manual bootstrap checklist. No model was installed,
-downloaded, trained, or run.
+isolated lab planning, manual bootstrap checklist, and provider-selection
+checkpoint. No model was installed, downloaded, trained, or run.
 
 ---
 
 ## 1. Decision Summary
 
-TASK-TTS-004D does not select a final provider.
+TASK-TTS-004E does not select a final runtime provider.
 
 The practical conclusion is:
 
-1. GPT-SoVITS and Style-Bert-VITS2 are the strongest long-term research
-   candidates if the project needs both Chinese usability and a more
-   Christina-like character voice.
-2. edge-tts remains the temporary Chinese provider / debug preview / fallback
+1. GPT-SoVITS is the first isolated lab candidate for a later approved probe.
+2. Style-Bert-VITS2 is the second provider / fallback research path.
+3. edge-tts remains the temporary Chinese provider / debug preview / fallback
    candidate only.
-3. VOICEVOX remains useful for Japanese/anime-style experiments, but it is not
+4. VOICEVOX remains useful for Japanese/anime-style experiments, but it is not
    suitable for the main Chinese runtime path.
-4. RVC-like conversion may be useful later as a post-processing layer, but it is
+5. RVC-like conversion may be useful later as a post-processing layer, but it is
    not a first TTS runtime because it needs a source TTS voice first.
-5. Runtime TTS remains disabled/mock-only. No playback queue, `/chat` wiring,
+6. Runtime TTS remains disabled/mock-only. No playback queue, `/chat` wiring,
    Pet playback, or auto-speaking should start until a real provider passes a
    standalone probe and manual listening review.
 
 Recommended next path:
 
-1. TASK-TTS-004D2 - Character Voice Feasibility Manual Environment Check.
-2. TASK-TTS-004E - GPT-SoVITS / Style-Bert-VITS2 Minimal Local Probe Plan.
+1. TASK-TTS-004E2 - GPT-SoVITS first isolated lab probe, only after explicit
+   setup approval.
 3. TASK-TTS-005 - TTS Runtime Playback Queue, only after provider decision.
 
 ---
@@ -159,11 +158,12 @@ Boundary:
 - No playback, Pet playback, or auto-speaking.
 - No generated reports committed.
 
-### TASK-TTS-004E - GPT-SoVITS / Style-Bert-VITS2 Minimal Local Probe Plan
+### TASK-TTS-004E2 - GPT-SoVITS First Isolated Lab Probe
 
 Goal:
 
-- Design the smallest allowed local probe before any runtime integration.
+- Run the smallest approved GPT-SoVITS first probe in the isolated lab, only
+  after TASK-TTS-004E approval requirements are explicitly accepted.
 
 Rules:
 
@@ -218,6 +218,33 @@ Summary:
   any clone, install, model download, training, inference, or synthesis.
 - Generated audio, model weights, source samples, reports, embeddings, logs,
   and local settings remain lab-only artifacts and must not be committed.
+
+### TASK-TTS-004E - Character Voice Provider Selection
+
+See:
+
+- `docs/TTS_CHARACTER_VOICE_PROVIDER_SELECTION.md`
+
+Summary:
+
+- GPT-SoVITS is selected as the first isolated lab candidate.
+- Style-Bert-VITS2 remains the second provider / fallback research path.
+- No final runtime provider is selected.
+- Recommended lab path remains
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\`.
+- Preferred setup is an isolated Conda environment with Python `3.10` or
+  `3.11`; do not reuse `backend\.venv`.
+- Before TASK-TTS-004E2 or any real setup, the user must approve lab path,
+  provider, Python version, Conda vs venv, external clone, package install,
+  PyTorch/CUDA install, model download, test audio generation, and artifact
+  storage policy.
+- First probe success requires lab-only setup, CUDA/PyTorch verification if GPU
+  path is chosen, no main app runtime changes, a short standalone Chinese
+  sample, uncommitted generated audio, and manual listening for Chinese
+  intelligibility, Christina fit, anime/character feel, latency, and stability.
+- Reject the first probe if setup is unsafe, licensing is unclear, voice data
+  rights are missing, RTX 3070 8 GB is not sufficient, Chinese output is poor,
+  or quality does not beat edge-tts / VOICEVOX enough to justify complexity.
 
 ### TASK-TTS-005 - TTS Runtime Playback Queue
 
