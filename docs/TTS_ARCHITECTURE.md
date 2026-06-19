@@ -1,7 +1,7 @@
 # TTS Architecture
 
-**Task:** TASK-TTS-001 / TASK-TTS-004E2A2
-**Status:** TASK-TTS-004E2A2 BLOCKED - MINICONDA INSTALL ROOT CAUSE NOT IDENTIFIED / NO RETRY PERFORMED
+**Task:** TASK-TTS-001 / TASK-TTS-004E2A3
+**Status:** TASK-TTS-004E2A3 BLOCKED - UTF-8 MINICONDA RETRY FAILED / NO FURTHER RETRY PERFORMED
 **Date:** 2026-06-19
 **Scope:** Provider-neutral architecture plus TASK-TTS-002 backend mock skeleton,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B VOICEVOX manual
@@ -13,12 +13,13 @@ environment-check workflow, TASK-TTS-004D3 isolated lab plan,
 TASK-TTS-004D4 manual bootstrap checklist, TASK-TTS-004E provider-selection
 checkpoint, TASK-TTS-004E2 blocked Phase 1 bootstrap attempt, and
 TASK-TTS-004E2A blocked isolated Miniconda bootstrap attempt, and
-TASK-TTS-004E2A2 Miniconda failure diagnostics. No runtime
+TASK-TTS-004E2A2 Miniconda failure diagnostics, and TASK-TTS-004E2A3 UTF-8
+retry. No runtime
 wiring, app playback, runtime/default dependency, schema change, STT behavior
 change, Conversation Mode behavior change, or Owner Voice behavior change is
 added by TASK-TTS-004C2, TASK-TTS-004C3, TASK-TTS-004D, TASK-TTS-004D2,
-TASK-TTS-004D4, TASK-TTS-004E, TASK-TTS-004E2, TASK-TTS-004E2A, or
-TASK-TTS-004E2A2.
+TASK-TTS-004D4, TASK-TTS-004E, TASK-TTS-004E2, TASK-TTS-004E2A,
+TASK-TTS-004E2A2, or TASK-TTS-004E2A3.
 
 This document defines the target architecture for Christina voice output and the
 implemented TASK-TTS-002 mock skeleton. It remains provider-neutral: Dragon Pet
@@ -255,6 +256,19 @@ TASK-TTS-004E2A2 diagnostics checkpoint:
   relevant Application/Defender Error/Warning, and a scoped lab tools write
   probe passed.
 - Exact upstream root cause remains unproven, so the lab remains blocked.
+
+TASK-TTS-004E2A3 retry checkpoint:
+
+- `docs/TTS_MINICONDA_UTF8_RETRY.md` records the approved one-time retry.
+- Only the approved partial install root was deleted before retry.
+- The same verified installer and same isolated path were used.
+- Process-local UTF-8 settings did not resolve the failure; installer exit code
+  remained `2`.
+- The post-retry partial install still lacks `condabin\conda.bat`,
+  `Scripts\conda.exe`, `python.exe`, and `Uninstall-Miniconda3.exe`.
+- No further retry, post-retry cleanup, PATH/profile/registry modification,
+  provider clone, Conda env, package/model install, synthesis, runtime wiring,
+  or backend venv change was performed.
 
 ---
 

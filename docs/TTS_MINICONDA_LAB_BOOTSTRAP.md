@@ -1,7 +1,7 @@
 # TTS Miniconda Lab Bootstrap
 
-**Task:** TASK-TTS-004E2A / TASK-TTS-004E2A2
-**Status:** TASK-TTS-004E2A2 BLOCKED - MINICONDA INSTALL ROOT CAUSE NOT IDENTIFIED / NO RETRY PERFORMED
+**Task:** TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3
+**Status:** TASK-TTS-004E2A3 BLOCKED - UTF-8 MINICONDA RETRY FAILED / NO FURTHER RETRY PERFORMED
 **Date:** 2026-06-19
 **Scope:** Approved isolated Miniconda bootstrap for the external character
 voice lab. This task was allowed to download the official Miniconda Windows
@@ -15,6 +15,11 @@ TASK-TTS-004E2A2 added diagnostics only. It did not retry the installer, clean
 the partial install, run an uninstaller, install an alternate environment tool,
 create a Conda environment, run `conda init`, modify PATH/profile state, clone
 provider repos, install dependencies, or change Dragon Pet AI runtime behavior.
+
+TASK-TTS-004E2A3 deleted only the approved failed partial install root, then
+retried the same verified installer once to the same path with process-local
+UTF-8 settings. The retry still exited `2`, recreated a partial install, and no
+further retry or post-retry cleanup was performed.
 
 ---
 
@@ -224,7 +229,45 @@ BLOCKED - MINICONDA INSTALL ROOT CAUSE NOT IDENTIFIED / NO RETRY PERFORMED
 
 ---
 
-## 8. Next Step
+## 8. TASK-TTS-004E2A3 UTF-8 Retry
+
+Added:
+
+- `docs/TTS_MINICONDA_UTF8_RETRY.md`
+
+External retry manifest:
+
+```text
+F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2A3_MINICONDA_UTF8_RETRY.md
+```
+
+TASK-TTS-004E2A3 result:
+
+- Deleted only the approved failed partial install root after exact path
+  verification.
+- Preserved installer, SHA-256 evidence, and reports.
+- Retried the same installer once to the same path with process-local
+  `PYTHONUTF8=1`, `PYTHONIOENCODING=utf-8`, and UTF-8 output encodings.
+- Installer exit code remained `2`.
+- The partial install root exists again after retry.
+- Required `condabin\conda.bat`, `Scripts\conda.exe`, `python.exe`, and
+  `Uninstall-Miniconda3.exe` remain missing.
+- `.step.log` still reports rollback after a `cp950` `UnicodeDecodeError`
+  while reading existing Conda-related paths.
+- No PATH/profile/registry modification, `conda init`, existing Anaconda
+  removal, provider clone, Conda env, dependency install, PyTorch/CUDA install,
+  model download, training, inference, WebUI, synthesis, audio generation,
+  runtime wiring, or backend venv change was performed.
+
+Diagnostic status:
+
+```text
+BLOCKED - UTF-8 MINICONDA RETRY FAILED / NO FURTHER RETRY PERFORMED
+```
+
+---
+
+## 9. Next Step
 
 Do not continue to TASK-TTS-004E2B until the failed isolated Miniconda
 installation is manually reviewed or the user explicitly approves a retry,

@@ -544,6 +544,22 @@ Suggested research and implementation tasks:
   is added. Direct log evidence narrows the failure to rollback after a `cp950`
   `UnicodeDecodeError` while reading existing Conda-related paths, but exact
   upstream root cause remains unproven.
+- TASK-TTS-004E2A3 Miniconda UTF-8 Retry / Same Installer Same Path.
+  **BLOCKED - UTF-8 MINICONDA RETRY FAILED / NO FURTHER RETRY PERFORMED
+  (2026-06-19):** Added `docs/TTS_MINICONDA_UTF8_RETRY.md` and external
+  manifest
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2A3_MINICONDA_UTF8_RETRY.md`.
+  Deleted only the approved failed partial install root, preserved the official
+  installer/reports, and retried the same verified installer once to the same
+  path with process-local UTF-8 settings. Retry still exited `2`, recreated a
+  partial install, and `.step.log` still reports rollback after a `cp950`
+  `UnicodeDecodeError` while reading existing Conda-related paths. No further
+  retry, post-retry cleanup, user/system PATH, `conda init`, PowerShell profile,
+  registry, existing Anaconda removal, provider clone, Conda env,
+  dependency/PyTorch/CUDA/model/dataset download, training, inference, WebUI,
+  synthesis, audio generation, runtime playback, `/chat` integration,
+  auto-speaking, STT, Conversation Mode, Owner Voice, or schema behavior change
+  is added.
 - TASK-TTS-004 Playback queue and renderer diagnostics after a real provider
   candidate is validated.
 - TASK-TTS-005 Pet speaking state / bubble sync.

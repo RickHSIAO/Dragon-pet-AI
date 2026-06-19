@@ -25258,6 +25258,133 @@ F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2A2_MINICONDA_INS
 
 ---
 
+## TASK-TTS-004E2A3 | Miniconda UTF-8 Retry / Same Installer Same Path
+
+**Status:** BLOCKED - UTF-8 MINICONDA RETRY FAILED / NO FURTHER RETRY PERFORMED
+**Date:** 2026-06-19
+**Phase:** Phase 5 - Companion Voice Output Architecture
+**Depends on:** TASK-TTS-004E2A2
+
+### Goal
+
+Delete only the approved failed partial Miniconda install directory, preserve
+the verified official installer and reports, then retry the same installer once
+to the same isolated path with process-local UTF-8 settings. The task must not
+modify user/system PATH, run `conda init`, modify PowerShell profile, delete
+registry entries, remove existing machine-wide Anaconda, clone provider repos,
+create GPT-SoVITS envs, install packages, install PyTorch/CUDA, download models,
+train, infer, start WebUI, synthesize audio, or change runtime/backend venv
+behavior.
+
+### Result
+
+TASK-TTS-004E2A3 exhausted the approved one-time retry:
+
+```text
+BLOCKED - UTF-8 MINICONDA RETRY FAILED / NO FURTHER RETRY PERFORMED
+```
+
+The approved partial install root was deleted after exact path verification:
+
+```text
+F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\tools\miniconda3
+```
+
+The retry used the same installer and the same target path with process-local:
+
+- `PYTHONUTF8=1`
+- `PYTHONIOENCODING=utf-8`
+- Console output encoding `utf-8`
+- PowerShell output encoding `utf-8`
+
+The installer still exited with code `2`, recreated a partial install, and
+`.step.log` still reports rollback after a `cp950` `UnicodeDecodeError` while
+reading existing Conda-related paths. No second retry was performed.
+
+### Evidence
+
+Post-retry required file checks:
+
+- `_conda.exe`: present.
+- `python.exe`: missing.
+- `Scripts\conda.exe`: missing.
+- `condabin\conda.bat`: missing.
+- `Uninstall-Miniconda3.exe`: missing.
+- `conda-meta`: present.
+- `pkgs`: present.
+- `.step.log`: present.
+- `install.log`: present but empty.
+
+Post-retry install root timestamps:
+
+- Creation time: `2026-06-19 13:44:27`.
+- Last write time: `2026-06-19 13:45:06`.
+
+Residual `_conda.exe --version` reports `conda 26.1.1`, but `_conda.exe info
+--base` points to a temporary extraction directory, not the approved install
+root. The partial install is not usable.
+
+Post-retry pollution checks:
+
+- User PATH contains install root: false.
+- Machine PATH contains install root: false.
+- Current process PATH contains install root: false.
+- User/machine `PYTHONUTF8`: unset.
+- User/machine `PYTHONIOENCODING`: unset.
+- PowerShell profile exists: false.
+- GPT-SoVITS repo: absent.
+- Style-Bert-VITS2 repo: absent.
+- `gpt-sovits-py310` env: absent.
+- Installer preserved: true.
+- Reports directory preserved: true.
+
+### Documentation Output
+
+Added:
+
+- `docs/TTS_MINICONDA_UTF8_RETRY.md`
+
+Updated:
+
+- `README.md`
+- `docs/ROADMAP.md`
+- `docs/TASKS.md`
+- `docs/TTS_ARCHITECTURE.md`
+- `docs/TTS_MINICONDA_LAB_BOOTSTRAP.md`
+- `docs/TTS_MINICONDA_INSTALL_DIAGNOSTICS.md`
+- `docs/TTS_GPT_SOVITS_LAB_PHASE1.md`
+- `docs/TTS_CHARACTER_VOICE_LAB_PLAN.md`
+- `docs/TTS_CHARACTER_VOICE_LAB_BOOTSTRAP_CHECKLIST.md`
+- `docs/TTS_CHARACTER_VOICE_PROVIDER_SELECTION.md`
+- `docs/TTS_PROVIDER_RESEARCH.md`
+- `docs/VOICE_TTS_RESEARCH.md`
+
+External manifest:
+
+```text
+F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2A3_MINICONDA_UTF8_RETRY.md
+```
+
+### Acceptance Criteria
+
+- [x] Only the approved failed partial install root was deleted.
+- [x] Existing official installer, SHA-256 evidence, and reports were preserved.
+- [x] Same verified installer and same isolated path were used for the single
+  retry.
+- [x] UTF-8 settings were process-local and did not persist.
+- [x] Retry failure was recorded without claiming install success.
+- [x] No further retry or post-retry cleanup was performed.
+- [x] Runtime remains disabled/mock-only.
+- [x] No user/system PATH modification, `conda init`, PowerShell profile
+  modification, registry deletion, existing Anaconda removal, GPT-SoVITS or
+  Style-Bert clone, Conda env creation, dependency install, PyTorch/CUDA
+  install, model/dataset download, training, inference, WebUI startup,
+  synthesis, audio generation, runtime TTS wiring, playback, auto-speaking,
+  `/chat` schema change, mood schema change, STT behavior change, Conversation
+  Mode behavior change, or Owner Voice behavior change is added.
+
+---
+
 ## TASK-228 | Output Queue Runtime Skeleton, Disabled by Default
 
 **Status:** DONE - WINDOWS VISUAL SMOKE PASS / DONE - PASS

@@ -1,7 +1,7 @@
 # TTS Character Voice Lab Bootstrap Checklist
 
-**Task:** TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2
-**Status:** TASK-TTS-004E2A2 BLOCKED - MINICONDA INSTALL ROOT CAUSE NOT IDENTIFIED / NO RETRY PERFORMED
+**Task:** TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3
+**Status:** TASK-TTS-004E2A3 BLOCKED - UTF-8 MINICONDA RETRY FAILED / NO FURTHER RETRY PERFORMED
 **Date:** 2026-06-19
 **Scope:** Manual-command checklist for a future isolated character voice lab.
 This task did not create the lab folder, clone external repos, install
@@ -24,6 +24,10 @@ TASK-TTS-004E2A2 performed diagnostics only. It did not retry the installer or
 clean the partial install. Direct log evidence points to rollback after a
 `cp950` `UnicodeDecodeError` while reading existing Conda-related paths, but
 exact upstream root cause remains unproven.
+
+TASK-TTS-004E2A3 performed one approved same-installer same-path retry after
+deleting only the approved partial install root. The retry still failed with
+exit code `2`, and no further retry or post-retry cleanup was performed.
 
 ---
 
@@ -407,3 +411,23 @@ Chinese Christina provider remains unresolved.
 - No retry, cleanup, alternate environment tool, Conda env, package install,
   provider clone, model download, synthesis, audio generation, runtime wiring,
   or backend venv change was performed.
+
+---
+
+## 17. TASK-TTS-004E2A3 UTF-8 Retry
+
+- Final status: BLOCKED - UTF-8 MINICONDA RETRY FAILED / NO FURTHER RETRY
+  PERFORMED.
+- Evidence doc: `docs/TTS_MINICONDA_UTF8_RETRY.md`.
+- External manifest:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2A3_MINICONDA_UTF8_RETRY.md`.
+- Deleted only the approved failed partial install root after exact path
+  verification.
+- Retried the same verified installer once to the same path with process-local
+  UTF-8 settings.
+- Retry still exited `2`, recreated a partial install, and `.step.log` still
+  reports rollback after a `cp950` `UnicodeDecodeError`.
+- No user/system PATH, `conda init`, PowerShell profile, registry, existing
+  Anaconda removal, provider clone, env creation, dependency install,
+  PyTorch/CUDA install, model download, training, inference, WebUI, synthesis,
+  audio generation, runtime wiring, or backend venv change was performed.

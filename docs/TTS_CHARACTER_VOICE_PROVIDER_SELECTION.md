@@ -1,7 +1,7 @@
 # TTS Character Voice Provider Selection
 
-**Task:** TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2
-**Status:** TASK-TTS-004E2A2 BLOCKED - MINICONDA INSTALL ROOT CAUSE NOT IDENTIFIED / NO RETRY PERFORMED
+**Task:** TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3
+**Status:** TASK-TTS-004E2A3 BLOCKED - UTF-8 MINICONDA RETRY FAILED / NO FURTHER RETRY PERFORMED
 **Date:** 2026-06-19
 **Scope:** Docs-only provider-selection and first-probe approval plan for the
 future isolated character voice lab. This task does not create the lab, clone
@@ -39,6 +39,10 @@ official installer failed and rolled back. The first probe remains blocked.
 TASK-TTS-004E2A2 performed diagnostics only. It narrowed evidence to rollback
 after a `cp950` `UnicodeDecodeError` while reading existing Conda-related paths,
 but exact upstream root cause remains unproven and no retry was performed.
+
+TASK-TTS-004E2A3 performed one approved same-installer same-path retry with
+process-local UTF-8 settings. It still failed with exit code `2`, so the first
+probe remains blocked.
 
 ---
 
@@ -255,3 +259,23 @@ Result:
 - Existing machine-wide Anaconda state found: yes.
 - First probe remains blocked until a human explicitly approves cleanup, retry,
   alternate environment tooling, or a different isolated environment strategy.
+
+---
+
+## 13. TASK-TTS-004E2A3 UTF-8 Retry
+
+See:
+
+- `docs/TTS_MINICONDA_UTF8_RETRY.md`
+
+Result:
+
+- Final status: BLOCKED - UTF-8 MINICONDA RETRY FAILED / NO FURTHER RETRY
+  PERFORMED.
+- Approved partial install cleanup before retry: performed.
+- Same verified installer / same path retry: performed once.
+- Retry exit code: `2`.
+- Valid isolated Conda installation: no.
+- Post-retry cleanup: not performed because it was not approved.
+- First probe remains blocked until a human explicitly approves a new
+  remediation path.

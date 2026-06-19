@@ -1,7 +1,7 @@
 # TTS Character Voice Lab Plan
 
-**Task:** TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2
-**Status:** TASK-TTS-004E2A2 BLOCKED - MINICONDA INSTALL ROOT CAUSE NOT IDENTIFIED / NO RETRY PERFORMED
+**Task:** TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3
+**Status:** TASK-TTS-004E2A3 BLOCKED - UTF-8 MINICONDA RETRY FAILED / NO FURTHER RETRY PERFORMED
 **Date:** 2026-06-19
 **Scope:** Planning-only boundary for future GPT-SoVITS / Style-Bert-VITS2
 experiments in an isolated lab environment. No lab folder was created, no
@@ -25,6 +25,11 @@ TASK-TTS-004E2A2 performed diagnostics only. Evidence narrows the failure to
 rollback after a `cp950` `UnicodeDecodeError` while reading existing
 Conda-related paths, but exact upstream root cause remains unproven and no retry
 or cleanup was performed.
+
+TASK-TTS-004E2A3 deleted only the approved failed partial install root and
+retried the same verified installer once with process-local UTF-8 settings. The
+retry still failed with exit code `2`, recreated a partial install, and no
+further retry or post-retry cleanup was performed.
 
 ---
 
@@ -395,3 +400,20 @@ Minimum evidence before runtime provider selection:
   probe passed.
 - Existing machine-wide Anaconda state was found, but exact upstream root cause
   remains unproven.
+
+---
+
+## 16. TASK-TTS-004E2A3 UTF-8 Retry
+
+- Final status: BLOCKED - UTF-8 MINICONDA RETRY FAILED / NO FURTHER RETRY
+  PERFORMED.
+- Evidence doc: `docs/TTS_MINICONDA_UTF8_RETRY.md`.
+- External manifest:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2A3_MINICONDA_UTF8_RETRY.md`.
+- Only the approved partial install root was deleted before retry.
+- Same verified installer and same isolated path were used.
+- Process-local `PYTHONUTF8=1`, `PYTHONIOENCODING=utf-8`, and UTF-8 output
+  encodings did not resolve the failure.
+- Installer exit code remained `2`.
+- Required Conda/Python files remain missing.
+- No further retry or post-retry cleanup was performed.

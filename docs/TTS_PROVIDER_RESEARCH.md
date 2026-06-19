@@ -1,7 +1,7 @@
 # TTS Provider Research
 
-**Task:** TASK-TTS-001 / TASK-TTS-004E2A2
-**Status:** TASK-TTS-004E2A2 BLOCKED - MINICONDA INSTALL ROOT CAUSE NOT IDENTIFIED / NO RETRY PERFORMED
+**Task:** TASK-TTS-001 / TASK-TTS-004E2A3
+**Status:** TASK-TTS-004E2A3 BLOCKED - UTF-8 MINICONDA RETRY FAILED / NO FURTHER RETRY PERFORMED
 **Date:** 2026-06-19
 **Scope:** Provider research, implemented mock-provider skeleton boundary,
 TASK-TTS-004A install-free provider review, TASK-TTS-004B manual VOICEVOX
@@ -13,14 +13,15 @@ TASK-TTS-004D2 environment check workflow, TASK-TTS-004D3 isolated lab
 plan, TASK-TTS-004D4 manual bootstrap checklist, TASK-TTS-004E provider
 selection checkpoint, TASK-TTS-004E2 blocked Phase 1 bootstrap attempt, and
 TASK-TTS-004E2A blocked isolated Miniconda bootstrap attempt, and
-TASK-TTS-004E2A2 Miniconda failure diagnostics. GPT-SoVITS is
+TASK-TTS-004E2A2 Miniconda failure diagnostics, and TASK-TTS-004E2A3 UTF-8
+retry. GPT-SoVITS is
 selected as the first isolated lab candidate, Style-Bert-VITS2 is the second
 provider / fallback research path, no real voice-quality provider is selected
 as final, no model is
 downloaded, the `edge-tts` install is optional/manual inside `backend\.venv`
 only, and no runtime synthesis/playback path is implemented by TASK-TTS-004C2,
 TASK-TTS-004C3, TASK-TTS-004D, TASK-TTS-004D2, TASK-TTS-004D3,
-TASK-TTS-004E2A, or TASK-TTS-004E2A2.
+TASK-TTS-004E2A, TASK-TTS-004E2A2, or TASK-TTS-004E2A3.
 
 This document records candidate directions for Christina voice output. It should
 guide later experiments, not lock Dragon Pet AI to a single TTS engine.
@@ -824,6 +825,33 @@ Actual result:
   over the install window.
 - External diagnostics manifest:
   `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2A2_MINICONDA_INSTALL_DIAGNOSTICS.md`.
+
+---
+
+## TASK-TTS-004E2A3 Miniconda UTF-8 Retry
+
+TASK-TTS-004E2A3 adds `docs/TTS_MINICONDA_UTF8_RETRY.md`.
+
+Actual result:
+
+- BLOCKED - UTF-8 MINICONDA RETRY FAILED / NO FURTHER RETRY PERFORMED.
+- Deleted only the approved failed partial install root after exact path
+  verification.
+- Preserved the official installer, SHA-256 evidence, and reports.
+- Retried the same verified installer once to the same path with process-local
+  `PYTHONUTF8=1`, `PYTHONIOENCODING=utf-8`, and UTF-8 output encodings.
+- Retry still exited `2` and recreated a partial install.
+- Required `condabin\conda.bat`, `Scripts\conda.exe`, `python.exe`, and
+  `Uninstall-Miniconda3.exe` remain missing.
+- `.step.log` still reports rollback after a `cp950` `UnicodeDecodeError`
+  while reading existing Conda-related paths.
+- No further retry or post-retry cleanup was performed.
+- No user/system PATH, `conda init`, PowerShell profile, registry, existing
+  Anaconda removal, provider repo, GPT-SoVITS env, dependency/PyTorch/CUDA
+  install, model/dataset download, training, inference, WebUI, synthesis,
+  generated audio, runtime wiring, playback, or backend venv change was added.
+- External retry manifest:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2A3_MINICONDA_UTF8_RETRY.md`.
 
 ---
 

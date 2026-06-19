@@ -1,7 +1,7 @@
 # GPT-SoVITS Isolated Lab Phase 1
 
 **Task:** TASK-TTS-004E2
-**Status:** SUPERSEDED BY TASK-TTS-004E2A2 BLOCKED - MINICONDA INSTALL ROOT CAUSE NOT IDENTIFIED / NO RETRY PERFORMED
+**Status:** SUPERSEDED BY TASK-TTS-004E2A3 BLOCKED - UTF-8 MINICONDA RETRY FAILED / NO FURTHER RETRY PERFORMED
 **Date:** 2026-06-19
 **Scope:** Approved Phase 1 bootstrap for the external GPT-SoVITS lab, limited
 to creating the external lab folder, cloning the official GPT-SoVITS repository,
@@ -217,6 +217,11 @@ or clean the partial install. Direct log evidence narrows the failure to
 rollback after a `cp950` `UnicodeDecodeError` while reading existing
 Conda-related paths, but exact upstream root cause remains unproven; see
 `docs/TTS_MINICONDA_INSTALL_DIAGNOSTICS.md`.
+
+TASK-TTS-004E2A3 then deleted only the approved failed partial install root and
+retried the same verified installer once to the same path with process-local
+UTF-8 settings. The retry still failed with exit code `2`; see
+`docs/TTS_MINICONDA_UTF8_RETRY.md`.
 
 The previously suggested next task, TASK-TTS-004E3 GPT-SoVITS Lab
 PyTorch/CUDA Compatibility Review, is not approved and cannot start from this

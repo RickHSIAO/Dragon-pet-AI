@@ -191,3 +191,22 @@ Not performed:
 Do not continue to TASK-TTS-004E2B or retry Miniconda until the user explicitly
 approves cleanup, retry, alternate installer/tooling, or a different isolated
 environment strategy.
+
+---
+
+## 11. TASK-TTS-004E2A3 Follow-Up
+
+TASK-TTS-004E2A3 was later approved for one narrow remediation attempt:
+
+- delete only the failed partial install root;
+- preserve installer, hash evidence, and reports;
+- retry the same verified installer once to the same isolated path with
+  process-local UTF-8 settings.
+
+Result:
+
+```text
+BLOCKED - UTF-8 MINICONDA RETRY FAILED / NO FURTHER RETRY PERFORMED
+```
+
+See `docs/TTS_MINICONDA_UTF8_RETRY.md`.
