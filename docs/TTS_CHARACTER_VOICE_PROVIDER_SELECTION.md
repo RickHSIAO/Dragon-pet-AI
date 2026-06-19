@@ -1,7 +1,7 @@
 # TTS Character Voice Provider Selection
 
-**Task:** TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B / TASK-TTS-004E4A / TASK-TTS-004E5
-**Status:** TASK-TTS-004E5 DONE - GPT-SOVITS AUDIO/TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED
+**Task:** TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B / TASK-TTS-004E4A / TASK-TTS-004E5 / TASK-TTS-004E5A
+**Status:** TASK-TTS-004E5A DONE - GPT-SOVITS WAV/AUDIO B1 DEPENDENCIES VERIFIED / TEXT MODEL RUNTIME NOT INSTALLED
 **Date:** 2026-06-19
 **Scope:** Docs-only provider-selection and first-probe approval plan for the
 future isolated character voice lab, plus later lab setup status checkpoints.
@@ -11,7 +11,8 @@ train, infer, synthesize audio, or wire runtime TTS. TASK-TTS-004E4 reviewed
 dependency compatibility only. TASK-TTS-004E4A installed only approved
 foundation dependencies and did not install audio/model dependency groups.
 TASK-TTS-004E5 reviewed audio/text dependency compatibility without installing
-anything.
+anything. TASK-TTS-004E5A installed and verified only the approved B1
+WAV/audio group.
 
 ---
 
@@ -70,8 +71,9 @@ installing anything. TASK-TTS-004E4A then installed only the approved
 foundation group, limited to `numpy==1.26.4`, `scipy==1.11.4`, `tqdm`,
 `PyYAML`, `chardet`, and `psutil` with protected torch/cu128 constraints.
 TASK-TTS-004E5 Audio/Text Dependency Compatibility Review completed without
-installing anything. Current next task is TASK-TTS-004E5A GPT-SoVITS
-WAV/Chinese Runtime Dependency Install, not approved yet.
+installing anything. TASK-TTS-004E5A then installed and verified only Group B1
+WAV/audio dependencies. Current next task is TASK-TTS-004E6 GPT-SoVITS Chinese
+Text Dependency Review, not approved yet.
 
 ---
 

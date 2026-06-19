@@ -681,7 +681,7 @@ DONE - GPT-SOVITS AUDIO/TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED
 Recommended next task, not approved yet:
 
 ```text
-TASK-TTS-004E5A - GPT-SoVITS WAV/Chinese Runtime Dependency Install
+TASK-TTS-004E6 - GPT-SoVITS Chinese Text Dependency Review
 ```
 
 Primary selected first install subset for that future task:
@@ -689,3 +689,8 @@ Primary selected first install subset for that future task:
 ```text
 Group B1 - Low-risk WAV/audio foundation
 ```
+
+TASK-TTS-004E5A later installed and verified this Group B1 subset only. It did
+not install Chinese text dependencies, model dependencies, ffmpeg, PyAV,
+TorchCodec, models, WebUI, inference, synthesis, persistent audio generation,
+or runtime wiring. See `docs/TTS_GPT_SOVITS_AUDIO_B1_INSTALL.md`.

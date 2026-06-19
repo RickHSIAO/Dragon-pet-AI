@@ -652,8 +652,19 @@ Suggested research and implementation tasks:
   Japanese/multilingual text, ffmpeg/PyAV/TorchCodec, models, WebUI,
   inference, synthesis, generated audio, runtime playback, `/chat`,
   auto-speaking, STT, Conversation Mode, Owner Voice, schema behavior, backend
-  venv, and dependency-file changes. Current next task is TASK-TTS-004E5A
-  GPT-SoVITS WAV/Chinese Runtime Dependency Install, not approved yet.
+  venv, and dependency-file changes.
+- TASK-TTS-004E5A GPT-SoVITS WAV/Chinese Runtime Dependency Install.
+  DONE - B1 WAV/audio dependencies verified; text/model runtime not installed.
+  Installed only approved Group B1 with `--only-binary=:all:` and protected
+  constraints in the isolated lab env. Validation passed for B1 imports,
+  in-memory `librosa` resample, mel filter creation, `soundfile` in-memory WAV
+  round trip, NumPy/SciPy/Torch interop, `pip check`, CUDA, RTX 3070, and a
+  minimal CUDA tensor. Chinese text dependencies, `jieba_fast`, G2PW, OpenCC,
+  `pyopenjtalk`, ffmpeg, PyAV, TorchCodec, models, WebUI, inference,
+  synthesis, persistent audio generation, playback, auto-speaking, runtime
+  TTS, `/chat`, STT, Conversation Mode, Owner Voice, schema behavior, backend
+  venv, and dependency-file changes remain unapproved. Current next task is
+  TASK-TTS-004E6 GPT-SoVITS Chinese Text Dependency Review, not approved yet.
 - TASK-TTS-004 Playback queue and renderer diagnostics after a real provider
   candidate is validated.
 - TASK-TTS-005 Pet speaking state / bubble sync.

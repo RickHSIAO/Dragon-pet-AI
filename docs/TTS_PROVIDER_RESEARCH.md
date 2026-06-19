@@ -1042,11 +1042,12 @@ Recommended sequencing:
 20. TASK-TTS-004E5: GPT-SoVITS audio/text dependency compatibility review.
    DONE - install not approved; Group B1 low-risk WAV/audio foundation selected
    as future first install candidate.
-21. TASK-TTS-004E5A: GPT-SoVITS WAV/Chinese Runtime Dependency Install. NOT
-   APPROVED.
-22. TASK-TTS-004: renderer playback queue diagnostics after a real provider
+21. TASK-TTS-004E5A: GPT-SoVITS WAV/Chinese Runtime Dependency Install. DONE -
+   B1 WAV/audio dependencies verified; text/model runtime not installed.
+22. TASK-TTS-004E6: GPT-SoVITS Chinese Text Dependency Review. NOT APPROVED.
+23. TASK-TTS-004: renderer playback queue diagnostics after a real provider
    candidate is validated.
-23. TASK-TTS-005: Pet speaking state and bubble sync.
+24. TASK-TTS-005: Pet speaking state and bubble sync.
 23. TASK-TTS-006: Conversation Mode feedback prevention.
 24. Future: provider comparison report and singing research.
 

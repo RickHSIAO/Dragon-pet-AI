@@ -1,7 +1,7 @@
 # TTS Character Voice Lab Bootstrap Checklist
 
-**Task:** TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B / TASK-TTS-004E4A / TASK-TTS-004E5
-**Status:** TASK-TTS-004E5 DONE - GPT-SOVITS AUDIO/TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED
+**Task:** TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B / TASK-TTS-004E4A / TASK-TTS-004E5 / TASK-TTS-004E5A
+**Status:** TASK-TTS-004E5A DONE - GPT-SOVITS WAV/AUDIO B1 DEPENDENCIES VERIFIED / TEXT MODEL RUNTIME NOT INSTALLED
 **Date:** 2026-06-19
 **Scope:** Manual-command checklist for a future isolated character voice lab
 plus later lab setup checkpoints. TASK-TTS-004E3A installed only approved
@@ -48,8 +48,10 @@ TASK-TTS-004E4A installed the foundation-only group: `numpy==1.26.4`,
 constraints that protect the existing cu128 torch stack. Validation passed.
 TASK-TTS-004E5 reviewed audio/text dependency compatibility without installing
 anything and selected future Group B1 low-risk WAV/audio foundation as the
-first install candidate. TASK-TTS-004E5A WAV/Chinese Runtime Dependency Install
-is the next recommended task and is not approved yet.
+first install candidate. TASK-TTS-004E5A then installed and verified only that
+B1 group with `--only-binary=:all:` and protected constraints. TASK-TTS-004E6
+Chinese Text Dependency Review is the next recommended task and is not approved
+yet.
 
 ---
 

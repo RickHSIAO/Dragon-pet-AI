@@ -728,10 +728,11 @@ audio/model dependency group. See
 `docs/TTS_GPT_SOVITS_FOUNDATION_DEPENDENCY_INSTALL.md`.
 
 TASK-TTS-004E5 later completed the audio/text dependency compatibility review
-without installing anything.
+without installing anything. TASK-TTS-004E5A later installed and verified only
+the approved B1 WAV/audio dependency group.
 
 Recommended next task, not approved yet:
 
 ```text
-TASK-TTS-004E5A - GPT-SoVITS WAV/Chinese Runtime Dependency Install
+TASK-TTS-004E6 - GPT-SoVITS Chinese Text Dependency Review
 ```

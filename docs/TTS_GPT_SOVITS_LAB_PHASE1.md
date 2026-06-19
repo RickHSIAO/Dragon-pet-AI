@@ -243,6 +243,7 @@ compatibility review then completed without installing anything. TASK-TTS-004E4A
 later installed only the approved foundation dependency group and verified
 imports, NumPy/Torch interop, `pip check`, CUDA, and the protected cu128 torch
 stack. TASK-TTS-004E5 then completed the audio/text dependency compatibility
-review without installing anything. The next recommended task is
-TASK-TTS-004E5A GPT-SoVITS WAV/Chinese Runtime Dependency Install. It is not
+review without installing anything. TASK-TTS-004E5A later installed and
+verified only the approved B1 WAV/audio dependency group. The next recommended
+task is TASK-TTS-004E6 GPT-SoVITS Chinese Text Dependency Review. It is not
 approved yet.

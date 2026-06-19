@@ -35,8 +35,10 @@ TASK-TTS-004E4A foundation install checkpoint:
 - Verified imports, `pip check`, NumPy/Torch interop, CUDA `12.8`, RTX 3070
   detection, and a CUDA tensor.
 - TASK-TTS-004E5 completed the audio/text dependency compatibility review
-  without installing anything. Current next task is TASK-TTS-004E5A
-  GPT-SoVITS WAV/Chinese Runtime Dependency Install, not approved yet.
+  without installing anything. TASK-TTS-004E5A then installed and verified
+  only approved Group B1 WAV/audio foundation packages in the isolated lab env.
+  Current next task is TASK-TTS-004E6 GPT-SoVITS Chinese Text Dependency
+  Review, not approved yet.
 - TorchCodec, Chinese text dependencies, Japanese/multilingual text
   dependencies, ffmpeg/PyAV codec layers, model dependencies, full GPT-SoVITS
   dependencies, models, WebUI, inference, synthesis, runtime playback, and

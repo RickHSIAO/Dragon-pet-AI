@@ -25888,12 +25888,13 @@ Documentation output:
 Recommended next task, not approved yet:
 
 ```text
-TASK-TTS-004E5A - GPT-SoVITS WAV/Chinese Runtime Dependency Install
+TASK-TTS-004E6 - GPT-SoVITS Chinese Text Dependency Review
 ```
 
 TASK-TTS-004E4A was later completed as a foundation-only install.
 TASK-TTS-004E5 was later completed as an audio/text dependency compatibility
 review without installing anything.
+TASK-TTS-004E5A was later completed as a B1 WAV/audio dependency install.
 
 ---
 
@@ -26015,8 +26016,10 @@ Validation:
 Recommended next task, not approved yet:
 
 ```text
-TASK-TTS-004E5A - GPT-SoVITS WAV/Chinese Runtime Dependency Install
+TASK-TTS-004E6 - GPT-SoVITS Chinese Text Dependency Review
 ```
+
+TASK-TTS-004E5A was later completed as a B1 WAV/audio dependency install.
 
 ---
 
@@ -26130,7 +26133,140 @@ Evidence files:
 Recommended next task, not approved yet:
 
 ```text
-TASK-TTS-004E5A - GPT-SoVITS WAV/Chinese Runtime Dependency Install
+TASK-TTS-004E6 - GPT-SoVITS Chinese Text Dependency Review
+```
+
+TASK-TTS-004E5A later installed and verified only this Group B1 subset.
+
+---
+
+## TASK-TTS-004E5A | GPT-SoVITS WAV/Chinese Runtime Dependency Install
+
+**Status:** DONE - GPT-SOVITS WAV/AUDIO B1 DEPENDENCIES VERIFIED / TEXT MODEL RUNTIME NOT INSTALLED
+**Date:** 2026-06-19
+**Phase:** Phase 5 - Companion Voice Output Architecture
+**Depends on:** TASK-TTS-004E5
+
+### Goal
+
+Install only approved Group B1 low-risk WAV/audio foundation packages into the
+isolated GPT-SoVITS lab environment:
+
+```text
+F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\envs\gpt-sovits-py310
+```
+
+Use `--only-binary=:all:` and lab-local constraints protecting:
+
+```text
+torch==2.7.0+cu128
+torchaudio==2.7.0+cu128
+numpy==1.26.4
+scipy==1.11.4
+```
+
+### Result
+
+TASK-TTS-004E5A completed:
+
+```text
+DONE - GPT-SOVITS WAV/AUDIO B1 DEPENDENCIES VERIFIED / TEXT MODEL RUNTIME NOT INSTALLED
+```
+
+Installed requested B1 packages:
+
+```text
+librosa==0.10.2
+soundfile==0.13.1
+numba==0.59.1
+llvmlite==0.42.0
+soxr==0.5.0.post1
+audioread==3.0.1
+scikit-learn==1.4.2
+joblib==1.4.2
+threadpoolctl==3.5.0
+decorator==5.1.1
+pooch==1.8.2
+platformdirs==4.2.2
+requests==2.32.3
+lazy-loader==0.4
+msgpack==1.0.8
+```
+
+Installed required transitive dependencies:
+
+```text
+cffi==2.0.0
+pycparser==3.0
+certifi==2026.6.17
+charset-normalizer==3.4.7
+idna==3.18
+urllib3==2.7.0
+```
+
+Validation passed for B1 imports and versions, `librosa` in-memory resample,
+mel filter creation, `soundfile` in-memory WAV round trip, NumPy/SciPy/Torch
+interop, `pip check`, protected package versions, CUDA availability, RTX 3070
+device detection, and a minimal CUDA tensor.
+
+Evidence files:
+
+- `docs/TTS_GPT_SOVITS_AUDIO_B1_INSTALL.md`
+- External manifest:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E5A_AUDIO_B1_INSTALL.md`
+- Constraints:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\constraints\TASK-TTS-004E5A_AUDIO_B1_PROTECTED.txt`
+- Requested package list:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\constraints\TASK-TTS-004E5A_AUDIO_B1_REQUESTED.txt`
+- Dry-run report:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E5A_DRY_RUN_REPORT.json`
+- Install report:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E5A_INSTALL_REPORT.json`
+- Install log:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E5A_AUDIO_B1_INSTALL.log`
+- Validation report:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E5A_VALIDATION.txt`
+- Before/after snapshots:
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E5A_PIP_BEFORE.txt`,
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E5A_CONDA_BEFORE.txt`,
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E5A_PIP_AFTER.txt`,
+  `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E5A_CONDA_AFTER.txt`
+
+### Acceptance Criteria
+
+- [x] Install targeted only the isolated external GPT-SoVITS lab env.
+- [x] Install used `--only-binary=:all:`.
+- [x] Lab-local constraints protected torch, torchaudio, numpy, and scipy.
+- [x] Binary-only dry-run passed before install.
+- [x] Dry-run and install reports contained no protected replacement, NumPy 2.x,
+  PyAV, TorchCodec, ffmpeg, model package, Chinese text dependency,
+  `jieba_fast`, G2PW, OpenCC, or `pyopenjtalk`.
+- [x] Requested B1 packages installed.
+- [x] Required transitive dependencies were recorded.
+- [x] B1 imports and version checks passed.
+- [x] `librosa` in-memory resample passed.
+- [x] `librosa.filters.mel` creation passed.
+- [x] `soundfile` in-memory WAV write/read round trip passed.
+- [x] NumPy/SciPy/Torch interop passed.
+- [x] `pip check`: `No broken requirements found.`
+- [x] Torch remained `2.7.0+cu128`.
+- [x] Torchaudio remained `2.7.0+cu128`.
+- [x] NumPy remained `1.26.4`.
+- [x] SciPy remained `1.11.4`.
+- [x] CUDA remained available.
+- [x] RTX 3070 remained detected.
+- [x] Minimal CUDA tensor test passed.
+- [x] No source build, fallback install, model/dataset download, training,
+  inference, WebUI, synthesis, persistent audio generation, runtime TTS,
+  playback, auto-speaking, Anaconda base, PATH/profile/registry, backend venv,
+  `/chat`, STT, Conversation Mode, Owner Voice, schema, or runtime change was
+  added.
+- [x] Unrelated `docs/???孵?.txt` was not staged or committed.
+
+Recommended next task, not approved yet:
+
+```text
+TASK-TTS-004E6 - GPT-SoVITS Chinese Text Dependency Review
 ```
 
 ---

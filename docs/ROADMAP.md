@@ -322,7 +322,7 @@ See `docs/OLLAMA_PROVIDER_DESIGN.md` for full design.
 **Goal:** Prepare Christina voice output with a provider-neutral, local-first TTS
 architecture before any new runtime provider implementation.
 
-**Status:** GPT-SOVITS AUDIO/TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED / TASK-TTS-004E5 DONE.
+**Status:** GPT-SOVITS WAV/AUDIO B1 DEPENDENCIES VERIFIED / TEXT MODEL RUNTIME NOT INSTALLED / TASK-TTS-004E5A DONE.
 
 | Task | Name | Status |
 |---|---|---|
@@ -350,7 +350,8 @@ architecture before any new runtime provider implementation.
 | TASK-TTS-004E4 | GPT-SoVITS Dependency Compatibility Review | DONE - GPT-SOVITS DEPENDENCY COMPATIBILITY REVIEW COMPLETE / DEPENDENCY INSTALL NOT APPROVED |
 | TASK-TTS-004E4A | GPT-SoVITS Foundation Dependency Install | DONE - GPT-SOVITS FOUNDATION DEPENDENCIES VERIFIED / AUDIO AND MODEL DEPENDENCIES NOT INSTALLED |
 | TASK-TTS-004E5 | GPT-SoVITS Audio/Text Dependency Compatibility Review | DONE - GPT-SOVITS AUDIO/TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED |
-| TASK-TTS-004E5A | GPT-SoVITS WAV/Chinese Runtime Dependency Install | NOT APPROVED |
+| TASK-TTS-004E5A | GPT-SoVITS WAV/Chinese Runtime Dependency Install | DONE - GPT-SOVITS WAV/AUDIO B1 DEPENDENCIES VERIFIED / TEXT MODEL RUNTIME NOT INSTALLED |
+| TASK-TTS-004E6 | GPT-SoVITS Chinese Text Dependency Review | NOT APPROVED |
 | TASK-TTS-004 | Playback queue and renderer diagnostics | PLANNED AFTER REAL PROVIDER CANDIDATE |
 | TASK-TTS-005 | Pet speaking state / bubble sync | PLANNED |
 | TASK-TTS-006 | Conversation Mode feedback prevention | PLANNED |
@@ -479,8 +480,17 @@ Track constraints:
   as Group B1 low-risk WAV/audio foundation, while Chinese text dependencies,
   Japanese/multilingual text dependencies, ffmpeg/PyAV/TorchCodec layers,
   models, WebUI, inference, synthesis, and runtime wiring remain unapproved.
-  Current next task is TASK-TTS-004E5A GPT-SoVITS WAV/Chinese Runtime
-  Dependency Install, not approved yet.
+  TASK-TTS-004E5A later installed and verified only that B1 WAV/audio
+  foundation group.
+- TASK-TTS-004E5A installed approved Group B1 with `--only-binary=:all:` and
+  protected constraints. Validation passed for B1 imports, in-memory
+  `librosa` resample, mel filter creation, `soundfile` in-memory WAV
+  round trip, NumPy/SciPy/Torch interop, `pip check`, CUDA, RTX 3070, and a
+  minimal CUDA tensor. Chinese text dependencies, `jieba_fast`, G2PW, OpenCC,
+  `pyopenjtalk`, ffmpeg, PyAV, TorchCodec, models, WebUI, inference,
+  synthesis, persistent audio generation, playback, auto-speaking, and runtime
+  wiring remain unapproved. Current next task is TASK-TTS-004E6 GPT-SoVITS
+  Chinese Text Dependency Review, not approved yet.
 - TTS remains disabled by default for the new provider architecture.
 - First implementation starts with `mock`, not ElevenLabs or a paid external
   provider.
@@ -488,7 +498,7 @@ Track constraints:
   opt-in cost/privacy design.
 - No `/chat` schema, mood schema, STT default, STT selector, Conversation Mode
   backpressure, or Owner Voice hard-gate behavior changes are part of
-  TASK-TTS-001 through TASK-TTS-004E5.
+  TASK-TTS-001 through TASK-TTS-004E5A.
 
 ---
 
@@ -1297,7 +1307,9 @@ Track constraints:
 - TASK-TTS-004E2B DONE - EXISTING ANACONDA VERIFIED / GPT-SOVITS LAB PHASE 1 READY (2026-06-19): Existing Anaconda Validation / GPT-SoVITS Phase 1 Resume. Added `docs/TTS_EXISTING_ANACONDA_GPT_SOVITS_PHASE1.md` and external manifest `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E2B_EXISTING_ANACONDA_RESUME.md`. Verified machine-wide Anaconda at `C:\ProgramData\anaconda3` with direct `conda.exe`; process-local UTF-8 was required for env list because default code page still hit the known `cp950` issue. Created isolated Python `3.10.20` env at `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\envs\gpt-sovits-py310` using lab package cache `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\pkgs-cache`; PyTorch probe returned `None`. Cloned official GPT-SoVITS origin `https://github.com/RVC-Boss/GPT-SoVITS.git`, branch `main`, commit `b2cff0cd0abd0ac134a16ae7a9695f88e8826104`, license `MIT License`. No Anaconda base package install/update, PATH/profile/registry change, `conda init`, failed Miniconda modification, GPT-SoVITS `install.ps1`, dependency/PyTorch/CUDA/model/dataset download, training, inference, WebUI, synthesis, audio generation, runtime TTS wiring, playback, auto-speaking, `/chat` schema or mood schema change, STT default/model selector change, Conversation Mode change, Owner Voice hard-gate change, backend venv change, or dependency-file change was added.
 - TASK-TTS-004E3A DONE - GPT-SOVITS LAB PYTORCH CUDA VERIFIED / GPT-SOVITS DEPENDENCIES NOT INSTALLED (2026-06-19): GPT-SoVITS Lab PyTorch/CUDA Install. Added `docs/TTS_GPT_SOVITS_PYTORCH_CUDA_INSTALL.md` and external manifest `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E3A_PYTORCH_CUDA_INSTALL.md`. Installed only `torch==2.7.0` and `torchaudio==2.7.0` from the official PyTorch CUDA `12.8` wheel index into `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\envs\gpt-sovits-py310`; verified `torch 2.7.0+cu128`, `torchaudio 2.7.0+cu128`, CUDA build `12.8`, `cuda_available=True`, one RTX 3070 device, and a minimal CUDA tensor on `cuda:0`. `numpy` remains uninstalled and the missing-NumPy warning was non-blocking. No cu126/CPU fallback, GPT-SoVITS dependency install, `install.ps1`, TorchCodec, ffmpeg, model/download, WebUI, inference, synthesis, audio generation, Anaconda base modification, PATH/profile/registry change, runtime TTS, playback, auto-speaking, `/chat` schema or mood schema change, STT default/model selector change, Conversation Mode change, Owner Voice hard-gate change, backend venv change, or dependency-file change was added.
 
-- TASK-TTS-004E5 DONE - GPT-SOVITS AUDIO/TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED (2026-06-19): GPT-SoVITS Audio/Text Dependency Compatibility Review. Added `docs/TTS_GPT_SOVITS_AUDIO_TEXT_DEPENDENCY_REVIEW.md` and external manifest `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E5_AUDIO_TEXT_DEPENDENCY_REVIEW.md`. Inspected audio/text/inference/preprocessing files read-only and separated WAV/audio foundation, Chinese text, Japanese/multilingual text, ffmpeg/PyAV/TorchCodec codec layers, and native-build risks. Selected the future primary first group as Group B1 low-risk WAV/audio foundation, not approved yet: `librosa==0.10.2`, `soundfile==0.13.1`, `numba==0.59.1`, `llvmlite==0.42.0`, `soxr==0.5.0.post1`, and pinned supporting wheels. Deferred Chinese text because `jieba_fast==0.53` is source-only in PyPI metadata and directly imported by the Chinese path; deferred ffmpeg/PyAV/TorchCodec/model/WebUI layers. No package install/uninstall, resolver run, model/download, WebUI, inference, synthesis, audio generation, PATH/profile/registry/Anaconda base/backend venv/runtime change, or unrelated `docs/開啟方式.txt` staging was performed. Next recommended task is TASK-TTS-004E5A - GPT-SoVITS WAV/Chinese Runtime Dependency Install, not approved yet.
+- TASK-TTS-004E5A DONE - GPT-SOVITS WAV/AUDIO B1 DEPENDENCIES VERIFIED / TEXT MODEL RUNTIME NOT INSTALLED (2026-06-19): GPT-SoVITS WAV/Chinese Runtime Dependency Install. Added `docs/TTS_GPT_SOVITS_AUDIO_B1_INSTALL.md` and external manifest `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E5A_AUDIO_B1_INSTALL.md`. Installed only approved Group B1 low-risk WAV/audio foundation packages into the isolated lab env with `--only-binary=:all:` and protected constraints: `librosa==0.10.2`, `soundfile==0.13.1`, `numba==0.59.1`, `llvmlite==0.42.0`, `soxr==0.5.0.post1`, `audioread==3.0.1`, `scikit-learn==1.4.2`, `joblib==1.4.2`, `threadpoolctl==3.5.0`, `decorator==5.1.1`, `pooch==1.8.2`, `platformdirs==4.2.2`, `requests==2.32.3`, `lazy-loader==0.4`, and `msgpack==1.0.8`; pip added required transitive `cffi==2.0.0`, `pycparser==3.0`, `certifi==2026.6.17`, `charset-normalizer==3.4.7`, `idna==3.18`, and `urllib3==2.7.0`. Validation passed for B1 imports/versions, in-memory `librosa` resample, mel filter creation, `soundfile` in-memory WAV round trip, NumPy/SciPy/Torch interop, `pip check`, protected torch/torchaudio/numpy/scipy versions, CUDA availability, RTX 3070 detection, and a minimal CUDA tensor. No source build, fallback install, protected package replacement, NumPy 2.x, PyAV, TorchCodec, ffmpeg, Chinese text dependency, model/download, training, inference, WebUI, persistent audio generation, runtime TTS, playback, auto-speaking, Anaconda base, PATH/profile/registry, backend venv, `/chat`, STT, Conversation Mode, Owner Voice, schema, or unrelated `docs/開啟方式.txt` staging was performed. Next recommended task is TASK-TTS-004E6 - GPT-SoVITS Chinese Text Dependency Review, not approved yet.
+
+- TASK-TTS-004E5 DONE - GPT-SOVITS AUDIO/TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED (2026-06-19): GPT-SoVITS Audio/Text Dependency Compatibility Review. Added `docs/TTS_GPT_SOVITS_AUDIO_TEXT_DEPENDENCY_REVIEW.md` and external manifest `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E5_AUDIO_TEXT_DEPENDENCY_REVIEW.md`. Inspected audio/text/inference/preprocessing files read-only and separated WAV/audio foundation, Chinese text, Japanese/multilingual text, ffmpeg/PyAV/TorchCodec codec layers, and native-build risks. Selected the future primary first group as Group B1 low-risk WAV/audio foundation, later installed by TASK-TTS-004E5A: `librosa==0.10.2`, `soundfile==0.13.1`, `numba==0.59.1`, `llvmlite==0.42.0`, `soxr==0.5.0.post1`, and pinned supporting wheels. Deferred Chinese text because `jieba_fast==0.53` is source-only in PyPI metadata and directly imported by the Chinese path; deferred ffmpeg/PyAV/TorchCodec/model/WebUI layers. No package install/uninstall, resolver run, model/download, WebUI, inference, synthesis, audio generation, PATH/profile/registry/Anaconda base/backend venv/runtime change, or unrelated `docs/開啟方式.txt` staging was performed.
 
 - TASK-TTS-004E4A DONE - GPT-SOVITS FOUNDATION DEPENDENCIES VERIFIED / AUDIO AND MODEL DEPENDENCIES NOT INSTALLED (2026-06-19): GPT-SoVITS Foundation Dependency Install. Added `docs/TTS_GPT_SOVITS_FOUNDATION_DEPENDENCY_INSTALL.md` and external manifest `F:\RickHSIAO\AI-Labs\dragon-pet-voice-lab\reports\TASK-TTS-004E4A_FOUNDATION_INSTALL.md`. Installed only the approved foundation group into the isolated lab env: `numpy==1.26.4`, `scipy==1.11.4`, `tqdm==4.68.3`, `PyYAML==6.0.3`, `chardet==7.4.3`, and `psutil==7.2.2`; required transitive `colorama==0.4.6` was added. Verified imports, NumPy/Torch interop, `pip check`, protected `torch 2.7.0+cu128`, `torchaudio 2.7.0+cu128`, CUDA build `12.8`, RTX 3070 detection, and a CUDA tensor. No SciPy fallback, torch/torchaudio replacement, full requirements, ffmpeg/PyAV/TorchCodec/audio/model dependency group, model/download, WebUI, inference, synthesis, generated audio, PATH/profile/registry/Anaconda base/backend venv/runtime change, or unrelated `docs/開啟方式.txt` staging was performed. Next recommended task was TASK-TTS-004E5, later completed.
 

@@ -1,14 +1,15 @@
 # TTS Character Voice Lab Plan
 
-**Task:** TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B / TASK-TTS-004E4A / TASK-TTS-004E5
-**Status:** TASK-TTS-004E5 DONE - GPT-SOVITS AUDIO/TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED
+**Task:** TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B / TASK-TTS-004E4A / TASK-TTS-004E5 / TASK-TTS-004E5A
+**Status:** TASK-TTS-004E5A DONE - GPT-SOVITS WAV/AUDIO B1 DEPENDENCIES VERIFIED / TEXT MODEL RUNTIME NOT INSTALLED
 **Date:** 2026-06-19
 **Scope:** Planning and review boundary for future GPT-SoVITS /
 Style-Bert-VITS2 experiments in an isolated lab environment. GPT-SoVITS Phase 1
 created the isolated Python env and official repo clone; TASK-TTS-004E3A then
 installed only approved PyTorch CUDA packages; TASK-TTS-004E4A then installed
 only approved foundation dependencies; TASK-TTS-004E5 then reviewed audio/text
-dependencies without installing anything. GPT-SoVITS Chinese text,
+dependencies without installing anything; TASK-TTS-004E5A then installed and
+verified only approved B1 WAV/audio dependencies. GPT-SoVITS Chinese text,
 Japanese/multilingual text, codec/model dependencies, models, training,
 inference, WebUI, and audio generation remain unapproved.
 
@@ -60,7 +61,9 @@ lab-local constraints that protect `torch==2.7.0+cu128` and
 RTX 3070 verification passed. TASK-TTS-004E5 Audio/Text Dependency
 Compatibility Review then completed without installing anything and selected
 future Group B1 low-risk WAV/audio foundation as the first install candidate.
-TASK-TTS-004E5A is the next recommended task and is not approved yet.
+TASK-TTS-004E5A then installed and verified only that B1 group with
+`--only-binary=:all:` and protected constraints. TASK-TTS-004E6 is the next
+recommended task and is not approved yet.
 
 ---
 
@@ -481,5 +484,6 @@ Minimum evidence before runtime provider selection:
 - TASK-TTS-004E4 dependency compatibility review: done.
 - TASK-TTS-004E4A foundation dependency install: done and verified.
 - TASK-TTS-004E5 audio/text dependency compatibility review: done.
-- Next recommended task: TASK-TTS-004E5A GPT-SoVITS WAV/Chinese Runtime
-  Dependency Install, not approved yet.
+- TASK-TTS-004E5A B1 WAV/audio dependency install: done and verified.
+- Next recommended task: TASK-TTS-004E6 GPT-SoVITS Chinese Text Dependency
+  Review, not approved yet.
