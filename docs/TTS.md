@@ -91,15 +91,25 @@ Current Chinese path findings:
 - GPT-SoVITS currently requires `from opencc import OpenCC`,
   `OpenCC("s2tw")`, and `.convert(text)` before G2PW; converted text must
   preserve input length for the downstream assertion.
-- Preferred OpenCC direction is an isolated official upstream OpenCC wheel probe
-  on Windows/Python 3.10, not the GPT-SoVITS `--no-binary=opencc` source-build
-  path.
-- `opencc-python-reimplemented` is API/config-name compatible on static review,
-  but dictionary/output parity is unproven and it is not selected as a direct
-  drop-in.
-- OpenCC-dependent Chinese inference remains blocked until the no-model
-  compatibility probe proves import origin, asset origin, offline behavior,
-  deterministic conversion, and acceptable `s2tw` output.
+- The official upstream OpenCC wheel
+  `OpenCC-1.3.1-cp310-cp310-win_amd64.whl` was downloaded from PyPI, verified
+  with SHA256
+  `268055c0545d419f5ee071c40cef72773fd87fd2db3f3b147112794ed73e5168`, and
+  extracted under the external lab vendor directory only.
+- The repo probe verified process-local `PYTHONPATH` import of
+  `opencc.__init__`, `opencc.clib.opencc_clib.cp310-win_amd64.pyd`,
+  `OpenCC("s2tw")`, `s2tw.json`, and required `.ocd2` dictionaries from the
+  external vendor root.
+- The fixed no-private-text corpus converted deterministically, returned
+  strings, preserved input length for every case, made no network attempt, did
+  not need `os.add_dll_directory`, and left package snapshots, protected
+  package versions, persistent environment variables, and the GPT-SoVITS
+  checkout unchanged.
+- OpenCC source-build installs, runtime integration, fallback substitution, and
+  `opencc-python-reimplemented` replacement remain unapproved.
+- OpenCC is no longer the active Chinese text blocker for this isolated lab
+  path, but Chinese inference remains blocked by G2PW package/model/tokenizer
+  and eager-import asset boundaries.
 - Multilingual eager imports may pull non-Chinese dependencies before a
   Chinese-only path is isolated.
 
@@ -118,5 +128,5 @@ Current Chinese path findings:
 ## Current Next Action
 
 ```text
-TASK-TTS-004E6E - Isolated OpenCC Compatibility Probe
+TASK-TTS-004E6F - G2PW Package and Asset Boundary Review
 ```

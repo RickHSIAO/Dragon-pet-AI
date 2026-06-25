@@ -7,7 +7,7 @@ the current documentation set; Git history remains the archive.
 
 | Area | Next item | Notes |
 |---|---|---|
-| TTS | `TASK-TTS-004E6E - Isolated OpenCC Compatibility Probe` | Prove official upstream OpenCC wheel behavior before any runtime or fallback substitution. |
+| TTS | `TASK-TTS-004E6F - G2PW Package and Asset Boundary Review` | OpenCC is externally verified; prove G2PW package/model/tokenizer boundaries before any Chinese inference. |
 | STT | Provider reliability and Conversation Mode quality | Do not change committed default without approval. |
 | Owner Voice Gate | Product decision and reliability review | Still not security-grade auth. |
 | Docs | Keep canonical docs current | Do not reintroduce task journals. |
