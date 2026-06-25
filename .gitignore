@@ -25,6 +25,9 @@ out/
 
 # Logs
 *.log
+logs/
+reports/
+local-notes/
 
 # OS / Editor
 .DS_Store
@@ -46,18 +49,13 @@ backend/data/provider_settings.json.tmp
 開啟方式.txt
 # TASK-261 local owner voice gate / pytest temp
 backend/data/owner_voice_gate_settings.json
+backend.pytest-tmp-*/
 backend.pytest-tmp-task261-*/
 
-# TASK-TTS-003 local-only provider probe reports
-outputs/tts_provider_probe/
-
-# TASK-TTS-004D2 local-only character voice environment reports
-outputs/tts_character_voice_env_check/
+# Local generated reports and snapshots
+outputs/
+docs/screenshots/
 
 # TASK-TTS-004D3 local-only character voice lab artifacts
-outputs/tts_character_voice_lab/
 .local-voice-lab/
 voice-lab/
-
-# TASK-TTS-004E6A local-only GPT-SoVITS Chinese import graph reports
-outputs/tts_gpt_sovits_chinese_import_graph/
