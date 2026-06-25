@@ -110,6 +110,14 @@ Current Chinese path findings:
 - OpenCC is no longer the active Chinese text blocker for this isolated lab
   path, but Chinese inference remains blocked by G2PW package/model/tokenizer
   and eager-import asset boundaries.
+- The G2PW boundary review found that `chinese2.py` imports local
+  `text.g2pw` and constructs `G2PWPinyin(...)` at module import time; that path
+  imports `onnxruntime`, may preload DLLs, can auto-download `G2PWModel` if the
+  model directory is missing, initializes a Transformers tokenizer, and creates
+  an ONNX Runtime session before any Chinese text function is called.
+- The smallest safe next layer is an ONNX Runtime Windows/Python 3.10
+  compatibility review; G2PW model assets, tokenizer assets, constructor
+  probes, source patches, and Chinese inference remain unapproved.
 - Multilingual eager imports may pull non-Chinese dependencies before a
   Chinese-only path is isolated.
 
@@ -128,5 +136,5 @@ Current Chinese path findings:
 ## Current Next Action
 
 ```text
-TASK-TTS-004E6F - G2PW Package and Asset Boundary Review
+TASK-TTS-004E6G - ONNX Runtime Windows Compatibility Review
 ```

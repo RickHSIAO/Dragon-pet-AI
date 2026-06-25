@@ -35,7 +35,9 @@ This document records the current project state only. It is not a task journal.
   verified, explicit adapter backed by official vendored `jieba-0.42.1`; the
   application runtime remains unchanged.
 - `chinese2.py` eagerly constructs G2PW at import time.
-- G2PW model/tokenizer/asset boundaries still need explicit approval.
+- G2PW import also crosses the ONNX Runtime and Transformers tokenizer
+  boundaries before any Chinese text function is called; model/tokenizer assets,
+  constructor probes, and lazy-init/source changes still need explicit approval.
 - OpenCC is verified only in the external lab through the official upstream
   `OpenCC-1.3.1-cp310-cp310-win_amd64.whl`, extracted under the lab vendor
   root and loaded with process-local `PYTHONPATH`; source-build installs,
@@ -46,7 +48,7 @@ This document records the current project state only. It is not a task journal.
 
 ## Current Next Actions
 
-- TTS: `TASK-TTS-004E6F - G2PW Package and Asset Boundary Review`.
+- TTS: `TASK-TTS-004E6G - ONNX Runtime Windows Compatibility Review`.
 - STT: continue provider reliability work without changing the committed
   default unless explicitly approved.
 - Documentation: keep current state in canonical docs and keep execution
