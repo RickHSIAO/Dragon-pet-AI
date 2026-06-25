@@ -31,9 +31,9 @@ This document records the current project state only. It is not a task journal.
 ## Known Blockers
 
 - GPT-SoVITS Chinese inference is not ready.
-- `jieba_fast` remains the current Chinese text path Windows blocker; the
-  selected resolution direction is an isolated lab-local compatibility adapter
-  backed by plain `jieba`, pending no-model compatibility proof.
+- The `jieba_fast` Windows blocker is resolved only inside the external lab by a
+  verified, explicit adapter backed by official vendored `jieba-0.42.1`; the
+  application runtime remains unchanged.
 - `chinese2.py` eagerly constructs G2PW at import time.
 - G2PW model/tokenizer/asset boundaries still need explicit approval.
 - OpenCC implementation compatibility remains unresolved.
@@ -43,7 +43,7 @@ This document records the current project state only. It is not a task journal.
 
 ## Current Next Actions
 
-- TTS: `TASK-TTS-004E6C - Isolated jieba Compatibility Lab Bootstrap`.
+- TTS: `TASK-TTS-004E6D - OpenCC and G2PW Boundary Review`.
 - STT: continue provider reliability work without changing the committed
   default unless explicitly approved.
 - Documentation: keep current state in canonical docs and keep execution

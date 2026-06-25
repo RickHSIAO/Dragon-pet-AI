@@ -7,7 +7,7 @@ the current documentation set; Git history remains the archive.
 
 | Area | Next item | Notes |
 |---|---|---|
-| TTS | `TASK-TTS-004E6C - Isolated jieba Compatibility Lab Bootstrap` | Prove adapter behavior before any implementation. |
+| TTS | `TASK-TTS-004E6D - OpenCC and G2PW Boundary Review` | Keep this no-model/no-runtime unless explicitly approved. |
 | STT | Provider reliability and Conversation Mode quality | Do not change committed default without approval. |
 | Owner Voice Gate | Product decision and reliability review | Still not security-grade auth. |
 | Docs | Keep canonical docs current | Do not reintroduce task journals. |

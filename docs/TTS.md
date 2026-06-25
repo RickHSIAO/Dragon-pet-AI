@@ -73,14 +73,21 @@ Current Chinese path findings:
   module import time.
 - This creates package, model/config, tokenizer, ONNX/runtime, and asset
   boundary risk before a Chinese-processing function is called.
-- `jieba_fast` is present in the Chinese import path and remains the immediate
-  Windows resolution blocker.
-- Preferred direction is a lab-local `jieba_fast` compatibility adapter that
-  delegates to plain `jieba`, but only after a no-model compatibility harness
-  proves the exact segmentation/POS behavior needed by GPT-SoVITS.
-- Fallback direction is to keep the Chinese path blocked if adapter parity or
-  lab-only isolation cannot be proven.
-- No alias, shim, import hook, source patch, or adapter has been implemented.
+- The `jieba_fast` Windows blocker has an external-lab-only compatibility
+  bootstrap: official `jieba-0.42.1.tar.gz` was downloaded from PyPI, verified
+  with SHA256
+  `055ca12f62674fafed09427f176506079bc135638a14e23e25be909131928db2`, and
+  extracted under the external lab vendor directory.
+- A lab-local explicit `jieba_fast` adapter delegates the current required API
+  surface to vendored plain `jieba`: `setLogLevel`, `cut_for_search`, and
+  `posseg.lcut` with `.word` / `.flag` pair behavior.
+- The repo probe verified process-local import precedence, segmentation/POS
+  parity against vendored plain `jieba`, deterministic output, unchanged package
+  snapshots, unchanged persistent environment variables, and no GPT-SoVITS
+  Chinese module import.
+- No package install, upstream GPT-SoVITS patch, import hook, `sitecustomize`,
+  runtime alias, source patch, inference, WebUI, training, playback, or audio
+  generation was performed.
 - OpenCC compatibility remains unresolved; `opencc.OpenCC(config).convert(text)`
   behavior must be verified before substitution.
 - Multilingual eager imports may pull non-Chinese dependencies before a
@@ -89,7 +96,7 @@ Current Chinese path findings:
 ## Not Approved
 
 - Chinese dependency install.
-- `jieba_fast` workaround implementation.
+- Repository or runtime `jieba_fast` workaround implementation.
 - G2PW package/model/tokenizer download.
 - GPT-SoVITS WebUI.
 - Training.
@@ -101,5 +108,5 @@ Current Chinese path findings:
 ## Current Next Action
 
 ```text
-TASK-TTS-004E6C - Isolated jieba Compatibility Lab Bootstrap
+TASK-TTS-004E6D - OpenCC and G2PW Boundary Review
 ```
