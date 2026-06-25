@@ -36,14 +36,16 @@ This document records the current project state only. It is not a task journal.
   application runtime remains unchanged.
 - `chinese2.py` eagerly constructs G2PW at import time.
 - G2PW model/tokenizer/asset boundaries still need explicit approval.
-- OpenCC implementation compatibility remains unresolved.
+- OpenCC static boundary review selected an isolated official upstream OpenCC
+  wheel probe as the preferred next proof; source-build installs and direct
+  `opencc-python-reimplemented` substitution remain unapproved.
 - Multilingual eager imports may pull non-Chinese dependencies before a
   Chinese-only path is isolated.
 - Runtime TTS is disabled/mock-only.
 
 ## Current Next Actions
 
-- TTS: `TASK-TTS-004E6D - OpenCC and G2PW Boundary Review`.
+- TTS: `TASK-TTS-004E6E - Isolated OpenCC Compatibility Probe`.
 - STT: continue provider reliability work without changing the committed
   default unless explicitly approved.
 - Documentation: keep current state in canonical docs and keep execution

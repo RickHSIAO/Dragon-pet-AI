@@ -88,8 +88,18 @@ Current Chinese path findings:
 - No package install, upstream GPT-SoVITS patch, import hook, `sitecustomize`,
   runtime alias, source patch, inference, WebUI, training, playback, or audio
   generation was performed.
-- OpenCC compatibility remains unresolved; `opencc.OpenCC(config).convert(text)`
-  behavior must be verified before substitution.
+- GPT-SoVITS currently requires `from opencc import OpenCC`,
+  `OpenCC("s2tw")`, and `.convert(text)` before G2PW; converted text must
+  preserve input length for the downstream assertion.
+- Preferred OpenCC direction is an isolated official upstream OpenCC wheel probe
+  on Windows/Python 3.10, not the GPT-SoVITS `--no-binary=opencc` source-build
+  path.
+- `opencc-python-reimplemented` is API/config-name compatible on static review,
+  but dictionary/output parity is unproven and it is not selected as a direct
+  drop-in.
+- OpenCC-dependent Chinese inference remains blocked until the no-model
+  compatibility probe proves import origin, asset origin, offline behavior,
+  deterministic conversion, and acceptable `s2tw` output.
 - Multilingual eager imports may pull non-Chinese dependencies before a
   Chinese-only path is isolated.
 
@@ -108,5 +118,5 @@ Current Chinese path findings:
 ## Current Next Action
 
 ```text
-TASK-TTS-004E6D - OpenCC and G2PW Boundary Review
+TASK-TTS-004E6E - Isolated OpenCC Compatibility Probe
 ```
