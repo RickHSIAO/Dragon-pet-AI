@@ -7,6 +7,8 @@
 
 ---
 
+**Latest TASK-TTS-004E6A status (2026-06-25):** GPT-SoVITS Chinese Import Graph Probe is complete with no install or download. The next isolated lab task is `TASK-TTS-004E6B - jieba_fast Windows Resolution Design`; Chinese inference is still not ready.
+
 ## Overview
 
 The project is developed in discrete phases. Each phase has a clearly defined scope and must not implement features belonging to later phases.

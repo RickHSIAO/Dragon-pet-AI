@@ -58,3 +58,6 @@ outputs/tts_character_voice_env_check/
 outputs/tts_character_voice_lab/
 .local-voice-lab/
 voice-lab/
+
+# TASK-TTS-004E6A local-only GPT-SoVITS Chinese import graph reports
+outputs/tts_gpt_sovits_chinese_import_graph/

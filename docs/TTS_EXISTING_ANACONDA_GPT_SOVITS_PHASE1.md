@@ -1,5 +1,7 @@
 # TTS Existing Anaconda GPT-SoVITS Phase 1 Resume
 
+**Latest TASK-TTS-004E6A status (2026-06-25):** The existing isolated Python `3.10.20` env was used only for safe `importlib.util.find_spec(...)` checks. No Anaconda base, target env package, protected package, PATH/profile/registry, or backend venv change was made.
+
 **Task:** TASK-TTS-004E2B / TASK-TTS-004E4A
 **Status:** TASK-TTS-004E6 DONE - GPT-SOVITS CHINESE TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED
 **Date:** 2026-06-19

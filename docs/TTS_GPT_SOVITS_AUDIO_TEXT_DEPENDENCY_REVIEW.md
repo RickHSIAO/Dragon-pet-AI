@@ -1,5 +1,7 @@
 # GPT-SoVITS Audio/Text Dependency Compatibility Review
 
+**Latest TASK-TTS-004E6A status (2026-06-25):** Static Chinese import-graph probe completed. Audio B1 status is unchanged; Chinese text remains blocked by `jieba_fast` Windows resolution and G2PW asset boundaries. No install/download/inference occurred.
+
 **Task:** TASK-TTS-004E5
 **Status:** TASK-TTS-004E6 DONE - GPT-SOVITS CHINESE TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED
 **Date:** 2026-06-19

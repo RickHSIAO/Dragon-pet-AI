@@ -1,5 +1,7 @@
 # Voice / TTS Research Note and Local Speech Roadmap
 
+**Latest TASK-TTS-004E6A status (2026-06-25):** GPT-SoVITS Chinese Import Graph Probe is complete as a static, no-install/no-download lab probe. It found eager `chinese2.py` G2PW risk and keeps `jieba_fast` Windows resolution as the next task; no runtime TTS or playback behavior changed.
+
 **Task:** TASK-227
 **Status:** IMPLEMENTED - DOCS ONLY / NO WINDOWS SMOKE REQUIRED
 **Date:** 2026-06-01

@@ -1,5 +1,7 @@
 # TTS Character Voice Lab Plan
 
+**Latest TASK-TTS-004E6A status (2026-06-25):** GPT-SoVITS Chinese Import Graph Probe completed with no install, no download, no G2PW initialization, and no inference. The lab remains review/probe-only for Chinese text; next work is `TASK-TTS-004E6B - jieba_fast Windows Resolution Design`.
+
 **Task:** TASK-TTS-004D3 / TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B / TASK-TTS-004E4A / TASK-TTS-004E5 / TASK-TTS-004E5A
 **Status:** TASK-TTS-004E6 DONE - GPT-SOVITS CHINESE TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED
 **Date:** 2026-06-19

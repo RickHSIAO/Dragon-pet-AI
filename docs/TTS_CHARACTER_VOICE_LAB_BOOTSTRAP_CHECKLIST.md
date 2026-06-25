@@ -1,5 +1,7 @@
 # TTS Character Voice Lab Bootstrap Checklist
 
+**Latest TASK-TTS-004E6A status (2026-06-25):** GPT-SoVITS Chinese Import Graph Probe completed read-only. Do not install Chinese dependencies or download G2PW/model/tokenizer assets from this checkpoint; the selected next task is `TASK-TTS-004E6B - jieba_fast Windows Resolution Design`.
+
 **Task:** TASK-TTS-004D4 / TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B / TASK-TTS-004E4A / TASK-TTS-004E5 / TASK-TTS-004E5A
 **Status:** TASK-TTS-004E6 DONE - GPT-SOVITS CHINESE TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED
 **Date:** 2026-06-19

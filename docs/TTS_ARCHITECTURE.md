@@ -1,5 +1,7 @@
 # TTS Architecture
 
+**Latest TASK-TTS-004E6A status (2026-06-25):** GPT-SoVITS Chinese Import Graph Probe **DONE - GPT-SOVITS CHINESE IMPORT GRAPH PROBE COMPLETE / NO INSTALL OR DOWNLOAD PERFORMED**. Static AST analysis inspected GPT-SoVITS commit `b2cff0cd0abd0ac134a16ae7a9695f88e8826104` without importing target modules. Findings: all checked Chinese/multilingual packages were unavailable in the lab env by `find_spec`, `chinese2.py` has eager G2PW model-asset risk, `jieba_fast` remains the immediate Windows design blocker, and Chinese inference is not ready.
+
 **Task:** TASK-TTS-001 / TASK-TTS-004E4A
 **Status:** TASK-TTS-004E6 DONE - GPT-SOVITS CHINESE TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED
 **Date:** 2026-06-19

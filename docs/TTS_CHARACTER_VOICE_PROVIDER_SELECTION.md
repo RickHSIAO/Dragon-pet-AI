@@ -1,5 +1,7 @@
 # TTS Character Voice Provider Selection
 
+**Latest TASK-TTS-004E6A status (2026-06-25):** GPT-SoVITS remains the first isolated lab candidate, but Chinese runtime is not ready. Static import-graph evidence keeps provider selection in research mode and selects `TASK-TTS-004E6B - jieba_fast Windows Resolution Design`.
+
 **Task:** TASK-TTS-004E / TASK-TTS-004E2 / TASK-TTS-004E2A / TASK-TTS-004E2A2 / TASK-TTS-004E2A3 / TASK-TTS-004E2B / TASK-TTS-004E4A / TASK-TTS-004E5 / TASK-TTS-004E5A
 **Status:** TASK-TTS-004E6 DONE - GPT-SOVITS CHINESE TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED
 **Date:** 2026-06-19

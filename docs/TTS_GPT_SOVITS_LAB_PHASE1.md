@@ -1,5 +1,7 @@
 # GPT-SoVITS Isolated Lab Phase 1
 
+**Latest TASK-TTS-004E6A status (2026-06-25):** The existing GPT-SoVITS checkout at commit `b2cff0cd0abd0ac134a16ae7a9695f88e8826104` was analyzed with static AST only. No Phase 1 lab setup, env, package, model, or repo source was modified.
+
 **Task:** TASK-TTS-004E2
 **Status:** TASK-TTS-004E6 DONE - GPT-SOVITS CHINESE TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED
 **Date:** 2026-06-19

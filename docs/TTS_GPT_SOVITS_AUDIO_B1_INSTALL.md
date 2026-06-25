@@ -1,5 +1,7 @@
 # GPT-SoVITS WAV/Chinese Runtime Dependency Install
 
+**Latest TASK-TTS-004E6A status (2026-06-25):** Chinese import-graph probe completed after this B1 install checkpoint. B1 audio package state remains unchanged; no Chinese text dependency, G2PW asset, WebUI, inference, synthesis, or audio generation was added.
+
 **Task:** TASK-TTS-004E5A
 **Status:** TASK-TTS-004E6 DONE - GPT-SOVITS CHINESE TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED
 **Date:** 2026-06-19

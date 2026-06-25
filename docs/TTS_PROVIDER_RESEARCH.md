@@ -1,5 +1,7 @@
 # TTS Provider Research
 
+**Latest TASK-TTS-004E6A status (2026-06-25):** GPT-SoVITS Chinese Import Graph Probe **DONE - GPT-SOVITS CHINESE IMPORT GRAPH PROBE COMPLETE / NO INSTALL OR DOWNLOAD PERFORMED**. The evidence selects `TASK-TTS-004E6B - jieba_fast Windows Resolution Design` as the next task. No provider is promoted to runtime use, and GPT-SoVITS Chinese inference remains not ready.
+
 **Task:** TASK-TTS-001 / TASK-TTS-004E4
 **Status:** TASK-TTS-004E6 DONE - GPT-SOVITS CHINESE TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED
 **Date:** 2026-06-19

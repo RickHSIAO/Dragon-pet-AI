@@ -1,5 +1,32 @@
 # TASKS
 
+## TASK-TTS-004E6A - GPT-SoVITS Chinese Text Import Graph Probe
+
+Status: DONE - GPT-SOVITS CHINESE IMPORT GRAPH PROBE COMPLETE / NO INSTALL OR DOWNLOAD PERFORMED
+
+Date: 2026-06-25
+
+Scope:
+- Roll back to `021bfdb` before implementation.
+- Preserve unrelated `docs/開啟方式.txt` and keep it unstaged.
+- Add static AST-only GPT-SoVITS Chinese import graph probe.
+- Add fixture-based tests that do not depend on the external GPT-SoVITS checkout.
+- Generate ignored local JSON/Markdown reports and an external lab manifest.
+- Do not install, download, import target modules, initialize G2PW, run WebUI,
+  run inference, synthesize audio, or modify Dragon Pet AI runtime behavior.
+
+Result:
+- Probe script: `scripts/tts_gpt_sovits_chinese_import_graph_probe.py`
+- Tests: `backend/tests/test_tts_gpt_sovits_chinese_import_graph_probe.py`
+- Report doc: `docs/TTS_GPT_SOVITS_CHINESE_IMPORT_GRAPH_PROBE.md`
+- GPT-SoVITS commit analyzed: `b2cff0cd0abd0ac134a16ae7a9695f88e8826104`
+- Import graph: `69` files, `808` import edges, `1052` top-level executable statements.
+- Key finding: `chinese2.py` has eager G2PW import-time/model-asset risk.
+- Key blocker: `jieba_fast` appears in `5` import locations.
+- Selected next task: `TASK-TTS-004E6B - jieba_fast Windows Resolution Design`
+
+---
+
 ## TASK-000 - Project Skeleton
 
 Status: DONE

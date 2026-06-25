@@ -1,5 +1,7 @@
 # GPT-SoVITS Dependency Compatibility Review
 
+**Latest TASK-TTS-004E6A status (2026-06-25):** Follow-up import-graph probe completed without install or download. It confirmed `jieba_fast` remains the next Windows resolution design blocker and `chinese2.py` has eager G2PW model-asset risk; no dependency recommendation is promoted to install.
+
 **Task:** TASK-TTS-004E4
 **Status:** TASK-TTS-004E6 DONE - GPT-SOVITS CHINESE TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED
 **Date:** 2026-06-19

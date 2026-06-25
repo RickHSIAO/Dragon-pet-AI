@@ -1,5 +1,7 @@
 # TTS Character Voice Feasibility
 
+**Latest TASK-TTS-004E6A status (2026-06-25):** GPT-SoVITS Chinese Import Graph Probe completed with static AST only. It inspected `69` files at commit `b2cff0cd0abd0ac134a16ae7a9695f88e8826104`, confirmed eager `chinese2.py` G2PW risk, kept Chinese inference not ready, and selected `TASK-TTS-004E6B - jieba_fast Windows Resolution Design`.
+
 **Latest TASK-TTS-004E5A status (2026-06-19):** GPT-SoVITS WAV/audio B1
 dependency install is complete and text/model runtime remains not installed.
 The external lab has isolated Python `3.10.20` at

@@ -1,5 +1,7 @@
 # GPT-SoVITS Chinese Text Dependency Review
 
+**Latest TASK-TTS-004E6A status (2026-06-25):** The requested follow-up Chinese Import Graph Probe is complete. It added a static AST probe and tests, inspected commit `b2cff0cd0abd0ac134a16ae7a9695f88e8826104`, found `808` import edges and `1052` top-level executable statements, confirmed `chinese2.py` eager G2PW risk, and selected `TASK-TTS-004E6B - jieba_fast Windows Resolution Design`. No install or download occurred.
+
 **Task:** TASK-TTS-004E6
 **Status:** DONE - GPT-SOVITS CHINESE TEXT DEPENDENCY REVIEW COMPLETE / INSTALL NOT APPROVED
 **Date:** 2026-06-20
