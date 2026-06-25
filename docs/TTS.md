@@ -118,6 +118,10 @@ Current Chinese path findings:
 - The smallest safe next layer is an ONNX Runtime Windows/Python 3.10
   compatibility review; G2PW model assets, tokenizer assets, constructor
   probes, source patches, and Chinese inference remain unapproved.
+- The ONNX Runtime Windows/Python 3.10 compatibility review selected an
+  external-lab, CPU-only `onnxruntime==1.23.2` wheel extraction/import/provider
+  probe as the next safe proof layer; target-environment installs and GPU
+  provider probing remain unapproved.
 - Multilingual eager imports may pull non-Chinese dependencies before a
   Chinese-only path is isolated.
 
@@ -136,5 +140,5 @@ Current Chinese path findings:
 ## Current Next Action
 
 ```text
-TASK-TTS-004E6G - ONNX Runtime Windows Compatibility Review
+TASK-TTS-004E6H - Isolated ONNX Runtime CPU Import and Provider Probe
 ```

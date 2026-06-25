@@ -38,6 +38,10 @@ This document records the current project state only. It is not a task journal.
 - G2PW import also crosses the ONNX Runtime and Transformers tokenizer
   boundaries before any Chinese text function is called; model/tokenizer assets,
   constructor probes, and lazy-init/source changes still need explicit approval.
+- ONNX Runtime compatibility review selected an external-lab, CPU-only
+  `onnxruntime==1.23.2` wheel extraction/import/provider probe as the next safe
+  proof layer; target-environment installs and GPU provider probing remain
+  unapproved.
 - OpenCC is verified only in the external lab through the official upstream
   `OpenCC-1.3.1-cp310-cp310-win_amd64.whl`, extracted under the lab vendor
   root and loaded with process-local `PYTHONPATH`; source-build installs,
@@ -48,7 +52,7 @@ This document records the current project state only. It is not a task journal.
 
 ## Current Next Actions
 
-- TTS: `TASK-TTS-004E6G - ONNX Runtime Windows Compatibility Review`.
+- TTS: `TASK-TTS-004E6H - Isolated ONNX Runtime CPU Import and Provider Probe`.
 - STT: continue provider reliability work without changing the committed
   default unless explicitly approved.
 - Documentation: keep current state in canonical docs and keep execution
