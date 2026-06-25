@@ -122,6 +122,16 @@ Current Chinese path findings:
   external-lab, CPU-only `onnxruntime==1.23.2` wheel extraction/import/provider
   probe as the next safe proof layer; target-environment installs and GPU
   provider probing remain unapproved.
+- `TASK-TTS-004E6H3` verified the official
+  `onnxruntime-1.23.2-cp310-cp310-win_amd64.whl` in the external lab only:
+  SHA256 matched
+  `0be6a37a45e6719db5120e9986fcd30ea205ac8103fd1fb74b6c33348327a0cc`,
+  package/native `.pyd`/loaded ORT DLL origins resolved under the external
+  vendor root, `CPUExecutionProvider` was available, `CUDAExecutionProvider`
+  was not available, and repeated fresh-process imports were deterministic.
+- The probe did not install packages, create `InferenceSession`, load an ONNX
+  model, run inference, modify persistent `PATH`/`PYTHONPATH`, patch
+  GPT-SoVITS source, or wire Dragon-Pet-AI runtime TTS.
 - Multilingual eager imports may pull non-Chinese dependencies before a
   Chinese-only path is isolated.
 
@@ -140,5 +150,5 @@ Current Chinese path findings:
 ## Current Next Action
 
 ```text
-TASK-TTS-004E6H - Isolated ONNX Runtime CPU Import and Provider Probe
+Next TTS approval boundary: G2PW package/model/tokenizer and constructor-risk review, without inference or runtime wiring.
 ```

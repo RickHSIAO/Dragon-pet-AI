@@ -7,7 +7,7 @@ the current documentation set; Git history remains the archive.
 
 | Area | Next item | Notes |
 |---|---|---|
-| TTS | `TASK-TTS-004E6H - Isolated ONNX Runtime CPU Import and Provider Probe` | Prove external-lab CPU-only `onnxruntime==1.23.2` extraction/import/provider boundaries before any target-env install, GPU provider probe, G2PW constructor, asset probe, or inference. |
+| TTS | G2PW package/model/tokenizer and constructor-risk review | `TASK-TTS-004E6H3` verified external-lab CPU-only `onnxruntime==1.23.2` import/provider boundaries. Target-env install, GPU provider probe, G2PW assets, constructor probes, and inference remain unapproved. |
 | STT | Provider reliability and Conversation Mode quality | Do not change committed default without approval. |
 | Owner Voice Gate | Product decision and reliability review | Still not security-grade auth. |
 | Docs | Keep canonical docs current | Do not reintroduce task journals. |
