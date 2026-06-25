@@ -75,8 +75,12 @@ Current Chinese path findings:
   boundary risk before a Chinese-processing function is called.
 - `jieba_fast` is present in the Chinese import path and remains the immediate
   Windows resolution blocker.
-- Plain `jieba` fallback is plausible only as a design option; no alias, shim,
-  import hook, or source patch has been implemented.
+- Preferred direction is a lab-local `jieba_fast` compatibility adapter that
+  delegates to plain `jieba`, but only after a no-model compatibility harness
+  proves the exact segmentation/POS behavior needed by GPT-SoVITS.
+- Fallback direction is to keep the Chinese path blocked if adapter parity or
+  lab-only isolation cannot be proven.
+- No alias, shim, import hook, source patch, or adapter has been implemented.
 - OpenCC compatibility remains unresolved; `opencc.OpenCC(config).convert(text)`
   behavior must be verified before substitution.
 - Multilingual eager imports may pull non-Chinese dependencies before a
@@ -97,5 +101,5 @@ Current Chinese path findings:
 ## Current Next Action
 
 ```text
-jieba_fast Windows Resolution Design
+TASK-TTS-004E6C - Isolated jieba Compatibility Lab Bootstrap
 ```

@@ -7,7 +7,7 @@ the current documentation set; Git history remains the archive.
 
 | Area | Next item | Notes |
 |---|---|---|
-| TTS | `jieba_fast Windows Resolution Design` | Do not implement until explicitly requested. |
+| TTS | `TASK-TTS-004E6C - Isolated jieba Compatibility Lab Bootstrap` | Prove adapter behavior before any implementation. |
 | STT | Provider reliability and Conversation Mode quality | Do not change committed default without approval. |
 | Owner Voice Gate | Product decision and reliability review | Still not security-grade auth. |
 | Docs | Keep canonical docs current | Do not reintroduce task journals. |
